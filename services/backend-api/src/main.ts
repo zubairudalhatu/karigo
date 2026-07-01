@@ -10,7 +10,12 @@ async function bootstrap() {
   configureApp(app, config);
   configureSwagger(app);
 
-  await app.listen(config.get<number>("APP_PORT", 4000));
+  const configuredPort = config.get<string>("APP_PORT") ?? "4000";
+  const parsedPort = Number(process.env.PORT ?? configuredPort);
+  const port = Number.isFinite(parsedPort) ? parsedPort : 4000;
+
+  await app.listen(port, "0.0.0.0");
+  console.log(`KariGO backend listening on port ${port}`);
 }
 
 void bootstrap();

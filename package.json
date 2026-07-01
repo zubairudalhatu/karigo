@@ -25,7 +25,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "overrides": {
     "react-native": "0.79.6",
