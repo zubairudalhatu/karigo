@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "KariGO Customer",
+    "slug": "karigo-customer",
+    "scheme": "karigo-customer",
+    "plugins": ["expo-router"],
+    "icon": "./assets/karigo-logo.png",
+    "splash": {
+      "image": "./assets/karigo-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "extra": {
+      "router": {}
+    }
+  }
+}

@@ -1,0 +1,1 @@
+import { api } from "./client"; export const reportsApi={operations:()=>api.get<any>("admin/reports/operations"),finance:()=>api.get<any>("admin/reports/finance"),vendors:()=>api.get<any[]>("admin/reports/vendors"),riders:()=>api.get<any[]>("admin/reports/riders"),promos:()=>api.get<any[]>("admin/reports/promos")};

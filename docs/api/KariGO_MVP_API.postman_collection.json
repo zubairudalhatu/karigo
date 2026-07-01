@@ -1,0 +1,249 @@
+{
+  "info": {
+    "_postman_id": "7cb1d499-624c-4c12-b178-5d576643be10",
+    "name": "KariGO MVP API",
+    "description": "Core manual QA journey. Populate role tokens and resource IDs after login/seed.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000/api/v1" },
+    { "key": "customerToken", "value": "" },
+    { "key": "vendorToken", "value": "" },
+    { "key": "riderToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "customerPhone", "value": "+2348012345678" },
+    { "key": "password", "value": "KariGO-Test-123!" },
+    { "key": "otp", "value": "" },
+    { "key": "vendorId", "value": "" },
+    { "key": "productId", "value": "" },
+    { "key": "addressId", "value": "" },
+    { "key": "orderId", "value": "" },
+    { "key": "paymentId", "value": "" },
+    { "key": "transactionReference", "value": "" },
+    { "key": "riderId", "value": "" },
+    { "key": "deliveryOtp", "value": "" },
+    { "key": "ticketId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 Foundation And Auth",
+      "item": [
+        {
+          "name": "Health",
+          "request": { "method": "GET", "url": "{{baseUrl}}/health" }
+        },
+        {
+          "name": "Register Customer",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"QA Customer\",\"phoneNumber\":\"{{customerPhone}}\",\"email\":\"qa.customer@karigo.local\",\"password\":\"{{password}}\"}"
+            },
+            "url": "{{baseUrl}}/auth/customer/register"
+          }
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"phoneNumber\":\"{{customerPhone}}\",\"otp\":\"{{otp}}\"}" },
+            "url": "{{baseUrl}}/auth/verify-otp"
+          }
+        },
+        {
+          "name": "Customer Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"phoneNumber\":\"{{customerPhone}}\",\"password\":\"{{password}}\"}" },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Authenticated Customer",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customerToken}}", "type": "string" }] },
+            "url": "{{baseUrl}}/auth/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Discovery And Checkout",
+      "item": [
+        {
+          "name": "Create Address",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customerToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"label\":\"Home\",\"addressLine\":\"Kano QA Address\",\"city\":\"Kano\",\"state\":\"Kano\",\"isDefault\":true}" },
+            "url": "{{baseUrl}}/addresses"
+          }
+        },
+        { "name": "List Vendors", "request": { "method": "GET", "url": "{{baseUrl}}/vendors" } },
+        { "name": "List Products", "request": { "method": "GET", "url": "{{baseUrl}}/vendors/{{vendorId}}/products" } },
+        {
+          "name": "Validate Launch Promo",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customerToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"promoCode\":\"KARIGOFIRST\",\"vendorId\":\"{{vendorId}}\",\"subtotal\":5000,\"deliveryFee\":1000}" },
+            "url": "{{baseUrl}}/promos/validate"
+          }
+        },
+        {
+          "name": "Create Vendor Order",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customerToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"vendorId\":\"{{vendorId}}\",\"deliveryAddressId\":\"{{addressId}}\",\"serviceCategory\":\"FOOD\",\"items\":[{\"productId\":\"{{productId}}\",\"quantity\":1}],\"promoCode\":\"KARIGOFIRST\"}" },
+            "url": "{{baseUrl}}/orders"
+          }
+        },
+        {
+          "name": "Create Parcel Order",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customerToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"pickupAddressId\":\"{{addressId}}\",\"deliveryAddressId\":\"{{addressId}}\",\"recipientName\":\"QA Recipient\",\"recipientPhone\":\"+2348099999999\",\"itemDescription\":\"QA parcel\"}" },
+            "url": "{{baseUrl}}/orders/parcel"
+          }
+        },
+        {
+          "name": "Initiate Mock Payment",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customerToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"orderId\":\"{{orderId}}\",\"amount\":5400,\"paymentMethod\":\"mock\"}" },
+            "url": "{{baseUrl}}/payments/initiate"
+          }
+        },
+        {
+          "name": "Verify Mock Payment",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customerToken}}", "type": "string" }] },
+            "url": "{{baseUrl}}/payments/verify/{{transactionReference}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Fulfilment",
+      "item": [
+        {
+          "name": "Vendor Accept",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{vendorToken}}", "type": "string" }] },
+            "url": "{{baseUrl}}/vendor-dashboard/orders/{{orderId}}/accept"
+          }
+        },
+        {
+          "name": "Vendor Preparing",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{vendorToken}}", "type": "string" }] },
+            "url": "{{baseUrl}}/vendor-dashboard/orders/{{orderId}}/preparing"
+          }
+        },
+        {
+          "name": "Vendor Ready",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{vendorToken}}", "type": "string" }] },
+            "url": "{{baseUrl}}/vendor-dashboard/orders/{{orderId}}/ready"
+          }
+        },
+        {
+          "name": "Admin Assign Rider",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"riderId\":\"{{riderId}}\"}" },
+            "url": "{{baseUrl}}/admin/orders/{{orderId}}/assign-rider"
+          }
+        },
+        {
+          "name": "Rider Accept",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
+            "url": "{{baseUrl}}/rider/jobs/{{orderId}}/accept"
+          }
+        },
+        {
+          "name": "Rider Update Status",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"status\":\"PICKED_UP\"}" },
+            "url": "{{baseUrl}}/rider/jobs/{{orderId}}/status"
+          }
+        },
+        {
+          "name": "Rider Complete",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"deliveryOtp\":\"{{deliveryOtp}}\"}" },
+            "url": "{{baseUrl}}/rider/jobs/{{orderId}}/complete"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Support And Activity",
+      "item": [
+        {
+          "name": "Create Support Ticket",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customerToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"category\":\"ORDER_DELAY\",\"subject\":\"QA delay test\",\"description\":\"Testing support workflow\",\"orderId\":\"{{orderId}}\"}" },
+            "url": "{{baseUrl}}/support/tickets"
+          }
+        },
+        {
+          "name": "Admin Resolve Support Ticket",
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"status\":\"RESOLVED\"}" },
+            "url": "{{baseUrl}}/admin/support/tickets/{{ticketId}}/status"
+          }
+        },
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customerToken}}", "type": "string" }] },
+            "url": "{{baseUrl}}/notifications"
+          }
+        },
+        {
+          "name": "Admin Dashboard",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+            "url": "{{baseUrl}}/admin/dashboard"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Build output and generated artifacts
+dist/
+build/
+coverage/
+.expo/
+.next/
+.turbo/
+.vercel/
+dist-expo-check/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Uploaded private files and local scratch data
+uploads/
+private/
+private-uploads/
+uploaded-private-files/
+docs/**/*.pdf
+docs/**/*.extracted.txt
+tmp/
+temp/
+.DS_Store
+Thumbs.db

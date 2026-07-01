@@ -1,0 +1,44 @@
+{
+  "name": "karigo-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "KariGO MVP delivery and local-commerce platform",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:api": "npm run start:dev --workspace @karigo/backend-api",
+    "dev:customer": "npm run start --workspace @karigo/customer-app",
+    "dev:rider": "npm run start --workspace @karigo/rider-app",
+    "dev:vendor": "npm run dev --workspace @karigo/vendor-dashboard",
+    "dev:admin": "npm run dev --workspace @karigo/admin-portal",
+    "db:format": "npm run prisma:format --workspace @karigo/backend-api",
+    "db:generate": "npm run prisma:generate --workspace @karigo/backend-api",
+    "db:migrate": "npm run prisma:migrate --workspace @karigo/backend-api",
+    "db:seed": "npm run seed --workspace @karigo/backend-api",
+    "db:studio": "npm run prisma:studio --workspace @karigo/backend-api",
+    "db:validate": "npm run prisma:validate --workspace @karigo/backend-api",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "overrides": {
+    "react-native": "0.79.6",
+    "expo-constants": "17.1.8",
+    "expo-linking": "7.1.7",
+    "react-native-screens": "4.11.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.0.14",
+    "@types/react-dom": "19.0.3",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "react-native": "0.79.6",
+    "react-native-screens": "4.11.1"
+  }
+}

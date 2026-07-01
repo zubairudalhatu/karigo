@@ -1,0 +1,705 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  VENDOR
+  RIDER
+  ADMIN
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  OPERATIONS_ADMIN
+  DISPATCH_OFFICER
+  SUPPORT_AGENT
+  VENDOR_MANAGER
+  RIDER_MANAGER
+  FINANCE_OFFICER
+  MARKETING_MANAGER
+}
+
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+  BLOCKED
+}
+
+enum VendorStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+  CLOSED
+  REJECTED
+}
+
+enum RiderStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+  OFFLINE
+  ONLINE
+  BUSY
+}
+
+enum DocumentVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ServiceCategory {
+  FOOD
+  GROCERY
+  MARKET
+  PARCEL
+  ERRAND
+  CORPORATE
+}
+
+enum OrderStatus {
+  DRAFT
+  AWAITING_PAYMENT
+  PAID
+  VENDOR_CONFIRMING
+  VENDOR_ACCEPTED
+  VENDOR_REJECTED
+  PREPARING
+  READY_FOR_PICKUP
+  RIDER_ASSIGNED
+  RIDER_ARRIVING_PICKUP
+  PICKED_UP
+  ON_THE_WAY
+  ARRIVED_DESTINATION
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  FAILED
+  REFUND_REQUESTED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESSFUL
+  FAILED
+  CANCELLED
+  REFUND_PENDING
+  REFUNDED
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_REVIEW
+  WAITING_FOR_CUSTOMER
+  WAITING_FOR_VENDOR
+  WAITING_FOR_RIDER
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketCategory {
+  ORDER_DELAY
+  WRONG_ITEM
+  MISSING_ITEM
+  DAMAGED_ITEM
+  PAYMENT_ISSUE
+  REFUND_REQUEST
+  VENDOR_ISSUE
+  RIDER_ISSUE
+  PARCEL_DELIVERY_ISSUE
+  APP_OR_LOGIN_ISSUE
+  PROMO_CODE_ISSUE
+  OTHER
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SettlementStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+enum PromoDiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum NotificationChannel {
+  IN_APP
+  SMS
+  EMAIL
+  WHATSAPP
+  PUSH
+}
+
+enum NotificationType {
+  ORDER_CREATED
+  PAYMENT_SUCCESSFUL
+  PAYMENT_FAILED
+  VENDOR_ACCEPTED_ORDER
+  VENDOR_REJECTED_ORDER
+  ORDER_PREPARING
+  ORDER_READY_FOR_PICKUP
+  RIDER_ASSIGNED
+  RIDER_PICKED_UP
+  RIDER_ON_THE_WAY
+  RIDER_ARRIVED_DESTINATION
+  ORDER_DELIVERED
+  ORDER_COMPLETED
+  REFUND_REQUESTED
+  REFUND_APPROVED
+  SUPPORT_TICKET_CREATED
+  SUPPORT_TICKET_UPDATED
+  PROMO_AVAILABLE
+  SETTLEMENT_PAID
+  RIDER_EARNING_PAID
+  SYSTEM_ALERT
+}
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+  WEB
+}
+
+enum PushProvider {
+  EXPO
+  FCM
+}
+
+enum AppSurface {
+  CUSTOMER_APP
+  RIDER_APP
+  VENDOR_DASHBOARD
+  ADMIN_PORTAL
+}
+
+model User {
+  id                String                 @id @default(uuid()) @db.Uuid
+  fullName          String
+  phoneNumber       String                 @unique
+  email             String?                @unique
+  passwordHash      String
+  role              UserRole
+  adminRole         AdminRole?
+  accountStatus     AccountStatus          @default(PENDING)
+  phoneVerified     Boolean                @default(false)
+  emailVerified     Boolean                @default(false)
+  lastLoginAt       DateTime?
+  deletedAt         DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  customerProfile   CustomerProfile?
+  vendor            Vendor?
+  rider             Rider?
+  addresses         Address[]
+  notifications     Notification[]
+  deviceTokens      DeviceToken[]
+  statusChanges     OrderStatusHistory[]   @relation("StatusChangedBy")
+  verifiedDocuments RiderDocument[]        @relation("DocumentVerifiedBy")
+  assignedTickets   SupportTicket[]        @relation("TicketAssignedAdmin")
+  ticketMessages    SupportTicketMessage[]
+  adminAuditLogs    AdminAuditLog[]
+  createdPromoCodes PromoCode[]            @relation("PromoCreatedBy")
+  otpVerifications  OtpVerification[]
+
+  @@map("users")
+}
+
+model OtpVerification {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  purpose    String    @default("PHONE_VERIFICATION")
+  codeHash   String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, purpose, createdAt])
+  @@map("otp_verifications")
+}
+
+model CustomerProfile {
+  id              String            @id @default(uuid()) @db.Uuid
+  userId          String            @unique @db.Uuid
+  referralCode    String            @unique
+  referredBy      String?           @db.Uuid
+  loyaltyBalance  Decimal           @default(0) @db.Decimal(12, 2)
+  totalOrders     Int               @default(0)
+  averageRating   Decimal?          @db.Decimal(3, 2)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  user            User              @relation(fields: [userId], references: [id])
+  referrer        CustomerProfile?  @relation("CustomerReferrals", fields: [referredBy], references: [id])
+  referrals       CustomerProfile[] @relation("CustomerReferrals")
+  orders          Order[]
+  payments        Payment[]
+  supportTickets  SupportTicket[]
+  promoCodeUsages PromoCodeUsage[]
+
+  @@map("customer_profiles")
+}
+
+model Address {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  label          String
+  addressLine    String
+  city           String
+  state          String
+  country        String   @default("Nigeria")
+  latitude       Decimal? @db.Decimal(10, 7)
+  longitude      Decimal? @db.Decimal(10, 7)
+  deliveryNote   String?
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id])
+  pickupOrders   Order[]  @relation("PickupAddress")
+  deliveryOrders Order[]  @relation("DeliveryAddress")
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+model VendorCategory {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  description String?
+  iconUrl     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  vendors     Vendor[]
+
+  @@map("vendor_categories")
+}
+
+model Vendor {
+  id               String             @id @default(uuid()) @db.Uuid
+  userId           String             @unique @db.Uuid
+  categoryId       String?            @db.Uuid
+  businessName     String
+  businessCategory String
+  description      String?
+  phoneNumber      String
+  email            String?
+  address          String
+  city             String
+  state            String
+  latitude         Decimal?           @db.Decimal(10, 7)
+  longitude        Decimal?           @db.Decimal(10, 7)
+  logoUrl          String?
+  coverImageUrl    String?
+  openingTime      String?
+  closingTime      String?
+  isOpen           Boolean            @default(false)
+  commissionRate   Decimal            @default(15) @db.Decimal(5, 2)
+  bankName         String?
+  accountNumber    String?
+  accountName      String?
+  status           VendorStatus       @default(PENDING_APPROVAL)
+  rating           Decimal?           @db.Decimal(3, 2)
+  totalOrders      Int                @default(0)
+  deletedAt        DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  user             User               @relation(fields: [userId], references: [id])
+  category         VendorCategory?    @relation(fields: [categoryId], references: [id])
+  products         Product[]
+  orders           Order[]
+  settlements      VendorSettlement[]
+  promoCodes       PromoCode[]
+
+  @@index([status, city])
+  @@map("vendors")
+}
+
+model Product {
+  id                     String      @id @default(uuid()) @db.Uuid
+  vendorId               String      @db.Uuid
+  name                   String
+  description            String?
+  category               String?
+  price                  Decimal     @db.Decimal(12, 2)
+  imageUrl               String?
+  preparationTimeMinutes Int?
+  isAvailable            Boolean     @default(true)
+  isActive               Boolean     @default(true)
+  deletedAt              DateTime?
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+  vendor                 Vendor      @relation(fields: [vendorId], references: [id])
+  orderItems             OrderItem[]
+
+  @@index([vendorId, isActive, isAvailable])
+  @@map("products")
+}
+
+model Rider {
+  id                       String          @id @default(uuid()) @db.Uuid
+  userId                   String          @unique @db.Uuid
+  riderCode                String          @unique
+  phoneNumber              String
+  photoUrl                 String?
+  vehicleType              String?
+  plateNumber              String?
+  licenseNumber            String?
+  guarantorName            String?
+  guarantorPhone           String?
+  currentLatitude          Decimal?        @db.Decimal(10, 7)
+  currentLongitude         Decimal?        @db.Decimal(10, 7)
+  currentLocationUpdatedAt DateTime?
+  availabilityStatus       RiderStatus     @default(OFFLINE)
+  verificationStatus       RiderStatus     @default(PENDING_APPROVAL)
+  rating                   Decimal?        @db.Decimal(3, 2)
+  totalDeliveries          Int             @default(0)
+  deletedAt                DateTime?
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+  user                     User            @relation(fields: [userId], references: [id])
+  documents                RiderDocument[]
+  orders                   Order[]
+  earnings                 RiderEarning[]
+
+  @@index([availabilityStatus, verificationStatus])
+  @@map("riders")
+}
+
+model RiderDocument {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  riderId            String                     @db.Uuid
+  documentType       String
+  documentUrl        String
+  verificationStatus DocumentVerificationStatus @default(PENDING)
+  uploadedAt         DateTime                   @default(now())
+  verifiedBy         String?                    @db.Uuid
+  verifiedAt         DateTime?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  rider              Rider                      @relation(fields: [riderId], references: [id])
+  verifier           User?                      @relation("DocumentVerifiedBy", fields: [verifiedBy], references: [id])
+
+  @@map("rider_documents")
+}
+
+model Order {
+  id                 String               @id @default(uuid()) @db.Uuid
+  orderNumber        String               @unique
+  customerId         String               @db.Uuid
+  vendorId           String?              @db.Uuid
+  riderId            String?              @db.Uuid
+  serviceCategory    ServiceCategory
+  orderStatus        OrderStatus          @default(DRAFT)
+  paymentStatus      PaymentStatus        @default(PENDING)
+  pickupAddressId    String?              @db.Uuid
+  deliveryAddressId  String?              @db.Uuid
+  recipientName      String?
+  recipientPhone     String?
+  itemDescription    String?
+  subtotal           Decimal              @default(0) @db.Decimal(12, 2)
+  deliveryFee        Decimal              @default(0) @db.Decimal(12, 2)
+  serviceFee         Decimal              @default(0) @db.Decimal(12, 2)
+  discountAmount     Decimal              @default(0) @db.Decimal(12, 2)
+  promoCodeId        String?              @db.Uuid
+  totalAmount        Decimal              @default(0) @db.Decimal(12, 2)
+  deliveryOtp        String?
+  customerNote       String?
+  cancellationReason String?
+  completedAt        DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  customer           CustomerProfile      @relation(fields: [customerId], references: [id])
+  vendor             Vendor?              @relation(fields: [vendorId], references: [id])
+  rider              Rider?               @relation(fields: [riderId], references: [id])
+  pickupAddress      Address?             @relation("PickupAddress", fields: [pickupAddressId], references: [id])
+  deliveryAddress    Address?             @relation("DeliveryAddress", fields: [deliveryAddressId], references: [id])
+  items              OrderItem[]
+  statusHistory      OrderStatusHistory[]
+  payments           Payment[]
+  settlements        VendorSettlement[]
+  riderEarnings      RiderEarning[]
+  supportTickets     SupportTicket[]
+  promoCodeUsages    PromoCodeUsage[]
+  promoCode          PromoCode?           @relation(fields: [promoCodeId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@index([orderStatus, createdAt])
+  @@index([riderId, orderStatus])
+  @@map("orders")
+}
+
+model OrderItem {
+  id                 String   @id @default(uuid()) @db.Uuid
+  orderId            String   @db.Uuid
+  productId          String?  @db.Uuid
+  productName        String
+  unitPrice          Decimal  @db.Decimal(12, 2)
+  quantity           Int
+  totalPrice         Decimal  @db.Decimal(12, 2)
+  specialInstruction String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  order              Order    @relation(fields: [orderId], references: [id])
+  product            Product? @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id              String       @id @default(uuid()) @db.Uuid
+  orderId         String       @db.Uuid
+  previousStatus  OrderStatus?
+  newStatus       OrderStatus
+  changedByUserId String?      @db.Uuid
+  changedByRole   String
+  note            String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  order           Order        @relation(fields: [orderId], references: [id])
+  changedBy       User?        @relation("StatusChangedBy", fields: [changedByUserId], references: [id])
+
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
+}
+
+model Payment {
+  id                   String          @id @default(uuid()) @db.Uuid
+  orderId              String          @db.Uuid
+  customerId           String          @db.Uuid
+  gateway              String
+  transactionReference String          @unique
+  amount               Decimal         @db.Decimal(12, 2)
+  currency             String          @default("NGN")
+  paymentMethod        String?
+  paymentStatus        PaymentStatus   @default(PENDING)
+  gatewayResponse      Json?
+  paidAt               DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  order                Order           @relation(fields: [orderId], references: [id])
+  customer             CustomerProfile @relation(fields: [customerId], references: [id])
+
+  @@index([orderId, paymentStatus])
+  @@map("payments")
+}
+
+model PaymentWebhookLog {
+  id                   String    @id @default(uuid()) @db.Uuid
+  gateway              String
+  eventType            String
+  transactionReference String?
+  payload              Json
+  isVerified           Boolean   @default(false)
+  processedAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([gateway, eventType, transactionReference])
+  @@map("payment_webhook_logs")
+}
+
+model VendorSettlement {
+  id               String           @id @default(uuid()) @db.Uuid
+  vendorId         String           @db.Uuid
+  orderId          String           @db.Uuid
+  grossAmount      Decimal          @db.Decimal(12, 2)
+  commissionRate   Decimal          @db.Decimal(5, 2)
+  commissionAmount Decimal          @db.Decimal(12, 2)
+  netAmount        Decimal          @db.Decimal(12, 2)
+  settlementStatus SettlementStatus @default(PENDING)
+  paidAt           DateTime?
+  paymentReference String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  vendor           Vendor           @relation(fields: [vendorId], references: [id])
+  order            Order            @relation(fields: [orderId], references: [id])
+
+  @@unique([vendorId, orderId])
+  @@map("vendor_settlements")
+}
+
+model RiderEarning {
+  id                     String           @id @default(uuid()) @db.Uuid
+  riderId                String           @db.Uuid
+  orderId                String           @db.Uuid
+  deliveryFee            Decimal          @db.Decimal(12, 2)
+  riderPayout            Decimal          @db.Decimal(12, 2)
+  platformDeliveryMargin Decimal          @db.Decimal(12, 2)
+  payoutStatus           SettlementStatus @default(PENDING)
+  paidAt                 DateTime?
+  paymentReference       String?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  rider                  Rider            @relation(fields: [riderId], references: [id])
+  order                  Order            @relation(fields: [orderId], references: [id])
+
+  @@unique([riderId, orderId])
+  @@map("rider_earnings")
+}
+
+model SupportTicket {
+  id              String                 @id @default(uuid()) @db.Uuid
+  ticketNumber    String                 @unique
+  customerId      String                 @db.Uuid
+  orderId         String?                @db.Uuid
+  category        SupportTicketCategory
+  priority        SupportTicketPriority  @default(MEDIUM)
+  subject         String
+  description     String
+  status          SupportTicketStatus    @default(OPEN)
+  assignedAdminId String?                @db.Uuid
+  resolutionNote  String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  closedAt        DateTime?
+  customer        CustomerProfile        @relation(fields: [customerId], references: [id])
+  order           Order?                 @relation(fields: [orderId], references: [id])
+  assignedAdmin   User?                  @relation("TicketAssignedAdmin", fields: [assignedAdminId], references: [id])
+  messages        SupportTicketMessage[]
+
+  @@index([status, createdAt])
+  @@map("support_tickets")
+}
+
+model SupportTicketMessage {
+  id             String        @id @default(uuid()) @db.Uuid
+  ticketId       String        @db.Uuid
+  senderUserId   String        @db.Uuid
+  senderRole     String
+  message        String
+  attachmentUrl  String?
+  isInternalNote Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  ticket         SupportTicket @relation(fields: [ticketId], references: [id])
+  sender         User          @relation(fields: [senderUserId], references: [id])
+
+  @@map("support_ticket_messages")
+}
+
+model Notification {
+  id         String              @id @default(uuid()) @db.Uuid
+  userId     String              @db.Uuid
+  title      String
+  message    String
+  channel    NotificationChannel @default(IN_APP)
+  type       NotificationType
+  entityType String?
+  entityId   String?             @db.Uuid
+  isRead     Boolean             @default(false)
+  readAt     DateTime?
+  metadata   Json?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  user       User                @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead, createdAt])
+  @@index([channel, type, createdAt])
+  @@map("notifications")
+}
+
+model DeviceToken {
+  id         String         @id @default(uuid()) @db.Uuid
+  userId     String         @db.Uuid
+  token      String         @unique
+  platform   DevicePlatform
+  provider   PushProvider
+  appSurface AppSurface
+  deviceId   String?
+  isActive   Boolean        @default(true)
+  lastSeenAt DateTime       @default(now())
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  user       User           @relation(fields: [userId], references: [id])
+
+  @@index([userId, isActive, updatedAt])
+  @@index([provider, platform, isActive])
+  @@map("device_tokens")
+}
+
+model PromoCode {
+  id                    String            @id @default(uuid()) @db.Uuid
+  code                  String            @unique
+  title                 String
+  description           String?
+  discountType          PromoDiscountType
+  discountValue         Decimal           @db.Decimal(12, 2)
+  maxDiscountAmount     Decimal?          @db.Decimal(12, 2)
+  minimumOrderAmount    Decimal           @default(0) @db.Decimal(12, 2)
+  usageLimit            Int?
+  usageLimitPerCustomer Int?              @default(1)
+  usageCount            Int               @default(0)
+  firstOrderOnly        Boolean           @default(false)
+  serviceCategory       ServiceCategory?
+  vendorId              String?           @db.Uuid
+  createdByAdminId      String?           @db.Uuid
+  startsAt              DateTime
+  endsAt                DateTime
+  isActive              Boolean           @default(true)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  usages                PromoCodeUsage[]
+  vendor                Vendor?           @relation(fields: [vendorId], references: [id])
+  createdByAdmin        User?             @relation("PromoCreatedBy", fields: [createdByAdminId], references: [id])
+  orders                Order[]
+
+  @@index([isActive, startsAt, endsAt])
+  @@index([vendorId])
+  @@map("promo_codes")
+}
+
+model PromoCodeUsage {
+  id             String          @id @default(uuid()) @db.Uuid
+  promoCodeId    String          @db.Uuid
+  customerId     String          @db.Uuid
+  orderId        String          @db.Uuid
+  discountAmount Decimal         @db.Decimal(12, 2)
+  usedAt         DateTime        @default(now())
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  promoCode      PromoCode       @relation(fields: [promoCodeId], references: [id])
+  customer       CustomerProfile @relation(fields: [customerId], references: [id])
+  order          Order           @relation(fields: [orderId], references: [id])
+
+  @@unique([promoCodeId, orderId])
+  @@map("promo_code_usages")
+}
+
+model AdminAuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  adminUserId String   @db.Uuid
+  action      String
+  entityType  String
+  entityId    String?  @db.Uuid
+  oldValue    Json?
+  newValue    Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  adminUser   User     @relation(fields: [adminUserId], references: [id])
+
+  @@index([adminUserId, createdAt])
+  @@map("admin_audit_logs")
+}

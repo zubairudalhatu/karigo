@@ -1,0 +1,1 @@
+"use client";import{managementApi}from"../../src/api/management.api";import{ManagementPage}from"../../src/components/management-page";export default function Users(){return <ManagementPage title="Users"load={managementApi.users}headers={["Name","Role","Phone","Email","Status"]}cells={x=>[x.fullName,x.role,x.phoneNumber,x.email??"-",x.accountStatus]}/>}

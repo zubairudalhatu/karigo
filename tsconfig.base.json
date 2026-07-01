@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@karigo/config": ["packages/config/src/index.ts"],
+      "@karigo/shared-types": ["packages/shared-types/src/index.ts"],
+      "@karigo/ui-components": ["packages/ui-components/src/index.tsx"]
+    }
+  }
+}

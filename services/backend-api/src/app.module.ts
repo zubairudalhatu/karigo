@@ -1,0 +1,53 @@
+import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
+import { validateEnvironment } from "./config/environment";
+import { DomainModule } from "./domain/domain.module";
+import { AuthModule } from "./modules/auth/auth.module";
+import { AddressesModule } from "./modules/addresses/addresses.module";
+import { AdminOperationsModule } from "./modules/admin-operations/admin-operations.module";
+import { CustomersModule } from "./modules/customers/customers.module";
+import { DispatchModule } from "./modules/dispatch/dispatch.module";
+import { HealthModule } from "./modules/health/health.module";
+import { OrdersModule } from "./modules/orders/orders.module";
+import { NotificationsModule } from "./modules/notifications/notifications.module";
+import { PaymentsModule } from "./modules/payments/payments.module";
+import { ProductsModule } from "./modules/products/products.module";
+import { PromoModule } from "./modules/promos/promo.module";
+import { RidersModule } from "./modules/riders/riders.module";
+import { SupportModule } from "./modules/support/support.module";
+import { UsersModule } from "./modules/users/users.module";
+import { VendorsModule } from "./modules/vendors/vendors.module";
+import { VendorDashboardOrdersModule } from "./modules/vendor-dashboard-orders/vendor-dashboard-orders.module";
+import { PrismaModule } from "./prisma/prisma.module";
+import { SecurityModule } from "./security/security.module";
+import { AdminAuditModule } from "./common/services/admin-audit.module";
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validate: validateEnvironment
+    }),
+    PrismaModule,
+    AdminAuditModule,
+    SecurityModule,
+    HealthModule,
+    UsersModule,
+    AuthModule,
+    CustomersModule,
+    AddressesModule,
+    VendorsModule,
+    ProductsModule,
+    PromoModule,
+    RidersModule,
+    OrdersModule,
+    NotificationsModule,
+    PaymentsModule,
+    VendorDashboardOrdersModule,
+    DispatchModule,
+    SupportModule,
+    AdminOperationsModule,
+    DomainModule
+  ]
+})
+export class AppModule {}

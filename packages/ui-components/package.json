@@ -1,0 +1,13 @@
+{
+  "name": "@karigo/ui-components",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.tsx",
+  "types": "src/index.tsx",
+  "dependencies": {
+    "@karigo/config": "*"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  }
+}

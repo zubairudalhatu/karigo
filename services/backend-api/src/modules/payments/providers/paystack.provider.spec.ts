@@ -1,0 +1,97 @@
+import { BadRequestException, UnauthorizedException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { createHmac } from "crypto";
+import { PaystackProvider } from "./paystack.provider";
+
+describe("PaystackProvider", () => {
+  const secret = "sk_test_not-a-real-key";
+  const config = {
+    get: jest.fn((key: string, fallback?: string) => {
+      if (key === "PAYSTACK_SECRET_KEY") return secret;
+      if (key === "PAYSTACK_WEBHOOK_SECRET") return secret;
+      if (key === "PAYSTACK_BASE_URL") return "https://api.paystack.co";
+      return fallback;
+    }),
+    getOrThrow: jest.fn(() => secret)
+  };
+  const provider = new PaystackProvider(config as unknown as ConfigService);
+
+  beforeEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("initializes a sandbox transaction in kobo without exposing the secret", async () => {
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      status: true,
+      message: "Authorization URL created",
+      data: {
+        authorization_url: "https://checkout.paystack.com/test",
+        access_code: "test-access",
+        reference: "KGO-PAYSTACK-123"
+      }
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    const result = await provider.initialize({
+      transactionReference: "KGO-PAYSTACK-123",
+      amount: "6000.50",
+      currency: "NGN",
+      customerEmail: "customer@example.com",
+      customerPhone: "+2348012345678",
+      metadata: { orderId: "order-1" }
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("https://api.paystack.co/transaction/initialize", expect.objectContaining({
+      method: "POST",
+      body: expect.stringContaining("\"amount\":600050")
+    }));
+    expect(JSON.stringify(result)).not.toContain(secret);
+    expect(result.authorizationUrl).toBe("https://checkout.paystack.com/test");
+  });
+
+  it("requires an email address for Paystack initiation", async () => {
+    await expect(provider.initialize({
+      transactionReference: "KGO-PAYSTACK-123",
+      amount: "6000.00",
+      currency: "NGN",
+      customerPhone: "+2348012345678",
+      metadata: {}
+    })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("returns amount and currency evidence from verification", async () => {
+    jest.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      status: true,
+      data: { reference: "KGO-PAYSTACK-123", status: "success", amount: 600000, currency: "NGN" }
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await expect(provider.verify("KGO-PAYSTACK-123")).resolves.toEqual(expect.objectContaining({
+      successful: true,
+      amountMinor: 600000,
+      currency: "NGN"
+    }));
+  });
+
+  it("accepts a correctly signed charge.success webhook", async () => {
+    const payload = { event: "charge.success", data: { reference: "KGO-PAYSTACK-123", status: "success", amount: 600000, currency: "NGN" } };
+    const rawBody = Buffer.from(JSON.stringify(payload));
+    const signature = createHmac("sha512", secret).update(rawBody).digest("hex");
+
+    const result = await provider.parseWebhook(payload, { rawBody, signature });
+    expect(result).toEqual(expect.objectContaining({
+      verified: true,
+      successful: true,
+      transactionReference: "KGO-PAYSTACK-123",
+      amountMinor: 600000
+    }));
+    expect(result.providerResponse).toEqual(payload);
+    expect(result.providerResponse).not.toHaveProperty("_rawBody");
+  });
+
+  it("rejects an invalid webhook signature", async () => {
+    const payload = { event: "charge.success", data: { reference: "KGO-PAYSTACK-123" } };
+    await expect(provider.parseWebhook(payload, {
+      rawBody: Buffer.from(JSON.stringify(payload)),
+      signature: "invalid"
+    })).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+});

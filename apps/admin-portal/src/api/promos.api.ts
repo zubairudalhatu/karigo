@@ -1,0 +1,1 @@
+import { api } from "./client"; export const promosApi={list:()=>api.get<any[]>("admin/promos"),create:(body:any)=>api.post("admin/promos",body),update:(id:string,body:any)=>api.patch(`admin/promos/${id}`,body),deactivate:(id:string)=>api.patch(`admin/promos/${id}/deactivate`),report:()=>api.get<any[]>("admin/reports/promos")};
