@@ -11,6 +11,13 @@ import {
   VendorStatus
 } from "@prisma/client";
 import { hash } from "bcrypt";
+import {
+  DEMO_ACCOUNT_PHONES,
+  demoCredentialUpdate,
+  isDemoCredentialResetRequested,
+  isStagingDemoCredentialResetEnabled,
+  stagingSeedMessages
+} from "../src/seed/demo-seed-controls";
 
 const prisma = new PrismaClient();
 
@@ -31,6 +38,10 @@ async function main() {
   const seedPassword = process.env.SEED_DEMO_PASSWORD ?? "ChangeMe123!";
   const passwordHash = await hash(seedPassword, 10);
   const superAdminPasswordHash = await hash(process.env.SUPER_ADMIN_PASSWORD ?? seedPassword, 10);
+  const resetDemoCredentials = isStagingDemoCredentialResetEnabled();
+  if (isDemoCredentialResetRequested() && !resetDemoCredentials) {
+    console.warn("Credential reset requested but skipped: APP_ENV must be staging.");
+  }
   const superAdminPhone = process.env.SUPER_ADMIN_PHONE ?? "+2348000000000";
   const superAdminEmail = process.env.SUPER_ADMIN_EMAIL ?? "admin@karigo.local";
   const superAdminName = process.env.SUPER_ADMIN_NAME ?? "KariGO Super Admin";
@@ -39,10 +50,10 @@ async function main() {
     update: {
       fullName: superAdminName,
       email: superAdminEmail,
-      passwordHash: superAdminPasswordHash,
       accountStatus: AccountStatus.ACTIVE,
       adminRole: AdminRole.SUPER_ADMIN,
-      phoneVerified: true
+      phoneVerified: true,
+      ...demoCredentialUpdate(resetDemoCredentials, superAdminPasswordHash)
     },
     create: {
       fullName: superAdminName,
@@ -56,16 +67,16 @@ async function main() {
     }
   });
   await prisma.user.upsert({
-    where: { phoneNumber: "+2348000000001" },
+    where: { phoneNumber: DEMO_ACCOUNT_PHONES.operationsAdmin },
     update: {
-      passwordHash,
       accountStatus: AccountStatus.ACTIVE,
       adminRole: AdminRole.OPERATIONS_ADMIN,
-      phoneVerified: true
+      phoneVerified: true,
+      ...demoCredentialUpdate(resetDemoCredentials, passwordHash)
     },
     create: {
       fullName: "KariGO Demo Operations Admin",
-      phoneNumber: "+2348000000001",
+      phoneNumber: DEMO_ACCOUNT_PHONES.operationsAdmin,
       email: "operations@karigo.local",
       passwordHash,
       role: UserRole.ADMIN,
@@ -123,11 +134,15 @@ async function main() {
   });
 
   const vendorUser = await prisma.user.upsert({
-    where: { phoneNumber: "+2348000000101" },
-    update: { accountStatus: AccountStatus.ACTIVE, phoneVerified: true },
+    where: { phoneNumber: DEMO_ACCOUNT_PHONES.vendorOwner },
+    update: {
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      ...demoCredentialUpdate(resetDemoCredentials, passwordHash)
+    },
     create: {
       fullName: "Kano Kitchen Vendor",
-      phoneNumber: "+2348000000101",
+      phoneNumber: DEMO_ACCOUNT_PHONES.vendorOwner,
       email: "vendor@karigo.local",
       passwordHash,
       role: UserRole.VENDOR,
@@ -144,7 +159,7 @@ async function main() {
       businessName: "Kano Kitchen",
       businessCategory: "FOOD",
       description: "Sample active KariGO food vendor",
-      phoneNumber: "+2348000000101",
+      phoneNumber: DEMO_ACCOUNT_PHONES.vendorOwner,
       email: "vendor@karigo.local",
       address: "Zoo Road",
       city: "Kano",
@@ -167,11 +182,15 @@ async function main() {
   });
 
   const customerUser = await prisma.user.upsert({
-    where: { phoneNumber: "+2348000000201" },
-    update: { accountStatus: AccountStatus.ACTIVE, phoneVerified: true },
+    where: { phoneNumber: DEMO_ACCOUNT_PHONES.customer },
+    update: {
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      ...demoCredentialUpdate(resetDemoCredentials, passwordHash)
+    },
     create: {
       fullName: "KariGO Sample Customer",
-      phoneNumber: "+2348000000201",
+      phoneNumber: DEMO_ACCOUNT_PHONES.customer,
       email: "customer@karigo.local",
       passwordHash,
       role: UserRole.CUSTOMER,
@@ -225,11 +244,15 @@ async function main() {
   });
 
   const riderUser = await prisma.user.upsert({
-    where: { phoneNumber: "+2348000000401" },
-    update: { accountStatus: AccountStatus.ACTIVE, phoneVerified: true },
+    where: { phoneNumber: DEMO_ACCOUNT_PHONES.rider },
+    update: {
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      ...demoCredentialUpdate(resetDemoCredentials, passwordHash)
+    },
     create: {
       fullName: "KariGO Sample Rider",
-      phoneNumber: "+2348000000401",
+      phoneNumber: DEMO_ACCOUNT_PHONES.rider,
       email: "rider@karigo.local",
       passwordHash,
       role: UserRole.RIDER,
@@ -253,6 +276,8 @@ async function main() {
       availabilityStatus: RiderStatus.ONLINE
     }
   });
+
+  stagingSeedMessages(resetDemoCredentials).forEach((message) => console.info(message));
 }
 
 main()
