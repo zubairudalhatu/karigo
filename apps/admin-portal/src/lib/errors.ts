@@ -1,1 +1,31 @@
-import { KariGoApiError } from "@karigo/shared-types"; export function friendlyError(e:unknown){if(e instanceof KariGoApiError)return e.status===401?"Your session has expired. Please sign in again.":e.message;if(e instanceof Error&&e.message.includes("cannot use the admin portal"))return e.message;return"Dashboard could not be loaded. Please try again."} export function money(v:any){return`NGN ${Number(v??0).toLocaleString()}`}
+import { KariGoApiError } from "@karigo/shared-types";
+
+type ErrorContext = "login" | "dashboard";
+
+export function friendlyError(error: unknown, context: ErrorContext = "dashboard") {
+  if (error instanceof KariGoApiError) {
+    if (context === "login" && error.status === 401) {
+      return "Invalid phone number or password.";
+    }
+
+    if (error.status === 401 || error.status === 403) {
+      return "Your session has expired. Please sign in again.";
+    }
+
+    return context === "login"
+      ? "We could not sign you in. Please try again."
+      : "Unable to load dashboard. Please try again.";
+  }
+
+  if (error instanceof Error && error.message.includes("cannot use the admin portal")) {
+    return error.message;
+  }
+
+  return context === "login"
+    ? "We could not sign you in. Please try again."
+    : "Unable to load dashboard. Please try again.";
+}
+
+export function money(value: unknown) {
+  return `NGN ${Number(value ?? 0).toLocaleString()}`;
+}

@@ -16,7 +16,7 @@ export interface ApiClientOptions {
   baseUrl?: string;
   tokenStore?: TokenStore;
   defaultHeaders?: Record<string, string>;
-  onUnauthorized?: () => void | Promise<void>;
+  onUnauthorized?: (status: number) => void | Promise<void>;
 }
 
 export interface ApiRequestOptions extends Omit<RequestInit, "body" | "headers"> {
@@ -48,7 +48,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
     const payload = (await response.json().catch(() => null)) as ApiSuccessResponse<T> | ApiErrorResponse | null;
     if (!response.ok || !payload || payload.success === false) {
-      if (response.status === 401) await options.onUnauthorized?.();
+      if (
+        requestOptions.authenticated !== false &&
+        (response.status === 401 || response.status === 403)
+      ) {
+        await options.onUnauthorized?.(response.status);
+      }
       const error = payload && payload.success === false ? payload : undefined;
       throw new KariGoApiError(
         error?.message || `Request failed with status ${response.status}`,
