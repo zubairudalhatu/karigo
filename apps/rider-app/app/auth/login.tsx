@@ -19,7 +19,7 @@ export default function RiderLogin() {
       await login({ phoneNumber, password });
       router.replace("/tabs/dashboard");
     } catch (e) {
-      setError(friendlyError(e));
+      setError(friendlyError(e, "login"));
     } finally {
       setBusy(false);
     }

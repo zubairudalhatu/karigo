@@ -17,6 +17,7 @@
   `docs/deployment/staging-environment-variables.md`,
   `docs/deployment/staging-deployment-checklist.md`,
   `docs/deployment/staging-seed-data.md`
+- Mobile staging build guide: `docs/deployment/mobile-staging-build-guide.md`
 - Environment/provider variables: `services/backend-api/.env.example`,
   `docs/providers/provider-environment-variables.md`
 - Final technical reviews: `docs/handover/backend-final-review.md`,
@@ -43,15 +44,22 @@
   `docs/launch/go-no-go-readiness-scoring-matrix.md`,
   `docs/launch/full-staging-go-no-go-readiness-report.md`
 - Private staging provisioning/execution pack:
+  `docs/deployment/render-staging-migration-and-seed-guide.md`,
   `docs/deployment/private-staging-deployment-decision-record.md`,
   `docs/deployment/private-staging-environment-validation.md`,
   `docs/deployment/private-staging-demo-account-register.md`,
   `docs/deployment/private-staging-seed-execution-record.md`,
   `docs/qa/private-staging-deployment-verification-script.md`,
+  `docs/qa/private-staging-health-verification.md`,
   `docs/qa/private-staging-primary-simulation-execution-record.md`,
   `docs/qa/private-staging-negative-simulation-execution-record.md`,
   `docs/qa/private-staging-evidence-register.md`,
   `docs/qa/private-staging-issue-register.md`
+- Mobile staging QA pack:
+  `docs/qa/customer-app-staging-test-checklist.md`,
+  `docs/qa/rider-app-staging-test-checklist.md`,
+  `docs/qa/customer-app-staging-test-evidence.md`,
+  `docs/qa/rider-app-staging-test-evidence.md`
 
 ## Launch Documents
 

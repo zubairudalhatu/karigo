@@ -17,7 +17,7 @@ export default function CustomerLogin() {
     try {
       await login({ phoneNumber, password });
       router.replace("/tabs/home");
-    } catch (e) { setError(friendlyError(e)); } finally { setBusy(false); }
+    } catch (e) { setError(friendlyError(e, "login")); } finally { setBusy(false); }
   }
 
   return <Screen title="Customer login">

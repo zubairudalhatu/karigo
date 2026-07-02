@@ -203,6 +203,9 @@ checklist is fully approved.
 - Staging deployment pack: `docs/deployment/staging-readme.md`,
   `docs/deployment/staging-deployment-plan.md`, and
   `docs/deployment/staging-deployment-checklist.md`
+- Mobile staging builds: `docs/deployment/mobile-staging-build-guide.md`,
+  `docs/qa/customer-app-staging-test-checklist.md`, and
+  `docs/qa/rider-app-staging-test-checklist.md`
 - Internal demo runbook/checklist and feedback form: `docs/demo/internal-demo-runbook.md`,
   `docs/demo/internal-demo-checklist.md`, and `docs/demo/demo-feedback-form.md`
 - Staging smoke test and issue register: `docs/qa/staging-smoke-test-script.md` and
@@ -218,11 +221,13 @@ checklist is fully approved.
   `docs/launch/controlled-soft-launch-recommendation.md`, and
   `docs/management/go-no-go-meeting-pack.md`
 - Private staging provisioning/execution pack:
+  `docs/deployment/render-staging-migration-and-seed-guide.md`,
   `docs/deployment/private-staging-deployment-decision-record.md`,
   `docs/deployment/private-staging-environment-validation.md`,
   `docs/deployment/private-staging-demo-account-register.md`,
   `docs/deployment/private-staging-seed-execution-record.md`,
   `docs/qa/private-staging-deployment-verification-script.md`,
+  `docs/qa/private-staging-health-verification.md`,
   `docs/qa/private-staging-primary-simulation-execution-record.md`,
   `docs/qa/private-staging-negative-simulation-execution-record.md`,
   `docs/qa/private-staging-evidence-register.md`, and

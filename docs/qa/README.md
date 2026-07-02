@@ -32,10 +32,18 @@ evidence. They do not authorize real-customer launch by themselves.
 ## Private Staging Execution
 
 - `private-staging-deployment-verification-script.md`
+- `private-staging-health-verification.md`
 - `private-staging-primary-simulation-execution-record.md`
 - `private-staging-negative-simulation-execution-record.md`
 - `private-staging-evidence-register.md`
 - `private-staging-issue-register.md`
+
+## Mobile Staging Tests
+
+- `customer-app-staging-test-checklist.md`
+- `rider-app-staging-test-checklist.md`
+- `customer-app-staging-test-evidence.md`
+- `rider-app-staging-test-evidence.md`
 
 ## Evidence Rules
 

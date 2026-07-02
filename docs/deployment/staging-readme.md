@@ -31,6 +31,14 @@ npm run build
 6. Verify `GET /api/v1/health` and the approved `/api/docs` policy.
 7. Run `docs/qa/staging-smoke-test-script.md`.
 
+## Mobile Staging Builds
+
+- Build guide: `mobile-staging-build-guide.md`
+- Customer checklist: `../qa/customer-app-staging-test-checklist.md`
+- Rider checklist: `../qa/rider-app-staging-test-checklist.md`
+- Customer evidence template: `../qa/customer-app-staging-test-evidence.md`
+- Rider evidence template: `../qa/rider-app-staging-test-evidence.md`
+
 ## Troubleshooting
 
 - Database errors: verify staging `DATABASE_URL`, network rules, migrations, and SSL requirement.
@@ -44,11 +52,13 @@ sandbox testing only after staging smoke and internal demo approval.
 
 ## Private Staging Task 38 Records
 
+- `render-staging-migration-and-seed-guide.md`
 - `private-staging-deployment-decision-record.md`
 - `private-staging-environment-validation.md`
 - `private-staging-demo-account-register.md`
 - `private-staging-seed-execution-record.md`
 - `../qa/private-staging-deployment-verification-script.md`
+- `../qa/private-staging-health-verification.md`
 - `../qa/private-staging-primary-simulation-execution-record.md`
 - `../qa/private-staging-negative-simulation-execution-record.md`
 - `../qa/private-staging-evidence-register.md`
