@@ -15,31 +15,9 @@
         "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1"
       }
     },
-    "rider-staging": {
-      "distribution": "internal",
-      "channel": "rider-staging",
-      "android": {
-        "buildType": "apk"
-      },
-      "env": {
-        "APP_VARIANT": "staging",
-        "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1"
-      }
-    },
     "customer-staging-ios-simulator": {
       "distribution": "internal",
       "channel": "customer-staging",
-      "ios": {
-        "simulator": true
-      },
-      "env": {
-        "APP_VARIANT": "staging",
-        "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1"
-      }
-    },
-    "rider-staging-ios-simulator": {
-      "distribution": "internal",
-      "channel": "rider-staging",
       "ios": {
         "simulator": true
       },

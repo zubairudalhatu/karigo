@@ -43,25 +43,18 @@ The staging identifiers are intentionally distinct from future production app ID
 
 ## EAS Profiles
 
-Root `eas.json` defines:
+Each Expo app has its own EAS configuration. Do not rely on a root `eas.json` for app
+builds.
 
-- `customer-staging`
-- `rider-staging`
-- `customer-staging-ios-simulator`
-- `rider-staging-ios-simulator`
+- Customer: `apps/customer-app/eas.json`
+- Rider: `apps/rider-app/eas.json`
 
-Android staging builds are internal APK builds.
+Android staging builds use internal distribution and APK output for direct installation
+on approved Android test devices.
 
 ## Customer App Android Internal Build
 
-From the repository root:
-
-```bash
-npx eas-cli build --platform android --profile customer-staging --project-dir apps/customer-app
-```
-
-If the installed EAS CLI does not support `--project-dir`, run from the app directory and
-copy or symlink the root `eas.json` into the app directory for the build session only:
+Run from the Customer App directory:
 
 ```bash
 cd apps/customer-app
@@ -70,13 +63,7 @@ npx eas-cli build --platform android --profile customer-staging
 
 ## Rider App Android Internal Build
 
-From the repository root:
-
-```bash
-npx eas-cli build --platform android --profile rider-staging --project-dir apps/rider-app
-```
-
-Fallback if `--project-dir` is unavailable:
+Run from the Rider App directory:
 
 ```bash
 cd apps/rider-app
@@ -88,8 +75,11 @@ npx eas-cli build --platform android --profile rider-staging
 Only run these when iOS testing is approved and Expo project credentials are ready:
 
 ```bash
-npx eas-cli build --platform ios --profile customer-staging-ios-simulator --project-dir apps/customer-app
-npx eas-cli build --platform ios --profile rider-staging-ios-simulator --project-dir apps/rider-app
+cd apps/customer-app
+npx eas-cli build --platform ios --profile customer-staging-ios-simulator
+
+cd ../rider-app
+npx eas-cli build --platform ios --profile rider-staging-ios-simulator
 ```
 
 ## Install On Internal Android Devices
