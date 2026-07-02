@@ -23,6 +23,31 @@ app `.env` files. Do not commit local `.env` files.
 - Secure handover channel for staging demo credentials.
 - GitHub access to the current `main` branch.
 
+## Local Node And CLI Guidance
+
+Use Node `22.x` for local Expo/EAS staging builds. The repository pins Node 22 because
+newer non-LTS Node releases can make Expo/EAS config resolution behave inconsistently on
+Windows.
+
+Check before building:
+
+```bash
+node --version
+```
+
+If Expo config validation appears to pause while using `npx`, run the local workspace
+binary without allowing package installation:
+
+```bash
+npx --no-install expo config --type public
+```
+
+That command should be run from the app directory after setting the staging environment
+variables for local validation.
+
+The Customer App keeps `eas-cli` as a local dev dependency so `npx eas-cli ...` resolves
+inside the monorepo instead of downloading the CLI during a staging build attempt.
+
 Authenticate securely:
 
 ```bash
@@ -59,6 +84,23 @@ Run from the Customer App directory:
 ```bash
 cd apps/customer-app
 npx eas-cli build --platform android --profile customer-staging
+```
+
+Local Customer App config validation:
+
+```bash
+cd apps/customer-app
+APP_VARIANT=staging EXPO_PUBLIC_API_BASE_URL=https://karigo-8htn.onrender.com/api/v1 npx --no-install expo config --type public
+```
+
+PowerShell equivalent:
+
+```powershell
+cd apps/customer-app
+$env:APP_VARIANT = "staging"
+$env:EXPO_PUBLIC_API_BASE_URL = "https://karigo-8htn.onrender.com/api/v1"
+npx --no-install expo config --type public
+npx --no-install eas-cli --version
 ```
 
 ## Rider App Android Internal Build

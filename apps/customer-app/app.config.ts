@@ -1,5 +1,3 @@
-import type { ConfigContext, ExpoConfig } from "expo/config";
-
 const easExtra = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
@@ -8,7 +6,7 @@ const isStaging =
   process.env.EAS_BUILD_PROFILE === "customer-staging" ||
   process.env.EAS_BUILD_PROFILE === "customer-staging-ios-simulator";
 
-export default ({ config }: ConfigContext): ExpoConfig => ({
+export default ({ config }: { config: Record<string, any> }) => ({
   ...config,
   name: isStaging ? "KariGO Customer Staging" : "KariGO Customer",
   slug: "karigo-customer",
