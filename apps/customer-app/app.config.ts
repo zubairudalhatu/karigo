@@ -20,6 +20,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     resizeMode: "contain",
     backgroundColor: "#FFFFFF"
   },
+  updates: {
+    ...config.updates,
+    url: "https://u.expo.dev/467aa2f6-22b1-4a81-a9d6-c38f3ebe191d"
+  },
+  runtimeVersion: {
+    policy: "appVersion"
+  },
   android: {
     ...config.android,
     package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer"
