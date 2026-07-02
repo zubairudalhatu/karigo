@@ -1,5 +1,8 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
+const easExtra = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+
 const isStaging =
   process.env.APP_VARIANT === "staging" ||
   process.env.EAS_BUILD_PROFILE === "customer-staging" ||
@@ -28,6 +31,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   extra: {
     ...config.extra,
     router: {},
-    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? ""
+    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
+    eas: {
+      ...easExtra(config.extra?.eas),
+      projectId: "467aa2f6-22b1-4a81-a9d6-c38f3ebe191d"
+    }
   }
 });
