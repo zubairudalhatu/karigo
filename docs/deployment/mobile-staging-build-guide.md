@@ -45,8 +45,13 @@ npx --no-install expo config --type public
 That command should be run from the app directory after setting the staging environment
 variables for local validation.
 
-The Customer App keeps `eas-cli` as a local dev dependency so `npx eas-cli ...` resolves
-inside the monorepo instead of downloading the CLI during a staging build attempt.
+Do not add `eas-cli` to either mobile app's dependencies or dev dependencies. Keep EAS
+CLI as a shell tool through `npx eas-cli ...` or an approved global installation so it
+does not affect Expo SDK package resolution inside the app.
+
+For Expo SDK 53 Android builds, Expo Router peer packages are declared explicitly in the
+mobile app manifests. This keeps `expo-constants`, `expo-linking`, and
+`react-native-screens` aligned with the SDK-compatible versions used by Expo prebuild.
 
 Authenticate securely:
 
@@ -100,7 +105,7 @@ cd apps/customer-app
 $env:APP_VARIANT = "staging"
 $env:EXPO_PUBLIC_API_BASE_URL = "https://karigo-8htn.onrender.com/api/v1"
 npx --no-install expo config --type public
-npx --no-install eas-cli --version
+npx eas-cli --version
 ```
 
 ## Rider App Android Internal Build
