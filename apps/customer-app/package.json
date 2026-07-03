@@ -7,6 +7,7 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
+    "test:regression": "node scripts/staging-regression-check.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

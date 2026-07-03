@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { OrderStatus, Prisma, PromoDiscountType, ServiceCategory } from "@prisma/client";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -16,7 +17,7 @@ export interface PromoValidationContext {
 
 @Injectable()
 export class PromoService {
-  constructor(private readonly prisma: PrismaService, private readonly audit: AdminAuditService) {}
+  constructor(private readonly prisma: PrismaService, private readonly audit: AdminAuditService, private readonly config: ConfigService) {}
 
   async create(adminUserId: string, dto: CreatePromoDto) {
     this.assertDates(dto.startsAt, dto.endsAt);
@@ -96,7 +97,7 @@ export class PromoService {
     const customer = await this.requireCustomer(userId);
     let context: PromoValidationContext = {
       subtotal: new Prisma.Decimal(dto.subtotal),
-      deliveryFee: new Prisma.Decimal(dto.deliveryFee ?? 0),
+      deliveryFee: new Prisma.Decimal(dto.deliveryFee ?? this.config.get<number>("STANDARD_DELIVERY_FEE", 1000)),
       vendorId: dto.vendorId,
       serviceCategory: dto.serviceCategory,
       orderId: dto.orderId
@@ -142,7 +143,7 @@ export class PromoService {
     if (promo.maxDiscountAmount && discount.greaterThan(promo.maxDiscountAmount)) discount = promo.maxDiscountAmount;
     if (discount.greaterThan(context.subtotal)) discount = context.subtotal;
     const finalPayableAmount = context.subtotal.add(context.deliveryFee).sub(discount);
-    return { promo, discountAmount: discount, finalPayableAmount: finalPayableAmount.lessThan(0) ? new Prisma.Decimal(0) : finalPayableAmount };
+    return { promo, deliveryFee: context.deliveryFee, discountAmount: discount, finalPayableAmount: finalPayableAmount.lessThan(0) ? new Prisma.Decimal(0) : finalPayableAmount };
   }
 
   async report() {

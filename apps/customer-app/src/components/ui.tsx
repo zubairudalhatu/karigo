@@ -1,11 +1,11 @@
 import { brand } from "@karigo/config";
 import { Link, Redirect } from "expo-router";
 import { ReactNode } from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAuth } from "../contexts/auth-context";
 
-export function Screen({ children, title, actions }: { children: ReactNode; title?: string; actions?: ReactNode }) {
-  return <ScrollView contentContainerStyle={styles.screen}>{title ? <View style={styles.heading}><Text style={styles.title}>{title}</Text>{actions}</View> : null}{children}</ScrollView>;
+export function Screen({ children, title, actions, refreshing, onRefresh }: { children: ReactNode; title?: string; actions?: ReactNode; refreshing?: boolean; onRefresh?: () => void }) {
+  return <ScrollView contentContainerStyle={styles.screen} refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={brand.colors.primary} /> : undefined}>{title ? <View style={styles.heading}><Text style={styles.title}>{title}</Text>{actions}</View> : null}{children}</ScrollView>;
 }
 
 export function Field(props: React.ComponentProps<typeof TextInput>) {

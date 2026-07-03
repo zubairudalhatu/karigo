@@ -11,7 +11,8 @@ describe("PromoService", () => {
     customerProfile: { findUnique: jest.fn() }
   };
   const audit = { record: jest.fn() };
-  const service = new PromoService(prisma as unknown as PrismaService, audit as never);
+  const config = { get: jest.fn((_key: string, fallback: number) => fallback) };
+  const service = new PromoService(prisma as unknown as PrismaService, audit as never, config as never);
 
   beforeEach(() => jest.clearAllMocks());
 
@@ -32,7 +33,32 @@ describe("PromoService", () => {
       serviceCategory: ServiceCategory.FOOD
     });
     expect(result.discountAmount.toNumber()).toBe(1000);
+    expect(result.deliveryFee.toNumber()).toBe(1000);
     expect(result.finalPayableAmount.toNumber()).toBe(15000);
+  });
+
+  it("uses the configured delivery fee when validating before an order exists", async () => {
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.promoCode.findUnique.mockResolvedValue({
+      id: "promo-1", code: "KARIGOFIRST", isActive: true,
+      startsAt: new Date("2025-01-01"), endsAt: new Date("2030-01-01"),
+      usageLimit: null, usageCount: 0, usageLimitPerCustomer: 1, firstOrderOnly: false,
+      minimumOrderAmount: new Prisma.Decimal(0), vendorId: null, serviceCategory: null,
+      discountType: PromoDiscountType.PERCENTAGE, discountValue: new Prisma.Decimal(10),
+      maxDiscountAmount: null
+    });
+    prisma.promoCodeUsage.count.mockResolvedValue(0);
+    config.get.mockReturnValue(1000);
+
+    const result = await service.validate("user-1", {
+      promoCode: "KARIGOFIRST",
+      subtotal: 3000,
+      serviceCategory: ServiceCategory.FOOD
+    });
+
+    expect(result.deliveryFee.toNumber()).toBe(1000);
+    expect(result.discountAmount.toNumber()).toBe(300);
+    expect(result.finalPayableAmount.toNumber()).toBe(3700);
   });
 
   it("rejects vendor-restricted promos for another vendor", async () => {

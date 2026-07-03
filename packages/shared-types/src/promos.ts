@@ -12,6 +12,7 @@ export interface ValidatePromoRequest {
 export interface PromoValidationResult {
   promoCodeId: string;
   code: string;
+  deliveryFee: number;
   discountAmount: number;
   finalPayableAmount: number;
 }
