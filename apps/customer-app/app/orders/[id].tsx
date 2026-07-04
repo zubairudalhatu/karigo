@@ -13,9 +13,16 @@ export default function OrderTracking() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [deliveryOtp, setDeliveryOtp] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState("");
   const load = () => ordersApi.detail(id).then(setOrder).catch((e) => setError(friendlyError(e)));
 
   useEffect(() => { void load(); }, [id]);
+  useEffect(() => {
+    setDeliveryOtp("");
+    setOtpError("");
+  }, [order?.id, order?.orderStatus]);
 
   async function pay() {
     if (!order) return;
@@ -27,9 +34,26 @@ export default function OrderTracking() {
     } catch (e) { setError(friendlyError(e)); } finally { setBusy(false); }
   }
 
+  async function revealDeliveryOtp() {
+    if (!order) return;
+    setOtpLoading(true);
+    setOtpError("");
+    try {
+      const result = await ordersApi.deliveryOtp(order.id);
+      setDeliveryOtp(result.deliveryOtp);
+    } catch (e) {
+      setDeliveryOtp("");
+      setOtpError(friendlyError(e));
+    } finally {
+      setOtpLoading(false);
+    }
+  }
+
   if (!order && !error) return <Loading label="Loading order..." />;
 
   const pricing = order ? pricingFromServer(order) : null;
+  const canRevealDeliveryOtp = order ? ["ARRIVED_DESTINATION", "DELIVERED"].includes(order.orderStatus) : false;
+  const groupedOtp = deliveryOtp ? `${deliveryOtp.slice(0, 3)} ${deliveryOtp.slice(3)}` : "";
 
   return <Protected><Screen title={order?.orderNumber ?? "Order details"}><Message>{message}</Message><Message error>{error}</Message>
     {order && pricing ? <>
@@ -43,7 +67,14 @@ export default function OrderTracking() {
       {order.paymentStatus === "PENDING" ? <Button title={busy ? "Verifying..." : "Pay with mock provider"} onPress={pay} disabled={busy} /> : null}
       {order.items?.map((item) => <Card key={item.id}><Text>{item.productName} x {item.quantity}</Text><Text>{money(item.totalPrice)}</Text></Card>)}
       <Text style={ui.title}>Order timeline</Text>{order.statusHistory.map((event) => <Card key={event.id}><StatusBadge status={event.newStatus} /><Text style={ui.muted}>{event.note || "Order updated"}</Text></Card>)}
-      <Card><Text style={ui.title}>Delivery safety</Text><Text style={ui.muted}>Do not share your delivery OTP until you have received your order.</Text></Card>
+      {canRevealDeliveryOtp ? <Card>
+        <Text style={ui.title}>Delivery code</Text>
+        <Text style={ui.muted}>Only share this code after you have received your order.</Text>
+        <Message error>{otpError}</Message>
+        {deliveryOtp ? <Text style={ui.otpCode}>{groupedOtp}</Text> : <Button title={otpLoading ? "Loading code..." : "Show delivery code"} onPress={revealDeliveryOtp} disabled={otpLoading} />}
+        {otpError ? <Button tone="muted" title="Retry delivery code" onPress={revealDeliveryOtp} disabled={otpLoading} /> : null}
+      </Card> : null}
+      <Card><Text style={ui.title}>Delivery safety</Text><Text style={ui.muted}>Only share this code after you have received your order.</Text></Card>
     </> : null}
   </Screen></Protected>;
 }

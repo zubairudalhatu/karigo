@@ -34,6 +34,10 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 | Mock payment flow works | Mock initiation/verification updates order | Pending | No live gateway |
 | Order tracking works | Tracking/status page loads | Passed | Paid order visible after mock payment |
 | Order details pricing breakdown is clear | Subtotal, delivery fee, discount and payable are displayed | Fixed | Uses server order fields |
+| Delivery code stays hidden before arrival | No OTP appears before `ARRIVED_DESTINATION` | Fixed | Customer must not see code early |
+| Delivery code reveal works | Eligible order shows "Show delivery code", then grouped six-digit code | Fixed | Only visible to owning customer after tap |
+| Delivery code safety copy is clear | "Only share this code after you have received your order." is visible | Fixed | Do not record OTP in QA evidence |
+| Delivery code unavailable after completion | Completed orders no longer reveal the delivery OTP | Fixed | Backend clears code on completion |
 | Notifications page loads | Customer notifications render | Pending |  |
 | Support ticket flow works | Customer can create/view ticket | Fixed | Newly created ticket is inserted immediately and list refreshes on focus/pull |
 | Route names are hidden | Route segments such as `checkout`, `support`, `tabs/` are not visible as headers | Fixed | Expo Router titles are explicitly configured |
@@ -45,7 +49,7 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 - Customer browsed Kano Kitchen, added Chicken Suya, checked out, applied `KARIGOFIRST`, completed mock payment, and saw the paid order.
 - Vendor Dashboard received the paid order.
 - Admin Portal reflected the order, GMV, delivery fee, and support activity.
-- Defects fixed after this test: route-name leakage, missing checkout delivery-fee line, mixed promo success/error state, reused-promo copy, discount reset after failed promo validation, and support list refresh after ticket creation.
+- Defects fixed after this test: route-name leakage, missing checkout delivery-fee line, mixed promo success/error state, reused-promo copy, discount reset after failed promo validation, support list refresh after ticket creation, and secure customer delivery-code reveal for Rider completion.
 
 ## Seeded Persona Reference
 

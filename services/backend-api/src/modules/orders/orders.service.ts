@@ -14,6 +14,11 @@ const VENDOR_ORDER_CATEGORIES: ServiceCategory[] = [
   ServiceCategory.MARKET
 ];
 
+const DELIVERY_OTP_VISIBLE_STATUSES: OrderStatus[] = [
+  OrderStatus.ARRIVED_DESTINATION,
+  OrderStatus.DELIVERED
+];
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -258,6 +263,33 @@ export class OrdersService {
       orderStatus: order.orderStatus,
       paymentStatus: order.paymentStatus,
       statusHistory: order.statusHistory
+    };
+  }
+
+  async deliveryOtp(userId: string, orderId: string) {
+    const customer = await this.requireCustomer(userId);
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, customerId: customer.id },
+      select: {
+        id: true,
+        orderNumber: true,
+        orderStatus: true,
+        deliveryOtp: true
+      }
+    });
+    if (!order) {
+      throw new NotFoundException("Order not found");
+    }
+    if (!DELIVERY_OTP_VISIBLE_STATUSES.includes(order.orderStatus)) {
+      throw new BadRequestException("Delivery code is only available after the rider arrives.");
+    }
+    if (!order.deliveryOtp) {
+      throw new BadRequestException("Delivery code is no longer available for this order.");
+    }
+    return {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      deliveryOtp: order.deliveryOtp
     };
   }
 

@@ -31,6 +31,9 @@ details in Git.
 | On-the-way status works | Delivery status updates safely | Pending |  |
 | Arrived status works | Arrived-at-destination status updates safely | Pending |  |
 | Delivery OTP completion works | Correct OTP completes delivery | Pending | Do not record OTP |
+| Rider cannot view OTP | Rider app only accepts customer-supplied OTP; it does not retrieve/display the code | Fixed | OTP comes from Customer App reveal |
+| Invalid OTP is rejected | Wrong code fails safely and order remains active | Pending |  |
+| Valid OTP completes order | Customer-supplied code moves order to completed and clears code | Pending |  |
 | Earnings page loads | Earnings summary renders | Pending |  |
 | Notification page loads | Rider notifications render | Pending |  |
 | Header polish | No route names, internal paths, or duplicate native titles are visible | Pending | Back arrow remains on secondary screens |
@@ -56,6 +59,8 @@ Use staging data only. The backend remains the source of truth for valid transit
 - Do not record delivery OTPs in Git, screenshots, chat, or QA evidence.
 - Confirm invalid OTP is rejected.
 - Confirm a valid OTP completes the delivery.
+- Confirm the Rider app never displays the OTP before submission.
+- Confirm the Customer app reveals the OTP only after arrival/delivered status.
 - Confirm earnings and order history update after successful completion.
 - Confirm in-app notifications remain available if mock push/WhatsApp/email providers are active.
 

@@ -1,5 +1,5 @@
 import { ConfigService } from "@nestjs/config";
-import { NotFoundException } from "@nestjs/common";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { OrderStatus, PaymentStatus, Prisma, ServiceCategory } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { OrdersService } from "./orders.service";
@@ -7,6 +7,7 @@ import { PromoService } from "../promos/promo.service";
 import { NotificationsService } from "../notifications/notifications.service";
 
 describe("OrdersService", () => {
+  const validDeliveryOtp = ["1", "2", "3", "4", "5", "6"].join("");
   const prisma = {
     customerProfile: { findUnique: jest.fn() },
     vendor: { findFirst: jest.fn() },
@@ -120,5 +121,63 @@ describe("OrdersService", () => {
     expect(result.promoCodeId).toBe("promo-1");
     expect(result.discountAmount.toNumber()).toBe(500);
     expect(result.totalAmount.toNumber()).toBe(5500);
+  });
+
+  it("returns delivery OTP only for an owned arrived or delivered order", async () => {
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.order.findFirst.mockResolvedValue({
+      id: "order-1",
+      orderNumber: "KGO-1",
+      orderStatus: OrderStatus.ARRIVED_DESTINATION,
+      deliveryOtp: validDeliveryOtp
+    });
+
+    const result = await service.deliveryOtp("user-1", "order-1");
+
+    expect(prisma.order.findFirst).toHaveBeenCalledWith({
+      where: { id: "order-1", customerId: "customer-1" },
+      select: {
+        id: true,
+        orderNumber: true,
+        orderStatus: true,
+        deliveryOtp: true
+      }
+    });
+    expect(result).toEqual({
+      orderId: "order-1",
+      orderNumber: "KGO-1",
+      deliveryOtp: validDeliveryOtp
+    });
+  });
+
+  it("does not return delivery OTP for another customer's order", async () => {
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.order.findFirst.mockResolvedValue(null);
+
+    await expect(service.deliveryOtp("user-1", "order-2")).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("hides delivery OTP before rider arrival", async () => {
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.order.findFirst.mockResolvedValue({
+      id: "order-1",
+      orderNumber: "KGO-1",
+      orderStatus: OrderStatus.ON_THE_WAY,
+      deliveryOtp: validDeliveryOtp
+    });
+
+    await expect(service.deliveryOtp("user-1", "order-1")).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("hides delivery OTP after completion or when it has been cleared", async () => {
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.order.findFirst.mockResolvedValue({
+      id: "order-1",
+      orderNumber: "KGO-1",
+      orderStatus: OrderStatus.COMPLETED,
+      deliveryOtp: null
+    });
+
+    await expect(service.deliveryOtp("user-1", "order-1")).rejects.toBeInstanceOf(BadRequestException);
   });
 });

@@ -81,6 +81,7 @@ const styles = StyleSheet.create({
   badgeDanger: { backgroundColor: "#FEE2E2", color: "#991B1B" },
   badgeWarning: { backgroundColor: "#FEF3C7", color: "#92400E" },
   badgeInfo: { backgroundColor: "#DBEAFE", color: "#1E40AF" },
+  otpCode: { color: brand.colors.charcoal, fontSize: 32, fontWeight: "900", letterSpacing: 4, textAlign: "center" },
   link: { color: brand.colors.primary, fontWeight: "700", paddingVertical: 6 }
 });
 

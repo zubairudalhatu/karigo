@@ -57,6 +57,7 @@ expect(jobDetail.includes("Accept job") && jobDetail.includes("Reject job"), "Jo
 expect(jobDetail.includes("RIDER_ARRIVING_PICKUP") && jobDetail.includes("PICKED_UP"), "Job detail must support pickup status progression.");
 expect(jobDetail.includes("ON_THE_WAY") && jobDetail.includes("ARRIVED_DESTINATION"), "Job detail must support delivery status progression.");
 expect(jobDetail.includes("Complete delivery") && jobDetail.includes("Delivery completed successfully."), "Job detail must support OTP completion.");
+expect(!jobsIndex.includes("deliveryOtp") && !jobDetail.includes("ordersApi.deliveryOtp"), "Rider app must not retrieve or display the customer delivery OTP.");
 
 if (failures.length) {
   console.error("Rider staging regression check failed:");

@@ -15,6 +15,8 @@ import { DispatchStatusService } from "./dispatch-status.service";
 import { DispatchService } from "./dispatch.service";
 
 describe("DispatchService", () => {
+  const validDeliveryOtp = ["1", "2", "3", "4", "5", "6"].join("");
+  const invalidDeliveryOtp = ["6", "5", "4", "3", "2", "1"].join("");
   const tx = {
     rider: { update: jest.fn() },
     order: { update: jest.fn() },
@@ -102,10 +104,10 @@ describe("DispatchService", () => {
     prisma.order.findFirst.mockResolvedValue({
       id: "order-1",
       orderStatus: OrderStatus.DELIVERED,
-      deliveryOtp: "123456"
+      deliveryOtp: validDeliveryOtp
     });
 
-    await expect(service.completeJob("rider-user-1", "order-1", { deliveryOtp: "654321" }))
+    await expect(service.completeJob("rider-user-1", "order-1", { deliveryOtp: invalidDeliveryOtp }))
       .rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
@@ -120,14 +122,14 @@ describe("DispatchService", () => {
       vendorId: "vendor-1",
       orderStatus: OrderStatus.DELIVERED,
       paymentStatus: PaymentStatus.SUCCESSFUL,
-      deliveryOtp: "123456",
+      deliveryOtp: validDeliveryOtp,
       deliveryFee: new Prisma.Decimal(1000),
       subtotal: new Prisma.Decimal(5000),
       vendor: { commissionRate: new Prisma.Decimal(15) }
     });
     tx.order.update.mockResolvedValue({ id: "order-1" });
 
-    await service.completeJob("rider-user-1", "order-1", { deliveryOtp: "123456" });
+    await service.completeJob("rider-user-1", "order-1", { deliveryOtp: validDeliveryOtp });
 
     expect(tx.riderEarning.upsert).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({
@@ -144,6 +146,23 @@ describe("DispatchService", () => {
     }));
     expect(tx.order.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ orderStatus: OrderStatus.COMPLETED, deliveryOtp: null })
+    }));
+  });
+
+  it("does not expose delivery OTP in rider job responses", async () => {
+    prisma.rider.findUnique.mockResolvedValue({
+      id: "rider-1",
+      user: { accountStatus: AccountStatus.ACTIVE }
+    });
+    prisma.order.findFirst.mockResolvedValue({
+      id: "order-1",
+      orderStatus: OrderStatus.DELIVERED
+    });
+
+    await service.riderJob("rider-user-1", "order-1");
+
+    expect(prisma.order.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.not.objectContaining({ deliveryOtp: true })
     }));
   });
 });

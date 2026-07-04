@@ -37,6 +37,15 @@ assert(checkout.includes("await loadQuote(\"\", { keepUiError: true })"), "Promo
 const orderDetail = read("app", "orders", "[id].tsx");
 assert(orderDetail.includes("Delivery fee:"), "Order detail must show delivery fee.");
 assert(orderDetail.includes("Payable:"), "Order detail must show payable total.");
+assert(orderDetail.includes("ordersApi.deliveryOtp"), "Order detail must fetch delivery OTP through the dedicated endpoint.");
+assert(orderDetail.includes("[\"ARRIVED_DESTINATION\", \"DELIVERED\"].includes(order.orderStatus)"), "Delivery OTP must stay hidden before rider arrival.");
+assert(orderDetail.includes("Show delivery code"), "Customer must explicitly reveal the delivery code.");
+assert(orderDetail.includes("Only share this code after you have received your order."), "Delivery OTP safety copy must be visible.");
+assert(orderDetail.includes("Retry delivery code"), "Delivery OTP fetch failures must have a retry action.");
+assert(orderDetail.includes("setDeliveryOtp(\"\")"), "Delivery OTP must reset when status/order changes or fetch fails.");
+
+const ordersApi = read("src", "api", "orders.api.ts");
+assert(ordersApi.includes("orders/${id}/delivery-otp"), "Customer app must use the delivery OTP endpoint.");
 
 const promoState = read("src", "lib", "promo-state.ts");
 assert(promoState.includes("This promo code has already been used on your account."), "Reused promo message must be customer-friendly.");

@@ -48,6 +48,12 @@ export class OrdersController {
     return { message: "Order tracking retrieved", data: await this.ordersService.tracking(user.id, orderId) };
   }
 
+  @Get(":orderId/delivery-otp")
+  @ApiOperation({ summary: "Reveal the delivery OTP for an eligible owned order" })
+  async deliveryOtp(@CurrentUser() user: AuthenticatedUser, @Param("orderId", ParseUUIDPipe) orderId: string) {
+    return { message: "Delivery code retrieved", data: await this.ordersService.deliveryOtp(user.id, orderId) };
+  }
+
   @Get(":orderId")
   @ApiOperation({ summary: "Get an owned order" })
   async detail(@CurrentUser() user: AuthenticatedUser, @Param("orderId", ParseUUIDPipe) orderId: string) {
