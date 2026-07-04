@@ -6,17 +6,18 @@ const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 
 const layout = read("app", "_layout.tsx");
-[
-  "Home",
-  "Vendor",
-  "Cart",
-  "Checkout",
-  "Order details",
-  "Support centre",
-  "Addresses",
-  "Profile",
-  "Send parcel"
-].forEach((title) => assert(layout.includes(`title: "${title}"`), `Missing route title: ${title}`));
+["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
+  .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
+["vendors/[id]", "products/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel"]
+  .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
+["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
+  .forEach((title) => assert(!layout.includes(`title: "${title}"`), `Native header title must be hidden: ${title}`));
+assert(layout.includes("headerTitle: \"\""), "Back-only header must hide native title text.");
+assert(layout.includes("headerTintColor: brand.colors.charcoal"), "Back arrow should use charcoal styling.");
+assert(layout.includes("headerStyle: { backgroundColor: brand.colors.white }"), "Header top area should stay minimal white.");
+
+const ui = read("src", "components", "ui.tsx");
+assert(ui.includes("paddingTop: 48"), "Screen safe-area/status-bar spacing must remain in place.");
 
 const checkout = read("app", "checkout.tsx");
 assert(checkout.includes("Delivery fee:"), "Checkout must show delivery fee.");
