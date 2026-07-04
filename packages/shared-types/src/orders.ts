@@ -15,6 +15,18 @@ export interface CreateOrderRequest {
   promoCode?: string;
 }
 
+export type QuoteOrderRequest = CreateOrderRequest;
+
+export interface CheckoutQuote {
+  quoteReference: string;
+  cartSubtotal: number;
+  deliveryFee: number;
+  discountAmount: number;
+  finalPayableAmount: number;
+  promoCode?: string;
+  createdAt: string;
+}
+
 export interface OrderSummary {
   id: string;
   orderNumber: string;

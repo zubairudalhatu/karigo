@@ -23,6 +23,74 @@ export class OrdersService {
     private readonly notifications: NotificationsService
   ) {}
 
+  async quoteVendorOrder(userId: string, dto: CreateOrderDto) {
+    if (!VENDOR_ORDER_CATEGORIES.includes(dto.serviceCategory)) {
+      throw new BadRequestException("Vendor orders support FOOD, GROCERY or MARKET categories");
+    }
+
+    const [customer, vendor, deliveryAddress] = await Promise.all([
+      this.requireCustomer(userId),
+      this.prisma.vendor.findFirst({
+        where: { id: dto.vendorId, status: VendorStatus.ACTIVE, deletedAt: null },
+        select: { id: true }
+      }),
+      this.prisma.address.findFirst({
+        where: { id: dto.deliveryAddressId, userId },
+        select: { id: true }
+      })
+    ]);
+
+    if (!vendor) {
+      throw new NotFoundException("Vendor not found");
+    }
+    if (!deliveryAddress) {
+      throw new NotFoundException("Delivery address not found");
+    }
+
+    const productIds = [...new Set(dto.items.map((item) => item.productId))];
+    const products = await this.prisma.product.findMany({
+      where: {
+        id: { in: productIds },
+        vendorId: dto.vendorId,
+        isActive: true,
+        isAvailable: true,
+        deletedAt: null
+      },
+      select: { id: true, price: true }
+    });
+
+    if (products.length !== productIds.length) {
+      throw new BadRequestException("One or more products are unavailable");
+    }
+
+    const productMap = new Map(products.map((product) => [product.id, product]));
+    const subtotal = dto.items.reduce((sum, item) => {
+      const product = productMap.get(item.productId)!;
+      return sum.add(product.price.mul(item.quantity));
+    }, new Prisma.Decimal(0));
+    const deliveryFee = new Prisma.Decimal(this.config.get<number>("STANDARD_DELIVERY_FEE", 1000));
+    const promo = dto.promoCode
+      ? await this.promos.validateForCustomer(customer.id, dto.promoCode, {
+          subtotal,
+          deliveryFee,
+          vendorId: dto.vendorId,
+          serviceCategory: dto.serviceCategory
+        })
+      : null;
+    const discountAmount = promo?.discountAmount ?? new Prisma.Decimal(0);
+    const finalPayableAmount = subtotal.add(deliveryFee).sub(discountAmount);
+
+    return {
+      quoteReference: `KGO-QUOTE-${Date.now()}-${randomBytes(2).toString("hex").toUpperCase()}`,
+      cartSubtotal: subtotal,
+      deliveryFee,
+      discountAmount,
+      finalPayableAmount,
+      promoCode: promo?.promo.code,
+      createdAt: new Date().toISOString()
+    };
+  }
+
   async createVendorOrder(userId: string, dto: CreateOrderDto) {
     if (!VENDOR_ORDER_CATEGORIES.includes(dto.serviceCategory)) {
       throw new BadRequestException("Vendor orders support FOOD, GROCERY or MARKET categories");

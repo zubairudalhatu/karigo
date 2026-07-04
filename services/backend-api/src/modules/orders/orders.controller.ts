@@ -24,6 +24,12 @@ export class OrdersController {
     return { message: "Order created", data: await this.ordersService.createVendorOrder(user.id, dto) };
   }
 
+  @Post("quote")
+  @ApiOperation({ summary: "Quote a vendor/product order before creation" })
+  async quote(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateOrderDto) {
+    return { message: "Order quote calculated", data: await this.ordersService.quoteVendorOrder(user.id, dto) };
+  }
+
   @Post("parcel")
   @ApiOperation({ summary: "Create a parcel delivery request" })
   async createParcel(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateParcelOrderDto) {

@@ -59,6 +59,29 @@ describe("OrdersService", () => {
     }));
   });
 
+  it("quotes a vendor order without creating it", async () => {
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-1" });
+    prisma.address.findFirst.mockResolvedValue({ id: "address-1" });
+    prisma.product.findMany.mockResolvedValue([
+      { id: "product-1", name: "Chicken Suya", price: new Prisma.Decimal(2500) }
+    ]);
+
+    const result = await service.quoteVendorOrder("user-1", {
+      vendorId: "vendor-1",
+      deliveryAddressId: "address-1",
+      serviceCategory: ServiceCategory.FOOD,
+      items: [{ productId: "product-1", quantity: 1 }]
+    });
+
+    expect(result.quoteReference).toMatch(/^KGO-QUOTE-/);
+    expect(result.cartSubtotal.toNumber()).toBe(2500);
+    expect(result.deliveryFee.toNumber()).toBe(1000);
+    expect(result.discountAmount.toNumber()).toBe(0);
+    expect(result.finalPayableAmount.toNumber()).toBe(3500);
+    expect(prisma.order.create).not.toHaveBeenCalled();
+  });
+
   it("rejects a parcel request using an address the customer does not own", async () => {
     prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
     prisma.address.count.mockResolvedValue(1);

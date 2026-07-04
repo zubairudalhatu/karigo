@@ -30,4 +30,5 @@ identifiers, or screenshots containing sensitive data.
 | Admin visibility | Passed | Admin Portal reflected order, GMV, delivery fee, and support activity |
 | Navigation headers | Fixed | Route names replaced with customer-facing titles |
 | Checkout/order pricing | Fixed | Subtotal, delivery fee, discount, and payable are shown from backend quote/order fields |
+| Checkout quote integrity | Fixed | Create order is blocked until a backend quote is loaded; missing quote no longer renders delivery fee as NGN 0 |
 | Support refresh | Fixed | Created tickets appear immediately and list refreshes on focus/pull |

@@ -1,5 +1,6 @@
 export interface ServerPricingSource {
   subtotal?: number | string;
+  cartSubtotal?: number | string;
   deliveryFee?: number | string;
   discountAmount?: number | string;
   totalAmount?: number | string;
@@ -17,7 +18,7 @@ const toNumber = (value: number | string | undefined): number => Number(value ??
 
 export function pricingFromServer(source: ServerPricingSource): PricingBreakdown {
   return {
-    subtotal: toNumber(source.subtotal),
+    subtotal: toNumber(source.subtotal ?? source.cartSubtotal),
     deliveryFee: toNumber(source.deliveryFee),
     discountAmount: toNumber(source.discountAmount),
     payableAmount: toNumber(source.totalAmount ?? source.finalPayableAmount)

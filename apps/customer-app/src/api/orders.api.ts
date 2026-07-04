@@ -1,4 +1,4 @@
-import type { CreateOrderRequest } from "@karigo/shared-types";
+import type { CheckoutQuote, CreateOrderRequest, QuoteOrderRequest } from "@karigo/shared-types";
 import { api } from "./client";
 
 export interface Order {
@@ -26,6 +26,7 @@ export interface ParcelRequest {
 }
 
 export const ordersApi = {
+  quote: (body: QuoteOrderRequest) => api.post<CheckoutQuote>("orders/quote", body),
   create: (body: CreateOrderRequest) => api.post<Order>("orders", body),
   createParcel: (body: ParcelRequest) => api.post<Order>("orders/parcel", body),
   mine: () => api.get<Order[]>("orders/my-orders"),

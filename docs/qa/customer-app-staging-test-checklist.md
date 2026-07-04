@@ -26,6 +26,10 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 | Promo revalidation is clean | Success and failure messages never display together | Fixed | Prior promo state clears before each validation |
 | Reused promo message is clear | One-time usage shows a customer-friendly already-used message | Fixed | No raw "not found" fallback for usage limit |
 | Checkout pricing breakdown is clear | Subtotal, delivery fee, discount and payable are displayed | Fixed | Values come from backend quote/order response |
+| Checkout requires server quote | Create order is disabled until backend quote returns subtotal, fee, discount, payable and quote reference | Fixed | Prevents absent quote from displaying NGN 0 delivery fee |
+| Checkout quote refresh works | Address, cart, focus and validated promo changes refresh quote | Fixed | Shows "Updating delivery total..." while refreshing |
+| Checkout quote failure is safe | Quote failure blocks order creation and shows retry action | Fixed | Retry delivery total button reloads quote |
+| Explicit zero-fee quote is preserved | NGN 0 delivery fee only displays when backend quote explicitly returns zero | Fixed | Missing quote shows waiting state instead of NGN 0 |
 | Order creation works | Order is created through backend | Pending |  |
 | Mock payment flow works | Mock initiation/verification updates order | Pending | No live gateway |
 | Order tracking works | Tracking/status page loads | Passed | Paid order visible after mock payment |

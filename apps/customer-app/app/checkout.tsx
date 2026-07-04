@@ -1,13 +1,13 @@
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Text } from "react-native";
+import type { CheckoutQuote } from "@karigo/shared-types";
 import { Address, addressesApi } from "../src/api/addresses.api";
 import { Order, ordersApi } from "../src/api/orders.api";
 import { paymentsApi } from "../src/api/payments.api";
-import { promosApi } from "../src/api/promos.api";
 import { Button, Card, Empty, Field, Message, Protected, Screen, ui } from "../src/components/ui";
 import { useCart } from "../src/contexts/cart-context";
-import { emptyPricing, pricingFromServer } from "../src/lib/checkout-pricing";
+import { pricingFromServer } from "../src/lib/checkout-pricing";
 import { friendlyError, money } from "../src/lib/errors";
 import { promoErrorMessage } from "../src/lib/promo-state";
 
@@ -17,11 +17,22 @@ export default function Checkout() {
   const [addressId, setAddressId] = useState("");
   const [promoCode, setPromo] = useState("");
   const [validPromoCode, setValidPromoCode] = useState("");
-  const [pricing, setPricing] = useState(() => emptyPricing(cart.subtotal));
+  const [quote, setQuote] = useState<CheckoutQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState("");
   const [order, setOrder] = useState<Order | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const items = useMemo(() => cart.items.map((i) => ({ productId: i.product.id, quantity: i.quantity })), [cart.items]);
+  const quoteKey = useMemo(() => JSON.stringify({
+    vendorId: cart.vendor?.id,
+    addressId,
+    serviceCategory: cart.serviceCategory,
+    items,
+    validPromoCode
+  }), [addressId, cart.serviceCategory, cart.vendor?.id, items, validPromoCode]);
 
   useEffect(() => {
     addressesApi.list()
@@ -32,40 +43,68 @@ export default function Checkout() {
       .catch((e) => setError(friendlyError(e)));
   }, []);
 
-  function resetPromoState() {
-    setValidPromoCode("");
-    setMessage("");
-    setError("");
-    setPricing(emptyPricing(cart.subtotal));
-  }
+  const loadQuote = useCallback(async (promo: string, options?: { promoAttempt?: boolean; keepUiError?: boolean }) => {
+    if (!cart.vendor || !addressId || !cart.items.length) {
+      setQuote(null);
+      setQuoteError("");
+      return null;
+    }
+
+    setQuote(null);
+    setQuoteLoading(true);
+    setQuoteError("");
+    if (!options?.keepUiError) setError("");
+
+    try {
+      const nextQuote = await ordersApi.quote({
+        vendorId: cart.vendor.id,
+        deliveryAddressId: addressId,
+        serviceCategory: cart.serviceCategory,
+        items,
+        promoCode: promo || undefined
+      });
+      setQuote(nextQuote);
+      if (options?.promoAttempt) {
+        setValidPromoCode(nextQuote.promoCode || promo);
+        setMessage(`Promo applied: ${money(nextQuote.discountAmount)} off.`);
+      }
+      return nextQuote;
+    } catch (e) {
+      setQuote(null);
+      if (options?.promoAttempt) {
+        setValidPromoCode("");
+        setMessage("");
+        setError(promoErrorMessage(e));
+      } else {
+        setQuoteError(friendlyError(e));
+      }
+      return null;
+    } finally {
+      setQuoteLoading(false);
+    }
+  }, [addressId, cart.items.length, cart.serviceCategory, cart.vendor, items]);
+
+  useEffect(() => { void loadQuote(validPromoCode); }, [quoteKey, loadQuote, validPromoCode]);
+  useFocusEffect(useCallback(() => { void loadQuote(validPromoCode); }, [loadQuote, validPromoCode]));
 
   async function validatePromo() {
     if (!cart.vendor) return;
-    resetPromoState();
-    try {
-      const code = promoCode.trim().toUpperCase();
-      const result = await promosApi.validate({
-        promoCode: code,
-        vendorId: cart.vendor.id,
-        serviceCategory: cart.serviceCategory,
-        subtotal: cart.subtotal
-      });
-      setPricing(pricingFromServer({
-        subtotal: cart.subtotal,
-        deliveryFee: result.deliveryFee,
-        discountAmount: result.discountAmount,
-        finalPayableAmount: result.finalPayableAmount
-      }));
-      setValidPromoCode(result.code || code);
-      setMessage(`Promo applied: ${money(result.discountAmount)} off.`);
-    } catch (e) {
-      setPricing(emptyPricing(cart.subtotal));
-      setError(promoErrorMessage(e));
+    const code = promoCode.trim().toUpperCase();
+    setError("");
+    setMessage("");
+    setValidPromoCode("");
+    const quoted = await loadQuote(code, { promoAttempt: true });
+    if (!quoted) {
+      await loadQuote("", { keepUiError: true });
     }
   }
 
   async function createOrder() {
     if (!cart.vendor || !addressId) return;
+    if (!quote || quoteLoading || quoteError) {
+      setError("Please refresh the delivery total before creating your order.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -73,15 +112,23 @@ export default function Checkout() {
         vendorId: cart.vendor.id,
         deliveryAddressId: addressId,
         serviceCategory: cart.serviceCategory,
-        items: cart.items.map((i) => ({ productId: i.product.id, quantity: i.quantity })),
+        items,
         promoCode: validPromoCode || undefined
       });
       setOrder(created);
-      setPricing(pricingFromServer(created));
+      setQuote({
+        quoteReference: created.orderNumber,
+        cartSubtotal: Number(created.subtotal),
+        deliveryFee: Number(created.deliveryFee),
+        discountAmount: Number(created.discountAmount),
+        finalPayableAmount: Number(created.totalAmount),
+        promoCode: validPromoCode || undefined,
+        createdAt: new Date().toISOString()
+      });
       setMessage("Your order has been created successfully.");
     } catch (e) {
       setValidPromoCode("");
-      setPricing(emptyPricing(cart.subtotal));
+      setQuote(null);
       setError(promoErrorMessage(e));
     } finally {
       setBusy(false);
@@ -106,19 +153,25 @@ export default function Checkout() {
 
   if (!cart.items.length && !order) return <Protected><Screen title="Checkout"><Empty message="Your cart is empty." /></Screen></Protected>;
 
+  const pricing = quote ? pricingFromServer(quote) : null;
+  const quoteReady = !!quote && !quoteLoading && !quoteError;
+
   return <Protected><Screen title="Checkout">
     {addresses.length === 0 ? <><Empty message="Add a delivery address before checkout." /><Button title="Add address" onPress={() => router.push("/addresses")} /></> :
       addresses.map((a) => <Button key={a.id} title={`${a.id === addressId ? "Selected - " : ""}${a.label}: ${a.addressLine}`} tone="muted" onPress={() => setAddressId(a.id)} />)}
-    <Field placeholder="Promo code (try KARIGOFIRST)" value={promoCode} onChangeText={(code) => { setPromo(code); resetPromoState(); }} autoCapitalize="characters" />
-    <Button title="Validate promo" tone="muted" onPress={validatePromo} disabled={!promoCode || !!order} />
+    <Field placeholder="Promo code (try KARIGOFIRST)" value={promoCode} onChangeText={(code) => { setPromo(code); setValidPromoCode(""); setMessage(""); setError(""); }} autoCapitalize="characters" />
+    <Button title="Validate promo" tone="muted" onPress={validatePromo} disabled={!promoCode || !!order || quoteLoading} />
     <Card>
-      <Text>Cart subtotal: {money(pricing.subtotal)}</Text>
-      <Text>Delivery fee: {money(pricing.deliveryFee)}</Text>
-      <Text>Discount: -{money(pricing.discountAmount)}</Text>
-      <Text style={ui.title}>Payable: {money(pricing.payableAmount)}</Text>
+      <Text>Cart subtotal: {pricing ? money(pricing.subtotal) : money(cart.subtotal)}</Text>
+      <Text>Delivery fee: {pricing ? money(pricing.deliveryFee) : "Waiting for server quote"}</Text>
+      <Text>Discount: {pricing ? `-${money(pricing.discountAmount)}` : "Waiting for server quote"}</Text>
+      <Text style={ui.title}>Payable: {pricing ? money(pricing.payableAmount) : "Waiting for server quote"}</Text>
+      {quote ? <Text style={ui.muted}>Quote: {quote.quoteReference}</Text> : null}
     </Card>
+    {quoteLoading ? <Message>Updating delivery total...</Message> : null}
+    {quoteError ? <><Message error>{quoteError}</Message><Button title="Retry delivery total" tone="muted" onPress={() => { void loadQuote(validPromoCode); }} /></> : null}
     <Message>{message}</Message><Message error>{error}</Message>
-    {!order ? <Button title={busy ? "Creating order..." : "Create order"} onPress={createOrder} disabled={busy || !addressId} /> :
+    {!order ? <Button title={busy ? "Creating order..." : "Create order"} onPress={createOrder} disabled={busy || !addressId || !quoteReady} /> :
       <Button title={busy ? "Verifying payment..." : `Pay ${money(order.totalAmount)} with mock provider`} onPress={pay} disabled={busy} />}
   </Screen></Protected>;
 }
