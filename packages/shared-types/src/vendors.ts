@@ -7,6 +7,13 @@ export interface VendorSummary {
   address?: string | null;
   city?: string | null;
   state?: string | null;
+  description?: string | null;
+  logoUrl?: string | null;
+  coverImageUrl?: string | null;
+  openingTime?: string | null;
+  closingTime?: string | null;
+  rating?: number | null;
+  averagePreparationTimeMinutes?: number | null;
   isOpen: boolean;
   status: string;
 }

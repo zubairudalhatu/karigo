@@ -38,4 +38,21 @@ describe("VendorsService public listing", () => {
     expect(vendors[0]).not.toHaveProperty("bankName");
     expect(vendors[0]).not.toHaveProperty("accountNumber");
   });
+
+  it("filters pharmacy vendors without falling back to food products", async () => {
+    prisma.vendor.findMany.mockResolvedValue([]);
+
+    await service.listPublic({ serviceCategory: "PHARMACY" });
+
+    expect(prisma.vendor.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        AND: [expect.objectContaining({
+          OR: [
+            { businessCategory: { contains: "PHARMACY", mode: "insensitive" } },
+            { category: { slug: "pharmacy" } }
+          ]
+        })]
+      })
+    }));
+  });
 });

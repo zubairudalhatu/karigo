@@ -12,10 +12,12 @@ import { OrdersModule } from "./modules/orders/orders.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { ProductsModule } from "./modules/products/products.module";
+import { MarketplaceDiscoveryModule } from "./modules/marketplace-discovery/marketplace-discovery.module";
 import { PromoModule } from "./modules/promos/promo.module";
 import { RidersModule } from "./modules/riders/riders.module";
 import { SupportModule } from "./modules/support/support.module";
 import { UsersModule } from "./modules/users/users.module";
+import { VendorApplicationsModule } from "./modules/vendor-applications/vendor-applications.module";
 import { VendorsModule } from "./modules/vendors/vendors.module";
 import { VendorDashboardOrdersModule } from "./modules/vendor-dashboard-orders/vendor-dashboard-orders.module";
 import { VendorSettlementsModule } from "./modules/vendor-settlements/vendor-settlements.module";
@@ -34,11 +36,13 @@ import { AdminAuditModule } from "./common/services/admin-audit.module";
     SecurityModule,
     HealthModule,
     UsersModule,
+    VendorApplicationsModule,
     AuthModule,
     CustomersModule,
     AddressesModule,
     VendorsModule,
     ProductsModule,
+    MarketplaceDiscoveryModule,
     PromoModule,
     RidersModule,
     OrdersModule,

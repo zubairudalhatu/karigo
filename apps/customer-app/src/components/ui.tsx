@@ -4,8 +4,8 @@ import { ReactNode } from "react";
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAuth } from "../contexts/auth-context";
 
-export function Screen({ children, title, actions, refreshing, onRefresh }: { children: ReactNode; title?: string; actions?: ReactNode; refreshing?: boolean; onRefresh?: () => void }) {
-  return <ScrollView contentContainerStyle={styles.screen} refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={brand.colors.primary} /> : undefined}>{title ? <View style={styles.heading}><Text style={styles.title}>{title}</Text>{actions}</View> : null}{children}</ScrollView>;
+export function Screen({ children, title, actions, refreshing, onRefresh, topPadding = true }: { children: ReactNode; title?: string; actions?: ReactNode; refreshing?: boolean; onRefresh?: () => void; topPadding?: boolean }) {
+  return <ScrollView contentContainerStyle={[styles.screen, !topPadding && styles.screenNoTopPadding]} refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={brand.colors.primary} /> : undefined}>{title ? <View style={styles.heading}><Text style={styles.title}>{title}</Text>{actions}</View> : null}{children}</ScrollView>;
 }
 
 export function Field(props: React.ComponentProps<typeof TextInput>) {
@@ -58,6 +58,7 @@ export function Protected({ children }: { children: ReactNode }) {
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: brand.colors.background, flexGrow: 1, gap: 18, padding: 22, paddingBottom: 112, paddingTop: 56 },
+  screenNoTopPadding: { paddingTop: 22 },
   heading: { alignItems: "flex-start", flexDirection: "row", gap: 12, justifyContent: "space-between" },
   title: { color: brand.colors.charcoal, fontSize: 28, fontWeight: "900", letterSpacing: -0.4 },
   heroTitle: { color: brand.colors.charcoal, fontSize: 24, fontWeight: "900", letterSpacing: -0.3 },

@@ -8,7 +8,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
-["vendors/[id]", "catalogue/[category]", "products/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel"]
+["vendors/[id]", "catalogue/[category]", "products/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel", "vendor/apply", "vendor/application-status"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
 ["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
   .forEach((title) => assert(!layout.includes(`title: "${title}"`), `Native header title must be hidden: ${title}`));
@@ -18,6 +18,7 @@ assert(layout.includes("headerStyle: { backgroundColor: brand.colors.white }"), 
 
 const ui = read("src", "components", "ui.tsx");
 assert(ui.includes("paddingTop: 56"), "Screen safe-area/status-bar spacing must remain in place.");
+assert(ui.includes("screenNoTopPadding"), "Screens with the KariGO top bar must be able to remove legacy top padding.");
 assert(ui.includes("heroTitle"), "Shared UI must include content-first hero titles.");
 assert(ui.includes("cardTitle"), "Shared UI must include readable card titles.");
 assert(ui.includes("chipGrid"), "Shared UI must include category/service chip layout.");
@@ -34,33 +35,43 @@ assert(!client.includes("AsyncStorage"), "Customer auth tokens must not use Asyn
 assert(ui.includes("paddingBottom: 112"), "Customer screens must leave room for bottom navigation.");
 
 const home = read("app", "tabs", "home.tsx");
-assert(home.includes("Food, groceries, parcels and errands across Kano."), "Home must use approved concise KariGO positioning copy.");
+assert(home.includes("KariGoAppTopBar"), "Home must use the branded KariGO top bar.");
+assert(home.includes("Welcome, {firstName(user?.fullName)}"), "Home greeting must use safe first-name fallback.");
 assert(home.includes("Food Delivery"), "Home must keep Food Delivery service category.");
 assert(home.includes("Groceries"), "Home must keep Groceries service category.");
 assert(home.includes("Market Items"), "Home must keep Market Items service category.");
+assert(home.includes("Pharmacy"), "Home must include the compliance-gated Pharmacy category.");
 assert(home.includes("Parcel Delivery"), "Home must keep Parcel Delivery service category.");
 assert(home.includes("SME Errands"), "Home must keep SME Errands service category.");
-assert(home.includes("Search food, groceries, vendors or area"), "Home search should support category discovery language.");
 assert(home.includes("/catalogue/food"), "Food Delivery chip must navigate to food catalogue.");
 assert(home.includes("/catalogue/groceries"), "Groceries chip must navigate to groceries catalogue.");
 assert(home.includes("/catalogue/market-items"), "Market Items chip must navigate to market-items catalogue.");
+assert(home.includes("/catalogue/pharmacy"), "Pharmacy chip must navigate to pharmacy browse.");
 assert(home.includes("/parcel?mode=errand"), "SME Errands chip must navigate to the errand flow.");
-assert(home.includes("Food near you"), "Home must group food products.");
-assert(home.includes("Groceries near you"), "Home must group grocery products.");
-assert(home.includes("Market items near you"), "Home must group market products.");
-assert(home.includes("productsApi.catalogue"), "Home must use the catalogue API.");
+assert(home.includes("Today's featured for you"), "Home must show vendor/campaign featured content.");
+assert(home.includes("Ad"), "Home must expose a clearly labelled internal ad placement.");
+assert(home.includes("VendorSpotlight"), "Home featured content must be vendor-focused.");
+assert(!home.includes("productsApi.catalogue"), "Home must not load individual product feeds.");
+assert(!home.includes("Add to cart"), "Home must not expose product add-to-cart actions.");
 assert(!home.includes("href=\"/addresses\""), "Home must not show the old dense text-link menu.");
 
 const catalogue = read("app", "catalogue", "[category].tsx");
 assert(catalogue.includes("Food delivery"), "Food catalogue heading must exist.");
 assert(catalogue.includes("Groceries"), "Groceries catalogue heading must exist.");
 assert(catalogue.includes("Market items"), "Market items catalogue heading must exist.");
+assert(catalogue.includes("Pharmacy"), "Pharmacy browse heading must exist.");
 assert(catalogue.includes("productCategory: config.productCategory"), "Catalogue must query by active product category.");
-assert(catalogue.includes("Add to cart"), "Catalogue product cards must allow add-to-cart.");
-assert(catalogue.includes("cart.addingProductIds"), "Catalogue add buttons must guard against rapid duplicate taps.");
+assert(catalogue.includes("Featured Vendors"), "Browse must display featured vendors before products.");
+assert(catalogue.includes("Top Restaurants"), "Browse must include restaurant vendor section.");
+assert(catalogue.includes("Top Grocery and Market Vendors"), "Browse must include grocery/market vendor section.");
+assert(catalogue.includes("Top Pharmacy Vendors"), "Browse must include pharmacy vendor section.");
+assert(catalogue.includes("Top Menus and Products"), "Browse must place product discovery last.");
+assert(catalogue.indexOf("Featured Vendors") < catalogue.indexOf("Top Menus and Products"), "Browse must order vendors before products.");
 
 const productsApi = read("src", "api", "products.api.ts");
 assert(productsApi.includes("query.set(\"category\""), "Customer product API must use the public category query parameter.");
+const vendorsApi = read("src", "api", "vendors.api.ts");
+assert(vendorsApi.includes("serviceCategory"), "Customer vendor API must support service-category browsing.");
 
 const cartContext = read("src", "contexts", "cart-context.tsx");
 assert(cartContext.includes("notice"), "Cart context must expose add-to-cart feedback notice.");
@@ -70,6 +81,7 @@ assert(cartContext.includes("setTimeout"), "Cart add feedback must auto-dismiss.
 const bottomNav = read("src", "components", "customer-navigation.tsx");
 assert(bottomNav.includes("CustomerBottomNav"), "Bottom navigation component must exist.");
 assert(bottomNav.includes("Home") && bottomNav.includes("Browse") && bottomNav.includes("Cart") && bottomNav.includes("Orders") && bottomNav.includes("Profile"), "Bottom navigation must include primary customer tabs.");
+assert(bottomNav.includes("@expo/vector-icons"), "Bottom navigation must use real icons instead of first-letter substitutes.");
 assert(bottomNav.includes("cart.count > 0"), "Bottom navigation must show a numeric cart badge.");
 assert(bottomNav.includes("View cart"), "Cart snackbar must include a View cart action.");
 assert(bottomNav.includes("pathname.startsWith(\"/auth\")"), "Bottom navigation must stay hidden across auth screens.");
@@ -77,6 +89,7 @@ assert(bottomNav.includes("pathname.startsWith(\"/auth\")"), "Bottom navigation 
 const profile = read("app", "profile.tsx");
 assert(profile.includes("Saved addresses"), "Addresses must be accessible from Profile.");
 assert(profile.includes("Support centre"), "Support must be accessible from Profile.");
+assert(profile.includes("Become a KariGO Vendor"), "Profile must link to public vendor application flow.");
 
 const checkout = read("app", "checkout.tsx");
 assert(checkout.includes("Delivery fee:"), "Checkout must show delivery fee.");

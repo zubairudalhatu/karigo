@@ -1,3 +1,4 @@
+import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import { Link, router, usePathname } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -6,12 +7,12 @@ import { useAuth } from "../contexts/auth-context";
 import { useCart } from "../contexts/cart-context";
 
 const navItems = [
-  { label: "Home", icon: "H", href: "/tabs/home", match: ["/tabs/home"] },
-  { label: "Browse", icon: "B", href: "/catalogue/food", match: ["/catalogue", "/vendors", "/products", "/parcel"] },
-  { label: "Cart", icon: "C", href: "/cart", match: ["/cart", "/checkout"] },
-  { label: "Orders", icon: "O", href: "/orders", match: ["/orders"] },
-  { label: "Profile", icon: "P", href: "/profile", match: ["/profile", "/addresses", "/support", "/notifications"] }
-];
+  { label: "Home", icon: "home", href: "/tabs/home", match: ["/tabs/home"] },
+  { label: "Browse", icon: "compass", href: "/catalogue/food", match: ["/catalogue", "/vendors", "/products", "/parcel"] },
+  { label: "Cart", icon: "shopping-bag", href: "/cart", match: ["/cart", "/checkout"] },
+  { label: "Orders", icon: "clipboard", href: "/orders", match: ["/orders"] },
+  { label: "Profile", icon: "user", href: "/profile", match: ["/profile", "/addresses", "/support", "/notifications"] }
+] as const;
 
 export function CustomerBottomNav() {
   const { user } = useAuth();
@@ -25,9 +26,9 @@ export function CustomerBottomNav() {
     {navItems.map((item) => {
       const active = item.match.some((prefix) => pathname.startsWith(prefix));
       return <Link key={item.label} href={item.href as never} asChild>
-        <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} style={styles.navItem}>
+        <Pressable accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{ selected: active }} style={styles.navItem}>
           <View>
-            <Text style={[styles.icon, active && styles.active]}>{item.icon}</Text>
+            <Feather name={item.icon} size={21} color={active ? brand.colors.primary : brand.colors.muted} />
             {item.label === "Cart" && cart.count > 0 ? <Text style={styles.badge}>{cart.count}</Text> : null}
           </View>
           <Text style={[styles.label, active && styles.active]}>{item.label}</Text>
@@ -53,7 +54,6 @@ export function CartNotice() {
 const styles = StyleSheet.create({
   nav: { backgroundColor: brand.colors.white, borderTopColor: brand.colors.border, borderTopWidth: 1, bottom: 0, flexDirection: "row", gap: 4, justifyContent: "space-around", left: 0, paddingTop: 8, position: "absolute", right: 0 },
   navItem: { alignItems: "center", flex: 1, gap: 2, minHeight: 54 },
-  icon: { color: brand.colors.muted, fontSize: 13, fontWeight: "900", textAlign: "center" },
   label: { color: brand.colors.muted, fontSize: 11, fontWeight: "800" },
   active: { color: brand.colors.primary },
   badge: { backgroundColor: brand.colors.primary, borderRadius: 999, color: brand.colors.white, fontSize: 10, fontWeight: "900", minWidth: 18, overflow: "hidden", paddingHorizontal: 5, paddingVertical: 2, position: "absolute", right: -14, textAlign: "center", top: -4 },

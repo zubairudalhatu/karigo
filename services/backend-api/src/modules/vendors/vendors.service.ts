@@ -38,6 +38,7 @@ export class VendorsService {
   }
 
   async listPublic(query: ListVendorsQueryDto) {
+    const productCategory = query.serviceCategory ? this.productCategoryForService(query.serviceCategory) : null;
     const filters = [
       ...(query.search
         ? [{
@@ -53,7 +54,7 @@ export class VendorsService {
             OR: [
               { businessCategory: { contains: query.serviceCategory, mode: "insensitive" as const } },
               { category: { slug: query.serviceCategory.toLowerCase() } },
-              { products: { some: { productCategory: this.productCategoryForService(query.serviceCategory), isActive: true, isAvailable: true, deletedAt: null } } }
+              ...(productCategory ? [{ products: { some: { productCategory, isActive: true, isAvailable: true, deletedAt: null } } }] : [])
             ]
           }]
         : [])
@@ -141,11 +142,13 @@ export class VendorsService {
     };
   }
 
-  private productCategoryForService(serviceCategory: ServiceCategory): ProductCategory {
+  private productCategoryForService(serviceCategory: ServiceCategory): ProductCategory | null {
     return serviceCategory === ServiceCategory.GROCERY
       ? ProductCategory.GROCERIES
       : serviceCategory === ServiceCategory.MARKET
         ? ProductCategory.MARKET_ITEMS
-        : ProductCategory.FOOD;
+        : serviceCategory === ServiceCategory.FOOD
+          ? ProductCategory.FOOD
+          : null;
   }
 }

@@ -179,6 +179,11 @@ async function main() {
     update: { name: "Market", isActive: true },
     create: { name: "Market", slug: "market", description: "Local market vendors" }
   });
+  await prisma.vendorCategory.upsert({
+    where: { slug: "pharmacy" },
+    update: { name: "Pharmacy", isActive: true },
+    create: { name: "Pharmacy", slug: "pharmacy", description: "Compliance-gated pharmacy and health vendors" }
+  });
 
   const vendorUser = await prisma.user.upsert({
     where: { phoneNumber: DEMO_ACCOUNT_PHONES.vendorOwner },

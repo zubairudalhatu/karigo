@@ -41,6 +41,34 @@ enum VendorStatus {
   REJECTED
 }
 
+enum VendorApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  CHANGES_REQUESTED
+  PROVISIONALLY_APPROVED
+  APPROVED
+  REJECTED
+  SUSPENDED
+  WITHDRAWN
+}
+
+enum VendorApplicationCategory {
+  RESTAURANT
+  GROCERIES
+  MARKET_ITEMS
+  PHARMACY
+  PARCEL_LOGISTICS_PARTNER
+  SME_SERVICES
+  OTHER_MARKETPLACE_VENDOR
+}
+
+enum PreferredContactMethod {
+  PHONE
+  EMAIL
+  WHATSAPP
+}
+
 enum RiderStatus {
   PENDING_APPROVAL
   ACTIVE
@@ -60,6 +88,7 @@ enum ServiceCategory {
   FOOD
   GROCERY
   MARKET
+  PHARMACY
   PARCEL
   ERRAND
   CORPORATE
@@ -316,6 +345,82 @@ model VendorCategory {
   vendors     Vendor[]
 
   @@map("vendor_categories")
+}
+
+model VendorApplication {
+  id                     String                           @id @default(uuid()) @db.Uuid
+  reference              String                           @unique
+  businessCategory       VendorApplicationCategory
+  businessName           String
+  tradingName            String?
+  businessType           String?
+  businessDescription    String
+  businessAddress        String
+  state                  String
+  city                   String
+  area                   String?
+  serviceAreas           Json?
+  operatingHours         String?
+  businessPhoneNumber    String
+  businessEmail          String
+  websiteOrSocialLink    String?
+  contactFullName        String
+  contactRole            String
+  contactPhoneNumber     String
+  contactEmail           String
+  preferredContactMethod PreferredContactMethod           @default(PHONE)
+  deliveryReadiness      String?
+  deliveryPreference     String?
+  averagePreparationTime String?
+  numberOfStaff          String?
+  catalogueCategory      String?
+  estimatedCatalogueSize String?
+  existingDelivery       String?
+  brandAssets            Json?
+  documentPlaceholders   Json?
+  declarationAccepted    Boolean                          @default(false)
+  privacyAccepted        Boolean                          @default(false)
+  contactConsentAccepted Boolean                          @default(false)
+  status                 VendorApplicationStatus          @default(SUBMITTED)
+  submittedAt            DateTime                         @default(now())
+  reviewedAt             DateTime?
+  createdAt              DateTime                         @default(now())
+  updatedAt              DateTime                         @updatedAt
+  reviews                VendorApplicationReview[]
+  statusHistory          VendorApplicationStatusHistory[]
+
+  @@index([status])
+  @@index([businessCategory])
+  @@index([submittedAt])
+  @@map("vendor_applications")
+}
+
+model VendorApplicationReview {
+  id            String                  @id @default(uuid()) @db.Uuid
+  applicationId String                  @db.Uuid
+  reviewerId    String?                 @db.Uuid
+  status        VendorApplicationStatus
+  notes         String?
+  checklist     Json?
+  createdAt     DateTime                @default(now())
+  application   VendorApplication       @relation(fields: [applicationId], references: [id])
+
+  @@index([applicationId, createdAt])
+  @@map("vendor_application_reviews")
+}
+
+model VendorApplicationStatusHistory {
+  id            String                   @id @default(uuid()) @db.Uuid
+  applicationId String                   @db.Uuid
+  fromStatus    VendorApplicationStatus?
+  toStatus      VendorApplicationStatus
+  note          String?
+  changedById   String?                  @db.Uuid
+  createdAt     DateTime                 @default(now())
+  application   VendorApplication        @relation(fields: [applicationId], references: [id])
+
+  @@index([applicationId, createdAt])
+  @@map("vendor_application_status_history")
 }
 
 model Vendor {

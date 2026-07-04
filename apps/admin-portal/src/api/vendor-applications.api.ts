@@ -1,0 +1,20 @@
+import { api } from "./client";
+
+export interface VendorApplication {
+  id: string;
+  reference: string;
+  businessName: string;
+  businessCategory: string;
+  businessEmail: string;
+  city: string;
+  state: string;
+  contactFullName: string;
+  contactEmail: string;
+  status: string;
+  submittedAt: string;
+}
+
+export const vendorApplicationsApi = {
+  list: () => api.get<VendorApplication[]>("admin/vendor-applications"),
+  review: (id: string, status: string, notes?: string) => api.patch<VendorApplication>(`admin/vendor-applications/${id}`, { status, notes })
+};

@@ -5,6 +5,7 @@ export const serviceCategories = [
   "FOOD",
   "GROCERY",
   "MARKET",
+  "PHARMACY",
   "PARCEL",
   "ERRAND",
   "CORPORATE"

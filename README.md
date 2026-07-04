@@ -9,6 +9,7 @@ Included services:
 - Food delivery
 - Grocery delivery
 - Market delivery
+- Pharmacy marketplace readiness, compliance-gated and disabled for automated fulfilment
 - Parcel delivery
 - Personal errands
 - SME and corporate errands
@@ -245,6 +246,30 @@ The supplied KariGO documents are preserved under `docs/`. Their extracted text 
 6. Explicit product-owner direction
 
 The explicit approved brand direction for this build is primary red, charcoal/black, white and light grey.
+
+## Consumer Discovery And Vendor Onboarding
+
+Task 44 adds a category-first Customer App homepage, vendor-first Browse ordering,
+pharmacy marketplace readiness and a public vendor application workflow.
+
+- Consumer discovery: `docs/consumer-discovery-and-homepage.md`
+- Vendor-first Browse: `docs/vendor-first-browse-experience.md`
+- Vendor storefront/product discovery priority: `apps/customer-app/app/vendors/[id].tsx`
+- Marketplace advertising placement: `docs/marketplace-advertising-placement.md`
+- Pharmacy readiness: `docs/pharmacy-marketplace-readiness.md`
+- Public vendor application workflow: `docs/public-vendor-application-workflow.md`
+- Admin review workflow: `docs/vendor-application-review-and-approval.md`
+- Product media readiness: `docs/vendor-product-media-management.md`
+- Payout account readiness: `docs/vendor-payout-account-readiness.md`
+- Vendor product promotion readiness: `docs/vendor-product-promotions.md`
+
+New read-only discovery endpoints live under `/api/v1/discovery/*`. Public vendor
+applications can be submitted through `POST /api/v1/vendor-applications`; admin review
+is available through `/api/v1/admin/vendor-applications`.
+
+`PHARMACY_MARKETPLACE_ENABLED` defaults to off unless explicitly set in the deployment
+environment. No live payout, prescription verification, external ad network, pharmacy
+approval automation or automatic vendor approval has been activated.
 
 ## Remaining Launch Work
 
