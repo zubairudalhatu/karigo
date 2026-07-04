@@ -117,6 +117,18 @@ cd apps/rider-app
 npx eas-cli build --platform android --profile rider-staging
 ```
 
+PowerShell equivalent:
+
+```powershell
+cd apps/rider-app
+$env:APP_VARIANT = "staging"
+$env:EXPO_PUBLIC_API_BASE_URL = "https://karigo-8htn.onrender.com/api/v1"
+npx eas-cli build --platform android --profile rider-staging
+```
+
+See `docs/deployment/rider-app-staging-build-guide.md` for Rider-specific validation,
+post-install testing, and first-time EAS project linking notes.
+
 ## Optional iOS Simulator Builds
 
 Only run these when iOS testing is approved and Expo project credentials are ready:
