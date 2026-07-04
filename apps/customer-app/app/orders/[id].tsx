@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { Text } from "react-native";
+import { Text, View } from "react-native";
 import { Order, ordersApi } from "../../src/api/orders.api";
 import { paymentsApi } from "../../src/api/payments.api";
 import { Button, Card, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
@@ -59,22 +59,22 @@ export default function OrderTracking() {
     {order && pricing ? <>
       <Card><StatusBadge status={order.orderStatus} /><Text>Payment: {order.paymentStatus}</Text>{order.vendor ? <Text>{order.vendor.businessName}</Text> : null}</Card>
       <Card>
-        <Text>Cart subtotal: {money(pricing.subtotal)}</Text>
-        <Text>Delivery fee: {money(pricing.deliveryFee)}</Text>
-        <Text>Discount: -{money(pricing.discountAmount)}</Text>
-        <Text style={ui.title}>Payable: {money(pricing.payableAmount)}</Text>
+        <View style={ui.priceRow}><Text style={ui.priceLabel}>Cart subtotal:</Text><Text style={ui.priceValue}>{money(pricing.subtotal)}</Text></View>
+        <View style={ui.priceRow}><Text style={ui.priceLabel}>Delivery fee:</Text><Text style={ui.priceValue}>{money(pricing.deliveryFee)}</Text></View>
+        <View style={ui.priceRow}><Text style={ui.priceLabel}>Discount:</Text><Text style={ui.priceValue}>-{money(pricing.discountAmount)}</Text></View>
+        <View style={ui.priceRow}><Text style={ui.sectionTitle}>Payable:</Text><Text style={ui.payable}>{money(pricing.payableAmount)}</Text></View>
       </Card>
       {order.paymentStatus === "PENDING" ? <Button title={busy ? "Verifying..." : "Pay with mock provider"} onPress={pay} disabled={busy} /> : null}
       {order.items?.map((item) => <Card key={item.id}><Text>{item.productName} x {item.quantity}</Text><Text>{money(item.totalPrice)}</Text></Card>)}
-      <Text style={ui.title}>Order timeline</Text>{order.statusHistory.map((event) => <Card key={event.id}><StatusBadge status={event.newStatus} /><Text style={ui.muted}>{event.note || "Order updated"}</Text></Card>)}
+      <Text style={ui.sectionTitle}>Order timeline</Text>{order.statusHistory.map((event) => <Card key={event.id}><StatusBadge status={event.newStatus} /><Text style={ui.muted}>{event.note || "Order updated"}</Text></Card>)}
       {canRevealDeliveryOtp ? <Card>
-        <Text style={ui.title}>Delivery code</Text>
+        <Text style={ui.cardTitle}>Delivery code</Text>
         <Text style={ui.muted}>Only share this code after you have received your order.</Text>
         <Message error>{otpError}</Message>
         {deliveryOtp ? <Text style={ui.otpCode}>{groupedOtp}</Text> : <Button title={otpLoading ? "Loading code..." : "Show delivery code"} onPress={revealDeliveryOtp} disabled={otpLoading} />}
         {otpError ? <Button tone="muted" title="Retry delivery code" onPress={revealDeliveryOtp} disabled={otpLoading} /> : null}
       </Card> : null}
-      <Card><Text style={ui.title}>Delivery safety</Text><Text style={ui.muted}>Only share this code after you have received your order.</Text></Card>
+      <Card><Text style={ui.cardTitle}>Delivery safety</Text><Text style={ui.muted}>Only share this code after you have received your order.</Text></Card>
     </> : null}
   </Screen></Protected>;
 }

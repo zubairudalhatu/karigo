@@ -17,7 +17,24 @@ assert(layout.includes("headerTintColor: brand.colors.charcoal"), "Back arrow sh
 assert(layout.includes("headerStyle: { backgroundColor: brand.colors.white }"), "Header top area should stay minimal white.");
 
 const ui = read("src", "components", "ui.tsx");
-assert(ui.includes("paddingTop: 48"), "Screen safe-area/status-bar spacing must remain in place.");
+assert(ui.includes("paddingTop: 56"), "Screen safe-area/status-bar spacing must remain in place.");
+assert(ui.includes("heroTitle"), "Shared UI must include content-first hero titles.");
+assert(ui.includes("cardTitle"), "Shared UI must include readable card titles.");
+assert(ui.includes("chipGrid"), "Shared UI must include category/service chip layout.");
+assert(ui.includes("vendorImage"), "Shared UI must include visual vendor card image areas.");
+assert(ui.includes("priceRow"), "Shared UI must include structured pricing rows.");
+assert(ui.includes("payable"), "Shared UI must include strong payable total styling.");
+
+const home = read("app", "tabs", "home.tsx");
+assert(home.includes("Food, groceries, parcels and errands across Kano."), "Home must use approved concise KariGO positioning copy.");
+assert(home.includes("Food Delivery"), "Home must keep Food Delivery service category.");
+assert(home.includes("Groceries"), "Home must keep Groceries service category.");
+assert(home.includes("Market Items"), "Home must keep Market Items service category.");
+assert(home.includes("Parcel Delivery"), "Home must keep Parcel Delivery service category.");
+assert(home.includes("SME Errands"), "Home must keep SME Errands service category.");
+assert(home.includes("Search food, groceries, vendors or area"), "Home search should support category discovery language.");
+assert(home.includes("vendorImage"), "Home vendor cards must have a clear visual area.");
+assert(home.includes("Currently closed"), "Closed vendors must have a visible state.");
 
 const checkout = read("app", "checkout.tsx");
 assert(checkout.includes("Delivery fee:"), "Checkout must show delivery fee.");

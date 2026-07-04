@@ -18,8 +18,8 @@ export default function VendorDetails() {
   if (!vendor && !error) return <Loading label="Loading vendor..." />;
   return <Protected><Screen title={vendor?.businessName ?? "Vendor"} actions={<NavLink href="/cart" label={`Cart (${cart.items.length})`} />}>
     <Message error>{error}</Message>
-    {vendor ? <Card><Text>{vendor.businessCategory}</Text><Text style={ui.muted}>{vendor.address}, {vendor.city}</Text></Card> : null}
+    {vendor ? <Card><Text style={ui.cardTitle}>{vendor.businessCategory}</Text><Text style={ui.pageIntro}>{vendor.address}, {vendor.city}</Text><Text style={ui.muted}>{vendor.isOpen ? "Open now for KariGO orders" : "Currently closed"}</Text></Card> : null}
     {products.length === 0 ? <Empty message="No available products right now." /> : products.map((product) =>
-      <Card key={product.id}><Text style={ui.title}>{product.name}</Text><Text style={ui.muted}>{product.description || "Freshly prepared for your order."}</Text><Text>{money(product.price)}</Text><NavLink href={`/products/${product.id}?vendorId=${id}`} label="View details" /><Button title={product.isAvailable ? "Add to cart" : "Unavailable"} disabled={!product.isAvailable || !vendor} onPress={() => vendor && cart.add(vendor, product)} /></Card>)}
+      <Card key={product.id}><Text style={ui.cardTitle}>{product.name}</Text><Text style={ui.muted}>{product.description || "Freshly prepared for your order."}</Text><Text style={ui.payable}>{money(product.price)}</Text><NavLink href={`/products/${product.id}?vendorId=${id}`} label="View details" /><Button title={product.isAvailable ? "Add to cart" : "Unavailable"} disabled={!product.isAvailable || !vendor} onPress={() => vendor && cart.add(vendor, product)} /></Card>)}
   </Screen></Protected>;
 }

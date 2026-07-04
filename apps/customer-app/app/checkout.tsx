@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Text } from "react-native";
+import { Text, View } from "react-native";
 import type { CheckoutQuote } from "@karigo/shared-types";
 import { Address, addressesApi } from "../src/api/addresses.api";
 import { Order, ordersApi } from "../src/api/orders.api";
@@ -162,11 +162,11 @@ export default function Checkout() {
     <Field placeholder="Promo code (try KARIGOFIRST)" value={promoCode} onChangeText={(code) => { setPromo(code); setValidPromoCode(""); setMessage(""); setError(""); }} autoCapitalize="characters" />
     <Button title="Validate promo" tone="muted" onPress={validatePromo} disabled={!promoCode || !!order || quoteLoading} />
     <Card>
-      <Text>Cart subtotal: {pricing ? money(pricing.subtotal) : money(cart.subtotal)}</Text>
-      <Text>Delivery fee: {pricing ? money(pricing.deliveryFee) : "Waiting for server quote"}</Text>
-      <Text>Discount: {pricing ? `-${money(pricing.discountAmount)}` : "Waiting for server quote"}</Text>
-      <Text style={ui.title}>Payable: {pricing ? money(pricing.payableAmount) : "Waiting for server quote"}</Text>
-      {quote ? <Text style={ui.muted}>Quote: {quote.quoteReference}</Text> : null}
+      <View style={ui.priceRow}><Text style={ui.priceLabel}>Cart subtotal:</Text><Text style={ui.priceValue}>{pricing ? money(pricing.subtotal) : money(cart.subtotal)}</Text></View>
+      <View style={ui.priceRow}><Text style={ui.priceLabel}>Delivery fee:</Text><Text style={ui.priceValue}>{pricing ? money(pricing.deliveryFee) : "Waiting for server quote"}</Text></View>
+      <View style={ui.priceRow}><Text style={ui.priceLabel}>Discount:</Text><Text style={ui.priceValue}>{pricing ? `-${money(pricing.discountAmount)}` : "Waiting for server quote"}</Text></View>
+      <View style={ui.priceRow}><Text style={ui.sectionTitle}>Payable:</Text><Text style={ui.payable}>{pricing ? money(pricing.payableAmount) : "Waiting for server quote"}</Text></View>
+      {quote ? <Text style={ui.quoteText}>Quote: {quote.quoteReference}</Text> : null}
     </Card>
     {quoteLoading ? <Message>Updating delivery total...</Message> : null}
     {quoteError ? <><Message error>{quoteError}</Message><Button title="Retry delivery total" tone="muted" onPress={() => { void loadQuote(validPromoCode); }} /></> : null}

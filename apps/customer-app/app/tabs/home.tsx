@@ -24,17 +24,36 @@ export default function CustomerHome() {
   useEffect(() => { void load(); }, []);
 
   return <Protected><Screen actions={<NavLink href="/notifications" label={`Activity (${unread})`} />}>
-    <BrandHeader eyebrow="Food, errands and packages across Kano." />
-    <View><NavLink href="/addresses" label="Addresses" /> <NavLink href="/cart" label="Cart" /> <NavLink href="/orders" label="Orders" /> <NavLink href="/profile" label="Profile" /> <NavLink href="/parcel" label="Send parcel" /> <NavLink href="/support" label="Support" /></View>
-    <Text style={ui.title}>What do you need today?</Text>
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-      {["Food Delivery", "Groceries", "Market Items", "Parcel Delivery", "SME Errands"].map((service) => <View key={service} style={{ backgroundColor: "#FEE2E2", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 }}><Text style={{ color: "#991B1B", fontWeight: "700" }}>{service}</Text></View>)}
+    <BrandHeader eyebrow="Food, groceries, parcels and errands across Kano." />
+    <View style={ui.quickNav}><NavLink href="/addresses" label="Addresses" /><NavLink href="/cart" label="Cart" /><NavLink href="/orders" label="Orders" /><NavLink href="/profile" label="Profile" /><NavLink href="/parcel" label="Send parcel" /><NavLink href="/support" label="Support" /></View>
+    <Text style={ui.heroTitle}>What do you need today?</Text>
+    <View style={ui.chipGrid}>
+      {["Food Delivery", "Groceries", "Market Items", "Parcel Delivery", "SME Errands"].map((service) => <View key={service} style={[ui.chip, ui.chipSoft]}><Text style={[ui.chipText, ui.chipTextSoft]}>{service}</Text></View>)}
     </View>
-    <Field placeholder="Search vendors or area" value={search} onChangeText={setSearch} onSubmitEditing={() => load(search)} />
+    <Field placeholder="Search food, groceries, vendors or area" value={search} onChangeText={setSearch} onSubmitEditing={() => load(search)} />
     <Message error>{error}</Message>
+    <Text style={ui.sectionTitle}>Vendors near you</Text>
     {loading ? <Loading label="Finding nearby vendors..." /> : vendors.length === 0 ? <Empty message="No vendors are available in this area yet. KariGO is expanding soon." /> : vendors.map((vendor) =>
       <Pressable key={vendor.id} onPress={() => router.push(`/vendors/${vendor.id}`)}>
-        <Card><Text style={ui.title}>{vendor.businessName}</Text><Text style={ui.muted}>{vendor.businessCategory} · {vendor.city}</Text><Text>{vendor.isOpen ? "Open now" : "Currently closed"}</Text></Card>
+        <Card>
+          <View style={ui.vendorCard}>
+            <View style={ui.vendorImage}>
+              <Text style={ui.vendorImageText}>{vendor.businessName.slice(0, 1).toUpperCase()}</Text>
+              {!vendor.isOpen ? <View style={ui.vendorOverlay}><Text style={ui.vendorOverlayText}>Currently closed</Text></View> : null}
+            </View>
+            <View style={ui.spaceBetween}>
+              <View>
+                <Text style={ui.cardTitle}>{vendor.businessName}</Text>
+                <Text style={ui.muted}>{vendor.businessCategory} · {vendor.city}</Text>
+              </View>
+              <Text accessibilityLabel="Favourite vendor" style={ui.favorite}>♡</Text>
+            </View>
+            <View style={ui.chipGrid}>
+              <View style={ui.chip}><Text style={ui.chipText}>{vendor.isOpen ? "Open now" : "Closed"}</Text></View>
+              <View style={ui.chip}><Text style={ui.chipText}>KariGO delivery</Text></View>
+            </View>
+          </View>
+        </Card>
       </Pressable>)}
   </Screen></Protected>;
 }

@@ -41,6 +41,14 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 | Notifications page loads | Customer notifications render | Pending |  |
 | Support ticket flow works | Customer can create/view ticket | Fixed | Newly created ticket is inserted immediately and list refreshes on focus/pull |
 | Route names are hidden | Route segments such as `checkout`, `support`, `tabs/` are not visible as headers | Fixed | Expo Router titles are explicitly configured |
+| Native header titles are minimized | Detail flows keep only the back affordance while page content carries the title | Fixed | Visual retest required in next APK |
+| Home copy is approved | Home displays `Food, groceries, parcels and errands across Kano.` | Fixed | Exact copy required for staging demo |
+| Service categories are clear | Food Delivery, Groceries, Market Items, Parcel Delivery and SME Errands display as clean chips | Fixed | Red is used as a soft accent only |
+| Vendor cards are content-first | Vendor name, category, city, open/closed state and favourite affordance are readable | Fixed | Closed vendors show an overlay state |
+| Cart presentation is clear | Cart item totals, quantity actions and server-pricing note are readable | Fixed | No pricing behavior changed |
+| Checkout receipt layout is clear | Subtotal, delivery fee, discount and payable render as a structured receipt | Fixed | Payable is visually strongest |
+| Order detail receipt layout is clear | Server-created order totals match checkout and are easy to scan | Fixed | Uses backend order fields |
+| Visual style is consistent | White/light-gray cards, black headings, muted support text and restrained KariGO red are used | Fixed | Applies through shared Customer UI primitives |
 | API errors are safe | No raw JSON/stack traces shown | Pending |  |
 | Render cold-start handled | Loading/retry behavior is understandable | Pending |  |
 
@@ -49,7 +57,15 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 - Customer browsed Kano Kitchen, added Chicken Suya, checked out, applied `KARIGOFIRST`, completed mock payment, and saw the paid order.
 - Vendor Dashboard received the paid order.
 - Admin Portal reflected the order, GMV, delivery fee, and support activity.
-- Defects fixed after this test: route-name leakage, missing checkout delivery-fee line, mixed promo success/error state, reused-promo copy, discount reset after failed promo validation, support list refresh after ticket creation, and secure customer delivery-code reveal for Rider completion.
+- Defects fixed after this test: route-name leakage, missing checkout delivery-fee line, mixed promo success/error state, reused-promo copy, discount reset after failed promo validation, support list refresh after ticket creation, secure customer delivery-code reveal for Rider completion, and content-first Customer App visual polish.
+
+## Visual Polish Retest
+
+- Confirm no technical route path or duplicate native title is visible on Home, Login, Vendor, Cart, Checkout, Order details, Support centre, Support ticket detail, Addresses and Profile.
+- Confirm back arrows remain available on detail/flow screens and Android safe-area spacing remains comfortable.
+- Confirm Home keeps the KariGO logo, approved Kano positioning copy, clean category chips and readable vendor cards.
+- Confirm Cart and Checkout keep the existing server-authoritative quote behavior while using the clearer receipt-style pricing layout.
+- Confirm Order details display the backend-created totals and delivery-code card without exposing OTP before the eligible statuses.
 
 ## Seeded Persona Reference
 
