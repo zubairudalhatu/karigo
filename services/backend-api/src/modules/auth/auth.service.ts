@@ -3,11 +3,15 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { AccountStatus } from "@prisma/client";
 import { compare, hash } from "bcrypt";
+import { createHash, randomBytes } from "crypto";
 import { LoginDto } from "./dto/login.dto";
+import { LogoutDto } from "./dto/logout.dto";
 import { RegisterCustomerDto } from "./dto/register-customer.dto";
+import { RefreshSessionDto } from "./dto/refresh-session.dto";
 import { ResendOtpDto } from "./dto/resend-otp.dto";
 import { VerifyOtpDto } from "./dto/verify-otp.dto";
 import { OtpService } from "./otp.service";
+import { PrismaService } from "../../prisma/prisma.service";
 import { UsersService } from "../users/users.service";
 
 @Injectable()
@@ -15,6 +19,7 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly otpService: OtpService,
+    private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService
   ) {}
@@ -68,7 +73,7 @@ export class AuthService {
 
     return {
       user: verifiedUser,
-      accessToken: await this.signToken(verifiedUser.id, verifiedUser.role)
+      ...(await this.issueSession(verifiedUser.id, verifiedUser.role))
     };
   }
 
@@ -89,7 +94,7 @@ export class AuthService {
     const publicUser = await this.usersService.markLogin(user.id);
     return {
       user: publicUser,
-      accessToken: await this.signToken(user.id, user.role)
+      ...(await this.issueSession(user.id, user.role))
     };
   }
 
@@ -97,7 +102,83 @@ export class AuthService {
     return this.usersService.findPublicById(userId);
   }
 
+  async refreshSession(dto: RefreshSessionDto) {
+    const tokenHash = this.hashRefreshToken(dto.refreshToken);
+    const existing = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+      include: { user: true }
+    });
+
+    if (
+      !existing ||
+      existing.revokedAt ||
+      existing.expiresAt.getTime() <= Date.now() ||
+      existing.user.deletedAt ||
+      existing.user.accountStatus !== AccountStatus.ACTIVE
+    ) {
+      throw new UnauthorizedException("Your session has expired. Please sign in again.");
+    }
+
+    const session = await this.issueSession(existing.user.id, existing.user.role);
+    await this.prisma.refreshToken.update({
+      where: { id: existing.id },
+      data: {
+        revokedAt: new Date(),
+        replacedBy: session.refreshTokenId
+      }
+    });
+
+    return {
+      user: await this.usersService.findPublicById(existing.user.id),
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken
+    };
+  }
+
+  async logout(userId: string, dto: LogoutDto) {
+    if (dto.refreshToken) {
+      await this.prisma.refreshToken.updateMany({
+        where: {
+          userId,
+          tokenHash: this.hashRefreshToken(dto.refreshToken),
+          revokedAt: null
+        },
+        data: { revokedAt: new Date() }
+      });
+    }
+
+    return { loggedOut: true };
+  }
+
   private signToken(userId: string, role: string): Promise<string> {
     return this.jwtService.signAsync({ sub: userId, role });
+  }
+
+  private async issueSession(userId: string, role: string) {
+    const refreshToken = randomBytes(48).toString("base64url");
+    const expiresAt = new Date(Date.now() + this.refreshTokenTtlDays() * 24 * 60 * 60 * 1000);
+    const stored = await this.prisma.refreshToken.create({
+      data: {
+        userId,
+        tokenHash: this.hashRefreshToken(refreshToken),
+        expiresAt
+      },
+      select: { id: true }
+    });
+
+    return {
+      accessToken: await this.signToken(userId, role),
+      refreshToken,
+      refreshTokenId: stored.id
+    };
+  }
+
+  private refreshTokenTtlDays(): number {
+    const configured = Number(this.config.get<string>("REFRESH_TOKEN_EXPIRES_DAYS", "30"));
+    return Number.isFinite(configured) && configured > 0 ? configured : 30;
+  }
+
+  private hashRefreshToken(token: string): string {
+    return createHash("sha256").update(token).digest("hex");
   }
 }

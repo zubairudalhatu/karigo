@@ -11,6 +11,13 @@ export const serviceCategories = [
 ] as const;
 export type ServiceCategory = (typeof serviceCategories)[number];
 
+export const productCategories = [
+  "FOOD",
+  "GROCERIES",
+  "MARKET_ITEMS"
+] as const;
+export type ProductCategory = (typeof productCategories)[number];
+
 export const orderStatuses = [
   "DRAFT",
   "AWAITING_PAYMENT",

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { ProductCategory, ServiceCategory } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { publicUserSelect } from "../users/users.service";
 import { ListVendorsQueryDto } from "./dto/list-vendors-query.dto";
@@ -51,7 +52,8 @@ export class VendorsService {
         ? [{
             OR: [
               { businessCategory: { contains: query.serviceCategory, mode: "insensitive" as const } },
-              { category: { slug: query.serviceCategory.toLowerCase() } }
+              { category: { slug: query.serviceCategory.toLowerCase() } },
+              { products: { some: { productCategory: this.productCategoryForService(query.serviceCategory), isActive: true, isAvailable: true, deletedAt: null } } }
             ]
           }]
         : [])
@@ -137,5 +139,13 @@ export class VendorsService {
       rating: vendor.rating?.toNumber() ?? null,
       averagePreparationTimeMinutes
     };
+  }
+
+  private productCategoryForService(serviceCategory: ServiceCategory): ProductCategory {
+    return serviceCategory === ServiceCategory.GROCERY
+      ? ProductCategory.GROCERIES
+      : serviceCategory === ServiceCategory.MARKET
+        ? ProductCategory.MARKET_ITEMS
+        : ProductCategory.FOOD;
   }
 }

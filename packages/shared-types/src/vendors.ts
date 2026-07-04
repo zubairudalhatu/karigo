@@ -1,4 +1,4 @@
-import type { ServiceCategory } from "./index";
+import type { ProductCategory, ServiceCategory } from "./index";
 
 export interface VendorSummary {
   id: string;
@@ -14,11 +14,31 @@ export interface VendorSummary {
 export interface ProductSummary {
   id: string;
   vendorId: string;
+  vendorName?: string;
   name: string;
-  description?: string | null;
+  description: string;
   category: string;
+  productCategory: ProductCategory;
   serviceCategory?: ServiceCategory;
   price: number;
-  imageUrl?: string | null;
+  imageUrl: string;
+  isAvailable: boolean;
+  isFeatured?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface VendorProductInput {
+  name: string;
+  description: string;
+  category?: string;
+  productCategory: ProductCategory;
+  price: number;
+  imageUrl: string;
+  isAvailable?: boolean;
+  isFeatured?: boolean;
+}
+
+export interface VendorProductAvailabilityInput {
   isAvailable: boolean;
 }

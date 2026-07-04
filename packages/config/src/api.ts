@@ -17,6 +17,7 @@ export interface ApiClientOptions {
   tokenStore?: TokenStore;
   defaultHeaders?: Record<string, string>;
   onUnauthorized?: (status: number) => void | Promise<void>;
+  refreshAuth?: () => boolean | Promise<boolean>;
 }
 
 export interface ApiRequestOptions extends Omit<RequestInit, "body" | "headers"> {
@@ -32,7 +33,7 @@ export function normalizeApiBaseUrl(value?: string): string {
 export function createApiClient(options: ApiClientOptions = {}) {
   const baseUrl = normalizeApiBaseUrl(options.baseUrl);
 
-  async function request<T>(path: string, requestOptions: ApiRequestOptions = {}): Promise<T> {
+  async function request<T>(path: string, requestOptions: ApiRequestOptions = {}, hasRetried = false): Promise<T> {
     const token = requestOptions.authenticated === false ? null : await options.tokenStore?.getToken();
     const response = await fetch(`${baseUrl}/${path.replace(/^\/+/, "")}`, {
       ...requestOptions,
@@ -48,6 +49,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
     const payload = (await response.json().catch(() => null)) as ApiSuccessResponse<T> | ApiErrorResponse | null;
     if (!response.ok || !payload || payload.success === false) {
+      if (requestOptions.authenticated !== false && response.status === 401 && !hasRetried && options.refreshAuth) {
+        const refreshed = await options.refreshAuth();
+        if (refreshed) {
+          return request<T>(path, requestOptions, true);
+        }
+      }
       if (
         requestOptions.authenticated !== false &&
         (response.status === 401 || response.status === 403)

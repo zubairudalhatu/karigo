@@ -8,7 +8,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
-["vendors/[id]", "products/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel"]
+["vendors/[id]", "catalogue/[category]", "products/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
 ["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
   .forEach((title) => assert(!layout.includes(`title: "${title}"`), `Native header title must be hidden: ${title}`));
@@ -24,6 +24,13 @@ assert(ui.includes("chipGrid"), "Shared UI must include category/service chip la
 assert(ui.includes("vendorImage"), "Shared UI must include visual vendor card image areas.");
 assert(ui.includes("priceRow"), "Shared UI must include structured pricing rows.");
 assert(ui.includes("payable"), "Shared UI must include strong payable total styling.");
+assert(ui.includes("productImage"), "Shared UI must include product image styling.");
+
+const client = read("src", "api", "client.ts");
+assert(client.includes("expo-secure-store"), "Customer session tokens must use Expo SecureStore.");
+assert(client.includes("karigo_customer_refresh_token"), "Customer app must persist refresh tokens separately.");
+assert(client.includes("auth/refresh"), "Customer API client must support session refresh.");
+assert(!client.includes("AsyncStorage"), "Customer auth tokens must not use AsyncStorage.");
 
 const home = read("app", "tabs", "home.tsx");
 assert(home.includes("Food, groceries, parcels and errands across Kano."), "Home must use approved concise KariGO positioning copy.");
@@ -33,8 +40,21 @@ assert(home.includes("Market Items"), "Home must keep Market Items service categ
 assert(home.includes("Parcel Delivery"), "Home must keep Parcel Delivery service category.");
 assert(home.includes("SME Errands"), "Home must keep SME Errands service category.");
 assert(home.includes("Search food, groceries, vendors or area"), "Home search should support category discovery language.");
-assert(home.includes("vendorImage"), "Home vendor cards must have a clear visual area.");
-assert(home.includes("Currently closed"), "Closed vendors must have a visible state.");
+assert(home.includes("/catalogue/food"), "Food Delivery chip must navigate to food catalogue.");
+assert(home.includes("/catalogue/groceries"), "Groceries chip must navigate to groceries catalogue.");
+assert(home.includes("/catalogue/market-items"), "Market Items chip must navigate to market-items catalogue.");
+assert(home.includes("/parcel?mode=errand"), "SME Errands chip must navigate to the errand flow.");
+assert(home.includes("Food near you"), "Home must group food products.");
+assert(home.includes("Groceries near you"), "Home must group grocery products.");
+assert(home.includes("Market items near you"), "Home must group market products.");
+assert(home.includes("productsApi.catalogue"), "Home must use the catalogue API.");
+
+const catalogue = read("app", "catalogue", "[category].tsx");
+assert(catalogue.includes("Food delivery"), "Food catalogue heading must exist.");
+assert(catalogue.includes("Groceries"), "Groceries catalogue heading must exist.");
+assert(catalogue.includes("Market items"), "Market items catalogue heading must exist.");
+assert(catalogue.includes("productCategory: config.productCategory"), "Catalogue must query by active product category.");
+assert(catalogue.includes("Add to cart"), "Catalogue product cards must allow add-to-cart.");
 
 const checkout = read("app", "checkout.tsx");
 assert(checkout.includes("Delivery fee:"), "Checkout must show delivery fee.");

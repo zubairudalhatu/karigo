@@ -4,6 +4,7 @@ import { AccountStatus, UserRole } from "@prisma/client";
 import { hash } from "bcrypt";
 import { AuthService } from "./auth.service";
 import { OtpService } from "./otp.service";
+import { PrismaService } from "../../prisma/prisma.service";
 import { UsersService } from "../users/users.service";
 
 describe("AuthService", () => {
@@ -15,6 +16,14 @@ describe("AuthService", () => {
     findPublicById: jest.fn()
   };
   const otpService = { issue: jest.fn(), verify: jest.fn() };
+  const prisma = {
+    refreshToken: {
+      create: jest.fn().mockResolvedValue({ id: "refresh-token-id" }),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn()
+    }
+  };
   const jwtService = { signAsync: jest.fn().mockResolvedValue("signed-token") };
   const config = {
     get: jest.fn((key: string, fallback: unknown) =>
@@ -24,6 +33,7 @@ describe("AuthService", () => {
   const service = new AuthService(
     usersService as unknown as UsersService,
     otpService as unknown as OtpService,
+    prisma as unknown as PrismaService,
     jwtService as unknown as JwtService,
     config as unknown as ConfigService
   );
@@ -138,6 +148,32 @@ describe("AuthService", () => {
     });
 
     expect(result.accessToken).toBe("signed-token");
+    expect(result.refreshToken).toEqual(expect.any(String));
     expect(usersService.markLogin).toHaveBeenCalledWith(user.id);
+  });
+
+  it("refreshes a valid refresh token with rotation", async () => {
+    const expiresAt = new Date(Date.now() + 60_000);
+    prisma.refreshToken.findUnique.mockResolvedValue({
+      id: "old-refresh-token-id",
+      user: {
+        id: "user-1",
+        role: UserRole.CUSTOMER,
+        deletedAt: null,
+        accountStatus: AccountStatus.ACTIVE
+      },
+      revokedAt: null,
+      expiresAt
+    });
+    usersService.findPublicById.mockResolvedValue({ id: "user-1", role: UserRole.CUSTOMER });
+
+    const result = await service.refreshSession({ refreshToken: "valid-refresh-token-value" });
+
+    expect(result.accessToken).toBe("signed-token");
+    expect(result.refreshToken).toEqual(expect.any(String));
+    expect(prisma.refreshToken.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "old-refresh-token-id" },
+      data: expect.objectContaining({ revokedAt: expect.any(Date), replacedBy: "refresh-token-id" })
+    }));
   });
 });

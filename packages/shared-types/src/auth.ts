@@ -15,7 +15,16 @@ export interface LoginRequest {
 
 export interface LoginResult {
   accessToken: string;
+  refreshToken?: string;
   user: AuthenticatedUser;
+}
+
+export interface RefreshSessionRequest {
+  refreshToken: string;
+}
+
+export interface LogoutRequest {
+  refreshToken?: string;
 }
 
 export interface RegisterCustomerRequest {

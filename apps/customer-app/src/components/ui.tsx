@@ -101,6 +101,7 @@ const styles = StyleSheet.create({
   vendorImageText: { color: brand.colors.primaryDark, fontSize: 22, fontWeight: "900" },
   vendorOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", backgroundColor: "rgba(17, 24, 39, 0.48)", justifyContent: "center" },
   vendorOverlayText: { color: brand.colors.white, fontWeight: "900" },
+  productImage: { backgroundColor: "#F3F4F6", borderRadius: 16, height: 150, width: "100%" },
   favorite: { color: brand.colors.primary, fontSize: 18, fontWeight: "900" },
   priceRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   priceLabel: { color: brand.colors.muted, fontSize: 15 },

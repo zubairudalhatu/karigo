@@ -1,6 +1,8 @@
 export const DEMO_ACCOUNT_PHONES = {
   operationsAdmin: "+2348000000001",
   vendorOwner: "+2348000000101",
+  groceryVendorOwner: "+2348000000102",
+  marketVendorOwner: "+2348000000103",
   customer: "+2348000000201",
   rider: "+2348000000401"
 } as const;
@@ -26,6 +28,8 @@ export function stagingSeedMessages(resetEnabled: boolean): string[] {
     "Demo Super Admin ensured",
     "Demo Operations Admin ensured",
     "Demo Vendor ensured",
+    "Demo Grocery Vendor ensured",
+    "Demo Market Vendor ensured",
     "Demo Rider ensured",
     "Demo Customer ensured",
     `Credential reset applied: ${resetEnabled ? "yes" : "no"}`

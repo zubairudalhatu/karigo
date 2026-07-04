@@ -14,9 +14,13 @@ before running. Never use real customer, vendor, rider, or production-admin deta
 - Configurable super admin
 - Demo operations admin
 - Demo customer with profile and Home address
-- Demo active/open vendor and vendor user
+- Demo active/open food vendor and vendor user
+- Demo active/open grocery vendor and vendor user
+- Demo active/open market-items vendor and vendor user
 - Food, grocery, and market vendor categories
-- Jollof Rice and Chicken Suya products
+- Kano Kitchen food products: Chicken Suya, Jollof Rice, Beef Shawarma, Grilled Chicken, Meat Pie, Zobo Drink
+- Kano Fresh Mart grocery products: 5kg Rice, Indomie Super Pack, Vegetable Oil, Fresh Eggs, Peak Milk, Golden Penny Spaghetti
+- Kano Everyday Market products: Detergent, Bathing Soap, Toothpaste, Tissue Paper, Cooking Gas Refill Voucher placeholder, Household Cleaning Pack
 - Demo active/online rider and rider user
 - `KARIGOFIRST` launch promo
 - Sample awaiting-payment parcel order

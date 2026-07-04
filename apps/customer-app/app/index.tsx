@@ -1,9 +1,16 @@
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Link } from "expo-router";
+import { Redirect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { brand } from "@karigo/config";
+import { Loading } from "../src/components/ui";
+import { useAuth } from "../src/contexts/auth-context";
 
 export default function CustomerWelcome() {
+  const { user, loading } = useAuth();
+  if (loading) return <Loading label="Opening KariGO..." />;
+  if (user) return <Redirect href="/tabs/home" />;
+
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
@@ -25,4 +32,3 @@ const styles = StyleSheet.create({
   button: { backgroundColor: brand.colors.primary, borderRadius: 12, paddingHorizontal: 32, paddingVertical: 15 },
   buttonText: { color: brand.colors.white, fontSize: 16, fontWeight: "700" }
 });
-

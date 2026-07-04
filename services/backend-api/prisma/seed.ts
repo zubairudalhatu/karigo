@@ -3,6 +3,7 @@ import {
   AdminRole,
   OrderStatus,
   PaymentStatus,
+  ProductCategory,
   PromoDiscountType,
   PrismaClient,
   RiderStatus,
@@ -24,8 +25,11 @@ const prisma = new PrismaClient();
 async function upsertProduct(vendorId: string, name: string, data: {
   description: string;
   category: string;
+  productCategory: ProductCategory;
   price: number;
+  imageUrl: string;
   preparationTimeMinutes: number;
+  isFeatured?: boolean;
 }) {
   const existing = await prisma.product.findFirst({ where: { vendorId, name } });
   if (existing) {
@@ -122,12 +126,12 @@ async function main() {
     update: { name: "Food Vendors", isActive: true },
     create: { name: "Food Vendors", slug: "food", description: "Restaurants and prepared meals" }
   });
-  await prisma.vendorCategory.upsert({
+  const groceryCategory = await prisma.vendorCategory.upsert({
     where: { slug: "grocery" },
     update: { name: "Groceries", isActive: true },
     create: { name: "Groceries", slug: "grocery", description: "Grocery stores and supermarkets" }
   });
-  await prisma.vendorCategory.upsert({
+  const marketCategory = await prisma.vendorCategory.upsert({
     where: { slug: "market" },
     update: { name: "Market", isActive: true },
     create: { name: "Market", slug: "market", description: "Local market vendors" }
@@ -169,17 +173,165 @@ async function main() {
     }
   });
   await upsertProduct(vendor.id, "Jollof Rice", {
-    description: "Classic Nigerian jollof rice",
+    description: "Smoky party-style jollof rice served fresh.",
     category: "Rice",
+    productCategory: ProductCategory.FOOD,
     price: 2500,
-    preparationTimeMinutes: 25
+    imageUrl: "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d",
+    preparationTimeMinutes: 25,
+    isFeatured: true
   });
   await upsertProduct(vendor.id, "Chicken Suya", {
-    description: "Spiced grilled chicken",
+    description: "Spiced grilled chicken with suya pepper.",
     category: "Grill",
+    productCategory: ProductCategory.FOOD,
     price: 3000,
-    preparationTimeMinutes: 30
+    imageUrl: "https://images.unsplash.com/photo-1598515214211-89d3c73ae83b",
+    preparationTimeMinutes: 30,
+    isFeatured: true
   });
+  await upsertProduct(vendor.id, "Beef Shawarma", {
+    description: "Warm beef shawarma with vegetables and sauce.",
+    category: "Wraps",
+    productCategory: ProductCategory.FOOD,
+    price: 2200,
+    imageUrl: "https://images.unsplash.com/photo-1662116765994-1e4200c43589",
+    preparationTimeMinutes: 20
+  });
+  await upsertProduct(vendor.id, "Grilled Chicken", {
+    description: "Tender grilled chicken with local spices.",
+    category: "Grill",
+    productCategory: ProductCategory.FOOD,
+    price: 4500,
+    imageUrl: "https://images.unsplash.com/photo-1532550907401-a500c9a57435",
+    preparationTimeMinutes: 35
+  });
+  await upsertProduct(vendor.id, "Meat Pie", {
+    description: "Fresh pastry filled with seasoned minced beef.",
+    category: "Snacks",
+    productCategory: ProductCategory.FOOD,
+    price: 900,
+    imageUrl: "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9",
+    preparationTimeMinutes: 15
+  });
+  await upsertProduct(vendor.id, "Zobo Drink", {
+    description: "Chilled hibiscus drink with ginger notes.",
+    category: "Drinks",
+    productCategory: ProductCategory.FOOD,
+    price: 700,
+    imageUrl: "https://images.unsplash.com/photo-1544145945-f90425340c7e",
+    preparationTimeMinutes: 10
+  });
+
+  const groceryUser = await prisma.user.upsert({
+    where: { phoneNumber: DEMO_ACCOUNT_PHONES.groceryVendorOwner },
+    update: {
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      ...demoCredentialUpdate(resetDemoCredentials, passwordHash)
+    },
+    create: {
+      fullName: "Kano Fresh Mart Vendor",
+      phoneNumber: DEMO_ACCOUNT_PHONES.groceryVendorOwner,
+      email: "grocery-vendor@karigo.local",
+      passwordHash,
+      role: UserRole.VENDOR,
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true
+    }
+  });
+  const groceryVendor = await prisma.vendor.upsert({
+    where: { userId: groceryUser.id },
+    update: { status: VendorStatus.ACTIVE, isOpen: true, categoryId: groceryCategory.id, businessCategory: "GROCERY" },
+    create: {
+      userId: groceryUser.id,
+      categoryId: groceryCategory.id,
+      businessName: "Kano Fresh Mart",
+      businessCategory: "GROCERY",
+      description: "Sample KariGO grocery vendor",
+      phoneNumber: DEMO_ACCOUNT_PHONES.groceryVendorOwner,
+      email: "grocery-vendor@karigo.local",
+      address: "Nasarawa GRA",
+      city: "Kano",
+      state: "Kano",
+      isOpen: true,
+      status: VendorStatus.ACTIVE
+    }
+  });
+  const groceryProducts = [
+    ["5kg Rice", "Bag of clean long-grain rice for home meals.", "Grains", 7800, "https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6"],
+    ["Indomie Super Pack", "Family-size pack of instant noodles.", "Noodles", 4200, "https://images.unsplash.com/photo-1612927601601-6638404737ce"],
+    ["Vegetable Oil", "Bottle of cooking oil for everyday kitchen use.", "Cooking Oil", 3600, "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5"],
+    ["Fresh Eggs", "Crate of fresh eggs from local suppliers.", "Eggs", 4500, "https://images.unsplash.com/photo-1506976785307-8732e854ad03"],
+    ["Peak Milk", "Tin milk for tea, pap and breakfast meals.", "Dairy", 1200, "https://images.unsplash.com/photo-1563636619-e9143da7973b"],
+    ["Golden Penny Spaghetti", "Pack of spaghetti for quick family meals.", "Pasta", 1100, "https://images.unsplash.com/photo-1551462147-ff29053bfc14"]
+  ] as const;
+  for (const [name, description, category, price, imageUrl] of groceryProducts) {
+    await upsertProduct(groceryVendor.id, name, {
+      description,
+      category,
+      productCategory: ProductCategory.GROCERIES,
+      price,
+      imageUrl,
+      preparationTimeMinutes: 10,
+      isFeatured: name === "5kg Rice" || name === "Fresh Eggs"
+    });
+  }
+
+  const marketUser = await prisma.user.upsert({
+    where: { phoneNumber: DEMO_ACCOUNT_PHONES.marketVendorOwner },
+    update: {
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      ...demoCredentialUpdate(resetDemoCredentials, passwordHash)
+    },
+    create: {
+      fullName: "Kano Everyday Market Vendor",
+      phoneNumber: DEMO_ACCOUNT_PHONES.marketVendorOwner,
+      email: "market-vendor@karigo.local",
+      passwordHash,
+      role: UserRole.VENDOR,
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true
+    }
+  });
+  const marketVendor = await prisma.vendor.upsert({
+    where: { userId: marketUser.id },
+    update: { status: VendorStatus.ACTIVE, isOpen: true, categoryId: marketCategory.id, businessCategory: "MARKET" },
+    create: {
+      userId: marketUser.id,
+      categoryId: marketCategory.id,
+      businessName: "Kano Everyday Market",
+      businessCategory: "MARKET",
+      description: "Sample KariGO market-items vendor",
+      phoneNumber: DEMO_ACCOUNT_PHONES.marketVendorOwner,
+      email: "market-vendor@karigo.local",
+      address: "Kano City Centre",
+      city: "Kano",
+      state: "Kano",
+      isOpen: true,
+      status: VendorStatus.ACTIVE
+    }
+  });
+  const marketProducts = [
+    ["Detergent", "Large pack detergent for laundry and cleaning.", "Household", 2500, "https://images.unsplash.com/photo-1626806819282-2c1dc01a5e0c"],
+    ["Bathing Soap", "Pack of bathing soap for daily home use.", "Personal Care", 1500, "https://images.unsplash.com/photo-1607006483224-53bb897d7a2f"],
+    ["Toothpaste", "Family toothpaste for daily dental care.", "Personal Care", 1300, "https://images.unsplash.com/photo-1606811841689-23dfddce3e95"],
+    ["Tissue Paper", "Soft tissue paper pack for household use.", "Household", 1800, "https://images.unsplash.com/photo-1584556812952-905ffd0c611a"],
+    ["Cooking Gas Refill Voucher", "Placeholder voucher request for manual cooking gas refill follow-up.", "Household", 5000, "https://images.unsplash.com/photo-1581092160607-ee22731c031f"],
+    ["Household Cleaning Pack", "Combined cleaning essentials for quick restock.", "Household", 6200, "https://images.unsplash.com/photo-1585421514738-01798e348b17"]
+  ] as const;
+  for (const [name, description, category, price, imageUrl] of marketProducts) {
+    await upsertProduct(marketVendor.id, name, {
+      description,
+      category,
+      productCategory: ProductCategory.MARKET_ITEMS,
+      price,
+      imageUrl,
+      preparationTimeMinutes: 10,
+      isFeatured: name === "Detergent" || name === "Household Cleaning Pack"
+    });
+  }
 
   const customerUser = await prisma.user.upsert({
     where: { phoneNumber: DEMO_ACCOUNT_PHONES.customer },

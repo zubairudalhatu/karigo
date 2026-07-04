@@ -1,8 +1,10 @@
 import type {
   AuthenticatedUser,
+  LogoutRequest,
   LoginRequest,
   LoginResult,
   RegisterCustomerRequest,
+  RefreshSessionRequest,
   ResendOtpRequest,
   ResendOtpResult,
   VerifyOtpRequest
@@ -20,5 +22,7 @@ export const authApi = {
   resendOtp: (body: ResendOtpRequest) => api.post<ResendOtpResult>("auth/resend-otp", body, { authenticated: false }),
   verifyOtp: (body: VerifyOtpRequest) => api.post<LoginResult>("auth/verify-otp", body, { authenticated: false }),
   login: (body: LoginRequest) => api.post<LoginResult>("auth/login", body, { authenticated: false }),
+  refresh: (body: RefreshSessionRequest) => api.post<LoginResult>("auth/refresh", body, { authenticated: false }),
+  logout: (body: LogoutRequest) => api.post<{ loggedOut: boolean }>("auth/logout", body),
   me: () => api.get<AuthenticatedUser>("auth/me")
 };

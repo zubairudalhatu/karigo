@@ -1,59 +1,90 @@
-import type { VendorSummary } from "@karigo/shared-types";
+import type { ProductCategory, ProductSummary, VendorSummary } from "@karigo/shared-types";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Image, Pressable, Text, View } from "react-native";
 import { notificationsApi } from "../../src/api/notifications.api";
-import { vendorsApi } from "../../src/api/vendors.api";
-import { BrandHeader, Card, Empty, Field, Loading, Message, NavLink, Protected, Screen, ui } from "../../src/components/ui";
-import { friendlyError } from "../../src/lib/errors";
+import { productsApi } from "../../src/api/products.api";
+import { BrandHeader, Button, Card, Empty, Field, Loading, Message, NavLink, Protected, Screen, ui } from "../../src/components/ui";
+import { useCart } from "../../src/contexts/cart-context";
+import { friendlyError, money } from "../../src/lib/errors";
+
+const serviceOptions = [
+  { label: "Food Delivery", heading: "Food delivery", category: "FOOD" as const, href: "/catalogue/food" },
+  { label: "Groceries", heading: "Groceries", category: "GROCERIES" as const, href: "/catalogue/groceries" },
+  { label: "Market Items", heading: "Market items", category: "MARKET_ITEMS" as const, href: "/catalogue/market-items" },
+  { label: "Parcel Delivery", heading: "Send a parcel", href: "/parcel" },
+  { label: "SME Errands", heading: "Request an errand", href: "/parcel?mode=errand" }
+];
+
+const categorySections: { title: string; category: ProductCategory; href: string; empty: string }[] = [
+  { title: "Food near you", category: "FOOD", href: "/catalogue/food", empty: "Food vendors are coming to this area soon." },
+  { title: "Groceries near you", category: "GROCERIES", href: "/catalogue/groceries", empty: "Grocery products are coming to this area soon." },
+  { title: "Market items near you", category: "MARKET_ITEMS", href: "/catalogue/market-items", empty: "Market items are coming to this area soon." }
+];
+
+function vendorFromProduct(product: ProductSummary): VendorSummary {
+  return {
+    id: product.vendorId,
+    businessName: product.vendorName ?? "KariGO vendor",
+    businessCategory: product.serviceCategory ?? "FOOD",
+    isOpen: true,
+    status: "ACTIVE"
+  };
+}
 
 export default function CustomerHome() {
-  const [vendors, setVendors] = useState<VendorSummary[]>([]);
+  const cart = useCart();
+  const [products, setProducts] = useState<ProductSummary[]>([]);
   const [search, setSearch] = useState("");
   const [unread, setUnread] = useState(0);
+  const [activeCategory, setActiveCategory] = useState<ProductCategory | "PARCEL" | "ERRAND">("FOOD");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   async function load(term?: string) {
     setLoading(true); setError("");
     try {
-      const [list, count] = await Promise.all([vendorsApi.list(term), notificationsApi.unreadCount()]);
-      setVendors(list); setUnread(count.count);
+      const [list, count] = await Promise.all([productsApi.catalogue({ search: term }), notificationsApi.unreadCount()]);
+      setProducts(list); setUnread(count.count);
     } catch (e) { setError(friendlyError(e)); } finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, []);
+
+  const grouped = useMemo(() => Object.fromEntries(categorySections.map((section) => [
+    section.category,
+    products.filter((product) => product.productCategory === section.category).slice(0, 4)
+  ])) as Record<ProductCategory, ProductSummary[]>, [products]);
 
   return <Protected><Screen actions={<NavLink href="/notifications" label={`Activity (${unread})`} />}>
     <BrandHeader eyebrow="Food, groceries, parcels and errands across Kano." />
     <View style={ui.quickNav}><NavLink href="/addresses" label="Addresses" /><NavLink href="/cart" label="Cart" /><NavLink href="/orders" label="Orders" /><NavLink href="/profile" label="Profile" /><NavLink href="/parcel" label="Send parcel" /><NavLink href="/support" label="Support" /></View>
     <Text style={ui.heroTitle}>What do you need today?</Text>
     <View style={ui.chipGrid}>
-      {["Food Delivery", "Groceries", "Market Items", "Parcel Delivery", "SME Errands"].map((service) => <View key={service} style={[ui.chip, ui.chipSoft]}><Text style={[ui.chipText, ui.chipTextSoft]}>{service}</Text></View>)}
+      {serviceOptions.map((service) => <Pressable
+        key={service.label}
+        accessibilityRole="button"
+        onPress={() => {
+          setActiveCategory(service.category ?? (service.label === "Parcel Delivery" ? "PARCEL" : "ERRAND"));
+          router.push(service.href as never);
+        }}
+        style={[ui.chip, activeCategory === (service.category ?? (service.label === "Parcel Delivery" ? "PARCEL" : "ERRAND")) && ui.chipSoft]}
+      ><Text style={[ui.chipText, activeCategory === (service.category ?? (service.label === "Parcel Delivery" ? "PARCEL" : "ERRAND")) && ui.chipTextSoft]}>{service.label}</Text></Pressable>)}
     </View>
     <Field placeholder="Search food, groceries, vendors or area" value={search} onChangeText={setSearch} onSubmitEditing={() => load(search)} />
     <Message error>{error}</Message>
-    <Text style={ui.sectionTitle}>Vendors near you</Text>
-    {loading ? <Loading label="Finding nearby vendors..." /> : vendors.length === 0 ? <Empty message="No vendors are available in this area yet. KariGO is expanding soon." /> : vendors.map((vendor) =>
-      <Pressable key={vendor.id} onPress={() => router.push(`/vendors/${vendor.id}`)}>
-        <Card>
-          <View style={ui.vendorCard}>
-            <View style={ui.vendorImage}>
-              <Text style={ui.vendorImageText}>{vendor.businessName.slice(0, 1).toUpperCase()}</Text>
-              {!vendor.isOpen ? <View style={ui.vendorOverlay}><Text style={ui.vendorOverlayText}>Currently closed</Text></View> : null}
-            </View>
-            <View style={ui.spaceBetween}>
-              <View>
-                <Text style={ui.cardTitle}>{vendor.businessName}</Text>
-                <Text style={ui.muted}>{vendor.businessCategory} · {vendor.city}</Text>
-              </View>
-              <Text accessibilityLabel="Favourite vendor" style={ui.favorite}>♡</Text>
-            </View>
-            <View style={ui.chipGrid}>
-              <View style={ui.chip}><Text style={ui.chipText}>{vendor.isOpen ? "Open now" : "Closed"}</Text></View>
-              <View style={ui.chip}><Text style={ui.chipText}>KariGO delivery</Text></View>
-            </View>
-          </View>
-        </Card>
-      </Pressable>)}
+    {loading ? <Loading label="Finding nearby products..." /> : categorySections.map((section) => <View key={section.category} style={{ gap: 10 }}>
+      <View style={ui.spaceBetween}><Text style={ui.sectionTitle}>{section.title}</Text><NavLink href={section.href} label="See all" /></View>
+      {grouped[section.category].length === 0 ? <Empty message={section.empty} /> : grouped[section.category].map((product) =>
+        <Pressable key={product.id} onPress={() => router.push(`/products/${product.id}?vendorId=${product.vendorId}`)}>
+          <Card>
+            <Image source={{ uri: product.imageUrl }} style={ui.productImage} />
+            <Text style={ui.cardTitle}>{product.name}</Text>
+            <Text style={ui.muted} numberOfLines={2}>{product.description}</Text>
+            <Text style={ui.muted}>{product.vendorName}</Text>
+            <View style={ui.priceRow}><Text style={ui.payable}>{money(product.price)}</Text><Text style={ui.priceValue}>{product.isAvailable ? "Available" : "Unavailable"}</Text></View>
+            <Button title={product.isAvailable ? "Add to cart" : "Unavailable"} disabled={!product.isAvailable} onPress={() => cart.add(vendorFromProduct(product), product)} />
+          </Card>
+        </Pressable>)}
+    </View>)}
   </Screen></Protected>;
 }

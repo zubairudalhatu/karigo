@@ -2,12 +2,13 @@ import type { AuthenticatedUser, LoginRequest, RegisterCustomerRequest, VerifyOt
 import { KariGoApiError } from "@karigo/shared-types";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { authApi } from "../api/auth.api";
-import { onUnauthorized, tokenStore } from "../api/client";
+import { onUnauthorized, refreshTokenStore, tokenStore } from "../api/client";
 import { normalizeNigerianPhoneNumber } from "../lib/phone";
 
 interface AuthContextValue {
   user: AuthenticatedUser | null;
   loading: boolean;
+  sessionMessage: string;
   register(body: RegisterCustomerRequest): ReturnType<typeof authApi.register>;
   verifyOtp(body: VerifyOtpRequest): Promise<void>;
   login(body: LoginRequest): Promise<void>;
@@ -23,14 +24,19 @@ function isAuthStatus(error: unknown) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionMessage, setSessionMessage] = useState("");
 
   useEffect(() => {
-    const unsubscribe = onUnauthorized(() => setUser(null));
+    const unsubscribe = onUnauthorized(() => {
+      setUser(null);
+      setSessionMessage("Your session has expired. Please sign in again.");
+    });
     let active = true;
 
     async function bootstrap() {
       const token = await tokenStore.getToken();
-      if (!token) {
+      const refreshToken = await refreshTokenStore.getToken();
+      if (!token && !refreshToken) {
         if (active) setLoading(false);
         return;
       }
@@ -40,7 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!active) return;
         current.role === "CUSTOMER" ? setUser(current) : await tokenStore.clearToken?.();
       } catch (error) {
-        if (isAuthStatus(error)) await tokenStore.clearToken?.();
+        if (isAuthStatus(error)) {
+          await tokenStore.clearToken?.();
+          setSessionMessage("Your session has expired. Please sign in again.");
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -53,9 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  async function saveSession(accessToken: string, nextUser: AuthenticatedUser) {
+  async function saveSession(accessToken: string, refreshToken: string | undefined, nextUser: AuthenticatedUser) {
     if (nextUser.role !== "CUSTOMER") throw new Error("This account cannot use the customer app.");
     await tokenStore.setToken?.(accessToken);
+    if (refreshToken) await refreshTokenStore.setToken(refreshToken);
+    setSessionMessage("");
     setUser(nextUser);
   }
 
@@ -63,19 +74,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user,
       loading,
+      sessionMessage,
       register: authApi.register,
       verifyOtp: async (body) => {
         const result = await authApi.verifyOtp(body);
-        await saveSession(result.accessToken, result.user);
+        await saveSession(result.accessToken, result.refreshToken, result.user);
       },
       login: async (body) => {
         const result = await authApi.login({
           ...body,
           phoneNumber: normalizeNigerianPhoneNumber(body.phoneNumber)
         });
-        await saveSession(result.accessToken, result.user);
+        await saveSession(result.accessToken, result.refreshToken, result.user);
       },
       logout: async () => {
+        const refreshToken = await refreshTokenStore.getToken();
+        if (refreshToken) {
+          await authApi.logout({ refreshToken }).catch(() => undefined);
+        }
         await tokenStore.clearToken?.();
         setUser(null);
       }

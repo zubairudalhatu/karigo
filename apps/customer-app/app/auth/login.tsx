@@ -6,7 +6,7 @@ import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 
 export default function CustomerLogin() {
-  const { login } = useAuth();
+  const { login, sessionMessage } = useAuth();
   const [phoneNumber, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -24,6 +24,7 @@ export default function CustomerLogin() {
     <Text style={ui.muted}>Sign in to order, track deliveries and get support.</Text>
     <Field placeholder="+234..." value={phoneNumber} onChangeText={setPhone} keyboardType="phone-pad" autoCapitalize="none" />
     <Field placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry />
+    <Message>{sessionMessage}</Message>
     <Message error>{error}</Message>
     <Button title={busy ? "Signing in..." : "Sign in"} onPress={submit} disabled={busy || !phoneNumber || !password} />
     <NavLink href="/auth/signup" label="New to KariGO? Create account" />

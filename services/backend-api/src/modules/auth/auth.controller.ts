@@ -5,7 +5,9 @@ import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
+import { LogoutDto } from "./dto/logout.dto";
 import { RegisterCustomerDto } from "./dto/register-customer.dto";
+import { RefreshSessionDto } from "./dto/refresh-session.dto";
 import { ResendOtpDto } from "./dto/resend-otp.dto";
 import { VerifyOtpDto } from "./dto/verify-otp.dto";
 
@@ -47,6 +49,26 @@ export class AuthController {
     return {
       message: "Login successful",
       data: await this.authService.login(dto)
+    };
+  }
+
+  @Post("refresh")
+  @ApiOperation({ summary: "Refresh an authenticated session with a valid refresh token" })
+  async refresh(@Body() dto: RefreshSessionDto) {
+    return {
+      message: "Session refreshed",
+      data: await this.authService.refreshSession(dto)
+    };
+  }
+
+  @Post("logout")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Log out and revoke the current refresh token when supplied" })
+  async logout(@CurrentUser() user: AuthenticatedUser, @Body() dto: LogoutDto) {
+    return {
+      message: "Logged out",
+      data: await this.authService.logout(user.id, dto)
     };
   }
 

@@ -19,6 +19,7 @@ export default function RootLayout() {
     <Stack.Screen name="auth/otp" options={backOnly} />
     <Stack.Screen name="tabs/home" options={headerless} />
     <Stack.Screen name="vendors/[id]" options={backOnly} />
+    <Stack.Screen name="catalogue/[category]" options={backOnly} />
     <Stack.Screen name="products/[id]" options={backOnly} />
     <Stack.Screen name="cart" options={backOnly} />
     <Stack.Screen name="checkout" options={backOnly} />

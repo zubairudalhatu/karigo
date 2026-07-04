@@ -29,4 +29,23 @@ assert(css.includes(".notification-message"), "Notification message styling must
 assert(css.includes("overflow-wrap: anywhere"), "Long notification references must wrap safely.");
 assert(css.includes(".settlement-card"), "Settlement card styling must exist.");
 
+const productsPage = read("app", "products", "page.tsx");
+assert(productsPage.includes("productsApi.listMine"), "Products page must use vendor-scoped product listing.");
+assert(productsPage.includes("productsApi.create"), "Products page must support product creation.");
+assert(productsPage.includes("productsApi.update("), "Products page must support product editing.");
+assert(productsPage.includes("productsApi.updateAvailability"), "Products page must support availability toggles.");
+assert(productsPage.includes("productsApi.archive"), "Products page must support safe archive.");
+assert(productsPage.includes("HTTPS image URL"), "Products page must expose image URL input.");
+assert(productsPage.includes("Total products"), "Products page must show total product summary.");
+assert(productsPage.includes("Available products"), "Products page must show available product summary.");
+assert(productsPage.includes("Unavailable products"), "Products page must show unavailable product summary.");
+
+const productsApi = read("src", "api", "products.api.ts");
+assert(productsApi.includes("vendor/products"), "Vendor dashboard product API must use vendor-owned endpoints.");
+assert(productsApi.includes("VendorProductInput"), "Vendor dashboard product API must use shared product input types.");
+assert(productsApi.includes("VendorProductAvailabilityInput"), "Vendor dashboard product API must use shared availability types.");
+
+assert(css.includes(".product-layout"), "Product management layout styling must exist.");
+assert(css.includes(".product-preview"), "Image preview styling must exist.");
+
 console.log("Vendor dashboard staging regression checks passed.");
