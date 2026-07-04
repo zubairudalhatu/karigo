@@ -15,21 +15,19 @@ providers, or app-store submission.
 
 ## EAS Project Status
 
-No Rider `extra.eas.projectId` is currently committed in the repository. If a KariGO
-Rider EAS project already exists, add or preserve that project ID through approved EAS
-linking. If it does not exist, EAS can create/link one during the first Rider build.
+The Rider app is now linked to the approved Expo project:
 
-Project IDs are not secrets, but do not invent one manually. If EAS prompts to create or
-link the Rider project, approve the prompt only while signed in to the approved Expo
-account.
+- Expo account: `@zamkah`
+- Project slug: `karigo-rider`
+- EAS project ID: `344a78dc-69d3-4aa-9616-fb1b067f0910`
 
-The dynamic app config preserves an existing project ID when supplied through:
+Builds should use the existing Rider project. Do not create a second Rider Expo project.
+Project IDs are not secrets, but Expo access tokens, signing credentials, and local
+`.env` files must stay out of Git.
 
-```text
-EXPO_PUBLIC_EAS_PROJECT_ID=<rider-eas-project-id>
-```
-
-Do not commit Expo access tokens, passwords, signing keys, or local `.env` files.
+EAS Update is configured for the Rider project through
+`https://u.expo.dev/344a78dc-69d3-4aa-9616-fb1b067f0910` with runtime version policy
+`appVersion`, matching the Customer App staging setup.
 
 ## Build Command
 
@@ -117,4 +115,6 @@ do not force a client-side workaround.
 - API loading errors: check `https://karigo-8htn.onrender.com/api/v1/health`.
 - Wrong app identity: confirm the `rider-staging` EAS profile was used.
 - EAS asks to create/link a project: approve only for the approved KariGO Rider project.
+- EAS tries to create a second project: stop the build and confirm the project ID in
+  `apps/rider-app/app.config.ts`.
 - Provider errors: confirm mock providers remain active.

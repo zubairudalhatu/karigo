@@ -35,7 +35,10 @@ expect(stagingProfile?.env?.APP_VARIANT === "staging", "rider-staging must set A
 expect(appConfig.includes("com.karigo.rider.staging"), "Staging Android package/iOS bundle ID must be configured.");
 expect(appConfig.includes("KariGO Rider Staging"), "Staging app name must be configured.");
 expect(appConfig.includes("EXPO_PUBLIC_API_BASE_URL"), "App config must read the public staging API URL.");
-expect(appConfig.includes("EXPO_PUBLIC_EAS_PROJECT_ID"), "App config must safely preserve a Rider EAS project ID when provided.");
+expect(appConfig.includes("344a78dc-69d3-4aa-9616-fb1b067f0910"), "Rider EAS project ID must be linked in app config.");
+expect(appConfig.includes("https://u.expo.dev/${riderEasProjectId}"), "Rider EAS Update URL must be configured.");
+expect(appConfig.includes('policy: "appVersion"'), "Rider runtimeVersion must use the appVersion policy.");
+expect(packageJson.dependencies?.["expo-updates"] === "~0.28.18", "Rider app must use the Expo SDK 53-compatible expo-updates package.");
 
 expect(apiClient.includes("karigo_rider_access_token"), "Rider token storage key must be rider-specific.");
 expect(apiClient.includes("createApiClient"), "Rider app must use the shared API client.");

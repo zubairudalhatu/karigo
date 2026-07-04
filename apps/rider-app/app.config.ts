@@ -3,11 +3,14 @@ const isStaging =
   process.env.EAS_BUILD_PROFILE === "rider-staging" ||
   process.env.EAS_BUILD_PROFILE === "rider-staging-ios-simulator";
 
+const riderEasProjectId = "344a78dc-69d3-4aa-9616-fb1b067f0910";
+
 type ExpoConfigInput = {
   config: {
     android?: Record<string, unknown>;
     extra?: Record<string, unknown>;
     ios?: Record<string, unknown>;
+    updates?: Record<string, unknown>;
     [key: string]: unknown;
   };
 };
@@ -18,9 +21,6 @@ const objectValue = (value: unknown): Record<string, unknown> =>
 export default ({ config }: ExpoConfigInput) => {
   const extra = objectValue(config.extra);
   const existingEas = objectValue(extra.eas);
-  const configuredProjectId =
-    process.env.EXPO_PUBLIC_EAS_PROJECT_ID ??
-    (typeof existingEas.projectId === "string" ? existingEas.projectId : undefined);
 
   return {
     ...config,
@@ -34,6 +34,13 @@ export default ({ config }: ExpoConfigInput) => {
       resizeMode: "contain",
       backgroundColor: "#FFFFFF"
     },
+    updates: {
+      ...objectValue(config.updates),
+      url: `https://u.expo.dev/${riderEasProjectId}`
+    },
+    runtimeVersion: {
+      policy: "appVersion"
+    },
     android: {
       ...config.android,
       package: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider"
@@ -46,14 +53,10 @@ export default ({ config }: ExpoConfigInput) => {
       ...extra,
       router: {},
       apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
-      ...(configuredProjectId
-        ? {
-            eas: {
-              ...existingEas,
-              projectId: configuredProjectId
-            }
-          }
-        : {})
+      eas: {
+        ...existingEas,
+        projectId: riderEasProjectId
+      }
     }
   };
 };
