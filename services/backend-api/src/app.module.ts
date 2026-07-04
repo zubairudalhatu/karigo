@@ -18,6 +18,7 @@ import { SupportModule } from "./modules/support/support.module";
 import { UsersModule } from "./modules/users/users.module";
 import { VendorsModule } from "./modules/vendors/vendors.module";
 import { VendorDashboardOrdersModule } from "./modules/vendor-dashboard-orders/vendor-dashboard-orders.module";
+import { VendorSettlementsModule } from "./modules/vendor-settlements/vendor-settlements.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { SecurityModule } from "./security/security.module";
 import { AdminAuditModule } from "./common/services/admin-audit.module";
@@ -44,6 +45,7 @@ import { AdminAuditModule } from "./common/services/admin-audit.module";
     NotificationsModule,
     PaymentsModule,
     VendorDashboardOrdersModule,
+    VendorSettlementsModule,
     DispatchModule,
     SupportModule,
     AdminOperationsModule,
