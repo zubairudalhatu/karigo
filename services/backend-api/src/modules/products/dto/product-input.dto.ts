@@ -1,6 +1,7 @@
 import { Transform, Type } from "class-transformer";
-import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, IsUrl, MaxLength, Min, MinLength } from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsNumber, IsOptional, IsString, IsUrl, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 import { ProductCategory } from "@prisma/client";
+import { ProductOptionGroupDto } from "./product-option.dto";
 
 export class ProductInputDto {
   @IsString()
@@ -40,4 +41,11 @@ export class ProductInputDto {
   @IsOptional()
   @IsBoolean()
   isFeatured?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(12)
+  @ValidateNested({ each: true })
+  @Type(() => ProductOptionGroupDto)
+  optionGroups?: ProductOptionGroupDto[];
 }

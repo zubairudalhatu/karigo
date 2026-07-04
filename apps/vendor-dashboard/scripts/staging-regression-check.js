@@ -35,6 +35,11 @@ assert(productsPage.includes("productsApi.create"), "Products page must support 
 assert(productsPage.includes("productsApi.update("), "Products page must support product editing.");
 assert(productsPage.includes("productsApi.updateAvailability"), "Products page must support availability toggles.");
 assert(productsPage.includes("productsApi.archive"), "Products page must support safe archive.");
+assert(productsPage.includes("Vendor catalogue"), "Products page must show the polished vendor catalogue eyebrow.");
+assert(productsPage.includes("Manage your menu, availability and product options."), "Products page must show the approved supporting copy.");
+assert(productsPage.includes("Options & add-ons"), "Products page must expose an options and add-ons section.");
+assert(productsPage.includes("Add option group"), "Products page must let vendors add option groups.");
+assert(productsPage.includes("priceAdjustmentKobo"), "Product options must use integer kobo price adjustments.");
 assert(productsPage.includes("HTTPS image URL"), "Products page must expose image URL input.");
 assert(productsPage.includes("Total products"), "Products page must show total product summary.");
 assert(productsPage.includes("Available products"), "Products page must show available product summary.");
@@ -44,8 +49,12 @@ const productsApi = read("src", "api", "products.api.ts");
 assert(productsApi.includes("vendor/products"), "Vendor dashboard product API must use vendor-owned endpoints.");
 assert(productsApi.includes("VendorProductInput"), "Vendor dashboard product API must use shared product input types.");
 assert(productsApi.includes("VendorProductAvailabilityInput"), "Vendor dashboard product API must use shared availability types.");
+assert(productsApi.includes("query.set(\"category\""), "Vendor dashboard product filters must use the public category query alias.");
 
 assert(css.includes(".product-layout"), "Product management layout styling must exist.");
 assert(css.includes(".product-preview"), "Image preview styling must exist.");
+assert(css.includes(".options-panel"), "Options and add-ons panel styling must exist.");
+assert(css.includes(".option-group"), "Option group styling must exist.");
+assert(css.includes(".option-grid"), "Option row grid styling must exist.");
 
 console.log("Vendor dashboard staging regression checks passed.");

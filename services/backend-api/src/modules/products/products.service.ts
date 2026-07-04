@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, ProductCategory } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ListProductsQueryDto } from "./dto/list-products-query.dto";
@@ -20,7 +20,29 @@ const PRODUCT_SELECT = {
   isFeatured: true,
   createdAt: true,
   updatedAt: true,
-  vendor: { select: { businessName: true, businessCategory: true } }
+  vendor: { select: { businessName: true, businessCategory: true } },
+  optionGroups: {
+    where: { isActive: true },
+    orderBy: { displayOrder: "asc" },
+    select: {
+      id: true,
+      name: true,
+      required: true,
+      minSelections: true,
+      maxSelections: true,
+      displayOrder: true,
+      options: {
+        orderBy: { displayOrder: "asc" },
+        select: {
+          id: true,
+          name: true,
+          priceAdjustmentKobo: true,
+          available: true,
+          displayOrder: true
+        }
+      }
+    }
+  }
 } satisfies Prisma.ProductSelect;
 
 @Injectable()
@@ -97,7 +119,8 @@ export class ProductsService {
         price: new Prisma.Decimal(dto.price),
         imageUrl: dto.imageUrl,
         isAvailable: dto.isAvailable ?? true,
-        isFeatured: dto.isFeatured ?? false
+        isFeatured: dto.isFeatured ?? false,
+        optionGroups: this.optionGroupsCreate(dto.optionGroups)
       },
       select: PRODUCT_SELECT
     });
@@ -112,20 +135,30 @@ export class ProductsService {
 
   async updateVendorProduct(userId: string, productId: string, dto: UpdateProductDto) {
     await this.requireOwnedProduct(userId, productId);
-    const product = await this.prisma.product.update({
-      where: { id: productId },
-      data: {
-        ...(dto.name !== undefined ? { name: dto.name } : {}),
-        ...(dto.description !== undefined ? { description: dto.description } : {}),
-        ...(dto.category !== undefined ? { category: dto.category } : {}),
-        ...(dto.productCategory !== undefined ? { productCategory: dto.productCategory } : {}),
-        ...(dto.price !== undefined ? { price: new Prisma.Decimal(dto.price) } : {}),
-        ...(dto.imageUrl !== undefined ? { imageUrl: dto.imageUrl } : {}),
-        ...(dto.isAvailable !== undefined ? { isAvailable: dto.isAvailable } : {}),
-        ...(dto.isFeatured !== undefined ? { isFeatured: dto.isFeatured } : {})
-      },
-      select: PRODUCT_SELECT
-    });
+    const productData: Prisma.ProductUpdateInput = {
+      ...(dto.name !== undefined ? { name: dto.name } : {}),
+      ...(dto.description !== undefined ? { description: dto.description } : {}),
+      ...(dto.category !== undefined ? { category: dto.category } : {}),
+      ...(dto.productCategory !== undefined ? { productCategory: dto.productCategory } : {}),
+      ...(dto.price !== undefined ? { price: new Prisma.Decimal(dto.price) } : {}),
+      ...(dto.imageUrl !== undefined ? { imageUrl: dto.imageUrl } : {}),
+      ...(dto.isAvailable !== undefined ? { isAvailable: dto.isAvailable } : {}),
+      ...(dto.isFeatured !== undefined ? { isFeatured: dto.isFeatured } : {}),
+      ...(dto.optionGroups !== undefined ? {
+        optionGroups: { create: this.optionGroupsCreate(dto.optionGroups)?.create ?? [] }
+      } : {})
+    };
+
+    const product = dto.optionGroups !== undefined
+      ? await this.prisma.$transaction(async (tx) => {
+          await tx.productOptionGroup.updateMany({ where: { productId }, data: { isActive: false } });
+          return tx.product.update({ where: { id: productId }, data: productData, select: PRODUCT_SELECT });
+        })
+      : await this.prisma.product.update({
+          where: { id: productId },
+          data: productData,
+          select: PRODUCT_SELECT
+        });
 
     return this.toProductSummary(product);
   }
@@ -153,8 +186,9 @@ export class ProductsService {
   }
 
   private publicFilters(query: ListProductsQueryDto) {
+    const productCategory = query.category ?? query.productCategory;
     return {
-      ...(query.productCategory ? { productCategory: query.productCategory } : {}),
+      ...(productCategory ? { productCategory } : {}),
       ...(query.search
         ? {
             OR: [
@@ -205,8 +239,56 @@ export class ProductsService {
       preparationTimeMinutes: product.preparationTimeMinutes,
       isAvailable: product.isAvailable,
       isFeatured: product.isFeatured,
+      optionGroups: product.optionGroups.map((group) => ({
+        id: group.id,
+        name: group.name,
+        required: group.required,
+        minSelections: group.minSelections,
+        maxSelections: group.maxSelections,
+        displayOrder: group.displayOrder,
+        options: group.options.map((option) => ({
+          id: option.id,
+          name: option.name,
+          priceAdjustmentKobo: option.priceAdjustmentKobo,
+          available: option.available,
+          displayOrder: option.displayOrder
+        }))
+      })),
       createdAt: product.createdAt.toISOString(),
       updatedAt: product.updatedAt.toISOString()
+    };
+  }
+
+  private optionGroupsCreate(groups: ProductInputDto["optionGroups"]) {
+    if (!groups?.length) return undefined;
+    groups.forEach((group) => {
+      const minSelections = group.minSelections ?? (group.required ? 1 : 0);
+      const maxSelections = group.maxSelections ?? Math.max(1, minSelections);
+      if (minSelections > maxSelections) {
+        throw new BadRequestException("Option group minimum selections cannot exceed maximum selections");
+      }
+    });
+
+    return {
+      create: groups.map((group, groupIndex) => {
+        const minSelections = group.minSelections ?? (group.required ? 1 : 0);
+        const maxSelections = group.maxSelections ?? Math.max(1, minSelections);
+        return {
+          name: group.name,
+          required: group.required ?? false,
+          minSelections,
+          maxSelections,
+          displayOrder: group.displayOrder ?? groupIndex,
+          options: {
+            create: (group.options ?? []).map((option, optionIndex) => ({
+              name: option.name,
+              priceAdjustmentKobo: option.priceAdjustmentKobo,
+              available: option.available ?? true,
+              displayOrder: option.displayOrder ?? optionIndex
+            }))
+          }
+        };
+      })
     };
   }
 

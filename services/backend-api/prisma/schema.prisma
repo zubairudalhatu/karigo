@@ -359,26 +359,60 @@ model Vendor {
 }
 
 model Product {
-  id                     String          @id @default(uuid()) @db.Uuid
-  vendorId               String          @db.Uuid
+  id                     String               @id @default(uuid()) @db.Uuid
+  vendorId               String               @db.Uuid
   name                   String
   description            String?
   category               String?
-  productCategory        ProductCategory @default(FOOD)
-  price                  Decimal         @db.Decimal(12, 2)
+  productCategory        ProductCategory      @default(FOOD)
+  price                  Decimal              @db.Decimal(12, 2)
   imageUrl               String?
   preparationTimeMinutes Int?
-  isAvailable            Boolean         @default(true)
-  isFeatured             Boolean         @default(false)
-  isActive               Boolean         @default(true)
+  isAvailable            Boolean              @default(true)
+  isFeatured             Boolean              @default(false)
+  isActive               Boolean              @default(true)
   deletedAt              DateTime?
-  createdAt              DateTime        @default(now())
-  updatedAt              DateTime        @updatedAt
-  vendor                 Vendor          @relation(fields: [vendorId], references: [id])
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  vendor                 Vendor               @relation(fields: [vendorId], references: [id])
+  optionGroups           ProductOptionGroup[]
   orderItems             OrderItem[]
 
   @@index([vendorId, productCategory, isActive, isAvailable])
   @@map("products")
+}
+
+model ProductOptionGroup {
+  id            String          @id @default(uuid()) @db.Uuid
+  productId     String          @db.Uuid
+  name          String
+  required      Boolean         @default(false)
+  minSelections Int             @default(0)
+  maxSelections Int             @default(1)
+  displayOrder  Int             @default(0)
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  product       Product         @relation(fields: [productId], references: [id])
+  options       ProductOption[]
+
+  @@index([productId, isActive, displayOrder])
+  @@map("product_option_groups")
+}
+
+model ProductOption {
+  id                  String             @id @default(uuid()) @db.Uuid
+  optionGroupId       String             @db.Uuid
+  name                String
+  priceAdjustmentKobo Int                @default(0)
+  available           Boolean            @default(true)
+  displayOrder        Int                @default(0)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  optionGroup         ProductOptionGroup @relation(fields: [optionGroupId], references: [id])
+
+  @@index([optionGroupId, available, displayOrder])
+  @@map("product_options")
 }
 
 model Rider {

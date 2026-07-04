@@ -6,12 +6,21 @@ export interface CartItem {
   quantity: number;
 }
 
+interface CartNotice {
+  productName: string;
+  message: string;
+}
+
 interface CartContextValue {
   vendor: VendorSummary | null;
   serviceCategory: ServiceCategory;
   items: CartItem[];
   subtotal: number;
-  add(vendor: VendorSummary, product: ProductSummary): void;
+  count: number;
+  notice: CartNotice | null;
+  addingProductIds: string[];
+  add(vendor: VendorSummary, product: ProductSummary): boolean;
+  clearNotice(): void;
   change(productId: string, quantity: number): void;
   clear(): void;
 }
@@ -21,14 +30,20 @@ const CartContext = createContext<CartContextValue | null>(null);
 export function CartProvider({ children }: { children: ReactNode }) {
   const [vendor, setVendor] = useState<VendorSummary | null>(null);
   const [items, setItems] = useState<CartItem[]>([]);
+  const [notice, setNotice] = useState<CartNotice | null>(null);
+  const [addingProductIds, setAddingProductIds] = useState<string[]>([]);
 
   const value = useMemo<CartContextValue>(() => ({
     vendor,
     serviceCategory: (vendor?.businessCategory?.toUpperCase() as ServiceCategory) || "FOOD",
     items,
     subtotal: items.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0),
+    count: items.reduce((sum, item) => sum + item.quantity, 0),
+    notice,
+    addingProductIds,
     add: (nextVendor, product) => {
-      if (!product.isAvailable) return;
+      if (!product.isAvailable || addingProductIds.includes(product.id)) return false;
+      setAddingProductIds((current) => [...current, product.id]);
       if (vendor && vendor.id !== nextVendor.id) setItems([{ product, quantity: 1 }]);
       else setItems((current) => {
         const existing = current.find((item) => item.product.id === product.id);
@@ -37,12 +52,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
           : [...current, { product, quantity: 1 }];
       });
       setVendor(nextVendor);
+      setNotice({ productName: product.name, message: `${product.name} added to cart` });
+      setTimeout(() => setAddingProductIds((current) => current.filter((id) => id !== product.id)), 900);
+      setTimeout(() => setNotice((current) => current?.productName === product.name ? null : current), 2500);
+      return true;
     },
+    clearNotice: () => setNotice(null),
     change: (productId, quantity) => setItems((current) =>
       quantity <= 0 ? current.filter((item) => item.product.id !== productId) : current.map((item) => item.product.id === productId ? { ...item, quantity } : item)
     ),
-    clear: () => { setVendor(null); setItems([]); }
-  }), [items, vendor]);
+    clear: () => { setVendor(null); setItems([]); setNotice(null); }
+  }), [addingProductIds, items, notice, vendor]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

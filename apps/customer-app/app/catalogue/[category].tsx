@@ -76,7 +76,7 @@ export default function CatalogueCategory() {
           <Text style={ui.muted} numberOfLines={2}>{product.description}</Text>
           <Text style={ui.muted}>{product.vendorName}</Text>
           <View style={ui.priceRow}><Text style={ui.payable}>{money(product.price)}</Text><Text style={ui.priceValue}>{product.isAvailable ? "Available" : "Unavailable"}</Text></View>
-          <Button title={product.isAvailable ? "Add to cart" : "Unavailable"} disabled={!product.isAvailable} onPress={() => cart.add(vendorFromProduct(product), product)} />
+          <Button title={cart.addingProductIds.includes(product.id) ? "Added" : product.isAvailable ? "Add to cart" : "Unavailable"} disabled={!product.isAvailable || cart.addingProductIds.includes(product.id)} onPress={() => cart.add(vendorFromProduct(product), product)} />
         </Card>
       </Pressable>)}
   </Screen></Protected>;

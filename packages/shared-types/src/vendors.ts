@@ -24,6 +24,7 @@ export interface ProductSummary {
   imageUrl: string;
   isAvailable: boolean;
   isFeatured?: boolean;
+  optionGroups?: ProductOptionGroup[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -37,8 +38,43 @@ export interface VendorProductInput {
   imageUrl: string;
   isAvailable?: boolean;
   isFeatured?: boolean;
+  optionGroups?: ProductOptionGroupInput[];
 }
 
 export interface VendorProductAvailabilityInput {
   isAvailable: boolean;
+}
+
+export interface ProductOptionInput {
+  name: string;
+  priceAdjustmentKobo: number;
+  available?: boolean;
+  displayOrder?: number;
+}
+
+export interface ProductOptionGroupInput {
+  name: string;
+  required?: boolean;
+  minSelections?: number;
+  maxSelections?: number;
+  displayOrder?: number;
+  options?: ProductOptionInput[];
+}
+
+export interface ProductOption {
+  id: string;
+  name: string;
+  priceAdjustmentKobo: number;
+  available: boolean;
+  displayOrder: number;
+}
+
+export interface ProductOptionGroup {
+  id: string;
+  name: string;
+  required: boolean;
+  minSelections: number;
+  maxSelections: number;
+  displayOrder: number;
+  options: ProductOption[];
 }

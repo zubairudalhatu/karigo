@@ -8,6 +8,10 @@ export class ListProductsQueryDto {
   productCategory?: ProductCategory;
 
   @IsOptional()
+  @IsEnum(ProductCategory)
+  category?: ProductCategory;
+
+  @IsOptional()
   @IsString()
   @MaxLength(100)
   @Transform(({ value }) => String(value).trim())

@@ -22,6 +22,20 @@ import {
 
 const prisma = new PrismaClient();
 
+type SeedProductOptionGroup = {
+  name: string;
+  required?: boolean;
+  minSelections?: number;
+  maxSelections?: number;
+  displayOrder?: number;
+  options: {
+    name: string;
+    priceAdjustmentKobo: number;
+    available?: boolean;
+    displayOrder?: number;
+  }[];
+};
+
 async function upsertProduct(vendorId: string, name: string, data: {
   description: string;
   category: string;
@@ -30,12 +44,41 @@ async function upsertProduct(vendorId: string, name: string, data: {
   imageUrl: string;
   preparationTimeMinutes: number;
   isFeatured?: boolean;
+  optionGroups?: SeedProductOptionGroup[];
 }) {
+  const { optionGroups, ...productData } = data;
   const existing = await prisma.product.findFirst({ where: { vendorId, name } });
-  if (existing) {
-    return prisma.product.update({ where: { id: existing.id }, data: { ...data, isActive: true, isAvailable: true } });
+  const product = existing
+    ? await prisma.product.update({ where: { id: existing.id }, data: { ...productData, isActive: true, isAvailable: true } })
+    : await prisma.product.create({ data: { vendorId, name, ...productData } });
+
+  if (optionGroups) {
+    await prisma.productOptionGroup.updateMany({ where: { productId: product.id }, data: { isActive: false } });
+    for (const [groupIndex, group] of optionGroups.entries()) {
+      const minSelections = group.minSelections ?? (group.required ? 1 : 0);
+      const maxSelections = group.maxSelections ?? Math.max(1, minSelections);
+      await prisma.productOptionGroup.create({
+        data: {
+          productId: product.id,
+          name: group.name,
+          required: group.required ?? false,
+          minSelections,
+          maxSelections,
+          displayOrder: group.displayOrder ?? groupIndex,
+          options: {
+            create: group.options.map((option, optionIndex) => ({
+              name: option.name,
+              priceAdjustmentKobo: option.priceAdjustmentKobo,
+              available: option.available ?? true,
+              displayOrder: option.displayOrder ?? optionIndex
+            }))
+          }
+        }
+      });
+    }
   }
-  return prisma.product.create({ data: { vendorId, name, ...data } });
+
+  return product;
 }
 
 async function main() {
@@ -179,7 +222,30 @@ async function main() {
     price: 2500,
     imageUrl: "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d",
     preparationTimeMinutes: 25,
-    isFeatured: true
+    isFeatured: true,
+    optionGroups: [
+      {
+        name: "Protein choice",
+        required: true,
+        minSelections: 1,
+        maxSelections: 1,
+        options: [
+          { name: "Chicken", priceAdjustmentKobo: 80000 },
+          { name: "Beef", priceAdjustmentKobo: 60000 },
+          { name: "No protein", priceAdjustmentKobo: 0 }
+        ]
+      },
+      {
+        name: "Drink add-on",
+        required: false,
+        minSelections: 0,
+        maxSelections: 1,
+        options: [
+          { name: "Zobo", priceAdjustmentKobo: 70000 },
+          { name: "Bottled water", priceAdjustmentKobo: 30000 }
+        ]
+      }
+    ]
   });
   await upsertProduct(vendor.id, "Chicken Suya", {
     description: "Spiced grilled chicken with suya pepper.",
@@ -188,7 +254,30 @@ async function main() {
     price: 3000,
     imageUrl: "https://images.unsplash.com/photo-1598515214211-89d3c73ae83b",
     preparationTimeMinutes: 30,
-    isFeatured: true
+    isFeatured: true,
+    optionGroups: [
+      {
+        name: "Spice level",
+        required: true,
+        minSelections: 1,
+        maxSelections: 1,
+        options: [
+          { name: "Mild", priceAdjustmentKobo: 0 },
+          { name: "Medium", priceAdjustmentKobo: 0 },
+          { name: "Extra spicy", priceAdjustmentKobo: 0 }
+        ]
+      },
+      {
+        name: "Extras",
+        required: false,
+        minSelections: 0,
+        maxSelections: 2,
+        options: [
+          { name: "Extra onions", priceAdjustmentKobo: 20000 },
+          { name: "Extra suya pepper", priceAdjustmentKobo: 15000 }
+        ]
+      }
+    ]
   });
   await upsertProduct(vendor.id, "Beef Shawarma", {
     description: "Warm beef shawarma with vegetables and sauce.",
@@ -329,7 +418,19 @@ async function main() {
       price,
       imageUrl,
       preparationTimeMinutes: 10,
-      isFeatured: name === "Detergent" || name === "Household Cleaning Pack"
+      isFeatured: name === "Detergent" || name === "Household Cleaning Pack",
+      optionGroups: name === "Household Cleaning Pack" ? [
+        {
+          name: "Add-on pack",
+          required: false,
+          minSelections: 0,
+          maxSelections: 2,
+          options: [
+            { name: "Extra tissue pack", priceAdjustmentKobo: 180000 },
+            { name: "Small detergent refill", priceAdjustmentKobo: 120000 }
+          ]
+        }
+      ] : undefined
     });
   }
 

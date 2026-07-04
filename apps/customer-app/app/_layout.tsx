@@ -2,12 +2,13 @@ import { Stack } from "expo-router";
 import { brand } from "@karigo/config";
 import { AuthProvider } from "../src/contexts/auth-context";
 import { CartProvider } from "../src/contexts/cart-context";
+import { CartNotice, CustomerBottomNav } from "../src/components/customer-navigation";
 
 const headerless = { headerShown: false };
 const backOnly = { headerTitle: "", title: "", headerBackTitle: "Back" };
 
 export default function RootLayout() {
-  return <AuthProvider><CartProvider><Stack screenOptions={{
+  return <AuthProvider><CartProvider><><Stack screenOptions={{
     headerBackTitle: "Back",
     headerShadowVisible: false,
     headerStyle: { backgroundColor: brand.colors.white },
@@ -32,5 +33,5 @@ export default function RootLayout() {
     <Stack.Screen name="profile" options={headerless} />
     <Stack.Screen name="parcel" options={backOnly} />
     <Stack.Screen name="notifications" options={headerless} />
-  </Stack></CartProvider></AuthProvider>;
+  </Stack><CustomerBottomNav /><CartNotice /></></CartProvider></AuthProvider>;
 }

@@ -22,6 +22,16 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 | Active vendor list loads | Vendors load from staging API | Pending |  |
 | Vendor details/products load | Product list and details render | Pending |  |
 | Cart works | Available products can be added/updated | Pending |  |
+| Cart add feedback appears | Tapping Add to cart shows a short non-blocking confirmation with `View cart` | Fixed | Product name appears where available |
+| Rapid duplicate add is blocked | Add button briefly changes to `Added` and prevents accidental duplicate quantity | Fixed | Intentional second add works after the short lockout clears |
+| Bottom navigation appears | Authenticated screens show Home, Browse, Cart, Orders and Profile | Fixed | Hidden on auth/onboarding routes |
+| Bottom navigation cart badge updates | Badge count changes immediately after cart add/update/clear | Fixed | Uses customer cart context count |
+| Home quick-link clutter removed | Addresses, Cart, Orders, Profile and Support are not shown as dense homepage text links | Fixed | Addresses/Support/Notifications moved into Profile |
+| Category filtering is server-scoped | Food, Groceries and Market Items request backend category filters | Fixed | Uses `GET /products?category=...` |
+| Food catalogue is accurate | Food Delivery only renders `FOOD` products | Pending | Verify with seeded Kano Kitchen data |
+| Grocery catalogue is accurate | Groceries only renders `GROCERIES` products | Pending | Verify with seeded Kano Fresh Mart data |
+| Market catalogue is accurate | Market Items only renders `MARKET_ITEMS` products | Pending | Verify with seeded Kano Everyday Market data |
+| Category search remains scoped | Search within a category does not leak products from other categories | Pending | Test one food and one grocery search term |
 | `KARIGOFIRST` validates | Promo returns expected server response | Passed | Live test applied NGN 300 discount |
 | Promo revalidation is clean | Success and failure messages never display together | Fixed | Prior promo state clears before each validation |
 | Reused promo message is clear | One-time usage shows a customer-friendly already-used message | Fixed | No raw "not found" fallback for usage limit |
@@ -58,6 +68,7 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 - Vendor Dashboard received the paid order.
 - Admin Portal reflected the order, GMV, delivery fee, and support activity.
 - Defects fixed after this test: route-name leakage, missing checkout delivery-fee line, mixed promo success/error state, reused-promo copy, discount reset after failed promo validation, support list refresh after ticket creation, secure customer delivery-code reveal for Rider completion, and content-first Customer App visual polish.
+- Task 51 fixes add bottom navigation, instant cart feedback, cart badge updates, server-scoped category requests and a simplified homepage with account-management items moved to Profile.
 
 ## Visual Polish Retest
 

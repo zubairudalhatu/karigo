@@ -36,7 +36,7 @@ export default function CustomerHome() {
   const cart = useCart();
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [search, setSearch] = useState("");
-  const [unread, setUnread] = useState(0);
+  const [_unread, setUnread] = useState(0);
   const [activeCategory, setActiveCategory] = useState<ProductCategory | "PARCEL" | "ERRAND">("FOOD");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -55,9 +55,8 @@ export default function CustomerHome() {
     products.filter((product) => product.productCategory === section.category).slice(0, 4)
   ])) as Record<ProductCategory, ProductSummary[]>, [products]);
 
-  return <Protected><Screen actions={<NavLink href="/notifications" label={`Activity (${unread})`} />}>
+  return <Protected><Screen>
     <BrandHeader eyebrow="Food, groceries, parcels and errands across Kano." />
-    <View style={ui.quickNav}><NavLink href="/addresses" label="Addresses" /><NavLink href="/cart" label="Cart" /><NavLink href="/orders" label="Orders" /><NavLink href="/profile" label="Profile" /><NavLink href="/parcel" label="Send parcel" /><NavLink href="/support" label="Support" /></View>
     <Text style={ui.heroTitle}>What do you need today?</Text>
     <View style={ui.chipGrid}>
       {serviceOptions.map((service) => <Pressable
@@ -82,7 +81,7 @@ export default function CustomerHome() {
             <Text style={ui.muted} numberOfLines={2}>{product.description}</Text>
             <Text style={ui.muted}>{product.vendorName}</Text>
             <View style={ui.priceRow}><Text style={ui.payable}>{money(product.price)}</Text><Text style={ui.priceValue}>{product.isAvailable ? "Available" : "Unavailable"}</Text></View>
-            <Button title={product.isAvailable ? "Add to cart" : "Unavailable"} disabled={!product.isAvailable} onPress={() => cart.add(vendorFromProduct(product), product)} />
+            <Button title={cart.addingProductIds.includes(product.id) ? "Added" : product.isAvailable ? "Add to cart" : "Unavailable"} disabled={!product.isAvailable || cart.addingProductIds.includes(product.id)} onPress={() => cart.add(vendorFromProduct(product), product)} />
           </Card>
         </Pressable>)}
     </View>)}

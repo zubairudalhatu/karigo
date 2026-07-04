@@ -31,6 +31,7 @@ assert(client.includes("expo-secure-store"), "Customer session tokens must use E
 assert(client.includes("karigo_customer_refresh_token"), "Customer app must persist refresh tokens separately.");
 assert(client.includes("auth/refresh"), "Customer API client must support session refresh.");
 assert(!client.includes("AsyncStorage"), "Customer auth tokens must not use AsyncStorage.");
+assert(ui.includes("paddingBottom: 112"), "Customer screens must leave room for bottom navigation.");
 
 const home = read("app", "tabs", "home.tsx");
 assert(home.includes("Food, groceries, parcels and errands across Kano."), "Home must use approved concise KariGO positioning copy.");
@@ -48,6 +49,7 @@ assert(home.includes("Food near you"), "Home must group food products.");
 assert(home.includes("Groceries near you"), "Home must group grocery products.");
 assert(home.includes("Market items near you"), "Home must group market products.");
 assert(home.includes("productsApi.catalogue"), "Home must use the catalogue API.");
+assert(!home.includes("href=\"/addresses\""), "Home must not show the old dense text-link menu.");
 
 const catalogue = read("app", "catalogue", "[category].tsx");
 assert(catalogue.includes("Food delivery"), "Food catalogue heading must exist.");
@@ -55,6 +57,26 @@ assert(catalogue.includes("Groceries"), "Groceries catalogue heading must exist.
 assert(catalogue.includes("Market items"), "Market items catalogue heading must exist.");
 assert(catalogue.includes("productCategory: config.productCategory"), "Catalogue must query by active product category.");
 assert(catalogue.includes("Add to cart"), "Catalogue product cards must allow add-to-cart.");
+assert(catalogue.includes("cart.addingProductIds"), "Catalogue add buttons must guard against rapid duplicate taps.");
+
+const productsApi = read("src", "api", "products.api.ts");
+assert(productsApi.includes("query.set(\"category\""), "Customer product API must use the public category query parameter.");
+
+const cartContext = read("src", "contexts", "cart-context.tsx");
+assert(cartContext.includes("notice"), "Cart context must expose add-to-cart feedback notice.");
+assert(cartContext.includes("addingProductIds"), "Cart context must track short add-button lockout.");
+assert(cartContext.includes("setTimeout"), "Cart add feedback must auto-dismiss.");
+
+const bottomNav = read("src", "components", "customer-navigation.tsx");
+assert(bottomNav.includes("CustomerBottomNav"), "Bottom navigation component must exist.");
+assert(bottomNav.includes("Home") && bottomNav.includes("Browse") && bottomNav.includes("Cart") && bottomNav.includes("Orders") && bottomNav.includes("Profile"), "Bottom navigation must include primary customer tabs.");
+assert(bottomNav.includes("cart.count > 0"), "Bottom navigation must show a numeric cart badge.");
+assert(bottomNav.includes("View cart"), "Cart snackbar must include a View cart action.");
+assert(bottomNav.includes("pathname.startsWith(\"/auth\")"), "Bottom navigation must stay hidden across auth screens.");
+
+const profile = read("app", "profile.tsx");
+assert(profile.includes("Saved addresses"), "Addresses must be accessible from Profile.");
+assert(profile.includes("Support centre"), "Support must be accessible from Profile.");
 
 const checkout = read("app", "checkout.tsx");
 assert(checkout.includes("Delivery fee:"), "Checkout must show delivery fee.");

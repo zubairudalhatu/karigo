@@ -57,7 +57,7 @@ export function Protected({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { backgroundColor: brand.colors.background, flexGrow: 1, gap: 18, padding: 22, paddingTop: 56 },
+  screen: { backgroundColor: brand.colors.background, flexGrow: 1, gap: 18, padding: 22, paddingBottom: 112, paddingTop: 56 },
   heading: { alignItems: "flex-start", flexDirection: "row", gap: 12, justifyContent: "space-between" },
   title: { color: brand.colors.charcoal, fontSize: 28, fontWeight: "900", letterSpacing: -0.4 },
   heroTitle: { color: brand.colors.charcoal, fontSize: 24, fontWeight: "900", letterSpacing: -0.3 },

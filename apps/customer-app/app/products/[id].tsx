@@ -24,7 +24,7 @@ export default function ProductDetails() {
     <Text style={ui.muted}>{product.category} · {vendor?.businessName ?? product.vendorName}</Text>
     <View style={ui.priceRow}><Text style={ui.priceLabel}>Quantity</Text><Text style={ui.priceValue}>{quantity}</Text></View>
     <View style={ui.row}><Button title="Remove one" tone="muted" disabled={quantity <= 1} onPress={() => setQuantity((current) => Math.max(1, current - 1))} /><Button title="Add one" tone="muted" onPress={() => setQuantity((current) => current + 1)} /></View>
-    <Button title={product.isAvailable ? `Add ${quantity} to cart` : "Unavailable"} disabled={!product.isAvailable || !vendor} onPress={() => {
+    <Button title={cart.addingProductIds.includes(product.id) ? "Added" : product.isAvailable ? `Add ${quantity} to cart` : "Unavailable"} disabled={!product.isAvailable || !vendor || cart.addingProductIds.includes(product.id)} onPress={() => {
       if (!vendor) return;
       for (let index = 0; index < quantity; index += 1) cart.add(vendor, product);
     }} />

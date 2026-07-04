@@ -5,7 +5,7 @@ export const productsApi = {
   publicList: (vendorId: string) => api.get<ProductSummary[]>(`vendors/${vendorId}/products`, { authenticated: false }),
   listMine: (params?: { productCategory?: ProductCategory; search?: string }) => {
     const query = new URLSearchParams();
-    if (params?.productCategory) query.set("productCategory", params.productCategory);
+    if (params?.productCategory) query.set("category", params.productCategory);
     if (params?.search) query.set("search", params.search);
     return api.get<ProductSummary[]>(`vendor/products${query.size ? `?${query.toString()}` : ""}`);
   },

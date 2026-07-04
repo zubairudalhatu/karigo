@@ -18,7 +18,8 @@ describe("ProductsService", () => {
     isFeatured: true,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-    vendor: { businessName: "Kano Kitchen", businessCategory: "FOOD" }
+    vendor: { businessName: "Kano Kitchen", businessCategory: "FOOD" },
+    optionGroups: []
   };
   const prisma = {
     vendor: { findFirst: jest.fn(), findUnique: jest.fn() },
@@ -45,6 +46,14 @@ describe("ProductsService", () => {
     });
   });
 
+  it("accepts category alias for public category filtering", async () => {
+    prisma.product.findMany.mockResolvedValue([product]);
+    await service.listPublicCatalogue({ category: ProductCategory.FOOD });
+    expect(prisma.product.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ productCategory: ProductCategory.FOOD })
+    }));
+  });
+
   it("requires a vendor profile before creating products", async () => {
     prisma.vendor.findUnique.mockResolvedValue(null);
     await expect(service.createVendorProduct("user-1", {
@@ -69,6 +78,40 @@ describe("ProductsService", () => {
     await service.archiveVendorProduct("user-1", "product-1");
     expect(prisma.product.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ isActive: false, isAvailable: false, deletedAt: expect.any(Date) })
+    }));
+  });
+
+  it("rejects option groups with invalid selection ranges", async () => {
+    prisma.vendor.findUnique.mockResolvedValue({ id: "vendor-1" });
+    await expect(service.createVendorProduct("user-1", {
+      name: "Jollof Rice",
+      description: "Rice with protein options.",
+      productCategory: ProductCategory.FOOD,
+      price: 3000,
+      imageUrl: "https://example.com/rice.jpg",
+      optionGroups: [{ name: "Protein", required: true, minSelections: 2, maxSelections: 1, options: [] }]
+    })).rejects.toThrow("minimum selections");
+  });
+
+  it("creates product option groups with kobo price adjustments", async () => {
+    prisma.vendor.findUnique.mockResolvedValue({ id: "vendor-1" });
+    prisma.product.create.mockResolvedValue(product);
+    await service.createVendorProduct("user-1", {
+      name: "Jollof Rice",
+      description: "Rice with protein options.",
+      productCategory: ProductCategory.FOOD,
+      price: 3000,
+      imageUrl: "https://example.com/rice.jpg",
+      optionGroups: [{ name: "Protein", required: true, minSelections: 1, maxSelections: 1, options: [{ name: "Chicken", priceAdjustmentKobo: 50000 }] }]
+    });
+    expect(prisma.product.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        optionGroups: expect.objectContaining({
+          create: [expect.objectContaining({
+            options: { create: [expect.objectContaining({ priceAdjustmentKobo: 50000 })] }
+          })]
+        })
+      })
     }));
   });
 });

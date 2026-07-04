@@ -26,7 +26,7 @@ export default function VendorDetails() {
         <Text style={ui.muted}>{product.description || "Freshly prepared for your order."}</Text>
         <View style={ui.priceRow}><Text style={ui.payable}>{money(product.price)}</Text><Text style={ui.priceValue}>{product.isAvailable ? "Available" : "Unavailable"}</Text></View>
         <NavLink href={`/products/${product.id}?vendorId=${id}`} label="View details" />
-        <Button title={product.isAvailable ? "Add to cart" : "Unavailable"} disabled={!product.isAvailable || !vendor} onPress={() => vendor && cart.add(vendor, product)} />
+        <Button title={cart.addingProductIds.includes(product.id) ? "Added" : product.isAvailable ? "Add to cart" : "Unavailable"} disabled={!product.isAvailable || !vendor || cart.addingProductIds.includes(product.id)} onPress={() => vendor && cart.add(vendor, product)} />
       </Card>)}
   </Screen></Protected>;
 }
