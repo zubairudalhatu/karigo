@@ -171,6 +171,13 @@ enum SettlementStatus {
   CANCELLED
 }
 
+enum PayoutAccountStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+  NEEDS_UPDATE
+}
+
 enum PromoDiscountType {
   PERCENTAGE
   FIXED_AMOUNT
@@ -205,6 +212,11 @@ enum NotificationType {
   PROMO_AVAILABLE
   SETTLEMENT_PAID
   RIDER_EARNING_PAID
+  PAYOUT_ACCOUNT_SUBMITTED
+  PAYOUT_ACCOUNT_UPDATED
+  PAYOUT_ACCOUNT_VERIFIED
+  PAYOUT_ACCOUNT_NEEDS_UPDATE
+  PAYOUT_ACCOUNT_REJECTED
   SYSTEM_ALERT
 }
 
@@ -227,34 +239,35 @@ enum AppSurface {
 }
 
 model User {
-  id                String                 @id @default(uuid()) @db.Uuid
-  fullName          String
-  phoneNumber       String                 @unique
-  email             String?                @unique
-  passwordHash      String
-  role              UserRole
-  adminRole         AdminRole?
-  accountStatus     AccountStatus          @default(PENDING)
-  phoneVerified     Boolean                @default(false)
-  emailVerified     Boolean                @default(false)
-  lastLoginAt       DateTime?
-  deletedAt         DateTime?
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime               @updatedAt
-  customerProfile   CustomerProfile?
-  vendor            Vendor?
-  rider             Rider?
-  addresses         Address[]
-  notifications     Notification[]
-  deviceTokens      DeviceToken[]
-  refreshTokens     RefreshToken[]
-  statusChanges     OrderStatusHistory[]   @relation("StatusChangedBy")
-  verifiedDocuments RiderDocument[]        @relation("DocumentVerifiedBy")
-  assignedTickets   SupportTicket[]        @relation("TicketAssignedAdmin")
-  ticketMessages    SupportTicketMessage[]
-  adminAuditLogs    AdminAuditLog[]
-  createdPromoCodes PromoCode[]            @relation("PromoCreatedBy")
-  otpVerifications  OtpVerification[]
+  id                     String                 @id @default(uuid()) @db.Uuid
+  fullName               String
+  phoneNumber            String                 @unique
+  email                  String?                @unique
+  passwordHash           String
+  role                   UserRole
+  adminRole              AdminRole?
+  accountStatus          AccountStatus          @default(PENDING)
+  phoneVerified          Boolean                @default(false)
+  emailVerified          Boolean                @default(false)
+  lastLoginAt            DateTime?
+  deletedAt              DateTime?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  customerProfile        CustomerProfile?
+  vendor                 Vendor?
+  rider                  Rider?
+  addresses              Address[]
+  notifications          Notification[]
+  deviceTokens           DeviceToken[]
+  refreshTokens          RefreshToken[]
+  statusChanges          OrderStatusHistory[]   @relation("StatusChangedBy")
+  verifiedDocuments      RiderDocument[]        @relation("DocumentVerifiedBy")
+  assignedTickets        SupportTicket[]        @relation("TicketAssignedAdmin")
+  ticketMessages         SupportTicketMessage[]
+  adminAuditLogs         AdminAuditLog[]
+  createdPromoCodes      PromoCode[]            @relation("PromoCreatedBy")
+  otpVerifications       OtpVerification[]
+  verifiedPayoutAccounts VendorPayoutAccount[]  @relation("PayoutVerifiedBy")
 
   @@map("users")
 }
@@ -424,9 +437,9 @@ model VendorApplicationStatusHistory {
 }
 
 model Vendor {
-  id               String             @id @default(uuid()) @db.Uuid
-  userId           String             @unique @db.Uuid
-  categoryId       String?            @db.Uuid
+  id               String               @id @default(uuid()) @db.Uuid
+  userId           String               @unique @db.Uuid
+  categoryId       String?              @db.Uuid
   businessName     String
   businessCategory String
   description      String?
@@ -435,29 +448,30 @@ model Vendor {
   address          String
   city             String
   state            String
-  latitude         Decimal?           @db.Decimal(10, 7)
-  longitude        Decimal?           @db.Decimal(10, 7)
+  latitude         Decimal?             @db.Decimal(10, 7)
+  longitude        Decimal?             @db.Decimal(10, 7)
   logoUrl          String?
   coverImageUrl    String?
   openingTime      String?
   closingTime      String?
-  isOpen           Boolean            @default(false)
-  commissionRate   Decimal            @default(15) @db.Decimal(5, 2)
+  isOpen           Boolean              @default(false)
+  commissionRate   Decimal              @default(15) @db.Decimal(5, 2)
   bankName         String?
   accountNumber    String?
   accountName      String?
-  status           VendorStatus       @default(PENDING_APPROVAL)
-  rating           Decimal?           @db.Decimal(3, 2)
-  totalOrders      Int                @default(0)
+  status           VendorStatus         @default(PENDING_APPROVAL)
+  rating           Decimal?             @db.Decimal(3, 2)
+  totalOrders      Int                  @default(0)
   deletedAt        DateTime?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  user             User               @relation(fields: [userId], references: [id])
-  category         VendorCategory?    @relation(fields: [categoryId], references: [id])
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  user             User                 @relation(fields: [userId], references: [id])
+  category         VendorCategory?      @relation(fields: [categoryId], references: [id])
   products         Product[]
   orders           Order[]
   settlements      VendorSettlement[]
   promoCodes       PromoCode[]
+  payoutAccount    VendorPayoutAccount?
 
   @@index([status, city])
   @@map("vendors")
@@ -701,6 +715,30 @@ model VendorSettlement {
 
   @@unique([vendorId, orderId])
   @@map("vendor_settlements")
+}
+
+model VendorPayoutAccount {
+  id                  String              @id @default(uuid()) @db.Uuid
+  vendorId            String              @unique @db.Uuid
+  accountName         String
+  bankName            String
+  bankCode            String?
+  accountNumber       String
+  maskedAccountNumber String
+  status              PayoutAccountStatus @default(PENDING_VERIFICATION)
+  submittedAt         DateTime            @default(now())
+  verifiedAt          DateTime?
+  verifiedByAdminId   String?             @db.Uuid
+  rejectionReason     String?
+  vendorVisibleNote   String?
+  internalNote        String?
+  lastUpdatedAt       DateTime            @updatedAt
+  createdAt           DateTime            @default(now())
+  vendor              Vendor              @relation(fields: [vendorId], references: [id])
+  verifiedByAdmin     User?               @relation("PayoutVerifiedBy", fields: [verifiedByAdminId], references: [id])
+
+  @@index([status, submittedAt])
+  @@map("vendor_payout_accounts")
 }
 
 model RiderEarning {

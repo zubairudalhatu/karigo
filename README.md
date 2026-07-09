@@ -261,6 +261,9 @@ pharmacy marketplace readiness and a public vendor application workflow.
 - Admin review workflow: `docs/vendor-application-review-and-approval.md`
 - Product media readiness: `docs/vendor-product-media-management.md`
 - Payout account readiness: `docs/vendor-payout-account-readiness.md`
+- Payout account API: `docs/api/vendor-payout-account-api.md`
+- Payout verification process: `docs/operations/vendor-payout-account-verification-process.md`
+- Payout staging checklist: `docs/qa/vendor-payout-account-staging-checklist.md`
 - Vendor product promotion readiness: `docs/vendor-product-promotions.md`
 
 New read-only discovery endpoints live under `/api/v1/discovery/*`. Public vendor
@@ -270,6 +273,10 @@ is available through `/api/v1/admin/vendor-applications`.
 `PHARMACY_MARKETPLACE_ENABLED` defaults to off unless explicitly set in the deployment
 environment. No live payout, prescription verification, external ad network, pharmacy
 approval automation or automatic vendor approval has been activated.
+
+Task 52 adds vendor payout-account submission and admin verification readiness.
+Vendor verification does not initiate transfers or mark settlements paid; payout
+execution remains Admin-controlled through the existing settlements workflow.
 
 ## Remaining Launch Work
 

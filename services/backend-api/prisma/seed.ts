@@ -3,6 +3,7 @@ import {
   AdminRole,
   OrderStatus,
   PaymentStatus,
+  PayoutAccountStatus,
   ProductCategory,
   PromoDiscountType,
   PrismaClient,
@@ -218,6 +219,34 @@ async function main() {
       state: "Kano",
       isOpen: true,
       status: VendorStatus.ACTIVE
+    }
+  });
+  await prisma.vendorPayoutAccount.upsert({
+    where: { vendorId: vendor.id },
+    update: {
+      accountName: "Kano Kitchen Vendor",
+      bankName: "KariGO Demo Bank",
+      bankCode: "KGO",
+      accountNumber: "0000000201",
+      maskedAccountNumber: "**** **** 0201",
+      status: PayoutAccountStatus.VERIFIED,
+      verifiedAt: new Date(),
+      verifiedByAdminId: superAdmin.id,
+      rejectionReason: null,
+      vendorVisibleNote: "Demo payout account verified for staging settlement review.",
+      internalNote: null
+    },
+    create: {
+      vendorId: vendor.id,
+      accountName: "Kano Kitchen Vendor",
+      bankName: "KariGO Demo Bank",
+      bankCode: "KGO",
+      accountNumber: "0000000201",
+      maskedAccountNumber: "**** **** 0201",
+      status: PayoutAccountStatus.VERIFIED,
+      verifiedAt: new Date(),
+      verifiedByAdminId: superAdmin.id,
+      vendorVisibleNote: "Demo payout account verified for staging settlement review."
     }
   });
   await upsertProduct(vendor.id, "Jollof Rice", {

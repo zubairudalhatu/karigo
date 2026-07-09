@@ -18,6 +18,7 @@ import { RidersModule } from "./modules/riders/riders.module";
 import { SupportModule } from "./modules/support/support.module";
 import { UsersModule } from "./modules/users/users.module";
 import { VendorApplicationsModule } from "./modules/vendor-applications/vendor-applications.module";
+import { VendorPayoutAccountsModule } from "./modules/vendor-payout-accounts/vendor-payout-accounts.module";
 import { VendorsModule } from "./modules/vendors/vendors.module";
 import { VendorDashboardOrdersModule } from "./modules/vendor-dashboard-orders/vendor-dashboard-orders.module";
 import { VendorSettlementsModule } from "./modules/vendor-settlements/vendor-settlements.module";
@@ -37,6 +38,7 @@ import { AdminAuditModule } from "./common/services/admin-audit.module";
     HealthModule,
     UsersModule,
     VendorApplicationsModule,
+    VendorPayoutAccountsModule,
     AuthModule,
     CustomersModule,
     AddressesModule,

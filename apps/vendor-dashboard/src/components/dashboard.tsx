@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode } from "react";
 import { useAuth } from "../contexts/auth-context";
 
-const nav = [["Dashboard", "/"], ["Orders", "/orders"], ["Products", "/products"], ["Settlements", "/settlements"], ["Support", "/support"], ["Notifications", "/notifications"], ["Profile", "/profile"]];
+const nav = [["Dashboard", "/"], ["Orders", "/orders"], ["Products", "/products"], ["Settlements", "/settlements"], ["Payout account", "/payout-account"], ["Support", "/support"], ["Notifications", "/notifications"], ["Profile", "/profile"]];
 const statusLabel = (value: ReactNode) => typeof value === "string" ? value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()) : value;
 
 export function DashboardShell({ children, unread = 0 }: { children: ReactNode; unread?: number }) {

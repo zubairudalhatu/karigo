@@ -17,6 +17,20 @@ const settlementsApi = read("src", "api", "settlements.api.ts");
 assert(settlementsApi.includes("vendor/settlements"), "Vendor dashboard must use the vendor-scoped settlement endpoint.");
 assert(settlementsApi.includes("VendorSettlementFilter"), "Vendor settlements API must expose safe filters.");
 
+const payoutPage = read("app", "payout-account", "page.tsx");
+assert(payoutPage.includes("Set up your payout account"), "Payout account page must include setup copy.");
+assert(payoutPage.includes("Update payout account"), "Payout account page must support vendor updates.");
+assert(payoutPage.includes("KariGO is reviewing your payout account details."), "Payout account page must show pending verification state.");
+assert(payoutPage.includes("maskedAccountNumber"), "Payout account page must display masked account details.");
+assert(!payoutPage.includes("Transfer funds") && !payoutPage.includes("Pay now"), "Vendor payout page must not expose transfer controls.");
+
+const payoutApi = read("src", "api", "payout-account.api.ts");
+assert(payoutApi.includes("vendor/payout-account"), "Vendor payout account API must use vendor-scoped endpoints.");
+assert(!payoutApi.includes("admin/vendor-payout-accounts"), "Vendor dashboard must not call admin payout-account endpoints.");
+
+const shell = read("src", "components", "dashboard.tsx");
+assert(shell.includes("Payout account"), "Vendor sidebar must include the payout account page.");
+
 const notificationsPage = read("app", "notifications", "page.tsx");
 assert(notificationsPage.includes("notification-title"), "Notifications must render title separately.");
 assert(notificationsPage.includes("notification-message"), "Notifications must render message separately.");
