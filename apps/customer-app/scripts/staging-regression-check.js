@@ -8,7 +8,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
-["vendors/[id]", "catalogue/[category]", "products/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel", "vendor/apply", "vendor/application-status"]
+["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel", "vendor/apply", "vendor/application-status"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
 ["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
   .forEach((title) => assert(!layout.includes(`title: "${title}"`), `Native header title must be hidden: ${title}`));
@@ -39,21 +39,43 @@ assert(home.includes("KariGoAppTopBar"), "Home must use the branded KariGO top b
 assert(home.includes("Welcome, {firstName(user?.fullName)}"), "Home greeting must use safe first-name fallback.");
 assert(home.includes("Food Delivery"), "Home must keep Food Delivery service category.");
 assert(home.includes("Groceries"), "Home must keep Groceries service category.");
+assert(home.includes("Taxi"), "Home must include Taxi readiness tile.");
 assert(home.includes("Market Items"), "Home must keep Market Items service category.");
 assert(home.includes("Pharmacy"), "Home must include the compliance-gated Pharmacy category.");
 assert(home.includes("Parcel Delivery"), "Home must keep Parcel Delivery service category.");
-assert(home.includes("SME Errands"), "Home must keep SME Errands service category.");
+assert(home.includes("SME Errand"), "Home must keep SME Errand service category.");
+assert(home.includes("Airtime"), "Home must include Airtime readiness tile.");
+assert(home.includes("Data"), "Home must include Data readiness tile.");
+assert(home.includes("Electricity"), "Home must include Electricity readiness tile.");
+assert(home.includes("Cable TV"), "Home must include Cable TV readiness tile.");
 assert(home.includes("/catalogue/food"), "Food Delivery chip must navigate to food catalogue.");
 assert(home.includes("/catalogue/groceries"), "Groceries chip must navigate to groceries catalogue.");
 assert(home.includes("/catalogue/market-items"), "Market Items chip must navigate to market-items catalogue.");
-assert(home.includes("/catalogue/pharmacy"), "Pharmacy chip must navigate to pharmacy browse.");
+assert(home.includes("/readiness/taxi"), "Taxi must route to a safe readiness screen.");
+assert(home.includes("EXPO_PUBLIC_PHARMACY_MARKETPLACE_ENABLED"), "Pharmacy must remain readiness-gated by environment.");
+assert(home.includes("/readiness/pharmacy"), "Disabled pharmacy must route to a readiness screen.");
 assert(home.includes("/parcel?mode=errand"), "SME Errands chip must navigate to the errand flow.");
+assert(home.includes("Bills & Utilities"), "Home must include a Bills & Utilities readiness section.");
+assert(home.includes("utilityServices"), "Bills & Utilities section must use safe utility readiness tiles.");
+assert(home.includes("/readiness/airtime"), "Airtime must route to a safe readiness screen.");
+assert(home.includes("/readiness/data"), "Data must route to a safe readiness screen.");
+assert(home.includes("/readiness/electricity"), "Electricity must route to a safe readiness screen.");
+assert(home.includes("/readiness/cable-tv"), "Cable TV must route to a safe readiness screen.");
+assert(home.includes("useWindowDimensions"), "Service grid must adapt between compact two and three column layouts.");
 assert(home.includes("Today's featured for you"), "Home must show vendor/campaign featured content.");
 assert(home.includes("Ad"), "Home must expose a clearly labelled internal ad placement.");
 assert(home.includes("VendorSpotlight"), "Home featured content must be vendor-focused.");
 assert(!home.includes("productsApi.catalogue"), "Home must not load individual product feeds.");
 assert(!home.includes("Add to cart"), "Home must not expose product add-to-cart actions.");
 assert(!home.includes("href=\"/addresses\""), "Home must not show the old dense text-link menu.");
+
+const readiness = read("src", "components", "readiness-screen.tsx");
+assert(readiness.includes("ReadinessScreen"), "Reusable readiness screen component must exist.");
+assert(readiness.includes("Back to home"), "Readiness screen must include a safe home CTA.");
+const readinessRoute = read("app", "readiness", "[service].tsx");
+assert(readinessRoute.includes("Taxi is coming soon. KariGO is preparing verified driver onboarding"), "Taxi readiness message must be explicit.");
+assert(readinessRoute.includes("Bills & Utilities is coming soon. KariGO is preparing secure provider integrations"), "Bills readiness message must be explicit.");
+assert(readinessRoute.includes("Pharmacy is preparing launch"), "Pharmacy disabled state must have safe readiness copy.");
 
 const catalogue = read("app", "catalogue", "[category].tsx");
 assert(catalogue.includes("Food delivery"), "Food catalogue heading must exist.");

@@ -27,6 +27,10 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 | Bottom navigation appears | Authenticated screens show Home, Browse, Cart, Orders and Profile | Fixed | Hidden on auth/onboarding routes |
 | Bottom navigation cart badge updates | Badge count changes immediately after cart add/update/clear | Fixed | Uses customer cart context count |
 | Home quick-link clutter removed | Addresses, Cart, Orders, Profile and Support are not shown as dense homepage text links | Fixed | Addresses/Support/Notifications moved into Profile |
+| Compact service grid displays | Home shows Food Delivery, Groceries, Taxi, Market Items, Pharmacy, Parcel Delivery, SME Errand, Airtime, Data, Electricity and Cable TV in compact tiles | Fixed | Taxi/Bills/disabled Pharmacy route to readiness screens |
+| Taxi readiness is safe | Taxi tap shows coming-soon message and does not request a ride | Fixed | No Rider dispatch integration |
+| Bills & Utilities readiness is safe | Airtime, Data, Electricity and Cable TV show coming-soon readiness message | Fixed | No live provider checkout |
+| Pharmacy readiness gate works | Pharmacy routes to readiness unless explicitly enabled by environment | Fixed | No prescription or pharmacy approval automation |
 | Category filtering is server-scoped | Food, Groceries and Market Items request backend category filters | Fixed | Uses `GET /products?category=...` |
 | Food catalogue is accurate | Food Delivery only renders `FOOD` products | Pending | Verify with seeded Kano Kitchen data |
 | Grocery catalogue is accurate | Groceries only renders `GROCERIES` products | Pending | Verify with seeded Kano Fresh Mart data |
@@ -69,6 +73,7 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 - Admin Portal reflected the order, GMV, delivery fee, and support activity.
 - Defects fixed after this test: route-name leakage, missing checkout delivery-fee line, mixed promo success/error state, reused-promo copy, discount reset after failed promo validation, support list refresh after ticket creation, secure customer delivery-code reveal for Rider completion, and content-first Customer App visual polish.
 - Task 51 fixes add bottom navigation, instant cart feedback, cart badge updates, server-scoped category requests and a simplified homepage with account-management items moved to Profile.
+- Task 53 fixes compact the homepage service grid and add readiness-gated Taxi plus Bills & Utilities entries without activating live provider flows.
 
 ## Visual Polish Retest
 
