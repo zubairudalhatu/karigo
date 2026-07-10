@@ -26,7 +26,7 @@ export default function RidersPage() {
           <Link className="button" href="/contact">Contact KariGO</Link>
         </article>
         <article className="info-card">
-          <h2>Taxi Drivers - Preparing Launch</h2>
+          <h2>Taxi Drivers - Coming Soon</h2>
           <ul className="list">
             <li>Taxi is coming later and is not live for ride requests yet</li>
             <li>Verified driver onboarding will be required</li>

@@ -10,14 +10,14 @@ assert(home.includes("Everything you need, delivered."), "Homepage must use appr
 assert(home.includes("Order food, shop groceries and market items"), "Homepage must use approved subheadline.");
 assert(home.includes("Download the App"), "Homepage must include Download App CTA.");
 assert(home.includes("Become a Vendor"), "Homepage must include Become a Vendor CTA.");
-assert(home.includes("KariGO is preparing secure merchant integrations"), "Bills readiness copy must be present.");
-assert(home.includes("Coming-soon services are clearly marked"), "Coming-soon services must not be presented as live.");
+assert(home.includes("KariGO is preparing secure merchant integrations"), "Bills coming-soon copy must be present.");
+assert(home.includes("Coming-soon services are clearly marked"), "Coming-soon services must be presented accurately.");
 assert(home.includes("Coming soon on Google Play"), "Website must not invent fake Play Store links.");
 
 const site = read("src", "lib", "site.ts");
 ["Food Delivery", "Groceries", "Taxi", "Market Items", "Pharmacy", "Parcel Delivery", "SME Errands", "Airtime", "Data", "Electricity", "Cable TV"]
   .forEach((service) => assert(site.includes(service), `Service list must include ${service}.`));
-assert(site.includes("Coming soon"), "Readiness service states must exist.");
+assert(site.includes("Coming soon"), "Coming-soon service states must exist.");
 assert(site.includes("Preparing launch"), "Pharmacy preparing-launch state must exist.");
 ["🍲", "🛒", "🚕", "📦"].forEach((icon) => assert(site.includes(icon), `Service icon ${icon} must be present.`));
 
@@ -32,8 +32,8 @@ assert(vendorForm.includes("Your vendor application has been submitted. KariGO w
 assert(!vendorForm.includes("Authorization"), "Public vendor application form must not require auth headers.");
 
 const riders = read("app", "riders", "page.tsx");
-assert(riders.includes("Taxi Drivers - Preparing Launch"), "Riders page must include future taxi driver section.");
-assert(riders.includes("Vehicle and licence checks will be required"), "Taxi driver readiness checks must be stated.");
+assert(riders.includes("Taxi Drivers - Coming Soon"), "Riders page must include future taxi driver section.");
+assert(riders.includes("Vehicle and licence checks will be required"), "Taxi driver checks must be stated.");
 assert(riders.includes("TaxiDriverApplicationForm"), "Riders page must include taxi driver application form.");
 assert(riders.includes("TaxiWaitlistForm"), "Riders page must include customer taxi waitlist form.");
 assert(riders.includes("Taxi is coming later and is not live for ride requests yet"), "Riders page must not present taxi as live.");
@@ -41,13 +41,13 @@ assert(riders.includes("Taxi is coming later and is not live for ride requests y
 const taxiForms = read("src", "components", "taxi-readiness-forms.tsx");
 assert(taxiForms.includes("taxi/waitlist"), "Website taxi waitlist form must post to taxi waitlist endpoint.");
 assert(taxiForms.includes("taxi/driver-applications"), "Website taxi driver form must post to driver application endpoint.");
-assert(taxiForms.includes("does not book a ride or activate live taxi dispatch"), "Website taxi waitlist must include readiness-only copy.");
-assert(taxiForms.includes("Approval is readiness-only"), "Website taxi driver application must include readiness-only approval copy.");
+assert(taxiForms.includes("does not book a ride or activate live taxi dispatch"), "Website taxi waitlist must state taxi is not live.");
+assert(taxiForms.includes("Approval is required and this form does not activate live taxi dispatch"), "Website taxi driver form must not imply live taxi activation.");
 
 const services = read("app", "services", "page.tsx");
 assert(services.includes("Live / Active"), "Services page must separate live services.");
 assert(services.includes("Preparing Launch"), "Services page must separate preparing-launch services.");
-assert(services.includes("Join Taxi Waitlist"), "Services page must link Taxi readiness to the waitlist.");
+assert(services.includes("Join Taxi Waitlist"), "Services page must link Taxi coming-soon interest to the waitlist.");
 
 const contact = read("app", "contact", "page.tsx");
 assert(contact.includes("ContactInquiryForm"), "Contact page must render the inquiry form.");
@@ -55,7 +55,7 @@ assert(contact.includes("Public contact details are intentionally not displayed"
 
 const contactForm = read("src", "components", "contact-inquiry-form.tsx");
 assert(contactForm.includes("Submit Inquiry"), "Contact inquiry form must include a visible submit button.");
-assert(contactForm.includes("no message was sent from this staging form"), "Contact inquiry form must avoid pretending to send without an approved workflow.");
+assert(contactForm.includes("KariGO will open public inquiry submission soon"), "Contact inquiry form must avoid pretending to send without a connected workflow.");
 
 const header = read("src", "components", "site-header.tsx");
 assert(header.includes("menu-toggle"), "Website header must include mobile menu control.");
@@ -65,7 +65,7 @@ const footer = read("src", "components", "site-footer.tsx");
 assert(footer.includes("&copy; 2026 KariGO Express Limited"), "Footer must include legal copyright text.");
 ["Privacy Policy", "Terms", "Vendor Application", "Contact"].forEach((link) => assert(footer.includes(link), `Footer must include ${link}.`));
 assert(footer.includes("Google Play soon"), "Footer must include Android launch status.");
-assert(footer.includes("No fake app-store links are published."), "Footer must avoid fake app-store links.");
+assert(footer.includes("Official store links will appear here when available."), "Footer must avoid fake app-store links.");
 assert(!footer.includes("Email:"), "Footer must not expose email contact text.");
 assert(!footer.includes("Phone:"), "Footer must not expose phone contact text.");
 assert(!footer.includes("Location:"), "Footer must not expose location contact text.");
@@ -77,7 +77,7 @@ assert(privacy.includes("Security and retention"), "Privacy page must include se
 
 const terms = read("app", "terms", "page.tsx");
 assert(terms.includes("Using KariGO"), "Terms page must include platform usage content.");
-assert(terms.includes("Readiness-gated services"), "Terms page must explain gated services.");
+assert(terms.includes("Services coming soon"), "Terms page must explain gated services.");
 assert(terms.includes("Prohibited use"), "Terms page must include prohibited use content.");
 
 const layout = read("app", "layout.tsx");

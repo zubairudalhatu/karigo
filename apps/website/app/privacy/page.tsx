@@ -11,8 +11,7 @@ export default function PrivacyPage() {
       <section className="section">
         <p className="eyebrow">Privacy Policy</p>
         <h1>Privacy Policy</h1>
-        <p className="lead">KariGO is built for delivery, local commerce and operational trust. This page explains the privacy approach for customers, vendors, riders, drivers, website visitors and pilot participants.</p>
-        <p className="legal-note">Pre-launch notice: this policy content is prepared for product readiness and should be reviewed by qualified legal and data-protection advisers before broad public launch.</p>
+        <p className="lead">KariGO is built for delivery, local commerce and operational trust. This page explains how we handle information for customers, vendors, riders, drivers and website visitors.</p>
       </section>
 
       <section className="section soft">
@@ -22,7 +21,7 @@ export default function PrivacyPage() {
             <ul className="list">
               <li>Account and profile details submitted by users.</li>
               <li>Delivery addresses, order details and support messages needed to operate KariGO.</li>
-              <li>Vendor, rider, driver and partner application details submitted through approved forms.</li>
+              <li>Vendor, rider, driver and partner application details submitted through KariGO forms.</li>
               <li>Device, browser and usage information needed to keep the service secure and reliable.</li>
             </ul>
           </article>
@@ -31,27 +30,27 @@ export default function PrivacyPage() {
             <h2>How we use information</h2>
             <ul className="list">
               <li>To create accounts, process orders, support delivery and respond to inquiries.</li>
-              <li>To review vendor, rider and driver readiness applications.</li>
+              <li>To review vendor, rider and driver applications or interest requests.</li>
               <li>To improve safety, prevent abuse and monitor operational performance.</li>
-              <li>To prepare reports for internal operations, finance and customer support.</li>
+              <li>To prepare reports for operations, finance and customer support.</li>
             </ul>
           </article>
 
           <article className="info-card">
             <h2>Sharing and access</h2>
-            <p>KariGO only shares operational information where it is needed to complete a service, support a user, review an application or comply with approved legal and operational requirements.</p>
-            <p>Role-based access controls should prevent customers, vendors, riders and admins from viewing information outside their permitted scope.</p>
+            <p>KariGO only shares operational information where it is needed to complete a service, support a user, review an application or comply with legal and operational requirements.</p>
+            <p>Role-based access controls are designed to keep customers, vendors, riders and admins within their permitted information scope.</p>
           </article>
 
           <article className="info-card">
             <h2>Security and retention</h2>
-            <p>KariGO uses authenticated access, role separation and staged provider activation to reduce data exposure risk. Sensitive credentials, OTPs and payment secrets must never be stored in public documents or exposed through the website.</p>
-            <p>Retention periods and deletion processes should be finalized before public launch.</p>
+            <p>KariGO uses authenticated access, role separation and careful provider activation to reduce data exposure risk. Sensitive credentials, OTPs and payment secrets must never be stored in public documents or exposed through the website.</p>
+            <p>KariGO keeps information only as long as needed for service delivery, safety, legal, finance and operational purposes.</p>
           </article>
 
           <article className="info-card">
             <h2>User choices</h2>
-            <p>Users should be able to request support, correct inaccurate details and ask questions about how their information is handled. Future notification preferences and consent controls remain part of the product roadmap.</p>
+            <p>Users can request support, correct inaccurate details and ask questions about how their information is handled. Notification preferences and consent controls will continue to improve as KariGO grows.</p>
           </article>
 
           <article className="info-card">

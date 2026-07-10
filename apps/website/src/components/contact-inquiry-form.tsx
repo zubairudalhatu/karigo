@@ -16,7 +16,7 @@ export function ContactInquiryForm() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setNotice("Your inquiry details are ready for KariGO review. The public contact workflow will be connected after approval, so no message was sent from this staging form.");
+    setNotice("Your inquiry is ready. KariGO will open public inquiry submission soon; vendor and rider applications can use the dedicated forms.");
   }
 
   return (

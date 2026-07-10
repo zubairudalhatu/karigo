@@ -5,7 +5,7 @@ import { liveServices, preparingServices, services } from "../../src/lib/site";
 
 export const metadata: Metadata = {
   title: "Services",
-  description: "KariGO services and readiness status."
+  description: "KariGO services and launch status."
 };
 
 export default function ServicesPage() {

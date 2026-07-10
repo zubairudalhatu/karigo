@@ -18,11 +18,11 @@ export default function VendorApplyPage() {
         <div>
           <h2>What vendors get</h2>
           <ul className="list">
-            <li>Storefront readiness</li>
+            <li>Storefront setup</li>
             <li>Order management workflow</li>
             <li>Settlement visibility</li>
             <li>Future campaign placement opportunities</li>
-            <li>Future payout account verification readiness</li>
+            <li>Future payout account verification support</li>
           </ul>
           <p>Approval is not automatic and does not activate live payouts, pharmacy scope or paid campaign placement.</p>
         </div>

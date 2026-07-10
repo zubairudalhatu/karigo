@@ -38,7 +38,7 @@ async function postReadiness(path: string, body: unknown) {
     body: JSON.stringify(body)
   });
 
-  if (!response.ok) throw new Error("Taxi readiness request failed");
+  if (!response.ok) throw new Error("Taxi request failed");
   return response.json();
 }
 
@@ -111,18 +111,18 @@ export function TaxiDriverApplicationForm() {
         vehiclePlateNumber: form.vehiclePlateNumber || undefined,
         notes: form.notes || undefined
       });
-      setSuccess(response?.data?.message ?? "Taxi driver readiness application submitted. KariGO will review your details before taxi launch.");
+      setSuccess(response?.data?.message ?? "Taxi driver interest submitted. KariGO will review your details before taxi launch.");
       setForm(driverInitial);
     } catch {
-      setError("We could not submit your taxi driver readiness application right now. Please check your details and try again.");
+      setError("We could not submit your taxi driver interest right now. Please check your details and try again.");
     } finally {
       setLoading(false);
     }
   }
 
   return <form className="form-card" id="taxi-driver-application" onSubmit={submit}>
-    <h3>Taxi Driver Readiness Application</h3>
-    <p>Apply for readiness review while KariGO prepares verified taxi operations. Approval is readiness-only and does not activate live taxi dispatch.</p>
+    <h3>Taxi Driver Interest</h3>
+    <p>Register interest while KariGO prepares verified taxi operations. Approval is required and this form does not activate live taxi dispatch.</p>
     <div className="form-grid">
       <label>Full name<input required value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></label>
       <label>Phone number<input required value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} /></label>

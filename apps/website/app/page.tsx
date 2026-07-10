@@ -44,7 +44,7 @@ export default function HomePage() {
             <p className="eyebrow">Services</p>
             <h2>Everyday services, one trusted platform.</h2>
           </div>
-          <p>Coming-soon services are clearly marked and are not live transactions.</p>
+          <p>Coming-soon services are clearly marked before launch.</p>
         </div>
         <div className="service-grid">{services.map((service) => <ServiceCard key={service.title} service={service} />)}</div>
       </section>
@@ -103,9 +103,9 @@ export default function HomePage() {
                 <span><small>Planned for</small><strong>App Store</strong></span>
               </div>
             </div>
-            <p><strong>Android:</strong> Coming soon on Google Play. Internal test app available only through approved staging distribution.</p>
+            <p><strong>Android:</strong> Coming soon on Google Play. Limited early access is shared separately.</p>
             <p><strong>iOS:</strong> Coming later.</p>
-            <p>No fake app-store links are published.</p>
+            <p>Official store links will appear here when available.</p>
           </article>
         </div>
       </section>
