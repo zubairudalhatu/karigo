@@ -11,9 +11,9 @@ Related files:
 
 ## Overall Status
 
-Current recommendation: Not ready for controlled soft launch signoff yet.
+Current recommendation: Not ready for controlled soft launch signoff yet, but branded Admin/Vendor domain blockers are resolved.
 
-KariGO is suitable for continued internal staging review using the Vercel fallback portals, but custom-domain portal readiness and full credentialed role QA must be completed before controlled soft launch approval.
+KariGO is suitable for continued internal staging review using the branded Admin and Vendor domains. Full mobile QA and credentialed role-flow evidence must still be completed before controlled soft launch approval.
 
 ## Readiness Matrix
 
@@ -23,8 +23,8 @@ KariGO is suitable for continued internal staging review using the Vercel fallba
 | Public website | Ready for public review | Primary website pages load and readiness-gated services are clearly marked. |
 | Admin Portal fallback URL | Ready for credentialed QA | Fallback URL loads; credentialed login was not executed in this pass. |
 | Vendor Dashboard fallback URL | Ready for credentialed QA | Fallback URL loads; credentialed login was not executed in this pass. |
-| Admin custom domain | Partially ready | Page loads, but backend CORS must allow `https://admin.karigo.com.ng`. |
-| Vendor custom domain | Not ready | Domain currently serves Admin Portal HTML instead of Vendor Dashboard HTML. |
+| Admin custom domain | Ready for branded-domain QA | Admin Portal loads correctly, backend CORS allows the origin, and authenticated dashboard reachability is confirmed. |
+| Vendor custom domain | Ready for branded-domain QA | Vendor Dashboard loads correctly, backend CORS allows the origin, and authenticated dashboard reachability is confirmed. |
 | Customer App | Blocked pending device QA | Typecheck passed; live APK/customer account journey not executed in this pass. |
 | Rider App | Blocked pending device QA | Typecheck passed; live APK/rider account journey not executed in this pass. |
 | Demo accounts | Documented, pending secure credential confirmation | Account personas and phone numbers are documented without password values. |
@@ -40,16 +40,13 @@ KariGO is suitable for continued internal staging review using the Vercel fallba
 | Decision Area | Recommendation |
 |---|---|
 | Internal technical review | Go, using fallback portal URLs and public website/API evidence. |
-| Management demo on custom domains | No-go until `vendor.karigo.com.ng` routing and custom-domain CORS are fixed. |
+| Management demo on custom domains | Go for Admin/Vendor branded-domain review; full checklist evidence should still be recorded. |
 | Full role-based staging QA | No-go until secure demo credentials and mobile test devices are used. |
-| Controlled soft launch | No-go until open high-severity deployment issues and blocked QA items are closed. |
+| Controlled soft launch | No-go until mobile QA and full credentialed role-flow evidence are completed. |
 | Public launch | No-go; live providers, legal/policy review and full role QA remain required. |
 
 ## Required Before Controlled Soft Launch
 
-- Fix `vendor.karigo.com.ng` so it serves Vendor Dashboard, not Admin Portal.
-- Add/confirm `https://admin.karigo.com.ng` and `https://vendor.karigo.com.ng` in backend staging CORS.
-- Re-run admin/vendor login on both custom domains.
 - Execute Customer App checklist with the current staging APK and secure demo customer.
 - Execute Rider App checklist with the current staging APK and secure demo rider.
 - Execute Vendor Dashboard role checklist for food, grocery and market vendors.
@@ -59,6 +56,9 @@ KariGO is suitable for continued internal staging review using the Vercel fallba
 ## Safe Paths For Continued Testing
 
 - Backend API: `https://karigo-8htn.onrender.com/api/v1`
+- Backend health check: `https://karigo-8htn.onrender.com/api/v1/health`
+- Admin branded portal: `https://admin.karigo.com.ng`
+- Vendor branded portal: `https://vendor.karigo.com.ng`
 - Admin fallback portal: `https://karigo-admin-portal.vercel.app`
 - Vendor fallback portal: `https://karigo-vendor-dashboard.vercel.app`
 - Public website: `https://www.karigo.com.ng`

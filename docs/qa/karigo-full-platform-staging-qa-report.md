@@ -34,18 +34,18 @@ This report records a read-only automated staging QA pass plus local build/typec
 | Public website content | Passed | Food, groceries, market, parcel and SME errands shown as live; Taxi, Bills and Pharmacy are clearly gated. |
 | Admin portal fallback | Passed | `karigo-admin-portal.vercel.app` returned Admin Portal HTML. |
 | Vendor dashboard fallback | Passed | `karigo-vendor-dashboard.vercel.app` returned Vendor Dashboard HTML. |
-| Admin custom domain | Partially passed | Domain loads Admin Portal, but backend CORS did not echo `access-control-allow-origin` for `https://admin.karigo.com.ng`. |
-| Vendor custom domain | Failed | `https://vendor.karigo.com.ng` served Admin Portal HTML instead of Vendor Dashboard HTML. |
-| Vendor custom-domain API CORS | Failed | Backend preflight did not echo `access-control-allow-origin` for `https://vendor.karigo.com.ng`. |
+| Admin custom domain | Passed | `https://admin.karigo.com.ng` loads the Admin Portal and authenticated dashboard access is confirmed. |
+| Vendor custom domain | Passed | `https://vendor.karigo.com.ng` loads the Vendor Dashboard and authenticated dashboard access is confirmed. |
+| Custom-domain API CORS | Passed | Backend preflight now echoes `access-control-allow-origin` for admin and vendor branded domains. |
 | Public vendor/product discovery | Passed | Active food, grocery and market vendors/products returned. |
 | Bills & Utilities catalogue | Passed for test catalogue | Demo utility providers returned; live fulfilment remains intentionally inactive. |
 | Protected endpoint guard | Passed | `GET /auth/me` without token returned `401 Unauthorized`. |
 | Customer App role QA | Blocked for live credentialed run | Requires secure demo password and Android/iOS test session. Static config/build validation passed. |
 | Rider App role QA | Blocked for live credentialed run | Requires secure demo password and Android test session. Static config/build validation passed. |
-| Vendor Dashboard credentialed QA | Blocked for live role run | Requires secure demo password. Fallback domain loads; custom domain currently misroutes. |
-| Admin Portal credentialed QA | Blocked for live role run | Requires secure demo password. Fallback domain loads; custom-domain CORS requires update before custom-domain operations. |
+| Vendor Dashboard credentialed QA | Partially passed | Branded-domain authenticated dashboard reachability is confirmed; full vendor checklist still requires secure test evidence. |
+| Admin Portal credentialed QA | Partially passed | Branded-domain authenticated dashboard reachability is confirmed; full admin checklist still requires secure test evidence. |
 
-Overall result: Partially passed, with deployment issues blocking custom-domain portal readiness and credentialed role QA still pending.
+Overall result: Partially passed. Custom-domain portal routing and CORS blockers are resolved; mobile QA and full secure role-flow evidence are still pending.
 
 ## Live Staging Evidence
 
@@ -68,6 +68,7 @@ Overall result: Partially passed, with deployment issues blocking custom-domain 
 | Check | Endpoint | Evidence | Result |
 |---|---|---|---|
 | Health | `GET /api/v1/health` | `success: true`, message `KariGO API is healthy`, service `backend-api`, status `ok` | Passed |
+| API base path | `GET /api/v1` | `NOT_FOUND` is expected for the API prefix root; use `/api/v1/health` for health checks | Passed |
 | Swagger | `GET /api/docs` | `HTTP/1.1 200 OK`, `content-type: text/html` | Passed |
 | Unauthorized protection | `GET /api/v1/auth/me` without token | `401 Unauthorized`, error code `UNAUTHORIZED` | Passed |
 | Public vendors | `GET /api/v1/vendors` | Returned Kano Everyday Market, Kano Fresh Mart and Kano Kitchen | Passed |
@@ -79,9 +80,9 @@ Overall result: Partially passed, with deployment issues blocking custom-domain 
 
 | Portal URL | Expected | Observed | Result |
 |---|---|---|---|
-| `https://admin.karigo.com.ng` | Admin Portal | Page title `KariGO Admin Portal` | Passed for page load |
+| `https://admin.karigo.com.ng` | Admin Portal | Admin Portal loads correctly; authenticated dashboard reachability confirmed | Passed |
 | `https://karigo-admin-portal.vercel.app` | Admin Portal | `HTTP/1.1 200 OK` | Passed |
-| `https://vendor.karigo.com.ng` | Vendor Dashboard | Page title `KariGO Admin Portal` | Failed |
+| `https://vendor.karigo.com.ng` | Vendor Dashboard | Vendor Dashboard loads correctly; authenticated dashboard reachability confirmed | Passed |
 | `https://karigo-vendor-dashboard.vercel.app` | Vendor Dashboard | Page title `KariGO Vendor Dashboard` | Passed |
 
 ### Backend CORS Preflight
@@ -94,8 +95,8 @@ Request tested: `OPTIONS /api/v1/auth/login` with `Access-Control-Request-Method
 | `https://karigo.com.ng` | `204 No Content`, `access-control-allow-origin: https://karigo.com.ng` | Passed |
 | `https://karigo-admin-portal.vercel.app` | `204 No Content`, `access-control-allow-origin: https://karigo-admin-portal.vercel.app` | Passed |
 | `https://karigo-vendor-dashboard.vercel.app` | `204 No Content`, `access-control-allow-origin: https://karigo-vendor-dashboard.vercel.app` | Passed |
-| `https://admin.karigo.com.ng` | `204 No Content`, no `access-control-allow-origin` header echoed | Failed |
-| `https://vendor.karigo.com.ng` | `204 No Content`, no `access-control-allow-origin` header echoed | Failed |
+| `https://admin.karigo.com.ng` | `204 No Content`, `access-control-allow-origin: https://admin.karigo.com.ng` | Passed |
+| `https://vendor.karigo.com.ng` | `204 No Content`, `access-control-allow-origin: https://vendor.karigo.com.ng` | Passed |
 
 ## Credentialed Role QA Status
 
@@ -105,8 +106,8 @@ The following checklist areas require secure demo passwords and, for mobile, ins
 |---|---|---|---|
 | Customer App | `customer-app-role-test-checklist.md` | Not executed in this pass | Secure demo password and test device session not supplied |
 | Rider App | `rider-app-role-test-checklist.md` | Not executed in this pass | Secure demo password and rider staging APK/device session not supplied |
-| Vendor Dashboard | `vendor-dashboard-role-test-checklist.md` | Not executed in this pass | Secure demo password not supplied; custom domain misroutes |
-| Admin Portal | `admin-portal-role-test-checklist.md` | Not executed in this pass | Secure demo password not supplied; custom-domain CORS missing |
+| Vendor Dashboard | `vendor-dashboard-role-test-checklist.md` | Partially executed externally | Authenticated branded-domain dashboard reachability is confirmed; full checklist evidence still pending |
+| Admin Portal | `admin-portal-role-test-checklist.md` | Partially executed externally | Authenticated branded-domain dashboard reachability is confirmed; full checklist evidence still pending |
 
 Do not record demo passwords in Git. Use the staging secret manager or approved internal vault when executing manual role QA.
 
@@ -126,10 +127,10 @@ Do not record demo passwords in Git. Use the staging secret manager or approved 
 
 ## QA Conclusion
 
-KariGO staging is healthy at the backend/API and public website level, and public discovery/catalogue data is available. The Vercel fallback portals are reachable. However, custom-domain portal readiness is not complete because `vendor.karigo.com.ng` is currently routed to the Admin Portal and backend CORS does not allow the admin/vendor custom domains.
+KariGO staging is healthy at the backend/API and public website level, and public discovery/catalogue data is available. The branded Admin and Vendor domains are now usable, and backend CORS allows both branded portal origins.
 
 Recommended release status:
 
-- Internal demo using Vercel fallback portals: Conditionally ready after secure demo credentials are confirmed.
-- Custom-domain management/vendor demo: Not ready until portal DNS/Vercel mapping and backend CORS are fixed.
-- Controlled soft launch: Not ready until credentialed end-to-end role QA is executed and signed off.
+- Internal demo using branded Admin/Vendor portals: Ready for continued management review.
+- Custom-domain management/vendor demo: Ready from a routing and CORS perspective.
+- Controlled soft launch: Not ready until mobile QA and full credentialed end-to-end role QA are executed and signed off.
