@@ -4,6 +4,7 @@ import {
   OrderStatus,
   PaymentStatus,
   PayoutAccountStatus,
+  Prisma,
   ProductCategory,
   PromoDiscountType,
   PrismaClient,
@@ -83,7 +84,7 @@ async function upsertProduct(vendorId: string, name: string, data: {
   return product;
 }
 
-async function upsertUtilityProvider(type: UtilityServiceType, name: string, code: string, metadata?: Record<string, unknown>) {
+async function upsertUtilityProvider(type: UtilityServiceType, name: string, code: string, metadata?: Prisma.InputJsonValue) {
   return prisma.utilityProvider.upsert({
     where: { code },
     update: { type, name, isActive: true, metadata },
@@ -95,7 +96,7 @@ async function upsertUtilityProduct(providerId: string, type: UtilityServiceType
   amountKobo?: number;
   minAmountKobo?: number;
   maxAmountKobo?: number;
-  metadata?: Record<string, unknown>;
+  metadata?: Prisma.InputJsonValue;
 }) {
   return prisma.utilityProduct.upsert({
     where: { code },
@@ -336,7 +337,7 @@ async function main() {
       maskedAccountNumber: "**** **** 0201",
       status: PayoutAccountStatus.VERIFIED,
       verifiedAt: new Date(),
-      verifiedByAdminId: superAdmin.id,
+      verifiedByAdminId: adminUser.id,
       rejectionReason: null,
       vendorVisibleNote: "Demo payout account verified for staging settlement review.",
       internalNote: null
@@ -350,7 +351,7 @@ async function main() {
       maskedAccountNumber: "**** **** 0201",
       status: PayoutAccountStatus.VERIFIED,
       verifiedAt: new Date(),
-      verifiedByAdminId: superAdmin.id,
+      verifiedByAdminId: adminUser.id,
       vendorVisibleNote: "Demo payout account verified for staging settlement review."
     }
   });
