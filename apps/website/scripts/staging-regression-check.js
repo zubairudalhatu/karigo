@@ -62,10 +62,23 @@ assert(header.includes("menu-toggle"), "Website header must include mobile menu 
 assert(header.includes("Become a Vendor"), "Mobile navigation must include vendor application access.");
 
 const footer = read("src", "components", "site-footer.tsx");
-assert(footer.includes("© 2026 KariGO Express Limited") || footer.includes("&copy; 2026 KariGO Express Limited"), "Footer must use the simplified legal text.");
+assert(footer.includes("&copy; 2026 KariGO Express Limited"), "Footer must include legal copyright text.");
+["Privacy Policy", "Terms", "Vendor Application", "Contact"].forEach((link) => assert(footer.includes(link), `Footer must include ${link}.`));
+assert(footer.includes("Google Play soon"), "Footer must include Android launch status.");
+assert(footer.includes("No fake app-store links are published."), "Footer must avoid fake app-store links.");
 assert(!footer.includes("Email:"), "Footer must not expose email contact text.");
 assert(!footer.includes("Phone:"), "Footer must not expose phone contact text.");
 assert(!footer.includes("Location:"), "Footer must not expose location contact text.");
+
+const privacy = read("app", "privacy", "page.tsx");
+assert(privacy.includes("Information we may collect"), "Privacy page must include data collection content.");
+assert(privacy.includes("How we use information"), "Privacy page must include usage content.");
+assert(privacy.includes("Security and retention"), "Privacy page must include security and retention content.");
+
+const terms = read("app", "terms", "page.tsx");
+assert(terms.includes("Using KariGO"), "Terms page must include platform usage content.");
+assert(terms.includes("Readiness-gated services"), "Terms page must explain gated services.");
+assert(terms.includes("Prohibited use"), "Terms page must include prohibited use content.");
 
 const layout = read("app", "layout.tsx");
 assert(layout.includes("KariGO - Everything You Need, Delivered"), "Metadata title must be configured.");
