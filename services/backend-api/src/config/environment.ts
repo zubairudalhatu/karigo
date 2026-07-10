@@ -52,6 +52,16 @@ function jwtExpirySeconds(value: unknown): number {
   return amount * multipliers[match[2].toLowerCase() as keyof typeof multipliers];
 }
 
+function booleanFlag(value: unknown, key: string, fallback = false): boolean {
+  if (value === undefined || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") throw new Error(`${key} must be true or false`);
+  const normalized = value.trim().toLowerCase();
+  if (["true", "1", "yes"].includes(normalized)) return true;
+  if (["false", "0", "no"].includes(normalized)) return false;
+  throw new Error(`${key} must be true or false`);
+}
+
 export function validateEnvironment(config: Record<string, unknown>): Record<string, unknown> {
   const appEnvironment = typeof config.APP_ENV === "string" ? config.APP_ENV : "development";
   const otpProvider =
@@ -116,6 +126,11 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   if (pushProvider !== "mock") {
     throw new Error("PUSH_PROVIDER must remain mock until push sandbox testing is approved");
   }
+  const taxiServiceEnabled = booleanFlag(config.TAXI_SERVICE_ENABLED, "TAXI_SERVICE_ENABLED", false);
+  const taxiStagingDispatchEnabled = booleanFlag(config.TAXI_STAGING_DISPATCH_ENABLED, "TAXI_STAGING_DISPATCH_ENABLED", false);
+  if (taxiStagingDispatchEnabled && appEnvironment === "production") {
+    throw new Error("TAXI_STAGING_DISPATCH_ENABLED cannot be enabled in production");
+  }
 
   return {
     ...config,
@@ -160,6 +175,12 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     WHATSAPP_API_VERSION: typeof config.WHATSAPP_API_VERSION === "string" && config.WHATSAPP_API_VERSION.trim()
       ? config.WHATSAPP_API_VERSION.trim()
       : "v20.0",
-    PUSH_PROVIDER: pushProvider
+    PUSH_PROVIDER: pushProvider,
+    TAXI_SERVICE_ENABLED: taxiServiceEnabled,
+    TAXI_STAGING_DISPATCH_ENABLED: taxiStagingDispatchEnabled,
+    TAXI_BASE_FARE_KOBO: positiveInteger(config.TAXI_BASE_FARE_KOBO, "TAXI_BASE_FARE_KOBO", 70000),
+    TAXI_PER_KM_KOBO: positiveInteger(config.TAXI_PER_KM_KOBO, "TAXI_PER_KM_KOBO", 25000),
+    TAXI_PER_MINUTE_KOBO: positiveInteger(config.TAXI_PER_MINUTE_KOBO, "TAXI_PER_MINUTE_KOBO", 4000),
+    TAXI_MINIMUM_FARE_KOBO: positiveInteger(config.TAXI_MINIMUM_FARE_KOBO, "TAXI_MINIMUM_FARE_KOBO", 120000)
   };
 }

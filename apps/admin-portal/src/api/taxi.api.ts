@@ -1,4 +1,12 @@
-import { TaxiApplicationStatus, TaxiDriverApplicationStatus, TaxiWaitlistEntry, TaxiWaitlistStatus } from "@karigo/shared-types";
+import {
+  TaxiApplicationStatus,
+  TaxiDriverApplicationStatus,
+  TaxiDriverProfile,
+  TaxiDriverProfileStatus,
+  TaxiTrip,
+  TaxiWaitlistEntry,
+  TaxiWaitlistStatus
+} from "@karigo/shared-types";
 import { api } from "./client";
 
 export interface AdminTaxiDriverApplication extends TaxiDriverApplicationStatus {
@@ -41,5 +49,16 @@ export const taxiApi = {
   },
   waitlistEntry: (id: string) => api.get<TaxiWaitlistEntry>(`admin/taxi/waitlist/${id}`),
   updateWaitlistStatus: (id: string, body: { status: TaxiWaitlistStatus; note?: string }) =>
-    api.patch<TaxiWaitlistEntry>(`admin/taxi/waitlist/${id}/status`, body)
+    api.patch<TaxiWaitlistEntry>(`admin/taxi/waitlist/${id}/status`, body),
+  driverProfiles: () => api.get<TaxiDriverProfile[]>("admin/taxi/driver-profiles"),
+  createProfileFromApplication: (applicationId: string) =>
+    api.post<TaxiDriverProfile>(`admin/taxi/driver-profiles/from-application/${applicationId}`),
+  updateProfileStatus: (profileId: string, body: { status: TaxiDriverProfileStatus; note?: string }) =>
+    api.patch<TaxiDriverProfile>(`admin/taxi/driver-profiles/${profileId}/status`, body),
+  trips: () => api.get<TaxiTrip[]>("admin/taxi/trips"),
+  trip: (tripId: string) => api.get<TaxiTrip>(`admin/taxi/trips/${tripId}`),
+  assignDriver: (tripId: string, driverProfileId: string) =>
+    api.patch<TaxiTrip>(`admin/taxi/trips/${tripId}/assign-driver`, { driverProfileId }),
+  cancelTrip: (tripId: string, reason?: string) => api.post<TaxiTrip>(`admin/taxi/trips/${tripId}/cancel`, { reason }),
+  summary: () => api.get<{ driverProfiles: number; availableDrivers: number; requestedTrips: number; activeTrips: number; completedTrips: number; cancelledTrips: number; testModeNotice: string }>("admin/taxi/summary")
 };

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AdminRole, UserRole } from "@prisma/client";
 import { AdminRoles } from "../../common/decorators/admin-roles.decorator";
@@ -8,8 +8,11 @@ import { AdminRolesGuard } from "../../common/guards/admin-roles.guard";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
+import { AdminAssignTaxiDriverDto } from "./dto/admin-assign-taxi-driver.dto";
+import { UpdateTaxiDriverProfileStatusDto } from "./dto/admin-taxi-profile.dto";
 import { ListTaxiDriverApplicationsQueryDto, ListTaxiWaitlistQueryDto } from "./dto/list-taxi-query.dto";
 import { ReviewTaxiDriverApplicationDto } from "./dto/review-taxi-application.dto";
+import { TaxiCancelDto } from "./dto/taxi-cancel.dto";
 import { UpdateTaxiWaitlistStatusDto } from "./dto/update-taxi-waitlist-status.dto";
 import { TaxiService } from "./taxi.service";
 
@@ -71,5 +74,61 @@ export class AdminTaxiController {
     @Body() dto: UpdateTaxiWaitlistStatusDto
   ) {
     return { message: "Taxi waitlist status updated", data: await this.taxi.updateWaitlistStatus(entryId, user.id, dto) };
+  }
+
+  @Get("driver-profiles")
+  @ApiOperation({ summary: "List Taxi staging driver profiles" })
+  async driverProfiles() {
+    return { message: "Taxi driver profiles retrieved", data: await this.taxi.adminDriverProfiles() };
+  }
+
+  @Post("driver-profiles/from-application/:applicationId")
+  @ApiOperation({ summary: "Create a Taxi staging driver profile from an approved application" })
+  async createProfile(@CurrentUser() user: AuthenticatedUser, @Param("applicationId", ParseUUIDPipe) applicationId: string) {
+    return { message: "Taxi driver profile created", data: await this.taxi.adminCreateDriverProfileFromApplication(user.id, applicationId) };
+  }
+
+  @Patch("driver-profiles/:profileId/status")
+  @ApiOperation({ summary: "Update Taxi staging driver profile status" })
+  async updateProfileStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("profileId", ParseUUIDPipe) profileId: string,
+    @Body() dto: UpdateTaxiDriverProfileStatusDto
+  ) {
+    return { message: "Taxi driver profile status updated", data: await this.taxi.adminUpdateDriverProfileStatus(user.id, profileId, dto) };
+  }
+
+  @Get("trips")
+  @ApiOperation({ summary: "List staging Taxi trips" })
+  async trips() {
+    return { message: "Taxi trips retrieved", data: await this.taxi.adminTrips() };
+  }
+
+  @Get("trips/:tripId")
+  @ApiOperation({ summary: "Get staging Taxi trip detail" })
+  async trip(@Param("tripId", ParseUUIDPipe) tripId: string) {
+    return { message: "Taxi trip retrieved", data: await this.taxi.adminTrip(tripId) };
+  }
+
+  @Patch("trips/:tripId/assign-driver")
+  @ApiOperation({ summary: "Assign a staging Taxi driver" })
+  async assignDriver(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("tripId", ParseUUIDPipe) tripId: string,
+    @Body() dto: AdminAssignTaxiDriverDto
+  ) {
+    return { message: "Taxi driver assigned", data: await this.taxi.adminAssignDriver(user.id, tripId, dto) };
+  }
+
+  @Post("trips/:tripId/cancel")
+  @ApiOperation({ summary: "Cancel a staging Taxi trip" })
+  async cancelTrip(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: TaxiCancelDto) {
+    return { message: "Taxi trip cancelled", data: await this.taxi.adminCancelTrip(user.id, tripId, dto) };
+  }
+
+  @Get("summary")
+  @ApiOperation({ summary: "Get staging Taxi operations summary" })
+  async summary() {
+    return { message: "Taxi summary retrieved", data: await this.taxi.adminSummary() };
   }
 }

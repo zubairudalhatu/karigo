@@ -3,6 +3,7 @@ import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { CreateTaxiDriverApplicationDto } from "./dto/create-taxi-driver-application.dto";
 import { CreateTaxiWaitlistDto } from "./dto/create-taxi-waitlist.dto";
 import { TaxiApplicationStatusQueryDto } from "./dto/taxi-application-status-query.dto";
+import { TaxiFareEstimateDto } from "./dto/taxi-fare-estimate.dto";
 import { TaxiService } from "./taxi.service";
 
 @ApiTags("Taxi Readiness")
@@ -26,5 +27,11 @@ export class TaxiController {
   @ApiOperation({ summary: "Check Taxi driver readiness application status" })
   async driverApplicationStatus(@Query() query: TaxiApplicationStatusQueryDto) {
     return { message: "Taxi driver readiness application status retrieved", data: await this.taxi.publicApplicationStatus(query) };
+  }
+
+  @Post("fare-estimate")
+  @ApiOperation({ summary: "Create a staging-only public Taxi fare estimate" })
+  async fareEstimate(@Body() dto: TaxiFareEstimateDto) {
+    return { message: "Taxi fare estimate calculated", data: this.taxi.fareEstimate(dto) };
   }
 }

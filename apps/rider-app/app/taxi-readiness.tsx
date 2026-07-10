@@ -1,13 +1,14 @@
+import { TaxiDriverApplicationStatus, TaxiDriverProfile, TaxiTrip, TaxiVehicleOwnership, TaxiVehicleType } from "@karigo/shared-types";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
-import { taxiApi } from "../src/api/taxi.api";
 import { riderApi } from "../src/api/rider.api";
-import { TaxiDriverApplicationStatus, TaxiVehicleOwnership, TaxiVehicleType } from "@karigo/shared-types";
+import { taxiApi } from "../src/api/taxi.api";
 import { Button, Card, Field, Message, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
 import { friendlyError } from "../src/lib/errors";
 
 const vehicleTypes: TaxiVehicleType[] = ["SEDAN", "SUV", "MINI_BUS", "TRICYCLE", "OTHER"];
 const ownershipTypes: TaxiVehicleOwnership[] = ["OWNER", "LEASED", "COMPANY_ASSIGNED", "OTHER"];
+const testNotice = "Taxi Test Mode. No real taxi ride, fare billing or payment is active.";
 
 const initialForm = {
   fullName: "",
@@ -28,30 +29,48 @@ const initialForm = {
   notes: ""
 };
 
+const money = (kobo?: number | null) => `NGN ${Math.round(Number(kobo ?? 0) / 100).toLocaleString()}`;
+
 export default function TaxiReadiness() {
   const [form, setForm] = useState(initialForm);
   const [status, setStatus] = useState<TaxiDriverApplicationStatus | null>(null);
+  const [profile, setProfile] = useState<TaxiDriverProfile | null>(null);
+  const [trips, setTrips] = useState<TaxiTrip[]>([]);
+  const [tripPin, setTripPin] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const taxiEnabled = process.env.EXPO_PUBLIC_TAXI_SERVICE_ENABLED === "true" && process.env.EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED === "true";
+
+  async function loadTaxiMode() {
+    if (!taxiEnabled) return;
+    try {
+      const loadedProfile = await taxiApi.profile();
+      setProfile(loadedProfile);
+      setTrips(await taxiApi.availableTrips());
+    } catch {
+      // Taxi readiness form remains useful even before an approved test profile exists.
+    }
+  }
 
   useEffect(() => {
     riderApi.profile()
-      .then((profile) => {
-        const phoneNumber = profile.phoneNumber ?? "";
+      .then((riderProfile) => {
+        const phoneNumber = riderProfile.phoneNumber ?? "";
         setForm((current) => ({
           ...current,
-          fullName: profile.user?.fullName ?? current.fullName,
+          fullName: riderProfile.user?.fullName ?? current.fullName,
           phoneNumber,
-          email: profile.user?.email ?? "",
-          vehiclePlateNumber: profile.plateNumber ?? current.vehiclePlateNumber,
-          vehicleType: profile.vehicleType?.toUpperCase().includes("TRICYCLE") ? "TRICYCLE" : current.vehicleType
+          email: riderProfile.user?.email ?? "",
+          vehiclePlateNumber: riderProfile.plateNumber ?? current.vehiclePlateNumber,
+          vehicleType: riderProfile.vehicleType?.toUpperCase().includes("TRICYCLE") ? "TRICYCLE" : current.vehicleType
         }));
         if (phoneNumber) return taxiApi.applicationStatus(phoneNumber).then(setStatus).catch(() => undefined);
         return undefined;
       })
+      .then(() => loadTaxiMode())
       .catch(() => undefined);
-  }, []);
+  }, [taxiEnabled]);
 
   async function submit() {
     setLoading(true);
@@ -80,11 +99,65 @@ export default function TaxiReadiness() {
     }
   }
 
+  async function toggleTaxiAvailability() {
+    if (!profile) return;
+    try {
+      const updated = await taxiApi.updateAvailability({ isAvailableForTaxi: !profile.isAvailableForTaxi });
+      setProfile(updated);
+      setMessage(updated.isAvailableForTaxi ? "Taxi Test Mode availability enabled." : "Taxi Test Mode availability disabled.");
+      setTrips(await taxiApi.availableTrips());
+    } catch (e) {
+      setError(friendlyError(e));
+    }
+  }
+
+  async function updateTrip(tripId: string, action: "accept" | "arrivedPickup" | "start" | "arrivedDestination" | "complete" | "cancel") {
+    try {
+      setError("");
+      if (action === "accept") await taxiApi.acceptTrip(tripId);
+      if (action === "arrivedPickup") await taxiApi.arrivedPickup(tripId);
+      if (action === "start") await taxiApi.startTrip(tripId, tripPin);
+      if (action === "arrivedDestination") await taxiApi.arrivedDestination(tripId);
+      if (action === "complete") await taxiApi.completeTrip(tripId);
+      if (action === "cancel") await taxiApi.cancelTrip(tripId, "Driver cancelled staging test trip");
+      setTripPin("");
+      setMessage("Taxi Test Mode trip updated.");
+      setTrips(await taxiApi.availableTrips());
+    } catch (e) {
+      setError(friendlyError(e));
+    }
+  }
+
   return <Protected><Screen title="Taxi Driver Readiness">
     <Card>
       <Text style={ui.title}>Taxi is not live yet</Text>
       <Text style={ui.muted}>This form helps KariGO prepare verified driver onboarding, vehicle checks and safe taxi operations. It does not activate taxi jobs or dispatch.</Text>
     </Card>
+    {taxiEnabled ? <Card>
+      <Text style={ui.title}>Taxi Test Mode</Text>
+      <Text style={ui.muted}>{testNotice}</Text>
+      {profile ? <>
+        <StatusBadge status={profile.status} />
+        <Text style={ui.muted}>{profile.isAvailableForTaxi ? "Available for staging Taxi trips" : "Offline for staging Taxi trips"}</Text>
+        <Button title={profile.isAvailableForTaxi ? "Go offline for Taxi Test Mode" : "Go online for Taxi Test Mode"} onPress={toggleTaxiAvailability} />
+      </> : <Text style={ui.muted}>An approved Taxi test driver profile is required before Taxi Test Mode appears.</Text>}
+    </Card> : null}
+    {taxiEnabled && trips.length ? <Card>
+      <Text style={ui.title}>Available test taxi trips</Text>
+      {trips.map((trip) => <Card key={trip.id}>
+        <Text style={ui.title}>{trip.tripReference}</Text>
+        <Text>{trip.pickupAddress} to {trip.destinationAddress}</Text>
+        <Text>{money(trip.estimatedFareKobo)}</Text>
+        <StatusBadge status={trip.status} />
+        <Button title="Accept trip" onPress={() => updateTrip(trip.id, "accept")} />
+        <Button title="Arrived pickup" tone="muted" onPress={() => updateTrip(trip.id, "arrivedPickup")} />
+        <Field placeholder="Customer trip PIN" value={tripPin} onChangeText={setTripPin} keyboardType="number-pad" />
+        <Button title="Start trip with PIN" tone="muted" disabled={tripPin.length !== 6} onPress={() => updateTrip(trip.id, "start")} />
+        <Button title="Arrived destination" tone="muted" onPress={() => updateTrip(trip.id, "arrivedDestination")} />
+        <Button title="Complete trip" tone="muted" onPress={() => updateTrip(trip.id, "complete")} />
+        <Button title="Cancel test trip" tone="danger" onPress={() => updateTrip(trip.id, "cancel")} />
+      </Card>)}
+    </Card> : null}
     {status ? <Card>
       <Text style={ui.title}>Application status</Text>
       <StatusBadge status={status.status} />

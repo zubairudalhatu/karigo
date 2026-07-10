@@ -67,8 +67,18 @@ expect(taxiReadiness.includes("Taxi is not live yet"), "Taxi readiness screen mu
 expect(taxiReadiness.includes("Apply for Taxi Readiness"), "Taxi readiness screen must include the driver application CTA.");
 expect(taxiReadiness.includes("taxiApi.submitDriverApplication"), "Taxi readiness screen must submit applications through the API client.");
 expect(taxiReadiness.includes("taxiApi.applicationStatus"), "Taxi readiness screen must check application status where available.");
+expect(taxiReadiness.includes("EXPO_PUBLIC_TAXI_SERVICE_ENABLED") && taxiReadiness.includes("EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED"), "Taxi Test Mode must be gated by both public staging flags.");
+expect(taxiReadiness.includes("Taxi Test Mode"), "Rider app must include staging-only Taxi Test Mode copy.");
+expect(taxiReadiness.includes("No real taxi ride, fare billing or payment is active."), "Rider Taxi Test Mode must show safety copy.");
+expect(taxiReadiness.includes("taxiApi.updateAvailability"), "Rider Taxi Test Mode must support staging availability updates.");
+expect(taxiReadiness.includes("taxiApi.availableTrips"), "Rider Taxi Test Mode must fetch staging available trips.");
+expect(taxiReadiness.includes("Start trip with PIN"), "Rider Taxi Test Mode must require customer PIN before trip start.");
+expect(taxiReadiness.includes("Complete trip"), "Rider Taxi Test Mode must support completion after destination arrival.");
 expect(taxiApi.includes("taxi/driver-applications"), "Rider taxi API must use public taxi driver application endpoint.");
-expect(!taxiReadiness.includes("Taxi Mode"), "Rider app must not expose live taxi mode switching.");
+expect(taxiApi.includes("rider/taxi/profile"), "Rider taxi API must expose staging profile endpoint.");
+expect(taxiApi.includes("rider/taxi/trips/available"), "Rider taxi API must expose staging available-trip endpoint.");
+expect(taxiApi.includes("rider/taxi/trips/${tripId}/start"), "Rider taxi API must submit the staging customer PIN to start a trip.");
+expect(!taxiReadiness.includes("Pay Now") && !taxiReadiness.includes("cashout"), "Rider Taxi Test Mode must not expose payment or cashout actions.");
 
 if (failures.length) {
   console.error("Rider staging regression check failed:");

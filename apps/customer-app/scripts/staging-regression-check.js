@@ -8,7 +8,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
-["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel", "vendor/apply", "vendor/application-status"]
+["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel", "vendor/apply", "vendor/application-status"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
 assert(layout.includes('<Stack.Screen name="utilities/index" options={headerless}'), "Utilities hub must hide native header.");
 ["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
@@ -41,6 +41,8 @@ assert(home.includes("Welcome, {firstName(user?.fullName)}"), "Home greeting mus
 assert(home.includes("Food Delivery"), "Home must keep Food Delivery service category.");
 assert(home.includes("Groceries"), "Home must keep Groceries service category.");
 assert(home.includes("Taxi"), "Home must include Taxi readiness tile.");
+assert(home.includes("EXPO_PUBLIC_TAXI_SERVICE_ENABLED"), "Taxi must remain feature-flagged.");
+assert(home.includes("EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED"), "Taxi staging dispatch must remain feature-flagged.");
 assert(home.includes("Market Items"), "Home must keep Market Items service category.");
 assert(home.includes("Pharmacy"), "Home must include the compliance-gated Pharmacy category.");
 assert(home.includes("Parcel Delivery"), "Home must keep Parcel Delivery service category.");
@@ -53,6 +55,7 @@ assert(home.includes("/catalogue/food"), "Food Delivery chip must navigate to fo
 assert(home.includes("/catalogue/groceries"), "Groceries chip must navigate to groceries catalogue.");
 assert(home.includes("/catalogue/market-items"), "Market Items chip must navigate to market-items catalogue.");
 assert(home.includes("/readiness/taxi"), "Taxi must route to a safe readiness screen.");
+assert(home.includes("/taxi/request"), "Taxi Test Mode route must only be available behind staging flags.");
 assert(home.includes("EXPO_PUBLIC_PHARMACY_MARKETPLACE_ENABLED"), "Pharmacy must remain readiness-gated by environment.");
 assert(home.includes("/readiness/pharmacy"), "Disabled pharmacy must route to a readiness screen.");
 assert(home.includes("/parcel?mode=errand"), "SME Errands chip must navigate to the errand flow.");
@@ -83,10 +86,20 @@ assert(readinessRoute.includes("Bills & Utilities is coming soon. KariGO is prep
 assert(readinessRoute.includes("Pharmacy is preparing launch"), "Pharmacy disabled state must have safe readiness copy.");
 const taxiApi = read("src", "api", "taxi.api.ts");
 assert(taxiApi.includes("taxi/waitlist"), "Customer taxi API must submit customer waitlist entries.");
+assert(taxiApi.includes("customer/taxi/fare-estimate"), "Customer taxi API must call authenticated staging fare-estimate endpoint.");
+assert(taxiApi.includes("customer/taxi/trips"), "Customer taxi API must call authenticated staging trip endpoints.");
 const taxiWaitlist = read("app", "taxi", "waitlist.tsx");
 assert(taxiWaitlist.includes("Join Taxi Waitlist"), "Customer taxi waitlist form must exist.");
 assert(taxiWaitlist.includes("verified drivers, vehicle checks, fare controls"), "Taxi waitlist form must explain readiness-only controls.");
 assert(taxiWaitlist.includes("taxiApi.joinWaitlist"), "Customer taxi waitlist must use the backend readiness endpoint.");
+const taxiRequest = read("app", "taxi", "request.tsx");
+assert(taxiRequest.includes("Request Test Taxi"), "Customer app must include the staging-only Request Test Taxi screen.");
+assert(taxiRequest.includes("Taxi is running in staging test mode. No real taxi ride or payment is guaranteed."), "Taxi request flow must show test-mode safety copy.");
+assert(taxiRequest.includes("EXPO_PUBLIC_TAXI_SERVICE_ENABLED") && taxiRequest.includes("EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED"), "Taxi request flow must be gated by both Taxi staging flags.");
+assert(taxiRequest.includes("taxiApi.fareEstimate"), "Taxi request flow must quote through the backend.");
+assert(taxiRequest.includes("taxiApi.createTrip"), "Taxi request flow must create trips through the backend.");
+assert(taxiRequest.includes("Join Taxi Waitlist") && taxiRequest.includes("/taxi/waitlist"), "Disabled Taxi request flow must route customers to the waitlist.");
+assert(!taxiRequest.includes("Pay Now"), "Taxi Test Mode must not show a payment action.");
 
 const catalogue = read("app", "catalogue", "[category].tsx");
 assert(catalogue.includes("Food delivery"), "Food catalogue heading must exist.");

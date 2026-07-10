@@ -286,6 +286,34 @@ enum TaxiVehicleOwnership {
   OTHER
 }
 
+enum TaxiDriverProfileStatus {
+  PENDING_ACTIVATION
+  ACTIVE_TEST
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum TaxiTripStatus {
+  REQUESTED
+  DRIVER_ASSIGNED
+  ACCEPTED
+  ARRIVED_PICKUP
+  STARTED
+  ARRIVED_DESTINATION
+  COMPLETED
+  CANCELLED_BY_CUSTOMER
+  CANCELLED_BY_DRIVER
+  CANCELLED_BY_ADMIN
+  EXPIRED
+}
+
+enum TaxiTripActorType {
+  CUSTOMER
+  DRIVER
+  ADMIN
+  SYSTEM
+}
+
 model User {
   id                       String                  @id @default(uuid()) @db.Uuid
   fullName                 String
@@ -318,6 +346,7 @@ model User {
   verifiedPayoutAccounts   VendorPayoutAccount[]   @relation("PayoutVerifiedBy")
   taxiDriverApplications   TaxiDriverApplication[] @relation("TaxiApplicant")
   reviewedTaxiApplications TaxiDriverApplication[] @relation("TaxiReviewedBy")
+  taxiDriverProfiles       TaxiDriverProfile[]
 
   @@map("users")
 }
@@ -366,6 +395,7 @@ model TaxiDriverApplication {
   updatedAt            DateTime              @updatedAt
   applicant            User?                 @relation("TaxiApplicant", fields: [applicantUserId], references: [id])
   reviewedByAdmin      User?                 @relation("TaxiReviewedBy", fields: [reviewedByAdminId], references: [id])
+  driverProfile        TaxiDriverProfile?
 
   @@index([status, createdAt])
   @@index([phoneNumber])
@@ -390,6 +420,94 @@ model TaxiWaitlistEntry {
   @@index([phoneNumber])
   @@index([city, state])
   @@map("taxi_waitlist_entries")
+}
+
+model TaxiDriverProfile {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  userId             String?                 @unique @db.Uuid
+  applicationId      String?                 @unique @db.Uuid
+  fullName           String
+  phoneNumber        String
+  city               String
+  state              String
+  vehicleMake        String?
+  vehicleModel       String?
+  vehicleYear        Int?
+  vehicleColour      String?
+  vehiclePlateNumber String?
+  vehicleType        TaxiVehicleType?
+  status             TaxiDriverProfileStatus @default(PENDING_ACTIVATION)
+  isAvailableForTaxi Boolean                 @default(false)
+  lastKnownLatitude  Decimal?                @db.Decimal(10, 7)
+  lastKnownLongitude Decimal?                @db.Decimal(10, 7)
+  lastSeenAt         DateTime?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  user               User?                   @relation(fields: [userId], references: [id])
+  application        TaxiDriverApplication?  @relation(fields: [applicationId], references: [id])
+  trips              TaxiTrip[]
+
+  @@index([status, isAvailableForTaxi])
+  @@index([city, state])
+  @@index([phoneNumber])
+  @@map("taxi_driver_profiles")
+}
+
+model TaxiTrip {
+  id                     String             @id @default(uuid()) @db.Uuid
+  tripReference          String             @unique
+  customerId             String             @db.Uuid
+  driverProfileId        String?            @db.Uuid
+  pickupAddress          String
+  pickupLatitude         Decimal?           @db.Decimal(10, 7)
+  pickupLongitude        Decimal?           @db.Decimal(10, 7)
+  destinationAddress     String
+  destinationLatitude    Decimal?           @db.Decimal(10, 7)
+  destinationLongitude   Decimal?           @db.Decimal(10, 7)
+  estimatedDistanceKm    Decimal?           @db.Decimal(8, 2)
+  estimatedDurationMin   Int?
+  estimatedFareKobo      Int
+  finalFareKobo          Int?
+  status                 TaxiTripStatus     @default(REQUESTED)
+  tripPinHash            String?
+  tripPinLastFour        String?
+  cancellationReason     String?
+  customerNote           String?
+  driverNote             String?
+  isTestMode             Boolean            @default(true)
+  requestedAt            DateTime           @default(now())
+  acceptedAt             DateTime?
+  arrivedAtPickupAt      DateTime?
+  startedAt              DateTime?
+  arrivedAtDestinationAt DateTime?
+  completedAt            DateTime?
+  cancelledAt            DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  customer               CustomerProfile    @relation(fields: [customerId], references: [id])
+  driverProfile          TaxiDriverProfile? @relation(fields: [driverProfileId], references: [id])
+  events                 TaxiTripEvent[]
+
+  @@index([customerId, createdAt])
+  @@index([driverProfileId, status])
+  @@index([status, createdAt])
+  @@map("taxi_trips")
+}
+
+model TaxiTripEvent {
+  id        String            @id @default(uuid()) @db.Uuid
+  tripId    String            @db.Uuid
+  actorType TaxiTripActorType
+  actorId   String?           @db.Uuid
+  eventType String
+  note      String?
+  metadata  Json?
+  createdAt DateTime          @default(now())
+  trip      TaxiTrip          @relation(fields: [tripId], references: [id])
+
+  @@index([tripId, createdAt])
+  @@index([actorType, createdAt])
+  @@map("taxi_trip_events")
 }
 
 model OtpVerification {
@@ -426,6 +544,7 @@ model CustomerProfile {
   supportTickets      SupportTicket[]
   promoCodeUsages     PromoCodeUsage[]
   utilityTransactions UtilityTransaction[]
+  taxiTrips           TaxiTrip[]
 
   @@map("customer_profiles")
 }
