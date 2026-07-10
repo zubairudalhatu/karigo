@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { ServiceCard } from "../../src/components/service-card";
 import { liveServices, preparingServices, services } from "../../src/lib/site";
 
@@ -17,7 +18,7 @@ export default function ServicesPage() {
       </section>
       <section className="section soft split">
         <article className="info-card"><h2>Live / Active</h2><ul className="list">{liveServices.map((service) => <li key={service}>{service}</li>)}</ul></article>
-        <article className="info-card"><h2>Preparing Launch</h2><ul className="list">{preparingServices.map((service) => <li key={service}>{service}</li>)}</ul></article>
+        <article className="info-card"><h2>Preparing Launch</h2><ul className="list">{preparingServices.map((service) => <li key={service}>{service}</li>)}</ul><p>Taxi is being prepared with verified driver onboarding, vehicle checks, fare controls and safety review.</p><Link className="button secondary" href="/riders#taxi-waitlist">Join Taxi Waitlist</Link></article>
       </section>
       <section className="section"><div className="service-grid">{services.map((service) => <ServiceCard key={service.title} service={service} />)}</div></section>
     </main>

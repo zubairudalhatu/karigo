@@ -1,12 +1,14 @@
 import { Feather } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { ReadinessScreen } from "../../src/components/readiness-screen";
 
-const readinessContent: Record<string, { title: string; message: string; icon: keyof typeof Feather.glyphMap }> = {
+const readinessContent: Record<string, { title: string; message: string; icon: keyof typeof Feather.glyphMap; secondaryCta?: string; onSecondaryPress?: () => void }> = {
   taxi: {
     title: "Taxi is coming soon",
-    message: "Taxi is coming soon. KariGO is preparing verified driver onboarding, fare controls, maps, safety checks and dispatch operations before launch.",
-    icon: "navigation"
+    message: "Taxi is coming soon. KariGO is preparing verified driver onboarding, vehicle checks, fare controls, maps, safety reviews and dispatch operations before launch.",
+    icon: "navigation",
+    secondaryCta: "Join Taxi Waitlist",
+    onSecondaryPress: () => router.push("/taxi/waitlist")
   },
   airtime: {
     title: "Airtime is coming soon",

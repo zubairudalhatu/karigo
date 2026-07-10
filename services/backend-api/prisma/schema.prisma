@@ -254,36 +254,70 @@ enum UtilityTransactionStatus {
   CANCELLED
 }
 
+enum TaxiApplicationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  CHANGES_REQUESTED
+  PROVISIONALLY_APPROVED
+  APPROVED
+  REJECTED
+}
+
+enum TaxiWaitlistStatus {
+  SUBMITTED
+  CONTACTED
+  INTERESTED
+  NOT_INTERESTED
+  CONVERTED
+}
+
+enum TaxiVehicleType {
+  SEDAN
+  SUV
+  MINI_BUS
+  TRICYCLE
+  OTHER
+}
+
+enum TaxiVehicleOwnership {
+  OWNER
+  LEASED
+  COMPANY_ASSIGNED
+  OTHER
+}
+
 model User {
-  id                     String                 @id @default(uuid()) @db.Uuid
-  fullName               String
-  phoneNumber            String                 @unique
-  email                  String?                @unique
-  passwordHash           String
-  role                   UserRole
-  adminRole              AdminRole?
-  accountStatus          AccountStatus          @default(PENDING)
-  phoneVerified          Boolean                @default(false)
-  emailVerified          Boolean                @default(false)
-  lastLoginAt            DateTime?
-  deletedAt              DateTime?
-  createdAt              DateTime               @default(now())
-  updatedAt              DateTime               @updatedAt
-  customerProfile        CustomerProfile?
-  vendor                 Vendor?
-  rider                  Rider?
-  addresses              Address[]
-  notifications          Notification[]
-  deviceTokens           DeviceToken[]
-  refreshTokens          RefreshToken[]
-  statusChanges          OrderStatusHistory[]   @relation("StatusChangedBy")
-  verifiedDocuments      RiderDocument[]        @relation("DocumentVerifiedBy")
-  assignedTickets        SupportTicket[]        @relation("TicketAssignedAdmin")
-  ticketMessages         SupportTicketMessage[]
-  adminAuditLogs         AdminAuditLog[]
-  createdPromoCodes      PromoCode[]            @relation("PromoCreatedBy")
-  otpVerifications       OtpVerification[]
-  verifiedPayoutAccounts VendorPayoutAccount[]  @relation("PayoutVerifiedBy")
+  id                       String                  @id @default(uuid()) @db.Uuid
+  fullName                 String
+  phoneNumber              String                  @unique
+  email                    String?                 @unique
+  passwordHash             String
+  role                     UserRole
+  adminRole                AdminRole?
+  accountStatus            AccountStatus           @default(PENDING)
+  phoneVerified            Boolean                 @default(false)
+  emailVerified            Boolean                 @default(false)
+  lastLoginAt              DateTime?
+  deletedAt                DateTime?
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+  customerProfile          CustomerProfile?
+  vendor                   Vendor?
+  rider                    Rider?
+  addresses                Address[]
+  notifications            Notification[]
+  deviceTokens             DeviceToken[]
+  refreshTokens            RefreshToken[]
+  statusChanges            OrderStatusHistory[]    @relation("StatusChangedBy")
+  verifiedDocuments        RiderDocument[]         @relation("DocumentVerifiedBy")
+  assignedTickets          SupportTicket[]         @relation("TicketAssignedAdmin")
+  ticketMessages           SupportTicketMessage[]
+  adminAuditLogs           AdminAuditLog[]
+  createdPromoCodes        PromoCode[]             @relation("PromoCreatedBy")
+  otpVerifications         OtpVerification[]
+  verifiedPayoutAccounts   VendorPayoutAccount[]   @relation("PayoutVerifiedBy")
+  taxiDriverApplications   TaxiDriverApplication[] @relation("TaxiApplicant")
+  reviewedTaxiApplications TaxiDriverApplication[] @relation("TaxiReviewedBy")
 
   @@map("users")
 }
@@ -301,6 +335,61 @@ model RefreshToken {
 
   @@index([userId, revokedAt, expiresAt])
   @@map("refresh_tokens")
+}
+
+model TaxiDriverApplication {
+  id                   String                @id @default(uuid()) @db.Uuid
+  applicationReference String                @unique
+  applicantUserId      String?               @db.Uuid
+  fullName             String
+  phoneNumber          String
+  email                String?
+  city                 String
+  state                String
+  address              String?
+  driverLicenceNumber  String?
+  driverLicenceExpiry  DateTime?
+  vehicleMake          String?
+  vehicleModel         String?
+  vehicleYear          Int?
+  vehicleColour        String?
+  vehiclePlateNumber   String?
+  vehicleType          TaxiVehicleType?
+  vehicleOwnership     TaxiVehicleOwnership?
+  notes                String?
+  status               TaxiApplicationStatus @default(SUBMITTED)
+  adminNote            String?
+  applicantVisibleNote String?
+  reviewedByAdminId    String?               @db.Uuid
+  reviewedAt           DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  applicant            User?                 @relation("TaxiApplicant", fields: [applicantUserId], references: [id])
+  reviewedByAdmin      User?                 @relation("TaxiReviewedBy", fields: [reviewedByAdminId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([phoneNumber])
+  @@index([city, state])
+  @@map("taxi_driver_applications")
+}
+
+model TaxiWaitlistEntry {
+  id          String             @id @default(uuid()) @db.Uuid
+  fullName    String
+  phoneNumber String
+  email       String?
+  city        String
+  state       String
+  pickupArea  String?
+  note        String?
+  status      TaxiWaitlistStatus @default(SUBMITTED)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([status, createdAt])
+  @@index([phoneNumber])
+  @@index([city, state])
+  @@map("taxi_waitlist_entries")
 }
 
 model OtpVerification {

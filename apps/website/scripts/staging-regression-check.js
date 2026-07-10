@@ -35,10 +35,20 @@ assert(!vendorForm.includes("Authorization"), "Public vendor application form mu
 const riders = read("app", "riders", "page.tsx");
 assert(riders.includes("Taxi Drivers - Preparing Launch"), "Riders page must include future taxi driver section.");
 assert(riders.includes("Vehicle and licence checks will be required"), "Taxi driver readiness checks must be stated.");
+assert(riders.includes("TaxiDriverApplicationForm"), "Riders page must include taxi driver application form.");
+assert(riders.includes("TaxiWaitlistForm"), "Riders page must include customer taxi waitlist form.");
+assert(riders.includes("Taxi is coming later and is not live for ride requests yet"), "Riders page must not present taxi as live.");
+
+const taxiForms = read("src", "components", "taxi-readiness-forms.tsx");
+assert(taxiForms.includes("taxi/waitlist"), "Website taxi waitlist form must post to taxi waitlist endpoint.");
+assert(taxiForms.includes("taxi/driver-applications"), "Website taxi driver form must post to driver application endpoint.");
+assert(taxiForms.includes("does not book a ride or activate live taxi dispatch"), "Website taxi waitlist must include readiness-only copy.");
+assert(taxiForms.includes("Approval is readiness-only"), "Website taxi driver application must include readiness-only approval copy.");
 
 const services = read("app", "services", "page.tsx");
 assert(services.includes("Live / Active"), "Services page must separate live services.");
 assert(services.includes("Preparing Launch"), "Services page must separate preparing-launch services.");
+assert(services.includes("Join Taxi Waitlist"), "Services page must link Taxi readiness to the waitlist.");
 
 const contact = read("app", "contact", "page.tsx");
 assert(contact.includes("This page does not send email automatically"), "Contact page must avoid unconfigured email sending.");

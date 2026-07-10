@@ -19,6 +19,8 @@ const authContext = read("src/contexts/auth-context.tsx");
 const dashboard = read("app/tabs/dashboard.tsx");
 const jobsIndex = read("app/jobs/index.tsx");
 const jobDetail = read("app/jobs/[id].tsx");
+const taxiReadiness = read("app/taxi-readiness.tsx");
+const taxiApi = read("src/api/taxi.api.ts");
 const ui = read("src/components/ui.tsx");
 
 const stagingProfile = easJson.build?.["rider-staging"];
@@ -47,17 +49,26 @@ expect(authContext.includes('role !== "RIDER"'), "Rider app must reject non-ride
 expect(rootLayout.includes("headerTitle: \"\""), "Native route titles must be hidden.");
 expect(rootLayout.includes("headerTintColor: brand.colors.charcoal"), "Back arrow should use KariGO charcoal styling.");
 expect(rootLayout.includes("jobs/[id]"), "Job detail route must keep a configured header/back area.");
+expect(rootLayout.includes("taxi-readiness"), "Taxi readiness route must be configured with back-only navigation.");
 expect(!rootLayout.includes("headerTintColor: brand.colors.primary"), "Rider headers should not use the older red default title styling.");
 
 expect(ui.includes("paddingTop: 48"), "Shared Rider screen spacing should preserve Android status-bar space.");
 expect(dashboard.includes("Go online") && dashboard.includes("Go offline"), "Dashboard must expose online/offline availability.");
 expect(dashboard.includes("Assigned jobs"), "Dashboard must show assigned jobs.");
+expect(dashboard.includes("Taxi Driver Readiness"), "Dashboard must include taxi readiness card.");
+expect(dashboard.includes("Apply for Taxi Readiness"), "Dashboard must link to taxi readiness application.");
 expect(jobsIndex.includes("No delivery jobs assigned yet. Stay online to receive jobs."), "Jobs list must have a rider-friendly empty state.");
 expect(jobDetail.includes("Accept job") && jobDetail.includes("Reject job"), "Job detail must support accept/reject actions.");
 expect(jobDetail.includes("RIDER_ARRIVING_PICKUP") && jobDetail.includes("PICKED_UP"), "Job detail must support pickup status progression.");
 expect(jobDetail.includes("ON_THE_WAY") && jobDetail.includes("ARRIVED_DESTINATION"), "Job detail must support delivery status progression.");
 expect(jobDetail.includes("Complete delivery") && jobDetail.includes("Delivery completed successfully."), "Job detail must support OTP completion.");
 expect(!jobsIndex.includes("deliveryOtp") && !jobDetail.includes("ordersApi.deliveryOtp"), "Rider app must not retrieve or display the customer delivery OTP.");
+expect(taxiReadiness.includes("Taxi is not live yet"), "Taxi readiness screen must not present taxi as live.");
+expect(taxiReadiness.includes("Apply for Taxi Readiness"), "Taxi readiness screen must include the driver application CTA.");
+expect(taxiReadiness.includes("taxiApi.submitDriverApplication"), "Taxi readiness screen must submit applications through the API client.");
+expect(taxiReadiness.includes("taxiApi.applicationStatus"), "Taxi readiness screen must check application status where available.");
+expect(taxiApi.includes("taxi/driver-applications"), "Rider taxi API must use public taxi driver application endpoint.");
+expect(!taxiReadiness.includes("Taxi Mode"), "Rider app must not expose live taxi mode switching.");
 
 if (failures.length) {
   console.error("Rider staging regression check failed:");

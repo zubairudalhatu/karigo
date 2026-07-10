@@ -41,6 +41,7 @@ img { max-width: 100%; }
 .nav-cta,.button { align-items: center; background: var(--red); border: 0; border-radius: 999px; color: white; cursor: pointer; display: inline-flex; font-weight: 900; justify-content: center; min-height: 46px; padding: 12px 18px; }
 .button.secondary { background: white; border: 1px solid var(--border); color: var(--charcoal); }
 .button.dark { background: var(--black); }
+.small-button { font-size: 13px; margin-top: 10px; min-height: 38px; padding: 9px 13px; }
 
 .section { padding: 72px clamp(18px, 5vw, 72px); }
 .section.soft { background: white; }

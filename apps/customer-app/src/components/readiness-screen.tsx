@@ -9,12 +9,16 @@ export function ReadinessScreen({
   title,
   message,
   icon = "clock",
-  cta = "Back to home"
+  cta = "Back to home",
+  secondaryCta,
+  onSecondaryPress
 }: {
   title: string;
   message: string;
   icon?: keyof typeof Feather.glyphMap;
   cta?: string;
+  secondaryCta?: string;
+  onSecondaryPress?: () => void;
 }) {
   return (
     <Protected>
@@ -26,6 +30,7 @@ export function ReadinessScreen({
           </View>
           <Text style={ui.heroTitle}>{title}</Text>
           <Text style={ui.pageIntro}>{message}</Text>
+          {secondaryCta ? <Button title={secondaryCta} onPress={onSecondaryPress} /> : null}
           <Button title={cta} onPress={() => router.replace("/tabs/home")} />
         </Card>
       </Screen>

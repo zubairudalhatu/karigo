@@ -69,13 +69,16 @@ export default function HomePage() {
           <p className="eyebrow">For Vendors</p>
           <h2>Grow your business with KariGO.</h2>
           <p>Restaurants, groceries, market sellers and approved service providers can apply to reach customers across Kano. KariGO reviews every application before onboarding.</p>
-          <Link className="button" href="/vendors/apply">Apply as a Vendor</Link>
-        </article>
+            <Link className="button" href="/vendors/apply">Apply as a Vendor</Link>
+          </article>
         <article className="info-card">
           <p className="eyebrow">For Riders & Drivers</p>
           <h2>Earn with KariGO.</h2>
           <p>Delivery riders are supported now. Taxi driver onboarding is being prepared with verification, safety and operational controls before launch.</p>
-          <Link className="button secondary" href="/riders">Join the Rider & Driver Waitlist</Link>
+          <div className="actions">
+            <Link className="button secondary" href="/riders">Rider & Driver Details</Link>
+            <Link className="button" href="/riders#taxi-waitlist">Join Taxi Waitlist</Link>
+          </div>
         </article>
       </section>
 

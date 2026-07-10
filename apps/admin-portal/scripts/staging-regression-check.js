@@ -23,6 +23,17 @@ assert(payoutApi.includes("accountNumber: string"), "Admin detail type must expl
 const shell = read("src", "components", "portal.tsx");
 assert(shell.includes("Payout Accounts"), "Admin sidebar must include payout accounts.");
 assert(shell.includes("Utilities"), "Admin sidebar must include Utilities.");
+assert(shell.includes("Taxi"), "Admin sidebar must include Taxi readiness.");
+
+const taxiPage = read("app", "taxi", "page.tsx");
+assert(taxiPage.includes("Driver Applications"), "Admin taxi page must show driver applications.");
+assert(taxiPage.includes("Customer Waitlist"), "Admin taxi page must show customer waitlist.");
+assert(taxiPage.includes("does not dispatch rides or manage fares"), "Admin taxi page must state readiness-only limits.");
+assert(taxiPage.includes("Taxi driver readiness review saved"), "Admin taxi page must support driver readiness review.");
+assert(!taxiPage.includes("Assign ride") && !taxiPage.includes("Dispatch taxi"), "Admin taxi page must not expose live taxi dispatch actions.");
+const taxiApi = read("src", "api", "taxi.api.ts");
+assert(taxiApi.includes("admin/taxi/driver-applications"), "Admin taxi API must call driver application endpoints.");
+assert(taxiApi.includes("admin/taxi/waitlist"), "Admin taxi API must call waitlist endpoints.");
 
 const utilitiesPage = read("app", "utilities", "page.tsx");
 assert(utilitiesPage.includes("Test-mode utility transaction monitoring"), "Admin utilities page must clearly state test mode.");

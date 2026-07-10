@@ -8,7 +8,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
-["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel", "vendor/apply", "vendor/application-status"]
+["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel", "vendor/apply", "vendor/application-status"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
 assert(layout.includes('<Stack.Screen name="utilities/index" options={headerless}'), "Utilities hub must hide native header.");
 ["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
@@ -74,10 +74,19 @@ assert(!home.includes("href=\"/addresses\""), "Home must not show the old dense 
 const readiness = read("src", "components", "readiness-screen.tsx");
 assert(readiness.includes("ReadinessScreen"), "Reusable readiness screen component must exist.");
 assert(readiness.includes("Back to home"), "Readiness screen must include a safe home CTA.");
+assert(readiness.includes("secondaryCta"), "Readiness screen must support a secondary CTA for safe waitlists.");
 const readinessRoute = read("app", "readiness", "[service].tsx");
 assert(readinessRoute.includes("Taxi is coming soon. KariGO is preparing verified driver onboarding"), "Taxi readiness message must be explicit.");
+assert(readinessRoute.includes("Join Taxi Waitlist"), "Taxi readiness route must expose the waitlist CTA.");
+assert(readinessRoute.includes("/taxi/waitlist"), "Taxi readiness route must navigate to the customer waitlist form.");
 assert(readinessRoute.includes("Bills & Utilities is coming soon. KariGO is preparing secure provider integrations"), "Bills readiness message must be explicit.");
 assert(readinessRoute.includes("Pharmacy is preparing launch"), "Pharmacy disabled state must have safe readiness copy.");
+const taxiApi = read("src", "api", "taxi.api.ts");
+assert(taxiApi.includes("taxi/waitlist"), "Customer taxi API must submit customer waitlist entries.");
+const taxiWaitlist = read("app", "taxi", "waitlist.tsx");
+assert(taxiWaitlist.includes("Join Taxi Waitlist"), "Customer taxi waitlist form must exist.");
+assert(taxiWaitlist.includes("verified drivers, vehicle checks, fare controls"), "Taxi waitlist form must explain readiness-only controls.");
+assert(taxiWaitlist.includes("taxiApi.joinWaitlist"), "Customer taxi waitlist must use the backend readiness endpoint.");
 
 const catalogue = read("app", "catalogue", "[category].tsx");
 assert(catalogue.includes("Food delivery"), "Food catalogue heading must exist.");

@@ -33,6 +33,7 @@ export default function RiderDashboard() {
       <Message error>{error}</Message>
       <Card>{profile ? <StatusBadge status={profile.availabilityStatus} /> : <Text style={ui.muted}>Loading status...</Text>}<Text style={ui.muted}>Approved riders can go online to receive assignments.</Text><Button title={profile?.availabilityStatus === "ONLINE" ? "Go offline" : "Go online"} disabled={!profile || profile.availabilityStatus === "BUSY"} onPress={toggle} /></Card>
       <Card><Text style={ui.title}>Assigned jobs</Text><Text style={styles.metric}>{jobs.length}</Text><NavLink href="/jobs" label="View delivery jobs" /></Card>
+      <Card><Text style={ui.title}>Taxi Driver Readiness</Text><Text style={ui.muted}>Taxi is not live yet. Apply for readiness review while KariGO prepares verified driver onboarding and vehicle checks.</Text><NavLink href="/taxi-readiness" label="Apply for Taxi Readiness" /></Card>
       <Card><Text style={ui.title}>Quick links</Text><NavLink href="/earnings" label="Earnings" /><NavLink href="/notifications" label={`Notifications (${unread} unread)`} /><NavLink href="/profile" label="Profile and location" /></Card>
     </Screen></Protected>
   );

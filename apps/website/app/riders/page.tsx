@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { site } from "../../src/lib/site";
+import { TaxiDriverApplicationForm, TaxiWaitlistForm } from "../../src/components/taxi-readiness-forms";
 
 export const metadata: Metadata = {
   title: "Riders & Drivers",
@@ -28,13 +28,17 @@ export default function RidersPage() {
         <article className="info-card">
           <h2>Taxi Drivers - Preparing Launch</h2>
           <ul className="list">
-            <li>Taxi is coming later</li>
-            <li>Driver verification will be required</li>
+            <li>Taxi is coming later and is not live for ride requests yet</li>
+            <li>Verified driver onboarding will be required</li>
             <li>Vehicle and licence checks will be required</li>
-            <li>Waitlist interest is handled through KariGO contact for now</li>
+            <li>Fare controls, safety review and dispatch rules must be approved before launch</li>
           </ul>
-          <a className="button secondary" href={`mailto:${site.email}`}>Join the Rider & Driver Waitlist</a>
+          <a className="button secondary" href="#taxi-driver-application">Apply for Taxi Readiness</a>
         </article>
+      </section>
+      <section className="section split">
+        <TaxiWaitlistForm />
+        <TaxiDriverApplicationForm />
       </section>
     </main>
   );

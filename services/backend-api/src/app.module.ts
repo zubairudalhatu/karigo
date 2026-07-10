@@ -16,6 +16,7 @@ import { MarketplaceDiscoveryModule } from "./modules/marketplace-discovery/mark
 import { PromoModule } from "./modules/promos/promo.module";
 import { RidersModule } from "./modules/riders/riders.module";
 import { SupportModule } from "./modules/support/support.module";
+import { TaxiModule } from "./modules/taxi/taxi.module";
 import { UsersModule } from "./modules/users/users.module";
 import { UtilitiesModule } from "./modules/utilities/utilities.module";
 import { VendorApplicationsModule } from "./modules/vendor-applications/vendor-applications.module";
@@ -56,6 +57,7 @@ import { AdminAuditModule } from "./common/services/admin-audit.module";
     VendorSettlementsModule,
     DispatchModule,
     SupportModule,
+    TaxiModule,
     AdminOperationsModule,
     DomainModule
   ]
