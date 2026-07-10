@@ -7,6 +7,7 @@ import { useState } from "react";
 const navLinks = [
   { label: "Services", href: "/services" },
   { label: "Vendors", href: "/vendors" },
+  { label: "Vendor Login", href: "https://vendor.karigo.com.ng" },
   { label: "Riders & Drivers", href: "/riders" },
   { label: "Download App", href: "/#download" },
   { label: "Contact", href: "/contact" }
@@ -34,7 +35,7 @@ export function SiteHeader() {
       </button>
       <nav className={`main-nav ${menuOpen ? "is-open" : ""}`} id="primary-navigation" aria-label="Primary navigation">
         {navLinks.map((link) => (
-          link.href.startsWith("/#")
+          link.href.startsWith("http") || link.href.startsWith("/#")
             ? <a key={link.href} href={link.href} onClick={closeMenu}>{link.label}</a>
             : <Link key={link.href} href={link.href} onClick={closeMenu}>{link.label}</Link>
         ))}

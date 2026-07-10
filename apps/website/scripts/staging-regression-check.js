@@ -25,6 +25,9 @@ const vendorApply = read("app", "vendors", "apply", "page.tsx");
 assert(vendorApply.includes("VendorApplicationForm"), "Vendor application page must render the form.");
 assert(vendorApply.includes("Approval is not automatic"), "Vendor application page must explain approval is not automatic.");
 
+const vendorPage = read("app", "vendors", "page.tsx");
+assert(vendorPage.includes("Vendor Login"), "Vendor page must include login access for onboarded vendors.");
+
 const vendorForm = read("src", "components", "vendor-application-form.tsx");
 assert(vendorForm.includes("/vendor-applications"), "Vendor application form must submit to public backend endpoint.");
 assert(vendorForm.includes("NEXT_PUBLIC_API_BASE_URL") || read("src", "lib", "site.ts").includes("NEXT_PUBLIC_API_BASE_URL"), "Website must use configured API base URL.");
@@ -55,15 +58,18 @@ assert(contact.includes("Public contact details are intentionally not displayed"
 
 const contactForm = read("src", "components", "contact-inquiry-form.tsx");
 assert(contactForm.includes("Submit Inquiry"), "Contact inquiry form must include a visible submit button.");
-assert(contactForm.includes("KariGO will open public inquiry submission soon"), "Contact inquiry form must avoid pretending to send without a connected workflow.");
+assert(contactForm.includes("Your inquiry has been received. KariGO will contact you with the next steps."), "Contact inquiry form must use public-facing success copy.");
+assert(!contactForm.includes("KariGO will open public inquiry submission soon"), "Contact inquiry form must not show internal readiness copy.");
 
 const header = read("src", "components", "site-header.tsx");
 assert(header.includes("menu-toggle"), "Website header must include mobile menu control.");
 assert(header.includes("Become a Vendor"), "Mobile navigation must include vendor application access.");
+assert(header.includes("Vendor Login"), "Website header must include vendor login access.");
+assert(header.includes("https://vendor.karigo.com.ng"), "Vendor login must point to branded vendor dashboard domain.");
 
 const footer = read("src", "components", "site-footer.tsx");
 assert(footer.includes("&copy; 2026 KariGO Express Limited"), "Footer must include legal copyright text.");
-["Privacy Policy", "Terms", "Vendor Application", "Contact"].forEach((link) => assert(footer.includes(link), `Footer must include ${link}.`));
+["Privacy Policy", "Terms", "Vendor Application", "Vendor Login", "Contact"].forEach((link) => assert(footer.includes(link), `Footer must include ${link}.`));
 assert(footer.includes("Google Play soon"), "Footer must include Android launch status.");
 assert(footer.includes("Official store links will appear here when available."), "Footer must avoid fake app-store links.");
 assert(!footer.includes("Email:"), "Footer must not expose email contact text.");

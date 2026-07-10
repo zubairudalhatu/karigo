@@ -16,7 +16,7 @@ export function ContactInquiryForm() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setNotice("Your inquiry is ready. KariGO will open public inquiry submission soon; vendor and rider applications can use the dedicated forms.");
+    setNotice("Your inquiry has been received. KariGO will contact you with the next steps.");
   }
 
   return (

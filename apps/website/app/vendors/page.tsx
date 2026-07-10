@@ -13,7 +13,10 @@ export default function VendorsPage() {
         <p className="eyebrow">Vendors</p>
         <h1>Reach more customers across Kano.</h1>
         <p className="lead">KariGO helps restaurants, grocery stores, market sellers and approved service providers receive digital orders, improve operations visibility and reach more customers.</p>
-        <div className="actions"><Link className="button" href="/vendors/apply">Apply as a Vendor</Link></div>
+        <div className="actions">
+          <Link className="button" href="/vendors/apply">Apply as a Vendor</Link>
+          <a className="button secondary" href="https://vendor.karigo.com.ng">Vendor Login</a>
+        </div>
       </section>
       <section className="section soft">
         <div className="card-grid">

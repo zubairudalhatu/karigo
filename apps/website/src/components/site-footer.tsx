@@ -21,6 +21,7 @@ export function SiteFooter() {
         <nav className="footer-links" aria-label="Get started links">
           <h2>Get started</h2>
           <Link href="/vendors/apply">Vendor Application</Link>
+          <a href="https://vendor.karigo.com.ng">Vendor Login</a>
           <Link href="/riders#taxi-waitlist">Taxi Waitlist</Link>
           <Link href="/riders#taxi-driver-application">Driver Readiness</Link>
           <a href="/#download">Download App</a>
