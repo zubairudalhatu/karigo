@@ -5,7 +5,7 @@ export function ServiceCard({ service }: { service: (typeof services)[number] })
   const taxi = service.title === "Taxi";
   return (
     <article className="service-card">
-      <span className="service-icon" aria-hidden="true">{service.icon}</span>
+      <span className="service-icon" aria-hidden="true"><span>{service.icon}</span></span>
       <div>
         <div className="card-title-row">
           <h3>{service.title}</h3>

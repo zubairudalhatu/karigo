@@ -19,8 +19,7 @@ const site = read("src", "lib", "site.ts");
   .forEach((service) => assert(site.includes(service), `Service list must include ${service}.`));
 assert(site.includes("Coming soon"), "Readiness service states must exist.");
 assert(site.includes("Preparing launch"), "Pharmacy preparing-launch state must exist.");
-assert(site.includes("meetup@karigo.com.ng"), "Contact email must be present.");
-assert(site.includes("+234 805 709 2686"), "Contact phone must be present.");
+["🍲", "🛒", "🚕", "📦"].forEach((icon) => assert(site.includes(icon), `Service icon ${icon} must be present.`));
 
 const vendorApply = read("app", "vendors", "apply", "page.tsx");
 assert(vendorApply.includes("VendorApplicationForm"), "Vendor application page must render the form.");
@@ -51,7 +50,22 @@ assert(services.includes("Preparing Launch"), "Services page must separate prepa
 assert(services.includes("Join Taxi Waitlist"), "Services page must link Taxi readiness to the waitlist.");
 
 const contact = read("app", "contact", "page.tsx");
-assert(contact.includes("This page does not send email automatically"), "Contact page must avoid unconfigured email sending.");
+assert(contact.includes("ContactInquiryForm"), "Contact page must render the inquiry form.");
+assert(contact.includes("Public contact details are intentionally not displayed"), "Contact page must avoid direct contact detail exposure.");
+
+const contactForm = read("src", "components", "contact-inquiry-form.tsx");
+assert(contactForm.includes("Submit Inquiry"), "Contact inquiry form must include a visible submit button.");
+assert(contactForm.includes("no message was sent from this staging form"), "Contact inquiry form must avoid pretending to send without an approved workflow.");
+
+const header = read("src", "components", "site-header.tsx");
+assert(header.includes("menu-toggle"), "Website header must include mobile menu control.");
+assert(header.includes("Become a Vendor"), "Mobile navigation must include vendor application access.");
+
+const footer = read("src", "components", "site-footer.tsx");
+assert(footer.includes("© 2026 KariGO Express Limited") || footer.includes("&copy; 2026 KariGO Express Limited"), "Footer must use the simplified legal text.");
+assert(!footer.includes("Email:"), "Footer must not expose email contact text.");
+assert(!footer.includes("Phone:"), "Footer must not expose phone contact text.");
+assert(!footer.includes("Location:"), "Footer must not expose location contact text.");
 
 const layout = read("app", "layout.tsx");
 assert(layout.includes("KariGO - Everything You Need, Delivered"), "Metadata title must be configured.");

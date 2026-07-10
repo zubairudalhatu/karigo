@@ -93,6 +93,16 @@ export default function HomePage() {
           <article className="info-card" id="download">
             <p className="eyebrow">Download App</p>
             <h2>Customer app rollout</h2>
+            <div className="store-badges" aria-label="Future app store availability">
+              <div className="store-badge" aria-disabled="true">
+                <span className="store-mark" aria-hidden="true">▶</span>
+                <span><small>Coming soon on</small><strong>Google Play</strong></span>
+              </div>
+              <div className="store-badge store-badge-muted" aria-disabled="true">
+                <span className="store-mark" aria-hidden="true">A</span>
+                <span><small>Planned for</small><strong>App Store</strong></span>
+              </div>
+            </div>
             <p><strong>Android:</strong> Coming soon on Google Play. Internal test app available only through approved staging distribution.</p>
             <p><strong>iOS:</strong> Coming later.</p>
             <p>No fake app-store links are published.</p>
