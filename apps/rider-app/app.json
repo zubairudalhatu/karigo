@@ -11,7 +11,10 @@
       "backgroundColor": "#FFFFFF"
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "344a78dc-69d9-4daa-9616-f100b67f0910"
+      }
     }
   }
 }
