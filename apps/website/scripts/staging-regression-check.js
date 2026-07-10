@@ -19,7 +19,7 @@ const site = read("src", "lib", "site.ts");
   .forEach((service) => assert(site.includes(service), `Service list must include ${service}.`));
 assert(site.includes("Coming soon"), "Coming-soon service states must exist.");
 assert(site.includes("Preparing launch"), "Pharmacy preparing-launch state must exist.");
-["🍲", "🛒", "🚕", "📦"].forEach((icon) => assert(site.includes(icon), `Service icon ${icon} must be present.`));
+["food", "groceries", "taxi", "parcel"].forEach((icon) => assert(site.includes(`icon: "${icon}"`), `Service icon key ${icon} must be present.`));
 
 const vendorApply = read("app", "vendors", "apply", "page.tsx");
 assert(vendorApply.includes("VendorApplicationForm"), "Vendor application page must render the form.");

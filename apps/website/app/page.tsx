@@ -95,7 +95,7 @@ export default function HomePage() {
             <h2>Customer app rollout</h2>
             <div className="store-badges" aria-label="Future app store availability">
               <div className="store-badge" aria-disabled="true">
-                <span className="store-mark" aria-hidden="true">▶</span>
+                <span className="store-mark" aria-hidden="true">GP</span>
                 <span><small>Coming soon on</small><strong>Google Play</strong></span>
               </div>
               <div className="store-badge store-badge-muted" aria-disabled="true">
