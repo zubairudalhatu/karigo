@@ -1,5 +1,7 @@
 # KariGO Internal Pilot Daily Monitoring Tracker - Task 64
 
+Note: This historical QA result copy is retained for traceability. The official pilot daily monitoring tracker now lives at `docs/pilot/karigo-pilot-daily-monitoring-tracker-task64.md`.
+
 Date: 10 July 2026
 Environment: Live staging
 

@@ -1,5 +1,7 @@
 # KariGO Internal Pilot Schedule - Task 64
 
+Note: This historical QA result copy is retained for traceability. The official pilot operations schedule now lives under `docs/pilot/`.
+
 Date: 10 July 2026
 Environment: Live staging
 

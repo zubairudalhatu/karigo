@@ -1,5 +1,7 @@
 # KariGO Internal Pilot Final Report Template - Task 64
 
+Note: This historical QA result copy is retained for traceability. The official pilot final report template now lives at `docs/pilot/karigo-pilot-final-report-template-task64.md`.
+
 Use this template after the controlled internal pilot. Do not include passwords, bearer tokens, raw delivery OTP values, provider credentials or sensitive screenshots.
 
 ## Pilot Details

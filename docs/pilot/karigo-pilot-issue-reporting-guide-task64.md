@@ -1,6 +1,4 @@
-# KariGO Internal Pilot Issue Reporting Workflow - Task 64
-
-Note: This historical QA result copy is retained for traceability. The official pilot issue reporting guide now lives at `docs/pilot/karigo-pilot-issue-reporting-guide-task64.md`.
+# KariGO Pilot Issue Reporting Guide - Task 64
 
 Date: 10 July 2026
 Environment: Live staging

@@ -1,5 +1,7 @@
 # KariGO Internal Pilot Support Escalation Guide - Task 64
 
+Note: This historical QA result copy is retained for traceability. The official pilot support escalation guide now lives at `docs/pilot/karigo-pilot-support-escalation-guide-task64.md`.
+
 Date: 10 July 2026
 Environment: Live staging
 

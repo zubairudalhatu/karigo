@@ -1,6 +1,4 @@
-# KariGO Internal Pilot Tester Onboarding Pack - Task 64
-
-Note: This historical QA result copy is retained for traceability. The official pilot operations copy now lives at `docs/pilot/karigo-pilot-tester-onboarding-pack-task64.md`.
+# KariGO Pilot Tester Onboarding Pack - Task 64
 
 Date: 10 July 2026
 Environment: Live staging
@@ -43,10 +41,10 @@ This onboarding pack prepares internal testers for the controlled KariGO pilot. 
 
 - Use only demo/staging accounts.
 - Do not invite public users.
-- Do not use real customer/vendor/rider private data.
+- Do not use real customer, vendor or rider private data.
 - Do not activate Taxi live booking, Pharmacy marketplace or live Bills & Utilities.
 - Do not activate live payment, SMS, email, WhatsApp or push providers.
-- Report issues immediately using the Task 64 issue workflow.
+- Report issues immediately using the pilot issue reporting guide.
 - Capture evidence with masked order, ticket, settlement and earning references only.
 
 ## Core Pilot Scenario
