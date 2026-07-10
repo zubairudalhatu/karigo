@@ -34,10 +34,10 @@ const categories: {
   },
   { label: "Parcel Delivery", icon: "package", href: "/parcel", serviceCategory: "PARCEL", tone: "#FFFBEB", state: "active" },
   { label: "SME Errand", icon: "briefcase", href: "/parcel?mode=errand", serviceCategory: "ERRAND", tone: "#F5F3FF", state: "active" },
-  { label: "Airtime", icon: "phone", href: "/readiness/airtime", tone: "#F3F4F6", state: "readiness", statusLabel: "Coming soon" },
-  { label: "Data", icon: "wifi", href: "/readiness/data", tone: "#F3F4F6", state: "readiness", statusLabel: "Coming soon" },
-  { label: "Electricity", icon: "zap", href: "/readiness/electricity", tone: "#F3F4F6", state: "readiness", statusLabel: "Coming soon" },
-  { label: "Cable TV", icon: "tv", href: "/readiness/cable-tv", tone: "#F3F4F6", state: "readiness", statusLabel: "Coming soon" }
+  { label: "Airtime", icon: "phone", href: "/utilities/airtime", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode" },
+  { label: "Data", icon: "wifi", href: "/utilities/data", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode" },
+  { label: "Electricity", icon: "zap", href: "/utilities/electricity", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode" },
+  { label: "Cable TV", icon: "tv", href: "/utilities/cable-tv", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode" }
 ];
 
 const utilityServices = categories.filter((category) => ["Airtime", "Data", "Electricity", "Cable TV"].includes(category.label));
@@ -121,19 +121,19 @@ export default function CustomerHome() {
       <View style={styles.utilitiesSection}>
         <View>
           <Text style={ui.sectionTitle}>Bills & Utilities</Text>
-          <Text style={ui.pageIntro}>Secure utility payments are being prepared for launch.</Text>
+          <Text style={ui.pageIntro}>Run safe test-mode utility transactions while live providers are still disabled.</Text>
         </View>
         <View style={styles.utilityGrid}>
           {utilityServices.map((service) => <Pressable
             key={service.label}
             accessibilityRole="button"
-            accessibilityLabel={`${service.label} coming soon`}
+            accessibilityLabel={`Open ${service.label} test mode`}
             onPress={() => router.push(service.href as never)}
             style={({ pressed }) => [styles.utilityTile, pressed && styles.categoryPressed]}
           >
             <Feather name={service.icon} size={19} color={brand.colors.primary} />
             <Text style={styles.utilityLabel}>{service.label}</Text>
-            <Text style={styles.serviceStatus}>Coming soon</Text>
+            <Text style={styles.serviceStatus}>Test mode</Text>
           </Pressable>)}
         </View>
       </View>

@@ -50,4 +50,5 @@ export * from "./payments";
 export * from "./promos";
 export * from "./riders";
 export * from "./support";
+export * from "./utilities";
 export * from "./vendors";

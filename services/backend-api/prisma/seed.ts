@@ -9,6 +9,7 @@ import {
   PrismaClient,
   RiderStatus,
   ServiceCategory,
+  UtilityServiceType,
   UserRole,
   VendorStatus
 } from "@prisma/client";
@@ -80,6 +81,110 @@ async function upsertProduct(vendorId: string, name: string, data: {
   }
 
   return product;
+}
+
+async function upsertUtilityProvider(type: UtilityServiceType, name: string, code: string, metadata?: Record<string, unknown>) {
+  return prisma.utilityProvider.upsert({
+    where: { code },
+    update: { type, name, isActive: true, metadata },
+    create: { type, name, code, isActive: true, metadata }
+  });
+}
+
+async function upsertUtilityProduct(providerId: string, type: UtilityServiceType, name: string, code: string, data: {
+  amountKobo?: number;
+  minAmountKobo?: number;
+  maxAmountKobo?: number;
+  metadata?: Record<string, unknown>;
+}) {
+  return prisma.utilityProduct.upsert({
+    where: { code },
+    update: {
+      providerId,
+      type,
+      name,
+      amountKobo: data.amountKobo,
+      minAmountKobo: data.minAmountKobo,
+      maxAmountKobo: data.maxAmountKobo,
+      metadata: data.metadata,
+      isActive: true
+    },
+    create: {
+      providerId,
+      type,
+      name,
+      code,
+      amountKobo: data.amountKobo,
+      minAmountKobo: data.minAmountKobo,
+      maxAmountKobo: data.maxAmountKobo,
+      metadata: data.metadata,
+      isActive: true
+    }
+  });
+}
+
+async function seedUtilityCatalogue() {
+  const airtimeProviders = [
+    ["MTN", "DEMO_MTN_AIRTIME_PROVIDER"],
+    ["Airtel", "DEMO_AIRTEL_AIRTIME_PROVIDER"],
+    ["Glo", "DEMO_GLO_AIRTIME_PROVIDER"],
+    ["9mobile", "DEMO_9MOBILE_AIRTIME_PROVIDER"]
+  ] as const;
+  for (const [name, code] of airtimeProviders) {
+    const provider = await upsertUtilityProvider(UtilityServiceType.AIRTIME, name, code, { demoOnly: true });
+    await upsertUtilityProduct(provider.id, UtilityServiceType.AIRTIME, `${name} Airtime Variable Amount`, code.replace("_PROVIDER", ""), {
+      minAmountKobo: 10000,
+      maxAmountKobo: 10000000,
+      metadata: { demoOnly: true, variableAmount: true }
+    });
+  }
+
+  const dataProviders = [
+    ["MTN Data", "DEMO_MTN_DATA_PROVIDER", "MTN 1GB Data Demo Plan", "DEMO_MTN_1GB", 50000],
+    ["Airtel Data", "DEMO_AIRTEL_DATA_PROVIDER", "Airtel 2GB Data Demo Plan", "DEMO_AIRTEL_2GB", 100000],
+    ["Glo Data", "DEMO_GLO_DATA_PROVIDER", "Glo 1.5GB Data Demo Plan", "DEMO_GLO_15GB", 75000],
+    ["9mobile Data", "DEMO_9MOBILE_DATA_PROVIDER", "9mobile 1GB Data Demo Plan", "DEMO_9MOBILE_1GB", 50000]
+  ] as const;
+  for (const [providerName, providerCode, productName, productCode, amountKobo] of dataProviders) {
+    const provider = await upsertUtilityProvider(UtilityServiceType.DATA, providerName, providerCode, { demoOnly: true });
+    await upsertUtilityProduct(provider.id, UtilityServiceType.DATA, productName, productCode, {
+      amountKobo,
+      minAmountKobo: amountKobo,
+      maxAmountKobo: amountKobo,
+      metadata: { demoOnly: true }
+    });
+  }
+
+  const electricityProviders = [
+    ["Kano Electricity Distribution Company", "DEMO_KEDCO_PROVIDER", "KEDCO Electricity Demo", "DEMO_KEDCO_PREPAID"],
+    ["Abuja Electricity Distribution Company", "DEMO_AEDC_PROVIDER", "AEDC Electricity Demo", "DEMO_AEDC_PREPAID"],
+    ["Kaduna Electric", "DEMO_KADUNA_ELECTRIC_PROVIDER", "Kaduna Electric Demo", "DEMO_KADUNA_PREPAID"],
+    ["Eko Electricity Distribution Company", "DEMO_EKEDC_PROVIDER", "Eko Electricity Demo", "DEMO_EKEDC_PREPAID"],
+    ["Ikeja Electric", "DEMO_IKEDC_PROVIDER", "Ikeja Electric Demo", "DEMO_IKEDC_PREPAID"]
+  ] as const;
+  for (const [providerName, providerCode, productName, productCode] of electricityProviders) {
+    const provider = await upsertUtilityProvider(UtilityServiceType.ELECTRICITY, providerName, providerCode, { demoOnly: true });
+    await upsertUtilityProduct(provider.id, UtilityServiceType.ELECTRICITY, productName, productCode, {
+      minAmountKobo: 50000,
+      maxAmountKobo: 50000000,
+      metadata: { demoOnly: true, variableAmount: true }
+    });
+  }
+
+  const cableProviders = [
+    ["DSTV", "DEMO_DSTV_PROVIDER", "DSTV Compact Demo", "DEMO_DSTV_COMPACT", 1200000],
+    ["GOtv", "DEMO_GOTV_PROVIDER", "GOtv Jolli Demo", "DEMO_GOTV_JOLLI", 485000],
+    ["Startimes", "DEMO_STARTIMES_PROVIDER", "Startimes Basic Demo", "DEMO_STARTIMES_BASIC", 250000]
+  ] as const;
+  for (const [providerName, providerCode, productName, productCode, amountKobo] of cableProviders) {
+    const provider = await upsertUtilityProvider(UtilityServiceType.CABLE_TV, providerName, providerCode, { demoOnly: true });
+    await upsertUtilityProduct(provider.id, UtilityServiceType.CABLE_TV, productName, productCode, {
+      amountKobo,
+      minAmountKobo: amountKobo,
+      maxAmountKobo: amountKobo,
+      metadata: { demoOnly: true }
+    });
+  }
 }
 
 async function main() {
@@ -564,7 +669,10 @@ async function main() {
     }
   });
 
+  await seedUtilityCatalogue();
+
   stagingSeedMessages(resetDemoCredentials).forEach((message) => console.info(message));
+  console.info("Demo Bills & Utilities catalogue ensured");
 }
 
 main()

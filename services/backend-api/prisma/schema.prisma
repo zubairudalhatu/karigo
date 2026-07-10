@@ -238,6 +238,22 @@ enum AppSurface {
   ADMIN_PORTAL
 }
 
+enum UtilityServiceType {
+  AIRTIME
+  DATA
+  ELECTRICITY
+  CABLE_TV
+}
+
+enum UtilityTransactionStatus {
+  DRAFT
+  PENDING
+  PROCESSING
+  SUCCESSFUL
+  FAILED
+  CANCELLED
+}
+
 model User {
   id                     String                 @id @default(uuid()) @db.Uuid
   fullName               String
@@ -304,24 +320,93 @@ model OtpVerification {
 }
 
 model CustomerProfile {
-  id              String            @id @default(uuid()) @db.Uuid
-  userId          String            @unique @db.Uuid
-  referralCode    String            @unique
-  referredBy      String?           @db.Uuid
-  loyaltyBalance  Decimal           @default(0) @db.Decimal(12, 2)
-  totalOrders     Int               @default(0)
-  averageRating   Decimal?          @db.Decimal(3, 2)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  user            User              @relation(fields: [userId], references: [id])
-  referrer        CustomerProfile?  @relation("CustomerReferrals", fields: [referredBy], references: [id])
-  referrals       CustomerProfile[] @relation("CustomerReferrals")
-  orders          Order[]
-  payments        Payment[]
-  supportTickets  SupportTicket[]
-  promoCodeUsages PromoCodeUsage[]
+  id                  String               @id @default(uuid()) @db.Uuid
+  userId              String               @unique @db.Uuid
+  referralCode        String               @unique
+  referredBy          String?              @db.Uuid
+  loyaltyBalance      Decimal              @default(0) @db.Decimal(12, 2)
+  totalOrders         Int                  @default(0)
+  averageRating       Decimal?             @db.Decimal(3, 2)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  user                User                 @relation(fields: [userId], references: [id])
+  referrer            CustomerProfile?     @relation("CustomerReferrals", fields: [referredBy], references: [id])
+  referrals           CustomerProfile[]    @relation("CustomerReferrals")
+  orders              Order[]
+  payments            Payment[]
+  supportTickets      SupportTicket[]
+  promoCodeUsages     PromoCodeUsage[]
+  utilityTransactions UtilityTransaction[]
 
   @@map("customer_profiles")
+}
+
+model UtilityProvider {
+  id           String               @id @default(uuid()) @db.Uuid
+  type         UtilityServiceType
+  name         String
+  code         String               @unique
+  isActive     Boolean              @default(true)
+  metadata     Json?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  products     UtilityProduct[]
+  transactions UtilityTransaction[]
+
+  @@index([type, isActive])
+  @@map("utility_providers")
+}
+
+model UtilityProduct {
+  id            String               @id @default(uuid()) @db.Uuid
+  providerId    String               @db.Uuid
+  type          UtilityServiceType
+  name          String
+  code          String               @unique
+  amountKobo    Int?
+  minAmountKobo Int?
+  maxAmountKobo Int?
+  isActive      Boolean              @default(true)
+  metadata      Json?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  provider      UtilityProvider      @relation(fields: [providerId], references: [id])
+  transactions  UtilityTransaction[]
+
+  @@index([providerId, type, isActive])
+  @@map("utility_products")
+}
+
+model UtilityTransaction {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  reference          String                   @unique
+  customerId         String                   @db.Uuid
+  serviceType        UtilityServiceType
+  providerId         String                   @db.Uuid
+  productId          String?                  @db.Uuid
+  amountKobo         Int
+  convenienceFeeKobo Int                      @default(0)
+  totalKobo          Int
+  recipient          String
+  recipientName      String?
+  status             UtilityTransactionStatus @default(PENDING)
+  providerStatus     String?
+  providerReference  String?
+  mockToken          String?
+  customerNote       String?
+  failureReason      String?
+  metadata           Json?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  completedAt        DateTime?
+  customer           CustomerProfile          @relation(fields: [customerId], references: [id])
+  provider           UtilityProvider          @relation(fields: [providerId], references: [id])
+  product            UtilityProduct?          @relation(fields: [productId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@index([serviceType, status, createdAt])
+  @@index([providerId, createdAt])
+  @@map("utility_transactions")
 }
 
 model Address {

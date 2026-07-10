@@ -17,6 +17,7 @@ import { PromoModule } from "./modules/promos/promo.module";
 import { RidersModule } from "./modules/riders/riders.module";
 import { SupportModule } from "./modules/support/support.module";
 import { UsersModule } from "./modules/users/users.module";
+import { UtilitiesModule } from "./modules/utilities/utilities.module";
 import { VendorApplicationsModule } from "./modules/vendor-applications/vendor-applications.module";
 import { VendorPayoutAccountsModule } from "./modules/vendor-payout-accounts/vendor-payout-accounts.module";
 import { VendorsModule } from "./modules/vendors/vendors.module";
@@ -37,6 +38,7 @@ import { AdminAuditModule } from "./common/services/admin-audit.module";
     SecurityModule,
     HealthModule,
     UsersModule,
+    UtilitiesModule,
     VendorApplicationsModule,
     VendorPayoutAccountsModule,
     AuthModule,

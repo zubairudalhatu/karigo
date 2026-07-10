@@ -8,8 +8,9 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
-["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel", "vendor/apply", "vendor/application-status"]
+["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel", "vendor/apply", "vendor/application-status"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
+assert(layout.includes('<Stack.Screen name="utilities/index" options={headerless}'), "Utilities hub must hide native header.");
 ["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
   .forEach((title) => assert(!layout.includes(`title: "${title}"`), `Native header title must be hidden: ${title}`));
 assert(layout.includes("headerTitle: \"\""), "Back-only header must hide native title text.");
@@ -57,10 +58,11 @@ assert(home.includes("/readiness/pharmacy"), "Disabled pharmacy must route to a 
 assert(home.includes("/parcel?mode=errand"), "SME Errands chip must navigate to the errand flow.");
 assert(home.includes("Bills & Utilities"), "Home must include a Bills & Utilities readiness section.");
 assert(home.includes("utilityServices"), "Bills & Utilities section must use safe utility readiness tiles.");
-assert(home.includes("/readiness/airtime"), "Airtime must route to a safe readiness screen.");
-assert(home.includes("/readiness/data"), "Data must route to a safe readiness screen.");
-assert(home.includes("/readiness/electricity"), "Electricity must route to a safe readiness screen.");
-assert(home.includes("/readiness/cable-tv"), "Cable TV must route to a safe readiness screen.");
+assert(home.includes("/utilities/airtime"), "Airtime must route to the safe utility test flow.");
+assert(home.includes("/utilities/data"), "Data must route to the safe utility test flow.");
+assert(home.includes("/utilities/electricity"), "Electricity must route to the safe utility test flow.");
+assert(home.includes("/utilities/cable-tv"), "Cable TV must route to the safe utility test flow.");
+assert(home.includes("Run safe test-mode utility transactions"), "Bills & Utilities section must state test-mode availability.");
 assert(home.includes("useWindowDimensions"), "Service grid must adapt between compact two and three column layouts.");
 assert(home.includes("Today's featured for you"), "Home must show vendor/campaign featured content.");
 assert(home.includes("Ad"), "Home must expose a clearly labelled internal ad placement.");
@@ -111,7 +113,26 @@ assert(bottomNav.includes("pathname.startsWith(\"/auth\")"), "Bottom navigation 
 const profile = read("app", "profile.tsx");
 assert(profile.includes("Saved addresses"), "Addresses must be accessible from Profile.");
 assert(profile.includes("Support centre"), "Support must be accessible from Profile.");
+assert(profile.includes("Utility test history"), "Utility history must be accessible from Profile.");
 assert(profile.includes("Become a KariGO Vendor"), "Profile must link to public vendor application flow.");
+
+const utilitiesApi = read("src", "api", "utilities.api.ts");
+assert(utilitiesApi.includes("utilities/providers"), "Customer utilities API must load public providers.");
+assert(utilitiesApi.includes("customer/utilities/quote"), "Customer utilities API must quote test transactions.");
+assert(utilitiesApi.includes("customer/utilities/transactions"), "Customer utilities API must create and list utility transactions.");
+const utilitiesHome = read("app", "utilities", "index.tsx");
+assert(utilitiesHome.includes("Bills & Utilities is currently in test mode"), "Utilities hub must show safety copy.");
+assert(utilitiesHome.includes("Airtime") && utilitiesHome.includes("Data") && utilitiesHome.includes("Electricity") && utilitiesHome.includes("Cable TV"), "Utilities hub must show all four services.");
+assert(utilitiesHome.includes("/utilities/history"), "Utilities hub must link to history.");
+const utilityFlow = read("app", "utilities", "[service].tsx");
+assert(utilityFlow.includes("Run Test Transaction"), "Utility confirm button must say Run Test Transaction.");
+assert(!utilityFlow.includes("Pay Now"), "Utility flow must not use Pay Now wording.");
+assert(utilityFlow.includes("No real airtime, data, electricity token or cable subscription will be delivered."), "Utility flow must include test-mode safety copy.");
+assert(utilityFlow.includes("utilitiesApi.quote"), "Utility flow must quote through backend.");
+assert(utilityFlow.includes("utilitiesApi.create"), "Utility flow must create through backend mock transaction endpoint.");
+const utilityReceipt = read("app", "utilities", "transactions", "[id].tsx");
+assert(utilityReceipt.includes("Test transaction receipt"), "Utility receipt detail must be explicit.");
+assert(utilityReceipt.includes("No real airtime, data, electricity token or cable subscription was delivered."), "Utility receipt must keep test-mode safety copy.");
 
 const checkout = read("app", "checkout.tsx");
 assert(checkout.includes("Delivery fee:"), "Checkout must show delivery fee.");

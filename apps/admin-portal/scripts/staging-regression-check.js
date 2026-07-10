@@ -22,5 +22,16 @@ assert(payoutApi.includes("accountNumber: string"), "Admin detail type must expl
 
 const shell = read("src", "components", "portal.tsx");
 assert(shell.includes("Payout Accounts"), "Admin sidebar must include payout accounts.");
+assert(shell.includes("Utilities"), "Admin sidebar must include Utilities.");
+
+const utilitiesPage = read("app", "utilities", "page.tsx");
+assert(utilitiesPage.includes("Test-mode utility transaction monitoring"), "Admin utilities page must clearly state test mode.");
+assert(utilitiesPage.includes("Total transactions"), "Admin utilities page must show summary cards.");
+assert(utilitiesPage.includes("Reference") && utilitiesPage.includes("Provider") && utilitiesPage.includes("Status"), "Admin utilities table must show core columns.");
+assert(utilitiesPage.includes("Update this mock utility transaction status?"), "Admin utility status override must require confirmation.");
+assert(!utilitiesPage.includes("Fulfil") && !utilitiesPage.includes("Send token"), "Admin utilities page must not expose live fulfilment actions.");
+const utilitiesApi = read("src", "api", "utilities.api.ts");
+assert(utilitiesApi.includes("admin/utilities/summary"), "Admin utilities API must load summary.");
+assert(utilitiesApi.includes("admin/utilities/transactions"), "Admin utilities API must load transactions.");
 
 console.log("Admin portal staging regression checks passed.");
