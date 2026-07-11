@@ -174,6 +174,12 @@ input:focus,select:focus,textarea:focus { border-color: var(--red); box-shadow: 
 .footer-logo { background: white; border-radius: 18px; display: block; height: 82px; margin-bottom: 12px; object-fit: contain; padding: 6px; width: 82px; }
 .site-footer h2 { color: white; font-size: 13px; letter-spacing: .08em; margin-bottom: 12px; text-transform: uppercase; }
 .site-footer p { color: #d1d5db; font-size: 14px; line-height: 1.55; margin-bottom: 8px; }
+.footer-social { display: grid; gap: 10px; margin-top: 16px; }
+.footer-social p { margin: 0; }
+.footer-social strong { color: white; }
+.social-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.social-links a { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); border-radius: 999px; color: #f9fafb; font-size: 13px; font-weight: 900; padding: 8px 11px; }
+.social-links a:hover { background: rgba(225,29,46,.28); border-color: rgba(254,202,202,.42); color: white; }
 .footer-links { align-content: start; display: grid; gap: 8px; }
 .footer-links a { color: #f3f4f6; font-size: 14px; font-weight: 800; }
 .footer-links a:hover { color: #fecaca; }

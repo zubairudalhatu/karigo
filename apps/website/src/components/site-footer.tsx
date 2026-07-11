@@ -1,6 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
 
+const socialLinks = [
+  { label: "Instagram", href: "https://www.instagram.com/karigoapp" },
+  { label: "X", href: "https://x.com/karigoapp" },
+  { label: "TikTok", href: "https://www.tiktok.com/@karigoapp" },
+  { label: "Facebook", href: "https://www.facebook.com/karigoapp" }
+];
+
 export function SiteFooter() {
   return (
     <footer className="site-footer">
@@ -8,6 +15,16 @@ export function SiteFooter() {
         <section className="footer-brand" aria-label="KariGO footer summary">
           <Image className="footer-logo" src="/karigo-logo.png" alt="KariGO" width={144} height={144} />
           <p>Delivering Nigeria. Connecting You.</p>
+          <div className="footer-social" aria-label="KariGO social media links">
+            <p>Follow <strong>@karigoapp</strong></p>
+            <div className="social-links">
+              {socialLinks.map((link) => (
+                <a key={link.href} href={link.href} rel="noopener noreferrer" target="_blank">
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          </div>
         </section>
 
         <nav className="footer-links" aria-label="Platform links">
