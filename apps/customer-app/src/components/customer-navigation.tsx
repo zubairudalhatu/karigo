@@ -8,7 +8,7 @@ import { useCart } from "../contexts/cart-context";
 
 const navItems = [
   { label: "Home", icon: "home", href: "/tabs/home", match: ["/tabs/home"] },
-  { label: "Browse", icon: "compass", href: "/catalogue/food", match: ["/catalogue", "/vendors", "/products", "/parcel"] },
+  { label: "Browse", icon: "compass", href: "/catalogue/food", match: ["/catalogue", "/vendors", "/products", "/parcel", "/sme-services"] },
   { label: "Cart", icon: "shopping-bag", href: "/cart", match: ["/cart", "/checkout"] },
   { label: "Orders", icon: "clipboard", href: "/orders", match: ["/orders"] },
   { label: "Profile", icon: "user", href: "/profile", match: ["/profile", "/addresses", "/support", "/notifications"] }

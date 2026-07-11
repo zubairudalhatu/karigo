@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
+import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Address, addressesApi } from "../src/api/addresses.api";
@@ -42,6 +43,7 @@ export default function SmeServices() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [createdRequestId, setCreatedRequestId] = useState("");
 
   useEffect(() => {
     Promise.all([
@@ -68,6 +70,7 @@ export default function SmeServices() {
     setSubmitting(true);
     setError("");
     setSuccess("");
+    setCreatedRequestId("");
     try {
       const request = await serviceProviderRequestsApi.create({
         serviceType: selectedType,
@@ -78,6 +81,7 @@ export default function SmeServices() {
         preferredTimeWindow: form.preferredTimeWindow || undefined,
         customerNote: form.customerNote || undefined
       });
+      setCreatedRequestId(request.id);
       setSuccess(`Service request ${request.requestNumber} has been submitted. KariGO will review it and contact you with the next steps.`);
       setForm((current) => ({ ...current, description: "", preferredDate: "", preferredTimeWindow: "", customerNote: "" }));
     } catch (e) {
@@ -89,6 +93,11 @@ export default function SmeServices() {
 
   return <Protected><Screen title="SME Services">
     <Text style={ui.pageIntro}>Request approved skilled service providers for homes, shops and businesses. Parcel Delivery remains for sending packages only.</Text>
+    <Card>
+      <Text style={ui.cardTitle}>Track your requests</Text>
+      <Text style={ui.muted}>View submitted SME Services requests, review status updates and safe next-step guidance.</Text>
+      <Button title="View my SME Services requests" tone="muted" onPress={() => router.push("/sme-services/requests")} />
+    </Card>
     <Card>
       <Text style={ui.cardTitle}>Choose a service provider</Text>
       <Text style={ui.muted}>Painter, plumber, mechanic, electrician, cleaner, carpenter, AC technician, generator repair technician and other approved providers can be requested in staging.</Text>
@@ -133,6 +142,7 @@ export default function SmeServices() {
 
     <Message error>{error}</Message>
     <Message>{success}</Message>
+    {createdRequestId ? <Button title="View submitted request status" tone="muted" onPress={() => router.push(`/sme-services/requests/${createdRequestId}`)} /> : null}
     <Button title={submitting ? "Submitting request..." : "Submit SME Services request"} onPress={submit} disabled={!canSubmit} />
   </Screen></Protected>;
 }

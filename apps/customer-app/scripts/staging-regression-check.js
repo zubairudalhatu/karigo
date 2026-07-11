@@ -8,7 +8,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
-["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel", "sme-services", "vendor/apply", "vendor/application-status"]
+["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel", "sme-services", "sme-services/requests/index", "sme-services/requests/[id]", "vendor/apply", "vendor/application-status"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
 assert(layout.includes('<Stack.Screen name="utilities/index" options={headerless}'), "Utilities hub must hide native header.");
 ["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
@@ -112,11 +112,28 @@ const smeServices = read("app", "sme-services.tsx");
 assert(smeServices.includes("SME Services"), "Customer app must include the SME Services request screen.");
 assert(smeServices.includes("serviceProviderRequestsApi.catalogue"), "SME Services screen must load provider categories from the backend.");
 assert(smeServices.includes("serviceProviderRequestsApi.create"), "SME Services screen must submit requests through the backend.");
+assert(smeServices.includes("View my SME Services requests"), "SME Services screen must link to request history.");
+assert(smeServices.includes("View submitted request status"), "SME Services screen must link to the submitted request detail.");
 assert(smeServices.includes("Doctor / health professional booking is readiness-only"), "Health professional category must remain readiness-only.");
 assert(smeServices.includes("Parcel Delivery remains for sending packages only."), "SME Services copy must differentiate from Parcel Delivery.");
 const serviceProviderApi = read("src", "api", "service-provider-requests.api.ts");
 assert(serviceProviderApi.includes("service-provider-requests/catalogue"), "Customer app must call the SME Services catalogue endpoint.");
 assert(serviceProviderApi.includes("service-provider-requests"), "Customer app must call the SME Services request endpoint.");
+assert(serviceProviderApi.includes("service-provider-requests/my-requests"), "Customer app must call the SME Services request history endpoint.");
+assert(serviceProviderApi.includes("service-provider-requests/${id}"), "Customer app must call the owned SME Services request detail endpoint.");
+assert(!serviceProviderApi.includes("assignedProvider"), "Customer SME Services API type must not expose provider private contact details.");
+const smeRequestHistory = read("app", "sme-services", "requests", "index.tsx");
+assert(smeRequestHistory.includes("serviceProviderRequestsApi.mine"), "SME Services request history must load customer-owned requests.");
+assert(smeRequestHistory.includes("useFocusEffect"), "SME Services request history must refresh on focus.");
+assert(smeRequestHistory.includes("onRefresh={load}"), "SME Services request history must support pull-to-refresh.");
+assert(smeRequestHistory.includes("Provider private phone and email details are not shown"), "SME Services request history must state private provider contact is hidden.");
+assert(smeRequestHistory.includes("/sme-services/requests/${request.id}"), "SME Services request history must link to request detail.");
+const smeRequestDetail = read("app", "sme-services", "requests", "[id].tsx");
+assert(smeRequestDetail.includes("serviceProviderRequestsApi.detail"), "SME Services request detail must load an owned request.");
+["Submitted", "Under Review", "Provider Matching", "Provider Assigned", "Completed", "Cancelled"].forEach((status) => assert(smeRequestDetail.includes(status), `SME Services detail must show ${status} status copy.`));
+assert(smeRequestDetail.includes("private provider contact details remain protected"), "SME Services detail must not expose private provider contact.");
+assert(smeRequestDetail.includes("No live dispatch, service payment, provider payout or provider login"), "SME Services detail must state safe review-only limits.");
+assert(!smeRequestDetail.includes("provider.phoneNumber") && !smeRequestDetail.includes("provider.email"), "SME Services detail must not render provider private phone/email.");
 
 const catalogue = read("app", "catalogue", "[category].tsx");
 assert(catalogue.includes("Food delivery"), "Food catalogue heading must exist.");
@@ -148,10 +165,12 @@ assert(bottomNav.includes("@expo/vector-icons"), "Bottom navigation must use rea
 assert(bottomNav.includes("cart.count > 0"), "Bottom navigation must show a numeric cart badge.");
 assert(bottomNav.includes("View cart"), "Cart snackbar must include a View cart action.");
 assert(bottomNav.includes("pathname.startsWith(\"/auth\")"), "Bottom navigation must stay hidden across auth screens.");
+assert(bottomNav.includes("\"/sme-services\""), "Bottom navigation Browse tab must stay active for SME Services screens.");
 
 const profile = read("app", "profile.tsx");
 assert(profile.includes("Saved addresses"), "Addresses must be accessible from Profile.");
 assert(profile.includes("Support centre"), "Support must be accessible from Profile.");
+assert(profile.includes("SME Services requests"), "SME Services request history must be accessible from Profile.");
 assert(profile.includes("Utility test history"), "Utility history must be accessible from Profile.");
 assert(profile.includes("Become a KariGO Vendor"), "Profile must link to public vendor application flow.");
 

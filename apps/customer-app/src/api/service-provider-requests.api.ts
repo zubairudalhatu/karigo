@@ -31,6 +31,14 @@ export interface ServiceProviderRequestInput {
   customerNote?: string;
 }
 
+export type ServiceProviderRequestStatus =
+  | "SUBMITTED"
+  | "UNDER_REVIEW"
+  | "PROVIDER_MATCHING"
+  | "PROVIDER_ASSIGNED"
+  | "COMPLETED"
+  | "CANCELLED";
+
 export interface ServiceProviderRequest {
   id: string;
   requestNumber: string;
@@ -41,7 +49,7 @@ export interface ServiceProviderRequest {
   preferredDate?: string | null;
   preferredTimeWindow?: string | null;
   customerNote?: string | null;
-  status: string;
+  status: ServiceProviderRequestStatus;
   readinessOnly: boolean;
   serviceAddress: Pick<Address, "id" | "label" | "addressLine" | "city" | "state" | "country">;
   createdAt: string;

@@ -22,7 +22,7 @@ export default function Profile() {
         <Field value={profile.email ?? ""} placeholder="Email" onChangeText={(email) => setProfile({ ...profile, email })} keyboardType="email-address" autoCapitalize="none" />
         <Text style={ui.muted}>{profile.phoneNumber}</Text>
         <Button title="Save profile" onPress={async () => { try { setProfile(await customerApi.update({ fullName: profile.fullName, email: profile.email || undefined })); } catch (e) { setError(friendlyError(e)); } }} />
-        <Card><Text style={ui.cardTitle}>Account actions</Text><NavLink href="/addresses" label="Saved addresses" /><NavLink href="/support" label="Support centre" /><NavLink href="/notifications" label="Notifications" /><NavLink href="/utilities/history" label="Utility test history" /><NavLink href="/vendor/apply" label="Become a KariGO Vendor" /></Card>
+        <Card><Text style={ui.cardTitle}>Account actions</Text><NavLink href="/addresses" label="Saved addresses" /><NavLink href="/support" label="Support centre" /><NavLink href="/notifications" label="Notifications" /><NavLink href="/sme-services/requests" label="SME Services requests" /><NavLink href="/utilities/history" label="Utility test history" /><NavLink href="/vendor/apply" label="Become a KariGO Vendor" /></Card>
         <Card><Text style={ui.cardTitle}>Your KariGO activity</Text><Text>{retention?.totalOrders ?? 0} orders · {retention?.completedOrders ?? 0} completed</Text><Text>{retention?.promoUsageCount ?? 0} promos used</Text></Card>
         <Button title="Log out" tone="muted" onPress={async () => { await logout(); router.replace("/auth/login"); }} />
       </> : null}
