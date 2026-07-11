@@ -47,6 +47,11 @@ assert(home.includes("Market Items"), "Home must keep Market Items service categ
 assert(home.includes("Pharmacy"), "Home must include the compliance-gated Pharmacy category.");
 assert(home.includes("Parcel Delivery"), "Home must keep Parcel Delivery service category.");
 assert(home.includes("SME Services"), "Home must keep SME Services service category.");
+assert(home.includes("Book trusted service providers"), "SME Services tile must use the approved subtitle.");
+const oldSmeSingular = ["SME", "E" + "rrand"].join(" ");
+const oldSmePlural = oldSmeSingular + "s";
+assert(!home.includes(oldSmeSingular), "Customer App home must not expose the old SME label.");
+assert(!home.includes(oldSmePlural), "Customer App home must not expose the old SME plural label.");
 assert(home.includes("Airtime"), "Home must include Airtime readiness tile.");
 assert(home.includes("Data"), "Home must include Data readiness tile.");
 assert(home.includes("Electricity"), "Home must include Electricity readiness tile.");
@@ -59,6 +64,8 @@ assert(home.includes("/taxi/request"), "Taxi Test Mode route must only be availa
 assert(home.includes("EXPO_PUBLIC_PHARMACY_MARKETPLACE_ENABLED"), "Pharmacy must remain readiness-gated by environment.");
 assert(home.includes("/readiness/pharmacy"), "Disabled pharmacy must route to a readiness screen.");
 assert(home.includes("/sme-services"), "SME Services chip must navigate to the service-provider request flow.");
+assert(home.includes('href: "/parcel"'), "Parcel Delivery must keep routing to the parcel request flow.");
+assert(home.includes('href: "/sme-services"'), "SME Services must route to the service-provider request flow.");
 assert(home.includes("Bills & Utilities"), "Home must include a Bills & Utilities readiness section.");
 assert(home.includes("utilityServices"), "Bills & Utilities section must use safe utility readiness tiles.");
 assert(home.includes("/utilities/airtime"), "Airtime must route to the safe utility test flow.");

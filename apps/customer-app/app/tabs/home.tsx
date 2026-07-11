@@ -12,6 +12,7 @@ import { friendlyError } from "../../src/lib/errors";
 
 const categories: {
   label: string;
+  subtitle?: string;
   icon: keyof typeof Feather.glyphMap;
   href: string;
   serviceCategory?: ServiceCategory;
@@ -33,7 +34,7 @@ const categories: {
     statusLabel: process.env.EXPO_PUBLIC_PHARMACY_MARKETPLACE_ENABLED === "true" ? undefined : "Preparing launch"
   },
   { label: "Parcel Delivery", icon: "package", href: "/parcel", serviceCategory: "PARCEL", tone: "#FFFBEB", state: "active" },
-  { label: "SME Services", icon: "tool", href: "/sme-services", serviceCategory: "CORPORATE", tone: "#F5F3FF", state: "active" },
+  { label: "SME Services", subtitle: "Book trusted service providers", icon: "tool", href: "/sme-services", serviceCategory: "CORPORATE", tone: "#F5F3FF", state: "active" },
   { label: "Airtime", icon: "phone", href: "/utilities/airtime", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode" },
   { label: "Data", icon: "wifi", href: "/utilities/data", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode" },
   { label: "Electricity", icon: "zap", href: "/utilities/electricity", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode" },
@@ -108,6 +109,7 @@ export default function CustomerHome() {
             <Feather name={category.icon} size={21} color={category.state === "readiness" ? brand.colors.charcoal : brand.colors.primary} />
           </View>
           <Text style={styles.categoryLabel}>{category.label}</Text>
+          {category.subtitle ? <Text style={styles.categorySubtitle}>{category.subtitle}</Text> : null}
           {category.statusLabel ? <Text style={styles.serviceStatus}>{category.statusLabel}</Text> : null}
         </Pressable>)}
       </View>
@@ -154,6 +156,7 @@ const styles = StyleSheet.create({
   categoryPressed: { borderColor: brand.colors.primary, transform: [{ scale: 0.99 }] },
   categoryIcon: { alignItems: "center", borderRadius: 16, height: 42, justifyContent: "center", width: 42 },
   categoryLabel: { color: brand.colors.charcoal, fontSize: 12.5, fontWeight: "900", lineHeight: 16, textAlign: "center" },
+  categorySubtitle: { color: brand.colors.muted, fontSize: 10.5, fontWeight: "700", lineHeight: 13, textAlign: "center" },
   serviceStatus: { color: brand.colors.muted, fontSize: 10.5, fontWeight: "800", lineHeight: 14, textAlign: "center" },
   vendorHeader: { alignItems: "center", flexDirection: "row", gap: 12 },
   vendorLogo: { alignItems: "center", backgroundColor: "#FEF2F2", borderRadius: 18, height: 54, justifyContent: "center", width: 54 },

@@ -16,7 +16,7 @@
 ## Increment 3: Customer Order Journey
 
 - Food/grocery/market cart and checkout
-- Parcel and errand request flows
+- Parcel delivery and SME Services request flows
 - Delivery fee calculation placeholder
 - Mock payment initiation, webhook verification and idempotency
 
@@ -33,4 +33,3 @@
 - Vendor settlements and rider earnings
 - Admin dashboard, reports, promotions and audit logs
 - Automated backend tests and end-to-end manual QA checklist
-

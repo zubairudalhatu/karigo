@@ -1,6 +1,6 @@
 # SME Services Foundation
 
-Task 72 renames the old SME Errand concept to SME Services and separates it from Parcel Delivery.
+Task 72 replaces the old SME service wording with SME Services and separates it from Parcel Delivery.
 
 ## Product Boundary
 

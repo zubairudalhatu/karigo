@@ -11,8 +11,7 @@ Included services:
 - Market delivery
 - Pharmacy marketplace readiness, compliance-gated and disabled for automated fulfilment
 - Parcel delivery
-- Personal errands
-- SME and corporate errands
+- SME Services for approved service-provider requests
 
 Future super-app services such as ride hailing, bill payments, ticketing, subscriptions and a full wallet are intentionally excluded.
 

@@ -13,7 +13,7 @@ Task 44 adds a labelled homepage ad placement but does not integrate an external
 - Vendor storefront.
 - Category browse page.
 - KariGO campaign page.
-- Parcel or errand request page.
+- Parcel delivery or SME Services request page.
 
 ## Safety Rules
 

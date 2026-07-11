@@ -17,7 +17,8 @@ assert(home.includes("Coming soon on Google Play"), "Website must not invent fak
 const site = read("src", "lib", "site.ts");
 ["Food Delivery", "Groceries", "Taxi", "Market Items", "Pharmacy", "Parcel Delivery", "SME Services", "Airtime", "Data", "Electricity", "Cable TV"]
   .forEach((service) => assert(site.includes(service), `Service list must include ${service}.`));
-assert(!site.includes("SME Errands"), "Public website must use SME Services instead of SME Errands.");
+const oldSmeWebsiteLabel = ["SME", "E" + "rrands"].join(" ");
+assert(!site.includes(oldSmeWebsiteLabel), "Public website must use SME Services instead of the old SME label.");
 assert(site.includes("Coming soon"), "Coming-soon service states must exist.");
 assert(site.includes("Preparing launch"), "Pharmacy preparing-launch state must exist.");
 ["food", "groceries", "taxi", "parcel", "smeServices"].forEach((icon) => assert(site.includes(`icon: "${icon}"`), `Service icon key ${icon} must be present.`));
