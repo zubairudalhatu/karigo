@@ -8,8 +8,12 @@ import { AdminRolesGuard } from "../../common/guards/admin-roles.guard";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
+import { AssignServiceProviderDto } from "./dto/assign-service-provider.dto";
+import { CreateServiceProviderDto } from "./dto/create-service-provider.dto";
 import { CreateServiceProviderRequestDto } from "./dto/create-service-provider-request.dto";
+import { ListServiceProvidersQueryDto } from "./dto/list-service-providers-query.dto";
 import { ListServiceProviderRequestsQueryDto } from "./dto/list-service-provider-requests-query.dto";
+import { UpdateServiceProviderDto } from "./dto/update-service-provider.dto";
 import { UpdateServiceProviderRequestStatusDto } from "./dto/update-service-provider-request-status.dto";
 import { ServiceProviderRequestsService } from "./service-provider-requests.service";
 
@@ -77,5 +81,53 @@ export class AdminServiceProviderRequestsController {
     @Body() dto: UpdateServiceProviderRequestStatusDto
   ) {
     return { message: "SME Services request status updated", data: await this.serviceRequests.adminUpdateStatus(user.id, requestId, dto) };
+  }
+
+  @Patch(":requestId/provider-assignment")
+  @ApiOperation({ summary: "Manually assign an approved SME Services provider to a request" })
+  async assignProvider(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("requestId", ParseUUIDPipe) requestId: string,
+    @Body() dto: AssignServiceProviderDto
+  ) {
+    return { message: "SME Services provider assignment recorded", data: await this.serviceRequests.adminAssignProvider(user.id, requestId, dto) };
+  }
+}
+
+@ApiTags("Admin SME Services Providers")
+@ApiBearerAuth()
+@Controller("admin/service-providers")
+@UseGuards(JwtAuthGuard, RolesGuard, AdminRolesGuard)
+@Roles(UserRole.ADMIN)
+@AdminRoles(...SERVICE_REQUEST_ADMINS)
+export class AdminServiceProvidersController {
+  constructor(private readonly serviceRequests: ServiceProviderRequestsService) {}
+
+  @Get()
+  @ApiOperation({ summary: "List SME Services providers for admin operations" })
+  async list(@Query() query: ListServiceProvidersQueryDto) {
+    return { message: "SME Services providers retrieved", data: await this.serviceRequests.adminListProviders(query) };
+  }
+
+  @Post()
+  @ApiOperation({ summary: "Create an admin-managed SME Services provider record" })
+  async create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateServiceProviderDto) {
+    return { message: "SME Services provider created", data: await this.serviceRequests.adminCreateProvider(user.id, dto) };
+  }
+
+  @Get(":providerId")
+  @ApiOperation({ summary: "Get one SME Services provider record" })
+  async detail(@Param("providerId", ParseUUIDPipe) providerId: string) {
+    return { message: "SME Services provider retrieved", data: await this.serviceRequests.adminProviderDetail(providerId) };
+  }
+
+  @Patch(":providerId")
+  @ApiOperation({ summary: "Update an admin-managed SME Services provider record" })
+  async update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("providerId", ParseUUIDPipe) providerId: string,
+    @Body() dto: UpdateServiceProviderDto
+  ) {
+    return { message: "SME Services provider updated", data: await this.serviceRequests.adminUpdateProvider(user.id, providerId, dto) };
   }
 }

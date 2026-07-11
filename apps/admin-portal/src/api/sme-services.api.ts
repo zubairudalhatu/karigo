@@ -20,6 +20,42 @@ export type ServiceProviderType =
   | "HEALTH_PROFESSIONAL"
   | "OTHER";
 
+export type ServiceProviderStatus =
+  | "PENDING_REVIEW"
+  | "APPROVED"
+  | "SUSPENDED"
+  | "INACTIVE";
+
+export interface SmeProvider {
+  id: string;
+  providerCode: string;
+  fullName: string;
+  businessName?: string | null;
+  serviceType: ServiceProviderType;
+  phoneNumber: string;
+  email?: string | null;
+  city: string;
+  state: string;
+  serviceAreas: string[];
+  status: ServiceProviderStatus;
+  readinessOnly: boolean;
+  notes?: string | null;
+  verificationNote?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SmeProvidersListResponse {
+  summary: {
+    total: number;
+    pendingReview: number;
+    approved: number;
+    suspended: number;
+    inactive: number;
+  };
+  items: SmeProvider[];
+}
+
 export interface SmeServiceRequest {
   id: string;
   requestNumber: string;
@@ -33,6 +69,10 @@ export interface SmeServiceRequest {
   status: ServiceProviderRequestStatus;
   readinessOnly: boolean;
   adminNote?: string | null;
+  assignmentNote?: string | null;
+  assignedAt?: string | null;
+  assignedProvider?: SmeProvider | null;
+  assignedByAdmin?: { id: string; fullName: string; email?: string | null };
   customer: {
     id: string;
     user: { id: string; fullName: string; phoneNumber: string; email?: string | null };
@@ -73,5 +113,11 @@ export const smeServicesApi = {
   list: (q = "") => api.get<SmeServicesListResponse>(`admin/service-provider-requests${q ? `?${q}` : ""}`),
   detail: (id: string) => api.get<SmeServiceRequest>(`admin/service-provider-requests/${id}`),
   status: (id: string, status: ServiceProviderRequestStatus, adminNote?: string) =>
-    api.patch<SmeServiceRequest>(`admin/service-provider-requests/${id}/status`, { status, adminNote })
+    api.patch<SmeServiceRequest>(`admin/service-provider-requests/${id}/status`, { status, adminNote }),
+  assignProvider: (id: string, providerId: string, assignmentNote?: string) =>
+    api.patch<SmeServiceRequest>(`admin/service-provider-requests/${id}/provider-assignment`, { providerId, assignmentNote }),
+  providers: (q = "") => api.get<SmeProvidersListResponse>(`admin/service-providers${q ? `?${q}` : ""}`),
+  provider: (id: string) => api.get<SmeProvider>(`admin/service-providers/${id}`),
+  createProvider: (payload: Partial<SmeProvider>) => api.post<SmeProvider>("admin/service-providers", payload),
+  updateProvider: (id: string, payload: Partial<SmeProvider>) => api.patch<SmeProvider>(`admin/service-providers/${id}`, payload)
 };

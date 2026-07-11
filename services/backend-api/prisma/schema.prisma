@@ -116,6 +116,13 @@ enum ServiceProviderRequestStatus {
   CANCELLED
 }
 
+enum ServiceProviderStatus {
+  PENDING_REVIEW
+  APPROVED
+  SUSPENDED
+  INACTIVE
+}
+
 enum ProductCategory {
   FOOD
   GROCERIES
@@ -337,20 +344,20 @@ enum TaxiTripActorType {
 }
 
 model User {
-  id                       String                  @id @default(uuid()) @db.Uuid
+  id                       String                   @id @default(uuid()) @db.Uuid
   fullName                 String
-  phoneNumber              String                  @unique
-  email                    String?                 @unique
+  phoneNumber              String                   @unique
+  email                    String?                  @unique
   passwordHash             String
   role                     UserRole
   adminRole                AdminRole?
-  accountStatus            AccountStatus           @default(PENDING)
-  phoneVerified            Boolean                 @default(false)
-  emailVerified            Boolean                 @default(false)
+  accountStatus            AccountStatus            @default(PENDING)
+  phoneVerified            Boolean                  @default(false)
+  emailVerified            Boolean                  @default(false)
   lastLoginAt              DateTime?
   deletedAt                DateTime?
-  createdAt                DateTime                @default(now())
-  updatedAt                DateTime                @updatedAt
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
   customerProfile          CustomerProfile?
   vendor                   Vendor?
   rider                    Rider?
@@ -358,16 +365,17 @@ model User {
   notifications            Notification[]
   deviceTokens             DeviceToken[]
   refreshTokens            RefreshToken[]
-  statusChanges            OrderStatusHistory[]    @relation("StatusChangedBy")
-  verifiedDocuments        RiderDocument[]         @relation("DocumentVerifiedBy")
-  assignedTickets          SupportTicket[]         @relation("TicketAssignedAdmin")
+  statusChanges            OrderStatusHistory[]     @relation("StatusChangedBy")
+  verifiedDocuments        RiderDocument[]          @relation("DocumentVerifiedBy")
+  assignedTickets          SupportTicket[]          @relation("TicketAssignedAdmin")
   ticketMessages           SupportTicketMessage[]
   adminAuditLogs           AdminAuditLog[]
-  createdPromoCodes        PromoCode[]             @relation("PromoCreatedBy")
+  assignedServiceRequests  ServiceProviderRequest[] @relation("ServiceProviderRequestAssignedBy")
+  createdPromoCodes        PromoCode[]              @relation("PromoCreatedBy")
   otpVerifications         OtpVerification[]
-  verifiedPayoutAccounts   VendorPayoutAccount[]   @relation("PayoutVerifiedBy")
-  taxiDriverApplications   TaxiDriverApplication[] @relation("TaxiApplicant")
-  reviewedTaxiApplications TaxiDriverApplication[] @relation("TaxiReviewedBy")
+  verifiedPayoutAccounts   VendorPayoutAccount[]    @relation("PayoutVerifiedBy")
+  taxiDriverApplications   TaxiDriverApplication[]  @relation("TaxiApplicant")
+  reviewedTaxiApplications TaxiDriverApplication[]  @relation("TaxiReviewedBy")
   taxiDriverProfiles       TaxiDriverProfile[]
 
   @@map("users")
@@ -667,6 +675,8 @@ model ServiceProviderRequest {
   id                  String                       @id @default(uuid()) @db.Uuid
   requestNumber       String                       @unique
   customerId          String                       @db.Uuid
+  assignedProviderId  String?                      @db.Uuid
+  assignedByAdminId   String?                      @db.Uuid
   serviceType         ServiceProviderType
   serviceLabel        String
   serviceAddressId    String                       @db.Uuid
@@ -678,15 +688,45 @@ model ServiceProviderRequest {
   status              ServiceProviderRequestStatus @default(SUBMITTED)
   readinessOnly       Boolean                      @default(false)
   adminNote           String?
+  assignmentNote      String?
+  assignedAt          DateTime?
   createdAt           DateTime                     @default(now())
   updatedAt           DateTime                     @updatedAt
   customer            CustomerProfile              @relation(fields: [customerId], references: [id])
+  assignedProvider    ServiceProvider?             @relation(fields: [assignedProviderId], references: [id])
+  assignedByAdmin     User?                        @relation("ServiceProviderRequestAssignedBy", fields: [assignedByAdminId], references: [id])
   serviceAddress      Address                      @relation("ServiceRequestAddress", fields: [serviceAddressId], references: [id])
 
   @@index([customerId, createdAt])
+  @@index([assignedProviderId, status])
   @@index([serviceType, status, createdAt])
   @@index([status, createdAt])
   @@map("service_provider_requests")
+}
+
+model ServiceProvider {
+  id               String                   @id @default(uuid()) @db.Uuid
+  providerCode     String                   @unique
+  fullName         String
+  businessName     String?
+  serviceType      ServiceProviderType
+  phoneNumber      String
+  email            String?
+  city             String
+  state            String
+  serviceAreas     Json?
+  status           ServiceProviderStatus    @default(PENDING_REVIEW)
+  readinessOnly    Boolean                  @default(false)
+  notes            String?
+  verificationNote String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  assignedRequests ServiceProviderRequest[]
+
+  @@index([serviceType, status])
+  @@index([city, state])
+  @@index([phoneNumber])
+  @@map("service_providers")
 }
 
 model VendorCategory {

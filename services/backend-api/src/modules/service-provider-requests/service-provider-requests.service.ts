@@ -1,10 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, ServiceProviderRequestStatus, ServiceProviderType } from "@prisma/client";
+import { Prisma, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AssignServiceProviderDto } from "./dto/assign-service-provider.dto";
+import { CreateServiceProviderDto } from "./dto/create-service-provider.dto";
 import { CreateServiceProviderRequestDto } from "./dto/create-service-provider-request.dto";
+import { ListServiceProvidersQueryDto } from "./dto/list-service-providers-query.dto";
 import { ListServiceProviderRequestsQueryDto } from "./dto/list-service-provider-requests-query.dto";
+import { UpdateServiceProviderDto } from "./dto/update-service-provider.dto";
 import { UpdateServiceProviderRequestStatusDto } from "./dto/update-service-provider-request-status.dto";
 
 const SERVICE_CATALOGUE: Array<{
@@ -195,6 +199,171 @@ export class ServiceProviderRequestsService {
     return this.adminRequest(updated);
   }
 
+  async adminListProviders(query: ListServiceProvidersQueryDto) {
+    const where: Prisma.ServiceProviderWhereInput = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.serviceType ? { serviceType: query.serviceType } : {}),
+      ...(query.city ? { city: { contains: query.city.trim(), mode: "insensitive" as const } } : {}),
+      ...(query.search ? {
+        OR: [
+          { providerCode: { contains: query.search, mode: "insensitive" as const } },
+          { fullName: { contains: query.search, mode: "insensitive" as const } },
+          { businessName: { contains: query.search, mode: "insensitive" as const } },
+          { phoneNumber: { contains: query.search } },
+          { email: { contains: query.search, mode: "insensitive" as const } }
+        ]
+      } : {})
+    };
+
+    const [items, total, pendingReview, approved, suspended, inactive] = await Promise.all([
+      this.prisma.serviceProvider.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: 200
+      }),
+      this.prisma.serviceProvider.count({ where: {} }),
+      this.prisma.serviceProvider.count({ where: { status: ServiceProviderStatus.PENDING_REVIEW } }),
+      this.prisma.serviceProvider.count({ where: { status: ServiceProviderStatus.APPROVED } }),
+      this.prisma.serviceProvider.count({ where: { status: ServiceProviderStatus.SUSPENDED } }),
+      this.prisma.serviceProvider.count({ where: { status: ServiceProviderStatus.INACTIVE } })
+    ]);
+
+    return {
+      summary: { total, pendingReview, approved, suspended, inactive },
+      items: items.map((provider) => this.adminProvider(provider))
+    };
+  }
+
+  async adminCreateProvider(adminUserId: string, dto: CreateServiceProviderDto) {
+    this.assertProviderCanUseStatus(dto.serviceType, dto.readinessOnly, dto.status);
+
+    const provider = await this.prisma.serviceProvider.create({
+      data: {
+        providerCode: await this.uniqueProviderCode(),
+        fullName: dto.fullName.trim(),
+        businessName: this.optionalText(dto.businessName),
+        serviceType: dto.serviceType,
+        phoneNumber: dto.phoneNumber.trim(),
+        email: this.optionalText(dto.email),
+        city: dto.city.trim(),
+        state: dto.state.trim(),
+        serviceAreas: this.serviceAreas(dto.serviceAreas),
+        status: dto.status ?? ServiceProviderStatus.PENDING_REVIEW,
+        readinessOnly: dto.readinessOnly ?? dto.serviceType === ServiceProviderType.HEALTH_PROFESSIONAL,
+        notes: this.optionalText(dto.notes),
+        verificationNote: this.optionalText(dto.verificationNote)
+      }
+    });
+
+    await this.audit.record(adminUserId, "service_provider.created", "ServiceProvider", provider.id, {
+      providerCode: provider.providerCode,
+      serviceType: provider.serviceType,
+      status: provider.status
+    });
+
+    return this.adminProvider(provider);
+  }
+
+  async adminProviderDetail(providerId: string) {
+    const provider = await this.prisma.serviceProvider.findUnique({ where: { id: providerId } });
+    if (!provider) {
+      throw new NotFoundException("SME Services provider not found");
+    }
+    return this.adminProvider(provider);
+  }
+
+  async adminUpdateProvider(adminUserId: string, providerId: string, dto: UpdateServiceProviderDto) {
+    const existing = await this.prisma.serviceProvider.findUnique({ where: { id: providerId } });
+    if (!existing) {
+      throw new NotFoundException("SME Services provider not found");
+    }
+
+    const nextServiceType = dto.serviceType ?? existing.serviceType;
+    const nextReadinessOnly = dto.readinessOnly ?? existing.readinessOnly;
+    const nextStatus = dto.status ?? existing.status;
+    this.assertProviderCanUseStatus(nextServiceType, nextReadinessOnly, nextStatus);
+
+    const provider = await this.prisma.serviceProvider.update({
+      where: { id: providerId },
+      data: {
+        ...(dto.fullName === undefined ? {} : { fullName: dto.fullName.trim() }),
+        ...(dto.businessName === undefined ? {} : { businessName: this.optionalText(dto.businessName) }),
+        ...(dto.serviceType === undefined ? {} : { serviceType: dto.serviceType }),
+        ...(dto.phoneNumber === undefined ? {} : { phoneNumber: dto.phoneNumber.trim() }),
+        ...(dto.email === undefined ? {} : { email: this.optionalText(dto.email) }),
+        ...(dto.city === undefined ? {} : { city: dto.city.trim() }),
+        ...(dto.state === undefined ? {} : { state: dto.state.trim() }),
+        ...(dto.serviceAreas === undefined ? {} : { serviceAreas: this.serviceAreas(dto.serviceAreas) }),
+        ...(dto.status === undefined ? {} : { status: dto.status }),
+        ...(dto.readinessOnly === undefined ? {} : { readinessOnly: dto.readinessOnly }),
+        ...(dto.notes === undefined ? {} : { notes: this.optionalText(dto.notes) }),
+        ...(dto.verificationNote === undefined ? {} : { verificationNote: this.optionalText(dto.verificationNote) })
+      }
+    });
+
+    await this.audit.record(adminUserId, "service_provider.updated", "ServiceProvider", providerId, {
+      providerCode: provider.providerCode,
+      previousStatus: existing.status,
+      status: provider.status,
+      serviceType: provider.serviceType
+    });
+
+    return this.adminProvider(provider);
+  }
+
+  async adminAssignProvider(adminUserId: string, requestId: string, dto: AssignServiceProviderDto) {
+    const request = await this.prisma.serviceProviderRequest.findUnique({
+      where: { id: requestId },
+      include: this.adminInclude()
+    });
+    if (!request) {
+      throw new NotFoundException("SME Services request not found");
+    }
+    if (request.status === ServiceProviderRequestStatus.COMPLETED || request.status === ServiceProviderRequestStatus.CANCELLED) {
+      throw new BadRequestException("Completed or cancelled SME Services requests cannot receive provider assignments.");
+    }
+    if (request.readinessOnly || request.serviceType === ServiceProviderType.HEALTH_PROFESSIONAL) {
+      throw new BadRequestException("Health professional requests remain readiness-only and cannot receive provider assignments.");
+    }
+
+    const provider = await this.prisma.serviceProvider.findUnique({ where: { id: dto.providerId } });
+    if (!provider) {
+      throw new NotFoundException("SME Services provider not found");
+    }
+    if (provider.status !== ServiceProviderStatus.APPROVED) {
+      throw new BadRequestException("Only approved SME Services providers can be manually assigned.");
+    }
+    if (provider.readinessOnly || provider.serviceType === ServiceProviderType.HEALTH_PROFESSIONAL) {
+      throw new BadRequestException("Readiness-only or health professional providers cannot be assigned in staging.");
+    }
+    if (provider.serviceType !== request.serviceType) {
+      throw new BadRequestException("Provider service type must match the customer request service type.");
+    }
+
+    const updated = await this.prisma.serviceProviderRequest.update({
+      where: { id: requestId },
+      data: {
+        assignedProviderId: provider.id,
+        assignedByAdminId: adminUserId,
+        assignedAt: new Date(),
+        assignmentNote: this.optionalText(dto.assignmentNote),
+        status: ServiceProviderRequestStatus.PROVIDER_ASSIGNED
+      },
+      include: this.adminInclude()
+    });
+
+    await this.audit.record(adminUserId, "service_provider_request.provider_assigned", "ServiceProviderRequest", requestId, {
+      requestNumber: request.requestNumber,
+      previousStatus: request.status,
+      status: ServiceProviderRequestStatus.PROVIDER_ASSIGNED,
+      providerId: provider.id,
+      providerCode: provider.providerCode,
+      serviceType: provider.serviceType
+    });
+
+    return this.adminRequest(updated);
+  }
+
   private async requireCustomer(userId: string) {
     const customer = await this.prisma.customerProfile.findUnique({ where: { userId }, select: { id: true } });
     if (!customer) {
@@ -210,6 +379,35 @@ export class ServiceProviderRequestsService {
       if (!existing) return requestNumber;
     }
     throw new BadRequestException("Could not generate a unique service request reference. Please try again.");
+  }
+
+  private async uniqueProviderCode() {
+    for (let i = 0; i < 5; i += 1) {
+      const providerCode = `KGO-SP-${Date.now()}-${randomBytes(3).toString("hex").toUpperCase()}`;
+      const existing = await this.prisma.serviceProvider.findUnique({ where: { providerCode }, select: { id: true } });
+      if (!existing) return providerCode;
+    }
+    throw new BadRequestException("Could not generate a unique service provider code. Please try again.");
+  }
+
+  private assertProviderCanUseStatus(
+    serviceType: ServiceProviderType,
+    readinessOnly = false,
+    status: ServiceProviderStatus = ServiceProviderStatus.PENDING_REVIEW
+  ) {
+    if ((readinessOnly || serviceType === ServiceProviderType.HEALTH_PROFESSIONAL) && status === ServiceProviderStatus.APPROVED) {
+      throw new BadRequestException("Readiness-only and health professional providers cannot be approved for live assignment yet.");
+    }
+  }
+
+  private serviceAreas(serviceAreas?: string[] | null) {
+    if (!serviceAreas) return Prisma.JsonNull;
+    const normalized = serviceAreas.map((area) => area.trim()).filter(Boolean);
+    return normalized.length ? normalized : Prisma.JsonNull;
+  }
+
+  private optionalText(value?: string | null) {
+    return value?.trim() || null;
   }
 
   private customerInclude() {
@@ -234,6 +432,29 @@ export class ServiceProviderRequestsService {
           id: true,
           user: { select: { id: true, fullName: true, phoneNumber: true, email: true } }
         }
+      },
+      assignedProvider: {
+        select: {
+          id: true,
+          providerCode: true,
+          fullName: true,
+          businessName: true,
+          serviceType: true,
+          phoneNumber: true,
+          email: true,
+          city: true,
+          state: true,
+          serviceAreas: true,
+          status: true,
+          readinessOnly: true,
+          notes: true,
+          verificationNote: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      },
+      assignedByAdmin: {
+        select: { id: true, fullName: true, email: true }
       },
       serviceAddress: {
         select: {
@@ -281,10 +502,35 @@ export class ServiceProviderRequestsService {
       status: request.status,
       readinessOnly: request.readinessOnly,
       adminNote: list ? undefined : request.adminNote,
+      assignmentNote: list ? undefined : request.assignmentNote,
+      assignedAt: request.assignedAt,
+      assignedProvider: request.assignedProvider ? this.adminProvider(request.assignedProvider) : null,
+      assignedByAdmin: list ? undefined : request.assignedByAdmin,
       customer: request.customer,
       serviceAddress: request.serviceAddress,
       createdAt: request.createdAt,
       updatedAt: request.updatedAt
+    };
+  }
+
+  private adminProvider(provider: Prisma.ServiceProviderGetPayload<object>) {
+    return {
+      id: provider.id,
+      providerCode: provider.providerCode,
+      fullName: provider.fullName,
+      businessName: provider.businessName,
+      serviceType: provider.serviceType,
+      phoneNumber: provider.phoneNumber,
+      email: provider.email,
+      city: provider.city,
+      state: provider.state,
+      serviceAreas: Array.isArray(provider.serviceAreas) ? provider.serviceAreas : [],
+      status: provider.status,
+      readinessOnly: provider.readinessOnly,
+      notes: provider.notes,
+      verificationNote: provider.verificationNote,
+      createdAt: provider.createdAt,
+      updatedAt: provider.updatedAt
     };
   }
 }

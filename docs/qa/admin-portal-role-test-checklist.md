@@ -11,7 +11,8 @@ Use Super Admin or Operations Admin from `docs/deployment/karigo-staging-demo-ac
 | Users/customers | Open users/customers pages. | Lists load and role data is readable. | Admin sees raw password/token data. | No password hashes in UI. |
 | Vendors | Open vendor management. | Vendors load with category/location/status. | Vendor data missing or wrong. | Check Food/Grocery/Market. |
 | Vendor applications | Review applications. | Application list/detail and review workflow work. | Applicant notes mixed with internal notes. | Internal notes hidden from applicant. |
-| SME Services | Open SME Services, filter requests, view detail and update review status. | Requests load with customer/location details; status update requires confirmation and records admin note/history. | Provider dispatch, payment, payout or medical booking action appears. | Review-only workflow; no live provider marketplace. |
+| SME Services | Open SME Services, filter requests, view detail, update review status and record manual provider assignment. | Requests load with customer/location details; status update and manual assignment require confirmation and record admin history. | Live provider dispatch, payment, payout, provider login or medical booking action appears. | Manual assignment is operations recordkeeping only. |
+| SME providers | Open SME Providers, create/update a provider record and filter by status/type/city. | Provider directory loads; approved matching providers are selectable for SME request assignment. | Provider phone is shown to Customer App, provider login exists, or health professional provider can be approved/assigned. | Admin-only directory; no customer-facing provider contact exposure. |
 | Payout accounts | Review pending/verified/rejected/needs update. | Admin can verify/reject with confirmation; vendor cannot. | Transfer funds button or missing confirmation. | No live payout provider. |
 | Riders | Open riders and available riders. | Rider status and availability are accurate. | Inactive riders assignable unexpectedly. | Coordinate Rider app test. |
 | Settlements | Mark vendor settlement/rider earning paid. | Confirmation appears; status and notifications update. | Real bank transfer triggered. | Mark-paid is recordkeeping only. |
@@ -42,4 +43,8 @@ SME Services-specific confirmations:
 - SME Services list and detail pages load for approved admin roles.
 - Admin can filter by request status and service provider type.
 - Admin can update review status with an internal note.
-- No live provider dispatch, service payment, provider payout or regulated medical booking is exposed.
+- Admin can create and update admin-only SME provider records.
+- Admin can manually assign only approved matching providers to active requests.
+- Health professional providers remain readiness-only and cannot be approved or assigned.
+- Customer-facing SME Services endpoints do not expose provider phone numbers or email addresses.
+- No live provider dispatch, service payment, provider payout, provider app login or regulated medical booking is exposed.

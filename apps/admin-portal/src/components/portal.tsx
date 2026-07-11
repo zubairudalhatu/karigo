@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode } from "react";
 import { useAuth } from "../contexts/auth-context";
 
-const nav = [["Dashboard", "/"], ["Orders", "/orders"], ["Dispatch", "/dispatch"], ["Users", "/users"], ["Vendors", "/vendors"], ["Vendor Applications", "/vendor-applications"], ["SME Services", "/sme-services"], ["Payout Accounts", "/payout-accounts"], ["Riders", "/riders"], ["Taxi", "/taxi"], ["Settlements", "/settlements"], ["Utilities", "/utilities"], ["Support", "/support"], ["Promotions", "/promotions"], ["Reports", "/reports"], ["Notifications", "/notifications"]];
+const nav = [["Dashboard", "/"], ["Orders", "/orders"], ["Dispatch", "/dispatch"], ["Users", "/users"], ["Vendors", "/vendors"], ["Vendor Applications", "/vendor-applications"], ["SME Services", "/sme-services"], ["SME Providers", "/sme-services/providers"], ["Payout Accounts", "/payout-accounts"], ["Riders", "/riders"], ["Taxi", "/taxi"], ["Settlements", "/settlements"], ["Utilities", "/utilities"], ["Support", "/support"], ["Promotions", "/promotions"], ["Reports", "/reports"], ["Notifications", "/notifications"]];
 const statusLabel = (value: ReactNode) => typeof value === "string" ? value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()) : value;
 
 export function PortalShell({ children }: { children: ReactNode }) {

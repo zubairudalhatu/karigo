@@ -25,6 +25,7 @@ assert(shell.includes("Payout Accounts"), "Admin sidebar must include payout acc
 assert(shell.includes("Utilities"), "Admin sidebar must include Utilities.");
 assert(shell.includes("Taxi"), "Admin sidebar must include Taxi readiness.");
 assert(shell.includes("SME Services"), "Admin sidebar must include SME Services.");
+assert(shell.includes("SME Providers"), "Admin sidebar must include SME provider directory.");
 
 const smeServicesPage = read("app", "sme-services", "page.tsx");
 assert(smeServicesPage.includes("SME Services"), "Admin SME Services list page must exist.");
@@ -32,13 +33,26 @@ assert(smeServicesPage.includes("does not dispatch providers"), "Admin SME Servi
 assert(smeServicesPage.includes("smeServicesApi.list"), "Admin SME Services page must call the list endpoint.");
 assert(smeServicesPage.includes("Total requests"), "Admin SME Services page must show summary cards.");
 assert(smeServicesPage.includes("All service types"), "Admin SME Services page must support service-type filtering.");
+assert(smeServicesPage.includes("Provider directory"), "Admin SME Services page must link to provider directory.");
 const smeServicesDetail = read("app", "sme-services", "[id]", "page.tsx");
 assert(smeServicesDetail.includes("Update review status"), "Admin SME Services detail must support status updates.");
 assert(smeServicesDetail.includes("does not dispatch a provider, collect payment or activate medical booking"), "Admin SME Services status update must confirm safe limits.");
+assert(smeServicesDetail.includes("Record manual assignment"), "Admin SME Services detail must support manual provider assignment.");
+assert(smeServicesDetail.includes("does not notify or dispatch the provider automatically"), "Manual assignment must state it is not live dispatch.");
 assert(!smeServicesDetail.includes("Pay Now") && !smeServicesDetail.includes("Transfer funds"), "Admin SME Services must not expose payment actions.");
+const smeProvidersPage = read("app", "sme-services", "providers", "page.tsx");
+assert(smeProvidersPage.includes("SME Services provider directory"), "Admin provider directory page must exist.");
+assert(smeProvidersPage.includes("Create provider record"), "Admin provider directory must support provider record creation.");
+assert(smeProvidersPage.includes("does not create provider login, live dispatch, payment collection, payout automation or medical booking"), "Admin provider directory must state safety limits.");
+const smeProviderDetail = read("app", "sme-services", "providers", "[id]", "page.tsx");
+assert(smeProviderDetail.includes("Edit provider"), "Admin provider detail must support provider record editing.");
+assert(smeProviderDetail.includes("Customers do not receive provider phone numbers"), "Provider detail must document customer contact privacy.");
+assert(!smeProviderDetail.includes("Pay Now") && !smeProviderDetail.includes("Transfer funds"), "Provider directory must not expose payment actions.");
 const smeServicesApiSource = read("src", "api", "sme-services.api.ts");
 assert(smeServicesApiSource.includes("admin/service-provider-requests"), "Admin portal must call admin SME Services endpoints.");
 assert(smeServicesApiSource.includes("admin/service-provider-requests/${id}/status"), "Admin portal must call the SME Services status endpoint.");
+assert(smeServicesApiSource.includes("admin/service-provider-requests/${id}/provider-assignment"), "Admin portal must call the SME Services assignment endpoint.");
+assert(smeServicesApiSource.includes("admin/service-providers"), "Admin portal must call admin SME Services provider endpoints.");
 
 const taxiPage = read("app", "taxi", "page.tsx");
 assert(taxiPage.includes("Driver Applications"), "Admin taxi page must show driver applications.");

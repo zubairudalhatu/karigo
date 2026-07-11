@@ -6,7 +6,7 @@ Task 72 replaces the old SME service wording with SME Services and separates it 
 
 Parcel Delivery is for sending parcels and packages between pickup and delivery addresses.
 
-SME Services is for requesting approved skilled service providers for a home, shop or business location. The staging foundation supports request intake only; it does not assign providers, collect service payments, automate quotes, or dispatch workers.
+SME Services is for requesting approved skilled service providers for a home, shop or business location. The staging foundation supports request intake, admin review, an admin-managed provider directory and manual assignment recording. It does not collect service payments, automate quotes, dispatch workers, create provider logins or trigger provider payouts.
 
 ## Initial Service Types
 
@@ -38,10 +38,17 @@ Admin endpoints:
 - `GET /api/v1/admin/service-provider-requests`
 - `GET /api/v1/admin/service-provider-requests/:requestId`
 - `PATCH /api/v1/admin/service-provider-requests/:requestId/status`
+- `PATCH /api/v1/admin/service-provider-requests/:requestId/provider-assignment`
+- `GET /api/v1/admin/service-providers`
+- `POST /api/v1/admin/service-providers`
+- `GET /api/v1/admin/service-providers/:providerId`
+- `PATCH /api/v1/admin/service-providers/:providerId`
 
 Admin access is restricted to approved admin roles. Admins can review requests, filter by status or service type, view customer/location details, add an internal admin note and update request review status.
 
-Admin status updates do not dispatch providers, collect service payments, create provider payouts, activate medical booking or assign service jobs automatically.
+Admin status updates and manual provider assignment do not dispatch providers, collect service payments, create provider payouts, activate medical booking or assign service jobs automatically. Assignment records only the provider selected by operations and moves the request to `PROVIDER_ASSIGNED`.
+
+Provider directory records are admin-only and include operations contact details. Customer-facing request endpoints do not expose provider phone numbers, email addresses or internal verification notes.
 
 ## Customer App Foundation
 
@@ -63,19 +70,31 @@ Health professional booking is blocked with clear readiness-only copy.
 
 The Admin Portal exposes an `SME Services` operations page.
 
-The page supports:
+The request page supports:
 
 - Summary cards for submitted, under-review and matching/assigned requests
 - Status, service type and search filters
 - Request detail view
 - Internal admin note
 - Review status updates with an explicit safety confirmation
+- Manual provider assignment from approved matching providers
 - Review history from admin audit records
+
+The provider directory page supports:
+
+- Provider summary cards
+- Provider search, status, city and service-type filters
+- Provider record creation
+- Provider detail/edit workflow
+- Readiness-only marking for providers not approved for assignment
+- Guardrails blocking health professional approval or assignment until future compliance approval
 
 ## Launch Notes
 
 - Do not connect live service-provider payments yet.
 - Do not assign providers automatically yet.
+- Do not create provider app login yet.
+- Do not expose provider phone numbers to customers yet.
 - Do not activate regulated medical or health booking.
 - Do not mix SME Services with the parcel/package request interface.
-- Future work should add admin review, provider onboarding, provider assignment, pricing/quote rules and operational service completion controls.
+- Future work should add provider onboarding verification depth, pricing/quote rules, provider communication controls and operational service completion controls.

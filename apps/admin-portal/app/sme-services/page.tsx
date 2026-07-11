@@ -48,6 +48,9 @@ export default function SmeServicesRequestsPage() {
   return <PortalShell>
     <h1>SME Services</h1>
     <p className="muted">Review customer service-provider requests. This page does not dispatch providers, collect service payments, approve medical booking or create provider payouts.</p>
+    <div className="top-actions">
+      <Link className="button-link" href="/sme-services/providers">Provider directory</Link>
+    </div>
     <div className="grid">
       <article className="card"><span className="muted">Total requests</span><p className="metric">{data?.summary.total ?? 0}</p></article>
       <article className="card"><span className="muted">Submitted</span><p className="metric">{data?.summary.submitted ?? 0}</p></article>
@@ -67,9 +70,9 @@ export default function SmeServicesRequestsPage() {
     <ErrorMessage>{error}</ErrorMessage>
     {loading ? <Loading /> : <section className="section">
       {data?.items.length ? data.items.map((request) => <Link className="card" href={`/sme-services/${request.id}`} key={request.id}>
-        <strong>{request.requestNumber} · {request.serviceLabel}</strong>
+        <strong>{request.requestNumber} - {request.serviceLabel}</strong>
         <p><Badge>{request.status}</Badge> {request.readinessOnly ? <Badge>Readiness Only</Badge> : null}</p>
-        <p className="muted">{request.customer.user.fullName} · {request.contactPhone} · {request.serviceAddress.city}, {request.serviceAddress.state}</p>
+        <p className="muted">{request.customer.user.fullName} - {request.contactPhone} - {request.serviceAddress.city}, {request.serviceAddress.state}</p>
         <p>{request.description}</p>
         <p className="muted">Created {date(request.createdAt)}</p>
       </Link>) : <Empty>No SME Services requests found.</Empty>}
