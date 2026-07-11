@@ -19,6 +19,14 @@ function areas(value: string) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
+function isReadinessOnlyProvider(form: ReturnType<typeof formFromProvider>) {
+  return form.readinessOnly || form.serviceType === "HEALTH_PROFESSIONAL";
+}
+
+function availableStatuses(form: ReturnType<typeof formFromProvider>) {
+  return isReadinessOnlyProvider(form) ? statuses.filter((item) => item !== "APPROVED") : statuses;
+}
+
 function formFromProvider(provider: SmeProvider) {
   return {
     fullName: provider.fullName,
@@ -59,6 +67,15 @@ export default function SmeProviderDetailPage() {
 
   async function save() {
     if (!form) return;
+    if (!form.fullName.trim() || !form.phoneNumber.trim() || !form.city.trim() || !form.state.trim()) {
+      setError("Provider could not be updated. Please check the required fields and try again.");
+      return;
+    }
+    const readinessOnly = isReadinessOnlyProvider(form);
+    if (readinessOnly && form.status === "APPROVED") {
+      setError("Readiness-only and health professional providers can be saved for review only. They cannot be approved or assigned yet.");
+      return;
+    }
     if (!window.confirm("Update this SME Services provider record? This does not create provider login, live dispatch, payment collection or medical booking.")) return;
     setSaving(true);
     setError("");
@@ -74,7 +91,7 @@ export default function SmeProviderDetailPage() {
         state: form.state,
         serviceAreas: areas(form.serviceAreas),
         status: form.status,
-        readinessOnly: form.readinessOnly,
+        readinessOnly,
         notes: form.notes || undefined,
         verificationNote: form.verificationNote || undefined
       });
@@ -82,7 +99,7 @@ export default function SmeProviderDetailPage() {
       setForm(formFromProvider(updated));
       setMessage("SME Services provider updated.");
     } catch (e) {
-      setError(friendlyError(e));
+      setError(friendlyError(e, "form"));
     } finally {
       setSaving(false);
     }
@@ -123,11 +140,20 @@ export default function SmeProviderDetailPage() {
         <h2>Edit provider</h2>
         <label>Full name<input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></label>
         <label>Business name<input value={form.businessName} onChange={(e) => setForm({ ...form, businessName: e.target.value })} /></label>
-        <label>Service type<select value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value as ServiceProviderType })}>
+        <label>Service type<select value={form.serviceType} onChange={(e) => {
+          const nextServiceType = e.target.value as ServiceProviderType;
+          const nextReadinessOnly = form.readinessOnly || nextServiceType === "HEALTH_PROFESSIONAL";
+          setForm({
+            ...form,
+            serviceType: nextServiceType,
+            readinessOnly: nextReadinessOnly,
+            status: nextReadinessOnly && form.status === "APPROVED" ? "PENDING_REVIEW" : form.status
+          });
+        }}>
           {serviceTypes.map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}
         </select></label>
         <label>Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as ServiceProviderStatus })}>
-          {statuses.map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}
+          {availableStatuses(form).map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}
         </select></label>
         <label>Phone<input value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} /></label>
         <label>Email<input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
@@ -136,7 +162,15 @@ export default function SmeProviderDetailPage() {
         <label>Service areas<input value={form.serviceAreas} onChange={(e) => setForm({ ...form, serviceAreas: e.target.value })} /></label>
         <label>Verification note<textarea value={form.verificationNote} onChange={(e) => setForm({ ...form, verificationNote: e.target.value })} /></label>
         <label>Internal notes<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Internal operations notes only." /></label>
-        <label className="check-row"><input type="checkbox" checked={form.readinessOnly} onChange={(e) => setForm({ ...form, readinessOnly: e.target.checked })} /> Readiness-only provider</label>
+        <label className="check-row"><input type="checkbox" checked={form.readinessOnly} onChange={(e) => {
+          const nextReadinessOnly = e.target.checked || form.serviceType === "HEALTH_PROFESSIONAL";
+          setForm({
+            ...form,
+            readinessOnly: nextReadinessOnly,
+            status: nextReadinessOnly && form.status === "APPROVED" ? "PENDING_REVIEW" : form.status
+          });
+        }} /> Readiness-only provider</label>
+        {isReadinessOnlyProvider(form) ? <p className="muted">Readiness-only and health professional providers can be saved for review, but cannot be approved or assigned yet.</p> : null}
         <button disabled={saving} onClick={() => void save()}>{saving ? "Saving..." : "Save provider"}</button>
       </aside>
     </div> : null}

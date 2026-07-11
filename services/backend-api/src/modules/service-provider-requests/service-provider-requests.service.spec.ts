@@ -231,6 +231,37 @@ describe("ServiceProviderRequestsService admin operations", () => {
     })).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it("creates readiness-only provider records for review without approving them", async () => {
+    const readinessProvider = {
+      ...provider,
+      serviceType: ServiceProviderType.HEALTH_PROFESSIONAL,
+      status: ServiceProviderStatus.PENDING_REVIEW,
+      readinessOnly: true
+    };
+    prisma.serviceProvider.findUnique.mockResolvedValue(null);
+    prisma.serviceProvider.create.mockResolvedValue(readinessProvider);
+
+    const result = await service.adminCreateProvider("admin-user", {
+      fullName: "Demo Doctor",
+      serviceType: ServiceProviderType.HEALTH_PROFESSIONAL,
+      phoneNumber: "+2348033333333",
+      city: "Kano",
+      state: "Kano",
+      readinessOnly: false,
+      status: ServiceProviderStatus.PENDING_REVIEW
+    });
+
+    expect(prisma.serviceProvider.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        serviceType: ServiceProviderType.HEALTH_PROFESSIONAL,
+        status: ServiceProviderStatus.PENDING_REVIEW,
+        readinessOnly: true
+      })
+    }));
+    expect(result.readinessOnly).toBe(true);
+    expect(result.status).toBe(ServiceProviderStatus.PENDING_REVIEW);
+  });
+
   it("manually assigns only an approved matching provider and records review status", async () => {
     prisma.serviceProviderRequest.findUnique.mockResolvedValue(request);
     prisma.serviceProvider.findUnique.mockResolvedValue(provider);

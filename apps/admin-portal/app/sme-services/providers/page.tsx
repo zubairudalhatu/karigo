@@ -41,6 +41,15 @@ function areas(value: string) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
+function isReadinessOnlyProvider(form: typeof initialForm) {
+  return form.readinessOnly || form.serviceType === "HEALTH_PROFESSIONAL";
+}
+
+function availableStatuses(form: typeof initialForm) {
+  const options = statuses.filter(Boolean) as ServiceProviderStatus[];
+  return isReadinessOnlyProvider(form) ? options.filter((item) => item !== "APPROVED") : options;
+}
+
 export default function SmeProvidersPage() {
   const [data, setData] = useState<SmeProvidersListResponse | null>(null);
   const [status, setStatus] = useState("");
@@ -70,6 +79,16 @@ export default function SmeProvidersPage() {
   useEffect(() => { void load(); }, [q]);
 
   async function createProvider() {
+    if (!form.fullName.trim() || !form.phoneNumber.trim() || !form.city.trim() || !form.state.trim()) {
+      setError("Provider could not be created. Please check the required fields and try again.");
+      return;
+    }
+    const readinessOnly = isReadinessOnlyProvider(form);
+    if (readinessOnly && form.status === "APPROVED") {
+      setError("Readiness-only and health professional providers can be saved for review only. They cannot be approved or assigned yet.");
+      return;
+    }
+
     setSaving(true);
     setError("");
     setMessage("");
@@ -84,15 +103,16 @@ export default function SmeProvidersPage() {
         state: form.state,
         serviceAreas: areas(form.serviceAreas),
         status: form.status,
-        readinessOnly: form.readinessOnly,
+        readinessOnly,
         notes: form.notes || undefined,
         verificationNote: form.verificationNote || undefined
       });
       setForm(initialForm);
-      setMessage("SME Services provider record created.");
+      setMessage("Service provider record has been created.");
       await load();
     } catch (e) {
-      setError(friendlyError(e));
+      const message = friendlyError(e, "form");
+      setError(message || "Provider could not be created. Please check the required fields and try again.");
     } finally {
       setSaving(false);
     }
@@ -115,11 +135,20 @@ export default function SmeProvidersPage() {
       <div className="form-grid">
         <label>Full name<input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></label>
         <label>Business name<input value={form.businessName} onChange={(e) => setForm({ ...form, businessName: e.target.value })} /></label>
-        <label>Service type<select value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value as ServiceProviderType })}>
+        <label>Service type<select value={form.serviceType} onChange={(e) => {
+          const nextServiceType = e.target.value as ServiceProviderType;
+          const nextReadinessOnly = form.readinessOnly || nextServiceType === "HEALTH_PROFESSIONAL";
+          setForm({
+            ...form,
+            serviceType: nextServiceType,
+            readinessOnly: nextReadinessOnly,
+            status: nextReadinessOnly && form.status === "APPROVED" ? "PENDING_REVIEW" : form.status
+          });
+        }}>
           {serviceTypes.filter(Boolean).map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}
         </select></label>
         <label>Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as ServiceProviderStatus })}>
-          {statuses.filter(Boolean).map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}
+          {availableStatuses(form).map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}
         </select></label>
         <label>Phone<input value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} /></label>
         <label>Email<input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
@@ -129,7 +158,15 @@ export default function SmeProvidersPage() {
         <label>Verification note<input value={form.verificationNote} onChange={(e) => setForm({ ...form, verificationNote: e.target.value })} /></label>
       </div>
       <label>Internal notes<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Internal operations notes only. Do not enter secrets, OTPs or sensitive health information." /></label>
-      <label className="check-row"><input type="checkbox" checked={form.readinessOnly} onChange={(e) => setForm({ ...form, readinessOnly: e.target.checked })} /> Readiness-only provider</label>
+      <label className="check-row"><input type="checkbox" checked={form.readinessOnly} onChange={(e) => {
+        const nextReadinessOnly = e.target.checked || form.serviceType === "HEALTH_PROFESSIONAL";
+        setForm({
+          ...form,
+          readinessOnly: nextReadinessOnly,
+          status: nextReadinessOnly && form.status === "APPROVED" ? "PENDING_REVIEW" : form.status
+        });
+      }} /> Readiness-only provider</label>
+      {isReadinessOnlyProvider(form) ? <p className="muted">Readiness-only and health professional providers can be saved for review, but cannot be approved or assigned yet.</p> : null}
       <button disabled={saving} onClick={() => void createProvider()}>{saving ? "Saving..." : "Create provider"}</button>
     </section>
     <div className="filters section">

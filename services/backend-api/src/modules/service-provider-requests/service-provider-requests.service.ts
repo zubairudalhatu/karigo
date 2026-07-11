@@ -235,7 +235,8 @@ export class ServiceProviderRequestsService {
   }
 
   async adminCreateProvider(adminUserId: string, dto: CreateServiceProviderDto) {
-    this.assertProviderCanUseStatus(dto.serviceType, dto.readinessOnly, dto.status);
+    const readinessOnly = this.providerReadinessOnly(dto.serviceType, dto.readinessOnly);
+    this.assertProviderCanUseStatus(dto.serviceType, readinessOnly, dto.status);
 
     const provider = await this.prisma.serviceProvider.create({
       data: {
@@ -249,7 +250,7 @@ export class ServiceProviderRequestsService {
         state: dto.state.trim(),
         serviceAreas: this.serviceAreas(dto.serviceAreas),
         status: dto.status ?? ServiceProviderStatus.PENDING_REVIEW,
-        readinessOnly: dto.readinessOnly ?? dto.serviceType === ServiceProviderType.HEALTH_PROFESSIONAL,
+        readinessOnly,
         notes: this.optionalText(dto.notes),
         verificationNote: this.optionalText(dto.verificationNote)
       }
@@ -279,7 +280,7 @@ export class ServiceProviderRequestsService {
     }
 
     const nextServiceType = dto.serviceType ?? existing.serviceType;
-    const nextReadinessOnly = dto.readinessOnly ?? existing.readinessOnly;
+    const nextReadinessOnly = this.providerReadinessOnly(nextServiceType, dto.readinessOnly ?? existing.readinessOnly);
     const nextStatus = dto.status ?? existing.status;
     this.assertProviderCanUseStatus(nextServiceType, nextReadinessOnly, nextStatus);
 
@@ -396,8 +397,12 @@ export class ServiceProviderRequestsService {
     status: ServiceProviderStatus = ServiceProviderStatus.PENDING_REVIEW
   ) {
     if ((readinessOnly || serviceType === ServiceProviderType.HEALTH_PROFESSIONAL) && status === ServiceProviderStatus.APPROVED) {
-      throw new BadRequestException("Readiness-only and health professional providers cannot be approved for live assignment yet.");
+      throw new BadRequestException("Readiness-only and health professional providers can be saved for review only. They cannot be approved or assigned yet.");
     }
+  }
+
+  private providerReadinessOnly(serviceType: ServiceProviderType, readinessOnly?: boolean | null) {
+    return readinessOnly === true || serviceType === ServiceProviderType.HEALTH_PROFESSIONAL;
   }
 
   private serviceAreas(serviceAreas?: string[] | null) {

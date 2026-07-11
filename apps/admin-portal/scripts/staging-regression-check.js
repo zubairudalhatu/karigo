@@ -43,6 +43,9 @@ assert(!smeServicesDetail.includes("Pay Now") && !smeServicesDetail.includes("Tr
 const smeProvidersPage = read("app", "sme-services", "providers", "page.tsx");
 assert(smeProvidersPage.includes("SME Services provider directory"), "Admin provider directory page must exist.");
 assert(smeProvidersPage.includes("Create provider record"), "Admin provider directory must support provider record creation.");
+assert(smeProvidersPage.includes("Provider could not be created. Please check the required fields and try again."), "Admin provider creation must show a form-specific validation error.");
+assert(smeProvidersPage.includes("Service provider record has been created."), "Admin provider creation must show the approved success message.");
+assert(smeProvidersPage.includes("friendlyError(e, \"form\")"), "Admin provider creation must surface safe API form errors.");
 assert(smeProvidersPage.includes("does not create provider login, live dispatch, payment collection, payout automation or medical booking"), "Admin provider directory must state safety limits.");
 const smeProviderDetail = read("app", "sme-services", "providers", "[id]", "page.tsx");
 assert(smeProviderDetail.includes("Edit provider"), "Admin provider detail must support provider record editing.");
