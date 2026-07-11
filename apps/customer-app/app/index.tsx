@@ -16,7 +16,7 @@ export default function CustomerWelcome() {
       <StatusBar style="dark" />
       <Image source={require("../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
       <Text style={styles.title}>Everything you need, delivered.</Text>
-      <Text style={styles.copy}>Order food, shop groceries, send parcels and request errands across Kano.</Text>
+      <Text style={styles.copy}>Order food, shop groceries, send parcels and request SME services across Kano.</Text>
       <Link href="/auth/login" asChild>
         <Pressable style={styles.button}><Text style={styles.buttonText}>Get started</Text></Pressable>
       </Link>

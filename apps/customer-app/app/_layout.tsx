@@ -41,6 +41,7 @@ export default function RootLayout() {
     <Stack.Screen name="vendor/apply" options={backOnly} />
     <Stack.Screen name="vendor/application-status" options={backOnly} />
     <Stack.Screen name="parcel" options={backOnly} />
+    <Stack.Screen name="sme-services" options={backOnly} />
     <Stack.Screen name="notifications" options={headerless} />
   </Stack><CustomerBottomNav /><CartNotice /></></CartProvider></AuthProvider>;
 }

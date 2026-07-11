@@ -33,7 +33,7 @@ const categories: {
     statusLabel: process.env.EXPO_PUBLIC_PHARMACY_MARKETPLACE_ENABLED === "true" ? undefined : "Preparing launch"
   },
   { label: "Parcel Delivery", icon: "package", href: "/parcel", serviceCategory: "PARCEL", tone: "#FFFBEB", state: "active" },
-  { label: "SME Errand", icon: "briefcase", href: "/parcel?mode=errand", serviceCategory: "ERRAND", tone: "#F5F3FF", state: "active" },
+  { label: "SME Services", icon: "tool", href: "/sme-services", serviceCategory: "CORPORATE", tone: "#F5F3FF", state: "active" },
   { label: "Airtime", icon: "phone", href: "/utilities/airtime", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode" },
   { label: "Data", icon: "wifi", href: "/utilities/data", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode" },
   { label: "Electricity", icon: "zap", href: "/utilities/electricity", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode" },

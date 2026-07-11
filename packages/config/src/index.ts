@@ -1,7 +1,7 @@
 export const brand = {
   name: "KariGO",
   companyName: "KariGO Express Limited",
-  tagline: "Food, errands and packages - all in one app.",
+  tagline: "Food, SME services and packages - all in one app.",
   colors: {
     primary: "#E11D2E",
     primaryDark: "#B81422",

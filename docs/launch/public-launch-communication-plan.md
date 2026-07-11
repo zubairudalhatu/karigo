@@ -7,7 +7,7 @@
 | Customers | Reliable local delivery in approved Kano zones | Website, social, flyers, approved email/WhatsApp |
 | Vendors | Reach customers through controlled fulfilment tools | Direct outreach, posters, social |
 | Riders | Verified delivery opportunities and transparent workflow | Recruitment materials, direct onboarding |
-| SMEs/corporate users | Managed errands and local logistics | Direct sales, website, email |
+| SMEs/corporate users | Approved service-provider requests and local logistics | Direct sales, website, email |
 | Media/community | KariGO launch scope, local value, safety/support | Press/community brief, social |
 | Internal team | Scope, roles, escalation, launch-day decisions | Briefing, operations channels |
 
@@ -29,8 +29,8 @@ vendors receive onboarding, training, and operational support.
 **Rider:** Apply to join KariGO's verified rider network. Complete verification, safety
 training, and app onboarding before activation.
 
-**SME/corporate:** KariGO supports selected local errands and delivery needs for Kano
-businesses. Contact our team for approved service coverage.
+**SME/corporate:** KariGO supports selected local service-provider requests and delivery
+needs for Kano businesses. Contact our team for approved service coverage.
 
 **Offer:** Use the approved KariGO launch offer within its published terms and limits.
 

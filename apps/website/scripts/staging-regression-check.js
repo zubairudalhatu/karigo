@@ -15,11 +15,12 @@ assert(home.includes("Coming-soon services are clearly marked"), "Coming-soon se
 assert(home.includes("Coming soon on Google Play"), "Website must not invent fake Play Store links.");
 
 const site = read("src", "lib", "site.ts");
-["Food Delivery", "Groceries", "Taxi", "Market Items", "Pharmacy", "Parcel Delivery", "SME Errands", "Airtime", "Data", "Electricity", "Cable TV"]
+["Food Delivery", "Groceries", "Taxi", "Market Items", "Pharmacy", "Parcel Delivery", "SME Services", "Airtime", "Data", "Electricity", "Cable TV"]
   .forEach((service) => assert(site.includes(service), `Service list must include ${service}.`));
+assert(!site.includes("SME Errands"), "Public website must use SME Services instead of SME Errands.");
 assert(site.includes("Coming soon"), "Coming-soon service states must exist.");
 assert(site.includes("Preparing launch"), "Pharmacy preparing-launch state must exist.");
-["food", "groceries", "taxi", "parcel"].forEach((icon) => assert(site.includes(`icon: "${icon}"`), `Service icon key ${icon} must be present.`));
+["food", "groceries", "taxi", "parcel", "smeServices"].forEach((icon) => assert(site.includes(`icon: "${icon}"`), `Service icon key ${icon} must be present.`));
 
 const vendorApply = read("app", "vendors", "apply", "page.tsx");
 assert(vendorApply.includes("VendorApplicationForm"), "Vendor application page must render the form.");

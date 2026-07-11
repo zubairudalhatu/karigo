@@ -7,7 +7,7 @@ Recommended length: 20 slides. Use synthetic/demo data only.
 | 1 | KariGO | Delivery and local commerce for Kano | Logo and red/charcoal cover | State MVP/demo scope clearly |
 | 2 | The Everyday Delivery Problem | Fragmented ordering, uncertain delivery, weak visibility | Simple customer-vendor-rider pain diagram | Keep local and practical |
 | 3 | KariGO Solution | One coordinated workflow and four role-based products | Four-surface diagram | Explain control, not just convenience |
-| 4 | What KariGO Delivers | Food, grocery/market, parcel, SME errands | Service cards | Confirm future super-app services are excluded |
+| 4 | What KariGO Delivers | Food, grocery/market, parcel, SME Services | Service cards | Confirm future super-app services are excluded |
 | 5 | Customer App | Browse, order, pay, track, support | Customer Home/order screenshots | Demo uses mock payment |
 | 6 | Rider App | Availability, jobs, status, OTP, earnings | Rider dashboard/job screenshots | Backend controls status sequence |
 | 7 | Vendor Dashboard | Paid orders and fulfilment actions | Vendor dashboard/order detail | Vendors see only their orders |

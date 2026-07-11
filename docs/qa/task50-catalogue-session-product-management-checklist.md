@@ -17,7 +17,7 @@ Use staging demo accounts only. Do not record passwords, tokens, OTPs, full phon
 - Groceries opens `Groceries` catalogue.
 - Market Items opens `Market items` catalogue.
 - Parcel Delivery opens the existing parcel flow.
-- SME Errands opens the existing parcel/errand flow with business-errand context.
+- SME Services opens the service-provider request flow and remains separate from the parcel/package flow.
 - Home shows `Food near you`, `Groceries near you`, and `Market items near you`.
 
 ## Customer Catalogue

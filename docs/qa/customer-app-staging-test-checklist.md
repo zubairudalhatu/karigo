@@ -27,7 +27,7 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 | Bottom navigation appears | Authenticated screens show Home, Browse, Cart, Orders and Profile | Fixed | Hidden on auth/onboarding routes |
 | Bottom navigation cart badge updates | Badge count changes immediately after cart add/update/clear | Fixed | Uses customer cart context count |
 | Home quick-link clutter removed | Addresses, Cart, Orders, Profile and Support are not shown as dense homepage text links | Fixed | Addresses/Support/Notifications moved into Profile |
-| Compact service grid displays | Home shows Food Delivery, Groceries, Taxi, Market Items, Pharmacy, Parcel Delivery, SME Errand, Airtime, Data, Electricity and Cable TV in compact tiles | Fixed | Taxi/Bills/disabled Pharmacy route to readiness screens |
+| Compact service grid displays | Home shows Food Delivery, Groceries, Taxi, Market Items, Pharmacy, Parcel Delivery, SME Services, Airtime, Data, Electricity and Cable TV in compact tiles | Fixed | Taxi/Bills/disabled Pharmacy route to readiness screens |
 | Taxi readiness is safe | Taxi tap shows coming-soon message and does not request a ride | Fixed | No Rider dispatch integration |
 | Bills & Utilities readiness is safe | Airtime, Data, Electricity and Cable TV show coming-soon readiness message | Fixed | No live provider checkout |
 | Pharmacy readiness gate works | Pharmacy routes to readiness unless explicitly enabled by environment | Fixed | No prescription or pharmacy approval automation |
@@ -56,8 +56,9 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 | Support ticket flow works | Customer can create/view ticket | Fixed | Newly created ticket is inserted immediately and list refreshes on focus/pull |
 | Route names are hidden | Route segments such as `checkout`, `support`, `tabs/` are not visible as headers | Fixed | Expo Router titles are explicitly configured |
 | Native header titles are minimized | Detail flows keep only the back affordance while page content carries the title | Fixed | Visual retest required in next APK |
-| Home copy is approved | Home displays `Food, groceries, parcels and errands across Kano.` | Fixed | Exact copy required for staging demo |
-| Service categories are clear | Food Delivery, Groceries, Market Items, Parcel Delivery and SME Errands display as clean chips | Fixed | Red is used as a soft accent only |
+| Home copy is approved | Home presents Food, groceries, market items, parcels and SME Services without mixing SME Services into Parcel Delivery | Fixed | Exact copy required for staging demo |
+| Service categories are clear | Food Delivery, Groceries, Market Items, Parcel Delivery and SME Services display as clean chips | Fixed | Red is used as a soft accent only |
+| SME Services request flow is distinct | SME Services opens the service-provider request screen instead of the parcel form | Fixed | Health professional category remains readiness-only |
 | Vendor cards are content-first | Vendor name, category, city, open/closed state and favourite affordance are readable | Fixed | Closed vendors show an overlay state |
 | Cart presentation is clear | Cart item totals, quantity actions and server-pricing note are readable | Fixed | No pricing behavior changed |
 | Checkout receipt layout is clear | Subtotal, delivery fee, discount and payable render as a structured receipt | Fixed | Payable is visually strongest |

@@ -3,7 +3,7 @@
 ## What KariGO Is
 
 KariGO is a delivery and local-commerce platform designed to help people and businesses
-in Kano request everyday deliveries and errands through one coordinated system.
+in Kano request everyday deliveries and approved local services through one coordinated system.
 
 ## The Problem
 
@@ -17,7 +17,7 @@ into one managed workflow.
 - Food delivery
 - Grocery and market delivery
 - Parcel delivery
-- SME and corporate errands
+- SME Services for approved skilled service-provider requests
 
 ## Four Product Surfaces
 

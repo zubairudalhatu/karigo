@@ -94,6 +94,28 @@ enum ServiceCategory {
   CORPORATE
 }
 
+enum ServiceProviderType {
+  PAINTER
+  PLUMBER
+  MECHANIC
+  ELECTRICIAN
+  CLEANER
+  CARPENTER
+  AC_TECHNICIAN
+  GENERATOR_REPAIR
+  HEALTH_PROFESSIONAL
+  OTHER
+}
+
+enum ServiceProviderRequestStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  PROVIDER_MATCHING
+  PROVIDER_ASSIGNED
+  COMPLETED
+  CANCELLED
+}
+
 enum ProductCategory {
   FOOD
   GROCERIES
@@ -527,24 +549,25 @@ model OtpVerification {
 }
 
 model CustomerProfile {
-  id                  String               @id @default(uuid()) @db.Uuid
-  userId              String               @unique @db.Uuid
-  referralCode        String               @unique
-  referredBy          String?              @db.Uuid
-  loyaltyBalance      Decimal              @default(0) @db.Decimal(12, 2)
-  totalOrders         Int                  @default(0)
-  averageRating       Decimal?             @db.Decimal(3, 2)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  user                User                 @relation(fields: [userId], references: [id])
-  referrer            CustomerProfile?     @relation("CustomerReferrals", fields: [referredBy], references: [id])
-  referrals           CustomerProfile[]    @relation("CustomerReferrals")
-  orders              Order[]
-  payments            Payment[]
-  supportTickets      SupportTicket[]
-  promoCodeUsages     PromoCodeUsage[]
-  utilityTransactions UtilityTransaction[]
-  taxiTrips           TaxiTrip[]
+  id                      String                   @id @default(uuid()) @db.Uuid
+  userId                  String                   @unique @db.Uuid
+  referralCode            String                   @unique
+  referredBy              String?                  @db.Uuid
+  loyaltyBalance          Decimal                  @default(0) @db.Decimal(12, 2)
+  totalOrders             Int                      @default(0)
+  averageRating           Decimal?                 @db.Decimal(3, 2)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  user                    User                     @relation(fields: [userId], references: [id])
+  referrer                CustomerProfile?         @relation("CustomerReferrals", fields: [referredBy], references: [id])
+  referrals               CustomerProfile[]        @relation("CustomerReferrals")
+  orders                  Order[]
+  payments                Payment[]
+  supportTickets          SupportTicket[]
+  promoCodeUsages         PromoCodeUsage[]
+  utilityTransactions     UtilityTransaction[]
+  taxiTrips               TaxiTrip[]
+  serviceProviderRequests ServiceProviderRequest[]
 
   @@map("customer_profiles")
 }
@@ -618,25 +641,52 @@ model UtilityTransaction {
 }
 
 model Address {
-  id             String   @id @default(uuid()) @db.Uuid
-  userId         String   @db.Uuid
-  label          String
-  addressLine    String
-  city           String
-  state          String
-  country        String   @default("Nigeria")
-  latitude       Decimal? @db.Decimal(10, 7)
-  longitude      Decimal? @db.Decimal(10, 7)
-  deliveryNote   String?
-  isDefault      Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id])
-  pickupOrders   Order[]  @relation("PickupAddress")
-  deliveryOrders Order[]  @relation("DeliveryAddress")
+  id                      String                   @id @default(uuid()) @db.Uuid
+  userId                  String                   @db.Uuid
+  label                   String
+  addressLine             String
+  city                    String
+  state                   String
+  country                 String                   @default("Nigeria")
+  latitude                Decimal?                 @db.Decimal(10, 7)
+  longitude               Decimal?                 @db.Decimal(10, 7)
+  deliveryNote            String?
+  isDefault               Boolean                  @default(false)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  user                    User                     @relation(fields: [userId], references: [id])
+  pickupOrders            Order[]                  @relation("PickupAddress")
+  deliveryOrders          Order[]                  @relation("DeliveryAddress")
+  serviceProviderRequests ServiceProviderRequest[] @relation("ServiceRequestAddress")
 
   @@index([userId])
   @@map("addresses")
+}
+
+model ServiceProviderRequest {
+  id                  String                       @id @default(uuid()) @db.Uuid
+  requestNumber       String                       @unique
+  customerId          String                       @db.Uuid
+  serviceType         ServiceProviderType
+  serviceLabel        String
+  serviceAddressId    String                       @db.Uuid
+  description         String
+  contactPhone        String
+  preferredDate       String?
+  preferredTimeWindow String?
+  customerNote        String?
+  status              ServiceProviderRequestStatus @default(SUBMITTED)
+  readinessOnly       Boolean                      @default(false)
+  adminNote           String?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  customer            CustomerProfile              @relation(fields: [customerId], references: [id])
+  serviceAddress      Address                      @relation("ServiceRequestAddress", fields: [serviceAddressId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@index([serviceType, status, createdAt])
+  @@index([status, createdAt])
+  @@map("service_provider_requests")
 }
 
 model VendorCategory {

@@ -35,9 +35,9 @@ const readinessContent: Record<string, { title: string; message: string; icon: k
     message: "KariGO is preparing approved pharmacy vendor onboarding, compliance checks and safe product visibility before pharmacy marketplace launch.",
     icon: "plus-square"
   },
-  "sme-errand": {
-    title: "SME Errand readiness",
-    message: "KariGO is preparing stronger SME errand controls for business tasks. You can continue using the existing parcel and errand request flow where available.",
+  "sme-services": {
+    title: "SME Services readiness",
+    message: "KariGO supports staging requests for approved service providers. Doctor and health professional categories remain readiness-only until future compliance approval.",
     icon: "briefcase"
   }
 };

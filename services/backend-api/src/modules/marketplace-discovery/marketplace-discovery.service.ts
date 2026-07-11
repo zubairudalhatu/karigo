@@ -8,7 +8,7 @@ const categories = [
   { key: "market-items", label: "Market Items", serviceCategory: "MARKET", href: "/catalogue/market-items", enabled: true },
   { key: "pharmacy", label: "Pharmacy", serviceCategory: "PHARMACY", href: "/catalogue/pharmacy", enabled: false },
   { key: "parcel", label: "Parcel Delivery", serviceCategory: "PARCEL", href: "/parcel", enabled: true },
-  { key: "sme-errands", label: "SME Errands", serviceCategory: "ERRAND", href: "/parcel?mode=errand", enabled: true }
+  { key: "sme-services", label: "SME Services", serviceCategory: "CORPORATE", href: "/sme-services", enabled: true }
 ];
 
 const VENDOR_SELECT = {

@@ -8,7 +8,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
-["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel", "vendor/apply", "vendor/application-status"]
+["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel", "sme-services", "vendor/apply", "vendor/application-status"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
 assert(layout.includes('<Stack.Screen name="utilities/index" options={headerless}'), "Utilities hub must hide native header.");
 ["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
@@ -46,7 +46,7 @@ assert(home.includes("EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED"), "Taxi staging
 assert(home.includes("Market Items"), "Home must keep Market Items service category.");
 assert(home.includes("Pharmacy"), "Home must include the compliance-gated Pharmacy category.");
 assert(home.includes("Parcel Delivery"), "Home must keep Parcel Delivery service category.");
-assert(home.includes("SME Errand"), "Home must keep SME Errand service category.");
+assert(home.includes("SME Services"), "Home must keep SME Services service category.");
 assert(home.includes("Airtime"), "Home must include Airtime readiness tile.");
 assert(home.includes("Data"), "Home must include Data readiness tile.");
 assert(home.includes("Electricity"), "Home must include Electricity readiness tile.");
@@ -58,7 +58,7 @@ assert(home.includes("/readiness/taxi"), "Taxi must route to a safe readiness sc
 assert(home.includes("/taxi/request"), "Taxi Test Mode route must only be available behind staging flags.");
 assert(home.includes("EXPO_PUBLIC_PHARMACY_MARKETPLACE_ENABLED"), "Pharmacy must remain readiness-gated by environment.");
 assert(home.includes("/readiness/pharmacy"), "Disabled pharmacy must route to a readiness screen.");
-assert(home.includes("/parcel?mode=errand"), "SME Errands chip must navigate to the errand flow.");
+assert(home.includes("/sme-services"), "SME Services chip must navigate to the service-provider request flow.");
 assert(home.includes("Bills & Utilities"), "Home must include a Bills & Utilities readiness section.");
 assert(home.includes("utilityServices"), "Bills & Utilities section must use safe utility readiness tiles.");
 assert(home.includes("/utilities/airtime"), "Airtime must route to the safe utility test flow.");
@@ -100,6 +100,16 @@ assert(taxiRequest.includes("taxiApi.fareEstimate"), "Taxi request flow must quo
 assert(taxiRequest.includes("taxiApi.createTrip"), "Taxi request flow must create trips through the backend.");
 assert(taxiRequest.includes("Join Taxi Waitlist") && taxiRequest.includes("/taxi/waitlist"), "Disabled Taxi request flow must route customers to the waitlist.");
 assert(!taxiRequest.includes("Pay Now"), "Taxi Test Mode must not show a payment action.");
+
+const smeServices = read("app", "sme-services.tsx");
+assert(smeServices.includes("SME Services"), "Customer app must include the SME Services request screen.");
+assert(smeServices.includes("serviceProviderRequestsApi.catalogue"), "SME Services screen must load provider categories from the backend.");
+assert(smeServices.includes("serviceProviderRequestsApi.create"), "SME Services screen must submit requests through the backend.");
+assert(smeServices.includes("Doctor / health professional booking is readiness-only"), "Health professional category must remain readiness-only.");
+assert(smeServices.includes("Parcel Delivery remains for sending packages only."), "SME Services copy must differentiate from Parcel Delivery.");
+const serviceProviderApi = read("src", "api", "service-provider-requests.api.ts");
+assert(serviceProviderApi.includes("service-provider-requests/catalogue"), "Customer app must call the SME Services catalogue endpoint.");
+assert(serviceProviderApi.includes("service-provider-requests"), "Customer app must call the SME Services request endpoint.");
 
 const catalogue = read("app", "catalogue", "[category].tsx");
 assert(catalogue.includes("Food delivery"), "Food catalogue heading must exist.");

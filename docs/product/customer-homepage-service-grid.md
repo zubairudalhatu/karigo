@@ -12,7 +12,7 @@ The homepage service order is:
 4. Market Items
 5. Pharmacy
 6. Parcel Delivery
-7. SME Errand
+7. SME Services
 8. Airtime
 9. Data
 10. Electricity
@@ -23,8 +23,8 @@ Active services route to existing customer flows:
 - Food Delivery: food/vendor discovery
 - Groceries: grocery/vendor discovery
 - Market Items: market/vendor discovery
-- Parcel Delivery: existing send parcel flow
-- SME Errand: existing parcel/errand request flow
+- Parcel Delivery: send parcel/package flow
+- SME Services: service-provider request flow for approved skilled providers such as painters, plumbers, mechanics, electricians, cleaners, carpenters, AC technicians and generator repair technicians
 
 ## Readiness-Gated Services
 

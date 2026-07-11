@@ -31,7 +31,7 @@ This report records a read-only automated staging QA pass plus local build/typec
 | Backend health | Passed | `GET /health` returned healthy JSON. |
 | Swagger/API docs | Passed | `GET /api/docs` returned `200 OK`. |
 | Public website domains | Passed | `www` and apex domains returned `200 OK` with SSL. |
-| Public website content | Passed | Food, groceries, market, parcel and SME errands shown as live; Taxi, Bills and Pharmacy are clearly gated. |
+| Public website content | Passed | Food, groceries, market, parcel and SME Services shown as live; Taxi, Bills and Pharmacy are clearly gated. |
 | Admin portal fallback | Passed | `karigo-admin-portal.vercel.app` returned Admin Portal HTML. |
 | Vendor dashboard fallback | Passed | `karigo-vendor-dashboard.vercel.app` returned Vendor Dashboard HTML. |
 | Admin custom domain | Passed | `https://admin.karigo.com.ng` loads the Admin Portal and authenticated dashboard access is confirmed. |

@@ -29,7 +29,8 @@ KariGO is suitable for continued internal staging review using the branded Admin
 | Rider App | Blocked pending device QA | Typecheck passed; live APK/rider account journey not executed in this pass. |
 | Demo accounts | Documented, pending secure credential confirmation | Account personas and phone numbers are documented without password values. |
 | Food/Grocery/Market catalogue | Ready for staging QA | Active vendors/products are returned from public API. |
-| Parcel/SME Errands | Pending credentialed app QA | Public website marks them live, but customer role flow was not executed here. |
+| Parcel Delivery | Pending credentialed app QA | Public website marks parcel delivery live, but customer parcel flow still requires credentialed app evidence. |
+| SME Services | Pending credentialed app QA | Service-provider request foundation is available in staging; health professional booking remains readiness-only. |
 | Bills & Utilities | Test-mode ready only | Demo providers are visible; live fulfilment remains intentionally inactive. |
 | Taxi | Readiness/staging only | Public website marks Taxi coming soon; no live Taxi activation. |
 | Pharmacy | Readiness only | Discovery API marks Pharmacy disabled; no public live Pharmacy flow. |

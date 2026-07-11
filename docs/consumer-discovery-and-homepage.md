@@ -12,7 +12,7 @@ Task 44 changes the Customer App homepage from a product feed into a category-fi
   - Market Items
   - Pharmacy
   - Parcel Delivery
-  - SME Errands
+  - SME Services
 - Homepage no longer renders individual product cards, prices, product carousels, or add-to-cart buttons.
 - `Today's featured for you` shows vendor spotlights only.
 - Labelled internal ad placement exists, but no ad content is shown unless approved content is later supplied.
@@ -27,6 +27,6 @@ Task 44 changes the Customer App homepage from a product feed into a category-fi
 ## Test Focus
 
 - Confirm no products appear on Home.
-- Confirm category cards route correctly.
+- Confirm category cards route correctly, including SME Services routing to the service-provider request flow instead of the parcel form.
 - Confirm bottom navigation icons and labels are visible and accessible.
 - Confirm `View Store` routes to vendor storefronts.

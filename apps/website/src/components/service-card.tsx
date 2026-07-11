@@ -7,7 +7,7 @@ const serviceIcons = {
   market: <><path d="M6 9h12l-1 11H7L6 9z" /><path d="M9 9a3 3 0 0 1 6 0" /></>,
   pharmacy: <><path d="M12 5v14" /><path d="M5 12h14" /><rect x="6" y="6" width="12" height="12" rx="3" /></>,
   parcel: <><path d="M5 8l7-4 7 4v8l-7 4-7-4z" /><path d="M5 8l7 4 7-4" /><path d="M12 12v8" /></>,
-  errands: <><path d="M5 12l4 4 10-10" /><path d="M5 20h14" /></>,
+  smeServices: <><path d="M7 18h10" /><path d="M9 14l6-6" /><path d="M8 7l3-3 3 3" /><path d="M15 9l2 2-6 6-2-2z" /></>,
   airtime: <><rect x="8" y="4" width="8" height="16" rx="2" /><path d="M11 17h2" /></>,
   data: <><circle cx="12" cy="12" r="7" /><path d="M5 12h14" /><path d="M12 5a12 12 0 0 1 0 14" /><path d="M12 5a12 12 0 0 0 0 14" /></>,
   electricity: <><path d="M13 3L6 14h5l-1 7 8-12h-5z" /></>,
@@ -17,7 +17,7 @@ const serviceIcons = {
 function ServiceIcon({ name }: { name: string }) {
   return (
     <svg aria-hidden="true" className="service-icon-svg" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
-      {serviceIcons[name as keyof typeof serviceIcons] ?? serviceIcons.errands}
+      {serviceIcons[name as keyof typeof serviceIcons] ?? serviceIcons.smeServices}
     </svg>
   );
 }
