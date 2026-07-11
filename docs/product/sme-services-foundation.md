@@ -33,6 +33,16 @@ Customer endpoints:
 
 The backend verifies that the authenticated customer owns the selected service address. Customers can view only their own SME Services requests.
 
+Admin endpoints:
+
+- `GET /api/v1/admin/service-provider-requests`
+- `GET /api/v1/admin/service-provider-requests/:requestId`
+- `PATCH /api/v1/admin/service-provider-requests/:requestId/status`
+
+Admin access is restricted to approved admin roles. Admins can review requests, filter by status or service type, view customer/location details, add an internal admin note and update request review status.
+
+Admin status updates do not dispatch providers, collect service payments, create provider payouts, activate medical booking or assign service jobs automatically.
+
 ## Customer App Foundation
 
 The Customer App now exposes a distinct SME Services screen at `/sme-services`.
@@ -48,6 +58,19 @@ The screen collects:
 - Optional customer note
 
 Health professional booking is blocked with clear readiness-only copy.
+
+## Admin Portal Foundation
+
+The Admin Portal exposes an `SME Services` operations page.
+
+The page supports:
+
+- Summary cards for submitted, under-review and matching/assigned requests
+- Status, service type and search filters
+- Request detail view
+- Internal admin note
+- Review status updates with an explicit safety confirmation
+- Review history from admin audit records
 
 ## Launch Notes
 

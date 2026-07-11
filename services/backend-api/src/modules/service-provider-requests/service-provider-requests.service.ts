@@ -1,8 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, ServiceProviderType } from "@prisma/client";
+import { Prisma, ServiceProviderRequestStatus, ServiceProviderType } from "@prisma/client";
 import { randomBytes } from "crypto";
+import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateServiceProviderRequestDto } from "./dto/create-service-provider-request.dto";
+import { ListServiceProviderRequestsQueryDto } from "./dto/list-service-provider-requests-query.dto";
+import { UpdateServiceProviderRequestStatusDto } from "./dto/update-service-provider-request-status.dto";
 
 const SERVICE_CATALOGUE: Array<{
   type: ServiceProviderType;
@@ -31,7 +34,10 @@ const SERVICE_CATALOGUE: Array<{
 
 @Injectable()
 export class ServiceProviderRequestsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AdminAuditService
+  ) {}
 
   catalogue() {
     return SERVICE_CATALOGUE.map((item) => ({
@@ -101,6 +107,94 @@ export class ServiceProviderRequestsService {
     return this.customerRequest(request);
   }
 
+  async adminList(query: ListServiceProviderRequestsQueryDto) {
+    const where: Prisma.ServiceProviderRequestWhereInput = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.serviceType ? { serviceType: query.serviceType } : {}),
+      ...(query.search ? {
+        OR: [
+          { requestNumber: { contains: query.search, mode: "insensitive" as const } },
+          { serviceLabel: { contains: query.search, mode: "insensitive" as const } },
+          { description: { contains: query.search, mode: "insensitive" as const } },
+          { contactPhone: { contains: query.search } },
+          { customer: { user: { fullName: { contains: query.search, mode: "insensitive" as const } } } },
+          { customer: { user: { phoneNumber: { contains: query.search } } } }
+        ]
+      } : {})
+    };
+
+    const [items, total, submitted, underReview, providerMatching, providerAssigned, completed, cancelled] = await Promise.all([
+      this.prisma.serviceProviderRequest.findMany({
+        where,
+        include: this.adminInclude(),
+        orderBy: { createdAt: "desc" },
+        take: 200
+      }),
+      this.prisma.serviceProviderRequest.count({ where: {} }),
+      this.prisma.serviceProviderRequest.count({ where: { status: ServiceProviderRequestStatus.SUBMITTED } }),
+      this.prisma.serviceProviderRequest.count({ where: { status: ServiceProviderRequestStatus.UNDER_REVIEW } }),
+      this.prisma.serviceProviderRequest.count({ where: { status: ServiceProviderRequestStatus.PROVIDER_MATCHING } }),
+      this.prisma.serviceProviderRequest.count({ where: { status: ServiceProviderRequestStatus.PROVIDER_ASSIGNED } }),
+      this.prisma.serviceProviderRequest.count({ where: { status: ServiceProviderRequestStatus.COMPLETED } }),
+      this.prisma.serviceProviderRequest.count({ where: { status: ServiceProviderRequestStatus.CANCELLED } })
+    ]);
+
+    return {
+      summary: { total, submitted, underReview, providerMatching, providerAssigned, completed, cancelled },
+      items: items.map((request) => this.adminRequest(request, true))
+    };
+  }
+
+  async adminDetail(requestId: string) {
+    const request = await this.prisma.serviceProviderRequest.findUnique({
+      where: { id: requestId },
+      include: this.adminInclude()
+    });
+    if (!request) {
+      throw new NotFoundException("SME Services request not found");
+    }
+
+    const reviewHistory = await this.prisma.adminAuditLog.findMany({
+      where: { entityType: "ServiceProviderRequest", entityId: requestId },
+      select: { id: true, action: true, newValue: true, createdAt: true, adminUser: { select: { fullName: true, email: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 20
+    });
+
+    return {
+      ...this.adminRequest(request),
+      reviewHistory
+    };
+  }
+
+  async adminUpdateStatus(adminUserId: string, requestId: string, dto: UpdateServiceProviderRequestStatusDto) {
+    const existing = await this.prisma.serviceProviderRequest.findUnique({
+      where: { id: requestId },
+      include: this.adminInclude()
+    });
+    if (!existing) {
+      throw new NotFoundException("SME Services request not found");
+    }
+
+    const updated = await this.prisma.serviceProviderRequest.update({
+      where: { id: requestId },
+      data: {
+        status: dto.status,
+        ...(dto.adminNote === undefined ? {} : { adminNote: dto.adminNote.trim() || null })
+      },
+      include: this.adminInclude()
+    });
+
+    await this.audit.record(adminUserId, "service_provider_request.status_changed", "ServiceProviderRequest", requestId, {
+      previousStatus: existing.status,
+      status: dto.status,
+      serviceType: existing.serviceType,
+      requestNumber: existing.requestNumber
+    });
+
+    return this.adminRequest(updated);
+  }
+
   private async requireCustomer(userId: string) {
     const customer = await this.prisma.customerProfile.findUnique({ where: { userId }, select: { id: true } });
     if (!customer) {
@@ -133,6 +227,27 @@ export class ServiceProviderRequestsService {
     };
   }
 
+  private adminInclude() {
+    return {
+      customer: {
+        select: {
+          id: true,
+          user: { select: { id: true, fullName: true, phoneNumber: true, email: true } }
+        }
+      },
+      serviceAddress: {
+        select: {
+          id: true,
+          label: true,
+          addressLine: true,
+          city: true,
+          state: true,
+          country: true
+        }
+      }
+    };
+  }
+
   private customerRequest(request: Prisma.ServiceProviderRequestGetPayload<{ include: ReturnType<ServiceProviderRequestsService["customerInclude"]> }>, list = false) {
     return {
       id: request.id,
@@ -146,6 +261,27 @@ export class ServiceProviderRequestsService {
       customerNote: list ? undefined : request.customerNote,
       status: request.status,
       readinessOnly: request.readinessOnly,
+      serviceAddress: request.serviceAddress,
+      createdAt: request.createdAt,
+      updatedAt: request.updatedAt
+    };
+  }
+
+  private adminRequest(request: Prisma.ServiceProviderRequestGetPayload<{ include: ReturnType<ServiceProviderRequestsService["adminInclude"]> }>, list = false) {
+    return {
+      id: request.id,
+      requestNumber: request.requestNumber,
+      serviceType: request.serviceType,
+      serviceLabel: request.serviceLabel,
+      description: request.description,
+      contactPhone: request.contactPhone,
+      preferredDate: request.preferredDate,
+      preferredTimeWindow: request.preferredTimeWindow,
+      customerNote: request.customerNote,
+      status: request.status,
+      readinessOnly: request.readinessOnly,
+      adminNote: list ? undefined : request.adminNote,
+      customer: request.customer,
       serviceAddress: request.serviceAddress,
       createdAt: request.createdAt,
       updatedAt: request.updatedAt

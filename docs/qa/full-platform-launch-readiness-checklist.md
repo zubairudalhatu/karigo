@@ -29,6 +29,7 @@ This checklist combines product, role, operations and deployment checks before c
 - [ ] Taxi Test Mode is clearly labelled and does not imply a real ride.
 - [ ] Pharmacy remains readiness-gated unless approved.
 - [ ] Bills and Utilities clearly say test mode.
+- [ ] SME Services remains review/status-only and does not expose live provider dispatch, payment, payout or medical booking.
 - [ ] No live utility merchant API is enabled.
 - [ ] No live payout/bank transfer provider is enabled.
 - [ ] No live WhatsApp/push/email/SMS provider is unintentionally enabled.

@@ -11,6 +11,7 @@ Use Super Admin or Operations Admin from `docs/deployment/karigo-staging-demo-ac
 | Users/customers | Open users/customers pages. | Lists load and role data is readable. | Admin sees raw password/token data. | No password hashes in UI. |
 | Vendors | Open vendor management. | Vendors load with category/location/status. | Vendor data missing or wrong. | Check Food/Grocery/Market. |
 | Vendor applications | Review applications. | Application list/detail and review workflow work. | Applicant notes mixed with internal notes. | Internal notes hidden from applicant. |
+| SME Services | Open SME Services, filter requests, view detail and update review status. | Requests load with customer/location details; status update requires confirmation and records admin note/history. | Provider dispatch, payment, payout or medical booking action appears. | Review-only workflow; no live provider marketplace. |
 | Payout accounts | Review pending/verified/rejected/needs update. | Admin can verify/reject with confirmation; vendor cannot. | Transfer funds button or missing confirmation. | No live payout provider. |
 | Riders | Open riders and available riders. | Rider status and availability are accurate. | Inactive riders assignable unexpectedly. | Coordinate Rider app test. |
 | Settlements | Mark vendor settlement/rider earning paid. | Confirmation appears; status and notifications update. | Real bank transfer triggered. | Mark-paid is recordkeeping only. |
@@ -35,3 +36,10 @@ Utilities-specific confirmations:
 - Utility summary and transaction detail load.
 - Manual override is staging-only.
 - UI says no real airtime, data, electricity token or cable subscription is delivered.
+
+SME Services-specific confirmations:
+
+- SME Services list and detail pages load for approved admin roles.
+- Admin can filter by request status and service provider type.
+- Admin can update review status with an internal note.
+- No live provider dispatch, service payment, provider payout or regulated medical booking is exposed.

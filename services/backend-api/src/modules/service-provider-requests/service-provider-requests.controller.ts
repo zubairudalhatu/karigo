@@ -1,13 +1,19 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
-import { UserRole } from "@prisma/client";
+import { AdminRole, UserRole } from "@prisma/client";
+import { AdminRoles } from "../../common/decorators/admin-roles.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
+import { AdminRolesGuard } from "../../common/guards/admin-roles.guard";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { CreateServiceProviderRequestDto } from "./dto/create-service-provider-request.dto";
+import { ListServiceProviderRequestsQueryDto } from "./dto/list-service-provider-requests-query.dto";
+import { UpdateServiceProviderRequestStatusDto } from "./dto/update-service-provider-request-status.dto";
 import { ServiceProviderRequestsService } from "./service-provider-requests.service";
+
+const SERVICE_REQUEST_ADMINS = [AdminRole.SUPER_ADMIN, AdminRole.OPERATIONS_ADMIN, AdminRole.SUPPORT_AGENT, AdminRole.VENDOR_MANAGER];
 
 @ApiTags("SME Services")
 @ApiBearerAuth()
@@ -39,5 +45,37 @@ export class ServiceProviderRequestsController {
   @ApiOperation({ summary: "Get an owned SME Services request" })
   async detail(@CurrentUser() user: AuthenticatedUser, @Param("requestId", ParseUUIDPipe) requestId: string) {
     return { message: "SME Services request retrieved", data: await this.serviceRequests.detail(user.id, requestId) };
+  }
+}
+
+@ApiTags("Admin SME Services")
+@ApiBearerAuth()
+@Controller("admin/service-provider-requests")
+@UseGuards(JwtAuthGuard, RolesGuard, AdminRolesGuard)
+@Roles(UserRole.ADMIN)
+@AdminRoles(...SERVICE_REQUEST_ADMINS)
+export class AdminServiceProviderRequestsController {
+  constructor(private readonly serviceRequests: ServiceProviderRequestsService) {}
+
+  @Get()
+  @ApiOperation({ summary: "List SME Services requests for admin review" })
+  async list(@Query() query: ListServiceProviderRequestsQueryDto) {
+    return { message: "SME Services requests retrieved", data: await this.serviceRequests.adminList(query) };
+  }
+
+  @Get(":requestId")
+  @ApiOperation({ summary: "Get one SME Services request for admin review" })
+  async detail(@Param("requestId", ParseUUIDPipe) requestId: string) {
+    return { message: "SME Services request retrieved", data: await this.serviceRequests.adminDetail(requestId) };
+  }
+
+  @Patch(":requestId/status")
+  @ApiOperation({ summary: "Update an SME Services request review status" })
+  async status(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("requestId", ParseUUIDPipe) requestId: string,
+    @Body() dto: UpdateServiceProviderRequestStatusDto
+  ) {
+    return { message: "SME Services request status updated", data: await this.serviceRequests.adminUpdateStatus(user.id, requestId, dto) };
   }
 }

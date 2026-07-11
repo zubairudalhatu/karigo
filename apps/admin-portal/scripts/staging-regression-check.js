@@ -24,6 +24,21 @@ const shell = read("src", "components", "portal.tsx");
 assert(shell.includes("Payout Accounts"), "Admin sidebar must include payout accounts.");
 assert(shell.includes("Utilities"), "Admin sidebar must include Utilities.");
 assert(shell.includes("Taxi"), "Admin sidebar must include Taxi readiness.");
+assert(shell.includes("SME Services"), "Admin sidebar must include SME Services.");
+
+const smeServicesPage = read("app", "sme-services", "page.tsx");
+assert(smeServicesPage.includes("SME Services"), "Admin SME Services list page must exist.");
+assert(smeServicesPage.includes("does not dispatch providers"), "Admin SME Services list must state safe review-only limits.");
+assert(smeServicesPage.includes("smeServicesApi.list"), "Admin SME Services page must call the list endpoint.");
+assert(smeServicesPage.includes("Total requests"), "Admin SME Services page must show summary cards.");
+assert(smeServicesPage.includes("All service types"), "Admin SME Services page must support service-type filtering.");
+const smeServicesDetail = read("app", "sme-services", "[id]", "page.tsx");
+assert(smeServicesDetail.includes("Update review status"), "Admin SME Services detail must support status updates.");
+assert(smeServicesDetail.includes("does not dispatch a provider, collect payment or activate medical booking"), "Admin SME Services status update must confirm safe limits.");
+assert(!smeServicesDetail.includes("Pay Now") && !smeServicesDetail.includes("Transfer funds"), "Admin SME Services must not expose payment actions.");
+const smeServicesApiSource = read("src", "api", "sme-services.api.ts");
+assert(smeServicesApiSource.includes("admin/service-provider-requests"), "Admin portal must call admin SME Services endpoints.");
+assert(smeServicesApiSource.includes("admin/service-provider-requests/${id}/status"), "Admin portal must call the SME Services status endpoint.");
 
 const taxiPage = read("app", "taxi", "page.tsx");
 assert(taxiPage.includes("Driver Applications"), "Admin taxi page must show driver applications.");
