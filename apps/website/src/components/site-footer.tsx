@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export function SiteFooter() {
@@ -5,9 +6,8 @@ export function SiteFooter() {
     <footer className="site-footer">
       <div className="footer-grid">
         <section className="footer-brand" aria-label="KariGO footer summary">
-          <strong>KariGO</strong>
+          <Image className="footer-logo" src="/karigo-logo.png" alt="KariGO" width={144} height={144} />
           <p>Delivering Nigeria. Connecting You.</p>
-          <p className="footer-note">KariGO is focused on core delivery services while preparing new categories carefully.</p>
         </section>
 
         <nav className="footer-links" aria-label="Platform links">
@@ -45,7 +45,6 @@ export function SiteFooter() {
               <strong>Planned later</strong>
             </div>
           </div>
-          <p className="footer-note">Official store links will appear here when available.</p>
         </section>
       </div>
 

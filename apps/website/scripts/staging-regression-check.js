@@ -69,9 +69,12 @@ assert(header.includes("https://vendor.karigo.com.ng"), "Vendor login must point
 
 const footer = read("src", "components", "site-footer.tsx");
 assert(footer.includes("&copy; 2026 KariGO Express Limited"), "Footer must include legal copyright text.");
-["Privacy Policy", "Terms", "Vendor Application", "Vendor Login", "Contact"].forEach((link) => assert(footer.includes(link), `Footer must include ${link}.`));
+["Services", "Vendors", "Vendor Application", "Vendor Login", "Riders & Drivers", "Taxi Waitlist", "Driver Readiness", "Download App", "Contact", "Privacy Policy", "Terms"]
+  .forEach((link) => assert(footer.includes(link), `Footer must include ${link}.`));
+assert(footer.includes("/karigo-logo.png"), "Footer must display the KariGO logo.");
 assert(footer.includes("Google Play soon"), "Footer must include Android launch status.");
-assert(footer.includes("Official store links will appear here when available."), "Footer must avoid fake app-store links.");
+assert(!footer.includes("KariGO is focused on core delivery services while preparing new categories carefully."), "Footer must not include internal service-focus note.");
+assert(!footer.includes("Official store links will appear here when available."), "Footer must not include app-store placeholder note.");
 assert(!footer.includes("Email:"), "Footer must not expose email contact text.");
 assert(!footer.includes("Phone:"), "Footer must not expose phone contact text.");
 assert(!footer.includes("Location:"), "Footer must not expose location contact text.");
