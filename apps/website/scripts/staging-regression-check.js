@@ -75,6 +75,9 @@ assert(footer.includes("/karigo-logo.png"), "Footer must display the KariGO logo
 assert(footer.includes("@karigoapp"), "Footer must show the official KariGO social handle.");
 ["https://www.instagram.com/karigoapp", "https://x.com/karigoapp", "https://www.tiktok.com/@karigoapp", "https://www.facebook.com/karigoapp", "https://www.linkedin.com/company/karigoapp"]
   .forEach((link) => assert(footer.includes(link), `Footer must include social link ${link}.`));
+assert(footer.includes("<SocialIcon name={link.icon} />"), "Footer social links must render icons instead of text chips.");
+assert(footer.includes("aria-label={`KariGO on ${link.label}`}"), "Footer social icon links must keep accessible labels.");
+assert(!footer.includes("{link.label}\n                </a>"), "Footer social links must not render visible text labels.");
 assert(footer.includes("Google Play soon"), "Footer must include Android launch status.");
 assert(!footer.includes("KariGO is focused on core delivery services while preparing new categories carefully."), "Footer must not include internal service-focus note.");
 assert(!footer.includes("Official store links will appear here when available."), "Footer must not include app-store placeholder note.");

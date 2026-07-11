@@ -2,12 +2,56 @@ import Image from "next/image";
 import Link from "next/link";
 
 const socialLinks = [
-  { label: "Instagram", href: "https://www.instagram.com/karigoapp" },
-  { label: "X", href: "https://x.com/karigoapp" },
-  { label: "TikTok", href: "https://www.tiktok.com/@karigoapp" },
-  { label: "Facebook", href: "https://www.facebook.com/karigoapp" },
-  { label: "LinkedIn", href: "https://www.linkedin.com/company/karigoapp" }
+  { label: "Instagram", href: "https://www.instagram.com/karigoapp", icon: "instagram" },
+  { label: "X", href: "https://x.com/karigoapp", icon: "x" },
+  { label: "TikTok", href: "https://www.tiktok.com/@karigoapp", icon: "tiktok" },
+  { label: "Facebook", href: "https://www.facebook.com/karigoapp", icon: "facebook" },
+  { label: "LinkedIn", href: "https://www.linkedin.com/company/karigoapp", icon: "linkedin" }
 ];
+
+function SocialIcon({ name }: { name: string }) {
+  if (name === "instagram") {
+    return (
+      <svg aria-hidden="true" className="social-icon" fill="none" viewBox="0 0 24 24">
+        <rect height="15" rx="4" stroke="currentColor" strokeWidth="2" width="15" x="4.5" y="4.5" />
+        <circle cx="12" cy="12" r="3.5" stroke="currentColor" strokeWidth="2" />
+        <circle cx="16.8" cy="7.2" fill="currentColor" r="1" />
+      </svg>
+    );
+  }
+
+  if (name === "x") {
+    return (
+      <svg aria-hidden="true" className="social-icon" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2.4" viewBox="0 0 24 24">
+        <path d="M5 5l14 14" />
+        <path d="M19 5L5 19" />
+      </svg>
+    );
+  }
+
+  if (name === "tiktok") {
+    return (
+      <svg aria-hidden="true" className="social-icon" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+        <path d="M13 4v10.5a4 4 0 1 1-4-4" />
+        <path d="M13 4c1 3.2 3.1 5.1 6 5.4" />
+      </svg>
+    );
+  }
+
+  if (name === "facebook") {
+    return (
+      <svg aria-hidden="true" className="social-icon" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M13.6 21v-8h2.7l.4-3.1h-3.1V8c0-.9.3-1.5 1.6-1.5h1.7V3.7c-.8-.1-1.6-.2-2.5-.2-2.5 0-4.2 1.5-4.2 4.2v2.2H7.4V13h2.8v8h3.4z" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg aria-hidden="true" className="social-icon" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M6.4 8.8H3.6V21h2.8V8.8zM5 3a1.7 1.7 0 1 0 0 3.4A1.7 1.7 0 0 0 5 3zM20.4 14.3c0-3.5-1.8-5.8-4.8-5.8-1.6 0-2.7.7-3.4 1.8V8.8H9.5V21h2.8v-6.2c0-2.1.9-3.3 2.6-3.3 1.6 0 2.6 1.1 2.6 3.3V21h2.9v-6.7z" />
+    </svg>
+  );
+}
 
 export function SiteFooter() {
   return (
@@ -20,8 +64,8 @@ export function SiteFooter() {
             <p>Follow <strong>@karigoapp</strong></p>
             <div className="social-links">
               {socialLinks.map((link) => (
-                <a key={link.href} href={link.href} rel="noopener noreferrer" target="_blank">
-                  {link.label}
+                <a key={link.href} aria-label={`KariGO on ${link.label}`} href={link.href} rel="noopener noreferrer" target="_blank">
+                  <SocialIcon name={link.icon} />
                 </a>
               ))}
             </div>
