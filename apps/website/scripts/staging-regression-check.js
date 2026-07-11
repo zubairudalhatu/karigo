@@ -73,7 +73,7 @@ assert(footer.includes("&copy; 2026 KariGO Express Limited"), "Footer must inclu
   .forEach((link) => assert(footer.includes(link), `Footer must include ${link}.`));
 assert(footer.includes("/karigo-logo.png"), "Footer must display the KariGO logo.");
 assert(footer.includes("@karigoapp"), "Footer must show the official KariGO social handle.");
-["https://www.instagram.com/karigoapp", "https://x.com/karigoapp", "https://www.tiktok.com/@karigoapp", "https://www.facebook.com/karigoapp"]
+["https://www.instagram.com/karigoapp", "https://x.com/karigoapp", "https://www.tiktok.com/@karigoapp", "https://www.facebook.com/karigoapp", "https://www.linkedin.com/company/karigoapp"]
   .forEach((link) => assert(footer.includes(link), `Footer must include social link ${link}.`));
 assert(footer.includes("Google Play soon"), "Footer must include Android launch status.");
 assert(!footer.includes("KariGO is focused on core delivery services while preparing new categories carefully."), "Footer must not include internal service-focus note.");

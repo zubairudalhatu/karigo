@@ -5,7 +5,8 @@ const socialLinks = [
   { label: "Instagram", href: "https://www.instagram.com/karigoapp" },
   { label: "X", href: "https://x.com/karigoapp" },
   { label: "TikTok", href: "https://www.tiktok.com/@karigoapp" },
-  { label: "Facebook", href: "https://www.facebook.com/karigoapp" }
+  { label: "Facebook", href: "https://www.facebook.com/karigoapp" },
+  { label: "LinkedIn", href: "https://www.linkedin.com/company/karigoapp" }
 ];
 
 export function SiteFooter() {
