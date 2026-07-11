@@ -25,6 +25,7 @@ assert(shell.includes("Payout Accounts"), "Admin sidebar must include payout acc
 assert(shell.includes("Utilities"), "Admin sidebar must include Utilities.");
 assert(shell.includes("Taxi"), "Admin sidebar must include Taxi readiness.");
 assert(shell.includes("SME Services"), "Admin sidebar must include SME Services.");
+assert(shell.includes("SME Provider Applications"), "Admin sidebar must include SME provider applications.");
 assert(shell.includes("SME Providers"), "Admin sidebar must include SME provider directory.");
 
 const smeServicesPage = read("app", "sme-services", "page.tsx");
@@ -34,6 +35,17 @@ assert(smeServicesPage.includes("smeServicesApi.list"), "Admin SME Services page
 assert(smeServicesPage.includes("Total requests"), "Admin SME Services page must show summary cards.");
 assert(smeServicesPage.includes("All service types"), "Admin SME Services page must support service-type filtering.");
 assert(smeServicesPage.includes("Provider directory"), "Admin SME Services page must link to provider directory.");
+const smeProviderApplicationsPage = read("app", "sme-services", "applications", "page.tsx");
+assert(smeProviderApplicationsPage.includes("SME Provider Applications"), "Admin SME provider applications list page must exist.");
+assert(smeProviderApplicationsPage.includes("providerApplications"), "Admin SME provider applications page must call the applications endpoint.");
+assert(smeProviderApplicationsPage.includes("does not activate live dispatch, payment collection, payout automation, provider login or medical booking"), "Admin SME provider applications list must state safety limits.");
+assert(smeProviderApplicationsPage.includes("All service types"), "Admin SME provider applications page must support service-type filtering.");
+const smeProviderApplicationDetail = read("app", "sme-services", "applications", "[id]", "page.tsx");
+assert(smeProviderApplicationDetail.includes("Update review status"), "Admin SME provider application detail must support status updates.");
+assert(smeProviderApplicationDetail.includes("Create provider record"), "Admin SME provider application detail must support conversion to provider record.");
+assert(smeProviderApplicationDetail.includes("does not create provider login, live dispatch, payment collection, payout automation or medical booking"), "Provider application conversion must state safety limits.");
+assert(smeProviderApplicationDetail.includes("Health professional applications remain readiness-only"), "Provider application detail must keep health professional readiness-only guardrail.");
+assert(!smeProviderApplicationDetail.includes("Pay Now") && !smeProviderApplicationDetail.includes("Transfer funds"), "Provider application detail must not expose payment actions.");
 const smeServicesDetail = read("app", "sme-services", "[id]", "page.tsx");
 assert(smeServicesDetail.includes("Update review status"), "Admin SME Services detail must support status updates.");
 assert(smeServicesDetail.includes("does not dispatch a provider, collect payment or activate medical booking"), "Admin SME Services status update must confirm safe limits.");
@@ -56,6 +68,8 @@ assert(smeServicesApiSource.includes("admin/service-provider-requests"), "Admin 
 assert(smeServicesApiSource.includes("admin/service-provider-requests/${id}/status"), "Admin portal must call the SME Services status endpoint.");
 assert(smeServicesApiSource.includes("admin/service-provider-requests/${id}/provider-assignment"), "Admin portal must call the SME Services assignment endpoint.");
 assert(smeServicesApiSource.includes("admin/service-providers"), "Admin portal must call admin SME Services provider endpoints.");
+assert(smeServicesApiSource.includes("admin/service-provider-applications"), "Admin portal must call admin SME Services provider application endpoints.");
+assert(smeServicesApiSource.includes("approve-create-provider"), "Admin portal must call application-to-provider conversion endpoint.");
 
 const taxiPage = read("app", "taxi", "page.tsx");
 assert(taxiPage.includes("Driver Applications"), "Admin taxi page must show driver applications.");

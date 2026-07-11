@@ -10,6 +10,7 @@ assert(home.includes("Everything you need, delivered."), "Homepage must use appr
 assert(home.includes("Order food, shop groceries and market items"), "Homepage must use approved subheadline.");
 assert(home.includes("Download the App"), "Homepage must include Download App CTA.");
 assert(home.includes("Become a Vendor"), "Homepage must include Become a Vendor CTA.");
+assert(home.includes("Become a Service Provider"), "Homepage must include SME Services provider application CTA.");
 assert(home.includes("KariGO is preparing secure merchant integrations"), "Bills coming-soon copy must be present.");
 assert(home.includes("Coming-soon services are clearly marked"), "Coming-soon services must be presented accurately.");
 assert(home.includes("Coming soon on Google Play"), "Website must not invent fake Play Store links.");
@@ -36,6 +37,18 @@ assert(vendorForm.includes("NEXT_PUBLIC_API_BASE_URL") || read("src", "lib", "si
 assert(vendorForm.includes("Your vendor application has been submitted. KariGO will review your details and contact you with the next steps."), "Success message must match approved copy.");
 assert(!vendorForm.includes("Authorization"), "Public vendor application form must not require auth headers.");
 
+const serviceProviderApply = read("app", "sme-services", "apply", "page.tsx");
+assert(serviceProviderApply.includes("ServiceProviderApplicationForm"), "SME Services provider application page must render the form.");
+assert(serviceProviderApply.includes("Join KariGO as a Service Provider"), "SME Services provider application page must use approved headline.");
+assert(serviceProviderApply.includes("does not create provider login, automatic job dispatch, service payments, payouts or live medical booking"), "SME Services provider application page must state safety limits.");
+
+const serviceProviderForm = read("src", "components", "service-provider-application-form.tsx");
+assert(serviceProviderForm.includes("/service-provider-applications"), "SME Services provider application form must submit to public backend endpoint.");
+assert(serviceProviderForm.includes("Your service provider application has been submitted. KariGO will review your details and contact you with the next steps."), "SME Services provider form success message must match approved copy.");
+assert(serviceProviderForm.includes("HEALTH_PROFESSIONAL"), "SME Services provider form must keep health professional readiness-only option.");
+assert(serviceProviderForm.includes("does not create live dispatch, provider login, payments or payouts"), "SME Services provider form must state review-only scope.");
+assert(!serviceProviderForm.includes("Authorization"), "Public SME Services provider application form must not require auth headers.");
+
 const riders = read("app", "riders", "page.tsx");
 assert(riders.includes("Taxi Drivers - Coming Soon"), "Riders page must include future taxi driver section.");
 assert(riders.includes("Vehicle and licence checks will be required"), "Taxi driver checks must be stated.");
@@ -53,6 +66,7 @@ const services = read("app", "services", "page.tsx");
 assert(services.includes("Live / Active"), "Services page must separate live services.");
 assert(services.includes("Preparing Launch"), "Services page must separate preparing-launch services.");
 assert(services.includes("Join Taxi Waitlist"), "Services page must link Taxi coming-soon interest to the waitlist.");
+assert(services.includes("/sme-services/apply"), "Services page must link SME Services provider applications.");
 
 const contact = read("app", "contact", "page.tsx");
 assert(contact.includes("ContactInquiryForm"), "Contact page must render the inquiry form.");
@@ -71,7 +85,7 @@ assert(header.includes("https://vendor.karigo.com.ng"), "Vendor login must point
 
 const footer = read("src", "components", "site-footer.tsx");
 assert(footer.includes("&copy; 2026 KariGO Express Limited"), "Footer must include legal copyright text.");
-["Services", "Vendors", "Vendor Application", "Vendor Login", "Riders & Drivers", "Taxi Waitlist", "Driver Readiness", "Download App", "Contact", "Privacy Policy", "Terms"]
+["Services", "Vendors", "Vendor Application", "Service Provider Application", "Vendor Login", "Riders & Drivers", "Taxi Waitlist", "Driver Readiness", "Download App", "Contact", "Privacy Policy", "Terms"]
   .forEach((link) => assert(footer.includes(link), `Footer must include ${link}.`));
 assert(footer.includes("/karigo-logo.png"), "Footer must display the KariGO logo.");
 assert(footer.includes("@karigoapp"), "Footer must show the official KariGO social handle.");

@@ -441,6 +441,7 @@ export class ServiceProviderRequestsService {
       assignedProvider: {
         select: {
           id: true,
+          sourceApplicationId: true,
           providerCode: true,
           fullName: true,
           businessName: true,

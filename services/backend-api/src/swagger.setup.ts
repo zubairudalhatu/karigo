@@ -24,6 +24,8 @@ const SWAGGER_TAGS: Array<[string, string]> = [
   ["Admin Settlements", "Vendor settlement and rider earning payouts"],
   ["Support", "Customer support ticket workflow"],
   ["Admin Support", "Admin support operations"],
+  ["Service Provider Applications", "Public SME Services provider application submission and status lookup"],
+  ["Admin Service Provider Applications", "Admin review workflow for SME Services provider applications"],
   ["Promos", "Customer promo validation"],
   ["Admin Promos", "Admin promotion management"],
   ["Admin Promo Reports", "Promotion performance reporting"],

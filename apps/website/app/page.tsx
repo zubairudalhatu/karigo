@@ -14,6 +14,7 @@ export default function HomePage() {
           <div className="actions">
             <a className="button" href="#download">Download the App</a>
             <Link className="button secondary" href="/vendors/apply">Become a Vendor</Link>
+            <Link className="button secondary" href="/sme-services/apply">Become a Service Provider</Link>
           </div>
         </div>
         <div className="app-visual" aria-label="KariGO app-style visual mockup">
@@ -69,8 +70,11 @@ export default function HomePage() {
           <p className="eyebrow">For Vendors</p>
           <h2>Grow your business with KariGO.</h2>
           <p>Restaurants, groceries, market sellers and approved service providers can apply to reach customers across Kano. KariGO reviews every application before onboarding.</p>
+          <div className="actions">
             <Link className="button" href="/vendors/apply">Apply as a Vendor</Link>
-          </article>
+            <Link className="button secondary" href="/sme-services/apply">Become a Service Provider</Link>
+          </div>
+        </article>
         <article className="info-card">
           <p className="eyebrow">For Riders & Drivers</p>
           <h2>Earn with KariGO.</h2>

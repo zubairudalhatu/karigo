@@ -123,6 +123,15 @@ enum ServiceProviderStatus {
   INACTIVE
 }
 
+enum ServiceProviderApplicationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  REJECTED
+  CONVERTED_TO_PROVIDER
+}
+
 enum ProductCategory {
   FOOD
   GROCERIES
@@ -344,39 +353,40 @@ enum TaxiTripActorType {
 }
 
 model User {
-  id                       String                   @id @default(uuid()) @db.Uuid
-  fullName                 String
-  phoneNumber              String                   @unique
-  email                    String?                  @unique
-  passwordHash             String
-  role                     UserRole
-  adminRole                AdminRole?
-  accountStatus            AccountStatus            @default(PENDING)
-  phoneVerified            Boolean                  @default(false)
-  emailVerified            Boolean                  @default(false)
-  lastLoginAt              DateTime?
-  deletedAt                DateTime?
-  createdAt                DateTime                 @default(now())
-  updatedAt                DateTime                 @updatedAt
-  customerProfile          CustomerProfile?
-  vendor                   Vendor?
-  rider                    Rider?
-  addresses                Address[]
-  notifications            Notification[]
-  deviceTokens             DeviceToken[]
-  refreshTokens            RefreshToken[]
-  statusChanges            OrderStatusHistory[]     @relation("StatusChangedBy")
-  verifiedDocuments        RiderDocument[]          @relation("DocumentVerifiedBy")
-  assignedTickets          SupportTicket[]          @relation("TicketAssignedAdmin")
-  ticketMessages           SupportTicketMessage[]
-  adminAuditLogs           AdminAuditLog[]
-  assignedServiceRequests  ServiceProviderRequest[] @relation("ServiceProviderRequestAssignedBy")
-  createdPromoCodes        PromoCode[]              @relation("PromoCreatedBy")
-  otpVerifications         OtpVerification[]
-  verifiedPayoutAccounts   VendorPayoutAccount[]    @relation("PayoutVerifiedBy")
-  taxiDriverApplications   TaxiDriverApplication[]  @relation("TaxiApplicant")
-  reviewedTaxiApplications TaxiDriverApplication[]  @relation("TaxiReviewedBy")
-  taxiDriverProfiles       TaxiDriverProfile[]
+  id                                  String                       @id @default(uuid()) @db.Uuid
+  fullName                            String
+  phoneNumber                         String                       @unique
+  email                               String?                      @unique
+  passwordHash                        String
+  role                                UserRole
+  adminRole                           AdminRole?
+  accountStatus                       AccountStatus                @default(PENDING)
+  phoneVerified                       Boolean                      @default(false)
+  emailVerified                       Boolean                      @default(false)
+  lastLoginAt                         DateTime?
+  deletedAt                           DateTime?
+  createdAt                           DateTime                     @default(now())
+  updatedAt                           DateTime                     @updatedAt
+  customerProfile                     CustomerProfile?
+  vendor                              Vendor?
+  rider                               Rider?
+  addresses                           Address[]
+  notifications                       Notification[]
+  deviceTokens                        DeviceToken[]
+  refreshTokens                       RefreshToken[]
+  statusChanges                       OrderStatusHistory[]         @relation("StatusChangedBy")
+  verifiedDocuments                   RiderDocument[]              @relation("DocumentVerifiedBy")
+  assignedTickets                     SupportTicket[]              @relation("TicketAssignedAdmin")
+  ticketMessages                      SupportTicketMessage[]
+  adminAuditLogs                      AdminAuditLog[]
+  assignedServiceRequests             ServiceProviderRequest[]     @relation("ServiceProviderRequestAssignedBy")
+  reviewedServiceProviderApplications ServiceProviderApplication[] @relation("ServiceProviderApplicationReviewedBy")
+  createdPromoCodes                   PromoCode[]                  @relation("PromoCreatedBy")
+  otpVerifications                    OtpVerification[]
+  verifiedPayoutAccounts              VendorPayoutAccount[]        @relation("PayoutVerifiedBy")
+  taxiDriverApplications              TaxiDriverApplication[]      @relation("TaxiApplicant")
+  reviewedTaxiApplications            TaxiDriverApplication[]      @relation("TaxiReviewedBy")
+  taxiDriverProfiles                  TaxiDriverProfile[]
 
   @@map("users")
 }
@@ -705,28 +715,64 @@ model ServiceProviderRequest {
 }
 
 model ServiceProvider {
-  id               String                   @id @default(uuid()) @db.Uuid
-  providerCode     String                   @unique
-  fullName         String
-  businessName     String?
-  serviceType      ServiceProviderType
-  phoneNumber      String
-  email            String?
-  city             String
-  state            String
-  serviceAreas     Json?
-  status           ServiceProviderStatus    @default(PENDING_REVIEW)
-  readinessOnly    Boolean                  @default(false)
-  notes            String?
-  verificationNote String?
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
-  assignedRequests ServiceProviderRequest[]
+  id                  String                      @id @default(uuid()) @db.Uuid
+  sourceApplicationId String?                     @unique @db.Uuid
+  providerCode        String                      @unique
+  fullName            String
+  businessName        String?
+  serviceType         ServiceProviderType
+  phoneNumber         String
+  email               String?
+  city                String
+  state               String
+  serviceAreas        Json?
+  status              ServiceProviderStatus       @default(PENDING_REVIEW)
+  readinessOnly       Boolean                     @default(false)
+  notes               String?
+  verificationNote    String?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  sourceApplication   ServiceProviderApplication? @relation("ServiceProviderApplicationConvertedProvider", fields: [sourceApplicationId], references: [id])
+  assignedRequests    ServiceProviderRequest[]
 
   @@index([serviceType, status])
   @@index([city, state])
   @@index([phoneNumber])
   @@map("service_providers")
+}
+
+model ServiceProviderApplication {
+  id                   String                           @id @default(uuid()) @db.Uuid
+  applicationReference String                           @unique
+  fullName             String
+  businessName         String?
+  serviceType          ServiceProviderType
+  phoneNumber          String
+  email                String?
+  city                 String
+  state                String
+  serviceAreas         Json?
+  address              String?
+  experienceSummary    String?
+  toolsOrEquipment     String?
+  availability         String?
+  identificationType   String?
+  identificationNumber String?
+  status               ServiceProviderApplicationStatus @default(SUBMITTED)
+  reviewNote           String?
+  submittedAt          DateTime                         @default(now())
+  reviewedAt           DateTime?
+  reviewedByAdminId    String?                          @db.Uuid
+  createdAt            DateTime                         @default(now())
+  updatedAt            DateTime                         @updatedAt
+  reviewedByAdmin      User?                            @relation("ServiceProviderApplicationReviewedBy", fields: [reviewedByAdminId], references: [id])
+  convertedProvider    ServiceProvider?                 @relation("ServiceProviderApplicationConvertedProvider")
+
+  @@index([status, submittedAt])
+  @@index([serviceType, status])
+  @@index([city, state])
+  @@index([phoneNumber])
+  @@map("service_provider_applications")
 }
 
 model VendorCategory {

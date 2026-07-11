@@ -26,6 +26,14 @@ export type ServiceProviderStatus =
   | "SUSPENDED"
   | "INACTIVE";
 
+export type ServiceProviderApplicationStatus =
+  | "SUBMITTED"
+  | "UNDER_REVIEW"
+  | "CHANGES_REQUESTED"
+  | "APPROVED"
+  | "REJECTED"
+  | "CONVERTED_TO_PROVIDER";
+
 export interface SmeProvider {
   id: string;
   providerCode: string;
@@ -43,6 +51,33 @@ export interface SmeProvider {
   verificationNote?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SmeProviderApplication {
+  id: string;
+  applicationReference: string;
+  fullName: string;
+  businessName?: string | null;
+  serviceType: ServiceProviderType;
+  phoneNumber: string;
+  email?: string | null;
+  city: string;
+  state: string;
+  serviceAreas: string[];
+  address?: string | null;
+  experienceSummary?: string | null;
+  toolsOrEquipment?: string | null;
+  availability?: string | null;
+  identificationType?: string | null;
+  identificationNumber?: string | null;
+  status: ServiceProviderApplicationStatus;
+  reviewNote?: string | null;
+  submittedAt: string;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  reviewedByAdmin?: { id: string; fullName: string; email?: string | null } | null;
+  convertedProvider?: Pick<SmeProvider, "id" | "providerCode" | "fullName" | "serviceType" | "status" | "readinessOnly"> | null;
 }
 
 export interface SmeProvidersListResponse {
@@ -119,5 +154,11 @@ export const smeServicesApi = {
   providers: (q = "") => api.get<SmeProvidersListResponse>(`admin/service-providers${q ? `?${q}` : ""}`),
   provider: (id: string) => api.get<SmeProvider>(`admin/service-providers/${id}`),
   createProvider: (payload: Partial<SmeProvider>) => api.post<SmeProvider>("admin/service-providers", payload),
-  updateProvider: (id: string, payload: Partial<SmeProvider>) => api.patch<SmeProvider>(`admin/service-providers/${id}`, payload)
+  updateProvider: (id: string, payload: Partial<SmeProvider>) => api.patch<SmeProvider>(`admin/service-providers/${id}`, payload),
+  providerApplications: (q = "") => api.get<SmeProviderApplication[]>(`admin/service-provider-applications${q ? `?${q}` : ""}`),
+  providerApplication: (id: string) => api.get<SmeProviderApplication>(`admin/service-provider-applications/${id}`),
+  updateProviderApplicationStatus: (id: string, status: ServiceProviderApplicationStatus, reviewNote?: string) =>
+    api.patch<SmeProviderApplication>(`admin/service-provider-applications/${id}/status`, { status, reviewNote }),
+  approveCreateProviderFromApplication: (id: string, payload?: { reviewNote?: string; providerNote?: string; verificationNote?: string }) =>
+    api.post<SmeProviderApplication>(`admin/service-provider-applications/${id}/approve-create-provider`, payload ?? {})
 };

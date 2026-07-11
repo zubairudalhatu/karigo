@@ -27,6 +27,7 @@ import { VendorSettlementsModule } from "./modules/vendor-settlements/vendor-set
 import { PrismaModule } from "./prisma/prisma.module";
 import { SecurityModule } from "./security/security.module";
 import { AdminAuditModule } from "./common/services/admin-audit.module";
+import { ServiceProviderApplicationsModule } from "./modules/service-provider-applications/service-provider-applications.module";
 import { ServiceProviderRequestsModule } from "./modules/service-provider-requests/service-provider-requests.module";
 
 @Module({
@@ -41,6 +42,7 @@ import { ServiceProviderRequestsModule } from "./modules/service-provider-reques
     HealthModule,
     UsersModule,
     UtilitiesModule,
+    ServiceProviderApplicationsModule,
     ServiceProviderRequestsModule,
     VendorApplicationsModule,
     VendorPayoutAccountsModule,
