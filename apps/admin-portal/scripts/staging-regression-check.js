@@ -23,6 +23,7 @@ assert(payoutApi.includes("accountNumber: string"), "Admin detail type must expl
 const shell = read("src", "components", "portal.tsx");
 assert(shell.includes("Payout Accounts"), "Admin sidebar must include payout accounts.");
 assert(shell.includes("Wallets"), "Admin sidebar must include Wallets.");
+assert(shell.includes("Referrals"), "Admin sidebar must include Referrals.");
 assert(shell.includes("Utilities"), "Admin sidebar must include Utilities.");
 assert(shell.includes("Taxi"), "Admin sidebar must include Taxi readiness.");
 assert(shell.includes("SME Services Summary"), "Admin sidebar must include SME Services operations summary.");
@@ -170,6 +171,19 @@ assert(!walletsPage.includes("Transfer funds") && !walletsPage.includes("Pay now
 const walletsApiSource = read("src", "api", "wallets.api.ts");
 assert(walletsApiSource.includes("admin/wallets"), "Admin wallet API must call wallet list and detail endpoints.");
 assert(walletsApiSource.includes("admin/wallets/${id}/adjustments"), "Admin wallet API must call manual adjustment endpoint.");
+
+const referralsPage = read("app", "referrals", "page.tsx");
+assert(referralsPage.includes("Referrals"), "Admin referrals page must exist.");
+assert(referralsPage.includes("referralsApi.list"), "Admin referrals page must list referral records.");
+assert(referralsPage.includes("referralsApi.rewardRules"), "Admin referrals page must list referral reward rules.");
+assert(referralsPage.includes("This page does not issue rewards, credit wallets, send airtime/data, issue promo codes or send SMS/email/WhatsApp/push notifications."), "Admin referrals page must state no fulfillment guardrails.");
+assert(referralsPage.includes("Referral records"), "Admin referrals page must show referral records.");
+assert(referralsPage.includes("Reward rules"), "Admin referrals page must show reward rules.");
+assert(referralsPage.includes("Tracking only"), "Admin referrals page must mark referral rewards as tracking-only.");
+assert(!referralsPage.includes("Issue reward") && !referralsPage.includes("Credit wallet") && !referralsPage.includes("Send SMS"), "Admin referrals page must not expose reward fulfillment actions.");
+const referralsApiSource = read("src", "api", "referrals.api.ts");
+assert(referralsApiSource.includes("admin/referrals"), "Admin referral API must call referral list endpoint.");
+assert(referralsApiSource.includes("admin/referrals/reward-rules"), "Admin referral API must call reward rules endpoint.");
 
 const taxiPage = read("app", "taxi", "page.tsx");
 assert(taxiPage.includes("Driver Applications"), "Admin taxi page must show driver applications.");
