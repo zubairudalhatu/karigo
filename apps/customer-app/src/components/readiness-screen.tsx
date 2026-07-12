@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import { router } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
-import { Button, Card, Protected, Screen, ui } from "./ui";
+import { Button, Card, Screen, ui } from "./ui";
 import { KariGoAppTopBar } from "./kari-go-app-top-bar";
 
 export function ReadinessScreen({
@@ -21,7 +21,7 @@ export function ReadinessScreen({
   onSecondaryPress?: () => void;
 }) {
   return (
-    <Protected>
+    <>
       <KariGoAppTopBar />
       <Screen topPadding={false}>
         <Card>
@@ -34,7 +34,7 @@ export function ReadinessScreen({
           <Button title={cta} onPress={() => router.replace("/tabs/home")} />
         </Card>
       </Screen>
-    </Protected>
+    </>
   );
 }
 

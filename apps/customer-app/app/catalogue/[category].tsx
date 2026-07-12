@@ -6,8 +6,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { productsApi } from "../../src/api/products.api";
 import { vendorsApi } from "../../src/api/vendors.api";
-import { Card, Empty, Field, Loading, Message, Protected, Screen, ui } from "../../src/components/ui";
+import { Card, Empty, Field, Loading, Message, Screen, ui } from "../../src/components/ui";
 import { KariGoAppTopBar } from "../../src/components/kari-go-app-top-bar";
+import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError, money } from "../../src/lib/errors";
 
 const categoryConfig: Record<string, {
@@ -77,6 +78,7 @@ function ProductPreview({ product }: { product: ProductSummary }) {
 }
 
 export default function CatalogueCategory() {
+  const { user } = useAuth();
   const { category } = useLocalSearchParams<{ category: string }>();
   const config = categoryConfig[category ?? "food"] ?? categoryConfig.food;
   const [vendors, setVendors] = useState<VendorSummary[]>([]);
@@ -109,8 +111,10 @@ export default function CatalogueCategory() {
   const groceryMarket = ["GROCERY", "MARKET"].includes(config.serviceCategory) ? vendors : [];
   const pharmacy = config.serviceCategory === "PHARMACY" ? vendors : [];
 
-  return <Protected>
-    <KariGoAppTopBar showBack title="Browse" rightAction={{ icon: "bell", label: "Open notifications", onPress: () => router.push("/notifications") }} />
+  return <>
+    <KariGoAppTopBar showBack title="Browse" rightAction={user
+      ? { icon: "bell", label: "Open notifications", onPress: () => router.push("/notifications") }
+      : { icon: "log-in", label: "Sign in", onPress: () => router.push("/auth/login") }} />
     <Screen topPadding={false}>
       <View style={styles.headingRow}>
         <View style={{ flex: 1 }}>
@@ -142,7 +146,7 @@ export default function CatalogueCategory() {
         {products.length === 0 ? <Empty message="No available products are published for this category yet." /> : products.map((product) => <ProductPreview key={product.id} product={product} />)}
       </>}
     </Screen>
-  </Protected>;
+  </>;
 }
 
 const styles = StyleSheet.create({

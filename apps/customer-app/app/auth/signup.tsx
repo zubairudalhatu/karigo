@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import { Text } from "react-native";
-import { Button, Field, Message, NavLink, Screen, ui } from "../../src/components/ui";
+import { Button, Field, Message, NavLink, PasswordField, Screen, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 
@@ -11,6 +11,7 @@ export default function SignUp() {
   const [phoneNumber, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [referralCode, setReferralCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -34,7 +35,7 @@ export default function SignUp() {
     <Field placeholder="Full name" value={fullName} onChangeText={setName} />
     <Field placeholder="+234..." value={phoneNumber} onChangeText={setPhone} keyboardType="phone-pad" />
     <Field placeholder="Email (optional)" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-    <Field placeholder="Password: uppercase, lowercase and number" value={password} onChangeText={setPassword} secureTextEntry />
+    <PasswordField placeholder="Password: uppercase, lowercase and number" value={password} onChangeText={setPassword} visible={passwordVisible} onToggleVisible={() => setPasswordVisible((current) => !current)} />
     <Field
       placeholder="Referral code (optional)"
       value={referralCode}

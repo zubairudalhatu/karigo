@@ -12,6 +12,22 @@ export function Field(props: React.ComponentProps<typeof TextInput>) {
   return <TextInput accessibilityLabel={props.placeholder} placeholderTextColor={brand.colors.muted} {...props} style={[styles.input, props.style]} />;
 }
 
+export function PasswordField(props: React.ComponentProps<typeof TextInput> & { visible: boolean; onToggleVisible: () => void }) {
+  const { visible, onToggleVisible, ...inputProps } = props;
+  return <View style={styles.passwordWrap}>
+    <TextInput
+      accessibilityLabel={inputProps.placeholder}
+      placeholderTextColor={brand.colors.muted}
+      {...inputProps}
+      secureTextEntry={!visible}
+      style={[styles.input, styles.passwordInput, inputProps.style]}
+    />
+    <Pressable accessibilityRole="button" accessibilityLabel={visible ? "Hide password" : "Show password"} onPress={onToggleVisible} style={styles.passwordToggle}>
+      <Text style={styles.passwordToggleText}>{visible ? "Hide" : "Show"}</Text>
+    </Pressable>
+  </View>;
+}
+
 export function Button({ title, onPress, disabled, tone = "primary" }: { title: string; onPress?: () => void; disabled?: boolean; tone?: "primary" | "muted" | "danger" }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={title} disabled={disabled} onPress={onPress} style={[styles.button, tone === "muted" && styles.buttonMuted, tone === "danger" && styles.buttonDanger, disabled && styles.disabled]}><Text style={[styles.buttonText, tone === "muted" && styles.buttonMutedText]}>{title}</Text></Pressable>;
 }
@@ -65,6 +81,10 @@ const styles = StyleSheet.create({
   sectionTitle: { color: brand.colors.charcoal, fontSize: 18, fontWeight: "900" },
   pageIntro: { color: brand.colors.muted, fontSize: 15, lineHeight: 22 },
   input: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, color: brand.colors.charcoal, minHeight: 50, padding: 14 },
+  passwordWrap: { position: "relative" },
+  passwordInput: { paddingRight: 82 },
+  passwordToggle: { alignItems: "center", bottom: 7, justifyContent: "center", position: "absolute", right: 8, top: 7, width: 66 },
+  passwordToggleText: { color: brand.colors.primary, fontWeight: "900" },
   button: { alignItems: "center", backgroundColor: brand.colors.primary, borderRadius: 14, minHeight: 48, justifyContent: "center", padding: 13 },
   buttonMuted: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderWidth: 1 },
   buttonDanger: { backgroundColor: brand.colors.primaryDark },

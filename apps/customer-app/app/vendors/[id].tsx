@@ -6,13 +6,15 @@ import { useEffect, useMemo, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { productsApi } from "../../src/api/products.api";
 import { vendorsApi } from "../../src/api/vendors.api";
-import { Button, Card, Empty, Field, Loading, Message, NavLink, Protected, Screen, ui } from "../../src/components/ui";
+import { Button, Card, Empty, Field, Loading, Message, NavLink, Screen, ui } from "../../src/components/ui";
 import { KariGoAppTopBar } from "../../src/components/kari-go-app-top-bar";
+import { useAuth } from "../../src/contexts/auth-context";
 import { useCart } from "../../src/contexts/cart-context";
 import { friendlyError, money } from "../../src/lib/errors";
 
 export default function VendorDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
   const cart = useCart();
   const [vendor, setVendor] = useState<VendorSummary | null>(null);
   const [products, setProducts] = useState<ProductSummary[]>([]);
@@ -38,8 +40,10 @@ export default function VendorDetails() {
   const productCategories = useMemo(() => Array.from(new Set(products.map((product) => product.category).filter(Boolean))), [products]);
 
   if (!vendor && !error) return <Loading label="Loading vendor..." />;
-  return <Protected>
-    <KariGoAppTopBar showBack title="Vendor" rightAction={{ icon: "shopping-bag", label: "Open cart", onPress: () => router.push("/cart") }} />
+  return <>
+    <KariGoAppTopBar showBack title="Vendor" rightAction={user
+      ? { icon: "shopping-bag", label: "Open cart", onPress: () => router.push("/cart") }
+      : { icon: "log-in", label: "Sign in", onPress: () => router.push("/auth/login") }} />
     <Screen topPadding={false}>
       <Message error>{error}</Message>
       {vendor ? <>
@@ -70,7 +74,7 @@ export default function VendorDetails() {
         </Card>
       </> : null}
 
-      <View style={ui.spaceBetween}><Text style={ui.sectionTitle}>Menus and products</Text><NavLink href="/cart" label={`Cart (${cart.items.length})`} /></View>
+      <View style={ui.spaceBetween}><Text style={ui.sectionTitle}>Menus and products</Text>{user ? <NavLink href="/cart" label={`Cart (${cart.items.length})`} /> : <NavLink href="/auth/login" label="Sign in to order" />}</View>
       {filteredProducts.length === 0 ? <Empty message="No available products right now." /> : filteredProducts.map((product) =>
         <Card key={product.id}>
           <Image source={{ uri: product.imageUrl }} style={ui.productImage} />
@@ -78,10 +82,16 @@ export default function VendorDetails() {
           <Text style={ui.muted}>{product.description || "Freshly prepared for your order."}</Text>
           <View style={ui.priceRow}><Text style={ui.payable}>{money(product.price)}</Text><Text style={ui.priceValue}>{product.isAvailable ? "Available" : "Unavailable"}</Text></View>
           <NavLink href={`/products/${product.id}?vendorId=${id}`} label="View details" />
-          <Button title={cart.addingProductIds.includes(product.id) ? "Added" : product.isAvailable ? "Add to cart" : "Unavailable"} disabled={!product.isAvailable || !vendor || cart.addingProductIds.includes(product.id)} onPress={() => vendor && cart.add(vendor, product)} />
+          <Button title={!product.isAvailable ? "Unavailable" : !user ? "Sign in to add" : cart.addingProductIds.includes(product.id) ? "Added" : "Add to cart"} disabled={!product.isAvailable || !vendor || (!!user && cart.addingProductIds.includes(product.id))} onPress={() => {
+            if (!user) {
+              router.push("/auth/login");
+              return;
+            }
+            if (vendor) cart.add(vendor, product);
+          }} />
         </Card>)}
     </Screen>
-  </Protected>;
+  </>;
 }
 
 function Info({ icon, label, value }: { icon: keyof typeof Feather.glyphMap; label: string; value: string }) {

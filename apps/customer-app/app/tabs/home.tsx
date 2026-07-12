@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { vendorsApi } from "../../src/api/vendors.api";
-import { Card, Empty, Loading, Message, Protected, Screen, ui } from "../../src/components/ui";
+import { Button, Card, Empty, Loading, Message, Screen, ui } from "../../src/components/ui";
 import { KariGoAppTopBar } from "../../src/components/kari-go-app-top-bar";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
@@ -19,10 +19,11 @@ const categories: {
   tone: string;
   state: "active" | "readiness";
   statusLabel?: string;
+  requiresAuth?: boolean;
 }[] = [
   { label: "Food Delivery", icon: "coffee", href: "/catalogue/food", serviceCategory: "FOOD", tone: "#FFF1F2", state: "active" },
   { label: "Groceries", icon: "shopping-bag", href: "/catalogue/groceries", serviceCategory: "GROCERY", tone: "#ECFDF3", state: "active" },
-  { label: "Taxi", icon: "navigation", href: process.env.EXPO_PUBLIC_TAXI_SERVICE_ENABLED === "true" && process.env.EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED === "true" ? "/taxi/request" : "/readiness/taxi", tone: "#F3F4F6", state: "readiness", statusLabel: process.env.EXPO_PUBLIC_TAXI_SERVICE_ENABLED === "true" && process.env.EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED === "true" ? "Test mode" : "Coming soon" },
+  { label: "Taxi", icon: "navigation", href: process.env.EXPO_PUBLIC_TAXI_SERVICE_ENABLED === "true" && process.env.EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED === "true" ? "/taxi/request" : "/readiness/taxi", tone: "#F3F4F6", state: "readiness", statusLabel: process.env.EXPO_PUBLIC_TAXI_SERVICE_ENABLED === "true" && process.env.EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED === "true" ? "Test mode" : "Coming soon", requiresAuth: process.env.EXPO_PUBLIC_TAXI_SERVICE_ENABLED === "true" && process.env.EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED === "true" },
   { label: "Market Items", icon: "shopping-cart", href: "/catalogue/market-items", serviceCategory: "MARKET", tone: "#EFF6FF", state: "active" },
   {
     label: "Pharmacy",
@@ -33,12 +34,12 @@ const categories: {
     state: process.env.EXPO_PUBLIC_PHARMACY_MARKETPLACE_ENABLED === "true" ? "active" : "readiness",
     statusLabel: process.env.EXPO_PUBLIC_PHARMACY_MARKETPLACE_ENABLED === "true" ? undefined : "Preparing launch"
   },
-  { label: "Parcel Delivery", icon: "package", href: "/parcel", serviceCategory: "PARCEL", tone: "#FFFBEB", state: "active" },
-  { label: "SME Services", subtitle: "Book trusted service providers", icon: "tool", href: "/sme-services", serviceCategory: "CORPORATE", tone: "#F5F3FF", state: "active" },
-  { label: "Airtime", icon: "phone", href: "/utilities/airtime", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode" },
-  { label: "Data", icon: "wifi", href: "/utilities/data", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode" },
-  { label: "Electricity", icon: "zap", href: "/utilities/electricity", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode" },
-  { label: "Cable TV", icon: "tv", href: "/utilities/cable-tv", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode" }
+  { label: "Parcel Delivery", icon: "package", href: "/parcel", serviceCategory: "PARCEL", tone: "#FFFBEB", state: "active", requiresAuth: true },
+  { label: "SME Services", subtitle: "Book trusted service providers", icon: "tool", href: "/sme-services", serviceCategory: "CORPORATE", tone: "#F5F3FF", state: "active", requiresAuth: true },
+  { label: "Airtime", icon: "phone", href: "/utilities/airtime", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode", requiresAuth: true },
+  { label: "Data", icon: "wifi", href: "/utilities/data", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode", requiresAuth: true },
+  { label: "Electricity", icon: "zap", href: "/utilities/electricity", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode", requiresAuth: true },
+  { label: "Cable TV", icon: "tv", href: "/utilities/cable-tv", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode", requiresAuth: true }
 ];
 
 const utilityServices = categories.filter((category) => ["Airtime", "Data", "Electricity", "Cable TV"].includes(category.label));
@@ -69,11 +70,12 @@ function VendorSpotlight({ vendor }: { vendor: VendorSummary }) {
 }
 
 export default function CustomerHome() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { width } = useWindowDimensions();
   const [vendors, setVendors] = useState<VendorSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [guestPrompt, setGuestPrompt] = useState("");
 
   useEffect(() => {
     vendorsApi.list()
@@ -86,13 +88,34 @@ export default function CustomerHome() {
   const columns = width >= 380 ? 3 : 2;
   const serviceTileBasis = `${(100 / columns) - 2}%` as const;
 
-  return <Protected>
-    <KariGoAppTopBar rightAction={{ icon: "bell", label: "Open notifications", onPress: () => router.push("/notifications") }} />
+  function openCategory(category: typeof categories[number]) {
+    if (!user && category.requiresAuth) {
+      setGuestPrompt(`${category.label} needs a KariGO account. Login or sign up to continue.`);
+      return;
+    }
+    setGuestPrompt("");
+    router.push(category.href as never);
+  }
+
+  if (authLoading) return <Loading label="Opening KariGO..." />;
+
+  return <>
+    <KariGoAppTopBar rightAction={user
+      ? { icon: "bell", label: "Open notifications", onPress: () => router.push("/notifications") }
+      : { icon: "log-in", label: "Sign in", onPress: () => router.push("/auth/login") }} />
     <Screen topPadding={false}>
-      <View style={styles.greeting}>
+      {!user ? <Card>
+        <Text style={ui.heroTitle}>Hi, welcome to KariGO</Text>
+        <Text style={ui.pageIntro}>Explore vendors, services and delivery options across Kano. Login or sign up when you are ready to order, track deliveries or use account features.</Text>
+        <View style={styles.authActions}>
+          <Button title="Login" onPress={() => router.push("/auth/login")} />
+          <Button title="Sign up" tone="muted" onPress={() => router.push("/auth/signup")} />
+        </View>
+        {guestPrompt ? <Message>{guestPrompt}</Message> : null}
+      </Card> : <View style={styles.greeting}>
         <Text style={ui.heroTitle}>Welcome, {firstName(user?.fullName)}</Text>
         <Text style={ui.pageIntro}>Here are top picks for you.</Text>
-      </View>
+      </View>}
 
       <View style={ui.spaceBetween}>
         <Text style={ui.sectionTitle}>What do you need today?</Text>
@@ -102,7 +125,7 @@ export default function CustomerHome() {
           key={category.label}
           accessibilityRole="button"
           accessibilityLabel={`Open ${category.label}`}
-          onPress={() => router.push(category.href as never)}
+          onPress={() => openCategory(category)}
           style={({ pressed }) => [styles.categoryCard, { flexBasis: serviceTileBasis }, pressed && styles.categoryPressed]}
         >
           <View style={[styles.categoryIcon, { backgroundColor: category.tone }]}>
@@ -130,7 +153,7 @@ export default function CustomerHome() {
             key={service.label}
             accessibilityRole="button"
             accessibilityLabel={`Open ${service.label} test mode`}
-            onPress={() => router.push(service.href as never)}
+            onPress={() => openCategory(service)}
             style={({ pressed }) => [styles.utilityTile, pressed && styles.categoryPressed]}
           >
             <Feather name={service.icon} size={19} color={brand.colors.primary} />
@@ -146,11 +169,12 @@ export default function CustomerHome() {
         <Text style={ui.muted}>Approved KariGO campaigns may appear here. Ads are labelled and never affect checkout pricing or delivery quotes.</Text>
       </View>
     </Screen>
-  </Protected>;
+  </>;
 }
 
 const styles = StyleSheet.create({
   greeting: { gap: 4 },
+  authActions: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
   categoryCard: { alignItems: "center", backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, flexGrow: 1, gap: 6, minHeight: 104, padding: 10 },
   categoryPressed: { borderColor: brand.colors.primary, transform: [{ scale: 0.99 }] },

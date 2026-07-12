@@ -34,9 +34,20 @@ assert(client.includes("karigo_customer_refresh_token"), "Customer app must pers
 assert(client.includes("auth/refresh"), "Customer API client must support session refresh.");
 assert(!client.includes("AsyncStorage"), "Customer auth tokens must not use AsyncStorage.");
 assert(ui.includes("paddingBottom: 112"), "Customer screens must leave room for bottom navigation.");
+assert(ui.includes("PasswordField"), "Shared UI must include a password visibility field.");
+assert(ui.includes("visible ? \"Hide\" : \"Show\""), "Password field must expose show/hide toggle copy.");
+
+const index = read("app", "index.tsx");
+assert(index.includes('<Redirect href="/tabs/home" />'), "Fresh Customer App launch must route guests to the homepage.");
 
 const home = read("app", "tabs", "home.tsx");
 assert(home.includes("KariGoAppTopBar"), "Home must use the branded KariGO top bar.");
+assert(!home.includes("return <Protected>"), "Home must be available to unauthenticated guests.");
+assert(home.includes("Hi, welcome to KariGO"), "Home must show a guest welcome header.");
+assert(home.includes("Login") && home.includes("Sign up"), "Guest homepage must show login and sign-up CTAs.");
+assert(home.includes("guestPrompt"), "Guest homepage must show a prompt for protected actions.");
+assert(home.includes("requiresAuth: true"), "Protected homepage actions must be explicitly flagged.");
+assert(home.includes("needs a KariGO account. Login or sign up to continue."), "Protected guest actions must explain the sign-in requirement.");
 assert(home.includes("Welcome, {firstName(user?.fullName)}"), "Home greeting must use safe first-name fallback.");
 assert(home.includes("Food Delivery"), "Home must keep Food Delivery service category.");
 assert(home.includes("Groceries"), "Home must keep Groceries service category.");
@@ -85,6 +96,7 @@ const readiness = read("src", "components", "readiness-screen.tsx");
 assert(readiness.includes("ReadinessScreen"), "Reusable readiness screen component must exist.");
 assert(readiness.includes("Back to home"), "Readiness screen must include a safe home CTA.");
 assert(readiness.includes("secondaryCta"), "Readiness screen must support a secondary CTA for safe waitlists.");
+assert(!readiness.includes("<Protected>"), "Readiness screens must be browseable by guests.");
 const readinessRoute = read("app", "readiness", "[service].tsx");
 assert(readinessRoute.includes("Taxi is coming soon. KariGO is preparing verified driver onboarding"), "Taxi readiness message must be explicit.");
 assert(readinessRoute.includes("Join Taxi Waitlist"), "Taxi readiness route must expose the waitlist CTA.");
@@ -145,6 +157,8 @@ assert(smeRequestDetail.includes("No live dispatch, service payment, provider pa
 assert(!smeRequestDetail.includes("provider.phoneNumber") && !smeRequestDetail.includes("provider.email"), "SME Services detail must not render provider private phone/email.");
 
 const catalogue = read("app", "catalogue", "[category].tsx");
+assert(!catalogue.includes("return <Protected>"), "Catalogue browsing must be available to guests.");
+assert(catalogue.includes("log-in"), "Catalogue guest top action must offer sign in.");
 assert(catalogue.includes("Food delivery"), "Food catalogue heading must exist.");
 assert(catalogue.includes("Groceries"), "Groceries catalogue heading must exist.");
 assert(catalogue.includes("Market items"), "Market items catalogue heading must exist.");
@@ -175,6 +189,15 @@ assert(bottomNav.includes("cart.count > 0"), "Bottom navigation must show a nume
 assert(bottomNav.includes("View cart"), "Cart snackbar must include a View cart action.");
 assert(bottomNav.includes("pathname.startsWith(\"/auth\")"), "Bottom navigation must stay hidden across auth screens.");
 assert(bottomNav.includes("\"/sme-services\""), "Bottom navigation Browse tab must stay active for SME Services screens.");
+
+const vendorDetail = read("app", "vendors", "[id].tsx");
+assert(!vendorDetail.includes("return <Protected>"), "Vendor detail browsing must be available to guests.");
+assert(vendorDetail.includes("Sign in to add"), "Vendor add-to-cart action must prompt guests to sign in.");
+assert(vendorDetail.includes("router.push(\"/auth/login\")"), "Vendor protected ordering action must route guests to login.");
+const productDetail = read("app", "products", "[id].tsx");
+assert(!productDetail.includes("return <Protected>"), "Product detail browsing must be available to guests.");
+assert(productDetail.includes("Sign in to add"), "Product add-to-cart action must prompt guests to sign in.");
+assert(productDetail.includes("router.push(\"/auth/login\")"), "Product protected ordering action must route guests to login.");
 
 const profile = read("app", "profile.tsx");
 assert(profile.includes("Your KariGO account"), "Profile must show the redesigned account hub heading.");
@@ -231,6 +254,9 @@ assert(signupScreen.includes("referralCode: cleanReferralCode || undefined"), "C
 assert(signupScreen.includes("referralCode.trim().toUpperCase()"), "Customer signup must normalize referral codes before registration.");
 assert(signupScreen.includes("Rewards are tracked for future review and are not issued automatically."), "Customer signup must not promise automatic referral rewards.");
 assert(!signupScreen.includes("walletApi") && !signupScreen.includes("paymentsApi"), "Customer signup must not issue wallet credits or payments for referrals.");
+assert(signupScreen.includes("PasswordField") && signupScreen.includes("passwordVisible"), "Signup password field must support visibility toggling.");
+const loginScreen = read("app", "auth", "login.tsx");
+assert(loginScreen.includes("PasswordField") && loginScreen.includes("passwordVisible"), "Login password field must support visibility toggling.");
 
 const utilitiesApi = read("src", "api", "utilities.api.ts");
 assert(utilitiesApi.includes("utilities/providers"), "Customer utilities API must load public providers.");
