@@ -230,6 +230,38 @@ enum WalletLedgerEntryStatus {
   FAILED
 }
 
+enum CustomerReferralProfileStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum CustomerReferralStatus {
+  REGISTERED
+  ACCOUNT_ACTIVATED
+  FIRST_VALID_TRANSACTION_COMPLETED
+  ELIGIBLE_FOR_REWARD
+  REWARD_REVIEW_PENDING
+  REWARD_APPROVED
+  REWARD_ISSUED
+  INELIGIBLE
+  CANCELLED
+}
+
+enum ReferralRewardTrigger {
+  ACCOUNT_ACTIVATED
+  FIRST_COMPLETED_ORDER
+  FIRST_COMPLETED_UTILITY_TRANSACTION
+  MANUAL_ADMIN_REVIEW
+}
+
+enum ReferralRewardType {
+  WALLET_CREDIT
+  PROMO_CODE
+  AIRTIME
+  DATA
+  MANUAL_REVIEW
+}
+
 enum SupportTicketStatus {
   OPEN
   IN_REVIEW
@@ -449,6 +481,7 @@ model User {
   reviewedTaxiApplications            TaxiDriverApplication[]      @relation("TaxiReviewedBy")
   taxiDriverProfiles                  TaxiDriverProfile[]
   createdWalletLedgerEntries          CustomerWalletLedgerEntry[]  @relation("WalletLedgerEntryCreatedByAdmin")
+  createdReferralRewardRules          CustomerReferralRewardRule[] @relation("ReferralRewardRuleCreatedBy")
 
   @@map("users")
 }
@@ -650,6 +683,9 @@ model CustomerProfile {
   serviceProviderRequests ServiceProviderRequest[]
   wallet                  CustomerWallet?
   walletLedgerEntries     CustomerWalletLedgerEntry[]
+  referralProfile         CustomerReferralProfile?
+  referralsMade           CustomerReferral[]          @relation("CustomerReferralReferredBy")
+  referralReceived        CustomerReferral?           @relation("CustomerReferralReferredCustomer")
 
   @@map("customer_profiles")
 }
@@ -1315,6 +1351,78 @@ model CustomerWalletLedgerEntry {
   @@index([entryType, status])
   @@index([sourceType, sourceId])
   @@map("customer_wallet_ledger_entries")
+}
+
+model CustomerReferralProfile {
+  id                 String                        @id @default(uuid()) @db.Uuid
+  customerId         String                        @unique @db.Uuid
+  code               String                        @unique
+  status             CustomerReferralProfileStatus @default(ACTIVE)
+  shareEnabled       Boolean                       @default(true)
+  totalReferrals     Int                           @default(0)
+  activatedReferrals Int                           @default(0)
+  eligibleReferrals  Int                           @default(0)
+  lastReferralAt     DateTime?
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+  customer           CustomerProfile               @relation(fields: [customerId], references: [id])
+  referrals          CustomerReferral[]
+
+  @@index([status, shareEnabled])
+  @@map("customer_referral_profiles")
+}
+
+model CustomerReferral {
+  id                      String                      @id @default(uuid()) @db.Uuid
+  referrerProfileId       String                      @db.Uuid
+  referrerCustomerId      String                      @db.Uuid
+  referredCustomerId      String                      @unique @db.Uuid
+  referralCode            String
+  status                  CustomerReferralStatus      @default(REGISTERED)
+  rewardRuleId            String?                     @db.Uuid
+  accountActivatedAt      DateTime?
+  firstValidTransactionAt DateTime?
+  eligibleAt              DateTime?
+  rewardReviewedAt        DateTime?
+  rewardIssuedAt          DateTime?
+  adminNote               String?
+  metadata                Json?
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+  referrerProfile         CustomerReferralProfile     @relation(fields: [referrerProfileId], references: [id])
+  referrerCustomer        CustomerProfile             @relation("CustomerReferralReferredBy", fields: [referrerCustomerId], references: [id])
+  referredCustomer        CustomerProfile             @relation("CustomerReferralReferredCustomer", fields: [referredCustomerId], references: [id])
+  rewardRule              CustomerReferralRewardRule? @relation(fields: [rewardRuleId], references: [id])
+
+  @@index([referrerCustomerId, createdAt])
+  @@index([status, createdAt])
+  @@index([referralCode])
+  @@map("customer_referrals")
+}
+
+model CustomerReferralRewardRule {
+  id                          String                @id @default(uuid()) @db.Uuid
+  name                        String
+  description                 String?
+  trigger                     ReferralRewardTrigger @default(FIRST_COMPLETED_ORDER)
+  rewardType                  ReferralRewardType    @default(MANUAL_REVIEW)
+  referrerRewardValue         Decimal               @default(0) @db.Decimal(12, 2)
+  referredCustomerRewardValue Decimal               @default(0) @db.Decimal(12, 2)
+  minimumTransactionAmount    Decimal?              @db.Decimal(12, 2)
+  requiredValidTransactions   Int                   @default(1)
+  currency                    String                @default("NGN")
+  isActive                    Boolean               @default(false)
+  startsAt                    DateTime?
+  endsAt                      DateTime?
+  createdByAdminId            String?               @db.Uuid
+  createdAt                   DateTime              @default(now())
+  updatedAt                   DateTime              @updatedAt
+  createdByAdmin              User?                 @relation("ReferralRewardRuleCreatedBy", fields: [createdByAdminId], references: [id])
+  referrals                   CustomerReferral[]
+
+  @@index([isActive, trigger])
+  @@index([rewardType])
+  @@map("customer_referral_reward_rules")
 }
 
 model VendorSettlement {

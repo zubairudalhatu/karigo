@@ -31,4 +31,12 @@ export class RegisterCustomerDto {
   @Matches(/[A-Z]/, { message: "password must include an uppercase letter" })
   @Matches(/\d/, { message: "password must include a number" })
   password!: string;
+
+  @ApiPropertyOptional({ example: "KGO-AB12CD34" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  @Matches(/^[A-Z0-9-]+$/, { message: "referralCode may contain only letters, numbers and hyphens" })
+  @Transform(({ value }) => value ? String(value).trim().toUpperCase() : undefined)
+  referralCode?: string;
 }

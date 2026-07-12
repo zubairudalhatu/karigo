@@ -30,7 +30,8 @@ export class AuthService {
       fullName: dto.fullName,
       phoneNumber: dto.phoneNumber,
       email: dto.email,
-      passwordHash
+      passwordHash,
+      referralCode: dto.referralCode
     });
     const verification = await this.otpService.issue(user.id, user.phoneNumber);
     const includeMockOtp =

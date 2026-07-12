@@ -1,5 +1,5 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { AccountStatus, Prisma, UserRole } from "@prisma/client";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { AccountStatus, CustomerReferralStatus, Prisma, UserRole } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 
@@ -27,26 +27,79 @@ export class UsersService {
     phoneNumber: string;
     email?: string;
     passwordHash: string;
+    referralCode?: string;
   }) {
     await this.assertUniqueIdentity(input.phoneNumber, input.email);
+    const referralCode = input.referralCode?.trim().toUpperCase();
 
-    return this.prisma.user.create({
-      data: {
-        fullName: input.fullName,
-        phoneNumber: input.phoneNumber,
-        email: input.email,
-        passwordHash: input.passwordHash,
-        role: UserRole.CUSTOMER,
-        customerProfile: {
-          create: {
-            referralCode: `KGO-${randomBytes(4).toString("hex").toUpperCase()}`
-          }
-        }
-      },
-      select: {
-        ...publicUserSelect,
-        customerProfile: true
+    return this.prisma.$transaction(async (tx) => {
+      const referrer = referralCode ? await tx.customerProfile.findFirst({
+        where: {
+          OR: [
+            { referralCode },
+            { referralProfile: { code: referralCode } }
+          ],
+          user: { deletedAt: null }
+        },
+        include: { referralProfile: true }
+      }) : null;
+
+      if (referralCode && !referrer) {
+        throw new BadRequestException("Referral code was not found");
       }
+
+      const newReferralCode = this.generateReferralCode();
+      const user = await tx.user.create({
+        data: {
+          fullName: input.fullName,
+          phoneNumber: input.phoneNumber,
+          email: input.email,
+          passwordHash: input.passwordHash,
+          role: UserRole.CUSTOMER,
+          customerProfile: {
+            create: {
+              referralCode: newReferralCode,
+              referredBy: referrer?.id,
+              referralProfile: {
+                create: { code: newReferralCode }
+              }
+            }
+          }
+        },
+        select: {
+          ...publicUserSelect,
+          customerProfile: true
+        }
+      });
+
+      if (referrer && user.customerProfile) {
+        const referrerProfile = referrer.referralProfile ?? await tx.customerReferralProfile.create({
+          data: {
+            customerId: referrer.id,
+            code: referrer.referralCode
+          }
+        });
+
+        await tx.customerReferral.create({
+          data: {
+            referrerProfileId: referrerProfile.id,
+            referrerCustomerId: referrer.id,
+            referredCustomerId: user.customerProfile.id,
+            referralCode: referralCode!,
+            status: CustomerReferralStatus.REGISTERED
+          }
+        });
+
+        await tx.customerReferralProfile.update({
+          where: { id: referrerProfile.id },
+          data: {
+            totalReferrals: { increment: 1 },
+            lastReferralAt: new Date()
+          }
+        });
+      }
+
+      return user;
     });
   }
 
@@ -84,13 +137,41 @@ export class UsersService {
   }
 
   markPhoneVerified(id: string) {
-    return this.prisma.user.update({
-      where: { id },
-      data: {
-        phoneVerified: true,
-        accountStatus: AccountStatus.ACTIVE
-      },
-      select: publicUserSelect
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({
+        where: { id },
+        data: {
+          phoneVerified: true,
+          accountStatus: AccountStatus.ACTIVE
+        },
+        select: publicUserSelect
+      });
+
+      const customer = await tx.customerProfile.findUnique({
+        where: { userId: id },
+        select: { id: true }
+      });
+      if (customer) {
+        const referral = await tx.customerReferral.findUnique({
+          where: { referredCustomerId: customer.id },
+          select: { id: true, status: true, referrerProfileId: true }
+        });
+        if (referral?.status === CustomerReferralStatus.REGISTERED) {
+          await tx.customerReferral.update({
+            where: { id: referral.id },
+            data: {
+              status: CustomerReferralStatus.ACCOUNT_ACTIVATED,
+              accountActivatedAt: new Date()
+            }
+          });
+          await tx.customerReferralProfile.update({
+            where: { id: referral.referrerProfileId },
+            data: { activatedReferrals: { increment: 1 } }
+          });
+        }
+      }
+
+      return user;
     });
   }
 
@@ -117,5 +198,9 @@ export class UsersService {
     if (email && existing?.email === email) {
       throw new ConflictException("Email address is already registered");
     }
+  }
+
+  private generateReferralCode(): string {
+    return `KGO-${randomBytes(5).toString("hex").toUpperCase()}`;
   }
 }

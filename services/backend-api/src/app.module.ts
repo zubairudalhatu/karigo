@@ -15,6 +15,7 @@ import { ProductsModule } from "./modules/products/products.module";
 import { MarketplaceDiscoveryModule } from "./modules/marketplace-discovery/marketplace-discovery.module";
 import { PromoModule } from "./modules/promos/promo.module";
 import { RidersModule } from "./modules/riders/riders.module";
+import { ReferralsModule } from "./modules/referrals/referrals.module";
 import { SupportModule } from "./modules/support/support.module";
 import { TaxiModule } from "./modules/taxi/taxi.module";
 import { UsersModule } from "./modules/users/users.module";
@@ -48,6 +49,7 @@ import { ServiceProviderRequestsModule } from "./modules/service-provider-reques
     VendorApplicationsModule,
     VendorPayoutAccountsModule,
     WalletModule,
+    ReferralsModule,
     AuthModule,
     CustomersModule,
     AddressesModule,
