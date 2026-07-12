@@ -38,7 +38,13 @@ assert(ui.includes("PasswordField"), "Shared UI must include a password visibili
 assert(ui.includes("visible ? \"Hide\" : \"Show\""), "Password field must expose show/hide toggle copy.");
 
 const index = read("app", "index.tsx");
-assert(index.includes('<Redirect href="/tabs/home" />'), "Fresh Customer App launch must route guests to the homepage.");
+assert(index.includes("Everything you need, delivered."), "Logged-out Customer App launch must show the KariGO welcome intro.");
+assert(index.includes("Order food, shop groceries, send parcels and request SME Services across Kano."), "Welcome intro must use current SME Services copy.");
+assert(index.includes("Get started"), "Welcome intro must expose a Get started action.");
+assert(index.includes('router.replace("/tabs/home")'), "Welcome Get started action must enter the guest homepage without forcing login.");
+assert(index.includes("You can browse first. Login or sign up when you are ready to order."), "Welcome intro must explain guest browsing.");
+assert(index.includes('if (user) return <Redirect href="/tabs/home" />'), "Logged-in customers must skip the welcome intro.");
+assert(!index.includes('href="/auth/login"'), "Welcome intro must not force Get started to login.");
 
 const home = read("app", "tabs", "home.tsx");
 assert(home.includes("KariGoAppTopBar"), "Home must use the branded KariGO top bar.");
