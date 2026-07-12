@@ -32,6 +32,7 @@ export interface RegisterCustomerRequest {
   phoneNumber: string;
   email?: string;
   password: string;
+  referralCode?: string;
 }
 
 export interface VerifyOtpRequest {

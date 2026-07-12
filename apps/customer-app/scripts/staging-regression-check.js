@@ -225,6 +225,13 @@ const referralsApi = read("src", "api", "referrals.api.ts");
 assert(referralsApi.includes('api.get<CustomerReferralProfileResult>("referrals/me")'), "Customer referral API must call referral profile endpoint.");
 assert(referralsApi.includes('api.get<CustomerReferralRecord[]>("referrals/my-referrals")'), "Customer referral API must call owned referral history endpoint.");
 
+const signupScreen = read("app", "auth", "signup.tsx");
+assert(signupScreen.includes("Referral code (optional)"), "Customer signup must expose an optional referral code field.");
+assert(signupScreen.includes("referralCode: cleanReferralCode || undefined"), "Customer signup must send referralCode only when a value is provided.");
+assert(signupScreen.includes("referralCode.trim().toUpperCase()"), "Customer signup must normalize referral codes before registration.");
+assert(signupScreen.includes("Rewards are tracked for future review and are not issued automatically."), "Customer signup must not promise automatic referral rewards.");
+assert(!signupScreen.includes("walletApi") && !signupScreen.includes("paymentsApi"), "Customer signup must not issue wallet credits or payments for referrals.");
+
 const utilitiesApi = read("src", "api", "utilities.api.ts");
 assert(utilitiesApi.includes("utilities/providers"), "Customer utilities API must load public providers.");
 assert(utilitiesApi.includes("customer/utilities/quote"), "Customer utilities API must quote test transactions.");
