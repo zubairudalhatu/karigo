@@ -328,6 +328,110 @@ export class ServiceProviderRequestsService {
     };
   }
 
+  async adminReport() {
+    const generatedAt = new Date();
+    const summary = await this.adminSummary();
+    const stamp = generatedAt.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+    const filename = `karigo-sme-services-pilot-report-${stamp}.md`;
+    const requestLines = summary.recent.requests.length
+      ? summary.recent.requests.map((request) => `| ${request.reference} | ${request.title} | ${request.status} | ${request.customerName} | ${this.reportDate(request.updatedAt)} |`).join("\n")
+      : "| - | No recent SME Services requests | - | - | - |";
+    const applicationLines = summary.recent.applications.length
+      ? summary.recent.applications.map((application) => `| ${application.reference} | ${application.title} | ${application.serviceType} | ${application.status} | ${this.reportDate(application.updatedAt)} |`).join("\n")
+      : "| - | No recent provider applications | - | - | - |";
+    const providerLines = summary.recent.providers.length
+      ? summary.recent.providers.map((provider) => `| ${provider.reference} | ${provider.title} | ${provider.serviceType} | ${provider.status} | ${provider.city}, ${provider.state} |`).join("\n")
+      : "| - | No recent provider records | - | - | - |";
+
+    const markdown = [
+      "# KariGO SME Services Pilot Operations Report",
+      "",
+      `Generated: ${this.reportDate(generatedAt)}`,
+      "",
+      "## Executive Summary",
+      "",
+      `- Total customer requests: ${summary.requests.total}`,
+      `- Active customer requests: ${summary.requests.active}`,
+      `- Provider matching or assigned requests: ${summary.requests.providerMatching + summary.requests.providerAssigned}`,
+      `- Completed requests: ${summary.requests.completed}`,
+      `- Cancelled requests: ${summary.requests.cancelled}`,
+      `- Pending provider applications: ${summary.providerApplications.pending}`,
+      `- Approved provider records: ${summary.providers.approved}`,
+      `- Readiness-only providers: ${summary.providers.readinessOnly}`,
+      "",
+      "## Request Status",
+      "",
+      `- Submitted: ${summary.requests.submitted}`,
+      `- Under review: ${summary.requests.underReview}`,
+      `- Provider matching: ${summary.requests.providerMatching}`,
+      `- Provider assigned: ${summary.requests.providerAssigned}`,
+      `- Completed: ${summary.requests.completed}`,
+      `- Cancelled: ${summary.requests.cancelled}`,
+      "",
+      "## Provider Application Status",
+      "",
+      `- Submitted: ${summary.providerApplications.submitted}`,
+      `- Under review: ${summary.providerApplications.underReview}`,
+      `- Changes requested: ${summary.providerApplications.changesRequested}`,
+      `- Approved: ${summary.providerApplications.approved}`,
+      `- Converted to provider: ${summary.providerApplications.convertedToProvider}`,
+      `- Rejected: ${summary.providerApplications.rejected}`,
+      `- Health professional readiness records: ${summary.providerApplications.healthProfessionalReadiness}`,
+      "",
+      "## Provider Directory Status",
+      "",
+      `- Total providers: ${summary.providers.total}`,
+      `- Pending review: ${summary.providers.pendingReview}`,
+      `- Approved: ${summary.providers.approved}`,
+      `- Suspended: ${summary.providers.suspended}`,
+      `- Inactive: ${summary.providers.inactive}`,
+      `- Readiness-only: ${summary.providers.readinessOnly}`,
+      "",
+      "## Recent Customer Requests",
+      "",
+      "| Reference | Service | Status | Customer | Updated |",
+      "| --- | --- | --- | --- | --- |",
+      requestLines,
+      "",
+      "## Recent Provider Applications",
+      "",
+      "| Reference | Applicant | Service type | Status | Updated |",
+      "| --- | --- | --- | --- | --- |",
+      applicationLines,
+      "",
+      "## Recent Provider Records",
+      "",
+      "| Reference | Provider | Service type | Status | Location |",
+      "| --- | --- | --- | --- | --- |",
+      providerLines,
+      "",
+      "## Operational Guardrails",
+      "",
+      `- Live dispatch: ${summary.guardrails.liveDispatchEnabled ? "Enabled" : "Disabled"}`,
+      `- Live payments: ${summary.guardrails.livePaymentsEnabled ? "Enabled" : "Disabled"}`,
+      `- Provider login: ${summary.guardrails.providerLoginEnabled ? "Enabled" : "Disabled"}`,
+      `- Provider payout: ${summary.guardrails.providerPayoutEnabled ? "Enabled" : "Disabled"}`,
+      `- Medical booking: ${summary.guardrails.medicalBookingEnabled ? "Enabled" : "Disabled"}`,
+      `- Note: ${summary.guardrails.note}`,
+      "",
+      "## Management Notes",
+      "",
+      "- This report is for internal pilot monitoring and management review only.",
+      "- It does not expose customer phone numbers, provider phone numbers, provider emails, payment data, OTPs or private admin notes.",
+      "- SME Services remains a manual review and coordination workflow until management approves future live operations."
+    ].join("\n");
+
+    return {
+      title: "KariGO SME Services Pilot Operations Report",
+      generatedAt,
+      filename,
+      format: "markdown",
+      mimeType: "text/markdown",
+      summary,
+      markdown
+    };
+  }
+
   async adminDetail(requestId: string) {
     const request = await this.prisma.serviceProviderRequest.findUnique({
       where: { id: requestId },
@@ -594,6 +698,10 @@ export class ServiceProviderRequestsService {
 
   private optionalText(value?: string | null) {
     return value?.trim() || null;
+  }
+
+  private reportDate(value: Date | string) {
+    return new Date(value).toISOString().replace("T", " ").replace(/\.\d{3}Z$/, " UTC");
   }
 
   private customerInclude() {

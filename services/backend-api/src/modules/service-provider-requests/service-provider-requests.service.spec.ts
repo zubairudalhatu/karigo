@@ -191,6 +191,61 @@ describe("ServiceProviderRequestsService admin operations", () => {
     });
   });
 
+  it("generates a management-ready pilot report without private contact details", async () => {
+    prisma.serviceProviderRequest.count
+      .mockResolvedValueOnce(8)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0);
+    prisma.serviceProviderApplication.count
+      .mockResolvedValueOnce(7)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1);
+    prisma.serviceProvider.count
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1);
+    prisma.serviceProviderRequest.findMany.mockResolvedValue([request]);
+    prisma.serviceProviderApplication.findMany.mockResolvedValue([{
+      id: "00000000-0000-0000-0000-000000000901",
+      applicationReference: "KGO-SPA-2026-001",
+      fullName: "Demo Applicant",
+      businessName: "Demo Services",
+      serviceType: ServiceProviderType.PLUMBER,
+      status: ServiceProviderApplicationStatus.SUBMITTED,
+      submittedAt: now,
+      updatedAt: now
+    }]);
+    prisma.serviceProvider.findMany.mockResolvedValue([provider]);
+
+    const result = await service.adminReport();
+
+    expect(result.title).toBe("KariGO SME Services Pilot Operations Report");
+    expect(result.filename).toMatch(/^karigo-sme-services-pilot-report-\d{8}T\d{6}Z\.md$/);
+    expect(result.format).toBe("markdown");
+    expect(result.mimeType).toBe("text/markdown");
+    expect(result.markdown).toContain("# KariGO SME Services Pilot Operations Report");
+    expect(result.markdown).toContain("- Active customer requests: 6");
+    expect(result.markdown).toContain("- Live dispatch: Disabled");
+    expect(result.markdown).toContain("internal pilot monitoring and management review only");
+    expect(result.markdown).not.toContain("+234");
+    expect(result.markdown).not.toContain("provider@karigo.local");
+    expect(result.markdown).not.toContain("Internal admin");
+    expect(result.summary.guardrails.providerLoginEnabled).toBe(false);
+  });
+
   it("returns admin detail with review history", async () => {
     prisma.serviceProviderRequest.findUnique.mockResolvedValue(request);
     prisma.adminAuditLog.findMany.mockResolvedValue([{ id: "audit-1", action: "service_provider_request.status_changed", createdAt: now }]);

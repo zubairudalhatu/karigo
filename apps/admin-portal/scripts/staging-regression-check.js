@@ -36,6 +36,10 @@ assert(smeServicesSummaryPage.includes("Customer requests"), "Admin SME Services
 assert(smeServicesSummaryPage.includes("Provider applications"), "Admin SME Services summary must link to provider applications.");
 assert(smeServicesSummaryPage.includes("Provider directory"), "Admin SME Services summary must link to provider directory.");
 assert(smeServicesSummaryPage.includes("Operational guardrails"), "Admin SME Services summary must show safety guardrails.");
+assert(smeServicesSummaryPage.includes("Download pilot report"), "Admin SME Services summary must expose the management report download action.");
+assert(smeServicesSummaryPage.includes("smeServicesApi.report"), "Admin SME Services summary must call the pilot report endpoint.");
+assert(smeServicesSummaryPage.includes("new Blob([report.markdown]"), "Admin SME Services summary must export the report as a local Markdown file.");
+assert(smeServicesSummaryPage.includes("SME Services pilot report generated."), "Admin SME Services summary must show report generation success feedback.");
 assert(smeServicesSummaryPage.includes("does not activate live dispatch, payment collection, provider payouts, provider login or medical booking"), "Admin SME Services summary must state safe pilot limits.");
 const smeServicesPage = read("app", "sme-services", "page.tsx");
 assert(smeServicesPage.includes("SME Services"), "Admin SME Services list page must exist.");
@@ -78,6 +82,9 @@ assert(smeProviderDetail.includes("Customers do not receive provider phone numbe
 assert(!smeProviderDetail.includes("Pay Now") && !smeProviderDetail.includes("Transfer funds"), "Provider directory must not expose payment actions.");
 const smeServicesApiSource = read("src", "api", "sme-services.api.ts");
 assert(smeServicesApiSource.includes("admin/service-provider-requests/summary"), "Admin portal must call admin SME Services summary endpoint.");
+assert(smeServicesApiSource.includes("admin/service-provider-requests/report"), "Admin portal must call admin SME Services report endpoint.");
+assert(smeServicesApiSource.includes("SmeServicesPilotReport"), "Admin portal must type the SME Services pilot report response.");
+assert(smeServicesApiSource.includes("markdown: string"), "Admin report response must expose generated Markdown content.");
 assert(smeServicesApiSource.includes("admin/service-provider-requests"), "Admin portal must call admin SME Services endpoints.");
 assert(smeServicesApiSource.includes("admin/service-provider-requests/${id}/status"), "Admin portal must call the SME Services status endpoint.");
 assert(smeServicesApiSource.includes("{ status, adminNote, customerNote }"), "Admin SME Services status API must send separate internal and customer-visible notes.");

@@ -222,8 +222,19 @@ export interface SmeServicesOperationsSummary {
   };
 }
 
+export interface SmeServicesPilotReport {
+  title: string;
+  generatedAt: string;
+  filename: string;
+  format: "markdown";
+  mimeType: "text/markdown";
+  summary: SmeServicesOperationsSummary;
+  markdown: string;
+}
+
 export const smeServicesApi = {
   summary: () => api.get<SmeServicesOperationsSummary>("admin/service-provider-requests/summary"),
+  report: () => api.get<SmeServicesPilotReport>("admin/service-provider-requests/report"),
   list: (q = "") => api.get<SmeServicesListResponse>(`admin/service-provider-requests${q ? `?${q}` : ""}`),
   detail: (id: string) => api.get<SmeServiceRequest>(`admin/service-provider-requests/${id}`),
   status: (id: string, status: ServiceProviderRequestStatus, adminNote?: string, customerNote?: string) =>

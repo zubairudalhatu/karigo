@@ -73,6 +73,12 @@ export class AdminServiceProviderRequestsController {
     return { message: "SME Services operations summary retrieved", data: await this.serviceRequests.adminSummary() };
   }
 
+  @Get("report")
+  @ApiOperation({ summary: "Generate an SME Services pilot operations report for admin review" })
+  async report() {
+    return { message: "SME Services pilot report generated", data: await this.serviceRequests.adminReport() };
+  }
+
   @Get(":requestId")
   @ApiOperation({ summary: "Get one SME Services request for admin review" })
   async detail(@Param("requestId", ParseUUIDPipe) requestId: string) {

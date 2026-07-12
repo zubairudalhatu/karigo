@@ -20,7 +20,9 @@ function Guardrail({ label, enabled }: { label: string; enabled: boolean }) {
 export default function SmeServicesSummaryPage() {
   const [summary, setSummary] = useState<SmeServicesOperationsSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   async function load() {
     setLoading(true);
@@ -34,6 +36,29 @@ export default function SmeServicesSummaryPage() {
     }
   }
 
+  async function downloadPilotReport() {
+    setExporting(true);
+    setError("");
+    setMessage("");
+    try {
+      const report = await smeServicesApi.report();
+      const blob = new Blob([report.markdown], { type: report.mimeType });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = report.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setMessage("SME Services pilot report generated.");
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   useEffect(() => { void load(); }, []);
 
   return <PortalShell>
@@ -44,7 +69,9 @@ export default function SmeServicesSummaryPage() {
       <Link className="button-link secondary" href="/sme-services/applications">Provider applications</Link>
       <Link className="button-link secondary" href="/sme-services/providers">Provider directory</Link>
       <button className="secondary" onClick={() => void load()}>Refresh</button>
+      <button onClick={() => void downloadPilotReport()} disabled={exporting}>{exporting ? "Generating..." : "Download pilot report"}</button>
     </div>
+    <p className="success">{message}</p>
     <ErrorMessage>{error}</ErrorMessage>
     {loading ? <Loading /> : summary ? <>
       <section className="section">
