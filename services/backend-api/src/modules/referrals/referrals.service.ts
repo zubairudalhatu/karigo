@@ -177,6 +177,156 @@ export class ReferralsService {
     };
   }
 
+  async adminSummary() {
+    const [
+      statusRows,
+      totalProfiles,
+      activeProfiles,
+      shareEnabledProfiles,
+      totalRules,
+      activeRules,
+      manualReviewRules,
+      recentReferrals
+    ] = await Promise.all([
+      this.prisma.customerReferral.groupBy({
+        by: ["status"],
+        _count: { _all: true }
+      }),
+      this.prisma.customerReferralProfile.count(),
+      this.prisma.customerReferralProfile.count({ where: { status: CustomerReferralProfileStatus.ACTIVE } }),
+      this.prisma.customerReferralProfile.count({ where: { shareEnabled: true } }),
+      this.prisma.customerReferralRewardRule.count(),
+      this.prisma.customerReferralRewardRule.count({ where: { isActive: true } }),
+      this.prisma.customerReferralRewardRule.count({ where: { rewardType: ReferralRewardType.MANUAL_REVIEW } }),
+      this.prisma.customerReferral.findMany({
+        include: REFERRAL_INCLUDE,
+        orderBy: { updatedAt: "desc" },
+        take: 5
+      })
+    ]);
+
+    const byStatus = this.emptyReferralStatusCounts();
+    statusRows.forEach((row) => { byStatus[row.status] = row._count._all; });
+    const totalReferrals = Object.values(byStatus).reduce((total, count) => total + count, 0);
+    const activatedReferrals = [
+      CustomerReferralStatus.ACCOUNT_ACTIVATED,
+      CustomerReferralStatus.FIRST_VALID_TRANSACTION_COMPLETED,
+      CustomerReferralStatus.ELIGIBLE_FOR_REWARD,
+      CustomerReferralStatus.REWARD_REVIEW_PENDING,
+      CustomerReferralStatus.REWARD_APPROVED,
+      CustomerReferralStatus.REWARD_ISSUED
+    ].reduce((total, status) => total + byStatus[status], 0);
+    const reviewQueue = byStatus[CustomerReferralStatus.ELIGIBLE_FOR_REWARD] + byStatus[CustomerReferralStatus.REWARD_REVIEW_PENDING];
+    const approvedReserved = byStatus[CustomerReferralStatus.REWARD_APPROVED];
+    const conversionRate = totalReferrals === 0 ? 0 : Number(((activatedReferrals / totalReferrals) * 100).toFixed(1));
+
+    return {
+      generatedAt: new Date().toISOString(),
+      profiles: {
+        total: totalProfiles,
+        active: activeProfiles,
+        shareEnabled: shareEnabledProfiles
+      },
+      referrals: {
+        total: totalReferrals,
+        registered: byStatus[CustomerReferralStatus.REGISTERED],
+        accountActivated: byStatus[CustomerReferralStatus.ACCOUNT_ACTIVATED],
+        firstValidTransactionCompleted: byStatus[CustomerReferralStatus.FIRST_VALID_TRANSACTION_COMPLETED],
+        eligibleForReward: byStatus[CustomerReferralStatus.ELIGIBLE_FOR_REWARD],
+        rewardReviewPending: byStatus[CustomerReferralStatus.REWARD_REVIEW_PENDING],
+        rewardApproved: approvedReserved,
+        rewardIssued: byStatus[CustomerReferralStatus.REWARD_ISSUED],
+        ineligible: byStatus[CustomerReferralStatus.INELIGIBLE],
+        cancelled: byStatus[CustomerReferralStatus.CANCELLED],
+        byStatus,
+        activatedReferrals,
+        conversionRate
+      },
+      rewardReview: {
+        queue: reviewQueue,
+        approvedReserved,
+        issuedBlocked: byStatus[CustomerReferralStatus.REWARD_ISSUED],
+        automaticRewardFulfillmentEnabled: false,
+        fulfillmentChannelsEnabled: {
+          walletCredit: false,
+          airtimeData: false,
+          promoCode: false,
+          freeDelivery: false,
+          messaging: false
+        },
+        note: "Referral rewards are review-only. Approved rewards are reserved for future fulfilment and no wallet credit, airtime/data, promo, free delivery or notification is issued."
+      },
+      rewardRules: {
+        total: totalRules,
+        active: activeRules,
+        manualReview: manualReviewRules
+      },
+      recentActivity: recentReferrals.map((referral) => ({
+        id: referral.id,
+        referralCode: referral.referralCode,
+        status: referral.status,
+        referrerName: referral.referrerCustomer.user.fullName,
+        referredCustomerName: referral.referredCustomer.user.fullName,
+        rewardRuleName: referral.rewardRule?.name ?? null,
+        rewardReviewedAt: referral.rewardReviewedAt?.toISOString() ?? null,
+        updatedAt: referral.updatedAt.toISOString()
+      }))
+    };
+  }
+
+  async adminReport() {
+    const summary = await this.adminSummary();
+    const markdown = [
+      "# KariGO Referral Pilot Report",
+      "",
+      `Generated: ${summary.generatedAt}`,
+      "",
+      "## Executive Summary",
+      `- Total referral profiles: ${summary.profiles.total}`,
+      `- Share-enabled referral profiles: ${summary.profiles.shareEnabled}`,
+      `- Total referral records: ${summary.referrals.total}`,
+      `- Activated referrals: ${summary.referrals.activatedReferrals}`,
+      `- Activation conversion rate: ${summary.referrals.conversionRate}%`,
+      `- Pending manual reward review: ${summary.rewardReview.queue}`,
+      `- Approved/reserved for future fulfilment: ${summary.rewardReview.approvedReserved}`,
+      "",
+      "## Referral Status Breakdown",
+      ...Object.entries(summary.referrals.byStatus).map(([status, count]) => `- ${this.humanize(status)}: ${count}`),
+      "",
+      "## Reward Rule Readiness",
+      `- Reward rules configured: ${summary.rewardRules.total}`,
+      `- Active reward rules: ${summary.rewardRules.active}`,
+      `- Manual-review reward rules: ${summary.rewardRules.manualReview}`,
+      "",
+      "## Safety And Fulfilment Guardrails",
+      "- Automatic reward fulfilment: Off",
+      "- Wallet credit posting: Off",
+      "- Airtime/data fulfilment: Off",
+      "- Promo code issuing: Off",
+      "- Free delivery reward creation: Off",
+      "- SMS/email/WhatsApp/push notifications: Off",
+      "",
+      "## Recent Referral Activity",
+      ...(summary.recentActivity.length
+        ? summary.recentActivity.map((item) => `- ${item.referralCode}: ${this.humanize(item.status)} (${item.referrerName} referred ${item.referredCustomerName})`)
+        : ["- No referral activity recorded yet."]),
+      "",
+      "## Management Notes",
+      "- Referral approvals recorded in KariGO are reservations only until management approves a fulfilment process.",
+      "- Finance and operations should reconcile approved referrals before any future manual reward fulfilment.",
+      "- No customer-facing reward promise should be made until fulfilment channels are approved."
+    ].join("\n");
+
+    return {
+      generatedAt: summary.generatedAt,
+      title: "KariGO Referral Pilot Report",
+      format: "markdown",
+      markdown,
+      summary,
+      fulfillmentEnabled: false
+    };
+  }
+
   async adminDetail(referralId: string) {
     const referral = await this.prisma.customerReferral.findUnique({
       where: { id: referralId },
@@ -371,6 +521,17 @@ export class ReferralsService {
       createdAt: profile.createdAt.toISOString(),
       updatedAt: profile.updatedAt.toISOString()
     };
+  }
+
+  private emptyReferralStatusCounts() {
+    return Object.values(CustomerReferralStatus).reduce((counts, status) => {
+      counts[status] = 0;
+      return counts;
+    }, {} as Record<CustomerReferralStatus, number>);
+  }
+
+  private humanize(value: string) {
+    return value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
   private toAdminReferral(referral: Prisma.CustomerReferralGetPayload<{ include: typeof REFERRAL_INCLUDE }>) {

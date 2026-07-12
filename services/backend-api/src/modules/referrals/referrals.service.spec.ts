@@ -77,6 +77,7 @@ describe("ReferralsService", () => {
   const prisma = {
     customerProfile: { findUnique: jest.fn() },
     customerReferralProfile: {
+      count: jest.fn(),
       upsert: jest.fn(),
       update: jest.fn()
     },
@@ -84,9 +85,11 @@ describe("ReferralsService", () => {
       count: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      groupBy: jest.fn(),
       update: jest.fn()
     },
     customerReferralRewardRule: {
+      count: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -103,9 +106,12 @@ describe("ReferralsService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.customerProfile.findUnique.mockResolvedValue(customer);
+    prisma.customerReferralProfile.count.mockResolvedValue(1);
     prisma.customerReferralProfile.upsert.mockResolvedValue(referralProfile);
     prisma.customerReferral.count.mockResolvedValue(0);
     prisma.customerReferral.findMany.mockResolvedValue([referral]);
+    prisma.customerReferral.groupBy.mockResolvedValue([{ status: CustomerReferralStatus.REGISTERED, _count: { _all: 1 } }]);
+    prisma.customerReferralRewardRule.count.mockResolvedValue(1);
     prisma.customerReferralRewardRule.findMany.mockResolvedValue([rewardRule]);
     prisma.customerReferralRewardRule.create.mockResolvedValue(rewardRule);
     prisma.customerReferralRewardRule.findUnique.mockResolvedValue({ id: rewardRule.id });
@@ -191,6 +197,54 @@ describe("ReferralsService", () => {
     expect(result.id).toBe(referral.id);
     expect(result.fulfillmentEnabled).toBe(false);
     expect(result).toHaveProperty("adminNote");
+  });
+
+  it("returns a referral pilot summary with fulfillment channels disabled", async () => {
+    prisma.customerReferral.groupBy.mockResolvedValue([
+      { status: CustomerReferralStatus.REGISTERED, _count: { _all: 2 } },
+      { status: CustomerReferralStatus.ELIGIBLE_FOR_REWARD, _count: { _all: 1 } },
+      { status: CustomerReferralStatus.REWARD_APPROVED, _count: { _all: 1 } }
+    ]);
+    prisma.customerReferralProfile.count
+      .mockResolvedValueOnce(4)
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(2);
+    prisma.customerReferralRewardRule.count
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(2);
+
+    const result = await service.adminSummary();
+
+    expect(result.referrals.total).toBe(4);
+    expect(result.rewardReview.queue).toBe(1);
+    expect(result.rewardReview.approvedReserved).toBe(1);
+    expect(result.rewardReview.automaticRewardFulfillmentEnabled).toBe(false);
+    expect(result.rewardReview.fulfillmentChannelsEnabled).toEqual({
+      walletCredit: false,
+      airtimeData: false,
+      promoCode: false,
+      freeDelivery: false,
+      messaging: false
+    });
+    expect(result.recentActivity[0]).toEqual(expect.objectContaining({
+      referralCode: referral.referralCode,
+      referrerName: "Referrer Customer",
+      referredCustomerName: "Referred Customer"
+    }));
+  });
+
+  it("generates a management-ready referral report without issuing rewards", async () => {
+    const result = await service.adminReport();
+
+    expect(result.title).toBe("KariGO Referral Pilot Report");
+    expect(result.format).toBe("markdown");
+    expect(result.fulfillmentEnabled).toBe(false);
+    expect(result.markdown).toContain("# KariGO Referral Pilot Report");
+    expect(result.markdown).toContain("Wallet credit posting: Off");
+    expect(result.markdown).toContain("Airtime/data fulfilment: Off");
+    expect(result.markdown).toContain("No customer-facing reward promise should be made");
+    expect(prisma.customerReferral.update).not.toHaveBeenCalled();
   });
 
   it("records a manual reward approval without issuing any reward", async () => {

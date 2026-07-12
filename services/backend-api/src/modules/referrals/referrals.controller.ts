@@ -58,6 +58,18 @@ export class AdminReferralsController {
     return { message: "Referral records retrieved", data: await this.referrals.adminList(query) };
   }
 
+  @Get("summary")
+  @ApiOperation({ summary: "Get referral pilot summary without reward fulfillment" })
+  async summary() {
+    return { message: "Referral summary retrieved", data: await this.referrals.adminSummary() };
+  }
+
+  @Get("report")
+  @ApiOperation({ summary: "Generate a management-ready referral pilot report without issuing rewards" })
+  async report() {
+    return { message: "Referral pilot report generated", data: await this.referrals.adminReport() };
+  }
+
   @Get("reward-rules")
   @ApiOperation({ summary: "List referral reward rules" })
   async rewardRules(@Query() query: ListRewardRulesQueryDto) {

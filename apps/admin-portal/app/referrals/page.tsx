@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CustomerReferralStatus, referralsApi, ReferralRewardRule, ReferralRewardType } from "../../src/api/referrals.api";
+import { AdminReferralPilotReport, AdminReferralSummary, CustomerReferralStatus, referralsApi, ReferralRewardRule, ReferralRewardType } from "../../src/api/referrals.api";
 import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
 import { friendlyError, money } from "../../src/lib/errors";
 
@@ -40,14 +40,18 @@ export default function ReferralsPage() {
   const [search, setSearch] = useState("");
   const [rewardType, setRewardType] = useState<ReferralRewardType | "ALL">("ALL");
   const [data, setData] = useState<Awaited<ReturnType<typeof referralsApi.list>> | null>(null);
+  const [summaryData, setSummaryData] = useState<AdminReferralSummary | null>(null);
   const [rules, setRules] = useState<ReferralRewardRule[]>([]);
+  const [report, setReport] = useState<AdminReferralPilotReport | null>(null);
   const [selectedReferral, setSelectedReferral] = useState<Awaited<ReturnType<typeof referralsApi.detail>> | null>(null);
   const [reviewStatus, setReviewStatus] = useState<CustomerReferralStatus>("REWARD_REVIEW_PENDING");
   const [reviewRewardRuleId, setReviewRewardRuleId] = useState("");
   const [reviewNote, setReviewNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [reviewLoading, setReviewLoading] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState("");
+  const [reportError, setReportError] = useState("");
   const [reviewError, setReviewError] = useState("");
   const [reviewSuccess, setReviewSuccess] = useState("");
 
@@ -56,14 +60,30 @@ export default function ReferralsPage() {
     setError("");
     Promise.all([
       referralsApi.list({ status, search }),
-      referralsApi.rewardRules({ isActive: "ALL", rewardType })
+      referralsApi.rewardRules({ isActive: "ALL", rewardType }),
+      referralsApi.summary()
     ])
-      .then(([nextData, nextRules]) => {
+      .then(([nextData, nextRules, nextSummary]) => {
         setData(nextData);
         setRules(nextRules);
+        setSummaryData(nextSummary);
       })
       .catch((e) => setError(friendlyError(e)))
       .finally(() => setLoading(false));
+  };
+
+  const generateReport = async () => {
+    setReportLoading(true);
+    setReportError("");
+    try {
+      const nextReport = await referralsApi.report();
+      setReport(nextReport);
+      setSummaryData(nextReport.summary);
+    } catch (e) {
+      setReportError(friendlyError(e, "form"));
+    } finally {
+      setReportLoading(false);
+    }
   };
 
   const openReview = async (referralId: string) => {
@@ -113,7 +133,16 @@ export default function ReferralsPage() {
 
   useEffect(() => { load(); }, [status, rewardType]);
 
-  const summary = data?.summary ?? {
+  const summary = summaryData ? {
+    total: summaryData.referrals.total,
+    registered: summaryData.referrals.registered,
+    accountActivated: summaryData.referrals.accountActivated,
+    eligibleForReward: summaryData.referrals.eligibleForReward,
+    rewardReviewPending: summaryData.referrals.rewardReviewPending,
+    rewardApproved: summaryData.referrals.rewardApproved,
+    rewardsIssued: summaryData.referrals.rewardIssued,
+    automaticRewardFulfillmentEnabled: summaryData.rewardReview.automaticRewardFulfillmentEnabled
+  } : data?.summary ?? {
     total: 0,
     registered: 0,
     accountActivated: 0,
@@ -130,7 +159,10 @@ export default function ReferralsPage() {
         <p className="muted">Referral tracking</p>
         <h1>Referrals</h1>
       </div>
-      <button className="secondary" onClick={load} disabled={loading}>Refresh</button>
+      <div className="top-actions">
+        <button className="secondary" onClick={load} disabled={loading}>Refresh</button>
+        <button onClick={() => void generateReport()} disabled={reportLoading}>{reportLoading ? "Generating..." : "Generate pilot report"}</button>
+      </div>
     </header>
 
     <p className="muted">Track referral codes, referred customers and reward-rule configuration. This page does not issue rewards, credit wallets, send airtime/data, issue promo codes or send SMS/email/WhatsApp/push notifications.</p>
@@ -144,6 +176,37 @@ export default function ReferralsPage() {
       <SummaryCard label="Pending review" value={summary.rewardReviewPending} />
       <SummaryCard label="Approved/reserved" value={summary.rewardApproved} />
       <div className="card"><p className="muted">Auto fulfillment</p><p className="metric">{summary.automaticRewardFulfillmentEnabled ? "On" : "Off"}</p></div>
+    </section>
+
+    <section className="section detail-grid">
+      <div className="card">
+        <p className="muted">Pilot summary</p>
+        <h2>Referral pilot summary</h2>
+        {summaryData ? (
+          <div className="section">
+            <div className="item"><span>Referral profiles</span><strong>{summaryData.profiles.total}</strong></div>
+            <div className="item"><span>Share enabled</span><strong>{summaryData.profiles.shareEnabled}</strong></div>
+            <div className="item"><span>Activation conversion</span><strong>{summaryData.referrals.conversionRate}%</strong></div>
+            <div className="item"><span>Manual review queue</span><strong>{summaryData.rewardReview.queue}</strong></div>
+            <div className="item"><span>Approved/reserved</span><strong>{summaryData.rewardReview.approvedReserved}</strong></div>
+            <div className="item"><span>Reward rules</span><strong>{summaryData.rewardRules.total}</strong></div>
+            <p className="muted">{summaryData.rewardReview.note}</p>
+          </div>
+        ) : <Loading />}
+      </div>
+
+      <div className="card review-panel">
+        <h2>Management report export</h2>
+        <p className="muted">Generate a Markdown referral pilot report for management review. This export is reporting-only and does not issue wallet credits, airtime/data, promo codes, free delivery rewards or notifications.</p>
+        <ErrorMessage>{reportError}</ErrorMessage>
+        <button onClick={() => void generateReport()} disabled={reportLoading}>{reportLoading ? "Generating report..." : "Generate Markdown report"}</button>
+        {report ? (
+          <>
+            <p className="success">Referral pilot report generated. Fulfilment remains {report.fulfillmentEnabled ? "enabled" : "disabled"}.</p>
+            <textarea aria-label="Referral pilot report markdown" readOnly rows={14} value={report.markdown} />
+          </>
+        ) : <p className="muted">No report generated yet.</p>}
+      </div>
     </section>
 
     <section className="section">

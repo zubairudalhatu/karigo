@@ -84,6 +84,8 @@ describe("Backend foundation (HTTP)", () => {
       .send({})
       .expect(401);
     await request(app!.getHttpServer()).get("/api/v1/admin/referrals").expect(401);
+    await request(app!.getHttpServer()).get("/api/v1/admin/referrals/summary").expect(401);
+    await request(app!.getHttpServer()).get("/api/v1/admin/referrals/report").expect(401);
     await request(app!.getHttpServer()).get("/api/v1/admin/referrals/00000000-0000-0000-0000-000000000000").expect(401);
     await request(app!.getHttpServer())
       .patch("/api/v1/admin/referrals/00000000-0000-0000-0000-000000000000/review")

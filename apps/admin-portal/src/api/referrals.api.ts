@@ -55,6 +55,68 @@ export interface AdminReferralsResult {
   items: AdminReferralRecord[];
 }
 
+export interface AdminReferralSummary {
+  generatedAt: string;
+  profiles: {
+    total: number;
+    active: number;
+    shareEnabled: number;
+  };
+  referrals: {
+    total: number;
+    registered: number;
+    accountActivated: number;
+    firstValidTransactionCompleted: number;
+    eligibleForReward: number;
+    rewardReviewPending: number;
+    rewardApproved: number;
+    rewardIssued: number;
+    ineligible: number;
+    cancelled: number;
+    byStatus: Record<CustomerReferralStatus, number>;
+    activatedReferrals: number;
+    conversionRate: number;
+  };
+  rewardReview: {
+    queue: number;
+    approvedReserved: number;
+    issuedBlocked: number;
+    automaticRewardFulfillmentEnabled: boolean;
+    fulfillmentChannelsEnabled: {
+      walletCredit: boolean;
+      airtimeData: boolean;
+      promoCode: boolean;
+      freeDelivery: boolean;
+      messaging: boolean;
+    };
+    note: string;
+  };
+  rewardRules: {
+    total: number;
+    active: number;
+    manualReview: number;
+  };
+  recentActivity: Array<{
+    id: string;
+    referralCode: string;
+    status: CustomerReferralStatus;
+    referrerName: string;
+    referredCustomerName: string;
+    rewardRuleName?: string | null;
+    rewardReviewedAt?: string | null;
+    updatedAt: string;
+  }>;
+}
+
+export interface AdminReferralPilotReport {
+  generatedAt: string;
+  title: string;
+  format: "markdown";
+  markdown: string;
+  summary: AdminReferralSummary;
+  fulfillmentEnabled: boolean;
+}
+
 export interface ReferralRewardRule {
   id: string;
   name: string;
@@ -85,6 +147,8 @@ function query(params: Record<string, string | undefined>) {
 export const referralsApi = {
   list: (filters: { status?: CustomerReferralStatus | "ALL"; search?: string } = {}) =>
     api.get<AdminReferralsResult>(`admin/referrals${query({ status: filters.status === "ALL" ? undefined : filters.status, search: filters.search })}`),
+  summary: () => api.get<AdminReferralSummary>("admin/referrals/summary"),
+  report: () => api.get<AdminReferralPilotReport>("admin/referrals/report"),
   detail: (referralId: string) => api.get<AdminReferralRecord>(`admin/referrals/${referralId}`),
   review: (referralId: string, body: { status: CustomerReferralStatus; rewardRuleId?: string | null; adminNote?: string }) =>
     api.patch<AdminReferralRecord>(`admin/referrals/${referralId}/review`, body),
