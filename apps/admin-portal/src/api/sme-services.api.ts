@@ -104,6 +104,7 @@ export interface SmeServiceRequest {
   status: ServiceProviderRequestStatus;
   readinessOnly: boolean;
   adminNote?: string | null;
+  customerUpdateNote?: string | null;
   assignmentNote?: string | null;
   assignedAt?: string | null;
   assignedProvider?: SmeProvider | null;
@@ -147,8 +148,8 @@ export interface SmeServicesListResponse {
 export const smeServicesApi = {
   list: (q = "") => api.get<SmeServicesListResponse>(`admin/service-provider-requests${q ? `?${q}` : ""}`),
   detail: (id: string) => api.get<SmeServiceRequest>(`admin/service-provider-requests/${id}`),
-  status: (id: string, status: ServiceProviderRequestStatus, adminNote?: string) =>
-    api.patch<SmeServiceRequest>(`admin/service-provider-requests/${id}/status`, { status, adminNote }),
+  status: (id: string, status: ServiceProviderRequestStatus, adminNote?: string, customerNote?: string) =>
+    api.patch<SmeServiceRequest>(`admin/service-provider-requests/${id}/status`, { status, adminNote, customerNote }),
   assignProvider: (id: string, providerId: string, assignmentNote?: string) =>
     api.patch<SmeServiceRequest>(`admin/service-provider-requests/${id}/provider-assignment`, { providerId, assignmentNote }),
   providers: (q = "") => api.get<SmeProvidersListResponse>(`admin/service-providers${q ? `?${q}` : ""}`),

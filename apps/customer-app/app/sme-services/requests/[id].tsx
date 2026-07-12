@@ -67,6 +67,11 @@ export default function SmeServicesRequestDetail() {
         <Text style={ui.muted}>{statusHelp[request.status]}</Text>
       </Card>
 
+      {request.customerUpdateNote ? <Card>
+        <Text style={ui.cardTitle}>KariGO update</Text>
+        <Text style={ui.cardText}>{request.customerUpdateNote}</Text>
+      </Card> : null}
+
       <Card>
         <Text style={ui.cardTitle}>Status progress</Text>
         {isCancelled ? <View style={styles.timelineItem}>

@@ -20,6 +20,7 @@ const request = {
   status: ServiceProviderRequestStatus.SUBMITTED,
   readinessOnly: false,
   adminNote: null,
+  customerUpdateNote: null,
   createdAt: now,
   updatedAt: now,
   assignedProviderId: null,
@@ -139,26 +140,68 @@ describe("ServiceProviderRequestsService admin operations", () => {
     expect(result.reviewHistory).toHaveLength(1);
   });
 
-  it("updates admin status without creating dispatch, payment or provider assignment records", async () => {
+  it("updates admin status and stores separate internal and customer-visible notes", async () => {
     prisma.serviceProviderRequest.findUnique.mockResolvedValue(request);
-    prisma.serviceProviderRequest.update.mockResolvedValue({ ...request, status: ServiceProviderRequestStatus.UNDER_REVIEW, adminNote: "Call customer" });
+    prisma.serviceProviderRequest.update.mockResolvedValue({
+      ...request,
+      status: ServiceProviderRequestStatus.UNDER_REVIEW,
+      adminNote: "Call customer",
+      customerUpdateNote: "KariGO is reviewing your request."
+    });
 
     const result = await service.adminUpdateStatus("admin-user", request.id, {
       status: ServiceProviderRequestStatus.UNDER_REVIEW,
-      adminNote: "Call customer"
+      adminNote: "Call customer",
+      customerNote: "KariGO is reviewing your request."
     });
 
     expect(prisma.serviceProviderRequest.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: request.id },
-      data: { status: ServiceProviderRequestStatus.UNDER_REVIEW, adminNote: "Call customer" }
+      data: {
+        status: ServiceProviderRequestStatus.UNDER_REVIEW,
+        adminNote: "Call customer",
+        customerUpdateNote: "KariGO is reviewing your request."
+      }
     }));
     expect(audit.record).toHaveBeenCalledWith("admin-user", "service_provider_request.status_changed", "ServiceProviderRequest", request.id, {
       previousStatus: ServiceProviderRequestStatus.SUBMITTED,
       status: ServiceProviderRequestStatus.UNDER_REVIEW,
       serviceType: ServiceProviderType.PLUMBER,
-      requestNumber: "KGO-SVC-001"
+      requestNumber: "KGO-SVC-001",
+      customerUpdateNoteProvided: true
     });
     expect(result.status).toBe(ServiceProviderRequestStatus.UNDER_REVIEW);
+    expect(result.adminNote).toBe("Call customer");
+    expect(result.customerUpdateNote).toBe("KariGO is reviewing your request.");
+  });
+
+  it("returns customer-visible update notes without internal admin notes or provider contact fields", async () => {
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.serviceProviderRequest.findFirst.mockResolvedValue({
+      ...request,
+      adminNote: "Internal admin follow-up",
+      customerUpdateNote: "KariGO is matching a suitable provider."
+    });
+
+    const result = await service.detail("user-1", request.id);
+
+    expect(prisma.serviceProviderRequest.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: request.id, customerId: "customer-1" }
+    }));
+    expect(result.customerUpdateNote).toBe("KariGO is matching a suitable provider.");
+    expect(result).not.toHaveProperty("adminNote");
+    expect(result).not.toHaveProperty("assignedProvider");
+    expect(result).not.toHaveProperty("assignmentNote");
+  });
+
+  it("does not return another customer's SME Services request notes", async () => {
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-2" });
+    prisma.serviceProviderRequest.findFirst.mockResolvedValue(null);
+
+    await expect(service.detail("other-user", request.id)).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.serviceProviderRequest.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: request.id, customerId: "customer-2" }
+    }));
   });
 
   it("lists SME Services providers with safe filters and summary counts", async () => {

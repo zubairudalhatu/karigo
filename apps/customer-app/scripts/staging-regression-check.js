@@ -121,6 +121,8 @@ assert(serviceProviderApi.includes("service-provider-requests/catalogue"), "Cust
 assert(serviceProviderApi.includes("service-provider-requests"), "Customer app must call the SME Services request endpoint.");
 assert(serviceProviderApi.includes("service-provider-requests/my-requests"), "Customer app must call the SME Services request history endpoint.");
 assert(serviceProviderApi.includes("service-provider-requests/${id}"), "Customer app must call the owned SME Services request detail endpoint.");
+assert(serviceProviderApi.includes("customerUpdateNote"), "Customer SME Services API type must include customer-visible admin status updates.");
+assert(!serviceProviderApi.includes("adminNote"), "Customer SME Services API type must not expose internal admin notes.");
 assert(!serviceProviderApi.includes("assignedProvider"), "Customer SME Services API type must not expose provider private contact details.");
 const smeRequestHistory = read("app", "sme-services", "requests", "index.tsx");
 assert(smeRequestHistory.includes("serviceProviderRequestsApi.mine"), "SME Services request history must load customer-owned requests.");
@@ -135,6 +137,9 @@ assert(smeRequestDetail.includes("serviceProviderRequestsApi.detail"), "SME Serv
 assert(!smeRequestDetail.includes("\"OK\""), "SME Services timeline must not use old OK badges.");
 assert(smeRequestDetail.includes("timelinePillCurrent"), "SME Services timeline must style the current step as a clear non-error state.");
 assert(smeRequestDetail.includes("#DBEAFE"), "SME Services current timeline step must use neutral blue styling, not an error color.");
+assert(smeRequestDetail.includes("KariGO update"), "SME Services detail must display customer-visible admin update notes.");
+assert(smeRequestDetail.includes("request.customerUpdateNote"), "SME Services detail must render only the safe customer-visible update field.");
+assert(!smeRequestDetail.includes("adminNote"), "SME Services detail must never render internal admin notes.");
 assert(smeRequestDetail.includes("private provider contact details remain protected"), "SME Services detail must not expose private provider contact.");
 assert(smeRequestDetail.includes("No live dispatch, service payment, provider payout or provider login"), "SME Services detail must state safe review-only limits.");
 assert(!smeRequestDetail.includes("provider.phoneNumber") && !smeRequestDetail.includes("provider.email"), "SME Services detail must not render provider private phone/email.");

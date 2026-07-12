@@ -184,7 +184,8 @@ export class ServiceProviderRequestsService {
       where: { id: requestId },
       data: {
         status: dto.status,
-        ...(dto.adminNote === undefined ? {} : { adminNote: dto.adminNote.trim() || null })
+        ...(dto.adminNote === undefined ? {} : { adminNote: this.optionalText(dto.adminNote) }),
+        ...(dto.customerNote === undefined ? {} : { customerUpdateNote: this.optionalText(dto.customerNote) })
       },
       include: this.adminInclude()
     });
@@ -193,7 +194,8 @@ export class ServiceProviderRequestsService {
       previousStatus: existing.status,
       status: dto.status,
       serviceType: existing.serviceType,
-      requestNumber: existing.requestNumber
+      requestNumber: existing.requestNumber,
+      customerUpdateNoteProvided: dto.customerNote !== undefined
     });
 
     return this.adminRequest(updated);
@@ -486,6 +488,7 @@ export class ServiceProviderRequestsService {
       preferredDate: request.preferredDate,
       preferredTimeWindow: request.preferredTimeWindow,
       customerNote: list ? undefined : request.customerNote,
+      customerUpdateNote: request.customerUpdateNote,
       status: request.status,
       readinessOnly: request.readinessOnly,
       serviceAddress: request.serviceAddress,
@@ -508,6 +511,7 @@ export class ServiceProviderRequestsService {
       status: request.status,
       readinessOnly: request.readinessOnly,
       adminNote: list ? undefined : request.adminNote,
+      customerUpdateNote: request.customerUpdateNote,
       assignmentNote: list ? undefined : request.assignmentNote,
       assignedAt: request.assignedAt,
       assignedProvider: request.assignedProvider ? this.adminProvider(request.assignedProvider) : null,

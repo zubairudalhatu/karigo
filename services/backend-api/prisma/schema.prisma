@@ -698,6 +698,7 @@ model ServiceProviderRequest {
   status              ServiceProviderRequestStatus @default(SUBMITTED)
   readinessOnly       Boolean                      @default(false)
   adminNote           String?
+  customerUpdateNote  String?
   assignmentNote      String?
   assignedAt          DateTime?
   createdAt           DateTime                     @default(now())

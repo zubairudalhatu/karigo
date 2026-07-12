@@ -49,6 +49,10 @@ assert(!smeProviderApplicationDetail.includes("Pay Now") && !smeProviderApplicat
 const smeServicesDetail = read("app", "sme-services", "[id]", "page.tsx");
 assert(smeServicesDetail.includes("Update review status"), "Admin SME Services detail must support status updates.");
 assert(smeServicesDetail.includes("does not dispatch a provider, collect payment or activate medical booking"), "Admin SME Services status update must confirm safe limits.");
+assert(smeServicesDetail.includes("Internal admin note"), "Admin SME Services detail must label the admin-only status note clearly.");
+assert(smeServicesDetail.includes("Visible only to KariGO Admin. Do not enter payment secrets, OTPs or sensitive medical details."), "Admin internal SME Services note must include safe helper text.");
+assert(smeServicesDetail.includes("Customer update note"), "Admin SME Services detail must support customer-visible progress notes.");
+assert(smeServicesDetail.includes("Visible to the customer in the Customer App"), "Admin customer update note must explain customer visibility.");
 assert(smeServicesDetail.includes("Record manual assignment"), "Admin SME Services detail must support manual provider assignment.");
 assert(smeServicesDetail.includes("does not notify or dispatch the provider automatically"), "Manual assignment must state it is not live dispatch.");
 assert(!smeServicesDetail.includes("Pay Now") && !smeServicesDetail.includes("Transfer funds"), "Admin SME Services must not expose payment actions.");
@@ -66,6 +70,7 @@ assert(!smeProviderDetail.includes("Pay Now") && !smeProviderDetail.includes("Tr
 const smeServicesApiSource = read("src", "api", "sme-services.api.ts");
 assert(smeServicesApiSource.includes("admin/service-provider-requests"), "Admin portal must call admin SME Services endpoints.");
 assert(smeServicesApiSource.includes("admin/service-provider-requests/${id}/status"), "Admin portal must call the SME Services status endpoint.");
+assert(smeServicesApiSource.includes("{ status, adminNote, customerNote }"), "Admin SME Services status API must send separate internal and customer-visible notes.");
 assert(smeServicesApiSource.includes("admin/service-provider-requests/${id}/provider-assignment"), "Admin portal must call the SME Services assignment endpoint.");
 assert(smeServicesApiSource.includes("admin/service-providers"), "Admin portal must call admin SME Services provider endpoints.");
 assert(smeServicesApiSource.includes("admin/service-provider-applications"), "Admin portal must call admin SME Services provider application endpoints.");

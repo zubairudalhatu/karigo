@@ -49,6 +49,7 @@ export interface ServiceProviderRequest {
   preferredDate?: string | null;
   preferredTimeWindow?: string | null;
   customerNote?: string | null;
+  customerUpdateNote?: string | null;
   status: ServiceProviderRequestStatus;
   readinessOnly: boolean;
   serviceAddress: Pick<Address, "id" | "label" | "addressLine" | "city" | "state" | "country">;

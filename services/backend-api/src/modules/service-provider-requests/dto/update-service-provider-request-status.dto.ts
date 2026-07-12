@@ -13,4 +13,10 @@ export class UpdateServiceProviderRequestStatusDto {
   @MaxLength(1000)
   @Transform(trim)
   adminNote?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  @Transform(trim)
+  customerNote?: string;
 }

@@ -20,6 +20,7 @@ export default function SmeServicesRequestDetailPage() {
   const [providers, setProviders] = useState<SmeProvider[]>([]);
   const [status, setStatus] = useState<ServiceProviderRequestStatus>("SUBMITTED");
   const [adminNote, setAdminNote] = useState("");
+  const [customerUpdateNote, setCustomerUpdateNote] = useState("");
   const [providerId, setProviderId] = useState("");
   const [assignmentNote, setAssignmentNote] = useState("");
   const [error, setError] = useState("");
@@ -32,6 +33,7 @@ export default function SmeServicesRequestDetailPage() {
       setRequest(item);
       setStatus(item.status);
       setAdminNote(item.adminNote ?? "");
+      setCustomerUpdateNote(item.customerUpdateNote ?? "");
       setProviderId(item.assignedProvider?.id ?? "");
       setAssignmentNote(item.assignmentNote ?? "");
 
@@ -50,7 +52,7 @@ export default function SmeServicesRequestDetailPage() {
     setError("");
     setMessage("");
     try {
-      const updated = await smeServicesApi.status(id, status, adminNote);
+      const updated = await smeServicesApi.status(id, status, adminNote, customerUpdateNote);
       setRequest(updated);
       setMessage("SME Services request status updated.");
       await load();
@@ -94,6 +96,7 @@ export default function SmeServicesRequestDetailPage() {
           <p><Badge>{request.status}</Badge> {request.readinessOnly ? <Badge>Readiness Only</Badge> : null}</p>
           <p>{request.description}</p>
           {request.customerNote ? <p><strong>Customer note:</strong> {request.customerNote}</p> : null}
+          {request.customerUpdateNote ? <p><strong>Customer update note:</strong> {request.customerUpdateNote}</p> : null}
         </article>
         <article className="card">
           <h2>Customer and location</h2>
@@ -131,7 +134,14 @@ export default function SmeServicesRequestDetailPage() {
         <label>Status<select value={status} onChange={(e) => setStatus(e.target.value as ServiceProviderRequestStatus)}>
           {statuses.map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}
         </select></label>
-        <label>Admin note<textarea value={adminNote} onChange={(e) => setAdminNote(e.target.value)} placeholder="Internal operation note. Do not enter payment secrets, OTPs or sensitive medical details." /></label>
+        <label>Internal admin note
+          <textarea value={adminNote} onChange={(e) => setAdminNote(e.target.value)} placeholder="Internal operation note." />
+          <span className="muted">Visible only to KariGO Admin. Do not enter payment secrets, OTPs or sensitive medical details.</span>
+        </label>
+        <label>Customer update note
+          <textarea value={customerUpdateNote} onChange={(e) => setCustomerUpdateNote(e.target.value)} placeholder="Safe update shown to the customer in their SME Services request tracker." />
+          <span className="muted">Visible to the customer in the Customer App. Do not include provider phone/email, OTPs, payment details or sensitive medical information.</span>
+        </label>
         <button onClick={() => void updateStatus()}>Save status</button>
         <h2>Assign provider</h2>
         <label>Approved provider<select value={providerId} onChange={(e) => setProviderId(e.target.value)}>
