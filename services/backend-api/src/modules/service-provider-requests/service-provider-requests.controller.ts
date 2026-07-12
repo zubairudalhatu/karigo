@@ -13,6 +13,7 @@ import { CreateServiceProviderDto } from "./dto/create-service-provider.dto";
 import { CreateServiceProviderRequestDto } from "./dto/create-service-provider-request.dto";
 import { ListServiceProvidersQueryDto } from "./dto/list-service-providers-query.dto";
 import { ListServiceProviderRequestsQueryDto } from "./dto/list-service-provider-requests-query.dto";
+import { RecordSmeServicesPilotLaunchDecisionDto } from "./dto/record-sme-services-pilot-launch-decision.dto";
 import { UpdateSmeServicesPilotReadinessDto } from "./dto/update-sme-services-pilot-readiness.dto";
 import { UpdateServiceProviderDto } from "./dto/update-service-provider.dto";
 import { UpdateServiceProviderRequestStatusDto } from "./dto/update-service-provider-request-status.dto";
@@ -126,6 +127,18 @@ export class AdminSmeServicesPilotReadinessController {
   @ApiOperation({ summary: "Update SME Services pilot readiness checklist" })
   async updateReadiness(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateSmeServicesPilotReadinessDto) {
     return { message: "SME Services pilot readiness checklist updated", data: await this.serviceRequests.adminUpdatePilotReadiness(user.id, dto) };
+  }
+
+  @Get("pilot-launch-control")
+  @ApiOperation({ summary: "Get SME Services pilot launch Go/No-Go control record" })
+  async launchControl() {
+    return { message: "SME Services pilot launch control retrieved", data: await this.serviceRequests.adminPilotLaunchControl() };
+  }
+
+  @Post("pilot-launch-control")
+  @ApiOperation({ summary: "Record an SME Services pilot launch Go/No-Go decision" })
+  async recordLaunchDecision(@CurrentUser() user: AuthenticatedUser, @Body() dto: RecordSmeServicesPilotLaunchDecisionDto) {
+    return { message: "SME Services pilot launch decision recorded", data: await this.serviceRequests.adminRecordPilotLaunchDecision(user.id, dto) };
   }
 }
 

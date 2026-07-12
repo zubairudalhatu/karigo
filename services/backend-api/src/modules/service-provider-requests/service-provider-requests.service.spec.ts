@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException } from "@nestjs/common";
-import { ServiceProviderApplicationStatus, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType } from "@prisma/client";
+import { ServiceProviderApplicationStatus, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType, SmeServicesPilotDecisionStatus } from "@prisma/client";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ServiceProviderRequestsService } from "./service-provider-requests.service";
@@ -78,6 +78,27 @@ const readinessItem = {
   updatedAt: now
 };
 
+const launchDecision = {
+  id: "00000000-0000-0000-0000-000000000b01",
+  decisionStatus: SmeServicesPilotDecisionStatus.CONDITIONAL_GO,
+  decisionTitle: "Proceed with limited internal pilot",
+  decisionSummary: "Operations can invite internal testers after final account checks.",
+  conditions: "Keep provider matching manual.",
+  blockers: null,
+  readinessStatusSnapshot: "NOT_READY",
+  requiredCompletedSnapshot: 0,
+  requiredTotalSnapshot: 1,
+  optionalCompletedSnapshot: 0,
+  optionalTotalSnapshot: 0,
+  approvedProvidersSnapshot: 2,
+  pendingProviderApplicationsSnapshot: 4,
+  activeRequestsSnapshot: 6,
+  recordedByAdminId: "admin-user",
+  recordedAt: now,
+  createdAt: now,
+  updatedAt: now
+};
+
 describe("ServiceProviderRequestsService admin operations", () => {
   const prisma = {
     customerProfile: { findUnique: jest.fn() },
@@ -105,6 +126,11 @@ describe("ServiceProviderRequestsService admin operations", () => {
       upsert: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn()
+    },
+    smeServicesPilotLaunchDecision: {
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn()
     },
     adminAuditLog: { findMany: jest.fn() }
   };
@@ -368,6 +394,77 @@ describe("ServiceProviderRequestsService admin operations", () => {
     });
     expect(result.requiredCompleted).toBe(1);
     expect(result.guardrails.livePaymentsEnabled).toBe(false);
+  });
+
+  it("returns SME Services pilot launch control with readiness and decision history", async () => {
+    prisma.smeServicesPilotReadinessItem.upsert.mockResolvedValue(readinessItem);
+    prisma.smeServicesPilotReadinessItem.findMany.mockResolvedValue([readinessItem]);
+    prisma.smeServicesPilotLaunchDecision.findFirst.mockResolvedValue(launchDecision);
+    prisma.smeServicesPilotLaunchDecision.findMany.mockResolvedValue([launchDecision]);
+    mockAdminSummaryQueries();
+
+    const result = await service.adminPilotLaunchControl();
+
+    expect(result.status).toBe(SmeServicesPilotDecisionStatus.CONDITIONAL_GO);
+    expect(result.latestDecision).toMatchObject({
+      decisionStatus: SmeServicesPilotDecisionStatus.CONDITIONAL_GO,
+      readinessStatusSnapshot: "NOT_READY",
+      approvedProvidersSnapshot: 2
+    });
+    expect(result.history).toHaveLength(1);
+    expect(result.readiness.status).toBe("NOT_READY");
+    expect(result.guardrails.liveDispatchEnabled).toBe(false);
+    expect(result.safetyNote).toContain("does not activate live dispatch");
+  });
+
+  it("records SME Services pilot launch decisions with readiness snapshots only", async () => {
+    prisma.smeServicesPilotReadinessItem.upsert.mockResolvedValue(readinessItem);
+    prisma.smeServicesPilotReadinessItem.findMany.mockResolvedValue([readinessItem]);
+    prisma.smeServicesPilotLaunchDecision.create.mockResolvedValue(launchDecision);
+    prisma.smeServicesPilotLaunchDecision.findMany.mockResolvedValue([launchDecision]);
+    mockAdminSummaryQueries();
+
+    const result = await service.adminRecordPilotLaunchDecision("admin-user", {
+      decisionStatus: SmeServicesPilotDecisionStatus.CONDITIONAL_GO,
+      decisionTitle: "Proceed with limited internal pilot",
+      decisionSummary: "Operations can invite internal testers after final account checks.",
+      conditions: "Keep provider matching manual."
+    });
+
+    expect(prisma.smeServicesPilotLaunchDecision.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        decisionStatus: SmeServicesPilotDecisionStatus.CONDITIONAL_GO,
+        decisionTitle: "Proceed with limited internal pilot",
+        readinessStatusSnapshot: "NOT_READY",
+        requiredCompletedSnapshot: 0,
+        requiredTotalSnapshot: 1,
+        approvedProvidersSnapshot: 2,
+        pendingProviderApplicationsSnapshot: 4,
+        activeRequestsSnapshot: 6,
+        recordedByAdminId: "admin-user"
+      })
+    }));
+    expect(audit.record).toHaveBeenCalledWith("admin-user", "sme_services.pilot_launch_decision_recorded", "SmeServicesPilotLaunchDecision", launchDecision.id, {
+      decisionStatus: SmeServicesPilotDecisionStatus.CONDITIONAL_GO,
+      readinessStatusSnapshot: "NOT_READY",
+      requiredCompletedSnapshot: 0,
+      requiredTotalSnapshot: 1,
+      approvedProvidersSnapshot: 2
+    });
+    expect(result.latestDecision?.decisionStatus).toBe(SmeServicesPilotDecisionStatus.CONDITIONAL_GO);
+    expect(result.guardrails.livePaymentsEnabled).toBe(false);
+  });
+
+  it("blocks internal pilot Go decisions until readiness checklist is complete", async () => {
+    prisma.smeServicesPilotReadinessItem.upsert.mockResolvedValue(readinessItem);
+    prisma.smeServicesPilotReadinessItem.findMany.mockResolvedValue([readinessItem]);
+    mockAdminSummaryQueries();
+
+    await expect(service.adminRecordPilotLaunchDecision("admin-user", {
+      decisionStatus: SmeServicesPilotDecisionStatus.GO_INTERNAL_PILOT,
+      decisionTitle: "Go for internal pilot"
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.smeServicesPilotLaunchDecision.create).not.toHaveBeenCalled();
   });
 
   it("returns admin detail with review history", async () => {

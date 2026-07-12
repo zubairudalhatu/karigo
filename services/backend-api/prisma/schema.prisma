@@ -132,6 +132,14 @@ enum ServiceProviderApplicationStatus {
   CONVERTED_TO_PROVIDER
 }
 
+enum SmeServicesPilotDecisionStatus {
+  NOT_REVIEWED
+  GO_INTERNAL_PILOT
+  CONDITIONAL_GO
+  NO_GO
+  DEFERRED
+}
+
 enum ProductCategory {
   FOOD
   GROCERIES
@@ -794,6 +802,31 @@ model SmeServicesPilotReadinessItem {
   @@index([category, sortOrder])
   @@index([isRequired, isCompleted])
   @@map("sme_services_pilot_readiness_items")
+}
+
+model SmeServicesPilotLaunchDecision {
+  id                                  String                         @id @default(uuid()) @db.Uuid
+  decisionStatus                      SmeServicesPilotDecisionStatus @default(NOT_REVIEWED)
+  decisionTitle                       String?
+  decisionSummary                     String?
+  conditions                          String?
+  blockers                            String?
+  readinessStatusSnapshot             String
+  requiredCompletedSnapshot           Int                            @default(0)
+  requiredTotalSnapshot               Int                            @default(0)
+  optionalCompletedSnapshot           Int                            @default(0)
+  optionalTotalSnapshot               Int                            @default(0)
+  approvedProvidersSnapshot           Int                            @default(0)
+  pendingProviderApplicationsSnapshot Int                            @default(0)
+  activeRequestsSnapshot              Int                            @default(0)
+  recordedByAdminId                   String?                        @db.Uuid
+  recordedAt                          DateTime                       @default(now())
+  createdAt                           DateTime                       @default(now())
+  updatedAt                           DateTime                       @updatedAt
+
+  @@index([decisionStatus, recordedAt])
+  @@index([recordedAt])
+  @@map("sme_services_pilot_launch_decisions")
 }
 
 model VendorCategory {

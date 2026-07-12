@@ -34,6 +34,13 @@ export type ServiceProviderApplicationStatus =
   | "REJECTED"
   | "CONVERTED_TO_PROVIDER";
 
+export type SmeServicesPilotDecisionStatus =
+  | "NOT_REVIEWED"
+  | "GO_INTERNAL_PILOT"
+  | "CONDITIONAL_GO"
+  | "NO_GO"
+  | "DEFERRED";
+
 export interface SmeProvider {
   id: string;
   providerCode: string;
@@ -266,12 +273,51 @@ export interface SmeServicesPilotReadiness {
   safetyNote: string;
 }
 
+export interface SmeServicesPilotLaunchDecision {
+  id: string;
+  decisionStatus: SmeServicesPilotDecisionStatus;
+  decisionTitle?: string | null;
+  decisionSummary?: string | null;
+  conditions?: string | null;
+  blockers?: string | null;
+  readinessStatusSnapshot: string;
+  requiredCompletedSnapshot: number;
+  requiredTotalSnapshot: number;
+  optionalCompletedSnapshot: number;
+  optionalTotalSnapshot: number;
+  approvedProvidersSnapshot: number;
+  pendingProviderApplicationsSnapshot: number;
+  activeRequestsSnapshot: number;
+  recordedByAdminId?: string | null;
+  recordedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SmeServicesPilotLaunchControl {
+  status: SmeServicesPilotDecisionStatus;
+  readiness: SmeServicesPilotReadiness;
+  latestDecision: SmeServicesPilotLaunchDecision | null;
+  history: SmeServicesPilotLaunchDecision[];
+  decisionOptions: SmeServicesPilotDecisionStatus[];
+  guardrails: SmeServicesOperationsSummary["guardrails"];
+  safetyNote: string;
+}
+
 export const smeServicesApi = {
   summary: () => api.get<SmeServicesOperationsSummary>("admin/service-provider-requests/summary"),
   report: () => api.get<SmeServicesPilotReport>("admin/service-provider-requests/report"),
   pilotReadiness: () => api.get<SmeServicesPilotReadiness>("admin/sme-services/pilot-readiness"),
   updatePilotReadiness: (items: Array<{ key: string; isCompleted: boolean; note?: string | null }>) =>
     api.patch<SmeServicesPilotReadiness>("admin/sme-services/pilot-readiness", { items }),
+  pilotLaunchControl: () => api.get<SmeServicesPilotLaunchControl>("admin/sme-services/pilot-launch-control"),
+  recordPilotLaunchDecision: (payload: {
+    decisionStatus: SmeServicesPilotDecisionStatus;
+    decisionTitle?: string;
+    decisionSummary?: string;
+    conditions?: string;
+    blockers?: string;
+  }) => api.post<SmeServicesPilotLaunchControl>("admin/sme-services/pilot-launch-control", payload),
   list: (q = "") => api.get<SmeServicesListResponse>(`admin/service-provider-requests${q ? `?${q}` : ""}`),
   detail: (id: string) => api.get<SmeServiceRequest>(`admin/service-provider-requests/${id}`),
   status: (id: string, status: ServiceProviderRequestStatus, adminNote?: string, customerNote?: string) =>

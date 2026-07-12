@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, ServiceProviderApplicationStatus, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType } from "@prisma/client";
+import { Prisma, ServiceProviderApplicationStatus, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType, SmeServicesPilotDecisionStatus } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -8,6 +8,7 @@ import { CreateServiceProviderDto } from "./dto/create-service-provider.dto";
 import { CreateServiceProviderRequestDto } from "./dto/create-service-provider-request.dto";
 import { ListServiceProvidersQueryDto } from "./dto/list-service-providers-query.dto";
 import { ListServiceProviderRequestsQueryDto } from "./dto/list-service-provider-requests-query.dto";
+import { RecordSmeServicesPilotLaunchDecisionDto } from "./dto/record-sme-services-pilot-launch-decision.dto";
 import { UpdateSmeServicesPilotReadinessDto } from "./dto/update-sme-services-pilot-readiness.dto";
 import { UpdateServiceProviderDto } from "./dto/update-service-provider.dto";
 import { UpdateServiceProviderRequestStatusDto } from "./dto/update-service-provider-request-status.dto";
@@ -564,6 +565,86 @@ export class ServiceProviderRequestsService {
     };
   }
 
+  async adminPilotLaunchControl() {
+    const [readiness, latestDecision, history] = await Promise.all([
+      this.adminPilotReadiness(),
+      this.prisma.smeServicesPilotLaunchDecision.findFirst({ orderBy: { recordedAt: "desc" } }),
+      this.prisma.smeServicesPilotLaunchDecision.findMany({
+        orderBy: { recordedAt: "desc" },
+        take: 10
+      })
+    ]);
+
+    return {
+      status: latestDecision?.decisionStatus ?? SmeServicesPilotDecisionStatus.NOT_REVIEWED,
+      readiness,
+      latestDecision: latestDecision ? this.adminPilotLaunchDecision(latestDecision) : null,
+      history: history.map((decision) => this.adminPilotLaunchDecision(decision)),
+      decisionOptions: [
+        SmeServicesPilotDecisionStatus.GO_INTERNAL_PILOT,
+        SmeServicesPilotDecisionStatus.CONDITIONAL_GO,
+        SmeServicesPilotDecisionStatus.NO_GO,
+        SmeServicesPilotDecisionStatus.DEFERRED
+      ],
+      guardrails: readiness.guardrails,
+      safetyNote: "This launch control record is internal only. Recording Go/No-Go does not activate live dispatch, payments, payouts, provider login, provider app access, push notifications, medical booking or public provider contact sharing."
+    };
+  }
+
+  async adminRecordPilotLaunchDecision(adminUserId: string, dto: RecordSmeServicesPilotLaunchDecisionDto) {
+    const readiness = await this.adminPilotReadiness();
+    if (dto.decisionStatus === SmeServicesPilotDecisionStatus.GO_INTERNAL_PILOT && readiness.status !== "READY_FOR_INTERNAL_PILOT") {
+      throw new BadRequestException("SME Services readiness checklist must be complete before recording Go for internal pilot.");
+    }
+
+    const decision = await this.prisma.smeServicesPilotLaunchDecision.create({
+      data: {
+        decisionStatus: dto.decisionStatus,
+        decisionTitle: this.optionalText(dto.decisionTitle),
+        decisionSummary: this.optionalText(dto.decisionSummary),
+        conditions: this.optionalText(dto.conditions),
+        blockers: this.optionalText(dto.blockers),
+        readinessStatusSnapshot: readiness.status,
+        requiredCompletedSnapshot: readiness.requiredCompleted,
+        requiredTotalSnapshot: readiness.requiredTotal,
+        optionalCompletedSnapshot: readiness.optionalCompleted,
+        optionalTotalSnapshot: readiness.optionalTotal,
+        approvedProvidersSnapshot: readiness.systemSnapshot.approvedProviders,
+        pendingProviderApplicationsSnapshot: readiness.systemSnapshot.pendingProviderApplications,
+        activeRequestsSnapshot: readiness.systemSnapshot.activeRequests,
+        recordedByAdminId: adminUserId
+      }
+    });
+
+    const history = await this.prisma.smeServicesPilotLaunchDecision.findMany({
+      orderBy: { recordedAt: "desc" },
+      take: 10
+    });
+
+    await this.audit.record(adminUserId, "sme_services.pilot_launch_decision_recorded", "SmeServicesPilotLaunchDecision", decision.id, {
+      decisionStatus: decision.decisionStatus,
+      readinessStatusSnapshot: decision.readinessStatusSnapshot,
+      requiredCompletedSnapshot: decision.requiredCompletedSnapshot,
+      requiredTotalSnapshot: decision.requiredTotalSnapshot,
+      approvedProvidersSnapshot: decision.approvedProvidersSnapshot
+    });
+
+    return {
+      status: decision.decisionStatus,
+      readiness,
+      latestDecision: this.adminPilotLaunchDecision(decision),
+      history: history.map((item) => this.adminPilotLaunchDecision(item)),
+      decisionOptions: [
+        SmeServicesPilotDecisionStatus.GO_INTERNAL_PILOT,
+        SmeServicesPilotDecisionStatus.CONDITIONAL_GO,
+        SmeServicesPilotDecisionStatus.NO_GO,
+        SmeServicesPilotDecisionStatus.DEFERRED
+      ],
+      guardrails: readiness.guardrails,
+      safetyNote: "This launch control record is internal only. Recording Go/No-Go does not activate live dispatch, payments, payouts, provider login, provider app access, push notifications, medical booking or public provider contact sharing."
+    };
+  }
+
   async adminUpdatePilotReadiness(adminUserId: string, dto: UpdateSmeServicesPilotReadinessDto) {
     await this.ensurePilotReadinessItems();
     const allowedKeys = new Set<string>(PILOT_READINESS_ITEMS.map((item) => item.key));
@@ -855,6 +936,29 @@ export class ServiceProviderRequestsService {
 
   private optionalText(value?: string | null) {
     return value?.trim() || null;
+  }
+
+  private adminPilotLaunchDecision(decision: Prisma.SmeServicesPilotLaunchDecisionGetPayload<object>) {
+    return {
+      id: decision.id,
+      decisionStatus: decision.decisionStatus,
+      decisionTitle: decision.decisionTitle,
+      decisionSummary: decision.decisionSummary,
+      conditions: decision.conditions,
+      blockers: decision.blockers,
+      readinessStatusSnapshot: decision.readinessStatusSnapshot,
+      requiredCompletedSnapshot: decision.requiredCompletedSnapshot,
+      requiredTotalSnapshot: decision.requiredTotalSnapshot,
+      optionalCompletedSnapshot: decision.optionalCompletedSnapshot,
+      optionalTotalSnapshot: decision.optionalTotalSnapshot,
+      approvedProvidersSnapshot: decision.approvedProvidersSnapshot,
+      pendingProviderApplicationsSnapshot: decision.pendingProviderApplicationsSnapshot,
+      activeRequestsSnapshot: decision.activeRequestsSnapshot,
+      recordedByAdminId: decision.recordedByAdminId,
+      recordedAt: decision.recordedAt,
+      createdAt: decision.createdAt,
+      updatedAt: decision.updatedAt
+    };
   }
 
   private async ensurePilotReadinessItems() {
