@@ -201,6 +201,35 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum WalletStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum WalletLedgerEntryType {
+  TOP_UP
+  REFUND
+  ADMIN_ADJUSTMENT
+  ORDER_PAYMENT
+  SERVICE_PAYMENT
+  REVERSAL
+  REFERRAL_REWARD
+}
+
+enum WalletLedgerDirection {
+  CREDIT
+  DEBIT
+}
+
+enum WalletLedgerEntryStatus {
+  PENDING
+  POSTED
+  REVERSED
+  CANCELLED
+  FAILED
+}
+
 enum SupportTicketStatus {
   OPEN
   IN_REVIEW
@@ -419,6 +448,7 @@ model User {
   taxiDriverApplications              TaxiDriverApplication[]      @relation("TaxiApplicant")
   reviewedTaxiApplications            TaxiDriverApplication[]      @relation("TaxiReviewedBy")
   taxiDriverProfiles                  TaxiDriverProfile[]
+  createdWalletLedgerEntries          CustomerWalletLedgerEntry[]  @relation("WalletLedgerEntryCreatedByAdmin")
 
   @@map("users")
 }
@@ -599,18 +629,18 @@ model OtpVerification {
 }
 
 model CustomerProfile {
-  id                      String                   @id @default(uuid()) @db.Uuid
-  userId                  String                   @unique @db.Uuid
-  referralCode            String                   @unique
-  referredBy              String?                  @db.Uuid
-  loyaltyBalance          Decimal                  @default(0) @db.Decimal(12, 2)
-  totalOrders             Int                      @default(0)
-  averageRating           Decimal?                 @db.Decimal(3, 2)
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-  user                    User                     @relation(fields: [userId], references: [id])
-  referrer                CustomerProfile?         @relation("CustomerReferrals", fields: [referredBy], references: [id])
-  referrals               CustomerProfile[]        @relation("CustomerReferrals")
+  id                      String                      @id @default(uuid()) @db.Uuid
+  userId                  String                      @unique @db.Uuid
+  referralCode            String                      @unique
+  referredBy              String?                     @db.Uuid
+  loyaltyBalance          Decimal                     @default(0) @db.Decimal(12, 2)
+  totalOrders             Int                         @default(0)
+  averageRating           Decimal?                    @db.Decimal(3, 2)
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+  user                    User                        @relation(fields: [userId], references: [id])
+  referrer                CustomerProfile?            @relation("CustomerReferrals", fields: [referredBy], references: [id])
+  referrals               CustomerProfile[]           @relation("CustomerReferrals")
   orders                  Order[]
   payments                Payment[]
   supportTickets          SupportTicket[]
@@ -618,6 +648,8 @@ model CustomerProfile {
   utilityTransactions     UtilityTransaction[]
   taxiTrips               TaxiTrip[]
   serviceProviderRequests ServiceProviderRequest[]
+  wallet                  CustomerWallet?
+  walletLedgerEntries     CustomerWalletLedgerEntry[]
 
   @@map("customer_profiles")
 }
@@ -1233,6 +1265,56 @@ model PaymentWebhookLog {
 
   @@unique([gateway, eventType, transactionReference])
   @@map("payment_webhook_logs")
+}
+
+model CustomerWallet {
+  id               String                      @id @default(uuid()) @db.Uuid
+  customerId       String                      @unique @db.Uuid
+  currency         String                      @default("NGN")
+  availableBalance Decimal                     @default(0) @db.Decimal(12, 2)
+  ledgerBalance    Decimal                     @default(0) @db.Decimal(12, 2)
+  status           WalletStatus                @default(ACTIVE)
+  lastActivityAt   DateTime?
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+  customer         CustomerProfile             @relation(fields: [customerId], references: [id])
+  ledgerEntries    CustomerWalletLedgerEntry[]
+
+  @@index([status])
+  @@map("customer_wallets")
+}
+
+model CustomerWalletLedgerEntry {
+  id               String                  @id @default(uuid()) @db.Uuid
+  walletId         String                  @db.Uuid
+  customerId       String                  @db.Uuid
+  entryType        WalletLedgerEntryType
+  direction        WalletLedgerDirection
+  status           WalletLedgerEntryStatus @default(POSTED)
+  amount           Decimal                 @db.Decimal(12, 2)
+  currency         String                  @default("NGN")
+  balanceBefore    Decimal                 @db.Decimal(12, 2)
+  balanceAfter     Decimal                 @db.Decimal(12, 2)
+  reference        String                  @unique
+  idempotencyKey   String?                 @unique
+  sourceType       String?
+  sourceId         String?
+  description      String?
+  metadata         Json?
+  createdByAdminId String?                 @db.Uuid
+  postedAt         DateTime?
+  reversedAt       DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  wallet           CustomerWallet          @relation(fields: [walletId], references: [id])
+  customer         CustomerProfile         @relation(fields: [customerId], references: [id])
+  createdByAdmin   User?                   @relation("WalletLedgerEntryCreatedByAdmin", fields: [createdByAdminId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@index([walletId, createdAt])
+  @@index([entryType, status])
+  @@index([sourceType, sourceId])
+  @@map("customer_wallet_ledger_entries")
 }
 
 model VendorSettlement {

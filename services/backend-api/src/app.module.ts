@@ -24,6 +24,7 @@ import { VendorPayoutAccountsModule } from "./modules/vendor-payout-accounts/ven
 import { VendorsModule } from "./modules/vendors/vendors.module";
 import { VendorDashboardOrdersModule } from "./modules/vendor-dashboard-orders/vendor-dashboard-orders.module";
 import { VendorSettlementsModule } from "./modules/vendor-settlements/vendor-settlements.module";
+import { WalletModule } from "./modules/wallet/wallet.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { SecurityModule } from "./security/security.module";
 import { AdminAuditModule } from "./common/services/admin-audit.module";
@@ -46,6 +47,7 @@ import { ServiceProviderRequestsModule } from "./modules/service-provider-reques
     ServiceProviderRequestsModule,
     VendorApplicationsModule,
     VendorPayoutAccountsModule,
+    WalletModule,
     AuthModule,
     CustomersModule,
     AddressesModule,
