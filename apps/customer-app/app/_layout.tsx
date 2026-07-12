@@ -38,6 +38,7 @@ export default function RootLayout() {
     <Stack.Screen name="addresses" options={headerless} />
     <Stack.Screen name="addresses/[id]" options={backOnly} />
     <Stack.Screen name="profile" options={headerless} />
+    <Stack.Screen name="profile/wallet" options={backOnly} />
     <Stack.Screen name="vendor/apply" options={backOnly} />
     <Stack.Screen name="vendor/application-status" options={backOnly} />
     <Stack.Screen name="parcel" options={backOnly} />

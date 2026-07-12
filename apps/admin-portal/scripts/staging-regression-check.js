@@ -22,6 +22,7 @@ assert(payoutApi.includes("accountNumber: string"), "Admin detail type must expl
 
 const shell = read("src", "components", "portal.tsx");
 assert(shell.includes("Payout Accounts"), "Admin sidebar must include payout accounts.");
+assert(shell.includes("Wallets"), "Admin sidebar must include Wallets.");
 assert(shell.includes("Utilities"), "Admin sidebar must include Utilities.");
 assert(shell.includes("Taxi"), "Admin sidebar must include Taxi readiness.");
 assert(shell.includes("SME Services Summary"), "Admin sidebar must include SME Services operations summary.");
@@ -154,6 +155,21 @@ assert(smeServicesApiSource.includes("admin/service-provider-requests/${id}/prov
 assert(smeServicesApiSource.includes("admin/service-providers"), "Admin portal must call admin SME Services provider endpoints.");
 assert(smeServicesApiSource.includes("admin/service-provider-applications"), "Admin portal must call admin SME Services provider application endpoints.");
 assert(smeServicesApiSource.includes("approve-create-provider"), "Admin portal must call application-to-provider conversion endpoint.");
+
+const walletsPage = read("app", "wallets", "page.tsx");
+assert(walletsPage.includes("Wallets"), "Admin wallets page must exist.");
+assert(walletsPage.includes("walletsApi.list"), "Admin wallets page must list customer wallets.");
+assert(walletsPage.includes("walletsApi.detail"), "Admin wallets page must inspect wallet detail and ledger entries.");
+assert(walletsPage.includes("walletsApi.adjustment"), "Admin wallets page must call the controlled manual adjustment endpoint.");
+assert(walletsPage.includes("controlled admin ledger entries only"), "Admin wallets page must state manual adjustment limits.");
+assert(walletsPage.includes("does not activate live top-up, withdrawals, automatic refunds, wallet checkout, referral rewards or subscription billing"), "Admin wallets page must not imply live wallet features are active.");
+assert(walletsPage.includes("Record manual adjustment"), "Admin wallets page must expose a controlled adjustment action.");
+assert(walletsPage.includes("window.confirm"), "Admin wallet adjustments must require confirmation.");
+assert(walletsPage.includes("friendlyError(e, \"form\")"), "Admin wallet form errors must be form-specific.");
+assert(!walletsPage.includes("Transfer funds") && !walletsPage.includes("Pay now"), "Admin wallets page must not expose live transfer or payment actions.");
+const walletsApiSource = read("src", "api", "wallets.api.ts");
+assert(walletsApiSource.includes("admin/wallets"), "Admin wallet API must call wallet list and detail endpoints.");
+assert(walletsApiSource.includes("admin/wallets/${id}/adjustments"), "Admin wallet API must call manual adjustment endpoint.");
 
 const taxiPage = read("app", "taxi", "page.tsx");
 assert(taxiPage.includes("Driver Applications"), "Admin taxi page must show driver applications.");

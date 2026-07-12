@@ -8,7 +8,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
-["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "parcel", "sme-services", "sme-services/requests/index", "sme-services/requests/[id]", "vendor/apply", "vendor/application-status"]
+["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "profile/wallet", "parcel", "sme-services", "sme-services/requests/index", "sme-services/requests/[id]", "vendor/apply", "vendor/application-status"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
 assert(layout.includes('<Stack.Screen name="utilities/index" options={headerless}'), "Utilities hub must hide native header.");
 ["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
@@ -187,12 +187,28 @@ assert(profile.includes("Orders"), "Order history must be accessible from Profil
 assert(profile.includes("SME Services requests"), "SME Services request history must be accessible from Profile.");
 assert(profile.includes("Utility test history"), "Utility history must be accessible from Profile.");
 assert(profile.includes("Become a KariGO Vendor"), "Profile must link to public vendor application flow.");
-assert(profile.includes("KariGO Wallet"), "Profile must reserve a future wallet surface.");
+assert(profile.includes("KariGO Wallet"), "Profile must link to the customer wallet surface.");
+assert(profile.includes("/profile/wallet"), "Profile wallet hub item must navigate to the wallet screen.");
+assert(profile.includes("View your staging wallet balance and ledger."), "Profile wallet hub item must describe view-only ledger access.");
+assert(profile.includes("View only"), "Profile wallet hub item must mark the wallet as view-only.");
 assert(profile.includes("Referral rewards"), "Profile must reserve a future referral surface.");
 assert(profile.includes("KariGO Plus"), "Profile must reserve a future subscription surface.");
 assert(profile.includes("Coming soon"), "Future profile areas must remain clearly marked as inactive placeholders.");
-assert(profile.includes("No live wallet, referral reward or subscription action is enabled."), "Profile placeholders must state that live value features are not active.");
+assert(profile.includes("Referral rewards and subscription actions are not active, and wallet remains view-only."), "Profile placeholders must state that live value features are not active.");
 assert(!profile.includes("wallet top-up"), "Profile must not activate wallet top-up language.");
+
+const walletScreen = read("app", "profile", "wallet.tsx");
+assert(walletScreen.includes("KariGO Wallet"), "Customer wallet screen must exist.");
+assert(walletScreen.includes("walletApi.transactions"), "Customer wallet screen must load wallet balance and ledger through the wallet API.");
+assert(walletScreen.includes("Wallet is currently view-only for staging"), "Customer wallet screen must show view-only staging guardrail copy.");
+assert(walletScreen.includes("has not enabled live top-up, withdrawals, automatic refunds, wallet checkout, referral rewards or subscription billing"), "Customer wallet screen must state inactive wallet capabilities.");
+assert(walletScreen.includes("Available later"), "Customer wallet screen must keep disabled future actions separate.");
+assert(walletScreen.includes("Wallet activity"), "Customer wallet screen must show ledger activity.");
+assert(walletScreen.includes("Wallet transactions will appear here after KariGO records approved wallet activity."), "Customer wallet screen must provide a safe empty state.");
+assert(!walletScreen.includes("Pay now") && !walletScreen.includes("Withdraw now") && !walletScreen.includes("Top up now"), "Customer wallet screen must not activate live wallet actions.");
+const walletApi = read("src", "api", "wallet.api.ts");
+assert(walletApi.includes('api.get<CustomerWallet>("wallet")'), "Customer wallet API must call the wallet summary endpoint.");
+assert(walletApi.includes('api.get<CustomerWalletLedgerResult>("wallet/transactions")'), "Customer wallet API must call the wallet ledger endpoint.");
 
 const utilitiesApi = read("src", "api", "utilities.api.ts");
 assert(utilitiesApi.includes("utilities/providers"), "Customer utilities API must load public providers.");

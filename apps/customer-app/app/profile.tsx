@@ -11,6 +11,7 @@ import { friendlyError } from "../src/lib/errors";
 
 type ProfileRoute =
   | "/orders"
+  | "/profile/wallet"
   | "/addresses"
   | "/support"
   | "/notifications"
@@ -35,6 +36,7 @@ type PlaceholderItem = {
 
 const primaryItems: HubItem[] = [
   { title: "Orders", description: "Track active and completed deliveries.", icon: "clipboard", href: "/orders" },
+  { title: "KariGO Wallet", description: "View your staging wallet balance and ledger.", icon: "credit-card", href: "/profile/wallet", badge: "View only" },
   { title: "Saved addresses", description: "Manage home, office and delivery locations.", icon: "map-pin", href: "/addresses" },
   { title: "Notifications", description: "Review order, support and account updates.", icon: "bell", href: "/notifications" },
   { title: "Support centre", description: "Open tickets and get help from KariGO.", icon: "headphones", href: "/support" }
@@ -47,7 +49,6 @@ const serviceItems: HubItem[] = [
 ];
 
 const futureItems: PlaceholderItem[] = [
-  { title: "KariGO Wallet", description: "Refund balances and top-ups are reserved for a future approved release.", icon: "credit-card", badge: "Coming soon" },
   { title: "Referral rewards", description: "Invite rewards are not active yet and will launch only after approval.", icon: "gift", badge: "Coming soon" },
   { title: "KariGO Plus", description: "Subscription perks are a future placeholder, not a live plan.", icon: "star", badge: "Coming soon" },
   { title: "Privacy & security", description: "More account controls and notification preferences will be added later.", icon: "shield", badge: "Planned" }
@@ -200,7 +201,7 @@ export default function Profile() {
 
         <Card>
           <Text style={ui.cardTitle}>Coming next</Text>
-          <Text style={ui.muted}>These areas are profile placeholders only. No live wallet, referral reward or subscription action is enabled.</Text>
+          <Text style={ui.muted}>These areas are profile placeholders only. Referral rewards and subscription actions are not active, and wallet remains view-only.</Text>
           <View style={styles.placeholderGrid}>
             {futureItems.map((item) => <PlaceholderCard key={item.title} item={item} />)}
           </View>
