@@ -24,10 +24,19 @@ const shell = read("src", "components", "portal.tsx");
 assert(shell.includes("Payout Accounts"), "Admin sidebar must include payout accounts.");
 assert(shell.includes("Utilities"), "Admin sidebar must include Utilities.");
 assert(shell.includes("Taxi"), "Admin sidebar must include Taxi readiness.");
+assert(shell.includes("SME Services Summary"), "Admin sidebar must include SME Services operations summary.");
 assert(shell.includes("SME Services"), "Admin sidebar must include SME Services.");
 assert(shell.includes("SME Provider Applications"), "Admin sidebar must include SME provider applications.");
 assert(shell.includes("SME Providers"), "Admin sidebar must include SME provider directory.");
 
+const smeServicesSummaryPage = read("app", "sme-services", "summary", "page.tsx");
+assert(smeServicesSummaryPage.includes("SME Services operations summary"), "Admin SME Services summary page must exist.");
+assert(smeServicesSummaryPage.includes("smeServicesApi.summary"), "Admin SME Services summary page must call the summary endpoint.");
+assert(smeServicesSummaryPage.includes("Customer requests"), "Admin SME Services summary must link to customer requests.");
+assert(smeServicesSummaryPage.includes("Provider applications"), "Admin SME Services summary must link to provider applications.");
+assert(smeServicesSummaryPage.includes("Provider directory"), "Admin SME Services summary must link to provider directory.");
+assert(smeServicesSummaryPage.includes("Operational guardrails"), "Admin SME Services summary must show safety guardrails.");
+assert(smeServicesSummaryPage.includes("does not activate live dispatch, payment collection, provider payouts, provider login or medical booking"), "Admin SME Services summary must state safe pilot limits.");
 const smeServicesPage = read("app", "sme-services", "page.tsx");
 assert(smeServicesPage.includes("SME Services"), "Admin SME Services list page must exist.");
 assert(smeServicesPage.includes("does not dispatch providers"), "Admin SME Services list must state safe review-only limits.");
@@ -68,6 +77,7 @@ assert(smeProviderDetail.includes("Edit provider"), "Admin provider detail must 
 assert(smeProviderDetail.includes("Customers do not receive provider phone numbers"), "Provider detail must document customer contact privacy.");
 assert(!smeProviderDetail.includes("Pay Now") && !smeProviderDetail.includes("Transfer funds"), "Provider directory must not expose payment actions.");
 const smeServicesApiSource = read("src", "api", "sme-services.api.ts");
+assert(smeServicesApiSource.includes("admin/service-provider-requests/summary"), "Admin portal must call admin SME Services summary endpoint.");
 assert(smeServicesApiSource.includes("admin/service-provider-requests"), "Admin portal must call admin SME Services endpoints.");
 assert(smeServicesApiSource.includes("admin/service-provider-requests/${id}/status"), "Admin portal must call the SME Services status endpoint.");
 assert(smeServicesApiSource.includes("{ status, adminNote, customerNote }"), "Admin SME Services status API must send separate internal and customer-visible notes.");

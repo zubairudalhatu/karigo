@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType } from "@prisma/client";
+import { Prisma, ServiceProviderApplicationStatus, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -146,6 +146,185 @@ export class ServiceProviderRequestsService {
     return {
       summary: { total, submitted, underReview, providerMatching, providerAssigned, completed, cancelled },
       items: items.map((request) => this.adminRequest(request, true))
+    };
+  }
+
+  async adminSummary() {
+    const [
+      totalRequests,
+      submittedRequests,
+      underReviewRequests,
+      providerMatchingRequests,
+      providerAssignedRequests,
+      completedRequests,
+      cancelledRequests,
+      readinessOnlyRequests,
+      totalApplications,
+      submittedApplications,
+      underReviewApplications,
+      changesRequestedApplications,
+      approvedApplications,
+      rejectedApplications,
+      convertedApplications,
+      healthProfessionalApplications,
+      totalProviders,
+      pendingReviewProviders,
+      approvedProviders,
+      suspendedProviders,
+      inactiveProviders,
+      readinessOnlyProviders,
+      recentRequests,
+      recentApplications,
+      recentProviders
+    ] = await Promise.all([
+      this.prisma.serviceProviderRequest.count(),
+      this.prisma.serviceProviderRequest.count({ where: { status: ServiceProviderRequestStatus.SUBMITTED } }),
+      this.prisma.serviceProviderRequest.count({ where: { status: ServiceProviderRequestStatus.UNDER_REVIEW } }),
+      this.prisma.serviceProviderRequest.count({ where: { status: ServiceProviderRequestStatus.PROVIDER_MATCHING } }),
+      this.prisma.serviceProviderRequest.count({ where: { status: ServiceProviderRequestStatus.PROVIDER_ASSIGNED } }),
+      this.prisma.serviceProviderRequest.count({ where: { status: ServiceProviderRequestStatus.COMPLETED } }),
+      this.prisma.serviceProviderRequest.count({ where: { status: ServiceProviderRequestStatus.CANCELLED } }),
+      this.prisma.serviceProviderRequest.count({ where: { readinessOnly: true } }),
+      this.prisma.serviceProviderApplication.count(),
+      this.prisma.serviceProviderApplication.count({ where: { status: ServiceProviderApplicationStatus.SUBMITTED } }),
+      this.prisma.serviceProviderApplication.count({ where: { status: ServiceProviderApplicationStatus.UNDER_REVIEW } }),
+      this.prisma.serviceProviderApplication.count({ where: { status: ServiceProviderApplicationStatus.CHANGES_REQUESTED } }),
+      this.prisma.serviceProviderApplication.count({ where: { status: ServiceProviderApplicationStatus.APPROVED } }),
+      this.prisma.serviceProviderApplication.count({ where: { status: ServiceProviderApplicationStatus.REJECTED } }),
+      this.prisma.serviceProviderApplication.count({ where: { status: ServiceProviderApplicationStatus.CONVERTED_TO_PROVIDER } }),
+      this.prisma.serviceProviderApplication.count({ where: { serviceType: ServiceProviderType.HEALTH_PROFESSIONAL } }),
+      this.prisma.serviceProvider.count(),
+      this.prisma.serviceProvider.count({ where: { status: ServiceProviderStatus.PENDING_REVIEW } }),
+      this.prisma.serviceProvider.count({ where: { status: ServiceProviderStatus.APPROVED } }),
+      this.prisma.serviceProvider.count({ where: { status: ServiceProviderStatus.SUSPENDED } }),
+      this.prisma.serviceProvider.count({ where: { status: ServiceProviderStatus.INACTIVE } }),
+      this.prisma.serviceProvider.count({ where: { readinessOnly: true } }),
+      this.prisma.serviceProviderRequest.findMany({
+        select: {
+          id: true,
+          requestNumber: true,
+          serviceLabel: true,
+          serviceType: true,
+          status: true,
+          readinessOnly: true,
+          createdAt: true,
+          updatedAt: true,
+          customer: { select: { user: { select: { fullName: true } } } }
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 5
+      }),
+      this.prisma.serviceProviderApplication.findMany({
+        select: {
+          id: true,
+          applicationReference: true,
+          fullName: true,
+          businessName: true,
+          serviceType: true,
+          status: true,
+          submittedAt: true,
+          updatedAt: true
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 5
+      }),
+      this.prisma.serviceProvider.findMany({
+        select: {
+          id: true,
+          providerCode: true,
+          fullName: true,
+          businessName: true,
+          serviceType: true,
+          status: true,
+          readinessOnly: true,
+          city: true,
+          state: true,
+          createdAt: true,
+          updatedAt: true
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 5
+      })
+    ]);
+
+    const activeRequests = submittedRequests + underReviewRequests + providerMatchingRequests + providerAssignedRequests;
+    const pendingApplications = submittedApplications + underReviewApplications + changesRequestedApplications;
+
+    return {
+      requests: {
+        total: totalRequests,
+        active: activeRequests,
+        submitted: submittedRequests,
+        underReview: underReviewRequests,
+        providerMatching: providerMatchingRequests,
+        providerAssigned: providerAssignedRequests,
+        completed: completedRequests,
+        cancelled: cancelledRequests,
+        readinessOnly: readinessOnlyRequests
+      },
+      providerApplications: {
+        total: totalApplications,
+        pending: pendingApplications,
+        submitted: submittedApplications,
+        underReview: underReviewApplications,
+        changesRequested: changesRequestedApplications,
+        approved: approvedApplications,
+        rejected: rejectedApplications,
+        convertedToProvider: convertedApplications,
+        healthProfessionalReadiness: healthProfessionalApplications
+      },
+      providers: {
+        total: totalProviders,
+        pendingReview: pendingReviewProviders,
+        approved: approvedProviders,
+        suspended: suspendedProviders,
+        inactive: inactiveProviders,
+        readinessOnly: readinessOnlyProviders
+      },
+      recent: {
+        requests: recentRequests.map((request) => ({
+          id: request.id,
+          reference: request.requestNumber,
+          title: request.serviceLabel,
+          serviceType: request.serviceType,
+          status: request.status,
+          readinessOnly: request.readinessOnly,
+          customerName: request.customer.user.fullName,
+          createdAt: request.createdAt,
+          updatedAt: request.updatedAt
+        })),
+        applications: recentApplications.map((application) => ({
+          id: application.id,
+          reference: application.applicationReference,
+          title: application.fullName,
+          businessName: application.businessName,
+          serviceType: application.serviceType,
+          status: application.status,
+          submittedAt: application.submittedAt,
+          updatedAt: application.updatedAt
+        })),
+        providers: recentProviders.map((provider) => ({
+          id: provider.id,
+          reference: provider.providerCode,
+          title: provider.fullName,
+          businessName: provider.businessName,
+          serviceType: provider.serviceType,
+          status: provider.status,
+          readinessOnly: provider.readinessOnly,
+          city: provider.city,
+          state: provider.state,
+          createdAt: provider.createdAt,
+          updatedAt: provider.updatedAt
+        }))
+      },
+      guardrails: {
+        liveDispatchEnabled: false,
+        livePaymentsEnabled: false,
+        providerLoginEnabled: false,
+        providerPayoutEnabled: false,
+        medicalBookingEnabled: false,
+        note: "SME Services remains an internal review and manual coordination workflow only."
+      }
     };
   }
 

@@ -57,6 +57,7 @@ export default function SmeProviderApplicationsPage() {
     <h1>SME Provider Applications</h1>
     <p className="muted">Review public SME Services provider applications. Approval creates an internal provider record only; it does not activate live dispatch, payment collection, payout automation, provider login or medical booking.</p>
     <div className="top-actions">
+      <Link className="button-link secondary" href="/sme-services/summary">Operations summary</Link>
       <Link className="button-link" href="/sme-services/providers">Provider directory</Link>
       <Link className="button-link secondary" href="/sme-services">Customer requests</Link>
     </div>

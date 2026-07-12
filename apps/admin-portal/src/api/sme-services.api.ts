@@ -145,7 +145,85 @@ export interface SmeServicesListResponse {
   items: SmeServiceRequest[];
 }
 
+export interface SmeServicesOperationsSummary {
+  requests: {
+    total: number;
+    active: number;
+    submitted: number;
+    underReview: number;
+    providerMatching: number;
+    providerAssigned: number;
+    completed: number;
+    cancelled: number;
+    readinessOnly: number;
+  };
+  providerApplications: {
+    total: number;
+    pending: number;
+    submitted: number;
+    underReview: number;
+    changesRequested: number;
+    approved: number;
+    rejected: number;
+    convertedToProvider: number;
+    healthProfessionalReadiness: number;
+  };
+  providers: {
+    total: number;
+    pendingReview: number;
+    approved: number;
+    suspended: number;
+    inactive: number;
+    readinessOnly: number;
+  };
+  recent: {
+    requests: Array<{
+      id: string;
+      reference: string;
+      title: string;
+      serviceType: ServiceProviderType;
+      status: ServiceProviderRequestStatus;
+      readinessOnly: boolean;
+      customerName: string;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+    applications: Array<{
+      id: string;
+      reference: string;
+      title: string;
+      businessName?: string | null;
+      serviceType: ServiceProviderType;
+      status: ServiceProviderApplicationStatus;
+      submittedAt: string;
+      updatedAt: string;
+    }>;
+    providers: Array<{
+      id: string;
+      reference: string;
+      title: string;
+      businessName?: string | null;
+      serviceType: ServiceProviderType;
+      status: ServiceProviderStatus;
+      readinessOnly: boolean;
+      city: string;
+      state: string;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  };
+  guardrails: {
+    liveDispatchEnabled: boolean;
+    livePaymentsEnabled: boolean;
+    providerLoginEnabled: boolean;
+    providerPayoutEnabled: boolean;
+    medicalBookingEnabled: boolean;
+    note: string;
+  };
+}
+
 export const smeServicesApi = {
+  summary: () => api.get<SmeServicesOperationsSummary>("admin/service-provider-requests/summary"),
   list: (q = "") => api.get<SmeServicesListResponse>(`admin/service-provider-requests${q ? `?${q}` : ""}`),
   detail: (id: string) => api.get<SmeServiceRequest>(`admin/service-provider-requests/${id}`),
   status: (id: string, status: ServiceProviderRequestStatus, adminNote?: string, customerNote?: string) =>

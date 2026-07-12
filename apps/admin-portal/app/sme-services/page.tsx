@@ -49,6 +49,7 @@ export default function SmeServicesRequestsPage() {
     <h1>SME Services</h1>
     <p className="muted">Review customer service-provider requests. This page does not dispatch providers, collect service payments, approve medical booking or create provider payouts.</p>
     <div className="top-actions">
+      <Link className="button-link secondary" href="/sme-services/summary">Operations summary</Link>
       <Link className="button-link" href="/sme-services/providers">Provider directory</Link>
     </div>
     <div className="grid">

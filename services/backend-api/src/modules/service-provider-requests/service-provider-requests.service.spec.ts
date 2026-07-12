@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException } from "@nestjs/common";
-import { ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType } from "@prisma/client";
+import { ServiceProviderApplicationStatus, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType } from "@prisma/client";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ServiceProviderRequestsService } from "./service-provider-requests.service";
@@ -81,6 +81,10 @@ describe("ServiceProviderRequestsService admin operations", () => {
       update: jest.fn(),
       count: jest.fn()
     },
+    serviceProviderApplication: {
+      findMany: jest.fn(),
+      count: jest.fn()
+    },
     adminAuditLog: { findMany: jest.fn() }
   };
   const audit = { record: jest.fn() };
@@ -124,6 +128,66 @@ describe("ServiceProviderRequestsService admin operations", () => {
       requestNumber: "KGO-SVC-001",
       serviceLabel: "Plumber",
       customer: request.customer
+    });
+  });
+
+  it("returns an admin operations summary across requests, applications and providers", async () => {
+    prisma.serviceProviderRequest.count
+      .mockResolvedValueOnce(8)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0);
+    prisma.serviceProviderApplication.count
+      .mockResolvedValueOnce(7)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1);
+    prisma.serviceProvider.count
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1);
+    prisma.serviceProviderRequest.findMany.mockResolvedValue([request]);
+    prisma.serviceProviderApplication.findMany.mockResolvedValue([{
+      id: "00000000-0000-0000-0000-000000000901",
+      applicationReference: "KGO-SPA-2026-001",
+      fullName: "Demo Applicant",
+      businessName: "Demo Services",
+      serviceType: ServiceProviderType.PLUMBER,
+      status: ServiceProviderApplicationStatus.SUBMITTED,
+      submittedAt: now,
+      updatedAt: now
+    }]);
+    prisma.serviceProvider.findMany.mockResolvedValue([provider]);
+
+    const result = await service.adminSummary();
+
+    expect(result.requests).toMatchObject({ total: 8, active: 6, submitted: 2, completed: 1 });
+    expect(result.providerApplications).toMatchObject({ total: 7, pending: 4, convertedToProvider: 1 });
+    expect(result.providers).toMatchObject({ total: 5, approved: 2, readinessOnly: 1 });
+    expect(result.recent.requests[0]).toMatchObject({
+      reference: "KGO-SVC-001",
+      customerName: "Demo Customer",
+      status: ServiceProviderRequestStatus.SUBMITTED
+    });
+    expect(result.recent.requests[0]).not.toHaveProperty("contactPhone");
+    expect(result.recent.providers[0]).not.toHaveProperty("phoneNumber");
+    expect(result.guardrails).toMatchObject({
+      liveDispatchEnabled: false,
+      livePaymentsEnabled: false,
+      providerLoginEnabled: false,
+      providerPayoutEnabled: false,
+      medicalBookingEnabled: false
     });
   });
 

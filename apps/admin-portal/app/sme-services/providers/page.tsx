@@ -122,6 +122,7 @@ export default function SmeProvidersPage() {
     <h1>SME Services provider directory</h1>
     <p className="muted">Admin-managed provider records for manual review and assignment only. This does not create provider login, live dispatch, payment collection, payout automation or medical booking.</p>
     <div className="top-actions">
+      <Link className="button-link secondary" href="/sme-services/summary">Operations summary</Link>
       <Link className="button-link" href="/sme-services">Back to requests</Link>
     </div>
     <div className="grid">
