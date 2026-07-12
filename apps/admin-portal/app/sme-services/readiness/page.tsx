@@ -67,6 +67,7 @@ export default function SmeServicesPilotReadinessPage() {
     <div className="top-actions">
       <Link className="button-link" href="/sme-services/summary">Operations summary</Link>
       <Link className="button-link secondary" href="/sme-services/launch-control">Launch control</Link>
+      <Link className="button-link secondary" href="/sme-services/participants">Pilot participants</Link>
       <Link className="button-link secondary" href="/sme-services">Customer requests</Link>
       <button className="secondary" onClick={() => void load()}>Refresh</button>
       <button disabled={saving || loading} onClick={() => void save()}>{saving ? "Saving..." : "Save checklist"}</button>

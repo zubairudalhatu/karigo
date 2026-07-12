@@ -1,14 +1,17 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, ServiceProviderApplicationStatus, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType, SmeServicesPilotDecisionStatus } from "@prisma/client";
+import { Prisma, ServiceProviderApplicationStatus, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType, SmeServicesPilotDecisionStatus, SmeServicesPilotParticipantStatus, SmeServicesPilotParticipantType } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AssignServiceProviderDto } from "./dto/assign-service-provider.dto";
 import { CreateServiceProviderDto } from "./dto/create-service-provider.dto";
 import { CreateServiceProviderRequestDto } from "./dto/create-service-provider-request.dto";
+import { CreateSmeServicesPilotParticipantDto } from "./dto/create-sme-services-pilot-participant.dto";
 import { ListServiceProvidersQueryDto } from "./dto/list-service-providers-query.dto";
 import { ListServiceProviderRequestsQueryDto } from "./dto/list-service-provider-requests-query.dto";
+import { ListSmeServicesPilotParticipantsQueryDto } from "./dto/list-sme-services-pilot-participants-query.dto";
 import { RecordSmeServicesPilotLaunchDecisionDto } from "./dto/record-sme-services-pilot-launch-decision.dto";
+import { UpdateSmeServicesPilotParticipantDto } from "./dto/update-sme-services-pilot-participant.dto";
 import { UpdateSmeServicesPilotReadinessDto } from "./dto/update-sme-services-pilot-readiness.dto";
 import { UpdateServiceProviderDto } from "./dto/update-service-provider.dto";
 import { UpdateServiceProviderRequestStatusDto } from "./dto/update-service-provider-request-status.dto";
@@ -645,6 +648,154 @@ export class ServiceProviderRequestsService {
     };
   }
 
+  async adminListPilotParticipants(query: ListSmeServicesPilotParticipantsQueryDto) {
+    const where: Prisma.SmeServicesPilotParticipantWhereInput = {
+      ...(query.participantType ? { participantType: query.participantType } : {}),
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.city ? { city: { contains: query.city.trim(), mode: "insensitive" as const } } : {}),
+      ...(query.pilotZone ? { pilotZone: { contains: query.pilotZone.trim(), mode: "insensitive" as const } } : {}),
+      ...(query.search ? {
+        OR: [
+          { displayName: { contains: query.search, mode: "insensitive" as const } },
+          { phoneNumber: { contains: query.search } },
+          { email: { contains: query.search, mode: "insensitive" as const } },
+          { organization: { contains: query.search, mode: "insensitive" as const } },
+          { pilotZone: { contains: query.search, mode: "insensitive" as const } }
+        ]
+      } : {})
+    };
+
+    const [items, total, customers, providers, observers, readyToInvite, invited, confirmed, declined, removed] = await Promise.all([
+      this.prisma.smeServicesPilotParticipant.findMany({
+        where,
+        orderBy: { updatedAt: "desc" },
+        take: 200
+      }),
+      this.prisma.smeServicesPilotParticipant.count(),
+      this.prisma.smeServicesPilotParticipant.count({ where: { participantType: SmeServicesPilotParticipantType.CUSTOMER } }),
+      this.prisma.smeServicesPilotParticipant.count({ where: { participantType: SmeServicesPilotParticipantType.SERVICE_PROVIDER } }),
+      this.prisma.smeServicesPilotParticipant.count({ where: { participantType: SmeServicesPilotParticipantType.INTERNAL_OBSERVER } }),
+      this.prisma.smeServicesPilotParticipant.count({ where: { status: SmeServicesPilotParticipantStatus.READY_TO_INVITE } }),
+      this.prisma.smeServicesPilotParticipant.count({ where: { status: SmeServicesPilotParticipantStatus.INVITED_MANUALLY } }),
+      this.prisma.smeServicesPilotParticipant.count({ where: { status: SmeServicesPilotParticipantStatus.CONFIRMED } }),
+      this.prisma.smeServicesPilotParticipant.count({ where: { status: SmeServicesPilotParticipantStatus.DECLINED } }),
+      this.prisma.smeServicesPilotParticipant.count({ where: { status: SmeServicesPilotParticipantStatus.REMOVED } })
+    ]);
+
+    return {
+      summary: { total, customers, providers, observers, readyToInvite, invited, confirmed, declined, removed },
+      items: items.map((participant) => this.adminPilotParticipant(participant)),
+      guardrails: {
+        liveInvitationsSent: false,
+        liveDispatchEnabled: false,
+        providerLoginEnabled: false,
+        providerAppAccessEnabled: false,
+        livePaymentsEnabled: false,
+        note: "Pilot participants are internal coordination records only. KariGO must invite and confirm participants manually outside this system."
+      }
+    };
+  }
+
+  async adminCreatePilotParticipant(adminUserId: string, dto: CreateSmeServicesPilotParticipantDto) {
+    const status = dto.status ?? SmeServicesPilotParticipantStatus.DRAFT;
+    await this.assertPilotParticipantAllowed({
+      participantType: dto.participantType,
+      status,
+      relatedProviderId: dto.relatedProviderId
+    });
+    const now = new Date();
+
+    const participant = await this.prisma.smeServicesPilotParticipant.create({
+      data: {
+        participantType: dto.participantType,
+        status,
+        displayName: dto.displayName.trim(),
+        phoneNumber: this.optionalText(dto.phoneNumber),
+        email: this.optionalText(dto.email),
+        organization: this.optionalText(dto.organization),
+        city: this.optionalText(dto.city),
+        pilotZone: this.optionalText(dto.pilotZone),
+        relatedUserId: this.optionalText(dto.relatedUserId),
+        relatedProviderId: this.optionalText(dto.relatedProviderId),
+        invitationChannel: dto.invitationChannel,
+        invitationNote: this.optionalText(dto.invitationNote),
+        internalNotes: this.optionalText(dto.internalNotes),
+        consentConfirmed: dto.consentConfirmed ?? false,
+        safetyBriefingCompleted: dto.safetyBriefingCompleted ?? false,
+        invitedAt: this.participantStatusInvited(status) ? now : undefined,
+        confirmedAt: status === SmeServicesPilotParticipantStatus.CONFIRMED ? now : undefined,
+        createdByAdminId: adminUserId,
+        updatedByAdminId: adminUserId
+      }
+    });
+
+    await this.audit.record(adminUserId, "sme_services.pilot_participant_created", "SmeServicesPilotParticipant", participant.id, {
+      participantType: participant.participantType,
+      status: participant.status,
+      relatedProviderId: participant.relatedProviderId
+    });
+
+    return this.adminPilotParticipant(participant);
+  }
+
+  async adminPilotParticipantDetail(participantId: string) {
+    const participant = await this.prisma.smeServicesPilotParticipant.findUnique({ where: { id: participantId } });
+    if (!participant) {
+      throw new NotFoundException("SME Services pilot participant not found");
+    }
+    return this.adminPilotParticipant(participant);
+  }
+
+  async adminUpdatePilotParticipant(adminUserId: string, participantId: string, dto: UpdateSmeServicesPilotParticipantDto) {
+    const existing = await this.prisma.smeServicesPilotParticipant.findUnique({ where: { id: participantId } });
+    if (!existing) {
+      throw new NotFoundException("SME Services pilot participant not found");
+    }
+
+    const nextParticipantType = dto.participantType ?? existing.participantType;
+    const nextStatus = dto.status ?? existing.status;
+    const nextRelatedProviderId = dto.relatedProviderId === undefined ? existing.relatedProviderId : this.optionalText(dto.relatedProviderId);
+    await this.assertPilotParticipantAllowed({
+      participantType: nextParticipantType,
+      status: nextStatus,
+      relatedProviderId: nextRelatedProviderId
+    });
+    const now = new Date();
+
+    const participant = await this.prisma.smeServicesPilotParticipant.update({
+      where: { id: participantId },
+      data: {
+        ...(dto.participantType === undefined ? {} : { participantType: dto.participantType }),
+        ...(dto.status === undefined ? {} : { status: dto.status }),
+        ...(dto.displayName === undefined ? {} : { displayName: dto.displayName.trim() }),
+        ...(dto.phoneNumber === undefined ? {} : { phoneNumber: this.optionalText(dto.phoneNumber) }),
+        ...(dto.email === undefined ? {} : { email: this.optionalText(dto.email) }),
+        ...(dto.organization === undefined ? {} : { organization: this.optionalText(dto.organization) }),
+        ...(dto.city === undefined ? {} : { city: this.optionalText(dto.city) }),
+        ...(dto.pilotZone === undefined ? {} : { pilotZone: this.optionalText(dto.pilotZone) }),
+        ...(dto.relatedUserId === undefined ? {} : { relatedUserId: this.optionalText(dto.relatedUserId) }),
+        ...(dto.relatedProviderId === undefined ? {} : { relatedProviderId: this.optionalText(dto.relatedProviderId) }),
+        ...(dto.invitationChannel === undefined ? {} : { invitationChannel: dto.invitationChannel }),
+        ...(dto.invitationNote === undefined ? {} : { invitationNote: this.optionalText(dto.invitationNote) }),
+        ...(dto.internalNotes === undefined ? {} : { internalNotes: this.optionalText(dto.internalNotes) }),
+        ...(dto.consentConfirmed === undefined ? {} : { consentConfirmed: dto.consentConfirmed }),
+        ...(dto.safetyBriefingCompleted === undefined ? {} : { safetyBriefingCompleted: dto.safetyBriefingCompleted }),
+        ...(this.participantStatusInvited(nextStatus) && !existing.invitedAt ? { invitedAt: now } : {}),
+        ...(nextStatus === SmeServicesPilotParticipantStatus.CONFIRMED && !existing.confirmedAt ? { confirmedAt: now } : {}),
+        updatedByAdminId: adminUserId
+      }
+    });
+
+    await this.audit.record(adminUserId, "sme_services.pilot_participant_updated", "SmeServicesPilotParticipant", participant.id, {
+      previousStatus: existing.status,
+      status: participant.status,
+      participantType: participant.participantType,
+      relatedProviderId: participant.relatedProviderId
+    });
+
+    return this.adminPilotParticipant(participant);
+  }
+
   async adminUpdatePilotReadiness(adminUserId: string, dto: UpdateSmeServicesPilotReadinessDto) {
     await this.ensurePilotReadinessItems();
     const allowedKeys = new Set<string>(PILOT_READINESS_ITEMS.map((item) => item.key));
@@ -958,6 +1109,62 @@ export class ServiceProviderRequestsService {
       recordedAt: decision.recordedAt,
       createdAt: decision.createdAt,
       updatedAt: decision.updatedAt
+    };
+  }
+
+  private async assertPilotParticipantAllowed(input: {
+    participantType: SmeServicesPilotParticipantType;
+    status: SmeServicesPilotParticipantStatus;
+    relatedProviderId?: string | null;
+  }) {
+    if (input.relatedProviderId && input.participantType !== SmeServicesPilotParticipantType.SERVICE_PROVIDER) {
+      throw new BadRequestException("Related provider records can only be attached to service provider pilot participants.");
+    }
+    if (!input.relatedProviderId) return;
+
+    const provider = await this.prisma.serviceProvider.findUnique({ where: { id: input.relatedProviderId } });
+    if (!provider) {
+      throw new NotFoundException("SME Services provider not found");
+    }
+    const inviteStatuses: SmeServicesPilotParticipantStatus[] = [
+      SmeServicesPilotParticipantStatus.READY_TO_INVITE,
+      SmeServicesPilotParticipantStatus.INVITED_MANUALLY,
+      SmeServicesPilotParticipantStatus.CONFIRMED
+    ];
+    const inviteStatus = inviteStatuses.includes(input.status);
+    if (inviteStatus && (provider.readinessOnly || provider.serviceType === ServiceProviderType.HEALTH_PROFESSIONAL)) {
+      throw new BadRequestException("Readiness-only and health professional providers can remain in the pilot list for review only. They cannot be marked ready, invited or confirmed.");
+    }
+  }
+
+  private participantStatusInvited(status: SmeServicesPilotParticipantStatus) {
+    return status === SmeServicesPilotParticipantStatus.INVITED_MANUALLY || status === SmeServicesPilotParticipantStatus.CONFIRMED;
+  }
+
+  private adminPilotParticipant(participant: Prisma.SmeServicesPilotParticipantGetPayload<object>) {
+    return {
+      id: participant.id,
+      participantType: participant.participantType,
+      status: participant.status,
+      displayName: participant.displayName,
+      phoneNumber: participant.phoneNumber,
+      email: participant.email,
+      organization: participant.organization,
+      city: participant.city,
+      pilotZone: participant.pilotZone,
+      relatedUserId: participant.relatedUserId,
+      relatedProviderId: participant.relatedProviderId,
+      invitationChannel: participant.invitationChannel,
+      invitationNote: participant.invitationNote,
+      internalNotes: participant.internalNotes,
+      consentConfirmed: participant.consentConfirmed,
+      safetyBriefingCompleted: participant.safetyBriefingCompleted,
+      invitedAt: participant.invitedAt,
+      confirmedAt: participant.confirmedAt,
+      createdByAdminId: participant.createdByAdminId,
+      updatedByAdminId: participant.updatedByAdminId,
+      createdAt: participant.createdAt,
+      updatedAt: participant.updatedAt
     };
   }
 

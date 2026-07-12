@@ -140,6 +140,30 @@ enum SmeServicesPilotDecisionStatus {
   DEFERRED
 }
 
+enum SmeServicesPilotParticipantType {
+  CUSTOMER
+  SERVICE_PROVIDER
+  INTERNAL_OBSERVER
+}
+
+enum SmeServicesPilotParticipantStatus {
+  DRAFT
+  READY_TO_INVITE
+  INVITED_MANUALLY
+  CONFIRMED
+  DECLINED
+  REMOVED
+}
+
+enum SmeServicesPilotInvitationChannel {
+  PHONE
+  WHATSAPP
+  EMAIL
+  IN_PERSON
+  IN_APP_NOTE
+  OTHER
+}
+
 enum ProductCategory {
   FOOD
   GROCERIES
@@ -827,6 +851,37 @@ model SmeServicesPilotLaunchDecision {
   @@index([decisionStatus, recordedAt])
   @@index([recordedAt])
   @@map("sme_services_pilot_launch_decisions")
+}
+
+model SmeServicesPilotParticipant {
+  id                      String                             @id @default(uuid()) @db.Uuid
+  participantType         SmeServicesPilotParticipantType
+  status                  SmeServicesPilotParticipantStatus  @default(DRAFT)
+  displayName             String
+  phoneNumber             String?
+  email                   String?
+  organization            String?
+  city                    String?
+  pilotZone               String?
+  relatedUserId           String?                            @db.Uuid
+  relatedProviderId       String?                            @db.Uuid
+  invitationChannel       SmeServicesPilotInvitationChannel?
+  invitationNote          String?
+  internalNotes           String?
+  consentConfirmed        Boolean                            @default(false)
+  safetyBriefingCompleted Boolean                            @default(false)
+  invitedAt               DateTime?
+  confirmedAt             DateTime?
+  createdByAdminId        String?                            @db.Uuid
+  updatedByAdminId        String?                            @db.Uuid
+  createdAt               DateTime                           @default(now())
+  updatedAt               DateTime                           @updatedAt
+
+  @@index([participantType, status])
+  @@index([status, createdAt])
+  @@index([phoneNumber])
+  @@index([relatedProviderId])
+  @@map("sme_services_pilot_participants")
 }
 
 model VendorCategory {

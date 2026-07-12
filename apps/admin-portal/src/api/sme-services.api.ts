@@ -41,6 +41,27 @@ export type SmeServicesPilotDecisionStatus =
   | "NO_GO"
   | "DEFERRED";
 
+export type SmeServicesPilotParticipantType =
+  | "CUSTOMER"
+  | "SERVICE_PROVIDER"
+  | "INTERNAL_OBSERVER";
+
+export type SmeServicesPilotParticipantStatus =
+  | "DRAFT"
+  | "READY_TO_INVITE"
+  | "INVITED_MANUALLY"
+  | "CONFIRMED"
+  | "DECLINED"
+  | "REMOVED";
+
+export type SmeServicesPilotInvitationChannel =
+  | "PHONE"
+  | "WHATSAPP"
+  | "EMAIL"
+  | "IN_PERSON"
+  | "IN_APP_NOTE"
+  | "OTHER";
+
 export interface SmeProvider {
   id: string;
   providerCode: string;
@@ -304,6 +325,54 @@ export interface SmeServicesPilotLaunchControl {
   safetyNote: string;
 }
 
+export interface SmeServicesPilotParticipant {
+  id: string;
+  participantType: SmeServicesPilotParticipantType;
+  status: SmeServicesPilotParticipantStatus;
+  displayName: string;
+  phoneNumber?: string | null;
+  email?: string | null;
+  organization?: string | null;
+  city?: string | null;
+  pilotZone?: string | null;
+  relatedUserId?: string | null;
+  relatedProviderId?: string | null;
+  invitationChannel?: SmeServicesPilotInvitationChannel | null;
+  invitationNote?: string | null;
+  internalNotes?: string | null;
+  consentConfirmed: boolean;
+  safetyBriefingCompleted: boolean;
+  invitedAt?: string | null;
+  confirmedAt?: string | null;
+  createdByAdminId?: string | null;
+  updatedByAdminId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SmeServicesPilotParticipantsListResponse {
+  summary: {
+    total: number;
+    customers: number;
+    providers: number;
+    observers: number;
+    readyToInvite: number;
+    invited: number;
+    confirmed: number;
+    declined: number;
+    removed: number;
+  };
+  items: SmeServicesPilotParticipant[];
+  guardrails: {
+    liveInvitationsSent: boolean;
+    liveDispatchEnabled: boolean;
+    providerLoginEnabled: boolean;
+    providerAppAccessEnabled: boolean;
+    livePaymentsEnabled: boolean;
+    note: string;
+  };
+}
+
 export const smeServicesApi = {
   summary: () => api.get<SmeServicesOperationsSummary>("admin/service-provider-requests/summary"),
   report: () => api.get<SmeServicesPilotReport>("admin/service-provider-requests/report"),
@@ -318,6 +387,10 @@ export const smeServicesApi = {
     conditions?: string;
     blockers?: string;
   }) => api.post<SmeServicesPilotLaunchControl>("admin/sme-services/pilot-launch-control", payload),
+  pilotParticipants: (q = "") => api.get<SmeServicesPilotParticipantsListResponse>(`admin/sme-services/pilot-participants${q ? `?${q}` : ""}`),
+  createPilotParticipant: (payload: Partial<SmeServicesPilotParticipant>) => api.post<SmeServicesPilotParticipant>("admin/sme-services/pilot-participants", payload),
+  pilotParticipant: (id: string) => api.get<SmeServicesPilotParticipant>(`admin/sme-services/pilot-participants/${id}`),
+  updatePilotParticipant: (id: string, payload: Partial<SmeServicesPilotParticipant>) => api.patch<SmeServicesPilotParticipant>(`admin/sme-services/pilot-participants/${id}`, payload),
   list: (q = "") => api.get<SmeServicesListResponse>(`admin/service-provider-requests${q ? `?${q}` : ""}`),
   detail: (id: string) => api.get<SmeServiceRequest>(`admin/service-provider-requests/${id}`),
   status: (id: string, status: ServiceProviderRequestStatus, adminNote?: string, customerNote?: string) =>

@@ -11,9 +11,12 @@ import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.in
 import { AssignServiceProviderDto } from "./dto/assign-service-provider.dto";
 import { CreateServiceProviderDto } from "./dto/create-service-provider.dto";
 import { CreateServiceProviderRequestDto } from "./dto/create-service-provider-request.dto";
+import { CreateSmeServicesPilotParticipantDto } from "./dto/create-sme-services-pilot-participant.dto";
 import { ListServiceProvidersQueryDto } from "./dto/list-service-providers-query.dto";
 import { ListServiceProviderRequestsQueryDto } from "./dto/list-service-provider-requests-query.dto";
+import { ListSmeServicesPilotParticipantsQueryDto } from "./dto/list-sme-services-pilot-participants-query.dto";
 import { RecordSmeServicesPilotLaunchDecisionDto } from "./dto/record-sme-services-pilot-launch-decision.dto";
+import { UpdateSmeServicesPilotParticipantDto } from "./dto/update-sme-services-pilot-participant.dto";
 import { UpdateSmeServicesPilotReadinessDto } from "./dto/update-sme-services-pilot-readiness.dto";
 import { UpdateServiceProviderDto } from "./dto/update-service-provider.dto";
 import { UpdateServiceProviderRequestStatusDto } from "./dto/update-service-provider-request-status.dto";
@@ -139,6 +142,34 @@ export class AdminSmeServicesPilotReadinessController {
   @ApiOperation({ summary: "Record an SME Services pilot launch Go/No-Go decision" })
   async recordLaunchDecision(@CurrentUser() user: AuthenticatedUser, @Body() dto: RecordSmeServicesPilotLaunchDecisionDto) {
     return { message: "SME Services pilot launch decision recorded", data: await this.serviceRequests.adminRecordPilotLaunchDecision(user.id, dto) };
+  }
+
+  @Get("pilot-participants")
+  @ApiOperation({ summary: "List SME Services pilot participants for admin coordination" })
+  async participants(@Query() query: ListSmeServicesPilotParticipantsQueryDto) {
+    return { message: "SME Services pilot participants retrieved", data: await this.serviceRequests.adminListPilotParticipants(query) };
+  }
+
+  @Post("pilot-participants")
+  @ApiOperation({ summary: "Create an SME Services pilot participant coordination record" })
+  async createParticipant(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateSmeServicesPilotParticipantDto) {
+    return { message: "SME Services pilot participant created", data: await this.serviceRequests.adminCreatePilotParticipant(user.id, dto) };
+  }
+
+  @Get("pilot-participants/:participantId")
+  @ApiOperation({ summary: "Get one SME Services pilot participant coordination record" })
+  async participant(@Param("participantId", ParseUUIDPipe) participantId: string) {
+    return { message: "SME Services pilot participant retrieved", data: await this.serviceRequests.adminPilotParticipantDetail(participantId) };
+  }
+
+  @Patch("pilot-participants/:participantId")
+  @ApiOperation({ summary: "Update an SME Services pilot participant coordination record" })
+  async updateParticipant(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("participantId", ParseUUIDPipe) participantId: string,
+    @Body() dto: UpdateSmeServicesPilotParticipantDto
+  ) {
+    return { message: "SME Services pilot participant updated", data: await this.serviceRequests.adminUpdatePilotParticipant(user.id, participantId, dto) };
   }
 }
 

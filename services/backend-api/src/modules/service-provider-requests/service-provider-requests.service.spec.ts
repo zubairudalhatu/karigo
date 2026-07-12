@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException } from "@nestjs/common";
-import { ServiceProviderApplicationStatus, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType, SmeServicesPilotDecisionStatus } from "@prisma/client";
+import { ServiceProviderApplicationStatus, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType, SmeServicesPilotDecisionStatus, SmeServicesPilotInvitationChannel, SmeServicesPilotParticipantStatus, SmeServicesPilotParticipantType } from "@prisma/client";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ServiceProviderRequestsService } from "./service-provider-requests.service";
@@ -99,6 +99,31 @@ const launchDecision = {
   updatedAt: now
 };
 
+const pilotParticipant = {
+  id: "00000000-0000-0000-0000-000000000c01",
+  participantType: SmeServicesPilotParticipantType.CUSTOMER,
+  status: SmeServicesPilotParticipantStatus.READY_TO_INVITE,
+  displayName: "Demo Pilot Customer",
+  phoneNumber: "+2348011111111",
+  email: "pilot.customer@karigo.local",
+  organization: null,
+  city: "Kano",
+  pilotZone: "Nasarawa GRA",
+  relatedUserId: "00000000-0000-0000-0000-000000000d01",
+  relatedProviderId: null,
+  invitationChannel: SmeServicesPilotInvitationChannel.PHONE,
+  invitationNote: "Call manually after signoff",
+  internalNotes: "Internal pilot participant only",
+  consentConfirmed: true,
+  safetyBriefingCompleted: false,
+  invitedAt: null,
+  confirmedAt: null,
+  createdByAdminId: "admin-user",
+  updatedByAdminId: "admin-user",
+  createdAt: now,
+  updatedAt: now
+};
+
 describe("ServiceProviderRequestsService admin operations", () => {
   const prisma = {
     customerProfile: { findUnique: jest.fn() },
@@ -131,6 +156,13 @@ describe("ServiceProviderRequestsService admin operations", () => {
       findFirst: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn()
+    },
+    smeServicesPilotParticipant: {
+      findMany: jest.fn(),
+      count: jest.fn(),
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn()
     },
     adminAuditLog: { findMany: jest.fn() }
   };
@@ -465,6 +497,130 @@ describe("ServiceProviderRequestsService admin operations", () => {
       decisionTitle: "Go for internal pilot"
     })).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.smeServicesPilotLaunchDecision.create).not.toHaveBeenCalled();
+  });
+
+  it("lists SME Services pilot participants with filters and safe coordination guardrails", async () => {
+    prisma.smeServicesPilotParticipant.findMany.mockResolvedValue([pilotParticipant]);
+    prisma.smeServicesPilotParticipant.count
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+
+    const result = await service.adminListPilotParticipants({
+      participantType: SmeServicesPilotParticipantType.CUSTOMER,
+      status: SmeServicesPilotParticipantStatus.READY_TO_INVITE,
+      city: "Kano",
+      pilotZone: "Nasarawa",
+      search: "Demo"
+    });
+
+    expect(prisma.smeServicesPilotParticipant.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        participantType: SmeServicesPilotParticipantType.CUSTOMER,
+        status: SmeServicesPilotParticipantStatus.READY_TO_INVITE,
+        city: { contains: "Kano", mode: "insensitive" },
+        pilotZone: { contains: "Nasarawa", mode: "insensitive" },
+        OR: expect.any(Array)
+      }),
+      take: 200
+    }));
+    expect(result.summary).toMatchObject({ total: 3, customers: 1, providers: 1, observers: 1 });
+    expect(result.items[0]).toMatchObject({ displayName: "Demo Pilot Customer", status: SmeServicesPilotParticipantStatus.READY_TO_INVITE });
+    expect(result.guardrails).toMatchObject({
+      liveInvitationsSent: false,
+      liveDispatchEnabled: false,
+      providerLoginEnabled: false,
+      providerAppAccessEnabled: false,
+      livePaymentsEnabled: false
+    });
+  });
+
+  it("creates SME Services pilot participants without sending invitations", async () => {
+    prisma.smeServicesPilotParticipant.create.mockResolvedValue(pilotParticipant);
+
+    const result = await service.adminCreatePilotParticipant("admin-user", {
+      participantType: SmeServicesPilotParticipantType.CUSTOMER,
+      status: SmeServicesPilotParticipantStatus.READY_TO_INVITE,
+      displayName: "Demo Pilot Customer",
+      phoneNumber: "+2348011111111",
+      email: "pilot.customer@karigo.local",
+      city: "Kano",
+      pilotZone: "Nasarawa GRA",
+      relatedUserId: "00000000-0000-0000-0000-000000000d01",
+      invitationChannel: SmeServicesPilotInvitationChannel.PHONE,
+      invitationNote: "Call manually after signoff",
+      internalNotes: "Internal pilot participant only",
+      consentConfirmed: true
+    });
+
+    expect(prisma.smeServicesPilotParticipant.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        participantType: SmeServicesPilotParticipantType.CUSTOMER,
+        status: SmeServicesPilotParticipantStatus.READY_TO_INVITE,
+        displayName: "Demo Pilot Customer",
+        invitedAt: undefined,
+        createdByAdminId: "admin-user",
+        updatedByAdminId: "admin-user"
+      })
+    }));
+    expect(audit.record).toHaveBeenCalledWith("admin-user", "sme_services.pilot_participant_created", "SmeServicesPilotParticipant", pilotParticipant.id, expect.objectContaining({
+      participantType: SmeServicesPilotParticipantType.CUSTOMER,
+      status: SmeServicesPilotParticipantStatus.READY_TO_INVITE
+    }));
+    expect(result.displayName).toBe("Demo Pilot Customer");
+  });
+
+  it("updates SME Services pilot participant status manually and records invitation timestamp", async () => {
+    prisma.smeServicesPilotParticipant.findUnique.mockResolvedValue(pilotParticipant);
+    prisma.smeServicesPilotParticipant.update.mockResolvedValue({
+      ...pilotParticipant,
+      status: SmeServicesPilotParticipantStatus.INVITED_MANUALLY,
+      invitedAt: now,
+      safetyBriefingCompleted: true
+    });
+
+    const result = await service.adminUpdatePilotParticipant("admin-user", pilotParticipant.id, {
+      status: SmeServicesPilotParticipantStatus.INVITED_MANUALLY,
+      safetyBriefingCompleted: true
+    });
+
+    expect(prisma.smeServicesPilotParticipant.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: pilotParticipant.id },
+      data: expect.objectContaining({
+        status: SmeServicesPilotParticipantStatus.INVITED_MANUALLY,
+        safetyBriefingCompleted: true,
+        invitedAt: expect.any(Date),
+        updatedByAdminId: "admin-user"
+      })
+    }));
+    expect(audit.record).toHaveBeenCalledWith("admin-user", "sme_services.pilot_participant_updated", "SmeServicesPilotParticipant", pilotParticipant.id, expect.objectContaining({
+      previousStatus: SmeServicesPilotParticipantStatus.READY_TO_INVITE,
+      status: SmeServicesPilotParticipantStatus.INVITED_MANUALLY
+    }));
+    expect(result.status).toBe(SmeServicesPilotParticipantStatus.INVITED_MANUALLY);
+    expect(result.safetyBriefingCompleted).toBe(true);
+  });
+
+  it("blocks readiness-only service providers from pilot invitation statuses", async () => {
+    prisma.serviceProvider.findUnique.mockResolvedValue({
+      ...provider,
+      serviceType: ServiceProviderType.HEALTH_PROFESSIONAL,
+      readinessOnly: true
+    });
+
+    await expect(service.adminCreatePilotParticipant("admin-user", {
+      participantType: SmeServicesPilotParticipantType.SERVICE_PROVIDER,
+      status: SmeServicesPilotParticipantStatus.READY_TO_INVITE,
+      displayName: "Readiness Doctor",
+      relatedProviderId: provider.id
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.smeServicesPilotParticipant.create).not.toHaveBeenCalled();
   });
 
   it("returns admin detail with review history", async () => {
