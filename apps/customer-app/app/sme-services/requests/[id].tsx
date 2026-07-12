@@ -27,6 +27,12 @@ function date(value?: string | null) {
   return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
+function progressLabel(index: number, currentStep: number) {
+  if (index < currentStep) return "Done";
+  if (index === currentStep) return "Current";
+  return "Pending";
+}
+
 export default function SmeServicesRequestDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [request, setRequest] = useState<ServiceProviderRequest | null>(null);
@@ -64,18 +70,24 @@ export default function SmeServicesRequestDetail() {
       <Card>
         <Text style={ui.cardTitle}>Status progress</Text>
         {isCancelled ? <View style={styles.timelineItem}>
-          <Text style={styles.timelineMarker}>!</Text>
+          <Text style={[styles.timelinePill, styles.timelinePillCancelled]}>Cancelled</Text>
           <View style={styles.timelineText}>
             <Text style={styles.timelineTitle}>Cancelled</Text>
             <Text style={ui.muted}>This request is no longer active.</Text>
           </View>
         </View> : progress.map((step, index) => {
           const active = index === currentStep;
-          const complete = currentStep >= index;
+          const complete = index < currentStep;
+          const pending = index > currentStep;
           return <View key={step.status} style={styles.timelineItem}>
-            <Text style={[styles.timelineMarker, complete && styles.timelineMarkerComplete, active && styles.timelineMarkerActive]}>{complete ? "OK" : index + 1}</Text>
+            <Text style={[
+              styles.timelinePill,
+              complete && styles.timelinePillDone,
+              active && styles.timelinePillCurrent,
+              pending && styles.timelinePillPending
+            ]}>{progressLabel(index, currentStep)}</Text>
             <View style={styles.timelineText}>
-              <Text style={[styles.timelineTitle, active && styles.timelineTitleActive]}>{step.label}</Text>
+              <Text style={[styles.timelineTitle, complete && styles.timelineTitleDone, active && styles.timelineTitleActive]}>{step.label}</Text>
               <Text style={ui.muted}>{step.description}</Text>
             </View>
           </View>;
@@ -109,10 +121,13 @@ export default function SmeServicesRequestDetail() {
 
 const styles = StyleSheet.create({
   timelineItem: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
-  timelineMarker: { backgroundColor: "#F3F4F6", borderRadius: 999, color: "#6B7280", fontSize: 12, fontWeight: "900", minWidth: 28, overflow: "hidden", paddingHorizontal: 8, paddingVertical: 6, textAlign: "center" },
-  timelineMarkerComplete: { backgroundColor: "#DCFCE7", color: "#166534" },
-  timelineMarkerActive: { backgroundColor: "#FEF2F2", color: "#991B1B" },
+  timelinePill: { borderRadius: 999, fontSize: 11, fontWeight: "900", minWidth: 72, overflow: "hidden", paddingHorizontal: 10, paddingVertical: 7, textAlign: "center" },
+  timelinePillDone: { backgroundColor: "#DCFCE7", color: "#166534" },
+  timelinePillCurrent: { backgroundColor: "#DBEAFE", color: "#1E40AF" },
+  timelinePillPending: { backgroundColor: "#F3F4F6", color: "#6B7280" },
+  timelinePillCancelled: { backgroundColor: "#FEE2E2", color: "#991B1B" },
   timelineText: { flex: 1, gap: 3 },
   timelineTitle: { color: "#6B7280", fontWeight: "900" },
+  timelineTitleDone: { color: "#166534" },
   timelineTitleActive: { color: "#111827" }
 });

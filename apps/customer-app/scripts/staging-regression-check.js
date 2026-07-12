@@ -131,6 +131,10 @@ assert(smeRequestHistory.includes("/sme-services/requests/${request.id}"), "SME 
 const smeRequestDetail = read("app", "sme-services", "requests", "[id].tsx");
 assert(smeRequestDetail.includes("serviceProviderRequestsApi.detail"), "SME Services request detail must load an owned request.");
 ["Submitted", "Under Review", "Provider Matching", "Provider Assigned", "Completed", "Cancelled"].forEach((status) => assert(smeRequestDetail.includes(status), `SME Services detail must show ${status} status copy.`));
+["Done", "Current", "Pending", "Cancelled"].forEach((label) => assert(smeRequestDetail.includes(label), `SME Services timeline must use ${label} progress labels.`));
+assert(!smeRequestDetail.includes("\"OK\""), "SME Services timeline must not use old OK badges.");
+assert(smeRequestDetail.includes("timelinePillCurrent"), "SME Services timeline must style the current step as a clear non-error state.");
+assert(smeRequestDetail.includes("#DBEAFE"), "SME Services current timeline step must use neutral blue styling, not an error color.");
 assert(smeRequestDetail.includes("private provider contact details remain protected"), "SME Services detail must not expose private provider contact.");
 assert(smeRequestDetail.includes("No live dispatch, service payment, provider payout or provider login"), "SME Services detail must state safe review-only limits.");
 assert(!smeRequestDetail.includes("provider.phoneNumber") && !smeRequestDetail.includes("provider.email"), "SME Services detail must not render provider private phone/email.");
