@@ -9,8 +9,17 @@ const statusFilters: Array<{ label: string; value: CustomerReferralStatus | "ALL
   { label: "All referrals", value: "ALL" },
   { label: "Registered", value: "REGISTERED" },
   { label: "Account activated", value: "ACCOUNT_ACTIVATED" },
+  { label: "First valid transaction", value: "FIRST_VALID_TRANSACTION_COMPLETED" },
   { label: "Eligible", value: "ELIGIBLE_FOR_REWARD" },
   { label: "Reward review pending", value: "REWARD_REVIEW_PENDING" },
+  { label: "Reward approved", value: "REWARD_APPROVED" },
+  { label: "Ineligible", value: "INELIGIBLE" },
+  { label: "Cancelled", value: "CANCELLED" }
+];
+const reviewStatuses: Array<{ label: string; value: CustomerReferralStatus }> = [
+  { label: "Eligible for manual reward review", value: "ELIGIBLE_FOR_REWARD" },
+  { label: "Reward review pending", value: "REWARD_REVIEW_PENDING" },
+  { label: "Reward approved / reserved for future fulfilment", value: "REWARD_APPROVED" },
   { label: "Ineligible", value: "INELIGIBLE" },
   { label: "Cancelled", value: "CANCELLED" }
 ];
@@ -32,8 +41,15 @@ export default function ReferralsPage() {
   const [rewardType, setRewardType] = useState<ReferralRewardType | "ALL">("ALL");
   const [data, setData] = useState<Awaited<ReturnType<typeof referralsApi.list>> | null>(null);
   const [rules, setRules] = useState<ReferralRewardRule[]>([]);
+  const [selectedReferral, setSelectedReferral] = useState<Awaited<ReturnType<typeof referralsApi.detail>> | null>(null);
+  const [reviewStatus, setReviewStatus] = useState<CustomerReferralStatus>("REWARD_REVIEW_PENDING");
+  const [reviewRewardRuleId, setReviewRewardRuleId] = useState("");
+  const [reviewNote, setReviewNote] = useState("");
   const [loading, setLoading] = useState(true);
+  const [reviewLoading, setReviewLoading] = useState(false);
   const [error, setError] = useState("");
+  const [reviewError, setReviewError] = useState("");
+  const [reviewSuccess, setReviewSuccess] = useState("");
 
   const load = () => {
     setLoading(true);
@@ -50,6 +66,51 @@ export default function ReferralsPage() {
       .finally(() => setLoading(false));
   };
 
+  const openReview = async (referralId: string) => {
+    setReviewLoading(true);
+    setReviewError("");
+    setReviewSuccess("");
+    try {
+      const referral = await referralsApi.detail(referralId);
+      const safeReviewStatus = reviewStatuses.some((option) => option.value === referral.status)
+        ? referral.status
+        : "REWARD_REVIEW_PENDING";
+      setSelectedReferral(referral);
+      setReviewStatus(safeReviewStatus);
+      setReviewRewardRuleId(referral.rewardRule?.id ?? "");
+      setReviewNote(referral.adminNote ?? "");
+    } catch (e) {
+      setReviewError(friendlyError(e, "form"));
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const saveReview = async () => {
+    if (!selectedReferral) return;
+    setReviewLoading(true);
+    setReviewError("");
+    setReviewSuccess("");
+    try {
+      const updated = await referralsApi.review(selectedReferral.id, {
+        status: reviewStatus,
+        rewardRuleId: reviewRewardRuleId || null,
+        adminNote: reviewNote.trim() || undefined
+      });
+      setSelectedReferral(updated);
+      setData((current) => current ? {
+        ...current,
+        items: current.items.map((item) => item.id === updated.id ? updated : item)
+      } : current);
+      setReviewSuccess("Referral review decision saved. Reward remains reserved only; no wallet credit, airtime, data, promo, free delivery or message was issued.");
+      void load();
+    } catch (e) {
+      setReviewError(friendlyError(e, "form"));
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
   useEffect(() => { load(); }, [status, rewardType]);
 
   const summary = data?.summary ?? {
@@ -57,6 +118,8 @@ export default function ReferralsPage() {
     registered: 0,
     accountActivated: 0,
     eligibleForReward: 0,
+    rewardReviewPending: 0,
+    rewardApproved: 0,
     rewardsIssued: 0,
     automaticRewardFulfillmentEnabled: false
   };
@@ -78,6 +141,8 @@ export default function ReferralsPage() {
       <SummaryCard label="Registered" value={summary.registered} />
       <SummaryCard label="Activated" value={summary.accountActivated} />
       <SummaryCard label="Eligible" value={summary.eligibleForReward} />
+      <SummaryCard label="Pending review" value={summary.rewardReviewPending} />
+      <SummaryCard label="Approved/reserved" value={summary.rewardApproved} />
       <div className="card"><p className="muted">Auto fulfillment</p><p className="metric">{summary.automaticRewardFulfillmentEnabled ? "On" : "Off"}</p></div>
     </section>
 
@@ -95,7 +160,7 @@ export default function ReferralsPage() {
       <h2>Referral records</h2>
       {loading ? <Loading /> : data?.items.length ? (
         <table className="table">
-          <thead><tr><th>Code</th><th>Referrer</th><th>Referred customer</th><th>Status</th><th>Created</th><th>Activated</th><th>Reward</th></tr></thead>
+          <thead><tr><th>Code</th><th>Referrer</th><th>Referred customer</th><th>Status</th><th>Created</th><th>Activated</th><th>Reward</th><th>Review</th></tr></thead>
           <tbody>
             {data.items.map((item) => (
               <tr key={item.id}>
@@ -106,11 +171,52 @@ export default function ReferralsPage() {
                 <td>{formatDate(item.createdAt)}</td>
                 <td>{formatDate(item.accountActivatedAt)}</td>
                 <td>{item.fulfillmentEnabled ? "Enabled" : "Tracking only"}</td>
+                <td><button className="secondary" onClick={() => void openReview(item.id)} disabled={reviewLoading}>Review</button></td>
               </tr>
             ))}
           </tbody>
         </table>
       ) : <Empty>No referral records found yet. Customer registrations using referral codes will appear here.</Empty>}
+    </section>
+
+    <section className="section detail-grid">
+      <div className="card">
+        <p className="muted">Manual qualification review</p>
+        <h2>Referral review decision</h2>
+        <p className="muted">Mark eligibility and reserve a future reward decision for management follow-up. This workflow does not issue any wallet credit, airtime, data, promo code, free delivery reward or notification.</p>
+        {selectedReferral ? (
+          <div className="section">
+            <div className="item"><span>Referral code</span><strong>{selectedReferral.referralCode}</strong></div>
+            <div className="item"><span>Referrer</span><strong>{selectedReferral.referrerCustomer.user.fullName}</strong></div>
+            <div className="item"><span>Referred customer</span><strong>{selectedReferral.referredCustomer.user.fullName}</strong></div>
+            <div className="item"><span>Current status</span><Badge>{selectedReferral.status}</Badge></div>
+            <div className="item"><span>Eligible at</span><strong>{formatDate(selectedReferral.eligibleAt)}</strong></div>
+            <div className="item"><span>Reviewed at</span><strong>{formatDate(selectedReferral.rewardReviewedAt)}</strong></div>
+            <div className="item"><span>Reward reserved</span><strong>{selectedReferral.status === "REWARD_APPROVED" ? "Yes, future fulfilment only" : "No"}</strong></div>
+          </div>
+        ) : <Empty>Select a referral record to review eligibility and reserve a manual reward decision.</Empty>}
+      </div>
+
+      <div className="card review-panel">
+        <h2>Save review</h2>
+        <label>Status decision
+          <select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value as CustomerReferralStatus)} disabled={!selectedReferral || reviewLoading}>
+            {reviewStatuses.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+        <label>Reward rule reference
+          <select value={reviewRewardRuleId} onChange={(event) => setReviewRewardRuleId(event.target.value)} disabled={!selectedReferral || reviewLoading}>
+            <option value="">No rule selected</option>
+            {rules.map((rule) => <option key={rule.id} value={rule.id}>{rule.name} ({label(rule.rewardType)})</option>)}
+          </select>
+        </label>
+        <label>Internal admin note
+          <textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} disabled={!selectedReferral || reviewLoading} placeholder="Record why this referral is eligible, pending, approved/reserved, ineligible or cancelled." />
+        </label>
+        <ErrorMessage>{reviewError}</ErrorMessage>
+        {reviewSuccess ? <p className="success">{reviewSuccess}</p> : null}
+        <button onClick={() => void saveReview()} disabled={!selectedReferral || reviewLoading}>{reviewLoading ? "Saving..." : "Save review decision"}</button>
+      </div>
     </section>
 
     <section className="section">

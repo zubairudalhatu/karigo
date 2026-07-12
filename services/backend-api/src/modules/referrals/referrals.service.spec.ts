@@ -111,6 +111,7 @@ describe("ReferralsService", () => {
     prisma.customerReferralRewardRule.findUnique.mockResolvedValue({ id: rewardRule.id });
     prisma.customerReferralRewardRule.update.mockResolvedValue({ ...rewardRule, isActive: true });
     prisma.customerReferral.findUnique.mockResolvedValue(null);
+    prisma.customerReferral.update.mockResolvedValue(referral);
     prisma.$transaction.mockImplementation((input: unknown) => Array.isArray(input) ? Promise.all(input as Promise<unknown>[]) : input);
     audit.record.mockResolvedValue({});
   });
@@ -180,6 +181,63 @@ describe("ReferralsService", () => {
       startsAt: "2026-07-13T00:00:00.000Z",
       endsAt: "2026-07-12T00:00:00.000Z"
     })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("returns referral detail for admin review without enabling fulfillment", async () => {
+    prisma.customerReferral.findUnique.mockResolvedValue(referral);
+
+    const result = await service.adminDetail(referral.id);
+
+    expect(result.id).toBe(referral.id);
+    expect(result.fulfillmentEnabled).toBe(false);
+    expect(result).toHaveProperty("adminNote");
+  });
+
+  it("records a manual reward approval without issuing any reward", async () => {
+    const reviewedReferral = {
+      ...referral,
+      status: CustomerReferralStatus.REWARD_APPROVED,
+      rewardRuleId: rewardRule.id,
+      rewardRule,
+      eligibleAt: now,
+      rewardReviewedAt: now,
+      adminNote: "Approved for future manual fulfilment after pilot signoff."
+    };
+    prisma.customerReferral.findUnique.mockResolvedValue({ id: referral.id, eligibleAt: null, adminNote: null });
+    prisma.customerReferral.update.mockResolvedValue(reviewedReferral);
+
+    const result = await service.adminReview("admin-1", referral.id, {
+      status: CustomerReferralStatus.REWARD_APPROVED,
+      rewardRuleId: rewardRule.id,
+      adminNote: "Approved for future manual fulfilment after pilot signoff."
+    });
+
+    expect(prisma.customerReferralRewardRule.findUnique).toHaveBeenCalledWith({ where: { id: rewardRule.id }, select: { id: true } });
+    expect(prisma.customerReferral.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: referral.id },
+      data: expect.objectContaining({
+        status: CustomerReferralStatus.REWARD_APPROVED,
+        eligibleAt: expect.any(Date),
+        rewardReviewedAt: expect.any(Date),
+        rewardRuleId: rewardRule.id,
+        adminNote: "Approved for future manual fulfilment after pilot signoff."
+      })
+    }));
+    expect(result.status).toBe(CustomerReferralStatus.REWARD_APPROVED);
+    expect(result.fulfillmentEnabled).toBe(false);
+    expect(audit.record).toHaveBeenCalledWith("admin-1", "referral.reward_review.updated", "CustomerReferral", referral.id, expect.objectContaining({
+      rewardReservedForFutureFulfillment: true,
+      fulfillmentEnabled: false
+    }));
+  });
+
+  it("rejects reward issued status because fulfillment is not active", async () => {
+    await expect(service.adminReview("admin-1", referral.id, {
+      status: CustomerReferralStatus.REWARD_ISSUED,
+      adminNote: "Do not issue automatically"
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.customerReferral.update).not.toHaveBeenCalled();
   });
 
   it("marks referred customer activation without issuing a reward", async () => {

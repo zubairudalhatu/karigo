@@ -47,6 +47,8 @@ export interface AdminReferralsResult {
     registered: number;
     accountActivated: number;
     eligibleForReward: number;
+    rewardReviewPending: number;
+    rewardApproved: number;
     rewardsIssued: number;
     automaticRewardFulfillmentEnabled: boolean;
   };
@@ -83,6 +85,9 @@ function query(params: Record<string, string | undefined>) {
 export const referralsApi = {
   list: (filters: { status?: CustomerReferralStatus | "ALL"; search?: string } = {}) =>
     api.get<AdminReferralsResult>(`admin/referrals${query({ status: filters.status === "ALL" ? undefined : filters.status, search: filters.search })}`),
+  detail: (referralId: string) => api.get<AdminReferralRecord>(`admin/referrals/${referralId}`),
+  review: (referralId: string, body: { status: CustomerReferralStatus; rewardRuleId?: string | null; adminNote?: string }) =>
+    api.patch<AdminReferralRecord>(`admin/referrals/${referralId}/review`, body),
   rewardRules: (filters: { isActive?: "ALL" | "true" | "false"; rewardType?: ReferralRewardType | "ALL" } = {}) =>
     api.get<ReferralRewardRule[]>(`admin/referrals/reward-rules${query({
       isActive: filters.isActive === "ALL" ? undefined : filters.isActive,

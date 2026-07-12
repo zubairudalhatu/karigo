@@ -180,9 +180,17 @@ assert(referralsPage.includes("This page does not issue rewards, credit wallets,
 assert(referralsPage.includes("Referral records"), "Admin referrals page must show referral records.");
 assert(referralsPage.includes("Reward rules"), "Admin referrals page must show reward rules.");
 assert(referralsPage.includes("Tracking only"), "Admin referrals page must mark referral rewards as tracking-only.");
+assert(referralsPage.includes("Manual qualification review"), "Admin referrals page must expose manual referral qualification review.");
+assert(referralsPage.includes("Save review decision"), "Admin referrals page must save manual referral review decisions.");
+assert(referralsPage.includes("Reward approved / reserved for future fulfilment"), "Admin referrals page must reserve approvals for future fulfilment only.");
+assert(referralsPage.includes("wallet credit, airtime, data, promo code, free delivery reward or notification"), "Admin referral review must state no reward fulfillment occurs.");
+assert(referralsPage.includes("referralsApi.detail"), "Admin referrals page must load selected referral detail before review.");
+assert(referralsPage.includes("referralsApi.review"), "Admin referrals page must call the manual referral review endpoint.");
 assert(!referralsPage.includes("Issue reward") && !referralsPage.includes("Credit wallet") && !referralsPage.includes("Send SMS"), "Admin referrals page must not expose reward fulfillment actions.");
 const referralsApiSource = read("src", "api", "referrals.api.ts");
 assert(referralsApiSource.includes("admin/referrals"), "Admin referral API must call referral list endpoint.");
+assert(referralsApiSource.includes("admin/referrals/${referralId}"), "Admin referral API must call referral detail endpoint.");
+assert(referralsApiSource.includes("admin/referrals/${referralId}/review"), "Admin referral API must call referral review endpoint.");
 assert(referralsApiSource.includes("admin/referrals/reward-rules"), "Admin referral API must call reward rules endpoint.");
 
 const taxiPage = read("app", "taxi", "page.tsx");

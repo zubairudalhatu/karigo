@@ -11,6 +11,7 @@ import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.in
 import { CreateReferralRewardRuleDto } from "./dto/create-referral-reward-rule.dto";
 import { ListReferralsQueryDto } from "./dto/list-referrals-query.dto";
 import { ListRewardRulesQueryDto } from "./dto/list-reward-rules-query.dto";
+import { ReviewReferralDto } from "./dto/review-referral.dto";
 import { UpdateReferralRewardRuleDto } from "./dto/update-referral-reward-rule.dto";
 import { ReferralsService } from "./referrals.service";
 
@@ -77,5 +78,21 @@ export class AdminReferralsController {
     @Body() dto: UpdateReferralRewardRuleDto
   ) {
     return { message: "Referral reward rule updated", data: await this.referrals.adminUpdateRewardRule(user.id, ruleId, dto) };
+  }
+
+  @Get(":referralId")
+  @ApiOperation({ summary: "Get one referral record for admin qualification review" })
+  async detail(@Param("referralId", ParseUUIDPipe) referralId: string) {
+    return { message: "Referral record retrieved", data: await this.referrals.adminDetail(referralId) };
+  }
+
+  @Patch(":referralId/review")
+  @ApiOperation({ summary: "Record an admin referral review decision without issuing rewards" })
+  async review(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("referralId", ParseUUIDPipe) referralId: string,
+    @Body() dto: ReviewReferralDto
+  ) {
+    return { message: "Referral review decision saved", data: await this.referrals.adminReview(user.id, referralId, dto) };
   }
 }

@@ -11,7 +11,21 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { CreateReferralRewardRuleDto } from "./dto/create-referral-reward-rule.dto";
 import { ListReferralsQueryDto } from "./dto/list-referrals-query.dto";
 import { ListRewardRulesQueryDto } from "./dto/list-reward-rules-query.dto";
+import { ReviewReferralDto } from "./dto/review-referral.dto";
 import { UpdateReferralRewardRuleDto } from "./dto/update-referral-reward-rule.dto";
+
+const REVIEW_STATUSES = new Set<CustomerReferralStatus>([
+  CustomerReferralStatus.ELIGIBLE_FOR_REWARD,
+  CustomerReferralStatus.REWARD_REVIEW_PENDING,
+  CustomerReferralStatus.REWARD_APPROVED,
+  CustomerReferralStatus.INELIGIBLE,
+  CustomerReferralStatus.CANCELLED
+]);
+const ELIGIBLE_REVIEW_STATUSES = new Set<CustomerReferralStatus>([
+  CustomerReferralStatus.ELIGIBLE_FOR_REWARD,
+  CustomerReferralStatus.REWARD_REVIEW_PENDING,
+  CustomerReferralStatus.REWARD_APPROVED
+]);
 
 const USER_PUBLIC_SELECT = {
   id: true,
@@ -132,7 +146,7 @@ export class ReferralsService {
       } : {})
     };
 
-    const [items, total, registered, activated, eligible, issued] = await Promise.all([
+    const [items, total, registered, activated, eligible, reviewPending, rewardApproved, issued] = await Promise.all([
       this.prisma.customerReferral.findMany({
         where,
         include: REFERRAL_INCLUDE,
@@ -143,6 +157,8 @@ export class ReferralsService {
       this.prisma.customerReferral.count({ where: { status: CustomerReferralStatus.REGISTERED } }),
       this.prisma.customerReferral.count({ where: { status: CustomerReferralStatus.ACCOUNT_ACTIVATED } }),
       this.prisma.customerReferral.count({ where: { status: CustomerReferralStatus.ELIGIBLE_FOR_REWARD } }),
+      this.prisma.customerReferral.count({ where: { status: CustomerReferralStatus.REWARD_REVIEW_PENDING } }),
+      this.prisma.customerReferral.count({ where: { status: CustomerReferralStatus.REWARD_APPROVED } }),
       this.prisma.customerReferral.count({ where: { status: CustomerReferralStatus.REWARD_ISSUED } })
     ]);
 
@@ -152,11 +168,63 @@ export class ReferralsService {
         registered,
         accountActivated: activated,
         eligibleForReward: eligible,
+        rewardReviewPending: reviewPending,
+        rewardApproved,
         rewardsIssued: issued,
         automaticRewardFulfillmentEnabled: false
       },
       items: items.map((referral) => this.toAdminReferral(referral))
     };
+  }
+
+  async adminDetail(referralId: string) {
+    const referral = await this.prisma.customerReferral.findUnique({
+      where: { id: referralId },
+      include: REFERRAL_INCLUDE
+    });
+    if (!referral) throw new NotFoundException("Referral record not found");
+    return this.toAdminReferral(referral);
+  }
+
+  async adminReview(adminUserId: string, referralId: string, dto: ReviewReferralDto) {
+    if (!REVIEW_STATUSES.has(dto.status)) {
+      throw new BadRequestException("Referral review can only mark records eligible, pending review, approved, ineligible or cancelled");
+    }
+
+    const existing = await this.prisma.customerReferral.findUnique({
+      where: { id: referralId },
+      select: { id: true, eligibleAt: true, adminNote: true }
+    });
+    if (!existing) throw new NotFoundException("Referral record not found");
+
+    if (dto.rewardRuleId) {
+      const rule = await this.prisma.customerReferralRewardRule.findUnique({ where: { id: dto.rewardRuleId }, select: { id: true } });
+      if (!rule) throw new BadRequestException("Referral reward rule not found");
+    }
+
+    const now = new Date();
+    const shouldStampEligible = ELIGIBLE_REVIEW_STATUSES.has(dto.status) && !existing.eligibleAt;
+
+    const referral = await this.prisma.customerReferral.update({
+      where: { id: referralId },
+      data: {
+        status: dto.status,
+        ...(shouldStampEligible ? { eligibleAt: now } : {}),
+        rewardReviewedAt: now,
+        ...(dto.adminNote !== undefined ? { adminNote: dto.adminNote?.trim() || null } : {}),
+        ...(dto.rewardRuleId !== undefined ? { rewardRuleId: dto.rewardRuleId || null } : {})
+      },
+      include: REFERRAL_INCLUDE
+    });
+
+    await this.audit.record(adminUserId, "referral.reward_review.updated", "CustomerReferral", referral.id, {
+      status: referral.status,
+      rewardRuleId: referral.rewardRuleId,
+      rewardReservedForFutureFulfillment: referral.status === CustomerReferralStatus.REWARD_APPROVED,
+      fulfillmentEnabled: false
+    });
+
+    return this.toAdminReferral(referral);
   }
 
   async adminRewardRules(query: ListRewardRulesQueryDto) {
