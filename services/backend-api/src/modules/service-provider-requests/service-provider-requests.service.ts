@@ -10,6 +10,7 @@ import { CreateSmeServicesPilotParticipantDto } from "./dto/create-sme-services-
 import { ListServiceProvidersQueryDto } from "./dto/list-service-providers-query.dto";
 import { ListServiceProviderRequestsQueryDto } from "./dto/list-service-provider-requests-query.dto";
 import { ListSmeServicesPilotParticipantsQueryDto } from "./dto/list-sme-services-pilot-participants-query.dto";
+import { PreviewSmeServicesPilotInvitationTemplateDto } from "./dto/preview-sme-services-pilot-invitation-template.dto";
 import { RecordSmeServicesPilotLaunchDecisionDto } from "./dto/record-sme-services-pilot-launch-decision.dto";
 import { UpdateSmeServicesPilotParticipantDto } from "./dto/update-sme-services-pilot-participant.dto";
 import { UpdateSmeServicesPilotReadinessDto } from "./dto/update-sme-services-pilot-readiness.dto";
@@ -121,6 +122,111 @@ const PILOT_READINESS_ITEMS = [
     description: "Operations has a simple call/message script for coordinating the customer and provider during the internal pilot.",
     sortOrder: 100,
     isRequired: false
+  }
+] as const;
+
+const PILOT_INVITATION_TEMPLATES = [
+  {
+    key: "customer_pilot_invitation",
+    audience: "Pilot customer",
+    title: "Customer pilot invitation",
+    subject: "KariGO SME Services controlled pilot invitation",
+    description: "Manual invitation text for selected customers joining the controlled SME Services pilot.",
+    suggestedChannels: ["Phone follow-up", "WhatsApp manual copy", "Email manual copy"],
+    requiredVariables: ["recipientName", "pilotZone", "pilotDate", "supportContact"],
+    bodyTemplate: [
+      "Hello {{recipientName}},",
+      "",
+      "KariGO is preparing a controlled SME Services pilot in {{pilotZone}} from {{pilotDate}}. You are invited to help test how customers request trusted service providers through KariGO.",
+      "",
+      "Participation is optional and KariGO operations will coordinate every pilot request manually. Live payments, automatic provider dispatch and public provider contact sharing are not active for this pilot.",
+      "",
+      "If you have questions, please contact {{supportContact}}.",
+      "",
+      "Additional note: {{customNote}}"
+    ].join("\n")
+  },
+  {
+    key: "service_provider_pilot_invitation",
+    audience: "Service provider",
+    title: "Service provider pilot invitation",
+    subject: "KariGO SME Services provider pilot invitation",
+    description: "Manual invitation text for approved non-readiness-only SME service providers.",
+    suggestedChannels: ["Phone follow-up", "WhatsApp manual copy", "Email manual copy"],
+    requiredVariables: ["recipientName", "pilotZone", "serviceFocus", "pilotDate", "supportContact"],
+    bodyTemplate: [
+      "Hello {{recipientName}},",
+      "",
+      "KariGO is preparing a controlled SME Services pilot for {{serviceFocus}} providers in {{pilotZone}} from {{pilotDate}}.",
+      "",
+      "This is a manual operations pilot only. It does not create provider app login, automated dispatch, payout automation, live payment collection or public customer access to your private contact details.",
+      "",
+      "KariGO operations will contact you manually if a suitable pilot request needs review.",
+      "",
+      "For questions, please contact {{supportContact}}.",
+      "",
+      "Additional note: {{customNote}}"
+    ].join("\n")
+  },
+  {
+    key: "internal_observer_briefing",
+    audience: "Internal observer",
+    title: "Internal observer briefing",
+    subject: "KariGO SME Services pilot observer briefing",
+    description: "Manual briefing text for management or internal observers monitoring the controlled pilot.",
+    suggestedChannels: ["Email manual copy", "Internal note", "Meeting agenda"],
+    requiredVariables: ["recipientName", "pilotZone", "pilotDate", "supportContact"],
+    bodyTemplate: [
+      "Hello {{recipientName}},",
+      "",
+      "You are listed as an internal observer for the KariGO SME Services controlled pilot in {{pilotZone}} from {{pilotDate}}.",
+      "",
+      "Your role is to observe pilot readiness, request handling, customer experience, provider coordination and support follow-up. This observer role does not activate live dispatch, payment collection, provider payout, provider login or medical booking.",
+      "",
+      "Please share observations with {{supportContact}}.",
+      "",
+      "Additional note: {{customNote}}"
+    ].join("\n")
+  },
+  {
+    key: "operations_staff_briefing",
+    audience: "Operations staff",
+    title: "Operations staff briefing",
+    subject: "KariGO SME Services pilot operations briefing",
+    description: "Manual briefing text for operations staff coordinating pilot requests and providers.",
+    suggestedChannels: ["Internal note", "Email manual copy", "Team briefing"],
+    requiredVariables: ["recipientName", "pilotZone", "pilotDate", "supportContact"],
+    bodyTemplate: [
+      "Hello {{recipientName}},",
+      "",
+      "You are assigned to support KariGO SME Services pilot operations in {{pilotZone}} from {{pilotDate}}.",
+      "",
+      "Please coordinate requests manually, keep provider contact details private, avoid making payment promises, and record operational notes in the Admin Portal. Do not treat any health professional readiness record as live medical booking.",
+      "",
+      "Escalate blockers or customer safety concerns to {{supportContact}}.",
+      "",
+      "Additional note: {{customNote}}"
+    ].join("\n")
+  },
+  {
+    key: "support_staff_briefing",
+    audience: "Support staff",
+    title: "Support staff briefing",
+    subject: "KariGO SME Services pilot support briefing",
+    description: "Manual briefing text for support staff handling SME Services pilot questions and issues.",
+    suggestedChannels: ["Internal note", "Email manual copy", "Team briefing"],
+    requiredVariables: ["recipientName", "pilotZone", "pilotDate", "supportContact"],
+    bodyTemplate: [
+      "Hello {{recipientName}},",
+      "",
+      "You are assigned to support KariGO SME Services pilot participants in {{pilotZone}} from {{pilotDate}}.",
+      "",
+      "Please respond with clear pilot-stage wording, route operational issues to the operations team, and avoid sharing provider private phone numbers, emails, payment details, OTPs or internal admin notes.",
+      "",
+      "Escalate unresolved issues to {{supportContact}}.",
+      "",
+      "Additional note: {{customNote}}"
+    ].join("\n")
   }
 ] as const;
 
@@ -648,6 +754,55 @@ export class ServiceProviderRequestsService {
     };
   }
 
+  adminPilotInvitationTemplates() {
+    return {
+      templates: PILOT_INVITATION_TEMPLATES.map((template) => this.adminPilotInvitationTemplate(template)),
+      guardrails: {
+        automatedSendingEnabled: false,
+        smsEnabled: false,
+        emailEnabled: false,
+        whatsappEnabled: false,
+        pushEnabled: false,
+        liveDispatchEnabled: false,
+        livePaymentsEnabled: false,
+        providerLoginEnabled: false,
+        providerAppAccessEnabled: false,
+        medicalBookingEnabled: false,
+        note: "Templates are for manual copy/preparation only. KariGO does not send invitations from this feature."
+      },
+      safetyNote: "Do not paste passwords, OTPs, payment details, private provider contact details, sensitive medical details or live credentials into invitation templates."
+    };
+  }
+
+  adminPreviewPilotInvitationTemplate(dto: PreviewSmeServicesPilotInvitationTemplateDto) {
+    const template = PILOT_INVITATION_TEMPLATES.find((item) => item.key === dto.templateKey);
+    if (!template) {
+      throw new BadRequestException("Unknown SME Services pilot invitation template.");
+    }
+
+    const variables = {
+      recipientName: this.invitationValue(dto.recipientName, "there"),
+      pilotZone: this.invitationValue(dto.pilotZone, "the selected pilot zone"),
+      pilotDate: this.invitationValue(dto.pilotDate, "the approved pilot date"),
+      serviceFocus: this.invitationValue(dto.serviceFocus, "SME Services"),
+      supportContact: this.invitationValue(dto.supportContact, "the KariGO operations team"),
+      customNote: this.invitationValue(dto.customNote, "No additional note.")
+    };
+    const messageText = this.renderInvitationTemplate(template.bodyTemplate, variables);
+
+    return {
+      template: this.adminPilotInvitationTemplate(template),
+      preview: {
+        subject: template.subject,
+        messageText,
+        suggestedChannels: [...template.suggestedChannels],
+        copyInstructions: "Copy this text manually into the approved communication channel. This endpoint does not send SMS, email, WhatsApp, push or in-app messages.",
+        safetyNote: "Review the message before sending manually. Do not include credentials, OTPs, private provider contact details, payment details or sensitive medical information."
+      },
+      variables
+    };
+  }
+
   async adminListPilotParticipants(query: ListSmeServicesPilotParticipantsQueryDto) {
     const where: Prisma.SmeServicesPilotParticipantWhereInput = {
       ...(query.participantType ? { participantType: query.participantType } : {}),
@@ -1087,6 +1242,28 @@ export class ServiceProviderRequestsService {
 
   private optionalText(value?: string | null) {
     return value?.trim() || null;
+  }
+
+  private invitationValue(value: string | undefined, fallback: string) {
+    return value?.trim() || fallback;
+  }
+
+  private renderInvitationTemplate(template: string, variables: Record<string, string>) {
+    return Object.entries(variables).reduce((message, [key, value]) => message.replaceAll(`{{${key}}}`, value), template);
+  }
+
+  private adminPilotInvitationTemplate(template: (typeof PILOT_INVITATION_TEMPLATES)[number]) {
+    return {
+      key: template.key,
+      audience: template.audience,
+      title: template.title,
+      subject: template.subject,
+      description: template.description,
+      suggestedChannels: [...template.suggestedChannels],
+      requiredVariables: [...template.requiredVariables],
+      messageTemplate: template.bodyTemplate,
+      safetyNote: "Manual copy template only. This does not send messages or activate live SME Services operations."
+    };
   }
 
   private adminPilotLaunchDecision(decision: Prisma.SmeServicesPilotLaunchDecisionGetPayload<object>) {

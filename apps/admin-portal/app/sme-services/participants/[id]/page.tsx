@@ -116,6 +116,7 @@ export default function SmeServicesPilotParticipantDetailPage() {
     <div className="top-actions">
       <Link className="button-link" href="/sme-services/participants">Back to participants</Link>
       <Link className="button-link secondary" href="/sme-services/launch-control">Launch control</Link>
+      <Link className="button-link secondary" href="/sme-services/invitation-templates">Invitation templates</Link>
       <button className="secondary" onClick={() => void load()}>Refresh</button>
     </div>
     <p className="success">{message}</p>

@@ -15,6 +15,7 @@ import { CreateSmeServicesPilotParticipantDto } from "./dto/create-sme-services-
 import { ListServiceProvidersQueryDto } from "./dto/list-service-providers-query.dto";
 import { ListServiceProviderRequestsQueryDto } from "./dto/list-service-provider-requests-query.dto";
 import { ListSmeServicesPilotParticipantsQueryDto } from "./dto/list-sme-services-pilot-participants-query.dto";
+import { PreviewSmeServicesPilotInvitationTemplateDto } from "./dto/preview-sme-services-pilot-invitation-template.dto";
 import { RecordSmeServicesPilotLaunchDecisionDto } from "./dto/record-sme-services-pilot-launch-decision.dto";
 import { UpdateSmeServicesPilotParticipantDto } from "./dto/update-sme-services-pilot-participant.dto";
 import { UpdateSmeServicesPilotReadinessDto } from "./dto/update-sme-services-pilot-readiness.dto";
@@ -142,6 +143,18 @@ export class AdminSmeServicesPilotReadinessController {
   @ApiOperation({ summary: "Record an SME Services pilot launch Go/No-Go decision" })
   async recordLaunchDecision(@CurrentUser() user: AuthenticatedUser, @Body() dto: RecordSmeServicesPilotLaunchDecisionDto) {
     return { message: "SME Services pilot launch decision recorded", data: await this.serviceRequests.adminRecordPilotLaunchDecision(user.id, dto) };
+  }
+
+  @Get("pilot-invitation-templates")
+  @ApiOperation({ summary: "List safe SME Services pilot invitation templates for manual use" })
+  async invitationTemplates() {
+    return { message: "SME Services pilot invitation templates retrieved", data: this.serviceRequests.adminPilotInvitationTemplates() };
+  }
+
+  @Post("pilot-invitation-templates/preview")
+  @ApiOperation({ summary: "Preview a safe SME Services pilot invitation message for manual copy" })
+  async previewInvitationTemplate(@Body() dto: PreviewSmeServicesPilotInvitationTemplateDto) {
+    return { message: "SME Services pilot invitation template preview generated", data: this.serviceRequests.adminPreviewPilotInvitationTemplate(dto) };
   }
 
   @Get("pilot-participants")

@@ -69,6 +69,7 @@ export default function SmeServicesSummaryPage() {
       <Link className="button-link secondary" href="/sme-services/readiness">Pilot readiness</Link>
       <Link className="button-link secondary" href="/sme-services/launch-control">Launch control</Link>
       <Link className="button-link secondary" href="/sme-services/participants">Pilot participants</Link>
+      <Link className="button-link secondary" href="/sme-services/invitation-templates">Invitation templates</Link>
       <Link className="button-link secondary" href="/sme-services/applications">Provider applications</Link>
       <Link className="button-link secondary" href="/sme-services/providers">Provider directory</Link>
       <button className="secondary" onClick={() => void load()}>Refresh</button>

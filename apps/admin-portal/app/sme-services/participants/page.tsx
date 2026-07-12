@@ -124,6 +124,7 @@ export default function SmeServicesPilotParticipantsPage() {
     <p className="muted">Internal invitation list for controlled SME Services pilot customers, providers and observers. This page does not send real SMS, email or WhatsApp invitations, activate live dispatch, collect payments, create provider login, grant provider app access or expose public provider contacts.</p>
     <div className="top-actions">
       <Link className="button-link" href="/sme-services/launch-control">Launch control</Link>
+      <Link className="button-link secondary" href="/sme-services/invitation-templates">Invitation templates</Link>
       <Link className="button-link secondary" href="/sme-services/readiness">Pilot readiness</Link>
       <Link className="button-link secondary" href="/sme-services/summary">Operations summary</Link>
       <button className="secondary" onClick={() => void load()}>Refresh</button>

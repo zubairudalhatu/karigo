@@ -499,6 +499,59 @@ describe("ServiceProviderRequestsService admin operations", () => {
     expect(prisma.smeServicesPilotLaunchDecision.create).not.toHaveBeenCalled();
   });
 
+  it("returns safe manual SME Services pilot invitation templates", () => {
+    const result = service.adminPilotInvitationTemplates();
+
+    expect(result.templates.map((template) => template.key)).toEqual(expect.arrayContaining([
+      "customer_pilot_invitation",
+      "service_provider_pilot_invitation",
+      "internal_observer_briefing",
+      "operations_staff_briefing",
+      "support_staff_briefing"
+    ]));
+    expect(result.guardrails).toMatchObject({
+      automatedSendingEnabled: false,
+      smsEnabled: false,
+      emailEnabled: false,
+      whatsappEnabled: false,
+      pushEnabled: false,
+      liveDispatchEnabled: false,
+      livePaymentsEnabled: false,
+      providerLoginEnabled: false,
+      providerAppAccessEnabled: false,
+      medicalBookingEnabled: false
+    });
+    expect(result.safetyNote).toContain("Do not paste passwords");
+  });
+
+  it("previews SME Services pilot invitation text without sending messages", () => {
+    const result = service.adminPreviewPilotInvitationTemplate({
+      templateKey: "service_provider_pilot_invitation",
+      recipientName: "Demo Plumber",
+      pilotZone: "Nasarawa GRA",
+      pilotDate: "20 July 2026",
+      serviceFocus: "plumbing",
+      supportContact: "KariGO operations",
+      customNote: "Please wait for manual confirmation before accepting any pilot request."
+    });
+
+    expect(result.preview.subject).toBe("KariGO SME Services provider pilot invitation");
+    expect(result.preview.messageText).toContain("Hello Demo Plumber");
+    expect(result.preview.messageText).toContain("plumbing providers in Nasarawa GRA from 20 July 2026");
+    expect(result.preview.messageText).toContain("does not create provider app login");
+    expect(result.preview.messageText).toContain("Please wait for manual confirmation");
+    expect(result.preview.copyInstructions).toContain("does not send SMS, email, WhatsApp, push or in-app messages");
+    expect(result.preview.messageText).not.toContain("{{");
+    expect(result.preview.messageText).not.toContain("OTP");
+    expect(result.preview.messageText).not.toContain("payment secret");
+  });
+
+  it("rejects unknown SME Services pilot invitation templates", () => {
+    expect(() => service.adminPreviewPilotInvitationTemplate({
+      templateKey: "unknown_template"
+    })).toThrow(BadRequestException);
+  });
+
   it("lists SME Services pilot participants with filters and safe coordination guardrails", async () => {
     prisma.smeServicesPilotParticipant.findMany.mockResolvedValue([pilotParticipant]);
     prisma.smeServicesPilotParticipant.count

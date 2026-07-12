@@ -81,6 +81,7 @@ export default function SmeServicesPilotLaunchControlPage() {
       <Link className="button-link" href="/sme-services/readiness">Pilot readiness</Link>
       <Link className="button-link secondary" href="/sme-services/summary">Operations summary</Link>
       <Link className="button-link secondary" href="/sme-services/participants">Pilot participants</Link>
+      <Link className="button-link secondary" href="/sme-services/invitation-templates">Invitation templates</Link>
       <Link className="button-link secondary" href="/sme-services">Customer requests</Link>
       <button className="secondary" onClick={() => void load()}>Refresh</button>
     </div>

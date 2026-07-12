@@ -28,6 +28,7 @@ assert(shell.includes("SME Services Summary"), "Admin sidebar must include SME S
 assert(shell.includes("SME Pilot Readiness"), "Admin sidebar must include SME Services pilot readiness.");
 assert(shell.includes("SME Launch Control"), "Admin sidebar must include SME Services pilot launch control.");
 assert(shell.includes("SME Pilot Participants"), "Admin sidebar must include SME Services pilot participants.");
+assert(shell.includes("SME Invitation Templates"), "Admin sidebar must include SME Services pilot invitation templates.");
 assert(shell.includes("SME Services"), "Admin sidebar must include SME Services.");
 assert(shell.includes("SME Provider Applications"), "Admin sidebar must include SME provider applications.");
 assert(shell.includes("SME Providers"), "Admin sidebar must include SME provider directory.");
@@ -38,6 +39,7 @@ assert(smeServicesSummaryPage.includes("smeServicesApi.summary"), "Admin SME Ser
 assert(smeServicesSummaryPage.includes("/sme-services/readiness"), "Admin SME Services summary must link to pilot readiness.");
 assert(smeServicesSummaryPage.includes("/sme-services/launch-control"), "Admin SME Services summary must link to pilot launch control.");
 assert(smeServicesSummaryPage.includes("/sme-services/participants"), "Admin SME Services summary must link to pilot participants.");
+assert(smeServicesSummaryPage.includes("/sme-services/invitation-templates"), "Admin SME Services summary must link to pilot invitation templates.");
 assert(smeServicesSummaryPage.includes("Customer requests"), "Admin SME Services summary must link to customer requests.");
 assert(smeServicesSummaryPage.includes("Provider applications"), "Admin SME Services summary must link to provider applications.");
 assert(smeServicesSummaryPage.includes("Provider directory"), "Admin SME Services summary must link to provider directory.");
@@ -53,6 +55,7 @@ assert(smeServicesReadinessPage.includes("smeServicesApi.pilotReadiness"), "Admi
 assert(smeServicesReadinessPage.includes("smeServicesApi.updatePilotReadiness"), "Admin pilot readiness page must save readiness checklist updates.");
 assert(smeServicesReadinessPage.includes("/sme-services/launch-control"), "Admin pilot readiness page must link to pilot launch control.");
 assert(smeServicesReadinessPage.includes("/sme-services/participants"), "Admin pilot readiness page must link to pilot participants.");
+assert(smeServicesReadinessPage.includes("/sme-services/invitation-templates"), "Admin pilot readiness page must link to pilot invitation templates.");
 assert(smeServicesReadinessPage.includes("Save checklist"), "Admin pilot readiness page must expose a save action.");
 assert(smeServicesReadinessPage.includes("Provider directory ready"), "Admin pilot readiness page must show derived provider readiness.");
 assert(smeServicesReadinessPage.includes("does not activate live dispatch, payments, payouts, provider login, provider app access, public provider contact exposure or medical booking"), "Admin pilot readiness page must state safe operational limits.");
@@ -61,6 +64,7 @@ assert(smeServicesLaunchControlPage.includes("SME Services launch control"), "Ad
 assert(smeServicesLaunchControlPage.includes("smeServicesApi.pilotLaunchControl"), "Admin pilot launch control page must load the launch-control endpoint.");
 assert(smeServicesLaunchControlPage.includes("smeServicesApi.recordPilotLaunchDecision"), "Admin pilot launch control page must record Go/No-Go decisions.");
 assert(smeServicesLaunchControlPage.includes("/sme-services/participants"), "Admin pilot launch control page must link to pilot participants.");
+assert(smeServicesLaunchControlPage.includes("/sme-services/invitation-templates"), "Admin pilot launch control page must link to pilot invitation templates.");
 assert(smeServicesLaunchControlPage.includes("GO_INTERNAL_PILOT"), "Admin pilot launch control page must support internal pilot Go decisions.");
 assert(smeServicesLaunchControlPage.includes("NO_GO"), "Admin pilot launch control page must support No-go decisions.");
 assert(smeServicesLaunchControlPage.includes("Decision history"), "Admin pilot launch control page must show decision history.");
@@ -69,6 +73,7 @@ const smeServicesParticipantsPage = read("app", "sme-services", "participants", 
 assert(smeServicesParticipantsPage.includes("SME Services pilot participants"), "Admin SME Services pilot participants page must exist.");
 assert(smeServicesParticipantsPage.includes("smeServicesApi.pilotParticipants"), "Admin pilot participants page must load participant records.");
 assert(smeServicesParticipantsPage.includes("smeServicesApi.createPilotParticipant"), "Admin pilot participants page must create participant records.");
+assert(smeServicesParticipantsPage.includes("/sme-services/invitation-templates"), "Admin pilot participants page must link to pilot invitation templates.");
 assert(smeServicesParticipantsPage.includes("does not send real SMS, email or WhatsApp invitations"), "Admin pilot participants page must state invitation safety limits.");
 assert(smeServicesParticipantsPage.includes("Create participant"), "Admin pilot participants page must expose a create action.");
 assert(!smeServicesParticipantsPage.includes("Send invitation"), "Admin pilot participants page must not expose real invitation sending.");
@@ -76,7 +81,15 @@ const smeServicesParticipantDetailPage = read("app", "sme-services", "participan
 assert(smeServicesParticipantDetailPage.includes("SME Services pilot participant"), "Admin SME Services pilot participant detail page must exist.");
 assert(smeServicesParticipantDetailPage.includes("smeServicesApi.pilotParticipant"), "Admin pilot participant detail page must load one record.");
 assert(smeServicesParticipantDetailPage.includes("smeServicesApi.updatePilotParticipant"), "Admin pilot participant detail page must update one record.");
+assert(smeServicesParticipantDetailPage.includes("/sme-services/invitation-templates"), "Admin pilot participant detail page must link to pilot invitation templates.");
 assert(smeServicesParticipantDetailPage.includes("does not send invitations, activate live dispatch, grant provider login"), "Admin participant detail page must state safe operational limits.");
+const smeServicesInvitationTemplatesPage = read("app", "sme-services", "invitation-templates", "page.tsx");
+assert(smeServicesInvitationTemplatesPage.includes("SME Services invitation templates"), "Admin SME Services invitation templates page must exist.");
+assert(smeServicesInvitationTemplatesPage.includes("smeServicesApi.pilotInvitationTemplates"), "Admin invitation templates page must load templates.");
+assert(smeServicesInvitationTemplatesPage.includes("smeServicesApi.previewPilotInvitationTemplate"), "Admin invitation templates page must preview manual invitation text.");
+assert(smeServicesInvitationTemplatesPage.includes("does not send SMS, email, WhatsApp, push or in-app invitations"), "Admin invitation templates page must state no automated sending.");
+assert(smeServicesInvitationTemplatesPage.includes("Copy preview text"), "Admin invitation templates page must support manual copy.");
+assert(!smeServicesInvitationTemplatesPage.includes("Send SMS") && !smeServicesInvitationTemplatesPage.includes("Send email") && !smeServicesInvitationTemplatesPage.includes("Send WhatsApp"), "Admin invitation templates page must not expose sending actions.");
 const smeServicesPage = read("app", "sme-services", "page.tsx");
 assert(smeServicesPage.includes("SME Services"), "Admin SME Services list page must exist.");
 assert(smeServicesPage.includes("does not dispatch providers"), "Admin SME Services list must state safe review-only limits.");
@@ -122,6 +135,7 @@ assert(smeServicesApiSource.includes("admin/service-provider-requests/report"), 
 assert(smeServicesApiSource.includes("admin/sme-services/pilot-readiness"), "Admin portal must call admin SME Services pilot readiness endpoint.");
 assert(smeServicesApiSource.includes("admin/sme-services/pilot-launch-control"), "Admin portal must call admin SME Services pilot launch control endpoint.");
 assert(smeServicesApiSource.includes("admin/sme-services/pilot-participants"), "Admin portal must call admin SME Services pilot participants endpoint.");
+assert(smeServicesApiSource.includes("admin/sme-services/pilot-invitation-templates"), "Admin portal must call admin SME Services pilot invitation template endpoint.");
 assert(smeServicesApiSource.includes("SmeServicesPilotReadiness"), "Admin portal must type the SME Services pilot readiness response.");
 assert(smeServicesApiSource.includes("updatePilotReadiness"), "Admin portal must support pilot readiness checklist updates.");
 assert(smeServicesApiSource.includes("SmeServicesPilotLaunchControl"), "Admin portal must type the SME Services pilot launch control response.");
@@ -129,6 +143,8 @@ assert(smeServicesApiSource.includes("recordPilotLaunchDecision"), "Admin portal
 assert(smeServicesApiSource.includes("SmeServicesPilotParticipant"), "Admin portal must type SME Services pilot participants.");
 assert(smeServicesApiSource.includes("createPilotParticipant"), "Admin portal must support creating SME Services pilot participants.");
 assert(smeServicesApiSource.includes("updatePilotParticipant"), "Admin portal must support updating SME Services pilot participants.");
+assert(smeServicesApiSource.includes("SmeServicesPilotInvitationTemplate"), "Admin portal must type SME Services pilot invitation templates.");
+assert(smeServicesApiSource.includes("previewPilotInvitationTemplate"), "Admin portal must support previewing SME Services pilot invitation templates.");
 assert(smeServicesApiSource.includes("SmeServicesPilotReport"), "Admin portal must type the SME Services pilot report response.");
 assert(smeServicesApiSource.includes("markdown: string"), "Admin report response must expose generated Markdown content.");
 assert(smeServicesApiSource.includes("admin/service-provider-requests"), "Admin portal must call admin SME Services endpoints.");

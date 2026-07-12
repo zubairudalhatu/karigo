@@ -373,6 +373,48 @@ export interface SmeServicesPilotParticipantsListResponse {
   };
 }
 
+export interface SmeServicesPilotInvitationTemplate {
+  key: string;
+  audience: string;
+  title: string;
+  subject: string;
+  description: string;
+  suggestedChannels: string[];
+  requiredVariables: string[];
+  messageTemplate: string;
+  safetyNote: string;
+}
+
+export interface SmeServicesPilotInvitationTemplatesResponse {
+  templates: SmeServicesPilotInvitationTemplate[];
+  guardrails: {
+    automatedSendingEnabled: boolean;
+    smsEnabled: boolean;
+    emailEnabled: boolean;
+    whatsappEnabled: boolean;
+    pushEnabled: boolean;
+    liveDispatchEnabled: boolean;
+    livePaymentsEnabled: boolean;
+    providerLoginEnabled: boolean;
+    providerAppAccessEnabled: boolean;
+    medicalBookingEnabled: boolean;
+    note: string;
+  };
+  safetyNote: string;
+}
+
+export interface SmeServicesPilotInvitationPreview {
+  template: SmeServicesPilotInvitationTemplate;
+  preview: {
+    subject: string;
+    messageText: string;
+    suggestedChannels: string[];
+    copyInstructions: string;
+    safetyNote: string;
+  };
+  variables: Record<string, string>;
+}
+
 export const smeServicesApi = {
   summary: () => api.get<SmeServicesOperationsSummary>("admin/service-provider-requests/summary"),
   report: () => api.get<SmeServicesPilotReport>("admin/service-provider-requests/report"),
@@ -391,6 +433,16 @@ export const smeServicesApi = {
   createPilotParticipant: (payload: Partial<SmeServicesPilotParticipant>) => api.post<SmeServicesPilotParticipant>("admin/sme-services/pilot-participants", payload),
   pilotParticipant: (id: string) => api.get<SmeServicesPilotParticipant>(`admin/sme-services/pilot-participants/${id}`),
   updatePilotParticipant: (id: string, payload: Partial<SmeServicesPilotParticipant>) => api.patch<SmeServicesPilotParticipant>(`admin/sme-services/pilot-participants/${id}`, payload),
+  pilotInvitationTemplates: () => api.get<SmeServicesPilotInvitationTemplatesResponse>("admin/sme-services/pilot-invitation-templates"),
+  previewPilotInvitationTemplate: (payload: {
+    templateKey: string;
+    recipientName?: string;
+    pilotZone?: string;
+    pilotDate?: string;
+    serviceFocus?: string;
+    supportContact?: string;
+    customNote?: string;
+  }) => api.post<SmeServicesPilotInvitationPreview>("admin/sme-services/pilot-invitation-templates/preview", payload),
   list: (q = "") => api.get<SmeServicesListResponse>(`admin/service-provider-requests${q ? `?${q}` : ""}`),
   detail: (id: string) => api.get<SmeServiceRequest>(`admin/service-provider-requests/${id}`),
   status: (id: string, status: ServiceProviderRequestStatus, adminNote?: string, customerNote?: string) =>
