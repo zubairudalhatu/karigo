@@ -2,7 +2,7 @@ import { Image, StyleSheet, Text } from "react-native";
 import { router } from "expo-router";
 import { useState } from "react";
 import { brand } from "@karigo/config";
-import { Button, Field, Message, Screen } from "../../src/components/ui";
+import { Button, Field, Message, PasswordField, Screen } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 
@@ -10,6 +10,7 @@ export default function RiderLogin() {
   const { login } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -31,7 +32,7 @@ export default function RiderLogin() {
       <Text style={styles.title}>Rider login</Text>
       <Text style={styles.copy}>Sign in with your approved rider account.</Text>
       <Field placeholder="+234..." keyboardType="phone-pad" value={phoneNumber} onChangeText={setPhoneNumber} />
-      <Field placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} />
+      <PasswordField placeholder="Password" visible={passwordVisible} onToggleVisible={() => setPasswordVisible((visible) => !visible)} value={password} onChangeText={setPassword} />
       <Message error>{error}</Message>
       <Button title={busy ? "Signing in..." : "Sign in"} disabled={busy || !phoneNumber || !password} onPress={submit} />
     </Screen>

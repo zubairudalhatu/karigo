@@ -20,8 +20,12 @@ details in Git.
 | App installs | Internal build installs without replacing production app | Pending |  |
 | Splash/logo loads | KariGO logo displays cleanly | Pending |  |
 | Login works | Demo rider can sign in | Pending | Use secure credential handover |
+| Password visibility toggle works | Rider can show/hide the password field while typing | Pending | Do not record passwords |
 | Session is isolated | Rider token does not conflict with Customer/Admin/Vendor sessions | Pending | Uses Rider-specific secure-store key |
 | Rider profile loads | Profile screen shows rider data | Pending |  |
+| Dashboard summary loads | Dashboard shows rider name, availability, today's assigned deliveries, active delivery and completed delivery count | Pending |  |
+| Staging safety note shows | Dashboard states live payouts, withdrawals, live taxi booking and live payment collection are disabled | Pending |  |
+| Support/help guidance shows | Dashboard gives rider a safe operations/support escalation prompt | Pending |  |
 | Online/offline works | Availability updates through staging API | Pending |  |
 | Job list loads | Assigned jobs display or safe empty state appears | Pending |  |
 | Assigned job opens | Job detail loads correctly | Pending |  |
@@ -30,7 +34,8 @@ details in Git.
 | Pickup status works | Pickup status updates safely | Pending |  |
 | On-the-way status works | Delivery status updates safely | Pending |  |
 | Arrived status works | Arrived-at-destination status updates safely | Pending |  |
-| Delivery OTP completion works | Correct OTP completes delivery | Pending | Do not record OTP |
+| OTP hidden before delivered | OTP card does not appear at `ARRIVED_DESTINATION` | Pending | Rider should mark delivered first |
+| Delivery OTP completion works | Correct OTP completes delivery after `DELIVERED` | Pending | Do not record OTP |
 | Rider cannot view OTP | Rider app only accepts customer-supplied OTP; it does not retrieve/display the code | Fixed | OTP comes from Customer App reveal |
 | Invalid OTP is rejected | Wrong code fails safely and order remains active | Pending |  |
 | Valid OTP completes order | Customer-supplied code moves order to completed and clears code | Pending |  |
@@ -51,7 +56,8 @@ Use staging data only. The backend remains the source of truth for valid transit
 5. Rider starts delivery: `ON_THE_WAY`.
 6. Rider confirms arrival: `ARRIVED_DESTINATION`.
 7. Rider marks delivered: `DELIVERED`.
-8. Rider completes delivery with the customer OTP: order should become completed according to backend workflow.
+8. Rider enters the customer-supplied OTP only after `DELIVERED`.
+9. Rider completes delivery with the customer OTP: order should become completed according to backend workflow.
 
 ## Delivery OTP Verification Checklist
 

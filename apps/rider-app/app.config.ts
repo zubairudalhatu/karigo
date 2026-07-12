@@ -3,6 +3,8 @@ const isStaging =
   process.env.EAS_BUILD_PROFILE === "rider-staging" ||
   process.env.EAS_BUILD_PROFILE === "rider-staging-ios-simulator";
 
+const riderEasProjectId = "344a78dc-69d9-4daa-9616-f100b67f0910";
+
 type ExpoConfigInput = {
   config: {
     android?: Record<string, unknown>;
@@ -19,10 +21,12 @@ const objectValue = (value: unknown): Record<string, unknown> =>
 export default ({ config }: ExpoConfigInput) => {
   const extra = objectValue(config.extra);
   const existingEas = objectValue(extra.eas);
-  const { projectId: _projectId, ...safeEas } = existingEas;
   const existingUpdates = objectValue(config.updates);
-  const { url: _updatesUrl, ...safeUpdates } = existingUpdates;
-  const hasSafeUpdates = Object.keys(safeUpdates).length > 0;
+  const safeEas = { ...existingEas, projectId: riderEasProjectId };
+  const safeUpdates = {
+    ...existingUpdates,
+    url: `https://u.expo.dev/${riderEasProjectId}`
+  };
 
   return {
     ...config,
@@ -36,7 +40,7 @@ export default ({ config }: ExpoConfigInput) => {
       resizeMode: "contain",
       backgroundColor: "#FFFFFF"
     },
-    ...(hasSafeUpdates ? { updates: safeUpdates } : {}),
+    updates: safeUpdates,
     runtimeVersion: {
       policy: "appVersion"
     },
@@ -52,7 +56,7 @@ export default ({ config }: ExpoConfigInput) => {
       ...extra,
       router: {},
       apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
-      ...(Object.keys(safeEas).length > 0 ? { eas: safeEas } : {})
+      eas: safeEas
     }
   };
 };

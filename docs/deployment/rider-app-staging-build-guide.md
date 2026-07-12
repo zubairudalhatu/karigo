@@ -19,14 +19,14 @@ The Rider app is now linked to the approved Expo project:
 
 - Expo account: `@zamkah`
 - Project slug: `karigo-rider`
-- EAS project ID: `344a78dc-69d3-4aa-9616-fb1b067f0910`
+- EAS project ID: `344a78dc-69d9-4daa-9616-f100b67f0910`
 
 Builds should use the existing Rider project. Do not create a second Rider Expo project.
 Project IDs are not secrets, but Expo access tokens, signing credentials, and local
 `.env` files must stay out of Git.
 
 EAS Update is configured for the Rider project through
-`https://u.expo.dev/344a78dc-69d3-4aa-9616-fb1b067f0910` with runtime version policy
+`https://u.expo.dev/344a78dc-69d9-4daa-9616-f100b67f0910` with runtime version policy
 `appVersion`, matching the Customer App staging setup.
 
 ## Build Command
@@ -75,12 +75,16 @@ passwords, tokens, delivery OTPs, full phone numbers, or device identifiers in G
 2. Open the app and confirm KariGO branding loads.
 3. Log in with the demo rider account from the secure staging credential handover.
 4. Confirm the dashboard loads from the Render staging API.
-5. Toggle rider availability to online.
-6. Confirm assigned jobs list loads or the safe empty state appears.
-7. Open an assigned job.
-8. Accept the job or reject with a reason during a controlled test.
-9. Progress the delivery through pickup, on-the-way, arrival, delivered, and OTP completion.
-10. Confirm earnings, notifications, and profile screens load.
+5. Confirm the dashboard shows rider name, availability, today's assigned deliveries,
+   active delivery, completed delivery summary, support/help copy, and staging safety note.
+6. Toggle rider availability to online.
+7. Confirm assigned jobs list loads or the safe empty state appears.
+8. Open an assigned job.
+9. Accept the job or reject with a controlled reason during a controlled test.
+10. Progress the delivery through pickup, on-the-way, arrival, and delivered.
+11. Confirm the delivery OTP entry appears only after the job is marked `DELIVERED`.
+12. Complete delivery with the customer-supplied OTP.
+13. Confirm earnings, notifications, and profile screens load.
 
 ## Expected Order Status Progression
 
@@ -107,6 +111,8 @@ do not force a client-side workaround.
 - Valid OTP should complete delivery.
 - The app should show "Delivery completed successfully."
 - Earnings and order history should update after completion.
+- Rider app must not retrieve or display the OTP; it should only accept the
+  customer-supplied code after `DELIVERED`.
 
 ## Troubleshooting
 
