@@ -177,11 +177,22 @@ assert(bottomNav.includes("pathname.startsWith(\"/auth\")"), "Bottom navigation 
 assert(bottomNav.includes("\"/sme-services\""), "Bottom navigation Browse tab must stay active for SME Services screens.");
 
 const profile = read("app", "profile.tsx");
+assert(profile.includes("Your KariGO account"), "Profile must show the redesigned account hub heading.");
+assert(profile.includes("Manage your orders, wallet, addresses and support."), "Profile hub must explain account management scope.");
+assert(profile.includes("Manage your KariGO"), "Profile must group primary customer actions.");
 assert(profile.includes("Saved addresses"), "Addresses must be accessible from Profile.");
 assert(profile.includes("Support centre"), "Support must be accessible from Profile.");
+assert(profile.includes("Notifications"), "Notifications must be accessible from Profile.");
+assert(profile.includes("Orders"), "Order history must be accessible from Profile.");
 assert(profile.includes("SME Services requests"), "SME Services request history must be accessible from Profile.");
 assert(profile.includes("Utility test history"), "Utility history must be accessible from Profile.");
 assert(profile.includes("Become a KariGO Vendor"), "Profile must link to public vendor application flow.");
+assert(profile.includes("KariGO Wallet"), "Profile must reserve a future wallet surface.");
+assert(profile.includes("Referral rewards"), "Profile must reserve a future referral surface.");
+assert(profile.includes("KariGO Plus"), "Profile must reserve a future subscription surface.");
+assert(profile.includes("Coming soon"), "Future profile areas must remain clearly marked as inactive placeholders.");
+assert(profile.includes("No live wallet, referral reward or subscription action is enabled."), "Profile placeholders must state that live value features are not active.");
+assert(!profile.includes("wallet top-up"), "Profile must not activate wallet top-up language.");
 
 const utilitiesApi = read("src", "api", "utilities.api.ts");
 assert(utilitiesApi.includes("utilities/providers"), "Customer utilities API must load public providers.");
