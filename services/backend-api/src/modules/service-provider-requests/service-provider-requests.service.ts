@@ -8,6 +8,7 @@ import { CreateServiceProviderDto } from "./dto/create-service-provider.dto";
 import { CreateServiceProviderRequestDto } from "./dto/create-service-provider-request.dto";
 import { ListServiceProvidersQueryDto } from "./dto/list-service-providers-query.dto";
 import { ListServiceProviderRequestsQueryDto } from "./dto/list-service-provider-requests-query.dto";
+import { UpdateSmeServicesPilotReadinessDto } from "./dto/update-sme-services-pilot-readiness.dto";
 import { UpdateServiceProviderDto } from "./dto/update-service-provider.dto";
 import { UpdateServiceProviderRequestStatusDto } from "./dto/update-service-provider-request-status.dto";
 
@@ -35,6 +36,89 @@ const SERVICE_CATALOGUE: Array<{
   },
   { type: ServiceProviderType.OTHER, label: "Other approved service provider", description: "Describe another service need for KariGO review." }
 ];
+
+const PILOT_READINESS_ITEMS = [
+  {
+    key: "pilot_scope_confirmed",
+    category: "Operations",
+    label: "Pilot scope confirmed",
+    description: "Pilot zones, invited customer group, supported service categories and internal owners are agreed.",
+    sortOrder: 10,
+    isRequired: true
+  },
+  {
+    key: "provider_review_queue_clear",
+    category: "Providers",
+    label: "Provider application review queue checked",
+    description: "Provider applications have been reviewed, rejected, or moved into the correct onboarding status before pilot invitations.",
+    sortOrder: 20,
+    isRequired: true
+  },
+  {
+    key: "approved_provider_directory_ready",
+    category: "Providers",
+    label: "Approved provider directory ready",
+    description: "Approved non-readiness-only provider records are available for manual matching and assignment where appropriate.",
+    sortOrder: 30,
+    isRequired: true
+  },
+  {
+    key: "health_readiness_blocked",
+    category: "Compliance",
+    label: "Health professional category remains blocked",
+    description: "Doctor and health professional records remain readiness-only until compliance, policy and management approvals are complete.",
+    sortOrder: 40,
+    isRequired: true
+  },
+  {
+    key: "customer_request_flow_verified",
+    category: "Customer Flow",
+    label: "Customer request flow verified",
+    description: "Customer App SME Services submission, request history and request detail/status tracking have been tested in staging.",
+    sortOrder: 50,
+    isRequired: true
+  },
+  {
+    key: "admin_review_notes_ready",
+    category: "Admin Operations",
+    label: "Admin review notes ready",
+    description: "Internal admin notes and customer-visible update notes are available and used without exposing private provider details.",
+    sortOrder: 60,
+    isRequired: true
+  },
+  {
+    key: "support_escalation_ready",
+    category: "Support",
+    label: "Support escalation route ready",
+    description: "Support and operations owners know how to escalate SME Services pilot issues, disputes, cancellations and safety concerns.",
+    sortOrder: 70,
+    isRequired: true
+  },
+  {
+    key: "pilot_report_export_ready",
+    category: "Management",
+    label: "Pilot report export ready",
+    description: "Admin can generate the SME Services pilot report for internal management review without exposing sensitive contact details.",
+    sortOrder: 80,
+    isRequired: true
+  },
+  {
+    key: "provider_contact_privacy_confirmed",
+    category: "Privacy",
+    label: "Provider contact privacy confirmed",
+    description: "Customer-facing responses and screens do not expose provider phone numbers, emails, private admin notes, OTPs or payment data.",
+    sortOrder: 90,
+    isRequired: true
+  },
+  {
+    key: "manual_coordination_script_ready",
+    category: "Operations",
+    label: "Manual coordination script ready",
+    description: "Operations has a simple call/message script for coordinating the customer and provider during the internal pilot.",
+    sortOrder: 100,
+    isRequired: false
+  }
+] as const;
 
 @Injectable()
 export class ServiceProviderRequestsService {
@@ -432,6 +516,79 @@ export class ServiceProviderRequestsService {
     };
   }
 
+  async adminPilotReadiness() {
+    await this.ensurePilotReadinessItems();
+
+    const [items, summary] = await Promise.all([
+      this.prisma.smeServicesPilotReadinessItem.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }] }),
+      this.adminSummary()
+    ]);
+    const requiredItems = items.filter((item) => item.isRequired);
+    const optionalItems = items.filter((item) => !item.isRequired);
+    const requiredCompleted = requiredItems.filter((item) => item.isCompleted).length;
+    const optionalCompleted = optionalItems.filter((item) => item.isCompleted).length;
+    const approvedProvidersReady = summary.providers.approved > 0;
+    const providerQueueReady = summary.providerApplications.pending === 0;
+    const readyForPilot = requiredCompleted === requiredItems.length && approvedProvidersReady;
+
+    return {
+      status: readyForPilot ? "READY_FOR_INTERNAL_PILOT" : "NOT_READY",
+      requiredTotal: requiredItems.length,
+      requiredCompleted,
+      optionalTotal: optionalItems.length,
+      optionalCompleted,
+      items: items.map((item) => ({
+        id: item.id,
+        key: item.key,
+        category: item.category,
+        label: item.label,
+        description: item.description,
+        sortOrder: item.sortOrder,
+        isRequired: item.isRequired,
+        isCompleted: item.isCompleted,
+        note: item.note,
+        completedAt: item.completedAt,
+        updatedAt: item.updatedAt
+      })),
+      systemSnapshot: {
+        approvedProviders: summary.providers.approved,
+        pendingProviderApplications: summary.providerApplications.pending,
+        activeRequests: summary.requests.active,
+        readinessOnlyProviders: summary.providers.readinessOnly,
+        healthProfessionalReadinessApplications: summary.providerApplications.healthProfessionalReadiness,
+        approvedProvidersReady,
+        providerQueueReady
+      },
+      guardrails: summary.guardrails,
+      safetyNote: "This checklist is internal only. Completing it does not activate live dispatch, payments, payouts, provider login, provider app access, medical booking or public provider contact exposure."
+    };
+  }
+
+  async adminUpdatePilotReadiness(adminUserId: string, dto: UpdateSmeServicesPilotReadinessDto) {
+    await this.ensurePilotReadinessItems();
+    const allowedKeys = new Set<string>(PILOT_READINESS_ITEMS.map((item) => item.key));
+    const updates = dto.items.filter((item) => allowedKeys.has(item.key));
+    const ignoredKeys = dto.items.map((item) => item.key).filter((key) => !allowedKeys.has(key));
+
+    await Promise.all(updates.map((item) => this.prisma.smeServicesPilotReadinessItem.update({
+      where: { key: item.key },
+      data: {
+        isCompleted: item.isCompleted,
+        note: this.optionalText(item.note),
+        updatedByAdminId: adminUserId,
+        completedAt: item.isCompleted ? new Date() : null
+      }
+    })));
+
+    await this.audit.record(adminUserId, "sme_services.pilot_readiness_updated", "SmeServicesPilotReadiness", "pilot-readiness", {
+      updatedKeys: updates.map((item) => item.key),
+      ignoredKeys,
+      completedCount: updates.filter((item) => item.isCompleted).length
+    });
+
+    return this.adminPilotReadiness();
+  }
+
   async adminDetail(requestId: string) {
     const request = await this.prisma.serviceProviderRequest.findUnique({
       where: { id: requestId },
@@ -698,6 +855,20 @@ export class ServiceProviderRequestsService {
 
   private optionalText(value?: string | null) {
     return value?.trim() || null;
+  }
+
+  private async ensurePilotReadinessItems() {
+    await Promise.all(PILOT_READINESS_ITEMS.map((item) => this.prisma.smeServicesPilotReadinessItem.upsert({
+      where: { key: item.key },
+      update: {
+        category: item.category,
+        label: item.label,
+        description: item.description,
+        sortOrder: item.sortOrder,
+        isRequired: item.isRequired
+      },
+      create: item
+    })));
   }
 
   private reportDate(value: Date | string) {

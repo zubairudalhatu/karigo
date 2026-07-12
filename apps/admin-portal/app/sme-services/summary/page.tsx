@@ -66,6 +66,7 @@ export default function SmeServicesSummaryPage() {
     <p className="muted">Internal pilot dashboard for request review, provider application review and provider directory activity. This page does not activate live dispatch, payment collection, provider payouts, provider login or medical booking.</p>
     <div className="top-actions">
       <Link className="button-link" href="/sme-services">Customer requests</Link>
+      <Link className="button-link secondary" href="/sme-services/readiness">Pilot readiness</Link>
       <Link className="button-link secondary" href="/sme-services/applications">Provider applications</Link>
       <Link className="button-link secondary" href="/sme-services/providers">Provider directory</Link>
       <button className="secondary" onClick={() => void load()}>Refresh</button>

@@ -62,6 +62,22 @@ const provider = {
   updatedAt: now
 };
 
+const readinessItem = {
+  id: "00000000-0000-0000-0000-000000000a01",
+  key: "pilot_scope_confirmed",
+  category: "Operations",
+  label: "Pilot scope confirmed",
+  description: "Pilot zones, invited customer group, supported service categories and internal owners are agreed.",
+  sortOrder: 10,
+  isRequired: true,
+  isCompleted: false,
+  note: null,
+  updatedByAdminId: null,
+  completedAt: null,
+  createdAt: now,
+  updatedAt: now
+};
+
 describe("ServiceProviderRequestsService admin operations", () => {
   const prisma = {
     customerProfile: { findUnique: jest.fn() },
@@ -85,6 +101,11 @@ describe("ServiceProviderRequestsService admin operations", () => {
       findMany: jest.fn(),
       count: jest.fn()
     },
+    smeServicesPilotReadinessItem: {
+      upsert: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn()
+    },
     adminAuditLog: { findMany: jest.fn() }
   };
   const audit = { record: jest.fn() };
@@ -97,6 +118,46 @@ describe("ServiceProviderRequestsService admin operations", () => {
     jest.clearAllMocks();
     audit.record.mockResolvedValue({});
   });
+
+  function mockAdminSummaryQueries() {
+    prisma.serviceProviderRequest.count
+      .mockResolvedValueOnce(8)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0);
+    prisma.serviceProviderApplication.count
+      .mockResolvedValueOnce(7)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1);
+    prisma.serviceProvider.count
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1);
+    prisma.serviceProviderRequest.findMany.mockResolvedValue([request]);
+    prisma.serviceProviderApplication.findMany.mockResolvedValue([{
+      id: "00000000-0000-0000-0000-000000000901",
+      applicationReference: "KGO-SPA-2026-001",
+      fullName: "Demo Applicant",
+      businessName: "Demo Services",
+      serviceType: ServiceProviderType.PLUMBER,
+      status: ServiceProviderApplicationStatus.SUBMITTED,
+      submittedAt: now,
+      updatedAt: now
+    }]);
+    prisma.serviceProvider.findMany.mockResolvedValue([provider]);
+  }
 
   it("lists SME Services requests with safe filters and summary counts", async () => {
     prisma.serviceProviderRequest.findMany.mockResolvedValue([request]);
@@ -244,6 +305,69 @@ describe("ServiceProviderRequestsService admin operations", () => {
     expect(result.markdown).not.toContain("provider@karigo.local");
     expect(result.markdown).not.toContain("Internal admin");
     expect(result.summary.guardrails.providerLoginEnabled).toBe(false);
+  });
+
+  it("returns a persistent internal pilot readiness checklist with system snapshot", async () => {
+    prisma.smeServicesPilotReadinessItem.upsert.mockResolvedValue(readinessItem);
+    prisma.smeServicesPilotReadinessItem.findMany.mockResolvedValue([readinessItem]);
+    mockAdminSummaryQueries();
+
+    const result = await service.adminPilotReadiness();
+
+    expect(prisma.smeServicesPilotReadinessItem.upsert).toHaveBeenCalled();
+    expect(result.status).toBe("NOT_READY");
+    expect(result.requiredTotal).toBe(1);
+    expect(result.requiredCompleted).toBe(0);
+    expect(result.items[0]).toMatchObject({
+      key: "pilot_scope_confirmed",
+      isRequired: true,
+      isCompleted: false
+    });
+    expect(result.systemSnapshot).toMatchObject({
+      approvedProviders: 2,
+      pendingProviderApplications: 4,
+      approvedProvidersReady: true,
+      providerQueueReady: false
+    });
+    expect(result.guardrails.liveDispatchEnabled).toBe(false);
+    expect(result.safetyNote).toContain("does not activate live dispatch");
+  });
+
+  it("updates internal pilot readiness items without activating live operations", async () => {
+    const completedItem = {
+      ...readinessItem,
+      isCompleted: true,
+      note: "Reviewed by operations",
+      updatedByAdminId: "admin-user",
+      completedAt: now
+    };
+    prisma.smeServicesPilotReadinessItem.upsert.mockResolvedValue(readinessItem);
+    prisma.smeServicesPilotReadinessItem.update.mockResolvedValue(completedItem);
+    prisma.smeServicesPilotReadinessItem.findMany.mockResolvedValue([completedItem]);
+    mockAdminSummaryQueries();
+
+    const result = await service.adminUpdatePilotReadiness("admin-user", {
+      items: [
+        { key: "pilot_scope_confirmed", isCompleted: true, note: "Reviewed by operations" },
+        { key: "unknown_key", isCompleted: true, note: "Ignored" }
+      ]
+    });
+
+    expect(prisma.smeServicesPilotReadinessItem.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { key: "pilot_scope_confirmed" },
+      data: expect.objectContaining({
+        isCompleted: true,
+        note: "Reviewed by operations",
+        updatedByAdminId: "admin-user"
+      })
+    }));
+    expect(audit.record).toHaveBeenCalledWith("admin-user", "sme_services.pilot_readiness_updated", "SmeServicesPilotReadiness", "pilot-readiness", {
+      updatedKeys: ["pilot_scope_confirmed"],
+      ignoredKeys: ["unknown_key"],
+      completedCount: 1
+    });
+    expect(result.requiredCompleted).toBe(1);
+    expect(result.guardrails.livePaymentsEnabled).toBe(false);
   });
 
   it("returns admin detail with review history", async () => {

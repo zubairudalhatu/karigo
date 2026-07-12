@@ -13,6 +13,7 @@ import { CreateServiceProviderDto } from "./dto/create-service-provider.dto";
 import { CreateServiceProviderRequestDto } from "./dto/create-service-provider-request.dto";
 import { ListServiceProvidersQueryDto } from "./dto/list-service-providers-query.dto";
 import { ListServiceProviderRequestsQueryDto } from "./dto/list-service-provider-requests-query.dto";
+import { UpdateSmeServicesPilotReadinessDto } from "./dto/update-sme-services-pilot-readiness.dto";
 import { UpdateServiceProviderDto } from "./dto/update-service-provider.dto";
 import { UpdateServiceProviderRequestStatusDto } from "./dto/update-service-provider-request-status.dto";
 import { ServiceProviderRequestsService } from "./service-provider-requests.service";
@@ -103,6 +104,28 @@ export class AdminServiceProviderRequestsController {
     @Body() dto: AssignServiceProviderDto
   ) {
     return { message: "SME Services provider assignment recorded", data: await this.serviceRequests.adminAssignProvider(user.id, requestId, dto) };
+  }
+}
+
+@ApiTags("Admin SME Services Pilot Readiness")
+@ApiBearerAuth()
+@Controller("admin/sme-services")
+@UseGuards(JwtAuthGuard, RolesGuard, AdminRolesGuard)
+@Roles(UserRole.ADMIN)
+@AdminRoles(...SERVICE_REQUEST_ADMINS)
+export class AdminSmeServicesPilotReadinessController {
+  constructor(private readonly serviceRequests: ServiceProviderRequestsService) {}
+
+  @Get("pilot-readiness")
+  @ApiOperation({ summary: "Get SME Services pilot readiness checklist" })
+  async readiness() {
+    return { message: "SME Services pilot readiness checklist retrieved", data: await this.serviceRequests.adminPilotReadiness() };
+  }
+
+  @Patch("pilot-readiness")
+  @ApiOperation({ summary: "Update SME Services pilot readiness checklist" })
+  async updateReadiness(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateSmeServicesPilotReadinessDto) {
+    return { message: "SME Services pilot readiness checklist updated", data: await this.serviceRequests.adminUpdatePilotReadiness(user.id, dto) };
   }
 }
 

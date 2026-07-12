@@ -232,9 +232,46 @@ export interface SmeServicesPilotReport {
   markdown: string;
 }
 
+export interface SmeServicesPilotReadinessItem {
+  id: string;
+  key: string;
+  category: string;
+  label: string;
+  description: string;
+  sortOrder: number;
+  isRequired: boolean;
+  isCompleted: boolean;
+  note?: string | null;
+  completedAt?: string | null;
+  updatedAt: string;
+}
+
+export interface SmeServicesPilotReadiness {
+  status: "READY_FOR_INTERNAL_PILOT" | "NOT_READY";
+  requiredTotal: number;
+  requiredCompleted: number;
+  optionalTotal: number;
+  optionalCompleted: number;
+  items: SmeServicesPilotReadinessItem[];
+  systemSnapshot: {
+    approvedProviders: number;
+    pendingProviderApplications: number;
+    activeRequests: number;
+    readinessOnlyProviders: number;
+    healthProfessionalReadinessApplications: number;
+    approvedProvidersReady: boolean;
+    providerQueueReady: boolean;
+  };
+  guardrails: SmeServicesOperationsSummary["guardrails"];
+  safetyNote: string;
+}
+
 export const smeServicesApi = {
   summary: () => api.get<SmeServicesOperationsSummary>("admin/service-provider-requests/summary"),
   report: () => api.get<SmeServicesPilotReport>("admin/service-provider-requests/report"),
+  pilotReadiness: () => api.get<SmeServicesPilotReadiness>("admin/sme-services/pilot-readiness"),
+  updatePilotReadiness: (items: Array<{ key: string; isCompleted: boolean; note?: string | null }>) =>
+    api.patch<SmeServicesPilotReadiness>("admin/sme-services/pilot-readiness", { items }),
   list: (q = "") => api.get<SmeServicesListResponse>(`admin/service-provider-requests${q ? `?${q}` : ""}`),
   detail: (id: string) => api.get<SmeServiceRequest>(`admin/service-provider-requests/${id}`),
   status: (id: string, status: ServiceProviderRequestStatus, adminNote?: string, customerNote?: string) =>
