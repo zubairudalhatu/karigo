@@ -1,13 +1,15 @@
 import { Type } from "class-transformer";
-import { IsDateString, IsEmail, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
+import { IsDateString, IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
 import { TaxiVehicleOwnership, TaxiVehicleType } from "@prisma/client";
 
 export class CreateTaxiDriverApplicationDto {
   @IsString()
+  @IsNotEmpty()
   @MaxLength(120)
   fullName!: string;
 
   @IsString()
+  @IsNotEmpty()
   @MaxLength(32)
   phoneNumber!: string;
 
@@ -17,61 +19,59 @@ export class CreateTaxiDriverApplicationDto {
   email?: string;
 
   @IsString()
+  @IsNotEmpty()
   @MaxLength(80)
   city!: string;
 
   @IsString()
+  @IsNotEmpty()
   @MaxLength(80)
   state!: string;
 
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(200)
-  address?: string;
+  address!: string;
 
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(80)
-  driverLicenceNumber?: string;
+  driverLicenceNumber!: string;
 
-  @IsOptional()
   @IsDateString()
-  driverLicenceExpiry?: string;
+  driverLicenceExpiry!: string;
 
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(80)
-  vehicleMake?: string;
+  vehicleMake!: string;
 
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(80)
-  vehicleModel?: string;
+  vehicleModel!: string;
 
-  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1980)
   @Max(2100)
-  vehicleYear?: number;
+  vehicleYear!: number;
 
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(50)
-  vehicleColour?: string;
+  vehicleColour!: string;
 
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(40)
-  vehiclePlateNumber?: string;
+  vehiclePlateNumber!: string;
 
-  @IsOptional()
   @IsEnum(TaxiVehicleType)
-  vehicleType?: TaxiVehicleType;
+  vehicleType!: TaxiVehicleType;
 
-  @IsOptional()
   @IsEnum(TaxiVehicleOwnership)
-  vehicleOwnership?: TaxiVehicleOwnership;
+  vehicleOwnership!: TaxiVehicleOwnership;
 
   @IsOptional()
   @IsString()

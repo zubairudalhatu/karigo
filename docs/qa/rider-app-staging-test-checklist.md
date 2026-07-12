@@ -23,6 +23,7 @@ details in Git.
 | Password visibility toggle works | Rider can show/hide the password field while typing | Pending | Do not record passwords |
 | Session is isolated | Rider token does not conflict with Customer/Admin/Vendor sessions | Pending | Uses Rider-specific secure-store key |
 | Rider profile loads | Profile screen shows rider data | Pending |  |
+| Bottom navigation works | Home, Jobs, Earnings and Profile tabs route correctly | Pending | Hidden on auth and Taxi readiness flow |
 | Dashboard summary loads | Dashboard shows rider name, availability, today's assigned deliveries, active delivery and completed delivery count | Pending |  |
 | Staging safety note shows | Dashboard states live payouts, withdrawals, live taxi booking and live payment collection are disabled | Pending |  |
 | Support/help guidance shows | Dashboard gives rider a safe operations/support escalation prompt | Pending |  |
@@ -40,7 +41,9 @@ details in Git.
 | Invalid OTP is rejected | Wrong code fails safely and order remains active | Pending |  |
 | Valid OTP completes order | Customer-supplied code moves order to completed and clears code | Pending |  |
 | Earnings page loads | Earnings summary renders | Pending |  |
+| Earnings guardrail shows | Screen states live wallet withdrawals and payout requests are disabled | Pending |  |
 | Notification page loads | Rider notifications render | Pending |  |
+| Taxi readiness required fields | Address, licence, licence expiry, vehicle make/model/year/colour/plate are required | Pending | Readiness only; no live Taxi booking |
 | Header polish | No route names, internal paths, or duplicate native titles are visible | Pending | Back arrow remains on secondary screens |
 | API errors are safe | No raw JSON/stack traces shown | Pending |  |
 | Render cold-start handled | Loading/retry behavior is understandable | Pending |  |

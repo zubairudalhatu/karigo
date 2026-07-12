@@ -24,7 +24,8 @@ export default function Jobs() {
 
   useEffect(() => { void load(); }, []);
 
-  return <Protected><Screen title="Delivery jobs" refreshing={loading} onRefresh={load}><Message error>{error}</Message>
+  return <Protected><Screen title="Assigned Jobs" subtitle="Review delivery jobs assigned by dispatch." refreshing={loading} onRefresh={load}><Message error>{error}</Message>
+    <Card tone="soft"><Text style={ui.sectionTitle}>Delivery queue</Text><Text style={ui.pageIntro}>Accept jobs only when you are ready to move through pickup, delivery and customer OTP completion.</Text></Card>
     {jobs.length === 0 ? <Empty message="No delivery jobs assigned yet. Stay online to receive jobs." /> : jobs.map((job) =>
       <Link key={job.id} href={`/jobs/${job.id}` as never} asChild><Pressable><Card>
         <Text style={ui.title}>{job.orderNumber}</Text><StatusBadge status={job.orderStatus} />

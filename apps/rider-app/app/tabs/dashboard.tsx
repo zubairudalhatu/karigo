@@ -1,10 +1,10 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import { useEffect, useMemo, useState } from "react";
 import { brand } from "@karigo/config";
 import { riderApi, RiderProfile } from "../../src/api/rider.api";
 import { jobsApi, RiderJob } from "../../src/api/jobs.api";
 import { notificationsApi } from "../../src/api/notifications.api";
-import { BrandHeader, Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
+import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError } from "../../src/lib/errors";
 
 const ACTIVE_DELIVERY_STATUSES = new Set([
@@ -82,13 +82,18 @@ export default function RiderDashboard() {
 
   return (
     <Protected><Screen refreshing={loading} onRefresh={load}>
-      <BrandHeader />
-      <Text style={styles.title}>Hi, {firstName(profile?.user?.fullName)}</Text>
+      <Card tone="soft">
+        <View style={ui.spaceBetween}>
+          <Image source={require("../../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
+          <StatusBadge status={availabilityLabel(profile)} />
+        </View>
+        <Text style={styles.title}>Hi, {firstName(profile?.user?.fullName)}</Text>
+        <Text style={ui.pageIntro}>Manage delivery assignments, availability and handoff progress from one place.</Text>
+      </Card>
       <Message error>{error}</Message>
 
       <Card>
         <Text style={ui.title}>Rider availability</Text>
-        <StatusBadge status={availabilityLabel(profile)} />
         <Text style={ui.muted}>{availabilityCopy(profile)}</Text>
         <Button title={profile?.availabilityStatus === "ONLINE" ? "Go offline" : "Go online"} disabled={!canToggle} onPress={toggle} />
       </Card>
@@ -118,6 +123,7 @@ export default function RiderDashboard() {
 
 const styles = StyleSheet.create({
   title: { color: brand.colors.charcoal, fontSize: 25, fontWeight: "800" },
+  logo: { height: 34, width: 102 },
   metric: { color: brand.colors.charcoal, fontSize: 28, fontWeight: "800" },
   summaryGrid: { gap: 12 },
   jobRef: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "800" }

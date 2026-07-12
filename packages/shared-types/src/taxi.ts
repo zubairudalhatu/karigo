@@ -54,16 +54,16 @@ export interface TaxiDriverApplicationInput {
   email?: string;
   city: string;
   state: string;
-  address?: string;
-  driverLicenceNumber?: string;
-  driverLicenceExpiry?: string;
-  vehicleMake?: string;
-  vehicleModel?: string;
-  vehicleYear?: number;
-  vehicleColour?: string;
-  vehiclePlateNumber?: string;
-  vehicleType?: TaxiVehicleType;
-  vehicleOwnership?: TaxiVehicleOwnership;
+  address: string;
+  driverLicenceNumber: string;
+  driverLicenceExpiry: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehicleYear: number;
+  vehicleColour: string;
+  vehiclePlateNumber: string;
+  vehicleType: TaxiVehicleType;
+  vehicleOwnership: TaxiVehicleOwnership;
   notes?: string;
 }
 

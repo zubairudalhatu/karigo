@@ -252,6 +252,14 @@ describe("TaxiService", () => {
       phoneNumber: "08030000000",
       city: "Kano",
       state: "Kano",
+      address: "Nasarawa GRA",
+      driverLicenceNumber: "DL-123",
+      driverLicenceExpiry: "2028-12-31",
+      vehicleMake: "Toyota",
+      vehicleModel: "Corolla",
+      vehicleYear: 2015,
+      vehicleColour: "Black",
+      vehiclePlateNumber: "KGO-123AA",
       vehicleType: TaxiVehicleType.SEDAN,
       vehicleOwnership: TaxiVehicleOwnership.OWNER
     });
