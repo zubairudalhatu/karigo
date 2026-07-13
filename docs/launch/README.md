@@ -2,10 +2,29 @@
 
 ## Current Decision
 
-KariGO is ready for internal demo and staging preparation. It is **not approved for a
-real-customer controlled soft launch** until the handover approval checklist, critical
-launch blockers, provider/infrastructure gates, operational rehearsal, and legal/security
-reviews are complete.
+KariGO is in controlled soft launch readiness preparation. Internal staging review,
+branded Admin/Vendor domains, Customer App, Vendor Dashboard, Admin Portal, KariGO Captain
+App, Website, Backend, SME Services, Wallet foundation, Referrals foundation and Paystack
+Test Mode readiness have supporting staging documentation.
+
+Controlled external soft launch still requires management approval, current mobile
+build/update installation, no open P0/P1 issues, support/dispatch/technical coverage and
+signed go/no-go evidence. Public production launch is not approved.
+
+## Task 103 Soft Launch Readiness Pack
+
+- Executive readiness pack: `karigo-soft-launch-readiness-pack-task103.md`
+- Go/no-go checklist: `karigo-soft-launch-go-no-go-checklist-task103.md`
+- Release runbook: `karigo-soft-launch-release-runbook-task103.md`
+- Daily monitoring tracker: `karigo-soft-launch-daily-monitoring-tracker-task103.md`
+- Issue triage register: `karigo-soft-launch-issue-triage-register-task103.md`
+- Communications and support pack:
+  `karigo-soft-launch-communications-and-support-pack-task103.md`
+
+These files prepare operations for a controlled soft launch decision. They do not activate
+live Paystack, live Accelerate.ng utilities, live Termii SMS, live payouts, wallet
+withdrawals, automatic refunds, live rides, Pharmacy marketplace, provider login or
+production launch.
 
 ## Controlled Pilot Preparation
 
