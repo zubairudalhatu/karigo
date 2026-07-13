@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { DeliveryCaptainApplicationForm } from "../../src/components/delivery-captain-application-form";
 import { TaxiDriverApplicationForm, TaxiWaitlistForm } from "../../src/components/taxi-readiness-forms";
 
 export const metadata: Metadata = {
@@ -23,7 +23,7 @@ export default function RidersPage() {
             <li>Earn from completed deliveries</li>
             <li>Support KariGO operations across Kano</li>
           </ul>
-          <Link className="button" href="/contact">Contact KariGO</Link>
+          <a className="button" href="#delivery-captain-application">Apply as Delivery Captain</a>
         </article>
         <article className="info-card">
           <h2>Ride Captains - Coming Soon</h2>
@@ -35,6 +35,9 @@ export default function RidersPage() {
           </ul>
           <a className="button secondary" href="#taxi-driver-application">Apply for Ride readiness</a>
         </article>
+      </section>
+      <section className="section">
+        <DeliveryCaptainApplicationForm />
       </section>
       <section className="section split">
         <TaxiWaitlistForm />

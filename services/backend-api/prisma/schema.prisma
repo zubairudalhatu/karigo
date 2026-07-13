@@ -417,6 +417,24 @@ enum TaxiVehicleOwnership {
   OTHER
 }
 
+enum DeliveryCaptainApplicationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  CHANGES_REQUESTED
+  PROVISIONALLY_APPROVED
+  APPROVED
+  REJECTED
+}
+
+enum DeliveryCaptainVehicleType {
+  MOTORCYCLE
+  BICYCLE
+  TRICYCLE
+  CAR
+  VAN
+  OTHER
+}
+
 enum TaxiDriverProfileStatus {
   PENDING_ACTIVATION
   ACTIVE_TEST
@@ -536,6 +554,35 @@ model TaxiDriverApplication {
   @@index([phoneNumber])
   @@index([city, state])
   @@map("taxi_driver_applications")
+}
+
+model DeliveryCaptainApplication {
+  id                   String                           @id @default(uuid()) @db.Uuid
+  applicationReference String                           @unique
+  fullName             String
+  phoneNumber          String
+  email                String?
+  city                 String
+  state                String
+  address              String
+  preferredZone        String?
+  vehicleType          DeliveryCaptainVehicleType
+  vehiclePlateNumber   String?
+  riderExperience      String?
+  guarantorName        String
+  guarantorPhone       String
+  notes                String?
+  status               DeliveryCaptainApplicationStatus @default(SUBMITTED)
+  adminNote            String?
+  applicantVisibleNote String?
+  reviewedAt           DateTime?
+  createdAt            DateTime                         @default(now())
+  updatedAt            DateTime                         @updatedAt
+
+  @@index([status, createdAt])
+  @@index([phoneNumber])
+  @@index([city, state])
+  @@map("delivery_captain_applications")
 }
 
 model TaxiWaitlistEntry {

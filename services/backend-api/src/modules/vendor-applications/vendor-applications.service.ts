@@ -56,6 +56,7 @@ export class VendorApplicationsService {
     if (!dto.declarationAccepted || !dto.privacyAccepted || !dto.contactConsentAccepted) {
       throw new BadRequestException("Application declaration, privacy acknowledgement and contact consent are required");
     }
+    this.assertKanoPilotLocation(dto);
 
     const data: Prisma.VendorApplicationCreateInput = {
         businessCategory: dto.businessCategory,
@@ -217,6 +218,12 @@ export class VendorApplicationsService {
 
   private json(value: unknown): Prisma.InputJsonValue | undefined {
     return value === undefined ? undefined : value as Prisma.InputJsonValue;
+  }
+
+  private assertKanoPilotLocation(dto: Pick<CreateVendorApplicationDto, "city" | "state">) {
+    if (dto.state !== "Kano" || dto.city !== "Kano") {
+      throw new BadRequestException("KariGO vendor applications are currently limited to Kano for the controlled pilot.");
+    }
   }
 
   private statusMessage(status: VendorApplicationStatus) {

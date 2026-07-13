@@ -35,6 +35,8 @@ const vendorForm = read("src", "components", "vendor-application-form.tsx");
 assert(vendorForm.includes("/vendor-applications"), "Vendor application form must submit to public backend endpoint.");
 assert(vendorForm.includes("NEXT_PUBLIC_API_BASE_URL") || read("src", "lib", "site.ts").includes("NEXT_PUBLIC_API_BASE_URL"), "Website must use configured API base URL.");
 assert(vendorForm.includes("Your vendor application has been submitted. KariGO will review your details and contact you with the next steps."), "Success message must match approved copy.");
+assert(vendorForm.includes("Vendor applications are currently open for Kano only"), "Vendor application form must state the Kano-only pilot limit.");
+assert(vendorForm.includes("kanoPilotLocation"), "Vendor application state/city inputs must use controlled Kano options.");
 assert(!vendorForm.includes("Authorization"), "Public vendor application form must not require auth headers.");
 
 const serviceProviderApply = read("app", "sme-services", "apply", "page.tsx");
@@ -50,11 +52,20 @@ assert(serviceProviderForm.includes("does not create live dispatch, provider log
 assert(!serviceProviderForm.includes("Authorization"), "Public SME Services provider application form must not require auth headers.");
 
 const riders = read("app", "riders", "page.tsx");
+assert(riders.includes("DeliveryCaptainApplicationForm"), "Captains page must include the Delivery Captain application form.");
+assert(riders.includes("Apply as Delivery Captain"), "Captains page must link to Delivery Captain application.");
 assert(riders.includes("Ride Captains - Coming Soon"), "Captains page must include future Ride Captain section.");
 assert(riders.includes("Vehicle and licence checks will be required"), "Ride Captain checks must be stated.");
 assert(riders.includes("TaxiDriverApplicationForm"), "Captains page must include the existing ride application form component.");
 assert(riders.includes("TaxiWaitlistForm"), "Captains page must include the existing ride waitlist form component.");
 assert(riders.includes("KariGO Rides is coming later and is not live for ride requests yet"), "Captains page must not present KariGO Rides as live.");
+
+const deliveryCaptainForm = read("src", "components", "delivery-captain-application-form.tsx");
+assert(deliveryCaptainForm.includes("/delivery-captain-applications"), "Delivery Captain application form must submit to the public backend endpoint.");
+assert(deliveryCaptainForm.includes("Delivery Captain application has been submitted"), "Delivery Captain form success message must match approved copy.");
+assert(deliveryCaptainForm.includes("does not create rider login, activate live dispatch, payouts or ride access"), "Delivery Captain form must state safety limits.");
+assert(deliveryCaptainForm.includes("<option value=\"Kano\">Kano</option>"), "Delivery Captain city/state controls must be limited to Kano.");
+assert(!deliveryCaptainForm.includes("Authorization"), "Public Delivery Captain application form must not require auth headers.");
 
 const taxiForms = read("src", "components", "taxi-readiness-forms.tsx");
 assert(taxiForms.includes("taxi/waitlist"), "Website ride waitlist form must post to the existing waitlist endpoint.");

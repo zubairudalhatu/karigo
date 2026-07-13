@@ -1,6 +1,6 @@
 import { PreferredContactMethod, VendorApplicationCategory } from "@prisma/client";
 import { Transform } from "class-transformer";
-import { IsBoolean, IsEmail, IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsBoolean, IsEmail, IsEnum, IsIn, IsOptional, IsString, MaxLength } from "class-validator";
 
 const trim = ({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value;
 
@@ -36,11 +36,13 @@ export class CreateVendorApplicationDto {
   businessAddress!: string;
 
   @IsString()
+  @IsIn(["Kano"], { message: "Vendor applications are currently limited to Kano State." })
   @MaxLength(80)
   @Transform(trim)
   state!: string;
 
   @IsString()
+  @IsIn(["Kano"], { message: "Vendor applications are currently limited to Kano city." })
   @MaxLength(80)
   @Transform(trim)
   city!: string;
