@@ -36,7 +36,9 @@ export class AccountActivationEmailService {
     const rendered = emailTemplates["account-activated"].render({
       recipientName: input.fullName,
       message: "Your KariGO account is now active. You can sign in and use approved pilot features.",
-      supportContact: this.config.get<string>("EMAIL_REPLY_TO", "KariGO Support")
+      supportContact: this.config.get<string>("EMAIL_REPLY_TO", "KariGO Support"),
+      logoUrl: this.config.get<string>("KARIGO_EMAIL_LOGO_URL", ""),
+      pilotLabel: this.config.get<string>("KARIGO_PILOT_EMAIL_LABEL", "Kano controlled early access")
     });
     const provider = this.provider();
 

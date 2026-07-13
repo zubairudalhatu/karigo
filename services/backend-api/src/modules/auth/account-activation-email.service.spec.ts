@@ -55,7 +55,9 @@ describe("AccountActivationEmailService", () => {
         RESEND_API_KEY: "resend-test-key-not-real",
         RESEND_FROM_EMAIL: "no-reply@example.test",
         RESEND_REPLY_TO: "support@example.test",
-        RESEND_BASE_URL: "https://api.resend.com"
+        RESEND_BASE_URL: "https://api.resend.com",
+        KARIGO_EMAIL_LOGO_URL: "https://www.karigo.com.ng/karigo-logo.png",
+        KARIGO_PILOT_EMAIL_LABEL: "Kano controlled early access"
       }[key] ?? fallback))
     };
     jest.spyOn(global, "fetch").mockResolvedValue({
@@ -79,6 +81,10 @@ describe("AccountActivationEmailService", () => {
     );
     expect(result).toEqual({ accepted: true, provider: "resend", providerReference: "email-1" });
     expect(JSON.stringify(result)).not.toContain("resend-test-key-not-real");
+    const requestBody = JSON.parse((fetch as jest.Mock).mock.calls[0][1].body);
+    expect(requestBody.subject).toBe("Your KariGO account is active");
+    expect(requestBody.html).toContain("https://www.karigo.com.ng/karigo-logo.png");
+    expect(requestBody.html).toContain("This is an account activation notification, not a marketing email.");
   });
 
   it("fails safely when Resend credentials are missing", async () => {

@@ -135,6 +135,12 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       requireValue(config, "RESEND_FROM_EMAIL");
     }
   }
+  const karigoEmailLogoUrl = typeof config.KARIGO_EMAIL_LOGO_URL === "string"
+    ? config.KARIGO_EMAIL_LOGO_URL.trim()
+    : "";
+  if (karigoEmailLogoUrl && !karigoEmailLogoUrl.startsWith("https://")) {
+    throw new Error("KARIGO_EMAIL_LOGO_URL must use HTTPS");
+  }
   const whatsappProvider =
     typeof config.WHATSAPP_PROVIDER === "string" ? config.WHATSAPP_PROVIDER.toLowerCase() : "mock";
   if (!["mock", "meta_cloud"].includes(whatsappProvider)) {
@@ -198,6 +204,10 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     RESEND_BASE_URL: typeof config.RESEND_BASE_URL === "string" && config.RESEND_BASE_URL.trim()
       ? config.RESEND_BASE_URL.trim()
       : "https://api.resend.com",
+    KARIGO_EMAIL_LOGO_URL: karigoEmailLogoUrl,
+    KARIGO_PILOT_EMAIL_LABEL: typeof config.KARIGO_PILOT_EMAIL_LABEL === "string" && config.KARIGO_PILOT_EMAIL_LABEL.trim()
+      ? config.KARIGO_PILOT_EMAIL_LABEL.trim()
+      : "Kano controlled early access",
     WHATSAPP_PROVIDER: whatsappProvider,
     WHATSAPP_BASE_URL: typeof config.WHATSAPP_BASE_URL === "string" && config.WHATSAPP_BASE_URL.trim()
       ? config.WHATSAPP_BASE_URL.trim()

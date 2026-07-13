@@ -24,6 +24,8 @@ describe("environment configuration", () => {
     expect(result.ACCOUNT_ACTIVATION_EMAIL_ENABLED).toBe(false);
     expect(result.ACCOUNT_ACTIVATION_EMAIL_PROVIDER).toBe("mock");
     expect(result.RESEND_BASE_URL).toBe("https://api.resend.com");
+    expect(result.KARIGO_EMAIL_LOGO_URL).toBe("");
+    expect(result.KARIGO_PILOT_EMAIL_LABEL).toBe("Kano controlled early access");
     expect(result.WHATSAPP_PROVIDER).toBe("mock");
     expect(result.WHATSAPP_API_VERSION).toBe("v20.0");
     expect(result.PUSH_PROVIDER).toBe("mock");
@@ -120,12 +122,22 @@ describe("environment configuration", () => {
       ACCOUNT_ACTIVATION_EMAIL_ENABLED: "true",
       ACCOUNT_ACTIVATION_EMAIL_PROVIDER: "resend",
       RESEND_API_KEY: "resend-test-key-not-real",
-      RESEND_FROM_EMAIL: "no-reply@example.test"
+      RESEND_FROM_EMAIL: "no-reply@example.test",
+      KARIGO_EMAIL_LOGO_URL: "https://www.karigo.com.ng/karigo-logo.png"
     });
 
     expect(result.ACCOUNT_ACTIVATION_EMAIL_ENABLED).toBe(true);
     expect(result.ACCOUNT_ACTIVATION_EMAIL_PROVIDER).toBe("resend");
+    expect(result.KARIGO_EMAIL_LOGO_URL).toBe("https://www.karigo.com.ng/karigo-logo.png");
     expect(result.EMAIL_PROVIDER).toBe("mock");
+  });
+
+  it("rejects non-HTTPS activation email logo URLs", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      KARIGO_EMAIL_LOGO_URL: "http://example.test/logo.png"
+    })).toThrow("KARIGO_EMAIL_LOGO_URL must use HTTPS");
   });
 
   it("keeps Resend account activation email blocked without credentials when enabled", () => {

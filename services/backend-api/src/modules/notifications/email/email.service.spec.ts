@@ -31,6 +31,33 @@ describe("EmailService and templates", () => {
     expect(rendered.htmlBody).toContain("&lt;script&gt;");
   });
 
+  it("renders the account activation email with an HTTPS logo and pilot footer copy", () => {
+    const rendered = emailTemplates["account-activated"].render({
+      recipientName: "Amina",
+      message: "Your KariGO account is now active.",
+      logoUrl: "https://www.karigo.com.ng/karigo-logo.png",
+      supportContact: "support@karigo.com.ng",
+      pilotLabel: "Kano controlled early access"
+    });
+
+    expect(rendered.subject).toBe("Your KariGO account is active");
+    expect(rendered.htmlBody).toContain("https://www.karigo.com.ng/karigo-logo.png");
+    expect(rendered.htmlBody).toContain("Kano controlled early access");
+    expect(rendered.htmlBody).toContain("This is an account activation notification, not a marketing email.");
+    expect(rendered.textBody).toContain("Mock payment remains the selected pilot payment mode");
+  });
+
+  it("falls back to text branding when the activation logo URL is not HTTPS", () => {
+    const rendered = emailTemplates["account-activated"].render({
+      recipientName: "Amina",
+      message: "Your KariGO account is now active.",
+      logoUrl: "http://example.test/logo.png"
+    });
+
+    expect(rendered.htmlBody).not.toContain("http://example.test/logo.png");
+    expect(rendered.htmlBody).toContain(">KariGO</div>");
+  });
+
   it("fails safely when required variables are missing", () => {
     expect(() => emailTemplates["payment-successful"].render({ recipientName: "Amina" }))
       .toThrow(BadRequestException);

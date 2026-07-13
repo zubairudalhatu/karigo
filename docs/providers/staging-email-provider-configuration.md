@@ -16,11 +16,15 @@ RESEND_API_KEY=
 RESEND_FROM_EMAIL=
 RESEND_REPLY_TO=
 RESEND_BASE_URL=
+KARIGO_EMAIL_LOGO_URL=
+KARIGO_PILOT_EMAIL_LABEL=
 ```
 
 Use this only after controlled staging/pilot approval. It must send only the account
 activation email after successful OTP verification. It must not send welcome campaigns,
 marketing messages, order updates, support updates, refund notices or promotional email.
+`KARIGO_EMAIL_LOGO_URL` must point to a public HTTPS logo asset, for example a verified
+website-hosted KariGO logo. Leave it blank to use the branded text fallback.
 
 ## SMTP Sandbox Or Test Inbox
 

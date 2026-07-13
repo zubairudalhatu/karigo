@@ -51,6 +51,8 @@ RESEND_API_KEY=
 RESEND_FROM_EMAIL=
 RESEND_REPLY_TO=
 RESEND_BASE_URL=
+KARIGO_EMAIL_LOGO_URL=
+KARIGO_PILOT_EMAIL_LABEL=
 ```
 
 ## Guardrails
@@ -62,6 +64,8 @@ RESEND_BASE_URL=
   configured window and are never returned in Termii mode.
 - Resend email is triggered only after successful account activation.
 - Resend failure must not undo successful OTP verification or block the user's account.
+- `KARIGO_EMAIL_LOGO_URL` must be a public HTTPS image URL. If it is not configured,
+  the activation email uses a polished text fallback instead of a broken image.
 - Generic `EMAIL_PROVIDER` remains `mock`, so order, support, marketing and other
   transactional emails remain disabled.
 - Termii must not be used for order-status, wallet, utility, marketing or campaign SMS
