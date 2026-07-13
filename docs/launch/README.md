@@ -81,6 +81,24 @@ status posts and launch announcement visuals. Do not commit heavy image/video ex
 claim live rides, live utilities, wallet withdrawals, automated payouts, automatic refunds
 or full public launch.
 
+## Task 107 Release Candidate Distribution Pack
+
+- Release candidate summary:
+  `release-candidate/karigo-soft-launch-release-candidate-task107.md`
+- APK distribution instructions:
+  `release-candidate/karigo-apk-distribution-instructions-task107.md`
+- Domain and service health check:
+  `release-candidate/karigo-domain-and-service-health-check-task107.md`
+- Pilot user install guide:
+  `release-candidate/karigo-pilot-user-install-guide-task107.md`
+- Release candidate approval log:
+  `release-candidate/karigo-release-candidate-approval-log-task107.md`
+
+Use this pack to record approved release-candidate builds, domains, service checks and
+pilot distribution instructions after the Task 103 readiness pack, Task 104 execution
+setup, Task 105 communications pack and Task 106 creative brief. Do not publish APK links
+publicly, commit APK/AAB files, or activate live providers.
+
 ## Controlled Pilot Preparation
 
 - Plan and scope: `controlled-soft-launch-plan.md`
