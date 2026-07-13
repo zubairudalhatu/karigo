@@ -3,21 +3,21 @@ import Link from "next/link";
 import { TaxiDriverApplicationForm, TaxiWaitlistForm } from "../../src/components/taxi-readiness-forms";
 
 export const metadata: Metadata = {
-  title: "Riders & Drivers",
-  description: "Join KariGO as a delivery rider or future taxi driver."
+  title: "Captains",
+  description: "Join KariGO as a Delivery Captain or future Ride Captain."
 };
 
 export default function RidersPage() {
   return (
     <main>
       <section className="section">
-        <p className="eyebrow">Riders & Drivers</p>
+        <p className="eyebrow">Captains</p>
         <h1>Earn with KariGO.</h1>
-        <p className="lead">KariGO supports delivery riders now and is preparing taxi driver onboarding for a later launch.</p>
+        <p className="lead">KariGO supports Delivery Captains now and is preparing Ride Captain onboarding for a later KariGO Rides launch.</p>
       </section>
       <section className="section soft split">
         <article className="info-card">
-          <h2>Delivery Riders</h2>
+          <h2>Delivery Captains</h2>
           <ul className="list">
             <li>Deliver customer orders</li>
             <li>Earn from completed deliveries</li>
@@ -26,14 +26,14 @@ export default function RidersPage() {
           <Link className="button" href="/contact">Contact KariGO</Link>
         </article>
         <article className="info-card">
-          <h2>Taxi Drivers - Coming Soon</h2>
+          <h2>Ride Captains - Coming Soon</h2>
           <ul className="list">
-            <li>Taxi is coming later and is not live for ride requests yet</li>
-            <li>Verified driver onboarding will be required</li>
+            <li>KariGO Rides is coming later and is not live for ride requests yet</li>
+            <li>Verified Ride Captain onboarding will be required</li>
             <li>Vehicle and licence checks will be required</li>
             <li>Fare controls, safety review and dispatch rules must be approved before launch</li>
           </ul>
-          <a className="button secondary" href="#taxi-driver-application">Apply for Taxi Readiness</a>
+          <a className="button secondary" href="#taxi-driver-application">Apply for Ride readiness</a>
         </article>
       </section>
       <section className="section split">

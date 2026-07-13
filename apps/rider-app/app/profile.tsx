@@ -103,7 +103,7 @@ export default function Profile() {
     <Card>
       <Text style={ui.sectionTitle}>Captain tools</Text>
       <NavLink href="/notifications" label="Activity feed and notifications" />
-      <NavLink href="/taxi-readiness" label="Driver Captain Readiness" />
+      <NavLink href="/taxi-readiness" label="Ride readiness" />
     </Card>
 
     <Button tone="muted" title="Log out" onPress={async () => { await logout(); router.replace("/auth/login"); }} />

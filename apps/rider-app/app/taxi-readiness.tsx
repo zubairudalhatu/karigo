@@ -8,7 +8,7 @@ import { friendlyError } from "../src/lib/errors";
 
 const vehicleTypes: TaxiVehicleType[] = ["SEDAN", "SUV", "MINI_BUS", "TRICYCLE", "OTHER"];
 const ownershipTypes: TaxiVehicleOwnership[] = ["OWNER", "LEASED", "COMPANY_ASSIGNED", "OTHER"];
-const testNotice = "Driver Captain Test Mode. No real taxi ride, fare billing or payment is active.";
+const testNotice = "Ride Captain Test Mode. No real ride, fare billing or payment is active.";
 
 const initialForm = {
   fullName: "",
@@ -35,7 +35,7 @@ const requiredFields: Array<{ key: keyof typeof initialForm; label: string }> = 
   { key: "city", label: "City" },
   { key: "state", label: "State" },
   { key: "address", label: "Residential address" },
-  { key: "driverLicenceNumber", label: "Driver licence number" },
+  { key: "driverLicenceNumber", label: "Driving licence number" },
   { key: "driverLicenceExpiry", label: "Licence expiry date" },
   { key: "vehicleMake", label: "Vehicle make" },
   { key: "vehicleModel", label: "Vehicle model" },
@@ -68,7 +68,7 @@ export default function TaxiReadiness() {
       setProfile(loadedProfile);
       setTrips(await taxiApi.availableTrips());
     } catch {
-      // Taxi readiness form remains useful even before an approved test profile exists.
+      // Ride readiness form remains useful even before an approved test profile exists.
     }
   }
 
@@ -140,7 +140,7 @@ export default function TaxiReadiness() {
     try {
       const updated = await taxiApi.updateAvailability({ isAvailableForTaxi: !profile.isAvailableForTaxi });
       setProfile(updated);
-      setMessage(updated.isAvailableForTaxi ? "Taxi Test Mode availability enabled." : "Taxi Test Mode availability disabled.");
+      setMessage(updated.isAvailableForTaxi ? "Ride Captain Test Mode availability enabled." : "Ride Captain Test Mode availability disabled.");
       setTrips(await taxiApi.availableTrips());
     } catch (e) {
       setError(friendlyError(e));
@@ -155,33 +155,33 @@ export default function TaxiReadiness() {
       if (action === "start") await taxiApi.startTrip(tripId, tripPin);
       if (action === "arrivedDestination") await taxiApi.arrivedDestination(tripId);
       if (action === "complete") await taxiApi.completeTrip(tripId);
-      if (action === "cancel") await taxiApi.cancelTrip(tripId, "Driver cancelled staging test trip");
+      if (action === "cancel") await taxiApi.cancelTrip(tripId, "Ride Captain cancelled staging test ride");
       setTripPin("");
-      setMessage("Taxi Test Mode trip updated.");
+      setMessage("Ride Captain Test Mode trip updated.");
       setTrips(await taxiApi.availableTrips());
     } catch (e) {
       setError(friendlyError(e));
     }
   }
 
-  return <Protected><Screen title="Driver Captain Readiness" subtitle="Prepare driver and vehicle verification details before Taxi is approved for launch.">
+  return <Protected><Screen title="Ride readiness" subtitle="Prepare Ride Captain and vehicle verification details before KariGO Rides is approved for launch.">
     <Card tone="soft">
-      <Text style={ui.sectionTitle}>Taxi is not live yet</Text>
-      <Text style={ui.pageIntro}>This form helps KariGO prepare Driver Captain onboarding, vehicle checks and safe taxi operations. It does not activate taxi jobs, live dispatch, fare billing or payment.</Text>
+      <Text style={ui.sectionTitle}>KariGO Rides is not live yet</Text>
+      <Text style={ui.pageIntro}>This form helps KariGO prepare Ride Captain onboarding, vehicle checks and safe ride operations. It does not activate ride jobs, live dispatch, fare billing or payment.</Text>
     </Card>
 
     {taxiEnabled ? <Card>
-      <Text style={ui.sectionTitle}>Driver Captain Test Mode</Text>
+      <Text style={ui.sectionTitle}>Ride Captain Test Mode</Text>
       <Text style={ui.muted}>{testNotice}</Text>
       {profile ? <>
         <StatusBadge status={profile.status} />
-        <Text style={ui.muted}>{profile.isAvailableForTaxi ? "Available for staging Driver Captain trips" : "Offline for staging Driver Captain trips"}</Text>
-        <Button title={profile.isAvailableForTaxi ? "Go offline for Driver Captain Test Mode" : "Go online for Driver Captain Test Mode"} onPress={toggleTaxiAvailability} />
-      </> : <Text style={ui.muted}>An approved Driver Captain test profile is required before Test Mode appears.</Text>}
+        <Text style={ui.muted}>{profile.isAvailableForTaxi ? "Available for staging ride requests" : "Offline for staging ride requests"}</Text>
+        <Button title={profile.isAvailableForTaxi ? "Go offline for Ride Captain Test Mode" : "Go online for Ride Captain Test Mode"} onPress={toggleTaxiAvailability} />
+      </> : <Text style={ui.muted}>An approved Ride Captain test profile is required before Test Mode appears.</Text>}
     </Card> : null}
 
     {taxiEnabled && trips.length ? <Card>
-      <Text style={ui.sectionTitle}>Available test taxi trips</Text>
+      <Text style={ui.sectionTitle}>Available test ride requests</Text>
       {trips.map((trip) => <Card key={trip.id}>
         <Text style={ui.sectionTitle}>{trip.tripReference}</Text>
         <Text>{trip.pickupAddress} to {trip.destinationAddress}</Text>
@@ -208,7 +208,7 @@ export default function TaxiReadiness() {
     <Message error>{error}</Message>
 
     <Card>
-      <Text style={ui.sectionTitle}>Driver identity</Text>
+      <Text style={ui.sectionTitle}>Ride Captain identity</Text>
       <Text style={ui.pageIntro}>Required fields are used for readiness review only.</Text>
       <Field placeholder="Full name required" value={form.fullName} onChangeText={(fullName) => setForm({ ...form, fullName })} />
       <Field placeholder="Phone number required" keyboardType="phone-pad" value={form.phoneNumber} onChangeText={(phoneNumber) => setForm({ ...form, phoneNumber })} />
@@ -220,7 +220,7 @@ export default function TaxiReadiness() {
 
     <Card>
       <Text style={ui.sectionTitle}>Licence verification</Text>
-      <Field placeholder="Driver licence number required" value={form.driverLicenceNumber} onChangeText={(driverLicenceNumber) => setForm({ ...form, driverLicenceNumber })} />
+      <Field placeholder="Driving licence number required" value={form.driverLicenceNumber} onChangeText={(driverLicenceNumber) => setForm({ ...form, driverLicenceNumber })} />
       <Field placeholder="Licence expiry YYYY-MM-DD required" value={form.driverLicenceExpiry} onChangeText={(driverLicenceExpiry) => setForm({ ...form, driverLicenceExpiry })} />
     </Card>
 
@@ -243,7 +243,7 @@ export default function TaxiReadiness() {
       <Text style={ui.sectionTitle}>Additional notes</Text>
       <Field placeholder="Readiness notes optional" value={form.notes} onChangeText={(notes) => setForm({ ...form, notes })} multiline />
       {missingRequiredFields.length ? <Message error>Missing required fields: {missingRequiredFields.join(", ")}</Message> : null}
-      <Button title={loading ? "Submitting..." : "Apply for Driver Captain Readiness"} disabled={loading || !formReady} onPress={submit} />
+      <Button title={loading ? "Submitting..." : "Apply for Ride readiness"} disabled={loading || !formReady} onPress={submit} />
     </Card>
   </Screen></Protected>;
 }

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description: "KariGO privacy policy summary for customers, vendors, riders, drivers and website visitors."
+  description: "KariGO privacy policy summary for customers, vendors, Captains, Ride readiness applicants and website visitors."
 };
 
 export default function PrivacyPage() {
@@ -11,7 +11,7 @@ export default function PrivacyPage() {
       <section className="section">
         <p className="eyebrow">Privacy Policy</p>
         <h1>Privacy Policy</h1>
-        <p className="lead">KariGO is built for delivery, local commerce and operational trust. This page explains how we handle information for customers, vendors, riders, drivers and website visitors.</p>
+        <p className="lead">KariGO is built for delivery, local commerce and operational trust. This page explains how we handle information for customers, vendors, Captains, Ride readiness applicants and website visitors.</p>
       </section>
 
       <section className="section soft">
@@ -21,7 +21,7 @@ export default function PrivacyPage() {
             <ul className="list">
               <li>Account and profile details submitted by users.</li>
               <li>Delivery addresses, order details and support messages needed to operate KariGO.</li>
-              <li>Vendor, rider, driver and partner application details submitted through KariGO forms.</li>
+              <li>Vendor, Captain, Ride readiness and partner application details submitted through KariGO forms.</li>
               <li>Device, browser and usage information needed to keep the service secure and reliable.</li>
             </ul>
           </article>
@@ -30,7 +30,7 @@ export default function PrivacyPage() {
             <h2>How we use information</h2>
             <ul className="list">
               <li>To create accounts, process orders, support delivery and respond to inquiries.</li>
-              <li>To review vendor, rider and driver applications or interest requests.</li>
+              <li>To review vendor, Captain and Ride readiness applications or interest requests.</li>
               <li>To improve safety, prevent abuse and monitor operational performance.</li>
               <li>To prepare reports for operations, finance and customer support.</li>
             </ul>
@@ -39,7 +39,7 @@ export default function PrivacyPage() {
           <article className="info-card">
             <h2>Sharing and access</h2>
             <p>KariGO only shares operational information where it is needed to complete a service, support a user, review an application or comply with legal and operational requirements.</p>
-            <p>Role-based access controls are designed to keep customers, vendors, riders and admins within their permitted information scope.</p>
+            <p>Role-based access controls are designed to keep customers, vendors, Captains and admins within their permitted information scope.</p>
           </article>
 
           <article className="info-card">

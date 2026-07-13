@@ -8,7 +8,7 @@ const navLinks = [
   { label: "Services", href: "/services" },
   { label: "Vendors", href: "/vendors" },
   { label: "Vendor Login", href: "https://vendor.karigo.com.ng" },
-  { label: "Riders & Drivers", href: "/riders" },
+  { label: "Captains", href: "/riders" },
   { label: "Download App", href: "/#download" },
   { label: "Contact", href: "/contact" }
 ];

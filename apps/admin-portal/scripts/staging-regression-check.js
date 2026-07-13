@@ -25,7 +25,7 @@ assert(shell.includes("Payout Accounts"), "Admin sidebar must include payout acc
 assert(shell.includes("Wallets"), "Admin sidebar must include Wallets.");
 assert(shell.includes("Referrals"), "Admin sidebar must include Referrals.");
 assert(shell.includes("Utilities"), "Admin sidebar must include Utilities.");
-assert(shell.includes("Taxi"), "Admin sidebar must include Taxi readiness.");
+assert(shell.includes("Ride Operations"), "Admin sidebar must include Ride Operations.");
 assert(shell.includes("SME Services Summary"), "Admin sidebar must include SME Services operations summary.");
 assert(shell.includes("SME Pilot Readiness"), "Admin sidebar must include SME Services pilot readiness.");
 assert(shell.includes("SME Launch Control"), "Admin sidebar must include SME Services pilot launch control.");
@@ -202,23 +202,23 @@ assert(referralsApiSource.includes("admin/referrals/${referralId}/review"), "Adm
 assert(referralsApiSource.includes("admin/referrals/reward-rules"), "Admin referral API must call reward rules endpoint.");
 
 const taxiPage = read("app", "taxi", "page.tsx");
-assert(taxiPage.includes("Driver Applications"), "Admin taxi page must show driver applications.");
-assert(taxiPage.includes("Customer Waitlist"), "Admin taxi page must show customer waitlist.");
-assert(taxiPage.includes("Driver Profiles"), "Admin taxi page must show driver profiles.");
-assert(taxiPage.includes("Test Taxi Trips"), "Admin taxi page must show staging test trips.");
-assert(taxiPage.includes("Taxi Summary"), "Admin taxi page must show Taxi summary.");
-assert(taxiPage.includes("does not perform live dispatch, maps billing or payment capture"), "Admin taxi page must state staging-only limits.");
-assert(taxiPage.includes("Taxi driver readiness review saved"), "Admin taxi page must support driver readiness review.");
-assert(taxiPage.includes("Create Test Driver Profile"), "Admin taxi page must create staging driver profiles from applications.");
-assert(taxiPage.includes("Assign Driver"), "Admin taxi page must support manual staging driver assignment.");
-assert(taxiPage.includes("Cancel Test Trip"), "Admin taxi page must support staging trip cancellation.");
-assert(!taxiPage.includes("Assign ride") && !taxiPage.includes("Dispatch taxi") && !taxiPage.includes("Pay Now"), "Admin taxi page must not expose live taxi dispatch or payment actions.");
+assert(taxiPage.includes("Ride Applications"), "Admin ride operations page must show ride applications.");
+assert(taxiPage.includes("Customer Waitlist"), "Admin ride operations page must show customer waitlist.");
+assert(taxiPage.includes("Ride Captain Profiles"), "Admin ride operations page must show Ride Captain profiles.");
+assert(taxiPage.includes("Test Ride Requests"), "Admin ride operations page must show staging test ride requests.");
+assert(taxiPage.includes("Ride Summary"), "Admin ride operations page must show Ride summary.");
+assert(taxiPage.includes("does not perform live dispatch, maps billing or payment capture"), "Admin ride operations page must state staging-only limits.");
+assert(taxiPage.includes("Ride readiness review saved"), "Admin ride operations page must support ride readiness review.");
+assert(taxiPage.includes("Create Test Ride Captain Profile"), "Admin ride operations page must create staging Ride Captain profiles from applications.");
+assert(taxiPage.includes("Assign Ride Captain"), "Admin ride operations page must support manual staging Ride Captain assignment.");
+assert(taxiPage.includes("Cancel Test Ride"), "Admin ride operations page must support staging ride cancellation.");
+assert(!taxiPage.includes("Assign ride") && !taxiPage.includes("Dispatch taxi") && !taxiPage.includes("Pay Now"), "Admin ride operations page must not expose live ride dispatch or payment actions.");
 const taxiApi = read("src", "api", "taxi.api.ts");
-assert(taxiApi.includes("admin/taxi/driver-applications"), "Admin taxi API must call driver application endpoints.");
-assert(taxiApi.includes("admin/taxi/waitlist"), "Admin taxi API must call waitlist endpoints.");
-assert(taxiApi.includes("admin/taxi/driver-profiles"), "Admin taxi API must call staging driver profile endpoints.");
-assert(taxiApi.includes("admin/taxi/trips"), "Admin taxi API must call staging trip endpoints.");
-assert(taxiApi.includes("admin/taxi/summary"), "Admin taxi API must call staging summary endpoint.");
+assert(taxiApi.includes("admin/taxi/driver-applications"), "Admin ride API client must call the existing application endpoints.");
+assert(taxiApi.includes("admin/taxi/waitlist"), "Admin ride API client must call the existing waitlist endpoints.");
+assert(taxiApi.includes("admin/taxi/driver-profiles"), "Admin ride API client must call existing staging profile endpoints.");
+assert(taxiApi.includes("admin/taxi/trips"), "Admin ride API client must call existing staging trip endpoints.");
+assert(taxiApi.includes("admin/taxi/summary"), "Admin ride API client must call the existing staging summary endpoint.");
 
 const utilitiesPage = read("app", "utilities", "page.tsx");
 assert(utilitiesPage.includes("Test-mode utility transaction monitoring"), "Admin utilities page must clearly state test mode.");

@@ -24,7 +24,7 @@ export default function HomePage() {
               <div className="mock-grid">
                 <div className="mock-tile">Food</div>
                 <div className="mock-tile">Groceries</div>
-                <div className="mock-tile">Taxi soon</div>
+                <div className="mock-tile">Rides soon</div>
                 <div className="mock-tile">Market</div>
                 <div className="mock-tile">Parcel</div>
                 <div className="mock-tile">Bills soon</div>
@@ -76,12 +76,12 @@ export default function HomePage() {
           </div>
         </article>
         <article className="info-card">
-          <p className="eyebrow">For Riders & Drivers</p>
+          <p className="eyebrow">For Captains</p>
           <h2>Earn with KariGO.</h2>
-          <p>Delivery riders are supported now. Taxi driver onboarding is being prepared with verification, safety and operational controls before launch.</p>
+          <p>Delivery Captains are supported now. Ride Captain onboarding is being prepared with verification, safety and operational controls before KariGO Rides launch.</p>
           <div className="actions">
-            <Link className="button secondary" href="/riders">Rider & Driver Details</Link>
-            <Link className="button" href="/riders#taxi-waitlist">Join Taxi Waitlist</Link>
+            <Link className="button secondary" href="/riders">Captain Details</Link>
+            <Link className="button" href="/riders#taxi-waitlist">Join Ride Waitlist</Link>
           </div>
         </article>
       </section>
@@ -109,7 +109,6 @@ export default function HomePage() {
             </div>
             <p><strong>Android:</strong> Coming soon on Google Play. Limited early access is shared separately.</p>
             <p><strong>iOS:</strong> Coming later.</p>
-            <p>Official store links will appear here when available.</p>
           </article>
         </div>
       </section>

@@ -6,7 +6,7 @@ export const site = {
 export const services = [
   { title: "Food Delivery", icon: "food", description: "Meals from trusted restaurants and kitchens.", status: "Live" },
   { title: "Groceries", icon: "groceries", description: "Daily essentials from local grocery vendors.", status: "Live" },
-  { title: "Taxi", icon: "taxi", description: "Verified driver onboarding and fare controls are being prepared.", status: "Coming soon" },
+  { title: "KariGO Rides", icon: "taxi", description: "Ride Captain onboarding, vehicle checks and fare controls are being prepared.", status: "Coming soon" },
   { title: "Market Items", icon: "market", description: "Household and everyday market items across Kano.", status: "Live" },
   { title: "Pharmacy", icon: "pharmacy", description: "Pharmacy marketplace service is being prepared.", status: "Preparing launch" },
   { title: "Parcel Delivery", icon: "parcel", description: "Send packages safely across selected Kano areas.", status: "Live" },
@@ -18,4 +18,4 @@ export const services = [
 ];
 
 export const liveServices = ["Food Delivery", "Groceries", "Market Items", "Parcel Delivery", "SME Services"];
-export const preparingServices = ["Taxi", "Pharmacy", "Airtime", "Data", "Electricity", "Cable TV"];
+export const preparingServices = ["KariGO Rides", "Pharmacy", "Airtime", "Data", "Electricity", "Cable TV"];

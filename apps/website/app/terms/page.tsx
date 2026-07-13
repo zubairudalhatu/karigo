@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Terms",
-  description: "KariGO terms of service summary for customers, vendors, riders, drivers and website visitors."
+  description: "KariGO terms of service summary for customers, vendors, Captains, Ride readiness applicants and website visitors."
 };
 
 export default function TermsPage() {
@@ -11,7 +11,7 @@ export default function TermsPage() {
       <section className="section">
         <p className="eyebrow">Terms</p>
         <h1>Terms of Service</h1>
-        <p className="lead">These terms explain the expected use of KariGO's public website, delivery platform, vendor application forms, rider/driver interest forms and related services.</p>
+        <p className="lead">These terms explain the expected use of KariGO's public website, delivery platform, vendor application forms, Captain and Ride readiness forms and related services.</p>
       </section>
 
       <section className="section soft">
@@ -23,7 +23,7 @@ export default function TermsPage() {
 
           <article className="info-card">
             <h2>Accounts and access</h2>
-            <p>Customers, vendors, riders, drivers and admins may have different levels of access. Users are responsible for keeping account access private and reporting suspected unauthorized activity quickly.</p>
+            <p>Customers, vendors, Captains, Ride readiness applicants and admins may have different levels of access. Users are responsible for keeping account access private and reporting suspected unauthorized activity quickly.</p>
           </article>
 
           <article className="info-card">
@@ -32,18 +32,18 @@ export default function TermsPage() {
           </article>
 
           <article className="info-card">
-            <h2>Vendors, riders and drivers</h2>
-            <p>Vendor applications, rider operations and taxi driver interest submissions are subject to review. Approval is not automatic, and interest forms do not activate restricted services by themselves.</p>
+            <h2>Vendors and Captains</h2>
+            <p>Vendor applications, Delivery Captain operations and Ride Captain readiness submissions are subject to review. Approval is not automatic, and interest forms do not activate restricted services by themselves.</p>
           </article>
 
           <article className="info-card">
             <h2>Services coming soon</h2>
-            <p>Taxi, Pharmacy, Bills & Utilities and other preparing-launch services are not live unless KariGO clearly announces availability. Website references to these services are availability information only.</p>
+            <p>KariGO Rides, Pharmacy, Bills & Utilities and other preparing-launch services are not live unless KariGO clearly announces availability. Website references to these services are availability information only.</p>
           </article>
 
           <article className="info-card">
             <h2>Support and disputes</h2>
-            <p>Users should report delivery, vendor, rider, payment, refund or account issues through the KariGO support process. Refund, settlement and operational decisions follow KariGO review controls.</p>
+            <p>Users should report delivery, vendor, Captain, payment, refund or account issues through the KariGO support process. Refund, settlement and operational decisions follow KariGO review controls.</p>
           </article>
 
           <article className="info-card">

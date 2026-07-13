@@ -22,7 +22,7 @@ export function ContactInquiryForm() {
   return (
     <form className="form-card inquiry-form" onSubmit={submit}>
       <h2>Send an inquiry</h2>
-      <p>Use this form to prepare a customer, vendor, rider, driver or business inquiry. Do not include passwords, OTPs, payment details or sensitive private information.</p>
+      <p>Use this form to prepare a customer, vendor, Captain, Ride readiness or business inquiry. Do not include passwords, OTPs, payment details or sensitive private information.</p>
       <div className="form-grid">
         <label>Full name<input required value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></label>
         <label>Email<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
@@ -30,7 +30,7 @@ export function ContactInquiryForm() {
         <label>Inquiry type<select value={form.inquiryType} onChange={(event) => setForm({ ...form, inquiryType: event.target.value })}>
           <option>Customer inquiry</option>
           <option>Vendor inquiry</option>
-          <option>Rider or driver inquiry</option>
+          <option>Captain or Ride readiness inquiry</option>
           <option>SME or corporate inquiry</option>
           <option>General inquiry</option>
         </select></label>

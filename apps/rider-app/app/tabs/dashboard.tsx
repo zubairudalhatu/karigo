@@ -89,8 +89,9 @@ export default function RiderDashboard() {
           <Image source={require("../../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
           <StatusBadge status={availabilityLabel(profile)} />
         </View>
+        <Text style={styles.kicker}>KariGO Captain</Text>
         <Text style={styles.title}>Hi, {firstName(profile?.user?.fullName)}</Text>
-        <Text style={ui.pageIntro}>Manage Delivery Captain assignments today. Driver Captain readiness stays gated until taxi is approved.</Text>
+        <Text style={ui.pageIntro}>Manage Delivery Captain assignments today. Ride Captain readiness stays gated until KariGO Rides is approved.</Text>
       </Card>
       <Message error>{error}</Message>
 
@@ -127,15 +128,16 @@ export default function RiderDashboard() {
       </Card>
 
       <Card><Text style={ui.title}>Assigned jobs</Text><Text style={styles.metric}>{jobs.length}</Text><NavLink href="/jobs" label="View assigned jobs" /></Card>
-      <Card><Text style={ui.title}>Driver Captain Readiness</Text><Text style={ui.muted}>Taxi is not live yet. Apply for readiness review while KariGO prepares verified driver onboarding and vehicle checks.</Text><NavLink href="/taxi-readiness" label="Apply for Driver Captain Readiness" /></Card>
+      <Card><Text style={ui.title}>Ride readiness</Text><Text style={ui.muted}>KariGO Rides is not live yet. Apply for readiness review while KariGO prepares approved Ride Captain onboarding and vehicle checks.</Text><NavLink href="/taxi-readiness" label="Apply for Ride readiness" /></Card>
       <Card><Text style={ui.title}>Support and help</Text><Text style={ui.muted}>For staging incidents, contact the KariGO operations or dispatch lead through the approved pilot support channel.</Text></Card>
-      <Card><Text style={ui.title}>Staging safety note</Text><Text style={ui.muted}>Mock providers remain active. Live payouts, withdrawals, live taxi booking and live payment collection are disabled.</Text></Card>
+      <Card><Text style={ui.title}>Staging safety note</Text><Text style={ui.muted}>Mock providers remain active. Live payouts, withdrawals, live ride booking and live payment collection are disabled.</Text></Card>
       <Card><Text style={ui.title}>Quick links</Text><NavLink href="/earnings" label="Earnings" /><NavLink href="/notifications" label={`Notifications (${unread} unread)`} /><NavLink href="/profile" label="Profile and location" /></Card>
     </Screen></Protected>
   );
 }
 
 const styles = StyleSheet.create({
+  kicker: { color: brand.colors.primary, fontSize: 12, fontWeight: "900", letterSpacing: 1.4, textTransform: "uppercase" },
   title: { color: brand.colors.charcoal, fontSize: 25, fontWeight: "800" },
   logo: { height: 34, width: 102 },
   metric: { color: brand.colors.charcoal, fontSize: 28, fontWeight: "800" },

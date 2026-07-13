@@ -23,10 +23,10 @@ details in Git.
 | Password visibility toggle works | Captain can show/hide the password field while typing | Pending | Do not record passwords |
 | Session is isolated | Captain token does not conflict with Customer/Admin/Vendor sessions | Pending | Uses app-specific secure-store key |
 | Captain profile loads | Profile screen shows captain data | Pending |  |
-| Bottom navigation works | Home, Jobs, Earnings and Profile tabs route correctly | Pending | Hidden on auth and Taxi readiness flow |
+| Bottom navigation works | Home, Deliveries, Earnings and Profile tabs route correctly | Pending | Hidden on auth and Ride readiness flow |
 | Dashboard summary loads | Dashboard shows captain name, Delivery Captain availability, today's assigned deliveries, active delivery and completed delivery count | Pending |  |
-| Captain modes show | Delivery Captain is delivery-only and Driver Captain remains readiness/test gated | Pending | No live ride dispatch |
-| Staging safety note shows | Dashboard states live payouts, withdrawals, live taxi booking and live payment collection are disabled | Pending |  |
+| Captain modes show | Delivery Captain is delivery-only and Ride Captain remains readiness/test gated | Pending | No live ride dispatch |
+| Staging safety note shows | Dashboard states live payouts, withdrawals, live ride booking and live payment collection are disabled | Pending |  |
 | Support/help guidance shows | Dashboard gives Captain a safe operations/support escalation prompt | Pending |  |
 | Online/offline works | Availability updates through staging API | Pending |  |
 | Job list loads | Assigned jobs display or safe empty state appears | Pending |  |
@@ -44,7 +44,7 @@ details in Git.
 | Earnings page loads | Earnings summary renders | Pending |  |
 | Earnings guardrail shows | Screen states live wallet withdrawals and payout requests are disabled | Pending |  |
 | Notification page loads | Captain notifications render | Pending |  |
-| Driver Captain readiness required fields | Address, licence, licence expiry, vehicle make/model/year/colour/plate are required | Pending | Readiness only; no live Taxi booking |
+| Ride readiness required fields | Address, licence, licence expiry, vehicle make/model/year/colour/plate are required | Pending | Readiness only; no live ride booking |
 | Header polish | No route names, internal paths, or duplicate native titles are visible | Pending | Back arrow remains on secondary screens |
 | API errors are safe | No raw JSON/stack traces shown | Pending |  |
 | Render cold-start handled | Loading/retry behavior is understandable | Pending |  |

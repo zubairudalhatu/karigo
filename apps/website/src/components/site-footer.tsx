@@ -76,7 +76,7 @@ export function SiteFooter() {
           <h2>Platform</h2>
           <Link href="/services">Services</Link>
           <Link href="/vendors">Vendors</Link>
-          <Link href="/riders">Riders & Drivers</Link>
+          <Link href="/riders">Captains</Link>
           <Link href="/contact">Contact</Link>
         </nav>
 
@@ -85,8 +85,8 @@ export function SiteFooter() {
           <Link href="/vendors/apply">Vendor Application</Link>
           <Link href="/sme-services/apply">Service Provider Application</Link>
           <a href="https://vendor.karigo.com.ng">Vendor Login</a>
-          <Link href="/riders#taxi-waitlist">Taxi Waitlist</Link>
-          <Link href="/riders#taxi-driver-application">Driver Readiness</Link>
+          <Link href="/riders#taxi-waitlist">Ride Waitlist</Link>
+          <Link href="/riders#taxi-driver-application">Ride readiness</Link>
           <a href="/#download">Download App</a>
         </nav>
 
