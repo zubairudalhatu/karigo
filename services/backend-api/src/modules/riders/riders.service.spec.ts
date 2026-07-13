@@ -45,7 +45,8 @@ describe("RidersService delivery captain applications", () => {
   };
   const applicationNotifications = {
     deliveryCaptainApplicationSubmitted: jest.fn(),
-    deliveryCaptainGuarantorListed: jest.fn()
+    deliveryCaptainGuarantorListed: jest.fn(),
+    deliveryCaptainApplicationReviewed: jest.fn()
   };
   const service = new RidersService(prisma as unknown as PrismaService, applicationNotifications as unknown as ApplicationNotificationsService);
 
@@ -60,6 +61,7 @@ describe("RidersService delivery captain applications", () => {
     prisma.deliveryCaptainApplication.update.mockResolvedValue({ ...deliveryCaptainApplication, status: DeliveryCaptainApplicationStatus.UNDER_REVIEW, reviewedAt: now });
     applicationNotifications.deliveryCaptainApplicationSubmitted.mockResolvedValue(undefined);
     applicationNotifications.deliveryCaptainGuarantorListed.mockResolvedValue(undefined);
+    applicationNotifications.deliveryCaptainApplicationReviewed.mockResolvedValue(undefined);
   });
 
   it("creates a Kano Delivery Captain application without activating login, dispatch or payouts", async () => {
@@ -171,6 +173,14 @@ describe("RidersService delivery captain applications", () => {
       take: 150
     }));
 
+    prisma.deliveryCaptainApplication.update.mockResolvedValueOnce({
+      ...deliveryCaptainApplication,
+      status: DeliveryCaptainApplicationStatus.UNDER_REVIEW,
+      applicantVisibleNote: "We are reviewing your application.",
+      adminNote: "Verify guarantor.",
+      reviewedAt: now
+    });
+
     await expect(service.reviewDeliveryCaptainApplication(deliveryCaptainApplication.id, {
       status: DeliveryCaptainApplicationStatus.UNDER_REVIEW,
       applicantVisibleNote: "We are reviewing your application.",
@@ -187,5 +197,13 @@ describe("RidersService delivery captain applications", () => {
         adminNote: "Verify guarantor."
       })
     }));
+    expect(applicationNotifications.deliveryCaptainApplicationReviewed).toHaveBeenCalledWith({
+      reference: deliveryCaptainApplication.applicationReference,
+      recipientName: deliveryCaptainApplication.fullName,
+      phoneNumber: deliveryCaptainApplication.phoneNumber,
+      email: deliveryCaptainApplication.email,
+      status: DeliveryCaptainApplicationStatus.UNDER_REVIEW,
+      note: "We are reviewing your application."
+    });
   });
 });

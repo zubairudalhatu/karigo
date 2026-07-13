@@ -8,6 +8,11 @@ interface ApplicationNotificationInput {
   email?: string | null;
 }
 
+interface ApplicationReviewNotificationInput extends ApplicationNotificationInput {
+  status: string;
+  note?: string | null;
+}
+
 interface GuarantorNotificationInput {
   reference: string;
   applicantName: string;
@@ -22,6 +27,13 @@ interface ChannelResult {
   providerReference?: string;
 }
 
+type ApplicationNotificationType =
+  | "vendor_application_received"
+  | "delivery_captain_application_received"
+  | "delivery_captain_guarantor_listed"
+  | "vendor_application_reviewed"
+  | "delivery_captain_application_reviewed";
+
 @Injectable()
 export class ApplicationNotificationsService {
   private readonly logger = new Logger(ApplicationNotificationsService.name);
@@ -30,37 +42,91 @@ export class ApplicationNotificationsService {
 
   async vendorApplicationSubmitted(input: ApplicationNotificationInput): Promise<void> {
     const message = `KariGO has received your vendor application ${input.reference} for Kano pilot review. Approval is not automatic. We will contact you with next steps.`;
-    await Promise.all([
-      this.sendApplicationEmail({
-        to: input.email,
-        recipientName: input.recipientName,
-        subject: "KariGO vendor application received",
-        heading: "Your vendor application has been received",
-        message,
-        reference: input.reference
-      }),
-      this.sendApplicationSms(input.phoneNumber, message, "vendor applicant")
-    ]);
+    await this.sendApplicantNotification("vendor_application_received", input, {
+      subject: "KariGO vendor application received",
+      heading: "Your vendor application has been received",
+      message
+    });
   }
 
   async deliveryCaptainApplicationSubmitted(input: ApplicationNotificationInput): Promise<void> {
     const message = `KariGO has received your Delivery Captain application ${input.reference} for Kano pilot review. This does not activate dispatch or payouts. We will contact you with next steps.`;
-    await Promise.all([
-      this.sendApplicationEmail({
-        to: input.email,
-        recipientName: input.recipientName,
-        subject: "KariGO Delivery Captain application received",
-        heading: "Your Delivery Captain application has been received",
-        message,
-        reference: input.reference
-      }),
-      this.sendApplicationSms(input.phoneNumber, message, "Delivery Captain applicant")
-    ]);
+    await this.sendApplicantNotification("delivery_captain_application_received", input, {
+      subject: "KariGO Delivery Captain application received",
+      heading: "Your Delivery Captain application has been received",
+      message
+    });
+  }
+
+  async vendorApplicationReviewed(input: ApplicationReviewNotificationInput): Promise<void> {
+    const statusText = this.statusText(input.status);
+    const noteText = input.note ? ` Note from KariGO: ${input.note}` : "";
+    const message = `KariGO vendor application ${input.reference} has been updated to ${statusText}.${noteText} Approval does not automatically activate live payments, payouts or public marketplace visibility.`;
+    await this.sendApplicantNotification("vendor_application_reviewed", input, {
+      subject: "KariGO vendor application update",
+      heading: "Your vendor application has been updated",
+      message
+    });
+  }
+
+  async deliveryCaptainApplicationReviewed(input: ApplicationReviewNotificationInput): Promise<void> {
+    const statusText = this.statusText(input.status);
+    const noteText = input.note ? ` Note from KariGO: ${input.note}` : "";
+    const message = `KariGO Delivery Captain application ${input.reference} has been updated to ${statusText}.${noteText} This does not activate dispatch, Ride access or payouts.`;
+    await this.sendApplicantNotification("delivery_captain_application_reviewed", input, {
+      subject: "KariGO Delivery Captain application update",
+      heading: "Your Delivery Captain application has been updated",
+      message
+    });
   }
 
   async deliveryCaptainGuarantorListed(input: GuarantorNotificationInput): Promise<void> {
     const message = `KariGO notice: ${input.applicantName} listed you as guarantor for Delivery Captain application ${input.reference}. KariGO may contact you for verification. Do not share OTPs or payment details.`;
-    await this.sendApplicationSms(input.guarantorPhone, message, "Delivery Captain guarantor");
+    const smsEnabled = this.guarantorSmsEnabled();
+    const smsProvider = smsEnabled ? this.smsProvider() : "disabled";
+    const result = await this.sendApplicationSms(input.guarantorPhone, message, "Delivery Captain guarantor", smsEnabled);
+    this.logDecision({
+      type: "delivery_captain_guarantor_listed",
+      smsEnabled,
+      emailEnabled: false,
+      hasPhone: Boolean(input.guarantorPhone),
+      hasEmail: false,
+      smsProvider,
+      emailProvider: "disabled",
+      results: [result]
+    });
+  }
+
+  private async sendApplicantNotification(
+    type: ApplicationNotificationType,
+    input: ApplicationNotificationInput,
+    content: { subject: string; heading: string; message: string }
+  ): Promise<void> {
+    const smsEnabled = this.smsEnabled();
+    const emailEnabled = this.emailEnabled();
+    const smsProvider = smsEnabled ? this.smsProvider() : "disabled";
+    const emailProvider = emailEnabled ? this.emailProvider() : "disabled";
+    const [emailResult, smsResult] = await Promise.all([
+      this.sendApplicationEmail({
+        to: input.email,
+        recipientName: input.recipientName,
+        subject: content.subject,
+        heading: content.heading,
+        message: content.message,
+        reference: input.reference
+      }),
+      this.sendApplicationSms(input.phoneNumber, content.message, this.typeLabel(type), smsEnabled)
+    ]);
+    this.logDecision({
+      type,
+      smsEnabled,
+      emailEnabled,
+      hasPhone: Boolean(input.phoneNumber),
+      hasEmail: Boolean(input.email),
+      smsProvider,
+      emailProvider,
+      results: [emailResult, smsResult]
+    });
   }
 
   private async sendApplicationEmail(input: {
@@ -71,7 +137,7 @@ export class ApplicationNotificationsService {
     message: string;
     reference: string;
   }): Promise<ChannelResult> {
-    if (!this.enabled() || !this.emailEnabled()) return { accepted: false, provider: "disabled", reason: "disabled" };
+    if (!this.emailEnabled()) return { accepted: false, provider: "disabled", reason: "disabled" };
     if (!input.to) return { accepted: false, provider: "disabled", reason: "missing_recipient" };
     const to = input.to;
     const provider = this.emailProvider();
@@ -88,8 +154,9 @@ export class ApplicationNotificationsService {
     }
   }
 
-  private async sendApplicationSms(phoneNumber: string, message: string, recipientLabel: string): Promise<ChannelResult> {
-    if (!this.enabled() || !this.smsEnabled()) return { accepted: false, provider: "disabled", reason: "disabled" };
+  private async sendApplicationSms(phoneNumber: string | null | undefined, message: string, recipientLabel: string, enabled: boolean): Promise<ChannelResult> {
+    if (!enabled) return { accepted: false, provider: "disabled", reason: "disabled" };
+    if (!phoneNumber) return { accepted: false, provider: "disabled", reason: "missing_recipient" };
     const provider = this.smsProvider();
     if (provider === "mock") {
       this.logger.log(`mock application SMS accepted recipient=${this.maskPhone(phoneNumber)} label=${recipientLabel}`);
@@ -186,31 +253,50 @@ export class ApplicationNotificationsService {
     return { subject: input.subject, htmlBody, textBody };
   }
 
-  private enabled() {
-    return this.flag("APPLICATION_NOTIFICATIONS_ENABLED");
-  }
-
   private emailEnabled() {
-    return this.flag("APPLICATION_NOTIFICATION_EMAIL_ENABLED");
+    return this.flag(["APPLICATION_EMAIL_NOTIFICATIONS_ENABLED", "APPLICATION_NOTIFICATION_EMAIL_ENABLED"]);
   }
 
   private smsEnabled() {
-    return this.flag("APPLICATION_NOTIFICATION_SMS_ENABLED");
+    return this.flag(["APPLICATION_SMS_NOTIFICATIONS_ENABLED", "APPLICATION_NOTIFICATION_SMS_ENABLED"]);
+  }
+
+  private guarantorSmsEnabled() {
+    const configured = this.firstConfigured(["GUARANTOR_SMS_NOTIFICATIONS_ENABLED"]);
+    if (configured !== undefined && configured !== "") return this.flag(["GUARANTOR_SMS_NOTIFICATIONS_ENABLED"]);
+    return this.smsEnabled();
   }
 
   private emailProvider(): "mock" | "resend" {
-    return this.config.get<string>("APPLICATION_NOTIFICATION_EMAIL_PROVIDER", "mock").toLowerCase() === "resend" ? "resend" : "mock";
+    const configured = this.stringValue(["APPLICATION_EMAIL_NOTIFICATION_PROVIDER", "APPLICATION_NOTIFICATION_EMAIL_PROVIDER"]);
+    const provider = configured ?? (this.emailEnabled() ? "resend" : "mock");
+    return provider.toLowerCase() === "resend" ? "resend" : "mock";
   }
 
   private smsProvider(): "mock" | "termii" {
-    return this.config.get<string>("APPLICATION_NOTIFICATION_SMS_PROVIDER", "mock").toLowerCase() === "termii" ? "termii" : "mock";
+    const configured = this.stringValue(["APPLICATION_SMS_NOTIFICATION_PROVIDER", "APPLICATION_NOTIFICATION_SMS_PROVIDER"]);
+    const provider = configured ?? (this.smsEnabled() || this.guarantorSmsEnabled() ? "termii" : "mock");
+    return provider.toLowerCase() === "termii" ? "termii" : "mock";
   }
 
-  private flag(key: string) {
-    const value = this.config.get<unknown>(key, false);
+  private flag(keys: string[]) {
+    const value = this.firstConfigured(keys);
     if (typeof value === "boolean") return value;
     if (typeof value === "string") return ["true", "1", "yes"].includes(value.toLowerCase());
     return false;
+  }
+
+  private firstConfigured(keys: string[]) {
+    for (const key of keys) {
+      const value = this.config.get<unknown>(key);
+      if (value !== undefined && value !== "") return value;
+    }
+    return undefined;
+  }
+
+  private stringValue(keys: string[]) {
+    const value = this.firstConfigured(keys);
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
   }
 
   private resendBaseUrl() {
@@ -241,5 +327,49 @@ export class ApplicationNotificationsService {
 
   private maskPhone(phoneNumber: string): string {
     return phoneNumber.length <= 7 ? "***" : `${phoneNumber.slice(0, 4)}***${phoneNumber.slice(-3)}`;
+  }
+
+  private logDecision(input: {
+    type: ApplicationNotificationType;
+    smsEnabled: boolean;
+    emailEnabled: boolean;
+    hasPhone: boolean;
+    hasEmail: boolean;
+    smsProvider: ChannelResult["provider"];
+    emailProvider: ChannelResult["provider"];
+    results: ChannelResult[];
+  }) {
+    const result = this.decisionResult(input.results);
+    const reason = this.decisionReason(input.results, result);
+    this.logger.log(
+      `Application notification decision type=${input.type} smsEnabled=${input.smsEnabled} emailEnabled=${input.emailEnabled} hasPhone=${input.hasPhone} hasEmail=${input.hasEmail} smsProvider=${input.smsProvider} emailProvider=${input.emailProvider} result=${result} reason=${reason}`
+    );
+  }
+
+  private decisionResult(results: ChannelResult[]) {
+    if (results.some((result) => result.accepted)) return "sent";
+    if (results.some((result) => result.reason === "provider_error")) return "failed";
+    return "skipped";
+  }
+
+  private decisionReason(results: ChannelResult[], result: string) {
+    if (result === "sent") return "provider_accepted";
+    const reason = results.find((item) => item.reason)?.reason;
+    return reason ?? "not_enabled";
+  }
+
+  private typeLabel(type: ApplicationNotificationType) {
+    const labels: Record<ApplicationNotificationType, string> = {
+      vendor_application_received: "vendor applicant",
+      delivery_captain_application_received: "Delivery Captain applicant",
+      delivery_captain_guarantor_listed: "Delivery Captain guarantor",
+      vendor_application_reviewed: "vendor applicant review",
+      delivery_captain_application_reviewed: "Delivery Captain applicant review"
+    };
+    return labels[type];
+  }
+
+  private statusText(status: string) {
+    return status.toLowerCase().replaceAll("_", " ");
   }
 }

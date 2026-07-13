@@ -154,6 +154,14 @@ export class RidersService {
       },
       select: DELIVERY_CAPTAIN_APPLICATION_SELECT
     });
+    await this.applicationNotifications.deliveryCaptainApplicationReviewed({
+      reference: application.applicationReference,
+      recipientName: application.fullName,
+      phoneNumber: application.phoneNumber,
+      email: application.email,
+      status: application.status,
+      note: application.applicantVisibleNote
+    });
     return this.toAdminDeliveryCaptainApplication(application);
   }
 

@@ -27,9 +27,14 @@ describe("environment configuration", () => {
     expect(result.KARIGO_EMAIL_LOGO_URL).toBe("");
     expect(result.KARIGO_PILOT_EMAIL_LABEL).toBe("Kano controlled early access");
     expect(result.APPLICATION_NOTIFICATIONS_ENABLED).toBe(false);
+    expect(result.APPLICATION_EMAIL_NOTIFICATIONS_ENABLED).toBe(false);
     expect(result.APPLICATION_NOTIFICATION_EMAIL_ENABLED).toBe(false);
+    expect(result.APPLICATION_EMAIL_NOTIFICATION_PROVIDER).toBe("mock");
     expect(result.APPLICATION_NOTIFICATION_EMAIL_PROVIDER).toBe("mock");
+    expect(result.APPLICATION_SMS_NOTIFICATIONS_ENABLED).toBe(false);
     expect(result.APPLICATION_NOTIFICATION_SMS_ENABLED).toBe(false);
+    expect(result.GUARANTOR_SMS_NOTIFICATIONS_ENABLED).toBe(false);
+    expect(result.APPLICATION_SMS_NOTIFICATION_PROVIDER).toBe("mock");
     expect(result.APPLICATION_NOTIFICATION_SMS_PROVIDER).toBe("mock");
     expect(result.WHATSAPP_PROVIDER).toBe("mock");
     expect(result.WHATSAPP_API_VERSION).toBe("v20.0");
@@ -169,11 +174,9 @@ describe("environment configuration", () => {
       DATABASE_URL: testDatabaseUrl,
       JWT_SECRET: "test-secret",
       APP_ENV: "staging",
-      APPLICATION_NOTIFICATIONS_ENABLED: "true",
-      APPLICATION_NOTIFICATION_EMAIL_ENABLED: "true",
-      APPLICATION_NOTIFICATION_EMAIL_PROVIDER: "resend",
-      APPLICATION_NOTIFICATION_SMS_ENABLED: "true",
-      APPLICATION_NOTIFICATION_SMS_PROVIDER: "termii",
+      APPLICATION_EMAIL_NOTIFICATIONS_ENABLED: "true",
+      APPLICATION_SMS_NOTIFICATIONS_ENABLED: "true",
+      GUARANTOR_SMS_NOTIFICATIONS_ENABLED: "true",
       RESEND_API_KEY: "resend-test-key-not-real",
       RESEND_FROM_EMAIL: "no-reply@example.test",
       TERMII_API_KEY: "termii-test-key-not-real",
@@ -181,10 +184,36 @@ describe("environment configuration", () => {
     });
 
     expect(result.APPLICATION_NOTIFICATIONS_ENABLED).toBe(true);
+    expect(result.APPLICATION_EMAIL_NOTIFICATIONS_ENABLED).toBe(true);
     expect(result.APPLICATION_NOTIFICATION_EMAIL_ENABLED).toBe(true);
+    expect(result.APPLICATION_EMAIL_NOTIFICATION_PROVIDER).toBe("resend");
     expect(result.APPLICATION_NOTIFICATION_EMAIL_PROVIDER).toBe("resend");
+    expect(result.APPLICATION_SMS_NOTIFICATIONS_ENABLED).toBe(true);
     expect(result.APPLICATION_NOTIFICATION_SMS_ENABLED).toBe(true);
+    expect(result.GUARANTOR_SMS_NOTIFICATIONS_ENABLED).toBe(true);
+    expect(result.APPLICATION_SMS_NOTIFICATION_PROVIDER).toBe("termii");
     expect(result.APPLICATION_NOTIFICATION_SMS_PROVIDER).toBe("termii");
+  });
+
+  it("keeps backward-compatible application notification flag aliases", () => {
+    const result = validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "staging",
+      APPLICATION_NOTIFICATIONS_ENABLED: "true",
+      APPLICATION_NOTIFICATION_EMAIL_ENABLED: "true",
+      APPLICATION_NOTIFICATION_EMAIL_PROVIDER: "mock",
+      APPLICATION_NOTIFICATION_SMS_ENABLED: "true",
+      APPLICATION_NOTIFICATION_SMS_PROVIDER: "mock"
+    });
+
+    expect(result.APPLICATION_NOTIFICATIONS_ENABLED).toBe(true);
+    expect(result.APPLICATION_EMAIL_NOTIFICATIONS_ENABLED).toBe(true);
+    expect(result.APPLICATION_NOTIFICATION_EMAIL_ENABLED).toBe(true);
+    expect(result.APPLICATION_EMAIL_NOTIFICATION_PROVIDER).toBe("mock");
+    expect(result.APPLICATION_SMS_NOTIFICATIONS_ENABLED).toBe(true);
+    expect(result.APPLICATION_NOTIFICATION_SMS_ENABLED).toBe(true);
+    expect(result.APPLICATION_SMS_NOTIFICATION_PROVIDER).toBe("mock");
   });
 
   it("keeps application notification email blocked without Resend credentials when enabled", () => {
@@ -192,9 +221,7 @@ describe("environment configuration", () => {
       DATABASE_URL: testDatabaseUrl,
       JWT_SECRET: "test-secret",
       APP_ENV: "staging",
-      APPLICATION_NOTIFICATIONS_ENABLED: "true",
-      APPLICATION_NOTIFICATION_EMAIL_ENABLED: "true",
-      APPLICATION_NOTIFICATION_EMAIL_PROVIDER: "resend"
+      APPLICATION_EMAIL_NOTIFICATIONS_ENABLED: "true"
     })).toThrow("Missing required environment variable: RESEND_API_KEY");
   });
 
@@ -203,9 +230,16 @@ describe("environment configuration", () => {
       DATABASE_URL: testDatabaseUrl,
       JWT_SECRET: "test-secret",
       APP_ENV: "staging",
-      APPLICATION_NOTIFICATIONS_ENABLED: "true",
-      APPLICATION_NOTIFICATION_SMS_ENABLED: "true",
-      APPLICATION_NOTIFICATION_SMS_PROVIDER: "termii"
+      APPLICATION_SMS_NOTIFICATIONS_ENABLED: "true"
+    })).toThrow("Missing required environment variable: TERMII_API_KEY");
+  });
+
+  it("keeps guarantor notification SMS blocked without Termii credentials when enabled", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "staging",
+      GUARANTOR_SMS_NOTIFICATIONS_ENABLED: "true"
     })).toThrow("Missing required environment variable: TERMII_API_KEY");
   });
 

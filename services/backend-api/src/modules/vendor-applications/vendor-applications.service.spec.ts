@@ -51,12 +51,16 @@ const vendorApplication = {
 
 describe("VendorApplicationsService", () => {
   const prisma: any = {
+    $transaction: jest.fn(),
     vendorApplication: {
       create: jest.fn(),
       findUnique: jest.fn()
     }
   };
-  const applicationNotifications = { vendorApplicationSubmitted: jest.fn() };
+  const applicationNotifications = {
+    vendorApplicationSubmitted: jest.fn(),
+    vendorApplicationReviewed: jest.fn()
+  };
   const service = new VendorApplicationsService(prisma as unknown as PrismaService, applicationNotifications as unknown as ApplicationNotificationsService);
 
   beforeEach(() => {
@@ -64,6 +68,7 @@ describe("VendorApplicationsService", () => {
     prisma.vendorApplication.findUnique.mockResolvedValue(null);
     prisma.vendorApplication.create.mockResolvedValue(vendorApplication);
     applicationNotifications.vendorApplicationSubmitted.mockResolvedValue(undefined);
+    applicationNotifications.vendorApplicationReviewed.mockResolvedValue(undefined);
   });
 
   const baseDto = {
@@ -103,5 +108,36 @@ describe("VendorApplicationsService", () => {
   it("rejects public vendor applications outside Kano", async () => {
     await expect(service.create({ ...baseDto, city: "Kaduna", state: "Kaduna" })).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.vendorApplication.create).not.toHaveBeenCalled();
+  });
+
+  it("notifies applicants when Admin reviews a vendor application without exposing internal notes", async () => {
+    const reviewedApplication = {
+      ...vendorApplication,
+      status: VendorApplicationStatus.APPROVED,
+      reviewedAt: now
+    };
+    const tx = {
+      vendorApplicationReview: { create: jest.fn() },
+      vendorApplicationStatusHistory: { create: jest.fn() },
+      vendorApplication: { update: jest.fn().mockResolvedValue(reviewedApplication) }
+    };
+    prisma.vendorApplication.findUnique.mockResolvedValueOnce({
+      id: vendorApplication.id,
+      status: VendorApplicationStatus.SUBMITTED
+    });
+    prisma.$transaction.mockImplementationOnce(async (callback: any) => callback(tx));
+
+    await expect(service.review(vendorApplication.id, "00000000-0000-0000-0000-00000000a001", {
+      status: VendorApplicationStatus.APPROVED,
+      notes: "Internal setup note"
+    })).resolves.toMatchObject({ status: VendorApplicationStatus.APPROVED });
+
+    expect(applicationNotifications.vendorApplicationReviewed).toHaveBeenCalledWith({
+      reference: vendorApplication.reference,
+      recipientName: vendorApplication.contactFullName,
+      phoneNumber: vendorApplication.contactPhoneNumber,
+      email: vendorApplication.contactEmail,
+      status: VendorApplicationStatus.APPROVED
+    });
   });
 });

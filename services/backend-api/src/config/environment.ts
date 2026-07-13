@@ -62,6 +62,23 @@ function booleanFlag(value: unknown, key: string, fallback = false): boolean {
   throw new Error(`${key} must be true or false`);
 }
 
+function firstConfigured(config: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) {
+    const value = config[key];
+    if (value !== undefined && value !== "") return value;
+  }
+  return undefined;
+}
+
+function booleanAlias(config: Record<string, unknown>, keys: string[], keyForError: string, fallback = false): boolean {
+  return booleanFlag(firstConfigured(config, keys), keyForError, fallback);
+}
+
+function stringAlias(config: Record<string, unknown>, keys: string[], fallback: string): string {
+  const value = firstConfigured(config, keys);
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
 export function validateEnvironment(config: Record<string, unknown>): Record<string, unknown> {
   const appEnvironment = typeof config.APP_ENV === "string" ? config.APP_ENV : "development";
   const otpProvider =
@@ -141,39 +158,56 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   if (karigoEmailLogoUrl && !karigoEmailLogoUrl.startsWith("https://")) {
     throw new Error("KARIGO_EMAIL_LOGO_URL must use HTTPS");
   }
-  const applicationNotificationsEnabled = booleanFlag(
+  const applicationEmailNotificationsEnabled = booleanAlias(
+    config,
+    ["APPLICATION_EMAIL_NOTIFICATIONS_ENABLED", "APPLICATION_NOTIFICATION_EMAIL_ENABLED"],
+    "APPLICATION_EMAIL_NOTIFICATIONS_ENABLED",
+    false
+  );
+  const applicationSmsNotificationsEnabled = booleanAlias(
+    config,
+    ["APPLICATION_SMS_NOTIFICATIONS_ENABLED", "APPLICATION_NOTIFICATION_SMS_ENABLED"],
+    "APPLICATION_SMS_NOTIFICATIONS_ENABLED",
+    false
+  );
+  const guarantorSmsNotificationsEnabled = booleanAlias(
+    config,
+    ["GUARANTOR_SMS_NOTIFICATIONS_ENABLED"],
+    "GUARANTOR_SMS_NOTIFICATIONS_ENABLED",
+    false
+  );
+  const legacyApplicationNotificationsEnabled = booleanFlag(
     config.APPLICATION_NOTIFICATIONS_ENABLED,
     "APPLICATION_NOTIFICATIONS_ENABLED",
     false
   );
-  const applicationNotificationEmailEnabled = booleanFlag(
-    config.APPLICATION_NOTIFICATION_EMAIL_ENABLED,
-    "APPLICATION_NOTIFICATION_EMAIL_ENABLED",
-    false
-  );
-  const applicationNotificationSmsEnabled = booleanFlag(
-    config.APPLICATION_NOTIFICATION_SMS_ENABLED,
-    "APPLICATION_NOTIFICATION_SMS_ENABLED",
-    false
-  );
+  const applicationNotificationsEnabled =
+    legacyApplicationNotificationsEnabled ||
+    applicationEmailNotificationsEnabled ||
+    applicationSmsNotificationsEnabled ||
+    guarantorSmsNotificationsEnabled;
   const applicationNotificationEmailProvider =
-    typeof config.APPLICATION_NOTIFICATION_EMAIL_PROVIDER === "string"
-      ? config.APPLICATION_NOTIFICATION_EMAIL_PROVIDER.toLowerCase()
-      : "mock";
+    stringAlias(
+      config,
+      ["APPLICATION_EMAIL_NOTIFICATION_PROVIDER", "APPLICATION_NOTIFICATION_EMAIL_PROVIDER"],
+      applicationEmailNotificationsEnabled ? "resend" : "mock"
+    ).toLowerCase();
   if (!["mock", "resend"].includes(applicationNotificationEmailProvider)) {
-    throw new Error("APPLICATION_NOTIFICATION_EMAIL_PROVIDER must be mock or resend");
+    throw new Error("APPLICATION_EMAIL_NOTIFICATION_PROVIDER must be mock or resend");
   }
   const applicationNotificationSmsProvider =
-    typeof config.APPLICATION_NOTIFICATION_SMS_PROVIDER === "string"
-      ? config.APPLICATION_NOTIFICATION_SMS_PROVIDER.toLowerCase()
-      : "mock";
+    stringAlias(
+      config,
+      ["APPLICATION_SMS_NOTIFICATION_PROVIDER", "APPLICATION_NOTIFICATION_SMS_PROVIDER"],
+      applicationSmsNotificationsEnabled || guarantorSmsNotificationsEnabled ? "termii" : "mock"
+    ).toLowerCase();
   if (!["mock", "termii"].includes(applicationNotificationSmsProvider)) {
-    throw new Error("APPLICATION_NOTIFICATION_SMS_PROVIDER must be mock or termii");
+    throw new Error("APPLICATION_SMS_NOTIFICATION_PROVIDER must be mock or termii");
   }
   if (applicationNotificationsEnabled && appEnvironment === "production") {
     throw new Error("Application notification sending is restricted to staging or pilot approval");
   }
-  if (applicationNotificationsEnabled && applicationNotificationEmailEnabled && applicationNotificationEmailProvider === "resend") {
+  if (applicationEmailNotificationsEnabled && applicationNotificationEmailProvider === "resend") {
     const resendBaseUrl = typeof config.RESEND_BASE_URL === "string" && config.RESEND_BASE_URL.trim()
       ? config.RESEND_BASE_URL.trim()
       : "https://api.resend.com";
@@ -181,7 +215,7 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     requireValue(config, "RESEND_API_KEY");
     requireValue(config, "RESEND_FROM_EMAIL");
   }
-  if (applicationNotificationsEnabled && applicationNotificationSmsEnabled && applicationNotificationSmsProvider === "termii") {
+  if ((applicationSmsNotificationsEnabled || guarantorSmsNotificationsEnabled) && applicationNotificationSmsProvider === "termii") {
     requireValue(config, "TERMII_API_KEY");
     requireValue(config, "TERMII_SENDER_ID");
     const termiiBaseUrl = typeof config.TERMII_BASE_URL === "string" && config.TERMII_BASE_URL.trim()
@@ -257,9 +291,14 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       ? config.KARIGO_PILOT_EMAIL_LABEL.trim()
       : "Kano controlled early access",
     APPLICATION_NOTIFICATIONS_ENABLED: applicationNotificationsEnabled,
-    APPLICATION_NOTIFICATION_EMAIL_ENABLED: applicationNotificationEmailEnabled,
+    APPLICATION_EMAIL_NOTIFICATIONS_ENABLED: applicationEmailNotificationsEnabled,
+    APPLICATION_NOTIFICATION_EMAIL_ENABLED: applicationEmailNotificationsEnabled,
+    APPLICATION_EMAIL_NOTIFICATION_PROVIDER: applicationNotificationEmailProvider,
     APPLICATION_NOTIFICATION_EMAIL_PROVIDER: applicationNotificationEmailProvider,
-    APPLICATION_NOTIFICATION_SMS_ENABLED: applicationNotificationSmsEnabled,
+    APPLICATION_SMS_NOTIFICATIONS_ENABLED: applicationSmsNotificationsEnabled,
+    APPLICATION_NOTIFICATION_SMS_ENABLED: applicationSmsNotificationsEnabled,
+    GUARANTOR_SMS_NOTIFICATIONS_ENABLED: guarantorSmsNotificationsEnabled,
+    APPLICATION_SMS_NOTIFICATION_PROVIDER: applicationNotificationSmsProvider,
     APPLICATION_NOTIFICATION_SMS_PROVIDER: applicationNotificationSmsProvider,
     WHATSAPP_PROVIDER: whatsappProvider,
     WHATSAPP_BASE_URL: typeof config.WHATSAPP_BASE_URL === "string" && config.WHATSAPP_BASE_URL.trim()

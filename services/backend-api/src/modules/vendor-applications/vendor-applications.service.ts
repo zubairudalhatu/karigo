@@ -189,6 +189,14 @@ export class VendorApplicationsService {
       });
     });
 
+    await this.applicationNotifications.vendorApplicationReviewed({
+      reference: application.reference,
+      recipientName: application.contactFullName,
+      phoneNumber: application.contactPhoneNumber,
+      email: application.contactEmail,
+      status: application.status
+    });
+
     return this.toAdminDetail(application);
   }
 

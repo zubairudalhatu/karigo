@@ -66,11 +66,12 @@ Record only variable names and pass/fail status. Do not record values.
 | --- | --- | --- | --- | --- |
 | `APP_ENV` | Staging/pilot, not production | `Pass / Fail / Blocked` |  |  |
 | `PAYMENTS_PROVIDER` / payment mode | Mock payment | `Pass / Fail / Blocked` |  |  |
-| `APPLICATION_NOTIFICATIONS_ENABLED` | `true` only for controlled verification; otherwise `false` | `Pass / Fail / Blocked` |  |  |
-| `APPLICATION_NOTIFICATION_EMAIL_ENABLED` | `true` only for approved application email verification | `Pass / Fail / Blocked` |  |  |
-| `APPLICATION_NOTIFICATION_EMAIL_PROVIDER` | `resend` for approved pilot verification or `mock` for rollback | `Pass / Fail / Blocked` |  |  |
-| `APPLICATION_NOTIFICATION_SMS_ENABLED` | `true` only for approved application SMS verification | `Pass / Fail / Blocked` |  |  |
-| `APPLICATION_NOTIFICATION_SMS_PROVIDER` | `termii` for approved pilot verification or `mock` for rollback | `Pass / Fail / Blocked` |  |  |
+| `APPLICATION_EMAIL_NOTIFICATIONS_ENABLED` | `true` only for approved application email verification | `Pass / Fail / Blocked` |  |  |
+| `APPLICATION_EMAIL_NOTIFICATION_PROVIDER` | `resend` for approved pilot verification or `mock` for rollback; defaults to `resend` when email flag is enabled | `Pass / Fail / Blocked` |  |  |
+| `APPLICATION_SMS_NOTIFICATIONS_ENABLED` | `true` only for approved application SMS verification | `Pass / Fail / Blocked` |  |  |
+| `APPLICATION_SMS_NOTIFICATION_PROVIDER` | `termii` for approved pilot verification or `mock` for rollback; defaults to `termii` when SMS flag is enabled | `Pass / Fail / Blocked` |  |  |
+| `GUARANTOR_SMS_NOTIFICATIONS_ENABLED` | `true` only for approved Delivery Captain guarantor SMS verification | `Pass / Fail / Blocked` |  |  |
+| Legacy aliases | `APPLICATION_NOTIFICATION_EMAIL_ENABLED`, `APPLICATION_NOTIFICATION_SMS_ENABLED`, `APPLICATION_NOTIFICATION_EMAIL_PROVIDER`, `APPLICATION_NOTIFICATION_SMS_PROVIDER` remain backward-compatible | `Pass / Fail / Blocked` |  |  |
 | `RESEND_API_KEY` | Present in secret manager only when email verification is approved | `Pass / Fail / Blocked` |  |  |
 | `RESEND_FROM_EMAIL` | Present in secret manager only when email verification is approved | `Pass / Fail / Blocked` |  |  |
 | `TERMII_API_KEY` | Present in secret manager only when SMS verification is approved | `Pass / Fail / Blocked` |  |  |
@@ -125,6 +126,26 @@ Record only variable names and pass/fail status. Do not record values.
 | `APP117-CAPTAIN-007` | Provider failure during applicant notification | Application remains submitted; failure is safely logged with masked recipient data |  | `Pass / Fail / Blocked` |  |  |
 | `APP117-CAPTAIN-008` | Provider failure during guarantor notification | Application remains submitted; failure is safely logged with masked recipient data |  | `Pass / Fail / Blocked` |  |  |
 
+## Observability Verification
+
+Backend logs should include one safe decision line whenever an application notification is
+considered. The log must not contain OTPs, secrets, full phone numbers or full email
+addresses.
+
+Expected log shape:
+
+```text
+Application notification decision type=<notification_type> smsEnabled=true/false emailEnabled=true/false hasPhone=true/false hasEmail=true/false smsProvider=termii/mock/disabled emailProvider=resend/mock/disabled result=sent/skipped/failed reason=<safe_reason>
+```
+
+| Test ID | Notification type | Expected decision log | Actual result | Status | Evidence reference |
+| --- | --- | --- | --- | --- | --- |
+| `APP117-OBS-001` | `vendor_application_received` | Log shows enabled/disabled channel decisions and provider result |  | `Pass / Fail / Blocked` |  |
+| `APP117-OBS-002` | `delivery_captain_application_received` | Log shows applicant SMS/email decision |  | `Pass / Fail / Blocked` |  |
+| `APP117-OBS-003` | `delivery_captain_guarantor_listed` | Log shows guarantor SMS decision with `emailEnabled=false` |  | `Pass / Fail / Blocked` |  |
+| `APP117-OBS-004` | `vendor_application_reviewed` | Log shows admin review notification decision |  | `Pass / Fail / Blocked` |  |
+| `APP117-OBS-005` | `delivery_captain_application_reviewed` | Log shows applicant-visible admin review notification decision |  | `Pass / Fail / Blocked` |  |
+
 ## Website Anchor Verification
 
 | Test ID | Page/link | Expected result | Actual result | Status | Evidence reference |
@@ -169,10 +190,11 @@ environment variables and redeploy. Do not remove submitted application records.
 
 ```dotenv
 APPLICATION_NOTIFICATIONS_ENABLED=false
-APPLICATION_NOTIFICATION_EMAIL_ENABLED=false
-APPLICATION_NOTIFICATION_EMAIL_PROVIDER=mock
-APPLICATION_NOTIFICATION_SMS_ENABLED=false
-APPLICATION_NOTIFICATION_SMS_PROVIDER=mock
+APPLICATION_EMAIL_NOTIFICATIONS_ENABLED=false
+APPLICATION_EMAIL_NOTIFICATION_PROVIDER=mock
+APPLICATION_SMS_NOTIFICATIONS_ENABLED=false
+APPLICATION_SMS_NOTIFICATION_PROVIDER=mock
+GUARANTOR_SMS_NOTIFICATIONS_ENABLED=false
 ```
 
 After rollback, verify:
