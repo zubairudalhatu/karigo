@@ -119,6 +119,27 @@ and close the pilot safely. It is operational only and does not activate live Pa
 Accelerate.ng, Termii, wallet withdrawals, automatic refunds, live rides, ride dispatch,
 payouts, Pharmacy marketplace or provider login.
 
+## Task 109 Participant Onboarding And Access Control
+
+- Participant onboarding pack:
+  `onboarding/karigo-pilot-participant-onboarding-pack-task109.md`
+- Role-based access permission matrix:
+  `onboarding/karigo-role-based-access-permission-matrix-task109.md`
+- Pilot access control register:
+  `onboarding/karigo-pilot-access-control-register-task109.md`
+- APK and link distribution tracker:
+  `onboarding/karigo-apk-and-link-distribution-tracker-task109.md`
+- Participant consent and code of conduct:
+  `onboarding/karigo-participant-consent-and-code-of-conduct-task109.md`
+- Access revocation and incident procedure:
+  `onboarding/karigo-access-revocation-and-incident-procedure-task109.md`
+- Pre-pilot onboarding checklist:
+  `onboarding/karigo-pre-pilot-onboarding-checklist-task109.md`
+
+Use this pack before sending access to real Kano pilot participants. It controls who can
+receive Customer App, Vendor Dashboard, KariGO Captain App and Admin Portal access, how
+APK links are distributed, and how access is suspended or revoked if needed.
+
 ## Controlled Pilot Preparation
 
 - Plan and scope: `controlled-soft-launch-plan.md`
