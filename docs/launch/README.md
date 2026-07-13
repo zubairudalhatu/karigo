@@ -41,6 +41,27 @@ Recommended pilot scope: Kano, 3-5 vendors, 20-50 customers, 3-5 Delivery Captai
 2-3 operations admins and a 7-14 day controlled pilot window. This setup is operational
 preparation only and does not activate live providers or public production launch.
 
+## Task 105 Soft Launch Communications Pack
+
+- Master message: `communications/karigo-soft-launch-master-message-task105.md`
+- Customer early access messages:
+  `communications/karigo-customer-early-access-messages-task105.md`
+- Vendor onboarding messages:
+  `communications/karigo-vendor-onboarding-messages-task105.md`
+- KariGO Captain onboarding messages:
+  `communications/karigo-captain-onboarding-messages-task105.md`
+- Social media soft launch copy:
+  `communications/karigo-social-media-soft-launch-copy-task105.md`
+- WhatsApp status and broadcast copy:
+  `communications/karigo-whatsapp-status-and-broadcast-copy-task105.md`
+- Support response templates:
+  `communications/karigo-support-response-templates-task105.md`
+- Soft launch FAQ: `communications/karigo-soft-launch-faq-task105.md`
+
+Use this pack for controlled early access in Kano only. Do not describe KariGO as fully
+publicly launched, and do not claim live rides, live utilities, wallet withdrawals,
+automated payouts, automatic refunds or Pharmacy marketplace availability.
+
 ## Controlled Pilot Preparation
 
 - Plan and scope: `controlled-soft-launch-plan.md`
