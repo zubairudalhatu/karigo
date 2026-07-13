@@ -161,6 +161,29 @@ Accelerate.ng, Termii, wallet withdrawals, automatic refunds, live rides, ride d
 payouts, Pharmacy marketplace and provider login remain inactive unless separately
 approved later.
 
+## Task 111 Day-One Pilot Execution Records
+
+- Launch execution record:
+  `day-one-records/karigo-day-one-launch-execution-record-task111.md`
+- Order flow record:
+  `day-one-records/karigo-day-one-order-flow-record-task111.md`
+- Issue and incident log:
+  `day-one-records/karigo-day-one-issue-and-incident-log-task111.md`
+- Communications record:
+  `day-one-records/karigo-day-one-communications-record-task111.md`
+- Metrics snapshot:
+  `day-one-records/karigo-day-one-metrics-snapshot-task111.md`
+- Closeout and next-day decision:
+  `day-one-records/karigo-day-one-closeout-and-next-day-decision-task111.md`
+
+Use these records during the first controlled Kano pilot window to capture actual
+events, order progress, incident handling, participant communications, operating
+metrics and the next-day decision. These records are fill-in templates only. The
+initial payment mode remains mock payment, and live Paystack, Paystack Test Mode as
+default, Accelerate.ng, Termii, wallet withdrawals, automatic refunds, live rides,
+ride dispatch, payouts, Pharmacy marketplace and provider login remain inactive unless
+separately approved later.
+
 ## Controlled Pilot Preparation
 
 - Plan and scope: `controlled-soft-launch-plan.md`
