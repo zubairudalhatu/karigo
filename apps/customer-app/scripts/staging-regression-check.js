@@ -283,6 +283,7 @@ assert(utilityReceipt.includes("Test transaction receipt"), "Utility receipt det
 assert(utilityReceipt.includes("No real airtime, data, electricity token or cable subscription was delivered."), "Utility receipt must keep test-mode safety copy.");
 
 const checkout = read("app", "checkout.tsx");
+const paymentStatus = read("src", "lib", "payment-status.ts");
 assert(checkout.includes("Delivery fee:"), "Checkout must show delivery fee.");
 assert(checkout.includes("Waiting for server quote"), "Checkout must not show zero fee when quote is absent.");
 assert(checkout.includes("Updating delivery total..."), "Checkout must show quote refresh loading state.");
@@ -298,8 +299,11 @@ assert(checkout.includes("loadQuote(code, { promoAttempt: true })"), "Promo succ
 assert(checkout.includes("await loadQuote(\"\", { keepUiError: true })"), "Promo failure must refresh a non-promo quote.");
 assert(checkout.includes("isExternalPaymentAuthorizationUrl"), "Checkout must detect external payment authorization URLs.");
 assert(checkout.includes("openExternalPaymentAuthorization"), "Checkout must open Paystack Test Mode authorization through the safe helper.");
-assert(checkout.includes("Payment authorization pending"), "Checkout must show a pending authorization state for Paystack Test Mode.");
-assert(checkout.includes("Verify payment"), "Checkout must let customers verify payment through the backend after provider checkout.");
+assert(paymentStatus.includes("Paystack Test Mode authorization"), "Checkout must show a Paystack Test Mode authorization state.");
+assert(paymentStatus.includes("KariGO will only mark the order paid after backend verification."), "Payment copy must state backend verification is required.");
+assert(paymentStatus.includes("Payment could not be verified yet."), "Payment failures must have a clear retry-oriented message.");
+assert(paymentStatus.includes("Wallet funding, automatic refunds and payout automation remain disabled."), "Payment copy must keep wallet/refund automation disabled.");
+assert(checkout.includes("Verify payment status"), "Checkout must let customers verify payment status through the backend after provider checkout.");
 const paymentFlow = read("src", "lib", "payment-flow.ts");
 assert(paymentFlow.includes("Linking.openURL"), "Customer payment flow must open external authorization with React Native Linking.");
 assert(paymentFlow.includes("^https:\\/\\/"), "Customer payment flow must only accept HTTPS external authorization URLs.");
@@ -315,8 +319,8 @@ assert(orderDetail.includes("Only share this code after you have received your o
 assert(orderDetail.includes("Retry delivery code"), "Delivery OTP fetch failures must have a retry action.");
 assert(orderDetail.includes("setDeliveryOtp(\"\")"), "Delivery OTP must reset when status/order changes or fetch fails.");
 assert(orderDetail.includes("isExternalPaymentAuthorizationUrl"), "Order detail retry payment must detect external payment authorization URLs.");
-assert(orderDetail.includes("Payment authorization pending"), "Order detail must show pending authorization state for Paystack Test Mode retry.");
-assert(orderDetail.includes("Verify payment"), "Order detail must let customers verify provider checkout through the backend.");
+assert(orderDetail.includes("pendingAuthorizationCopy"), "Order detail must show Paystack Test Mode authorization guidance for retry payments.");
+assert(orderDetail.includes("Verify payment status"), "Order detail must let customers verify provider checkout through the backend.");
 
 const ordersApi = read("src", "api", "orders.api.ts");
 assert(ordersApi.includes("orders/${id}/delivery-otp"), "Customer app must use the delivery OTP endpoint.");

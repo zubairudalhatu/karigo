@@ -11,6 +11,13 @@ import {
   isMockAuthorizationUrl,
   openExternalPaymentAuthorization
 } from "../../src/lib/payment-flow";
+import {
+  paymentSafetyNote,
+  paymentStatusView,
+  paymentVerificationFailureMessage,
+  pendingAuthorizationCopy,
+  walletRefundFutureNote
+} from "../../src/lib/payment-status";
 
 export default function OrderTracking() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -40,7 +47,7 @@ export default function OrderTracking() {
       if (isExternalPaymentAuthorizationUrl(authorizationUrl)) {
         setPendingPaymentReference(started.payment.transactionReference);
         setPendingAuthorizationUrl(authorizationUrl);
-        setMessage("Paystack Test Mode checkout opened. Return to KariGO and tap Verify payment after completing payment.");
+        setMessage("Paystack Test Mode opened. Return to KariGO and tap Verify payment after completing the test checkout.");
         await openExternalPaymentAuthorization(authorizationUrl);
         return;
       }
@@ -66,7 +73,7 @@ export default function OrderTracking() {
     try {
       await verifyPayment(pendingPaymentReference);
     } catch (e) {
-      setError(friendlyError(e));
+      setError(paymentVerificationFailureMessage(friendlyError(e)));
     } finally {
       setBusy(false);
     }
@@ -105,10 +112,19 @@ export default function OrderTracking() {
   const pricing = order ? pricingFromServer(order) : null;
   const canRevealDeliveryOtp = order ? ["ARRIVED_DESTINATION", "DELIVERED"].includes(order.orderStatus) : false;
   const groupedOtp = deliveryOtp ? `${deliveryOtp.slice(0, 3)} ${deliveryOtp.slice(3)}` : "";
+  const paymentView = paymentStatusView(order?.paymentStatus);
+  const pendingView = pendingAuthorizationCopy();
 
   return <Protected><Screen title={order?.orderNumber ?? "Order details"}><Message>{message}</Message><Message error>{error}</Message>
     {order && pricing ? <>
-      <Card><StatusBadge status={order.orderStatus} /><Text>Payment: {order.paymentStatus}</Text>{order.vendor ? <Text>{order.vendor.businessName}</Text> : null}</Card>
+      <Card><StatusBadge status={order.orderStatus} />{order.vendor ? <Text>{order.vendor.businessName}</Text> : null}</Card>
+      <Card>
+        <Text style={ui.cardTitle}>{paymentView.title}</Text>
+        <StatusBadge status={order.paymentStatus} />
+        <Text style={ui.cardText}>{paymentView.body}</Text>
+        <Text style={ui.muted}>{paymentView.actionHint}</Text>
+        <Text style={ui.muted}>{paymentSafetyNote}</Text>
+      </Card>
       <Card>
         <View style={ui.priceRow}><Text style={ui.priceLabel}>Cart subtotal:</Text><Text style={ui.priceValue}>{money(pricing.subtotal)}</Text></View>
         <View style={ui.priceRow}><Text style={ui.priceLabel}>Delivery fee:</Text><Text style={ui.priceValue}>{money(pricing.deliveryFee)}</Text></View>
@@ -118,12 +134,18 @@ export default function OrderTracking() {
       {order.paymentStatus === "PENDING" ? <>
         <Button title={busy ? "Preparing payment..." : `Continue to payment - ${money(order.totalAmount)}`} onPress={pay} disabled={busy || !!pendingPaymentReference} />
         {pendingPaymentReference ? <Card>
-          <Text style={ui.cardTitle}>Payment authorization pending</Text>
-          <Text style={ui.muted}>Complete the Paystack Test Mode checkout page, return to KariGO, then verify payment here. KariGO will only mark the order paid after backend verification.</Text>
+          <Text style={ui.cardTitle}>{pendingView.title}</Text>
+          <Text style={ui.cardText}>{pendingView.body}</Text>
+          <Text style={ui.muted}>{pendingView.actionHint}</Text>
+          <Text style={ui.muted}>Do not use live card details during staging tests.</Text>
           <Button title="Open payment page again" tone="muted" onPress={reopenPaymentAuthorization} disabled={busy} />
-          <Button title={busy ? "Verifying payment..." : "Verify payment"} onPress={verifyPendingPayment} disabled={busy} />
+          <Button title={busy ? "Verifying payment..." : "Verify payment status"} onPress={verifyPendingPayment} disabled={busy} />
         </Card> : null}
       </> : null}
+      <Card>
+        <Text style={ui.cardTitle}>Wallet and refunds</Text>
+        <Text style={ui.muted}>{walletRefundFutureNote}</Text>
+      </Card>
       {order.items?.map((item) => <Card key={item.id}><Text>{item.productName} x {item.quantity}</Text><Text>{money(item.totalPrice)}</Text></Card>)}
       <Text style={ui.sectionTitle}>Order timeline</Text>{order.statusHistory.map((event) => <Card key={event.id}><StatusBadge status={event.newStatus} /><Text style={ui.muted}>{event.note || "Order updated"}</Text></Card>)}
       {canRevealDeliveryOtp ? <Card>
