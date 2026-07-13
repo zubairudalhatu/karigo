@@ -1,8 +1,10 @@
 import { PreferredContactMethod, VendorApplicationCategory } from "@prisma/client";
 import { Transform } from "class-transformer";
-import { IsBoolean, IsEmail, IsEnum, IsIn, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsBoolean, IsEmail, IsEnum, IsIn, IsOptional, IsString, Matches, MaxLength } from "class-validator";
+import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../../common/utils/phone.util";
 
 const trim = ({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value;
+const normalizePhone = ({ value }: { value: unknown }) => typeof value === "string" ? normalizePhoneNumber(value) : value;
 
 export class CreateVendorApplicationDto {
   @IsEnum(VendorApplicationCategory)
@@ -63,8 +65,9 @@ export class CreateVendorApplicationDto {
   operatingHours?: string;
 
   @IsString()
+  @Matches(NIGERIAN_PHONE_PATTERN, { message: "businessPhoneNumber must be a valid Nigerian mobile number" })
   @MaxLength(30)
-  @Transform(trim)
+  @Transform(normalizePhone)
   businessPhoneNumber!: string;
 
   @IsEmail()
@@ -89,8 +92,9 @@ export class CreateVendorApplicationDto {
   contactRole!: string;
 
   @IsString()
+  @Matches(NIGERIAN_PHONE_PATTERN, { message: "contactPhoneNumber must be a valid Nigerian mobile number" })
   @MaxLength(30)
-  @Transform(trim)
+  @Transform(normalizePhone)
   contactPhoneNumber!: string;
 
   @IsEmail()

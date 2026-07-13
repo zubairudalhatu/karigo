@@ -105,6 +105,41 @@ describe("VendorApplicationsService", () => {
     expect(result).toMatchObject({ status: VendorApplicationStatus.SUBMITTED });
   });
 
+  it("normalizes vendor application phone numbers before persistence and notification", async () => {
+    prisma.vendorApplication.create.mockResolvedValueOnce({
+      ...vendorApplication,
+      businessPhoneNumber: "+2348030000000",
+      contactPhoneNumber: "+2348051112222"
+    });
+
+    const result = await service.create({
+      ...baseDto,
+      businessPhoneNumber: "0803 000 0000",
+      contactPhoneNumber: "0805-111-2222"
+    });
+
+    expect(prisma.vendorApplication.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        businessPhoneNumber: "+2348030000000",
+        contactPhoneNumber: "+2348051112222"
+      })
+    }));
+    expect(applicationNotifications.vendorApplicationSubmitted).toHaveBeenCalledWith(expect.objectContaining({
+      phoneNumber: "+2348051112222"
+    }));
+    expect(result).toMatchObject({ status: VendorApplicationStatus.SUBMITTED });
+  });
+
+  it("rejects invalid vendor application phone numbers before persistence", async () => {
+    await expect(service.create({
+      ...baseDto,
+      contactPhoneNumber: "12345"
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.vendorApplication.create).not.toHaveBeenCalled();
+    expect(applicationNotifications.vendorApplicationSubmitted).not.toHaveBeenCalled();
+  });
+
   it("rejects public vendor applications outside Kano", async () => {
     await expect(service.create({ ...baseDto, city: "Kaduna", state: "Kaduna" })).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.vendorApplication.create).not.toHaveBeenCalled();

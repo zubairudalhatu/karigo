@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, VendorApplicationStatus } from "@prisma/client";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
+import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateVendorApplicationDto } from "./dto/create-vendor-application.dto";
 import { ReviewVendorApplicationDto } from "./dto/review-vendor-application.dto";
@@ -58,6 +59,8 @@ export class VendorApplicationsService {
       throw new BadRequestException("Application declaration, privacy acknowledgement and contact consent are required");
     }
     this.assertKanoPilotLocation(dto);
+    const businessPhoneNumber = this.normalizePhone(dto.businessPhoneNumber);
+    const contactPhoneNumber = this.normalizePhone(dto.contactPhoneNumber);
 
     const data: Prisma.VendorApplicationCreateInput = {
         businessCategory: dto.businessCategory,
@@ -71,12 +74,12 @@ export class VendorApplicationsService {
         area: dto.area,
         serviceAreas: this.json(dto.serviceAreas),
         operatingHours: dto.operatingHours,
-        businessPhoneNumber: dto.businessPhoneNumber,
+        businessPhoneNumber,
         businessEmail: dto.businessEmail,
         websiteOrSocialLink: dto.websiteOrSocialLink,
         contactFullName: dto.contactFullName,
         contactRole: dto.contactRole,
-        contactPhoneNumber: dto.contactPhoneNumber,
+        contactPhoneNumber,
         contactEmail: dto.contactEmail,
         preferredContactMethod: dto.preferredContactMethod,
         deliveryReadiness: dto.deliveryReadiness,
@@ -205,6 +208,14 @@ export class VendorApplicationsService {
     const reference = `KGO-APP-${new Date().getFullYear()}-${suffix}`;
     const exists = await this.prisma.vendorApplication.findUnique({ where: { reference }, select: { id: true } });
     return exists ? this.nextReference() : reference;
+  }
+
+  private normalizePhone(phoneNumber: string) {
+    const normalized = normalizePhoneNumber(phoneNumber);
+    if (!NIGERIAN_PHONE_PATTERN.test(normalized)) {
+      throw new BadRequestException("Enter a valid Nigerian phone number.");
+    }
+    return normalized;
   }
 
   private toPublicStatus(application: Prisma.VendorApplicationGetPayload<{ select: typeof APPLICATION_SELECT }>) {
