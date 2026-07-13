@@ -34,7 +34,7 @@ export function ServiceCard({ service }: { service: (typeof services)[number] })
           {readiness ? <span className="badge badge-muted">{service.status}</span> : <span className="badge">Live</span>}
         </div>
         <p>{service.description}</p>
-        {rideReadiness ? <a className="button secondary small-button" href="/riders#taxi-waitlist">Join Ride Waitlist</a> : null}
+        {rideReadiness ? <a className="button secondary small-button" href="/riders#ride-waitlist">Join Ride Waitlist</a> : null}
       </div>
     </article>
   );

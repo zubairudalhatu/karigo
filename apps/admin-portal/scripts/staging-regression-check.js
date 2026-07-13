@@ -22,6 +22,7 @@ assert(payoutApi.includes("accountNumber: string"), "Admin detail type must expl
 
 const shell = read("src", "components", "portal.tsx");
 assert(shell.includes("Payout Accounts"), "Admin sidebar must include payout accounts.");
+assert(shell.includes("Delivery Captain Applications"), "Admin sidebar must include Delivery Captain applications.");
 assert(shell.includes("Wallets"), "Admin sidebar must include Wallets.");
 assert(shell.includes("Referrals"), "Admin sidebar must include Referrals.");
 assert(shell.includes("Utilities"), "Admin sidebar must include Utilities.");
@@ -34,6 +35,20 @@ assert(shell.includes("SME Invitation Templates"), "Admin sidebar must include S
 assert(shell.includes("SME Services"), "Admin sidebar must include SME Services.");
 assert(shell.includes("SME Provider Applications"), "Admin sidebar must include SME provider applications.");
 assert(shell.includes("SME Providers"), "Admin sidebar must include SME provider directory.");
+
+const deliveryCaptainApplicationsPage = read("app", "delivery-captain-applications", "page.tsx");
+assert(deliveryCaptainApplicationsPage.includes("Delivery Captain Applications"), "Admin Delivery Captain applications page must exist.");
+assert(deliveryCaptainApplicationsPage.includes("deliveryCaptainApplicationsApi.list"), "Admin Delivery Captain applications page must list applications.");
+assert(deliveryCaptainApplicationsPage.includes("deliveryCaptainApplicationsApi.review"), "Admin Delivery Captain applications page must review applications.");
+assert(deliveryCaptainApplicationsPage.includes("does not create a Captain account, activate dispatch, payouts or KariGO Rides access"), "Admin Delivery Captain applications page must state safe limits.");
+assert(deliveryCaptainApplicationsPage.includes("Guarantor:"), "Admin Delivery Captain applications page must show guarantor verification information.");
+assert(deliveryCaptainApplicationsPage.includes("Applicant-visible note optional"), "Admin Delivery Captain review must support applicant-visible notes.");
+assert(deliveryCaptainApplicationsPage.includes("Internal admin note optional"), "Admin Delivery Captain review must support internal notes.");
+assert(!deliveryCaptainApplicationsPage.includes("Create Test Ride Captain Profile") && !deliveryCaptainApplicationsPage.includes("Activate dispatch") && !deliveryCaptainApplicationsPage.includes("Pay Now"), "Admin Delivery Captain applications page must not expose activation, ride or payment actions.");
+const deliveryCaptainApplicationsApi = read("src", "api", "delivery-captain-applications.api.ts");
+assert(deliveryCaptainApplicationsApi.includes("admin/delivery-captain-applications"), "Admin Delivery Captain API must call admin application endpoints.");
+assert(deliveryCaptainApplicationsApi.includes("applicantVisibleNote"), "Admin Delivery Captain API must support applicant-visible review notes.");
+assert(deliveryCaptainApplicationsApi.includes("adminNote"), "Admin Delivery Captain API must support internal review notes.");
 
 const smeServicesSummaryPage = read("app", "sme-services", "summary", "page.tsx");
 assert(smeServicesSummaryPage.includes("SME Services operations summary"), "Admin SME Services summary page must exist.");

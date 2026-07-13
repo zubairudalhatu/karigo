@@ -10,6 +10,8 @@ const SWAGGER_TAGS: Array<[string, string]> = [
   ["Vendors", "Vendor profiles and public vendor discovery"],
   ["Vendor Applications", "Public vendor application submission and status lookup"],
   ["Admin Vendor Applications", "Admin review workflow for public vendor applications"],
+  ["Delivery Captain Applications", "Public Delivery Captain application submission and status lookup"],
+  ["Admin Delivery Captain Applications", "Admin review workflow for Delivery Captain applications"],
   ["Vendor Payout Accounts", "Vendor payout account submission and verification status"],
   ["Admin Vendor Payout Accounts", "Admin payout account review and verification workflow"],
   ["Products", "Public vendor product discovery"],

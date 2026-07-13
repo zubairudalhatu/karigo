@@ -26,6 +26,11 @@ describe("environment configuration", () => {
     expect(result.RESEND_BASE_URL).toBe("https://api.resend.com");
     expect(result.KARIGO_EMAIL_LOGO_URL).toBe("");
     expect(result.KARIGO_PILOT_EMAIL_LABEL).toBe("Kano controlled early access");
+    expect(result.APPLICATION_NOTIFICATIONS_ENABLED).toBe(false);
+    expect(result.APPLICATION_NOTIFICATION_EMAIL_ENABLED).toBe(false);
+    expect(result.APPLICATION_NOTIFICATION_EMAIL_PROVIDER).toBe("mock");
+    expect(result.APPLICATION_NOTIFICATION_SMS_ENABLED).toBe(false);
+    expect(result.APPLICATION_NOTIFICATION_SMS_PROVIDER).toBe("mock");
     expect(result.WHATSAPP_PROVIDER).toBe("mock");
     expect(result.WHATSAPP_API_VERSION).toBe("v20.0");
     expect(result.PUSH_PROVIDER).toBe("mock");
@@ -157,6 +162,60 @@ describe("environment configuration", () => {
       APP_ENV: "production",
       ACCOUNT_ACTIVATION_EMAIL_PROVIDER: "resend"
     })).toThrow("Resend account activation email is restricted");
+  });
+
+  it("allows controlled application notification email and SMS only outside production", () => {
+    const result = validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "staging",
+      APPLICATION_NOTIFICATIONS_ENABLED: "true",
+      APPLICATION_NOTIFICATION_EMAIL_ENABLED: "true",
+      APPLICATION_NOTIFICATION_EMAIL_PROVIDER: "resend",
+      APPLICATION_NOTIFICATION_SMS_ENABLED: "true",
+      APPLICATION_NOTIFICATION_SMS_PROVIDER: "termii",
+      RESEND_API_KEY: "resend-test-key-not-real",
+      RESEND_FROM_EMAIL: "no-reply@example.test",
+      TERMII_API_KEY: "termii-test-key-not-real",
+      TERMII_SENDER_ID: "KariGO"
+    });
+
+    expect(result.APPLICATION_NOTIFICATIONS_ENABLED).toBe(true);
+    expect(result.APPLICATION_NOTIFICATION_EMAIL_ENABLED).toBe(true);
+    expect(result.APPLICATION_NOTIFICATION_EMAIL_PROVIDER).toBe("resend");
+    expect(result.APPLICATION_NOTIFICATION_SMS_ENABLED).toBe(true);
+    expect(result.APPLICATION_NOTIFICATION_SMS_PROVIDER).toBe("termii");
+  });
+
+  it("keeps application notification email blocked without Resend credentials when enabled", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "staging",
+      APPLICATION_NOTIFICATIONS_ENABLED: "true",
+      APPLICATION_NOTIFICATION_EMAIL_ENABLED: "true",
+      APPLICATION_NOTIFICATION_EMAIL_PROVIDER: "resend"
+    })).toThrow("Missing required environment variable: RESEND_API_KEY");
+  });
+
+  it("keeps application notification SMS blocked without Termii credentials when enabled", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "staging",
+      APPLICATION_NOTIFICATIONS_ENABLED: "true",
+      APPLICATION_NOTIFICATION_SMS_ENABLED: "true",
+      APPLICATION_NOTIFICATION_SMS_PROVIDER: "termii"
+    })).toThrow("Missing required environment variable: TERMII_API_KEY");
+  });
+
+  it("does not expose application notification sending in production", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "production",
+      APPLICATION_NOTIFICATIONS_ENABLED: "true"
+    })).toThrow("Application notification sending is restricted");
   });
 
   it("keeps Meta WhatsApp Cloud disabled until sandbox approval", () => {

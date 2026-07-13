@@ -1,11 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { DeliveryCaptainApplicationStatus, Prisma } from "@prisma/client";
 import { randomBytes } from "crypto";
+import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
 import { PrismaService } from "../../prisma/prisma.service";
 import { publicUserSelect } from "../users/users.service";
 import { CreateDeliveryCaptainApplicationDto } from "./dto/create-delivery-captain-application.dto";
 import { DeliveryCaptainApplicationStatusQueryDto } from "./dto/delivery-captain-application-status-query.dto";
+import { ListDeliveryCaptainApplicationsQueryDto } from "./dto/list-delivery-captain-applications-query.dto";
+import { ReviewDeliveryCaptainApplicationDto } from "./dto/review-delivery-captain-application.dto";
 import { UpdateRiderProfileDto } from "./dto/update-rider-profile.dto";
 
 const DELIVERY_CAPTAIN_APPLICATION_SELECT = {
@@ -25,6 +28,7 @@ const DELIVERY_CAPTAIN_APPLICATION_SELECT = {
   guarantorPhone: true,
   notes: true,
   status: true,
+  adminNote: true,
   applicantVisibleNote: true,
   reviewedAt: true,
   createdAt: true,
@@ -33,7 +37,7 @@ const DELIVERY_CAPTAIN_APPLICATION_SELECT = {
 
 @Injectable()
 export class RidersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly applicationNotifications: ApplicationNotificationsService) {}
 
   async me(userId: string) {
     const rider = await this.prisma.rider.findUnique({
@@ -88,6 +92,20 @@ export class RidersService {
       },
       select: DELIVERY_CAPTAIN_APPLICATION_SELECT
     });
+    await Promise.all([
+      this.applicationNotifications.deliveryCaptainApplicationSubmitted({
+        reference: application.applicationReference,
+        recipientName: application.fullName,
+        phoneNumber: application.phoneNumber,
+        email: application.email
+      }),
+      this.applicationNotifications.deliveryCaptainGuarantorListed({
+        reference: application.applicationReference,
+        applicantName: application.fullName,
+        guarantorName: application.guarantorName,
+        guarantorPhone: application.guarantorPhone
+      })
+    ]);
 
     return this.toPublicDeliveryCaptainApplicationStatus(application);
   }
@@ -103,6 +121,40 @@ export class RidersService {
       throw new NotFoundException("Delivery Captain application status could not be found for the supplied phone number");
     }
     return this.toPublicDeliveryCaptainApplicationStatus(application);
+  }
+
+  async listDeliveryCaptainApplications(query: ListDeliveryCaptainApplicationsQueryDto) {
+    const applications = await this.prisma.deliveryCaptainApplication.findMany({
+      where: this.deliveryCaptainApplicationWhere(query),
+      select: DELIVERY_CAPTAIN_APPLICATION_SELECT,
+      orderBy: { createdAt: "desc" },
+      take: 150
+    });
+    return applications.map((application) => this.toAdminDeliveryCaptainApplication(application));
+  }
+
+  async deliveryCaptainApplicationDetail(applicationId: string) {
+    const application = await this.prisma.deliveryCaptainApplication.findUnique({
+      where: { id: applicationId },
+      select: DELIVERY_CAPTAIN_APPLICATION_SELECT
+    });
+    if (!application) throw new NotFoundException("Delivery Captain application not found");
+    return this.toAdminDeliveryCaptainApplication(application);
+  }
+
+  async reviewDeliveryCaptainApplication(applicationId: string, dto: ReviewDeliveryCaptainApplicationDto) {
+    await this.deliveryCaptainApplicationDetail(applicationId);
+    const application = await this.prisma.deliveryCaptainApplication.update({
+      where: { id: applicationId },
+      data: {
+        status: dto.status,
+        applicantVisibleNote: dto.applicantVisibleNote,
+        adminNote: dto.adminNote,
+        reviewedAt: new Date()
+      },
+      select: DELIVERY_CAPTAIN_APPLICATION_SELECT
+    });
+    return this.toAdminDeliveryCaptainApplication(application);
   }
 
   private async nextDeliveryCaptainApplicationReference(): Promise<string> {
@@ -130,6 +182,22 @@ export class RidersService {
     }
   }
 
+  private deliveryCaptainApplicationWhere(query: ListDeliveryCaptainApplicationsQueryDto): Prisma.DeliveryCaptainApplicationWhereInput {
+    return {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.search ? {
+        OR: [
+          { applicationReference: { contains: query.search, mode: "insensitive" } },
+          { fullName: { contains: query.search, mode: "insensitive" } },
+          { phoneNumber: { contains: query.search, mode: "insensitive" } },
+          { city: { contains: query.search, mode: "insensitive" } },
+          { preferredZone: { contains: query.search, mode: "insensitive" } },
+          { vehiclePlateNumber: { contains: query.search, mode: "insensitive" } }
+        ]
+      } : {})
+    };
+  }
+
   private toPublicDeliveryCaptainApplicationStatus(application: Prisma.DeliveryCaptainApplicationGetPayload<{ select: typeof DELIVERY_CAPTAIN_APPLICATION_SELECT }>) {
     return {
       applicationReference: application.applicationReference,
@@ -145,6 +213,17 @@ export class RidersService {
       createsLogin: false,
       activatesDispatch: false,
       payoutActivation: false
+    };
+  }
+
+  private toAdminDeliveryCaptainApplication(application: Prisma.DeliveryCaptainApplicationGetPayload<{ select: typeof DELIVERY_CAPTAIN_APPLICATION_SELECT }>) {
+    return {
+      ...application,
+      reviewedAt: application.reviewedAt?.toISOString() ?? null,
+      createdAt: application.createdAt.toISOString(),
+      updatedAt: application.updatedAt.toISOString(),
+      deliveryOnly: true,
+      launchWarning: "Review approval does not create a Captain login, activate live dispatch, payouts or KariGO Rides access."
     };
   }
 

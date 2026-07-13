@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { DeliveryCaptainApplicationStatus, DeliveryCaptainVehicleType } from "@prisma/client";
+import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { RidersService } from "./riders.service";
 
@@ -37,16 +38,28 @@ describe("RidersService delivery captain applications", () => {
     deliveryCaptainApplication: {
       create: jest.fn(),
       findFirst: jest.fn(),
-      findUnique: jest.fn()
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn()
     }
   };
-  const service = new RidersService(prisma as unknown as PrismaService);
+  const applicationNotifications = {
+    deliveryCaptainApplicationSubmitted: jest.fn(),
+    deliveryCaptainGuarantorListed: jest.fn()
+  };
+  const service = new RidersService(prisma as unknown as PrismaService, applicationNotifications as unknown as ApplicationNotificationsService);
 
   beforeEach(() => {
     jest.clearAllMocks();
-    prisma.deliveryCaptainApplication.findUnique.mockResolvedValue(null);
+    prisma.deliveryCaptainApplication.findUnique.mockImplementation(async ({ where }: any) =>
+      where.applicationReference ? null : deliveryCaptainApplication
+    );
     prisma.deliveryCaptainApplication.create.mockResolvedValue(deliveryCaptainApplication);
     prisma.deliveryCaptainApplication.findFirst.mockResolvedValue(deliveryCaptainApplication);
+    prisma.deliveryCaptainApplication.findMany.mockResolvedValue([deliveryCaptainApplication]);
+    prisma.deliveryCaptainApplication.update.mockResolvedValue({ ...deliveryCaptainApplication, status: DeliveryCaptainApplicationStatus.UNDER_REVIEW, reviewedAt: now });
+    applicationNotifications.deliveryCaptainApplicationSubmitted.mockResolvedValue(undefined);
+    applicationNotifications.deliveryCaptainGuarantorListed.mockResolvedValue(undefined);
   });
 
   it("creates a Kano Delivery Captain application without activating login, dispatch or payouts", async () => {
@@ -85,6 +98,14 @@ describe("RidersService delivery captain applications", () => {
       activatesDispatch: false,
       payoutActivation: false
     });
+    expect(applicationNotifications.deliveryCaptainApplicationSubmitted).toHaveBeenCalledWith(expect.objectContaining({
+      reference: deliveryCaptainApplication.applicationReference,
+      phoneNumber: deliveryCaptainApplication.phoneNumber
+    }));
+    expect(applicationNotifications.deliveryCaptainGuarantorListed).toHaveBeenCalledWith(expect.objectContaining({
+      reference: deliveryCaptainApplication.applicationReference,
+      guarantorPhone: deliveryCaptainApplication.guarantorPhone
+    }));
   });
 
   it("rejects Delivery Captain applications outside the Kano pilot location", async () => {
@@ -135,5 +156,36 @@ describe("RidersService delivery captain applications", () => {
   it("returns not found when no Delivery Captain public status exists", async () => {
     prisma.deliveryCaptainApplication.findFirst.mockResolvedValueOnce(null);
     await expect(service.deliveryCaptainApplicationStatus({ phoneNumber: "08030000000" })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("lists and reviews Delivery Captain applications for Admin without activating dispatch", async () => {
+    await expect(service.listDeliveryCaptainApplications({ status: DeliveryCaptainApplicationStatus.SUBMITTED })).resolves.toEqual([
+      expect.objectContaining({
+        id: deliveryCaptainApplication.id,
+        deliveryOnly: true,
+        launchWarning: expect.stringContaining("does not create a Captain login")
+      })
+    ]);
+    expect(prisma.deliveryCaptainApplication.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { status: DeliveryCaptainApplicationStatus.SUBMITTED },
+      take: 150
+    }));
+
+    await expect(service.reviewDeliveryCaptainApplication(deliveryCaptainApplication.id, {
+      status: DeliveryCaptainApplicationStatus.UNDER_REVIEW,
+      applicantVisibleNote: "We are reviewing your application.",
+      adminNote: "Verify guarantor."
+    })).resolves.toMatchObject({
+      status: DeliveryCaptainApplicationStatus.UNDER_REVIEW,
+      deliveryOnly: true
+    });
+    expect(prisma.deliveryCaptainApplication.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: deliveryCaptainApplication.id },
+      data: expect.objectContaining({
+        status: DeliveryCaptainApplicationStatus.UNDER_REVIEW,
+        applicantVisibleNote: "We are reviewing your application.",
+        adminNote: "Verify guarantor."
+      })
+    }));
   });
 });

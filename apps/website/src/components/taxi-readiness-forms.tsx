@@ -70,7 +70,7 @@ export function TaxiWaitlistForm() {
     }
   }
 
-  return <form className="form-card" id="taxi-waitlist" onSubmit={submit}>
+  return <form className="form-card" id="ride-waitlist" onSubmit={submit}>
     <h3>Join Ride Waitlist</h3>
     <p>KariGO Rides is coming soon. Waitlist registration does not book a ride or activate live ride dispatch.</p>
     <div className="form-grid">
@@ -122,7 +122,7 @@ export function TaxiDriverApplicationForm() {
     }
   }
 
-  return <form className="form-card" id="taxi-driver-application" onSubmit={submit}>
+  return <form className="form-card" id="ride-captain-application" onSubmit={submit}>
     <h3>Ride Captain Application</h3>
     <p>Register interest while KariGO prepares verified ride operations. Approval is required and this form does not activate live ride dispatch.</p>
     <div className="form-grid">

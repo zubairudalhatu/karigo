@@ -33,7 +33,7 @@ export default function RidersPage() {
             <li>Vehicle and licence checks will be required</li>
             <li>Fare controls, safety review and dispatch rules must be approved before launch</li>
           </ul>
-          <a className="button secondary" href="#taxi-driver-application">Apply for Ride readiness</a>
+          <a className="button secondary" href="#ride-captain-application">Apply for Ride readiness</a>
         </article>
       </section>
       <section className="section">

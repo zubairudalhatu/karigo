@@ -81,7 +81,7 @@ export default function HomePage() {
           <p>Delivery Captains are supported now. Ride Captain onboarding is being prepared with verification, safety and operational controls before KariGO Rides launch.</p>
           <div className="actions">
             <Link className="button secondary" href="/riders">Captain Details</Link>
-            <Link className="button" href="/riders#taxi-waitlist">Join Ride Waitlist</Link>
+            <Link className="button" href="/riders#ride-waitlist">Join Ride Waitlist</Link>
           </div>
         </article>
       </section>

@@ -1,5 +1,6 @@
 import { BadRequestException } from "@nestjs/common";
 import { PreferredContactMethod, VendorApplicationCategory, VendorApplicationStatus } from "@prisma/client";
+import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { VendorApplicationsService } from "./vendor-applications.service";
 
@@ -55,12 +56,14 @@ describe("VendorApplicationsService", () => {
       findUnique: jest.fn()
     }
   };
-  const service = new VendorApplicationsService(prisma as unknown as PrismaService);
+  const applicationNotifications = { vendorApplicationSubmitted: jest.fn() };
+  const service = new VendorApplicationsService(prisma as unknown as PrismaService, applicationNotifications as unknown as ApplicationNotificationsService);
 
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.vendorApplication.findUnique.mockResolvedValue(null);
     prisma.vendorApplication.create.mockResolvedValue(vendorApplication);
+    applicationNotifications.vendorApplicationSubmitted.mockResolvedValue(undefined);
   });
 
   const baseDto = {
@@ -88,6 +91,11 @@ describe("VendorApplicationsService", () => {
 
     expect(prisma.vendorApplication.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ city: "Kano", state: "Kano" })
+    }));
+    expect(applicationNotifications.vendorApplicationSubmitted).toHaveBeenCalledWith(expect.objectContaining({
+      reference: vendorApplication.reference,
+      phoneNumber: vendorApplication.contactPhoneNumber,
+      email: vendorApplication.contactEmail
     }));
     expect(result).toMatchObject({ status: VendorApplicationStatus.SUBMITTED });
   });

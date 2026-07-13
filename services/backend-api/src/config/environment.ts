@@ -141,6 +141,54 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   if (karigoEmailLogoUrl && !karigoEmailLogoUrl.startsWith("https://")) {
     throw new Error("KARIGO_EMAIL_LOGO_URL must use HTTPS");
   }
+  const applicationNotificationsEnabled = booleanFlag(
+    config.APPLICATION_NOTIFICATIONS_ENABLED,
+    "APPLICATION_NOTIFICATIONS_ENABLED",
+    false
+  );
+  const applicationNotificationEmailEnabled = booleanFlag(
+    config.APPLICATION_NOTIFICATION_EMAIL_ENABLED,
+    "APPLICATION_NOTIFICATION_EMAIL_ENABLED",
+    false
+  );
+  const applicationNotificationSmsEnabled = booleanFlag(
+    config.APPLICATION_NOTIFICATION_SMS_ENABLED,
+    "APPLICATION_NOTIFICATION_SMS_ENABLED",
+    false
+  );
+  const applicationNotificationEmailProvider =
+    typeof config.APPLICATION_NOTIFICATION_EMAIL_PROVIDER === "string"
+      ? config.APPLICATION_NOTIFICATION_EMAIL_PROVIDER.toLowerCase()
+      : "mock";
+  if (!["mock", "resend"].includes(applicationNotificationEmailProvider)) {
+    throw new Error("APPLICATION_NOTIFICATION_EMAIL_PROVIDER must be mock or resend");
+  }
+  const applicationNotificationSmsProvider =
+    typeof config.APPLICATION_NOTIFICATION_SMS_PROVIDER === "string"
+      ? config.APPLICATION_NOTIFICATION_SMS_PROVIDER.toLowerCase()
+      : "mock";
+  if (!["mock", "termii"].includes(applicationNotificationSmsProvider)) {
+    throw new Error("APPLICATION_NOTIFICATION_SMS_PROVIDER must be mock or termii");
+  }
+  if (applicationNotificationsEnabled && appEnvironment === "production") {
+    throw new Error("Application notification sending is restricted to staging or pilot approval");
+  }
+  if (applicationNotificationsEnabled && applicationNotificationEmailEnabled && applicationNotificationEmailProvider === "resend") {
+    const resendBaseUrl = typeof config.RESEND_BASE_URL === "string" && config.RESEND_BASE_URL.trim()
+      ? config.RESEND_BASE_URL.trim()
+      : "https://api.resend.com";
+    if (!resendBaseUrl.startsWith("https://")) throw new Error("RESEND_BASE_URL must use HTTPS");
+    requireValue(config, "RESEND_API_KEY");
+    requireValue(config, "RESEND_FROM_EMAIL");
+  }
+  if (applicationNotificationsEnabled && applicationNotificationSmsEnabled && applicationNotificationSmsProvider === "termii") {
+    requireValue(config, "TERMII_API_KEY");
+    requireValue(config, "TERMII_SENDER_ID");
+    const termiiBaseUrl = typeof config.TERMII_BASE_URL === "string" && config.TERMII_BASE_URL.trim()
+      ? config.TERMII_BASE_URL.trim()
+      : "https://api.ng.termii.com";
+    if (!termiiBaseUrl.startsWith("https://")) throw new Error("TERMII_BASE_URL must use HTTPS");
+  }
   const whatsappProvider =
     typeof config.WHATSAPP_PROVIDER === "string" ? config.WHATSAPP_PROVIDER.toLowerCase() : "mock";
   if (!["mock", "meta_cloud"].includes(whatsappProvider)) {
@@ -208,6 +256,11 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     KARIGO_PILOT_EMAIL_LABEL: typeof config.KARIGO_PILOT_EMAIL_LABEL === "string" && config.KARIGO_PILOT_EMAIL_LABEL.trim()
       ? config.KARIGO_PILOT_EMAIL_LABEL.trim()
       : "Kano controlled early access",
+    APPLICATION_NOTIFICATIONS_ENABLED: applicationNotificationsEnabled,
+    APPLICATION_NOTIFICATION_EMAIL_ENABLED: applicationNotificationEmailEnabled,
+    APPLICATION_NOTIFICATION_EMAIL_PROVIDER: applicationNotificationEmailProvider,
+    APPLICATION_NOTIFICATION_SMS_ENABLED: applicationNotificationSmsEnabled,
+    APPLICATION_NOTIFICATION_SMS_PROVIDER: applicationNotificationSmsProvider,
     WHATSAPP_PROVIDER: whatsappProvider,
     WHATSAPP_BASE_URL: typeof config.WHATSAPP_BASE_URL === "string" && config.WHATSAPP_BASE_URL.trim()
       ? config.WHATSAPP_BASE_URL.trim()

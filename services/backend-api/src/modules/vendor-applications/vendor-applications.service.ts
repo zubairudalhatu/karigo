@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, VendorApplicationStatus } from "@prisma/client";
+import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateVendorApplicationDto } from "./dto/create-vendor-application.dto";
 import { ReviewVendorApplicationDto } from "./dto/review-vendor-application.dto";
@@ -50,7 +51,7 @@ const APPLICATION_SELECT = {
 
 @Injectable()
 export class VendorApplicationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly applicationNotifications: ApplicationNotificationsService) {}
 
   async create(dto: CreateVendorApplicationDto) {
     if (!dto.declarationAccepted || !dto.privacyAccepted || !dto.contactConsentAccepted) {
@@ -103,6 +104,12 @@ export class VendorApplicationsService {
     const application = await this.prisma.vendorApplication.create({
       data,
       select: APPLICATION_SELECT
+    });
+    await this.applicationNotifications.vendorApplicationSubmitted({
+      reference: application.reference,
+      recipientName: application.contactFullName,
+      phoneNumber: application.contactPhoneNumber,
+      email: application.contactEmail
     });
 
     return this.toPublicStatus(application);

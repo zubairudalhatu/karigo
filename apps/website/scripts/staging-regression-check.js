@@ -54,6 +54,9 @@ assert(!serviceProviderForm.includes("Authorization"), "Public SME Services prov
 const riders = read("app", "riders", "page.tsx");
 assert(riders.includes("DeliveryCaptainApplicationForm"), "Captains page must include the Delivery Captain application form.");
 assert(riders.includes("Apply as Delivery Captain"), "Captains page must link to Delivery Captain application.");
+assert(riders.includes("#delivery-captain-application"), "Captains page must use the Delivery Captain application anchor.");
+assert(riders.includes("#ride-captain-application"), "Captains page must use the public Ride Captain application anchor.");
+assert(!riders.includes("#taxi-driver-application"), "Captains page must not use the old Taxi driver application anchor.");
 assert(riders.includes("Ride Captains - Coming Soon"), "Captains page must include future Ride Captain section.");
 assert(riders.includes("Vehicle and licence checks will be required"), "Ride Captain checks must be stated.");
 assert(riders.includes("TaxiDriverApplicationForm"), "Captains page must include the existing ride application form component.");
@@ -70,6 +73,9 @@ assert(!deliveryCaptainForm.includes("Authorization"), "Public Delivery Captain 
 const taxiForms = read("src", "components", "taxi-readiness-forms.tsx");
 assert(taxiForms.includes("taxi/waitlist"), "Website ride waitlist form must post to the existing waitlist endpoint.");
 assert(taxiForms.includes("taxi/driver-applications"), "Website ride application form must post to the existing application endpoint.");
+assert(taxiForms.includes("id=\"ride-waitlist\""), "Website ride waitlist form must use the public Ride waitlist anchor.");
+assert(taxiForms.includes("id=\"ride-captain-application\""), "Website Ride Captain form must use the public Ride Captain anchor.");
+assert(!taxiForms.includes("id=\"taxi-driver-application\""), "Website Ride Captain form must not use the old Taxi driver anchor.");
 assert(taxiForms.includes("does not book a ride or activate live ride dispatch"), "Website ride waitlist must state rides are not live.");
 assert(taxiForms.includes("Approval is required and this form does not activate live ride dispatch"), "Website Ride Captain form must not imply live ride activation.");
 assert(taxiForms.includes("driverLicenceExpiry"), "Website Ride Captain form must capture required licence expiry.");
@@ -78,6 +84,7 @@ const services = read("app", "services", "page.tsx");
 assert(services.includes("Live / Active"), "Services page must separate live services.");
 assert(services.includes("Preparing Launch"), "Services page must separate preparing-launch services.");
 assert(services.includes("Join Ride Waitlist"), "Services page must link KariGO Rides interest to the waitlist.");
+assert(services.includes("/riders#ride-waitlist"), "Services page must use the public Ride waitlist anchor.");
 assert(services.includes("/sme-services/apply"), "Services page must link SME Services provider applications.");
 
 const contact = read("app", "contact", "page.tsx");
@@ -107,6 +114,9 @@ assert(footer.includes("<SocialIcon name={link.icon} />"), "Footer social links 
 assert(footer.includes("aria-label={`KariGO on ${link.label}`}"), "Footer social icon links must keep accessible labels.");
 assert(!footer.includes("{link.label}\n                </a>"), "Footer social links must not render visible text labels.");
 assert(footer.includes("Google Play soon"), "Footer must include Android launch status.");
+assert(footer.includes("/riders#ride-waitlist"), "Footer must use the public Ride waitlist anchor.");
+assert(footer.includes("/riders#ride-captain-application"), "Footer must use the public Ride Captain application anchor.");
+assert(!footer.includes("/riders#taxi-driver-application"), "Footer must not use the old Taxi driver application anchor.");
 assert(!footer.includes("KariGO is focused on core delivery services while preparing new categories carefully."), "Footer must not include internal service-focus note.");
 assert(!footer.includes("Official store links will appear here when available."), "Footer must not include app-store placeholder note.");
 assert(!footer.includes("Email:"), "Footer must not expose email contact text.");
