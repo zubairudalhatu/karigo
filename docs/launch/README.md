@@ -62,6 +62,25 @@ Use this pack for controlled early access in Kano only. Do not describe KariGO a
 publicly launched, and do not claim live rides, live utilities, wallet withdrawals,
 automated payouts, automatic refunds or Pharmacy marketplace availability.
 
+## Task 106 Soft Launch Creative Brief
+
+- Creative brief: `creative/karigo-soft-launch-creative-brief-task106.md`
+- Social media graphics copy:
+  `creative/karigo-social-media-graphics-copy-task106.md`
+- WhatsApp status graphics copy:
+  `creative/karigo-whatsapp-status-graphics-copy-task106.md`
+- Vendor recruitment graphics copy:
+  `creative/karigo-vendor-recruitment-graphics-copy-task106.md`
+- KariGO Captain recruitment graphics copy:
+  `creative/karigo-captain-recruitment-graphics-copy-task106.md`
+- Gemini video prompts: `creative/karigo-soft-launch-video-prompt-task106.md`
+- Design specifications: `creative/karigo-design-specifications-task106.md`
+
+Use this pack to brief designers for social media graphics, flyers, banners, WhatsApp
+status posts and launch announcement visuals. Do not commit heavy image/video exports or
+claim live rides, live utilities, wallet withdrawals, automated payouts, automatic refunds
+or full public launch.
+
 ## Controlled Pilot Preparation
 
 - Plan and scope: `controlled-soft-launch-plan.md`
