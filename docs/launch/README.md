@@ -99,6 +99,26 @@ pilot distribution instructions after the Task 103 readiness pack, Task 104 exec
 setup, Task 105 communications pack and Task 106 creative brief. Do not publish APK links
 publicly, commit APK/AAB files, or activate live providers.
 
+## Task 108 Day-One Command Centre Pack
+
+- Pilot activation checklist:
+  `day-one/karigo-soft-launch-pilot-activation-checklist-task108.md`
+- Day-One command centre:
+  `day-one/karigo-day-one-command-centre-task108.md`
+- Live operations board:
+  `day-one/karigo-day-one-live-operations-board-task108.md`
+- Incident response:
+  `day-one/karigo-day-one-incident-response-task108.md`
+- Communications log:
+  `day-one/karigo-day-one-communications-log-task108.md`
+- Day-One wrap and go/no-go report:
+  `day-one/karigo-day-one-wrap-and-go-no-go-report-task108.md`
+
+Use this pack on the first controlled Kano pilot day to activate, monitor, pause, escalate
+and close the pilot safely. It is operational only and does not activate live Paystack,
+Accelerate.ng, Termii, wallet withdrawals, automatic refunds, live rides, ride dispatch,
+payouts, Pharmacy marketplace or provider login.
+
 ## Controlled Pilot Preparation
 
 - Plan and scope: `controlled-soft-launch-plan.md`
