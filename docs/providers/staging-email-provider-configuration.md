@@ -3,6 +3,25 @@
 These are blank deployment templates, not environment files. Store credentials, sender
 identities, domain details, and test recipients only in the staging secret manager.
 
+Task 112 adds a separate Resend path for account activation email only. Generic
+transactional email still remains disabled with `EMAIL_PROVIDER=mock`.
+
+## Account Activation Email Only
+
+```dotenv
+EMAIL_PROVIDER=mock
+ACCOUNT_ACTIVATION_EMAIL_ENABLED=true
+ACCOUNT_ACTIVATION_EMAIL_PROVIDER=resend
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
+RESEND_REPLY_TO=
+RESEND_BASE_URL=
+```
+
+Use this only after controlled staging/pilot approval. It must send only the account
+activation email after successful OTP verification. It must not send welcome campaigns,
+marketing messages, order updates, support updates, refund notices or promotional email.
+
 ## SMTP Sandbox Or Test Inbox
 
 ```dotenv

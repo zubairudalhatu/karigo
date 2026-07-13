@@ -3,6 +3,7 @@ import { JwtService } from "@nestjs/jwt";
 import { AccountStatus, UserRole } from "@prisma/client";
 import { hash } from "bcrypt";
 import { AuthService } from "./auth.service";
+import { AccountActivationEmailService } from "./account-activation-email.service";
 import { OtpService } from "./otp.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { UsersService } from "../users/users.service";
@@ -16,6 +17,7 @@ describe("AuthService", () => {
     findPublicById: jest.fn()
   };
   const otpService = { issue: jest.fn(), verify: jest.fn() };
+  const accountActivationEmail = { sendAccountActivatedEmail: jest.fn().mockResolvedValue({ accepted: true }) };
   const prisma = {
     refreshToken: {
       create: jest.fn().mockResolvedValue({ id: "refresh-token-id" }),
@@ -35,7 +37,8 @@ describe("AuthService", () => {
     otpService as unknown as OtpService,
     prisma as unknown as PrismaService,
     jwtService as unknown as JwtService,
-    config as unknown as ConfigService
+    config as unknown as ConfigService,
+    accountActivationEmail as unknown as AccountActivationEmailService
   );
 
   beforeEach(() => {
@@ -89,6 +92,50 @@ describe("AuthService", () => {
     });
 
     expect(result).not.toHaveProperty("mockOtp");
+  });
+
+  it("sends an account activation email after successful OTP verification", async () => {
+    usersService.findByPhoneForAuth.mockResolvedValue({
+      id: "user-1",
+      phoneNumber: "+2348012345678",
+      phoneVerified: false,
+      deletedAt: null
+    });
+    usersService.markPhoneVerified.mockResolvedValue({
+      id: "user-1",
+      fullName: "Kari Customer",
+      email: "customer@example.com",
+      role: UserRole.CUSTOMER
+    });
+
+    const result = await service.verifyOtp({ phoneNumber: "+2348012345678", otp: "123456" });
+
+    expect(otpService.verify).toHaveBeenCalledWith("user-1", "123456");
+    expect(accountActivationEmail.sendAccountActivatedEmail).toHaveBeenCalledWith({
+      userId: "user-1",
+      fullName: "Kari Customer",
+      email: "customer@example.com"
+    });
+    expect(result.accessToken).toBe("signed-token");
+  });
+
+  it("does not fail OTP verification if activation email delivery fails", async () => {
+    accountActivationEmail.sendAccountActivatedEmail.mockRejectedValueOnce(new Error("email unavailable"));
+    usersService.findByPhoneForAuth.mockResolvedValue({
+      id: "user-1",
+      phoneNumber: "+2348012345678",
+      phoneVerified: false,
+      deletedAt: null
+    });
+    usersService.markPhoneVerified.mockResolvedValue({
+      id: "user-1",
+      fullName: "Kari Customer",
+      email: "customer@example.com",
+      role: UserRole.CUSTOMER
+    });
+
+    await expect(service.verifyOtp({ phoneNumber: "+2348012345678", otp: "123456" }))
+      .resolves.toHaveProperty("accessToken", "signed-token");
   });
 
   it("does not expose the mock OTP in production-like mode", async () => {

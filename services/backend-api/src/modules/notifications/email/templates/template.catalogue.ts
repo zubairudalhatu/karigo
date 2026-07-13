@@ -2,6 +2,7 @@ import { defineTemplate } from "./template.factory";
 
 export const emailTemplates = {
   "welcome-customer": defineTemplate({ name: "welcome-customer", subject: "Welcome to KariGO", heading: "Welcome to KariGO" }),
+  "account-activated": defineTemplate({ name: "account-activated", subject: "Your KariGO account is active", heading: "Your account is active" }),
   "otp-verification": defineTemplate({ name: "otp-verification", subject: "Your KariGO verification code", heading: "Verify your KariGO account" }),
   "order-created": defineTemplate({ name: "order-created", subject: "Your KariGO order has been created", heading: "Order created", actionLabel: "View order" }),
   "payment-successful": defineTemplate({ name: "payment-successful", subject: "Payment successful for your KariGO order", heading: "Payment successful", actionLabel: "View receipt" }),

@@ -3,6 +3,11 @@
 This file is a configuration template, not an environment file. Keep committed values
 blank. Supply approved values through the staging platform secret manager only.
 
+For Task 112, Termii is approved only for authentication OTP SMS used by registration,
+verification and resend flows. Do not use Termii for marketing SMS, order-status SMS,
+wallet alerts, utility alerts, ride alerts or broad notifications unless a later task
+separately approves that scope.
+
 ```dotenv
 OTP_PROVIDER=termii
 SMS_PROVIDER=termii

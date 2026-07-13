@@ -21,6 +21,9 @@ describe("environment configuration", () => {
     expect(result.OTP_MAX_ATTEMPTS).toBe(5);
     expect(result.EMAIL_PROVIDER).toBe("mock");
     expect(result.EMAIL_FROM).toBe("no-reply@karigo.com.ng");
+    expect(result.ACCOUNT_ACTIVATION_EMAIL_ENABLED).toBe(false);
+    expect(result.ACCOUNT_ACTIVATION_EMAIL_PROVIDER).toBe("mock");
+    expect(result.RESEND_BASE_URL).toBe("https://api.resend.com");
     expect(result.WHATSAPP_PROVIDER).toBe("mock");
     expect(result.WHATSAPP_API_VERSION).toBe("v20.0");
     expect(result.PUSH_PROVIDER).toBe("mock");
@@ -107,6 +110,41 @@ describe("environment configuration", () => {
       JWT_SECRET: "test-secret",
       EMAIL_PROVIDER: "smtp"
     })).toThrow("EMAIL_PROVIDER must remain mock");
+  });
+
+  it("allows Resend only for explicitly enabled account activation email outside production", () => {
+    const result = validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "staging",
+      ACCOUNT_ACTIVATION_EMAIL_ENABLED: "true",
+      ACCOUNT_ACTIVATION_EMAIL_PROVIDER: "resend",
+      RESEND_API_KEY: "resend-test-key-not-real",
+      RESEND_FROM_EMAIL: "no-reply@example.test"
+    });
+
+    expect(result.ACCOUNT_ACTIVATION_EMAIL_ENABLED).toBe(true);
+    expect(result.ACCOUNT_ACTIVATION_EMAIL_PROVIDER).toBe("resend");
+    expect(result.EMAIL_PROVIDER).toBe("mock");
+  });
+
+  it("keeps Resend account activation email blocked without credentials when enabled", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "staging",
+      ACCOUNT_ACTIVATION_EMAIL_ENABLED: "true",
+      ACCOUNT_ACTIVATION_EMAIL_PROVIDER: "resend"
+    })).toThrow("Missing required environment variable: RESEND_API_KEY");
+  });
+
+  it("does not expose Resend account activation email in production", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "production",
+      ACCOUNT_ACTIVATION_EMAIL_PROVIDER: "resend"
+    })).toThrow("Resend account activation email is restricted");
   });
 
   it("keeps Meta WhatsApp Cloud disabled until sandbox approval", () => {

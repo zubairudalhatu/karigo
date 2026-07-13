@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { PassportModule } from "@nestjs/passport";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { UsersModule } from "../users/users.module";
+import { AccountActivationEmailService } from "./account-activation-email.service";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { JwtStrategy } from "./jwt.strategy";
@@ -16,6 +17,7 @@ import { TermiiOtpProvider } from "./providers/termii-otp.provider";
   controllers: [AuthController],
   providers: [
     AuthService,
+    AccountActivationEmailService,
     OtpService,
     OtpProviderRegistry,
     MockOtpProvider,

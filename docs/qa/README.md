@@ -17,6 +17,7 @@ evidence. They do not authorize real-customer launch by themselves.
 - `staging-known-issues-register.md`
 - `payment-sandbox-test-script.md`
 - `sms-otp-sandbox-test-script.md`
+- `termii-resend-auth-activation-test-plan-task112.md`
 - `transactional-email-sandbox-test-script.md`
 - `push-notification-sandbox-test-script.md`
 - `whatsapp-sandbox-test-script.md`

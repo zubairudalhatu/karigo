@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { AccountStatus } from "@prisma/client";
@@ -13,15 +13,19 @@ import { VerifyOtpDto } from "./dto/verify-otp.dto";
 import { OtpService } from "./otp.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { UsersService } from "../users/users.service";
+import { AccountActivationEmailService } from "./account-activation-email.service";
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly otpService: OtpService,
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly accountActivationEmail: AccountActivationEmailService
   ) {}
 
   async registerCustomer(dto: RegisterCustomerDto) {
@@ -71,6 +75,7 @@ export class AuthService {
 
     await this.otpService.verify(user.id, dto.otp);
     const verifiedUser = await this.usersService.markPhoneVerified(user.id);
+    await this.sendAccountActivationNotice(verifiedUser);
 
     return {
       user: verifiedUser,
@@ -181,5 +186,17 @@ export class AuthService {
 
   private hashRefreshToken(token: string): string {
     return createHash("sha256").update(token).digest("hex");
+  }
+
+  private async sendAccountActivationNotice(user: { id: string; fullName: string; email?: string | null }) {
+    try {
+      await this.accountActivationEmail.sendAccountActivatedEmail({
+        userId: user.id,
+        fullName: user.fullName,
+        email: user.email
+      });
+    } catch {
+      this.logger.warn("Account activation email notification failed");
+    }
   }
 }

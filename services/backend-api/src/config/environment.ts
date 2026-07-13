@@ -110,6 +110,31 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   if (emailProvider !== "mock") {
     throw new Error("EMAIL_PROVIDER must remain mock until email sandbox testing is approved");
   }
+  const accountActivationEmailEnabled = booleanFlag(
+    config.ACCOUNT_ACTIVATION_EMAIL_ENABLED,
+    "ACCOUNT_ACTIVATION_EMAIL_ENABLED",
+    false
+  );
+  const accountActivationEmailProvider =
+    typeof config.ACCOUNT_ACTIVATION_EMAIL_PROVIDER === "string"
+      ? config.ACCOUNT_ACTIVATION_EMAIL_PROVIDER.toLowerCase()
+      : "mock";
+  if (!["mock", "resend"].includes(accountActivationEmailProvider)) {
+    throw new Error("ACCOUNT_ACTIVATION_EMAIL_PROVIDER must be mock or resend");
+  }
+  if (accountActivationEmailProvider === "resend") {
+    const resendBaseUrl = typeof config.RESEND_BASE_URL === "string" && config.RESEND_BASE_URL.trim()
+      ? config.RESEND_BASE_URL.trim()
+      : "https://api.resend.com";
+    if (!resendBaseUrl.startsWith("https://")) throw new Error("RESEND_BASE_URL must use HTTPS");
+    if (appEnvironment === "production") {
+      throw new Error("Resend account activation email is restricted to staging or pilot approval");
+    }
+    if (accountActivationEmailEnabled) {
+      requireValue(config, "RESEND_API_KEY");
+      requireValue(config, "RESEND_FROM_EMAIL");
+    }
+  }
   const whatsappProvider =
     typeof config.WHATSAPP_PROVIDER === "string" ? config.WHATSAPP_PROVIDER.toLowerCase() : "mock";
   if (!["mock", "meta_cloud"].includes(whatsappProvider)) {
@@ -168,6 +193,11 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     EMAIL_REPLY_TO: typeof config.EMAIL_REPLY_TO === "string" && config.EMAIL_REPLY_TO.trim()
       ? config.EMAIL_REPLY_TO.trim()
       : "support@karigo.com.ng",
+    ACCOUNT_ACTIVATION_EMAIL_ENABLED: accountActivationEmailEnabled,
+    ACCOUNT_ACTIVATION_EMAIL_PROVIDER: accountActivationEmailProvider,
+    RESEND_BASE_URL: typeof config.RESEND_BASE_URL === "string" && config.RESEND_BASE_URL.trim()
+      ? config.RESEND_BASE_URL.trim()
+      : "https://api.resend.com",
     WHATSAPP_PROVIDER: whatsappProvider,
     WHATSAPP_BASE_URL: typeof config.WHATSAPP_BASE_URL === "string" && config.WHATSAPP_BASE_URL.trim()
       ? config.WHATSAPP_BASE_URL.trim()
