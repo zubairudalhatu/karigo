@@ -140,6 +140,27 @@ Use this pack before sending access to real Kano pilot participants. It controls
 receive Customer App, Vendor Dashboard, KariGO Captain App and Admin Portal access, how
 APK links are distributed, and how access is suspended or revoked if needed.
 
+## Task 110 Final Pre-Pilot Audit And Go/No-Go
+
+- Final pre-pilot activation audit:
+  `pre-pilot-audit/karigo-final-pre-pilot-activation-audit-task110.md`
+- Mock payment pilot guardrail:
+  `pre-pilot-audit/karigo-mock-payment-pilot-guardrail-task110.md`
+- Real participant invite readiness:
+  `pre-pilot-audit/karigo-real-participant-invite-readiness-task110.md`
+- Final go/no-go decision record:
+  `pre-pilot-audit/karigo-final-go-no-go-decision-record-task110.md`
+- Pre-pilot blocker register:
+  `pre-pilot-audit/karigo-pre-pilot-blocker-register-task110.md`
+- Management pre-pilot signoff:
+  `pre-pilot-audit/karigo-management-pre-pilot-signoff-task110.md`
+
+Use this pack as the final gate before inviting real controlled early access participants.
+The selected initial payment mode is mock payment. Paystack Test Mode, live Paystack,
+Accelerate.ng, Termii, wallet withdrawals, automatic refunds, live rides, ride dispatch,
+payouts, Pharmacy marketplace and provider login remain inactive unless separately
+approved later.
+
 ## Controlled Pilot Preparation
 
 - Plan and scope: `controlled-soft-launch-plan.md`
