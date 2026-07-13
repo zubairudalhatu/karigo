@@ -6,6 +6,7 @@ import { riderApi, RiderProfile } from "../src/api/rider.api";
 import { Button, Card, Field, Loading, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
 import { useAuth } from "../src/contexts/auth-context";
 import { friendlyError } from "../src/lib/errors";
+import { captainModes } from "../src/lib/captain-modes";
 
 function initials(name?: string | null) {
   const parts = name?.trim().split(/\s+/).filter(Boolean) ?? [];
@@ -54,7 +55,9 @@ export default function Profile() {
     }
   }
 
-  return <Protected><Screen title="Rider Profile" subtitle="Manage your rider record, vehicle details and staging location."><Message error>{error}</Message><Message>{message}</Message>{profile ? <>
+  const modes = captainModes(profile);
+
+  return <Protected><Screen title="Captain Profile" subtitle="Manage your Captain record, vehicle details and staging location."><Message error>{error}</Message><Message>{message}</Message>{profile ? <>
     <Card tone="soft">
       <View style={styles.headerRow}>
         <View style={styles.avatar}><Text style={styles.avatarText}>{initials(profile.user?.fullName).toUpperCase()}</Text></View>
@@ -69,6 +72,17 @@ export default function Profile() {
         <StatusBadge status={profile.availabilityStatus} />
       </View>
       <Text style={ui.pageIntro}>{profile.totalDeliveries} completed deliveries recorded in KariGO.</Text>
+    </Card>
+
+    <Card>
+      <Text style={ui.sectionTitle}>Captain modes</Text>
+      {modes.map((mode) => <View key={mode.key} style={styles.modeRow}>
+        <View style={ui.spaceBetween}>
+          <Text style={ui.sectionTitle}>{mode.label}</Text>
+          <StatusBadge status={mode.badge} />
+        </View>
+        <Text style={ui.muted}>{mode.description}</Text>
+      </View>)}
     </Card>
 
     <Card>
@@ -87,9 +101,9 @@ export default function Profile() {
     </Card>
 
     <Card>
-      <Text style={ui.sectionTitle}>Rider tools</Text>
+      <Text style={ui.sectionTitle}>Captain tools</Text>
       <NavLink href="/notifications" label="Activity feed and notifications" />
-      <NavLink href="/taxi-readiness" label="Taxi Driver Readiness" />
+      <NavLink href="/taxi-readiness" label="Driver Captain Readiness" />
     </Card>
 
     <Button tone="muted" title="Log out" onPress={async () => { await logout(); router.replace("/auth/login"); }} />
@@ -101,5 +115,6 @@ const styles = StyleSheet.create({
   headerText: { flex: 1, gap: 2 },
   avatar: { alignItems: "center", backgroundColor: brand.colors.primary, borderRadius: 28, height: 56, justifyContent: "center", width: 56 },
   avatarText: { color: brand.colors.white, fontSize: 19, fontWeight: "900" },
-  badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }
+  badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  modeRow: { borderTopColor: brand.colors.border, borderTopWidth: 1, gap: 8, paddingTop: 12 }
 });

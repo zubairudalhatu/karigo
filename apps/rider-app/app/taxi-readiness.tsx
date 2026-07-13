@@ -8,7 +8,7 @@ import { friendlyError } from "../src/lib/errors";
 
 const vehicleTypes: TaxiVehicleType[] = ["SEDAN", "SUV", "MINI_BUS", "TRICYCLE", "OTHER"];
 const ownershipTypes: TaxiVehicleOwnership[] = ["OWNER", "LEASED", "COMPANY_ASSIGNED", "OTHER"];
-const testNotice = "Taxi Test Mode. No real taxi ride, fare billing or payment is active.";
+const testNotice = "Driver Captain Test Mode. No real taxi ride, fare billing or payment is active.";
 
 const initialForm = {
   fullName: "",
@@ -164,20 +164,20 @@ export default function TaxiReadiness() {
     }
   }
 
-  return <Protected><Screen title="Taxi Driver Readiness" subtitle="Prepare driver and vehicle verification details before Taxi is approved for launch.">
+  return <Protected><Screen title="Driver Captain Readiness" subtitle="Prepare driver and vehicle verification details before Taxi is approved for launch.">
     <Card tone="soft">
       <Text style={ui.sectionTitle}>Taxi is not live yet</Text>
-      <Text style={ui.pageIntro}>This form helps KariGO prepare verified driver onboarding, vehicle checks and safe taxi operations. It does not activate taxi jobs, live dispatch, fare billing or payment.</Text>
+      <Text style={ui.pageIntro}>This form helps KariGO prepare Driver Captain onboarding, vehicle checks and safe taxi operations. It does not activate taxi jobs, live dispatch, fare billing or payment.</Text>
     </Card>
 
     {taxiEnabled ? <Card>
-      <Text style={ui.sectionTitle}>Taxi Test Mode</Text>
+      <Text style={ui.sectionTitle}>Driver Captain Test Mode</Text>
       <Text style={ui.muted}>{testNotice}</Text>
       {profile ? <>
         <StatusBadge status={profile.status} />
-        <Text style={ui.muted}>{profile.isAvailableForTaxi ? "Available for staging Taxi trips" : "Offline for staging Taxi trips"}</Text>
-        <Button title={profile.isAvailableForTaxi ? "Go offline for Taxi Test Mode" : "Go online for Taxi Test Mode"} onPress={toggleTaxiAvailability} />
-      </> : <Text style={ui.muted}>An approved Taxi test driver profile is required before Taxi Test Mode appears.</Text>}
+        <Text style={ui.muted}>{profile.isAvailableForTaxi ? "Available for staging Driver Captain trips" : "Offline for staging Driver Captain trips"}</Text>
+        <Button title={profile.isAvailableForTaxi ? "Go offline for Driver Captain Test Mode" : "Go online for Driver Captain Test Mode"} onPress={toggleTaxiAvailability} />
+      </> : <Text style={ui.muted}>An approved Driver Captain test profile is required before Test Mode appears.</Text>}
     </Card> : null}
 
     {taxiEnabled && trips.length ? <Card>
@@ -243,7 +243,7 @@ export default function TaxiReadiness() {
       <Text style={ui.sectionTitle}>Additional notes</Text>
       <Field placeholder="Readiness notes optional" value={form.notes} onChangeText={(notes) => setForm({ ...form, notes })} multiline />
       {missingRequiredFields.length ? <Message error>Missing required fields: {missingRequiredFields.join(", ")}</Message> : null}
-      <Button title={loading ? "Submitting..." : "Apply for Taxi Readiness"} disabled={loading || !formReady} onPress={submit} />
+      <Button title={loading ? "Submitting..." : "Apply for Driver Captain Readiness"} disabled={loading || !formReady} onPress={submit} />
     </Card>
   </Screen></Protected>;
 }

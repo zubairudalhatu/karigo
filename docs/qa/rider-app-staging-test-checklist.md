@@ -1,4 +1,4 @@
-# Rider App Staging Test Checklist
+# Captain App Staging Test Checklist
 
 Use approved internal devices and staging demo accounts only. Do not record passwords,
 bearer tokens, delivery OTPs, full phone numbers, device identifiers, or real customer
@@ -6,7 +6,7 @@ details in Git.
 
 ## Environment
 
-- App: KariGO Rider Staging
+- App: KariGO Captain Staging
 - API: `https://karigo-8htn.onrender.com/api/v1`
 - Providers: mock only
 - Android package: `com.karigo.rider.staging`
@@ -19,14 +19,15 @@ details in Git.
 | --- | --- | --- | --- |
 | App installs | Internal build installs without replacing production app | Pending |  |
 | Splash/logo loads | KariGO logo displays cleanly | Pending |  |
-| Login works | Demo rider can sign in | Pending | Use secure credential handover |
-| Password visibility toggle works | Rider can show/hide the password field while typing | Pending | Do not record passwords |
-| Session is isolated | Rider token does not conflict with Customer/Admin/Vendor sessions | Pending | Uses Rider-specific secure-store key |
-| Rider profile loads | Profile screen shows rider data | Pending |  |
+| Login works | Demo captain can sign in with the approved delivery account | Pending | Use secure credential handover |
+| Password visibility toggle works | Captain can show/hide the password field while typing | Pending | Do not record passwords |
+| Session is isolated | Captain token does not conflict with Customer/Admin/Vendor sessions | Pending | Uses app-specific secure-store key |
+| Captain profile loads | Profile screen shows captain data | Pending |  |
 | Bottom navigation works | Home, Jobs, Earnings and Profile tabs route correctly | Pending | Hidden on auth and Taxi readiness flow |
-| Dashboard summary loads | Dashboard shows rider name, availability, today's assigned deliveries, active delivery and completed delivery count | Pending |  |
+| Dashboard summary loads | Dashboard shows captain name, Delivery Captain availability, today's assigned deliveries, active delivery and completed delivery count | Pending |  |
+| Captain modes show | Delivery Captain is delivery-only and Driver Captain remains readiness/test gated | Pending | No live ride dispatch |
 | Staging safety note shows | Dashboard states live payouts, withdrawals, live taxi booking and live payment collection are disabled | Pending |  |
-| Support/help guidance shows | Dashboard gives rider a safe operations/support escalation prompt | Pending |  |
+| Support/help guidance shows | Dashboard gives Captain a safe operations/support escalation prompt | Pending |  |
 | Online/offline works | Availability updates through staging API | Pending |  |
 | Job list loads | Assigned jobs display or safe empty state appears | Pending |  |
 | Assigned job opens | Job detail loads correctly | Pending |  |
@@ -35,15 +36,15 @@ details in Git.
 | Pickup status works | Pickup status updates safely | Pending |  |
 | On-the-way status works | Delivery status updates safely | Pending |  |
 | Arrived status works | Arrived-at-destination status updates safely | Pending |  |
-| OTP hidden before delivered | OTP card does not appear at `ARRIVED_DESTINATION` | Pending | Rider should mark delivered first |
+| OTP hidden before delivered | OTP card does not appear at `ARRIVED_DESTINATION` | Pending | Captain should mark delivered first |
 | Delivery OTP completion works | Correct OTP completes delivery after `DELIVERED` | Pending | Do not record OTP |
-| Rider cannot view OTP | Rider app only accepts customer-supplied OTP; it does not retrieve/display the code | Fixed | OTP comes from Customer App reveal |
+| Captain cannot view OTP | Captain app only accepts customer-supplied OTP; it does not retrieve/display the code | Fixed | OTP comes from Customer App reveal |
 | Invalid OTP is rejected | Wrong code fails safely and order remains active | Pending |  |
 | Valid OTP completes order | Customer-supplied code moves order to completed and clears code | Pending |  |
 | Earnings page loads | Earnings summary renders | Pending |  |
 | Earnings guardrail shows | Screen states live wallet withdrawals and payout requests are disabled | Pending |  |
-| Notification page loads | Rider notifications render | Pending |  |
-| Taxi readiness required fields | Address, licence, licence expiry, vehicle make/model/year/colour/plate are required | Pending | Readiness only; no live Taxi booking |
+| Notification page loads | Captain notifications render | Pending |  |
+| Driver Captain readiness required fields | Address, licence, licence expiry, vehicle make/model/year/colour/plate are required | Pending | Readiness only; no live Taxi booking |
 | Header polish | No route names, internal paths, or duplicate native titles are visible | Pending | Back arrow remains on secondary screens |
 | API errors are safe | No raw JSON/stack traces shown | Pending |  |
 | Render cold-start handled | Loading/retry behavior is understandable | Pending |  |
@@ -52,15 +53,15 @@ details in Git.
 
 Use staging data only. The backend remains the source of truth for valid transitions.
 
-1. Admin assigns rider: `RIDER_ASSIGNED`.
-2. Rider accepts job: app shows success and reloads the job.
-3. Rider heads to pickup: backend should return the next dispatch-ready rider status.
-4. Rider confirms pickup: `PICKED_UP`.
-5. Rider starts delivery: `ON_THE_WAY`.
-6. Rider confirms arrival: `ARRIVED_DESTINATION`.
-7. Rider marks delivered: `DELIVERED`.
-8. Rider enters the customer-supplied OTP only after `DELIVERED`.
-9. Rider completes delivery with the customer OTP: order should become completed according to backend workflow.
+1. Admin assigns Delivery Captain: `RIDER_ASSIGNED`.
+2. Delivery Captain accepts job: app shows success and reloads the job.
+3. Delivery Captain heads to pickup: backend should return the next dispatch-ready status.
+4. Delivery Captain confirms pickup: `PICKED_UP`.
+5. Delivery Captain starts delivery: `ON_THE_WAY`.
+6. Delivery Captain confirms arrival: `ARRIVED_DESTINATION`.
+7. Delivery Captain marks delivered: `DELIVERED`.
+8. Delivery Captain enters the customer-supplied OTP only after `DELIVERED`.
+9. Delivery Captain completes delivery with the customer OTP: order should become completed according to backend workflow.
 
 ## Delivery OTP Verification Checklist
 
@@ -68,7 +69,7 @@ Use staging data only. The backend remains the source of truth for valid transit
 - Do not record delivery OTPs in Git, screenshots, chat, or QA evidence.
 - Confirm invalid OTP is rejected.
 - Confirm a valid OTP completes the delivery.
-- Confirm the Rider app never displays the OTP before submission.
+- Confirm the Captain app never displays the OTP before submission.
 - Confirm the Customer app reveals the OTP only after arrival/delivered status.
 - Confirm earnings and order history update after successful completion.
 - Confirm in-app notifications remain available if mock push/WhatsApp/email providers are active.
@@ -85,7 +86,7 @@ Use staging data only. The backend remains the source of truth for valid transit
 
 | Persona | Login phone placeholder |
 | --- | --- |
-| Demo rider | `<demo-rider-phone>` |
+| Demo captain | `<demo-rider-phone>` |
 | Operations admin | `<operations-admin-phone>` |
 
 Passwords must remain outside Git.

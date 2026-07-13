@@ -11,7 +11,7 @@ const tabs = [
   { label: "Profile", href: "/profile", match: ["/profile", "/notifications"] }
 ] as const;
 
-export function RiderBottomNav() {
+export function CaptainBottomNav() {
   const { user } = useAuth();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();

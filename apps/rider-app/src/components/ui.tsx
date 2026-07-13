@@ -76,7 +76,7 @@ export function NavLink({ href, label }: { href: string; label: string }) {
 
 export function Protected({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
-  if (loading) return <Loading label="Opening KariGO Rider..." />;
+  if (loading) return <Loading label="Opening KariGO Captain..." />;
   if (!user) return <Redirect href="/auth/login" />;
   return children;
 }

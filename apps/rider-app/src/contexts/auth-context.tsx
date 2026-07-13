@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...body,
         phoneNumber: normalizeNigerianPhoneNumber(body.phoneNumber)
       });
-      if (result.user.role !== "RIDER") throw new Error("This account cannot use the rider app.");
+      if (result.user.role !== "RIDER") throw new Error("This account cannot use the Captain app.");
       await tokenStore.setToken?.(result.accessToken); setUser(result.user);
     },
     logout: async () => { await tokenStore.clearToken?.(); setUser(null); }

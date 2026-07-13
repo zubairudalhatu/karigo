@@ -1,0 +1,49 @@
+import type { RiderProfile } from "../api/rider.api";
+
+export type CaptainModeStatus = "ACTIVE" | "READINESS_ONLY" | "PENDING_APPROVAL" | "DISABLED";
+
+export type CaptainMode = {
+  key: "DELIVERY_CAPTAIN" | "DRIVER_CAPTAIN";
+  label: string;
+  status: CaptainModeStatus;
+  badge: string;
+  description: string;
+  ctaLabel?: string;
+  href?: string;
+};
+
+export function isTaxiStagingEnabled() {
+  return process.env.EXPO_PUBLIC_TAXI_SERVICE_ENABLED === "true" &&
+    process.env.EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED === "true";
+}
+
+export function deliveryCaptainMode(profile?: RiderProfile | null): CaptainMode {
+  const active = profile?.verificationStatus === "ACTIVE";
+  return {
+    key: "DELIVERY_CAPTAIN",
+    label: "Delivery Captain",
+    status: active ? "ACTIVE" : "PENDING_APPROVAL",
+    badge: active ? "Approved" : "Pending approval",
+    description: active
+      ? "Handle KariGO delivery assignments, pickup milestones and customer handoff."
+      : "Delivery jobs unlock after KariGO approves this Captain account."
+  };
+}
+
+export function driverCaptainMode(taxiStagingEnabled = isTaxiStagingEnabled()): CaptainMode {
+  return {
+    key: "DRIVER_CAPTAIN",
+    label: "Driver Captain",
+    status: taxiStagingEnabled ? "READINESS_ONLY" : "DISABLED",
+    badge: taxiStagingEnabled ? "Staging test only" : "Readiness only",
+    description: taxiStagingEnabled
+      ? "Taxi test mode is limited to approved staging checks. Live ride dispatch remains disabled."
+      : "Submit driver and vehicle readiness details while taxi operations remain gated.",
+    ctaLabel: "Driver Captain Readiness",
+    href: "/taxi-readiness"
+  };
+}
+
+export function captainModes(profile?: RiderProfile | null, taxiStagingEnabled = isTaxiStagingEnabled()) {
+  return [deliveryCaptainMode(profile), driverCaptainMode(taxiStagingEnabled)];
+}

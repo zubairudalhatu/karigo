@@ -6,6 +6,7 @@ import { jobsApi, RiderJob } from "../../src/api/jobs.api";
 import { notificationsApi } from "../../src/api/notifications.api";
 import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError } from "../../src/lib/errors";
+import { captainModes } from "../../src/lib/captain-modes";
 
 const ACTIVE_DELIVERY_STATUSES = new Set([
   "RIDER_ASSIGNED",
@@ -18,8 +19,8 @@ const ACTIVE_DELIVERY_STATUSES = new Set([
 
 function firstName(fullName?: string | null) {
   const name = fullName?.trim();
-  if (!name) return "Rider";
-  return name.split(/\s+/)[0] || "Rider";
+  if (!name) return "Captain";
+  return name.split(/\s+/)[0] || "Captain";
 }
 
 function availabilityLabel(profile?: RiderProfile | null) {
@@ -32,8 +33,8 @@ function availabilityLabel(profile?: RiderProfile | null) {
 }
 
 function availabilityCopy(profile?: RiderProfile | null) {
-  if (!profile) return "Loading rider status...";
-  if (profile.verificationStatus !== "ACTIVE") return "Only active approved riders can go online for delivery assignments.";
+  if (!profile) return "Loading Captain status...";
+  if (profile.verificationStatus !== "ACTIVE") return "Only active approved Delivery Captains can go online for delivery assignments.";
   if (profile.availabilityStatus === "BUSY") return "You are currently assigned to an active delivery. Finish it before changing availability.";
   if (profile.availabilityStatus === "ONLINE") return "You are available for KariGO delivery assignments.";
   return "Go online when dispatch is ready to assign you a delivery.";
@@ -68,6 +69,7 @@ export default function RiderDashboard() {
     return jobs.filter((job) => new Date(job.updatedAt ?? job.createdAt).toDateString() === today);
   }, [jobs]);
   const activeJob = useMemo(() => jobs.find((job) => ACTIVE_DELIVERY_STATUSES.has(job.orderStatus)), [jobs]);
+  const modes = useMemo(() => captainModes(profile), [profile]);
 
   async function toggle() {
     if (!profile) return;
@@ -88,14 +90,26 @@ export default function RiderDashboard() {
           <StatusBadge status={availabilityLabel(profile)} />
         </View>
         <Text style={styles.title}>Hi, {firstName(profile?.user?.fullName)}</Text>
-        <Text style={ui.pageIntro}>Manage delivery assignments, availability and handoff progress from one place.</Text>
+        <Text style={ui.pageIntro}>Manage Delivery Captain assignments today. Driver Captain readiness stays gated until taxi is approved.</Text>
       </Card>
       <Message error>{error}</Message>
 
       <Card>
-        <Text style={ui.title}>Rider availability</Text>
+        <Text style={ui.title}>Delivery Captain availability</Text>
         <Text style={ui.muted}>{availabilityCopy(profile)}</Text>
         <Button title={profile?.availabilityStatus === "ONLINE" ? "Go offline" : "Go online"} disabled={!canToggle} onPress={toggle} />
+      </Card>
+
+      <Card>
+        <Text style={ui.title}>Captain modes</Text>
+        {modes.map((mode) => <View key={mode.key} style={styles.modeCard}>
+          <View style={ui.spaceBetween}>
+            <Text style={ui.sectionTitle}>{mode.label}</Text>
+            <StatusBadge status={mode.badge} />
+          </View>
+          <Text style={ui.muted}>{mode.description}</Text>
+          {mode.href && mode.ctaLabel ? <NavLink href={mode.href} label={mode.ctaLabel} /> : null}
+        </View>)}
       </Card>
 
       <View style={styles.summaryGrid}>
@@ -113,7 +127,7 @@ export default function RiderDashboard() {
       </Card>
 
       <Card><Text style={ui.title}>Assigned jobs</Text><Text style={styles.metric}>{jobs.length}</Text><NavLink href="/jobs" label="View assigned jobs" /></Card>
-      <Card><Text style={ui.title}>Taxi Driver Readiness</Text><Text style={ui.muted}>Taxi is not live yet. Apply for readiness review while KariGO prepares verified driver onboarding and vehicle checks.</Text><NavLink href="/taxi-readiness" label="Apply for Taxi Readiness" /></Card>
+      <Card><Text style={ui.title}>Driver Captain Readiness</Text><Text style={ui.muted}>Taxi is not live yet. Apply for readiness review while KariGO prepares verified driver onboarding and vehicle checks.</Text><NavLink href="/taxi-readiness" label="Apply for Driver Captain Readiness" /></Card>
       <Card><Text style={ui.title}>Support and help</Text><Text style={ui.muted}>For staging incidents, contact the KariGO operations or dispatch lead through the approved pilot support channel.</Text></Card>
       <Card><Text style={ui.title}>Staging safety note</Text><Text style={ui.muted}>Mock providers remain active. Live payouts, withdrawals, live taxi booking and live payment collection are disabled.</Text></Card>
       <Card><Text style={ui.title}>Quick links</Text><NavLink href="/earnings" label="Earnings" /><NavLink href="/notifications" label={`Notifications (${unread} unread)`} /><NavLink href="/profile" label="Profile and location" /></Card>
@@ -126,5 +140,6 @@ const styles = StyleSheet.create({
   logo: { height: 34, width: 102 },
   metric: { color: brand.colors.charcoal, fontSize: 28, fontWeight: "800" },
   summaryGrid: { gap: 12 },
-  jobRef: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "800" }
+  jobRef: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "800" },
+  modeCard: { borderTopColor: brand.colors.border, borderTopWidth: 1, gap: 8, paddingTop: 12 }
 });

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "KariGO Rider",
+    "name": "KariGO Captain",
     "slug": "karigo-rider",
     "scheme": "karigo-rider",
     "plugins": ["expo-router"],

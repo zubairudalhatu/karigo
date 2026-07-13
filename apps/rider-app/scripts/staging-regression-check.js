@@ -26,6 +26,7 @@ const riderNav = read("src/components/rider-navigation.tsx");
 const taxiReadiness = read("app/taxi-readiness.tsx");
 const taxiApi = read("src/api/taxi.api.ts");
 const ui = read("src/components/ui.tsx");
+const captainModes = read("src/lib/captain-modes.ts");
 
 const stagingProfile = easJson.build?.["rider-staging"];
 
@@ -39,7 +40,7 @@ expect(
 expect(stagingProfile?.env?.APP_VARIANT === "staging", "rider-staging must set APP_VARIANT=staging.");
 
 expect(appConfig.includes("com.karigo.rider.staging"), "Staging Android package/iOS bundle ID must be configured.");
-expect(appConfig.includes("KariGO Rider Staging"), "Staging app name must be configured.");
+expect(appConfig.includes("KariGO Captain Staging"), "Staging app name must be configured.");
 expect(appConfig.includes("EXPO_PUBLIC_API_BASE_URL"), "App config must read the public staging API URL.");
 expect(appConfig.includes("344a78dc-69d9-4daa-9616-f100b67f0910"), "Rider EAS project ID must be linked in app config.");
 expect(!appConfig.includes("344a78dc-69d3-4aa-9616-fb1b067f0910"), "Rider app config must not contain the old invalid EAS project ID.");
@@ -49,7 +50,8 @@ expect(packageJson.dependencies?.["expo-updates"] === "~0.28.18", "Rider app mus
 
 expect(apiClient.includes("karigo_rider_access_token"), "Rider token storage key must be rider-specific.");
 expect(apiClient.includes("createApiClient"), "Rider app must use the shared API client.");
-expect(authContext.includes('role !== "RIDER"'), "Rider app must reject non-rider accounts.");
+expect(authContext.includes('role !== "RIDER"'), "Captain app must reject non-rider accounts until a backend Captain role exists.");
+expect(authContext.includes("cannot use the Captain app"), "Role rejection copy must use Captain branding.");
 expect(ui.includes("PasswordField"), "Rider shared UI must include a password visibility field.");
 expect(ui.includes("visible ? \"Hide\" : \"Show\""), "Rider password field must expose show/hide toggle copy.");
 expect(loginScreen.includes("PasswordField") && loginScreen.includes("passwordVisible"), "Rider login password field must support visibility toggling.");
@@ -58,7 +60,7 @@ expect(rootLayout.includes("headerTitle: \"\""), "Native route titles must be hi
 expect(rootLayout.includes("headerTintColor: brand.colors.charcoal"), "Back arrow should use KariGO charcoal styling.");
 expect(rootLayout.includes("jobs/[id]"), "Job detail route must keep a configured header/back area.");
 expect(rootLayout.includes("taxi-readiness"), "Taxi readiness route must be configured with back-only navigation.");
-expect(rootLayout.includes("RiderBottomNav"), "Root layout must mount the Rider bottom navigation.");
+expect(rootLayout.includes("CaptainBottomNav"), "Root layout must mount the Captain bottom navigation.");
 expect(!rootLayout.includes("headerTintColor: brand.colors.primary"), "Rider headers should not use the older red default title styling.");
 
 expect(ui.includes("paddingTop: 28"), "Shared Rider screen spacing should use compact top padding.");
@@ -68,9 +70,16 @@ expect(ui.includes("heroTitle"), "Shared Rider UI must include stronger hero tit
 expect(riderNav.includes("Home") && riderNav.includes("Jobs") && riderNav.includes("Earnings") && riderNav.includes("Profile"), "Rider bottom nav must expose Home, Jobs, Earnings and Profile tabs.");
 expect(riderNav.includes("pathname.startsWith(\"/auth\")"), "Rider bottom nav must hide on auth screens.");
 expect(riderNav.includes("pathname.startsWith(\"/taxi-readiness\")"), "Rider bottom nav must hide on Taxi readiness flow.");
-expect(dashboard.includes("Rider availability"), "Dashboard must show a clear availability section.");
+expect(captainModes.includes("DELIVERY_CAPTAIN") && captainModes.includes("DRIVER_CAPTAIN"), "Captain mode helper must define delivery and driver modes.");
+expect(captainModes.includes("READINESS_ONLY"), "Driver Captain mode must support readiness-only state.");
+expect(captainModes.includes("isTaxiStagingEnabled"), "Driver Captain mode must stay gated by taxi staging flags.");
 expect(dashboard.includes("karigo-logo.png"), "Dashboard must use compact KariGO branding.");
-expect(dashboard.includes("Manage delivery assignments, availability and handoff progress from one place."), "Dashboard must include polished rider-facing intro copy.");
+expect(dashboard.includes("Delivery Captain availability"), "Dashboard must show a clear Delivery Captain availability section.");
+expect(dashboard.includes("Loading Captain status"), "Dashboard fallback copy must use Captain branding.");
+expect(dashboard.includes("Only active approved Delivery Captains"), "Dashboard approval copy must use Captain branding.");
+expect(dashboard.includes("Manage Delivery Captain assignments today. Driver Captain readiness stays gated until taxi is approved."), "Dashboard must include polished Captain-facing intro copy.");
+expect(dashboard.includes("Captain modes"), "Dashboard must show role-based Captain modes.");
+expect(dashboard.includes("Driver Captain Readiness"), "Dashboard must expose Driver Captain readiness without live ride dispatch.");
 expect(dashboard.includes("Available") && dashboard.includes("Unavailable") && dashboard.includes("On delivery") && dashboard.includes("Offline"), "Dashboard must expose rider-friendly availability states.");
 expect(dashboard.includes("Go online") && dashboard.includes("Go offline"), "Dashboard must expose online/offline availability.");
 expect(dashboard.includes("Today's assigned deliveries"), "Dashboard must show today's assigned deliveries.");
@@ -80,12 +89,12 @@ expect(dashboard.includes("Assigned jobs"), "Dashboard must show assigned jobs."
 expect(dashboard.includes("Support and help"), "Dashboard must include support/help access copy.");
 expect(dashboard.includes("Staging safety note"), "Dashboard must include a staging safety note.");
 expect(dashboard.includes("Live payouts, withdrawals, live taxi booking and live payment collection are disabled."), "Dashboard must state inactive live operations.");
-expect(dashboard.includes("Taxi Driver Readiness"), "Dashboard must include taxi readiness card.");
-expect(dashboard.includes("Apply for Taxi Readiness"), "Dashboard must link to taxi readiness application.");
+expect(dashboard.includes("Apply for Driver Captain Readiness"), "Dashboard must link to driver readiness application.");
 expect(jobsIndex.includes("Assigned Jobs"), "Jobs screen title must be rider-friendly.");
 expect(jobsIndex.includes("No delivery jobs assigned yet. Stay online to receive jobs."), "Jobs list must have a rider-friendly empty state.");
 expect(earnings.includes("Live wallet withdrawals and payout requests are not enabled in staging."), "Earnings screen must state withdrawal guardrails.");
-expect(profile.includes("Rider Profile"), "Profile screen must use polished Rider Profile title.");
+expect(profile.includes("Captain Profile"), "Profile screen must use polished Captain Profile title.");
+expect(profile.includes("Captain tools"), "Profile must use Captain tool branding.");
 expect(profile.includes("Activity feed and notifications"), "Profile must link to notifications.");
 expect(jobDetail.includes("Accept job") && jobDetail.includes("Reject job"), "Job detail must support accept/reject actions.");
 expect(jobDetail.includes("RIDER_ARRIVING_PICKUP") && jobDetail.includes("PICKED_UP"), "Job detail must support pickup status progression.");
@@ -96,8 +105,9 @@ expect(!jobDetail.includes('job.orderStatus === "DELIVERED" || job.orderStatus =
 expect(jobDetail.includes("value.replace(/\\D/g, \"\").slice(0, 6)"), "Delivery OTP entry must accept only six digits.");
 expect(jobDetail.includes("Complete delivery") && jobDetail.includes("Delivery completed successfully."), "Job detail must support OTP completion.");
 expect(!jobsIndex.includes("deliveryOtp") && !jobDetail.includes("ordersApi.deliveryOtp"), "Rider app must not retrieve or display the customer delivery OTP.");
-expect(taxiReadiness.includes("Taxi is not live yet"), "Taxi readiness screen must not present taxi as live.");
-expect(taxiReadiness.includes("Apply for Taxi Readiness"), "Taxi readiness screen must include the driver application CTA.");
+expect(taxiReadiness.includes("Taxi is not live yet"), "Driver Captain readiness screen must not present taxi as live.");
+expect(taxiReadiness.includes("Apply for Driver Captain Readiness"), "Driver Captain readiness screen must include the application CTA.");
+expect(taxiReadiness.includes("Driver Captain Test Mode"), "Driver Captain test mode copy must be used.");
 expect(taxiReadiness.includes("Full name required"), "Taxi readiness must require full name.");
 expect(taxiReadiness.includes("Residential address required"), "Taxi readiness must require driver address.");
 expect(taxiReadiness.includes("Driver licence number required"), "Taxi readiness must require licence number.");

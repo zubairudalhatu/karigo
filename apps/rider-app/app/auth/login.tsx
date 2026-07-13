@@ -6,7 +6,7 @@ import { Button, Field, Message, PasswordField, Screen } from "../../src/compone
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 
-export default function RiderLogin() {
+export default function CaptainLogin() {
   const { login } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
@@ -29,8 +29,8 @@ export default function RiderLogin() {
   return (
     <Screen>
       <Image source={require("../../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
-      <Text style={styles.title}>Rider login</Text>
-      <Text style={styles.copy}>Sign in with your approved rider account.</Text>
+      <Text style={styles.title}>Captain login</Text>
+      <Text style={styles.copy}>Sign in with your approved KariGO Captain account.</Text>
       <Field placeholder="+234..." keyboardType="phone-pad" value={phoneNumber} onChangeText={setPhoneNumber} />
       <PasswordField placeholder="Password" visible={passwordVisible} onToggleVisible={() => setPasswordVisible((visible) => !visible)} value={password} onChangeText={setPassword} />
       <Message error>{error}</Message>

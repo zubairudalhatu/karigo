@@ -2,14 +2,14 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Link } from "expo-router";
 import { brand } from "@karigo/config";
 
-export default function RiderWelcome() {
+export default function CaptainWelcome() {
   return (
     <View style={styles.container}>
       <Image source={require("../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
-      <Text style={styles.title}>Deliver with KariGO</Text>
-      <Text style={styles.copy}>Manage verified delivery jobs, milestone updates and earnings in one place.</Text>
+      <Text style={styles.title}>KariGO Captain</Text>
+      <Text style={styles.copy}>One app for approved Delivery Captains today, with Driver Captain readiness prepared for future taxi operations.</Text>
       <Link href="/auth/login" asChild>
-        <Pressable style={styles.button}><Text style={styles.buttonText}>Rider login</Text></Pressable>
+        <Pressable style={styles.button}><Text style={styles.buttonText}>Captain login</Text></Pressable>
       </Link>
     </View>
   );
@@ -23,4 +23,3 @@ const styles = StyleSheet.create({
   button: { backgroundColor: brand.colors.primary, borderRadius: 12, paddingHorizontal: 32, paddingVertical: 15 },
   buttonText: { color: brand.colors.white, fontSize: 16, fontWeight: "700" }
 });
-

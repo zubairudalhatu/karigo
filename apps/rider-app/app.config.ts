@@ -30,7 +30,7 @@ export default ({ config }: ExpoConfigInput) => {
 
   return {
     ...config,
-    name: isStaging ? "KariGO Rider Staging" : "KariGO Rider",
+    name: isStaging ? "KariGO Captain Staging" : "KariGO Captain",
     slug: "karigo-rider",
     scheme: isStaging ? "karigo-rider-staging" : "karigo-rider",
     plugins: ["expo-router"],

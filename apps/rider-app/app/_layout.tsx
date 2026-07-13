@@ -1,7 +1,7 @@
 import { Stack } from "expo-router";
 import { brand } from "@karigo/config";
 import { AuthProvider } from "../src/contexts/auth-context";
-import { RiderBottomNav } from "../src/components/rider-navigation";
+import { CaptainBottomNav } from "../src/components/rider-navigation";
 
 const hiddenHeader = {
   headerShown: false
@@ -38,7 +38,7 @@ export default function RootLayout() {
           <Stack.Screen name="profile" options={backOnlyHeader} />
           <Stack.Screen name="taxi-readiness" options={backOnlyHeader} />
         </Stack>
-        <RiderBottomNav />
+        <CaptainBottomNav />
       </>
     </AuthProvider>
   );
