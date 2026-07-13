@@ -3,7 +3,12 @@ import { api } from "./client";
 
 export interface PaymentInitiation {
   payment: { id: string; transactionReference: string; paymentStatus: string };
-  authorization: { transactionReference: string; authorizationUrl?: string; providerResponse?: unknown };
+  authorization: {
+    transactionReference: string;
+    authorizationUrl?: string | null;
+    accessCode?: string | null;
+    providerResponse?: unknown;
+  };
 }
 
 export const paymentsApi = {

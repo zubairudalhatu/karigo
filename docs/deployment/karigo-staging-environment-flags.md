@@ -9,7 +9,9 @@ APP_ENV=staging
 TAXI_SERVICE_ENABLED=false
 TAXI_STAGING_DISPATCH_ENABLED=false
 PHARMACY_MARKETPLACE_ENABLED=false
+PAYMENTS_PROVIDER=mock
 PAYMENT_PROVIDER=mock
+PAYMENTS_LIVE_ENABLED=false
 OTP_PROVIDER=mock
 SMS_PROVIDER=mock
 EMAIL_PROVIDER=mock
@@ -17,6 +19,17 @@ WHATSAPP_PROVIDER=mock
 PUSH_PROVIDER=mock
 NOTIFICATION_PROVIDER=mock
 ```
+
+Paystack Test Mode may be enabled only for a controlled staging checkout test:
+
+```text
+PAYSTACK_MODE=test
+PAYMENTS_PROVIDER=paystack
+PAYMENT_PROVIDER=paystack
+PAYMENTS_LIVE_ENABLED=false
+```
+
+Never set `PAYMENTS_LIVE_ENABLED=true` in staging or commit Paystack credentials to Git.
 
 Taxi staging dispatch may be enabled only in staging for controlled tests:
 

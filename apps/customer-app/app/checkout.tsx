@@ -9,6 +9,11 @@ import { Button, Card, Empty, Field, Message, Protected, Screen, ui } from "../s
 import { useCart } from "../src/contexts/cart-context";
 import { pricingFromServer } from "../src/lib/checkout-pricing";
 import { friendlyError, money } from "../src/lib/errors";
+import {
+  isExternalPaymentAuthorizationUrl,
+  isMockAuthorizationUrl,
+  openExternalPaymentAuthorization
+} from "../src/lib/payment-flow";
 import { promoErrorMessage } from "../src/lib/promo-state";
 
 export default function Checkout() {
@@ -24,6 +29,8 @@ export default function Checkout() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pendingPaymentReference, setPendingPaymentReference] = useState("");
+  const [pendingAuthorizationUrl, setPendingAuthorizationUrl] = useState("");
 
   const items = useMemo(() => cart.items.map((i) => ({ productId: i.product.id, quantity: i.quantity })), [cart.items]);
   const quoteKey = useMemo(() => JSON.stringify({
@@ -140,10 +147,55 @@ export default function Checkout() {
     setBusy(true);
     setError("");
     try {
-      const started = await paymentsApi.initiate({ orderId: order.id, amount: Number(order.totalAmount), paymentMethod: "mock" });
-      await paymentsApi.verify(started.payment.transactionReference);
-      cart.clear();
-      router.replace(`/orders/${order.id}`);
+      const started = await paymentsApi.initiate({ orderId: order.id, amount: Number(order.totalAmount), paymentMethod: "card" });
+      const authorizationUrl = started.authorization.authorizationUrl;
+      if (isExternalPaymentAuthorizationUrl(authorizationUrl)) {
+        setPendingPaymentReference(started.payment.transactionReference);
+        setPendingAuthorizationUrl(authorizationUrl);
+        setMessage("Paystack Test Mode checkout opened. Return to KariGO and tap Verify payment after completing payment.");
+        await openExternalPaymentAuthorization(authorizationUrl);
+        return;
+      }
+      if (authorizationUrl && !isMockAuthorizationUrl(authorizationUrl)) {
+        throw new Error("Payment authorization link was not accepted.");
+      }
+      await verifyPayment(started.payment.transactionReference);
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyPayment(reference: string) {
+    const orderId = order?.id;
+    if (!orderId) return;
+    await paymentsApi.verify(reference);
+    cart.clear();
+    setPendingPaymentReference("");
+    setPendingAuthorizationUrl("");
+    router.replace(`/orders/${orderId}`);
+  }
+
+  async function verifyPendingPayment() {
+    if (!pendingPaymentReference) return;
+    setBusy(true);
+    setError("");
+    try {
+      await verifyPayment(pendingPaymentReference);
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reopenPaymentAuthorization() {
+    if (!pendingAuthorizationUrl) return;
+    setBusy(true);
+    setError("");
+    try {
+      await openExternalPaymentAuthorization(pendingAuthorizationUrl);
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -172,6 +224,14 @@ export default function Checkout() {
     {quoteError ? <><Message error>{quoteError}</Message><Button title="Retry delivery total" tone="muted" onPress={() => { void loadQuote(validPromoCode); }} /></> : null}
     <Message>{message}</Message><Message error>{error}</Message>
     {!order ? <Button title={busy ? "Creating order..." : "Create order"} onPress={createOrder} disabled={busy || !addressId || !quoteReady} /> :
-      <Button title={busy ? "Verifying payment..." : `Pay ${money(order.totalAmount)} with mock provider`} onPress={pay} disabled={busy} />}
+      <>
+        <Button title={busy ? "Preparing payment..." : `Continue to payment - ${money(order.totalAmount)}`} onPress={pay} disabled={busy || !!pendingPaymentReference} />
+        {pendingPaymentReference ? <Card>
+          <Text style={ui.cardTitle}>Payment authorization pending</Text>
+          <Text style={ui.muted}>Complete the Paystack Test Mode checkout page, return to KariGO, then verify payment here. KariGO will only mark the order paid after backend verification.</Text>
+          <Button title="Open payment page again" tone="muted" onPress={reopenPaymentAuthorization} disabled={busy} />
+          <Button title={busy ? "Verifying payment..." : "Verify payment"} onPress={verifyPendingPayment} disabled={busy} />
+        </Card> : null}
+      </>}
   </Screen></Protected>;
 }

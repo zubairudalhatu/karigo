@@ -7,15 +7,17 @@ instrument details, secrets, or private customer data.
 
 1. Customer creates an order; record masked order/reference evidence.
 2. Initiate payment and confirm sandbox authorization URL/access code is returned.
-3. Complete provider-approved sandbox checkout.
-4. Verify through KariGO backend.
-5. Confirm payment `SUCCESSFUL`, order `PAID` (or parcel dispatch-ready), one history transition, customer notification, and vendor visibility.
+3. Customer App opens the backend-returned HTTPS authorization URL externally.
+4. Complete provider-approved sandbox checkout.
+5. Return to KariGO and use the customer-visible backend verification action.
+6. Confirm payment `SUCCESSFUL`, order `PAID` (or parcel dispatch-ready), one history transition, customer notification, and vendor visibility.
 
 ## B. Failed Or Cancelled Payment
 
 1. Create/order initiate payment, then fail/cancel/abandon sandbox checkout.
-2. Confirm payment remains `FAILED` or `PENDING` as designed and order never becomes `PAID`.
-3. Confirm clear customer state/error and safe retry behavior.
+2. Return to KariGO and attempt backend verification.
+3. Confirm payment remains `FAILED` or `PENDING` as designed and order never becomes `PAID`.
+4. Confirm clear customer state/error and safe retry behavior.
 
 ## C. Duplicate Verification
 

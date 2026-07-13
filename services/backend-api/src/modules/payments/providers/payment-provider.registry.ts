@@ -25,7 +25,10 @@ export class PaymentProviderRegistry {
   }
 
   active(): PaymentProvider {
-    return this.get(this.config.get<string>("PAYMENT_PROVIDER", "mock"));
+    return this.get(
+      this.config.get<string>("PAYMENTS_PROVIDER")
+        ?? this.config.get<string>("PAYMENT_PROVIDER", "mock")
+    );
   }
 
   get(name: string): PaymentProvider {

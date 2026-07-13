@@ -296,6 +296,14 @@ assert(checkout.includes("validPromoCode"), "Checkout must separate typed promo 
 assert(!checkout.includes("deliveryFee: 1000"), "Checkout must not hardcode staging delivery fee.");
 assert(checkout.includes("loadQuote(code, { promoAttempt: true })"), "Promo success must refresh the server quote.");
 assert(checkout.includes("await loadQuote(\"\", { keepUiError: true })"), "Promo failure must refresh a non-promo quote.");
+assert(checkout.includes("isExternalPaymentAuthorizationUrl"), "Checkout must detect external payment authorization URLs.");
+assert(checkout.includes("openExternalPaymentAuthorization"), "Checkout must open Paystack Test Mode authorization through the safe helper.");
+assert(checkout.includes("Payment authorization pending"), "Checkout must show a pending authorization state for Paystack Test Mode.");
+assert(checkout.includes("Verify payment"), "Checkout must let customers verify payment through the backend after provider checkout.");
+const paymentFlow = read("src", "lib", "payment-flow.ts");
+assert(paymentFlow.includes("Linking.openURL"), "Customer payment flow must open external authorization with React Native Linking.");
+assert(paymentFlow.includes("^https:\\/\\/"), "Customer payment flow must only accept HTTPS external authorization URLs.");
+assert(paymentFlow.includes("mock://"), "Customer payment flow must preserve mock authorization handling.");
 
 const orderDetail = read("app", "orders", "[id].tsx");
 assert(orderDetail.includes("Delivery fee:"), "Order detail must show delivery fee.");
@@ -306,6 +314,9 @@ assert(orderDetail.includes("Show delivery code"), "Customer must explicitly rev
 assert(orderDetail.includes("Only share this code after you have received your order."), "Delivery OTP safety copy must be visible.");
 assert(orderDetail.includes("Retry delivery code"), "Delivery OTP fetch failures must have a retry action.");
 assert(orderDetail.includes("setDeliveryOtp(\"\")"), "Delivery OTP must reset when status/order changes or fetch fails.");
+assert(orderDetail.includes("isExternalPaymentAuthorizationUrl"), "Order detail retry payment must detect external payment authorization URLs.");
+assert(orderDetail.includes("Payment authorization pending"), "Order detail must show pending authorization state for Paystack Test Mode retry.");
+assert(orderDetail.includes("Verify payment"), "Order detail must let customers verify provider checkout through the backend.");
 
 const ordersApi = read("src", "api", "orders.api.ts");
 assert(ordersApi.includes("orders/${id}/delivery-otp"), "Customer app must use the delivery OTP endpoint.");

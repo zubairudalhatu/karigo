@@ -4,21 +4,22 @@
 
 The customer app currently initiates payment, immediately calls the KariGO verification
 endpoint, and navigates to order tracking. This remains the default behavior while
-`PAYMENT_PROVIDER=mock`.
+`PAYMENTS_PROVIDER=mock` / `PAYMENT_PROVIDER=mock`.
 
 ## Paystack Sandbox
 
 Paystack initiation returns an `authorizationUrl`, `accessCode`, and transaction
-reference. The shared customer payment API type already accepts authorization details,
-but checkout currently assumes mock payment and verifies immediately.
+reference. Checkout and order detail now open a backend-returned HTTPS authorization URL
+for Paystack Test Mode, then require the customer to return to KariGO and tap
+`Verify payment`.
 
 ## Frontend TODO
 
-Before enabling `PAYMENT_PROVIDER=paystack` for customer testing:
+Before enabling `PAYMENTS_PROVIDER=paystack` for customer testing:
 
-1. Decide between an external secure browser flow and an in-app webview.
+1. Confirm `PAYSTACK_MODE=test` and `PAYMENTS_LIVE_ENABLED=false`.
 2. Open only the backend-returned Paystack authorization URL.
-3. Handle the configured callback/deep link without treating the redirect as success.
+3. If a callback/deep link is configured later, handle it without treating the redirect as success.
 4. Call `GET /api/v1/payments/verify/:transactionReference`.
 5. Show success only after KariGO confirms the payment.
 6. Handle cancellation, abandoned checkout, timeout, and retry safely.
@@ -26,5 +27,4 @@ Before enabling `PAYMENT_PROVIDER=paystack` for customer testing:
 The frontend must never receive the Paystack secret key, trust query-string payment
 status, calculate the authoritative amount, or mark the order paid.
 
-Mock payment remains suitable for the internal demo until this checkout decision and
-sandbox device/browser walkthrough are complete.
+Mock payment remains suitable for the internal demo and is the required rollback path.

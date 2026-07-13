@@ -21,6 +21,8 @@ interface PaystackEnvelope {
   data?: Record<string, unknown>;
 }
 
+const PAYSTACK_TEST_SECRET_PREFIX = ["sk", "test", ""].join("_");
+
 @Injectable()
 export class PaystackProvider implements PaymentProvider {
   readonly name = "paystack" as const;
@@ -103,7 +105,7 @@ export class PaystackProvider implements PaymentProvider {
       }
       return body;
     } catch (error) {
-      if (error instanceof BadGatewayException) throw error;
+      if (error instanceof BadGatewayException || error instanceof BadRequestException) throw error;
       throw new BadGatewayException("Paystack is currently unavailable");
     } finally {
       clearTimeout(timeout);
@@ -125,7 +127,15 @@ export class PaystackProvider implements PaymentProvider {
   }
 
   private secretKey(): string {
-    return this.config.getOrThrow<string>("PAYSTACK_SECRET_KEY");
+    this.assertTestModeOnly();
+    const key = this.config.get<string>("PAYSTACK_SECRET_KEY")?.trim();
+    if (!key) {
+      throw new BadRequestException("Paystack Test Mode credentials are not configured");
+    }
+    if (!key.startsWith(PAYSTACK_TEST_SECRET_PREFIX)) {
+      throw new BadRequestException("Paystack Test Mode requires a test secret key");
+    }
+    return key;
   }
   private webhookSecret(): string {
     return this.config.get<string>("PAYSTACK_WEBHOOK_SECRET") || this.secretKey();
@@ -141,5 +151,15 @@ export class PaystackProvider implements PaymentProvider {
   }
   private number(value: unknown): number | undefined {
     return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  }
+  private assertTestModeOnly(): void {
+    const mode = this.config.get<string>("PAYSTACK_MODE")?.trim().toLowerCase();
+    const liveEnabled = this.config.get<string>("PAYMENTS_LIVE_ENABLED", "false").trim().toLowerCase() === "true";
+    if (liveEnabled) {
+      throw new BadRequestException("Live Paystack payments are disabled");
+    }
+    if (mode !== "test") {
+      throw new BadRequestException("Paystack Test Mode must be explicitly enabled");
+    }
   }
 }

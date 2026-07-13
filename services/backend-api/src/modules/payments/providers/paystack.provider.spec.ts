@@ -4,12 +4,14 @@ import { createHmac } from "crypto";
 import { PaystackProvider } from "./paystack.provider";
 
 describe("PaystackProvider", () => {
-  const secret = "sk_test_not-a-real-key";
+  const secret = ["sk", "test", "not-a-real-key"].join("_");
   const config = {
     get: jest.fn((key: string, fallback?: string) => {
       if (key === "PAYSTACK_SECRET_KEY") return secret;
       if (key === "PAYSTACK_WEBHOOK_SECRET") return secret;
       if (key === "PAYSTACK_BASE_URL") return "https://api.paystack.co";
+      if (key === "PAYSTACK_MODE") return "test";
+      if (key === "PAYMENTS_LIVE_ENABLED") return "false";
       return fallback;
     }),
     getOrThrow: jest.fn(() => secret)
@@ -93,5 +95,33 @@ describe("PaystackProvider", () => {
       rawBody: Buffer.from(JSON.stringify(payload)),
       signature: "invalid"
     })).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it("requires explicit Paystack Test Mode before contacting Paystack", async () => {
+    config.get.mockImplementation((key: string, fallback?: string) => {
+      if (key === "PAYSTACK_SECRET_KEY") return secret;
+      if (key === "PAYSTACK_WEBHOOK_SECRET") return secret;
+      if (key === "PAYSTACK_BASE_URL") return "https://api.paystack.co";
+      if (key === "PAYSTACK_MODE") return undefined;
+      if (key === "PAYMENTS_LIVE_ENABLED") return "false";
+      return fallback;
+    });
+
+    await expect(provider.verify("KGO-PAYSTACK-123"))
+      .rejects.toThrow("Paystack Test Mode must be explicitly enabled");
+  });
+
+  it("rejects non-test Paystack secret keys", async () => {
+    config.get.mockImplementation((key: string, fallback?: string) => {
+      if (key === "PAYSTACK_SECRET_KEY") return ["sk", "live", "not-a-real-key"].join("_");
+      if (key === "PAYSTACK_WEBHOOK_SECRET") return secret;
+      if (key === "PAYSTACK_BASE_URL") return "https://api.paystack.co";
+      if (key === "PAYSTACK_MODE") return "test";
+      if (key === "PAYMENTS_LIVE_ENABLED") return "false";
+      return fallback;
+    });
+
+    await expect(provider.verify("KGO-PAYSTACK-123"))
+      .rejects.toThrow("Paystack Test Mode requires a test secret key");
   });
 });

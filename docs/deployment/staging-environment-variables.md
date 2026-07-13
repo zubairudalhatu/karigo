@@ -16,7 +16,9 @@ CORS_ORIGINS=
 
 OTP_PROVIDER=mock
 SMS_PROVIDER=mock
+PAYMENTS_PROVIDER=mock
 PAYMENT_PROVIDER=mock
+PAYMENTS_LIVE_ENABLED=false
 NOTIFICATION_PROVIDER=mock
 EMAIL_PROVIDER=mock
 WHATSAPP_PROVIDER=mock
@@ -28,6 +30,24 @@ SUPER_ADMIN_PHONE=
 SUPER_ADMIN_PASSWORD=
 SEED_DEMO_PASSWORD=
 ```
+
+Optional Paystack Test Mode variables for controlled checkout verification only:
+
+```dotenv
+PAYSTACK_MODE=test
+PAYMENTS_PROVIDER=paystack
+PAYMENT_PROVIDER=paystack
+PAYMENTS_LIVE_ENABLED=false
+PAYSTACK_SECRET_KEY=
+PAYSTACK_PUBLIC_KEY=
+PAYSTACK_WEBHOOK_SECRET=
+PAYSTACK_BASE_URL=
+PAYSTACK_CALLBACK_URL=
+```
+
+Store all Paystack values only in the staging secret manager. Do not commit credentials,
+test instruments or provider dashboard screenshots. Roll back by setting
+`PAYMENTS_PROVIDER=mock` and `PAYMENT_PROVIDER=mock`, then redeploying the backend.
 
 Frontend deployment variables:
 
