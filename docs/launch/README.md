@@ -26,6 +26,21 @@ live Paystack, live Accelerate.ng utilities, live Termii SMS, live payouts, wall
 withdrawals, automatic refunds, live rides, Pharmacy marketplace, provider login or
 production launch.
 
+## Task 104 Soft Launch Execution Setup
+
+- Execution plan: `karigo-soft-launch-execution-plan-task104.md`
+- Participant roster: `karigo-soft-launch-participant-roster-task104.md`
+- 7-14 day schedule: `karigo-soft-launch-7-14-day-schedule-task104.md`
+- Day-one execution script: `karigo-soft-launch-day-one-execution-script-task104.md`
+- Evidence and signoff log: `karigo-soft-launch-evidence-and-signoff-log-task104.md`
+- Customer, vendor and Captain communications:
+  `karigo-soft-launch-customer-vendor-captain-comms-task104.md`
+- Closeout report template: `karigo-soft-launch-closeout-report-template-task104.md`
+
+Recommended pilot scope: Kano, 3-5 vendors, 20-50 customers, 3-5 Delivery Captains,
+2-3 operations admins and a 7-14 day controlled pilot window. This setup is operational
+preparation only and does not activate live providers or public production launch.
+
 ## Controlled Pilot Preparation
 
 - Plan and scope: `controlled-soft-launch-plan.md`
