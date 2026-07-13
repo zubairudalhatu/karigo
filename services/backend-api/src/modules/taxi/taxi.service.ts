@@ -11,6 +11,7 @@ import {
 import * as bcrypt from "bcrypt";
 import { randomBytes, randomInt } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
+import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AdminAssignTaxiDriverDto } from "./dto/admin-assign-taxi-driver.dto";
@@ -125,7 +126,8 @@ export class TaxiService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AdminAuditService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly applicationNotifications: ApplicationNotificationsService
   ) {}
 
   async joinWaitlist(dto: CreateTaxiWaitlistDto) {
@@ -141,6 +143,12 @@ export class TaxiService {
         note: dto.note?.trim()
       },
       select: TAXI_WAITLIST_SELECT
+    });
+    await this.applicationNotifications.rideWaitlistJoined({
+      reference: entry.id,
+      recipientName: entry.fullName,
+      phoneNumber: entry.phoneNumber,
+      email: entry.email
     });
 
     return {
@@ -180,6 +188,12 @@ export class TaxiService {
         notes: dto.notes?.trim()
       },
       select: TAXI_APPLICATION_DETAIL_SELECT
+    });
+    await this.applicationNotifications.rideCaptainApplicationSubmitted({
+      reference: application.applicationReference,
+      recipientName: application.fullName,
+      phoneNumber: application.phoneNumber,
+      email: application.email
     });
     return this.formatPublicApplicationStatus(application);
   }

@@ -32,7 +32,10 @@ type ApplicationNotificationType =
   | "delivery_captain_application_received"
   | "delivery_captain_guarantor_listed"
   | "vendor_application_reviewed"
-  | "delivery_captain_application_reviewed";
+  | "delivery_captain_application_reviewed"
+  | "ride_captain_application_received"
+  | "ride_waitlist_joined"
+  | "order_created";
 
 @Injectable()
 export class ApplicationNotificationsService {
@@ -83,7 +86,7 @@ export class ApplicationNotificationsService {
   async deliveryCaptainGuarantorListed(input: GuarantorNotificationInput): Promise<void> {
     const message = `KariGO notice: ${input.applicantName} listed you as guarantor for Delivery Captain application ${input.reference}. KariGO may contact you for verification. Do not share OTPs or payment details.`;
     const smsEnabled = this.guarantorSmsEnabled();
-    const smsProvider = smsEnabled ? this.smsProvider() : "disabled";
+    const smsProvider = smsEnabled ? this.smsProvider(smsEnabled) : "disabled";
     const result = await this.sendApplicationSms(input.guarantorPhone, message, "Delivery Captain guarantor", smsEnabled);
     this.logDecision({
       type: "delivery_captain_guarantor_listed",
@@ -97,15 +100,54 @@ export class ApplicationNotificationsService {
     });
   }
 
+  async rideCaptainApplicationSubmitted(input: ApplicationNotificationInput): Promise<void> {
+    const message = `KariGO has received your Ride Captain readiness application ${input.reference}. KariGO Rides remains readiness-only and live ride dispatch is not active. We will contact you with next steps.`;
+    await this.sendApplicantNotification("ride_captain_application_received", input, {
+      subject: "KariGO Ride Captain readiness application received",
+      heading: "Your Ride Captain readiness application has been received",
+      message
+    }, {
+      emailEnabled: this.rideApplicationEmailEnabled(),
+      smsEnabled: this.rideApplicationSmsEnabled()
+    });
+  }
+
+  async rideWaitlistJoined(input: ApplicationNotificationInput): Promise<void> {
+    const message = `KariGO has received your Ride waitlist request ${input.reference}. KariGO Rides is not live yet. We will contact you when readiness testing expands in your area.`;
+    await this.sendApplicantNotification("ride_waitlist_joined", input, {
+      subject: "KariGO Ride waitlist request received",
+      heading: "Your Ride waitlist request has been received",
+      message
+    }, {
+      emailEnabled: this.rideWaitlistEmailEnabled(),
+      smsEnabled: this.rideWaitlistSmsEnabled()
+    });
+  }
+
+  async orderCreated(input: ApplicationNotificationInput): Promise<void> {
+    const message = `KariGO order ${input.reference} has been created and is awaiting payment confirmation in the app. Mock payment remains selected for the Kano pilot.`;
+    await this.sendApplicantNotification("order_created", input, {
+      subject: "KariGO order created",
+      heading: "Your KariGO order has been created",
+      message
+    }, {
+      emailEnabled: this.orderEmailEnabled(),
+      smsEnabled: this.orderSmsEnabled()
+    });
+  }
+
   private async sendApplicantNotification(
     type: ApplicationNotificationType,
     input: ApplicationNotificationInput,
-    content: { subject: string; heading: string; message: string }
+    content: { subject: string; heading: string; message: string },
+    options?: { emailEnabled?: boolean; smsEnabled?: boolean }
   ): Promise<void> {
-    const smsEnabled = this.smsEnabled();
-    const emailEnabled = this.emailEnabled();
-    const smsProvider = smsEnabled ? this.smsProvider() : "disabled";
-    const emailProvider = emailEnabled ? this.emailProvider() : "disabled";
+    const smsEnabled = options?.smsEnabled ?? this.smsEnabled();
+    const emailEnabled = options?.emailEnabled ?? this.emailEnabled();
+    const activeSmsProvider = smsEnabled ? this.smsProvider(smsEnabled) : undefined;
+    const activeEmailProvider = emailEnabled ? this.emailProvider(emailEnabled) : undefined;
+    const smsProvider = activeSmsProvider ?? "disabled";
+    const emailProvider = activeEmailProvider ?? "disabled";
     const [emailResult, smsResult] = await Promise.all([
       this.sendApplicationEmail({
         to: input.email,
@@ -114,8 +156,8 @@ export class ApplicationNotificationsService {
         heading: content.heading,
         message: content.message,
         reference: input.reference
-      }),
-      this.sendApplicationSms(input.phoneNumber, content.message, this.typeLabel(type), smsEnabled)
+      }, emailEnabled, activeEmailProvider),
+      this.sendApplicationSms(input.phoneNumber, content.message, this.typeLabel(type), smsEnabled, activeSmsProvider)
     ]);
     this.logDecision({
       type,
@@ -136,11 +178,10 @@ export class ApplicationNotificationsService {
     heading: string;
     message: string;
     reference: string;
-  }): Promise<ChannelResult> {
-    if (!this.emailEnabled()) return { accepted: false, provider: "disabled", reason: "disabled" };
+  }, enabled = this.emailEnabled(), provider: "mock" | "resend" = this.emailProvider(enabled)): Promise<ChannelResult> {
+    if (!enabled) return { accepted: false, provider: "disabled", reason: "disabled" };
     if (!input.to) return { accepted: false, provider: "disabled", reason: "missing_recipient" };
     const to = input.to;
-    const provider = this.emailProvider();
     if (provider === "mock") {
       this.logger.log(`mock application email accepted recipient=${this.maskEmail(to)} reference=${input.reference}`);
       return { accepted: true, provider: "mock" };
@@ -154,10 +195,15 @@ export class ApplicationNotificationsService {
     }
   }
 
-  private async sendApplicationSms(phoneNumber: string | null | undefined, message: string, recipientLabel: string, enabled: boolean): Promise<ChannelResult> {
+  private async sendApplicationSms(
+    phoneNumber: string | null | undefined,
+    message: string,
+    recipientLabel: string,
+    enabled: boolean,
+    provider: "mock" | "termii" = this.smsProvider(enabled)
+  ): Promise<ChannelResult> {
     if (!enabled) return { accepted: false, provider: "disabled", reason: "disabled" };
     if (!phoneNumber) return { accepted: false, provider: "disabled", reason: "missing_recipient" };
-    const provider = this.smsProvider();
     if (provider === "mock") {
       this.logger.log(`mock application SMS accepted recipient=${this.maskPhone(phoneNumber)} label=${recipientLabel}`);
       return { accepted: true, provider: "mock" };
@@ -202,7 +248,11 @@ export class ApplicationNotificationsService {
       signal: AbortSignal.timeout(10_000)
     });
     const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
-    if (!response.ok) throw new Error(`Resend returned HTTP ${response.status}`);
+    if (!response.ok) {
+      this.logger.warn(`Resend application email rejected status=${response.status} message=${this.safeProviderMessage(payload)}`);
+      throw new Error(`Resend returned HTTP ${response.status}`);
+    }
+    this.logger.log(`Resend application email accepted recipient=${this.maskEmail(input.to)} reference=${input.reference} providerReference=${typeof payload.id === "string" ? payload.id : "unavailable"}`);
     return {
       accepted: true,
       provider: "resend",
@@ -229,11 +279,16 @@ export class ApplicationNotificationsService {
       signal: AbortSignal.timeout(10_000)
     });
     const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
-    if (!response.ok) throw new Error(`Termii returned HTTP ${response.status}`);
+    if (!response.ok) {
+      this.logger.warn(`Termii SMS rejected recipient=${this.maskPhone(phoneNumber)} status=${response.status} message=${this.safeProviderMessage(payload)}`);
+      throw new Error(`Termii returned HTTP ${response.status}`);
+    }
+    const providerReference = this.providerReference(payload, ["message_id", "messageId", "request_id", "id"]);
+    this.logger.log(`Termii SMS accepted recipient=${this.maskPhone(phoneNumber)} providerReference=${providerReference ?? "unavailable"} message=${this.safeProviderMessage(payload)}`);
     return {
       accepted: true,
       provider: "termii",
-      providerReference: typeof payload.message_id === "string" ? payload.message_id : undefined
+      providerReference
     };
   }
 
@@ -267,15 +322,39 @@ export class ApplicationNotificationsService {
     return this.smsEnabled();
   }
 
-  private emailProvider(): "mock" | "resend" {
-    const configured = this.stringValue(["APPLICATION_EMAIL_NOTIFICATION_PROVIDER", "APPLICATION_NOTIFICATION_EMAIL_PROVIDER"]);
-    const provider = configured ?? (this.emailEnabled() ? "resend" : "mock");
+  private rideApplicationEmailEnabled() {
+    return this.flag(["RIDE_APPLICATION_EMAIL_NOTIFICATIONS_ENABLED"]);
+  }
+
+  private rideApplicationSmsEnabled() {
+    return this.flag(["RIDE_APPLICATION_SMS_NOTIFICATIONS_ENABLED"]);
+  }
+
+  private rideWaitlistEmailEnabled() {
+    return this.flag(["RIDE_WAITLIST_EMAIL_NOTIFICATIONS_ENABLED"]);
+  }
+
+  private rideWaitlistSmsEnabled() {
+    return this.flag(["RIDE_WAITLIST_SMS_NOTIFICATIONS_ENABLED"]);
+  }
+
+  private orderEmailEnabled() {
+    return this.flag(["ORDER_EMAIL_NOTIFICATIONS_ENABLED"]);
+  }
+
+  private orderSmsEnabled() {
+    return this.flag(["ORDER_SMS_NOTIFICATIONS_ENABLED"]);
+  }
+
+  private emailProvider(enabled = this.emailEnabled()): "mock" | "resend" {
+    const configured = this.stringValue(["TRANSACTIONAL_EMAIL_NOTIFICATION_PROVIDER", "APPLICATION_EMAIL_NOTIFICATION_PROVIDER", "APPLICATION_NOTIFICATION_EMAIL_PROVIDER"]);
+    const provider = configured ?? (enabled ? "resend" : "mock");
     return provider.toLowerCase() === "resend" ? "resend" : "mock";
   }
 
-  private smsProvider(): "mock" | "termii" {
-    const configured = this.stringValue(["APPLICATION_SMS_NOTIFICATION_PROVIDER", "APPLICATION_NOTIFICATION_SMS_PROVIDER"]);
-    const provider = configured ?? (this.smsEnabled() || this.guarantorSmsEnabled() ? "termii" : "mock");
+  private smsProvider(enabled = this.smsEnabled() || this.guarantorSmsEnabled()): "mock" | "termii" {
+    const configured = this.stringValue(["TRANSACTIONAL_SMS_NOTIFICATION_PROVIDER", "APPLICATION_SMS_NOTIFICATION_PROVIDER", "APPLICATION_NOTIFICATION_SMS_PROVIDER"]);
+    const provider = configured ?? (enabled ? "termii" : "mock");
     return provider.toLowerCase() === "termii" ? "termii" : "mock";
   }
 
@@ -354,6 +433,7 @@ export class ApplicationNotificationsService {
 
   private decisionReason(results: ChannelResult[], result: string) {
     if (result === "sent") return "provider_accepted";
+    if (result === "failed") return results.find((item) => item.reason === "provider_error")?.reason ?? "provider_error";
     const reason = results.find((item) => item.reason)?.reason;
     return reason ?? "not_enabled";
   }
@@ -364,12 +444,30 @@ export class ApplicationNotificationsService {
       delivery_captain_application_received: "Delivery Captain applicant",
       delivery_captain_guarantor_listed: "Delivery Captain guarantor",
       vendor_application_reviewed: "vendor applicant review",
-      delivery_captain_application_reviewed: "Delivery Captain applicant review"
+      delivery_captain_application_reviewed: "Delivery Captain applicant review",
+      ride_captain_application_received: "Ride Captain applicant",
+      ride_waitlist_joined: "Ride waitlist",
+      order_created: "order customer"
     };
     return labels[type];
   }
 
   private statusText(status: string) {
     return status.toLowerCase().replaceAll("_", " ");
+  }
+
+  private providerReference(payload: Record<string, unknown>, keys: string[]) {
+    for (const key of keys) {
+      const value = payload[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+      if (typeof value === "number") return String(value);
+    }
+    return undefined;
+  }
+
+  private safeProviderMessage(payload: Record<string, unknown>) {
+    const value = payload.message ?? payload.status ?? payload.error ?? payload.description ?? payload.response;
+    if (typeof value !== "string") return "unavailable";
+    return value.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]").replace(/\+?\d[\d\s-]{6,}\d/g, "[phone]").slice(0, 160);
   }
 }

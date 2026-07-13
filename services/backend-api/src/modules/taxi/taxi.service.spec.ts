@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, NotFoundException } from "@nes
 import { TaxiApplicationStatus, TaxiDriverProfileStatus, TaxiTripStatus, TaxiVehicleOwnership, TaxiVehicleType, TaxiWaitlistStatus } from "@prisma/client";
 import * as bcrypt from "bcrypt";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
+import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { TaxiService } from "./taxi.service";
 
@@ -159,7 +160,16 @@ describe("TaxiService", () => {
   };
   const audit = { record: jest.fn() };
   const config = { get: jest.fn((_key: string, fallback?: unknown) => fallback) };
-  const service = new TaxiService(prisma as unknown as PrismaService, audit as unknown as AdminAuditService, config as never);
+  const applicationNotifications = {
+    rideWaitlistJoined: jest.fn(),
+    rideCaptainApplicationSubmitted: jest.fn()
+  };
+  const service = new TaxiService(
+    prisma as unknown as PrismaService,
+    audit as unknown as AdminAuditService,
+    config as never,
+    applicationNotifications as unknown as ApplicationNotificationsService
+  );
 
   function enableTaxiStaging() {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
@@ -214,6 +224,8 @@ describe("TaxiService", () => {
     prisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<unknown>) => callback(prisma));
     audit.record.mockResolvedValue({});
     config.get.mockImplementation((_key: string, fallback?: unknown) => fallback);
+    applicationNotifications.rideWaitlistJoined.mockResolvedValue(undefined);
+    applicationNotifications.rideCaptainApplicationSubmitted.mockResolvedValue(undefined);
   });
 
   it("creates a customer taxi waitlist entry with normalized Nigerian phone number", async () => {
@@ -232,6 +244,12 @@ describe("TaxiService", () => {
         email: "customer@example.test"
       })
     }));
+    expect(applicationNotifications.rideWaitlistJoined).toHaveBeenCalledWith({
+      reference: waitlistEntry.id,
+      recipientName: waitlistEntry.fullName,
+      phoneNumber: waitlistEntry.phoneNumber,
+      email: waitlistEntry.email
+    });
     expect(result).toMatchObject({ status: TaxiWaitlistStatus.SUBMITTED });
     expect(result.message).toContain("Taxi waitlist");
   });
@@ -271,6 +289,12 @@ describe("TaxiService", () => {
         vehicleType: TaxiVehicleType.SEDAN
       })
     }));
+    expect(applicationNotifications.rideCaptainApplicationSubmitted).toHaveBeenCalledWith({
+      reference: application.applicationReference,
+      recipientName: application.fullName,
+      phoneNumber: application.phoneNumber,
+      email: application.email
+    });
     expect(result).toMatchObject({ readinessOnly: true, status: TaxiApplicationStatus.SUBMITTED });
   });
 

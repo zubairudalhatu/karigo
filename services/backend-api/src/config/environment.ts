@@ -186,11 +186,78 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     applicationEmailNotificationsEnabled ||
     applicationSmsNotificationsEnabled ||
     guarantorSmsNotificationsEnabled;
+  const rideApplicationEmailNotificationsEnabled = booleanFlag(
+    config.RIDE_APPLICATION_EMAIL_NOTIFICATIONS_ENABLED,
+    "RIDE_APPLICATION_EMAIL_NOTIFICATIONS_ENABLED",
+    false
+  );
+  const rideApplicationSmsNotificationsEnabled = booleanFlag(
+    config.RIDE_APPLICATION_SMS_NOTIFICATIONS_ENABLED,
+    "RIDE_APPLICATION_SMS_NOTIFICATIONS_ENABLED",
+    false
+  );
+  const rideWaitlistEmailNotificationsEnabled = booleanFlag(
+    config.RIDE_WAITLIST_EMAIL_NOTIFICATIONS_ENABLED,
+    "RIDE_WAITLIST_EMAIL_NOTIFICATIONS_ENABLED",
+    false
+  );
+  const rideWaitlistSmsNotificationsEnabled = booleanFlag(
+    config.RIDE_WAITLIST_SMS_NOTIFICATIONS_ENABLED,
+    "RIDE_WAITLIST_SMS_NOTIFICATIONS_ENABLED",
+    false
+  );
+  const orderEmailNotificationsEnabled = booleanFlag(
+    config.ORDER_EMAIL_NOTIFICATIONS_ENABLED,
+    "ORDER_EMAIL_NOTIFICATIONS_ENABLED",
+    false
+  );
+  const orderSmsNotificationsEnabled = booleanFlag(
+    config.ORDER_SMS_NOTIFICATIONS_ENABLED,
+    "ORDER_SMS_NOTIFICATIONS_ENABLED",
+    false
+  );
+  const anyTransactionalEmailEnabled =
+    applicationEmailNotificationsEnabled ||
+    rideApplicationEmailNotificationsEnabled ||
+    rideWaitlistEmailNotificationsEnabled ||
+    orderEmailNotificationsEnabled;
+  const anyTransactionalSmsEnabled =
+    applicationSmsNotificationsEnabled ||
+    guarantorSmsNotificationsEnabled ||
+    rideApplicationSmsNotificationsEnabled ||
+    rideWaitlistSmsNotificationsEnabled ||
+    orderSmsNotificationsEnabled;
+  const transactionalNotificationsEnabled =
+    applicationNotificationsEnabled ||
+    rideApplicationEmailNotificationsEnabled ||
+    rideApplicationSmsNotificationsEnabled ||
+    rideWaitlistEmailNotificationsEnabled ||
+    rideWaitlistSmsNotificationsEnabled ||
+    orderEmailNotificationsEnabled ||
+    orderSmsNotificationsEnabled;
+  const transactionalEmailProvider =
+    stringAlias(
+      config,
+      ["TRANSACTIONAL_EMAIL_NOTIFICATION_PROVIDER", "APPLICATION_EMAIL_NOTIFICATION_PROVIDER", "APPLICATION_NOTIFICATION_EMAIL_PROVIDER"],
+      anyTransactionalEmailEnabled ? "resend" : "mock"
+    ).toLowerCase();
+  if (!["mock", "resend"].includes(transactionalEmailProvider)) {
+    throw new Error("TRANSACTIONAL_EMAIL_NOTIFICATION_PROVIDER must be mock or resend");
+  }
+  const transactionalSmsProvider =
+    stringAlias(
+      config,
+      ["TRANSACTIONAL_SMS_NOTIFICATION_PROVIDER", "APPLICATION_SMS_NOTIFICATION_PROVIDER", "APPLICATION_NOTIFICATION_SMS_PROVIDER"],
+      anyTransactionalSmsEnabled ? "termii" : "mock"
+    ).toLowerCase();
+  if (!["mock", "termii"].includes(transactionalSmsProvider)) {
+    throw new Error("TRANSACTIONAL_SMS_NOTIFICATION_PROVIDER must be mock or termii");
+  }
   const applicationNotificationEmailProvider =
     stringAlias(
       config,
-      ["APPLICATION_EMAIL_NOTIFICATION_PROVIDER", "APPLICATION_NOTIFICATION_EMAIL_PROVIDER"],
-      applicationEmailNotificationsEnabled ? "resend" : "mock"
+      ["APPLICATION_EMAIL_NOTIFICATION_PROVIDER", "APPLICATION_NOTIFICATION_EMAIL_PROVIDER", "TRANSACTIONAL_EMAIL_NOTIFICATION_PROVIDER"],
+      applicationEmailNotificationsEnabled ? transactionalEmailProvider : "mock"
     ).toLowerCase();
   if (!["mock", "resend"].includes(applicationNotificationEmailProvider)) {
     throw new Error("APPLICATION_EMAIL_NOTIFICATION_PROVIDER must be mock or resend");
@@ -198,16 +265,16 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   const applicationNotificationSmsProvider =
     stringAlias(
       config,
-      ["APPLICATION_SMS_NOTIFICATION_PROVIDER", "APPLICATION_NOTIFICATION_SMS_PROVIDER"],
-      applicationSmsNotificationsEnabled || guarantorSmsNotificationsEnabled ? "termii" : "mock"
+      ["APPLICATION_SMS_NOTIFICATION_PROVIDER", "APPLICATION_NOTIFICATION_SMS_PROVIDER", "TRANSACTIONAL_SMS_NOTIFICATION_PROVIDER"],
+      applicationSmsNotificationsEnabled || guarantorSmsNotificationsEnabled ? transactionalSmsProvider : "mock"
     ).toLowerCase();
   if (!["mock", "termii"].includes(applicationNotificationSmsProvider)) {
     throw new Error("APPLICATION_SMS_NOTIFICATION_PROVIDER must be mock or termii");
   }
-  if (applicationNotificationsEnabled && appEnvironment === "production") {
-    throw new Error("Application notification sending is restricted to staging or pilot approval");
+  if (transactionalNotificationsEnabled && appEnvironment === "production") {
+    throw new Error("Transactional notification sending is restricted to staging or pilot approval");
   }
-  if (applicationEmailNotificationsEnabled && applicationNotificationEmailProvider === "resend") {
+  if (anyTransactionalEmailEnabled && transactionalEmailProvider === "resend") {
     const resendBaseUrl = typeof config.RESEND_BASE_URL === "string" && config.RESEND_BASE_URL.trim()
       ? config.RESEND_BASE_URL.trim()
       : "https://api.resend.com";
@@ -215,7 +282,7 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     requireValue(config, "RESEND_API_KEY");
     requireValue(config, "RESEND_FROM_EMAIL");
   }
-  if ((applicationSmsNotificationsEnabled || guarantorSmsNotificationsEnabled) && applicationNotificationSmsProvider === "termii") {
+  if (anyTransactionalSmsEnabled && transactionalSmsProvider === "termii") {
     requireValue(config, "TERMII_API_KEY");
     requireValue(config, "TERMII_SENDER_ID");
     const termiiBaseUrl = typeof config.TERMII_BASE_URL === "string" && config.TERMII_BASE_URL.trim()
@@ -291,6 +358,8 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       ? config.KARIGO_PILOT_EMAIL_LABEL.trim()
       : "Kano controlled early access",
     APPLICATION_NOTIFICATIONS_ENABLED: applicationNotificationsEnabled,
+    TRANSACTIONAL_EMAIL_NOTIFICATION_PROVIDER: transactionalEmailProvider,
+    TRANSACTIONAL_SMS_NOTIFICATION_PROVIDER: transactionalSmsProvider,
     APPLICATION_EMAIL_NOTIFICATIONS_ENABLED: applicationEmailNotificationsEnabled,
     APPLICATION_NOTIFICATION_EMAIL_ENABLED: applicationEmailNotificationsEnabled,
     APPLICATION_EMAIL_NOTIFICATION_PROVIDER: applicationNotificationEmailProvider,
@@ -300,6 +369,12 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     GUARANTOR_SMS_NOTIFICATIONS_ENABLED: guarantorSmsNotificationsEnabled,
     APPLICATION_SMS_NOTIFICATION_PROVIDER: applicationNotificationSmsProvider,
     APPLICATION_NOTIFICATION_SMS_PROVIDER: applicationNotificationSmsProvider,
+    RIDE_APPLICATION_EMAIL_NOTIFICATIONS_ENABLED: rideApplicationEmailNotificationsEnabled,
+    RIDE_APPLICATION_SMS_NOTIFICATIONS_ENABLED: rideApplicationSmsNotificationsEnabled,
+    RIDE_WAITLIST_EMAIL_NOTIFICATIONS_ENABLED: rideWaitlistEmailNotificationsEnabled,
+    RIDE_WAITLIST_SMS_NOTIFICATIONS_ENABLED: rideWaitlistSmsNotificationsEnabled,
+    ORDER_EMAIL_NOTIFICATIONS_ENABLED: orderEmailNotificationsEnabled,
+    ORDER_SMS_NOTIFICATIONS_ENABLED: orderSmsNotificationsEnabled,
     WHATSAPP_PROVIDER: whatsappProvider,
     WHATSAPP_BASE_URL: typeof config.WHATSAPP_BASE_URL === "string" && config.WHATSAPP_BASE_URL.trim()
       ? config.WHATSAPP_BASE_URL.trim()

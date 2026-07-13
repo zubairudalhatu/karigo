@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { ConfigService } from "@nestjs/config";
 import { NotificationType, OrderStatus, PaymentStatus, Prisma, ServiceCategory, VendorStatus } from "@prisma/client";
 import { randomBytes } from "crypto";
+import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { CreateParcelOrderDto } from "./dto/create-parcel-order.dto";
@@ -25,7 +26,8 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly promos: PromoService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly applicationNotifications: ApplicationNotificationsService
   ) {}
 
   async quoteVendorOrder(userId: string, dto: CreateOrderDto) {
@@ -190,6 +192,12 @@ export class OrdersService {
       include: this.orderInclude()
     });
     await this.notifications.createNotification({ userId, title: "Order created", message: `Order ${order.orderNumber} was created and is awaiting payment.`, type: NotificationType.ORDER_CREATED, entityType: "Order", entityId: order.id });
+    await this.applicationNotifications.orderCreated({
+      reference: order.orderNumber,
+      recipientName: customer.user.fullName,
+      phoneNumber: customer.user.phoneNumber,
+      email: customer.user.email
+    });
     return order;
   }
 
@@ -231,6 +239,12 @@ export class OrdersService {
       include: this.orderInclude()
     });
     await this.notifications.createNotification({ userId, title: "Parcel request created", message: `Parcel request ${order.orderNumber} was created and is awaiting payment.`, type: NotificationType.ORDER_CREATED, entityType: "Order", entityId: order.id });
+    await this.applicationNotifications.orderCreated({
+      reference: order.orderNumber,
+      recipientName: customer.user.fullName,
+      phoneNumber: customer.user.phoneNumber,
+      email: customer.user.email
+    });
     return order;
   }
 
@@ -294,7 +308,10 @@ export class OrdersService {
   }
 
   private async requireCustomer(userId: string) {
-    const customer = await this.prisma.customerProfile.findUnique({ where: { userId } });
+    const customer = await this.prisma.customerProfile.findUnique({
+      where: { userId },
+      include: { user: { select: { fullName: true, phoneNumber: true, email: true } } }
+    });
     if (!customer) {
       throw new NotFoundException("Customer profile not found");
     }

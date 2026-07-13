@@ -27,6 +27,8 @@ describe("environment configuration", () => {
     expect(result.KARIGO_EMAIL_LOGO_URL).toBe("");
     expect(result.KARIGO_PILOT_EMAIL_LABEL).toBe("Kano controlled early access");
     expect(result.APPLICATION_NOTIFICATIONS_ENABLED).toBe(false);
+    expect(result.TRANSACTIONAL_EMAIL_NOTIFICATION_PROVIDER).toBe("mock");
+    expect(result.TRANSACTIONAL_SMS_NOTIFICATION_PROVIDER).toBe("mock");
     expect(result.APPLICATION_EMAIL_NOTIFICATIONS_ENABLED).toBe(false);
     expect(result.APPLICATION_NOTIFICATION_EMAIL_ENABLED).toBe(false);
     expect(result.APPLICATION_EMAIL_NOTIFICATION_PROVIDER).toBe("mock");
@@ -36,6 +38,12 @@ describe("environment configuration", () => {
     expect(result.GUARANTOR_SMS_NOTIFICATIONS_ENABLED).toBe(false);
     expect(result.APPLICATION_SMS_NOTIFICATION_PROVIDER).toBe("mock");
     expect(result.APPLICATION_NOTIFICATION_SMS_PROVIDER).toBe("mock");
+    expect(result.RIDE_APPLICATION_EMAIL_NOTIFICATIONS_ENABLED).toBe(false);
+    expect(result.RIDE_APPLICATION_SMS_NOTIFICATIONS_ENABLED).toBe(false);
+    expect(result.RIDE_WAITLIST_EMAIL_NOTIFICATIONS_ENABLED).toBe(false);
+    expect(result.RIDE_WAITLIST_SMS_NOTIFICATIONS_ENABLED).toBe(false);
+    expect(result.ORDER_EMAIL_NOTIFICATIONS_ENABLED).toBe(false);
+    expect(result.ORDER_SMS_NOTIFICATIONS_ENABLED).toBe(false);
     expect(result.WHATSAPP_PROVIDER).toBe("mock");
     expect(result.WHATSAPP_API_VERSION).toBe("v20.0");
     expect(result.PUSH_PROVIDER).toBe("mock");
@@ -249,7 +257,52 @@ describe("environment configuration", () => {
       JWT_SECRET: "test-secret",
       APP_ENV: "production",
       APPLICATION_NOTIFICATIONS_ENABLED: "true"
-    })).toThrow("Application notification sending is restricted");
+    })).toThrow("Transactional notification sending is restricted");
+  });
+
+  it("allows controlled Ride readiness and order notification flags only outside production", () => {
+    const result = validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "staging",
+      RIDE_APPLICATION_EMAIL_NOTIFICATIONS_ENABLED: "true",
+      RIDE_APPLICATION_SMS_NOTIFICATIONS_ENABLED: "true",
+      RIDE_WAITLIST_EMAIL_NOTIFICATIONS_ENABLED: "true",
+      RIDE_WAITLIST_SMS_NOTIFICATIONS_ENABLED: "true",
+      ORDER_EMAIL_NOTIFICATIONS_ENABLED: "true",
+      ORDER_SMS_NOTIFICATIONS_ENABLED: "true",
+      RESEND_API_KEY: "resend-test-key-not-real",
+      RESEND_FROM_EMAIL: "no-reply@example.test",
+      TERMII_API_KEY: "termii-test-key-not-real",
+      TERMII_SENDER_ID: "KariGO"
+    });
+
+    expect(result.TRANSACTIONAL_EMAIL_NOTIFICATION_PROVIDER).toBe("resend");
+    expect(result.TRANSACTIONAL_SMS_NOTIFICATION_PROVIDER).toBe("termii");
+    expect(result.RIDE_APPLICATION_EMAIL_NOTIFICATIONS_ENABLED).toBe(true);
+    expect(result.RIDE_APPLICATION_SMS_NOTIFICATIONS_ENABLED).toBe(true);
+    expect(result.RIDE_WAITLIST_EMAIL_NOTIFICATIONS_ENABLED).toBe(true);
+    expect(result.RIDE_WAITLIST_SMS_NOTIFICATIONS_ENABLED).toBe(true);
+    expect(result.ORDER_EMAIL_NOTIFICATIONS_ENABLED).toBe(true);
+    expect(result.ORDER_SMS_NOTIFICATIONS_ENABLED).toBe(true);
+  });
+
+  it("keeps order email blocked without Resend credentials when enabled", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "staging",
+      ORDER_EMAIL_NOTIFICATIONS_ENABLED: "true"
+    })).toThrow("Missing required environment variable: RESEND_API_KEY");
+  });
+
+  it("keeps Ride waitlist SMS blocked without Termii credentials when enabled", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "staging",
+      RIDE_WAITLIST_SMS_NOTIFICATIONS_ENABLED: "true"
+    })).toThrow("Missing required environment variable: TERMII_API_KEY");
   });
 
   it("keeps Meta WhatsApp Cloud disabled until sandbox approval", () => {

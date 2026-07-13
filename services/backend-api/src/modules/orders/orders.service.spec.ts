@@ -5,6 +5,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { OrdersService } from "./orders.service";
 import { PromoService } from "../promos/promo.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 
 describe("OrdersService", () => {
   const validDeliveryOtp = ["1", "2", "3", "4", "5", "6"].join("");
@@ -20,18 +21,23 @@ describe("OrdersService", () => {
   };
   const promos = { validateForCustomer: jest.fn() };
   const notifications = { createNotification: jest.fn() };
+  const applicationNotifications = { orderCreated: jest.fn() };
   const service = new OrdersService(
     prisma as unknown as PrismaService,
     config as unknown as ConfigService,
     promos as unknown as PromoService,
-    notifications as unknown as NotificationsService
+    notifications as unknown as NotificationsService,
+    applicationNotifications as unknown as ApplicationNotificationsService
   );
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    applicationNotifications.orderCreated.mockResolvedValue(undefined);
+  });
 
   it("calculates vendor-order totals from stored product prices", async () => {
     let createData: Record<string, any> = {};
-    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
     prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-1" });
     prisma.address.findFirst.mockResolvedValue({ id: "address-1" });
     prisma.product.findMany.mockResolvedValue([
@@ -58,10 +64,16 @@ describe("OrdersService", () => {
       productName: "Jollof Rice",
       quantity: 2
     }));
+    expect(applicationNotifications.orderCreated).toHaveBeenCalledWith(expect.objectContaining({
+      reference: result.orderNumber,
+      recipientName: "Demo Customer",
+      phoneNumber: "+2348030000000",
+      email: "customer@example.test"
+    }));
   });
 
   it("quotes a vendor order without creating it", async () => {
-    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
     prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-1" });
     prisma.address.findFirst.mockResolvedValue({ id: "address-1" });
     prisma.product.findMany.mockResolvedValue([
@@ -84,7 +96,7 @@ describe("OrdersService", () => {
   });
 
   it("rejects a parcel request using an address the customer does not own", async () => {
-    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
     prisma.address.count.mockResolvedValue(1);
 
     await expect(service.createParcelOrder("user-1", {
@@ -97,7 +109,7 @@ describe("OrdersService", () => {
   });
 
   it("applies a server-validated promo discount to a vendor order", async () => {
-    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
     prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-1" });
     prisma.address.findFirst.mockResolvedValue({ id: "address-1" });
     prisma.product.findMany.mockResolvedValue([
@@ -124,7 +136,7 @@ describe("OrdersService", () => {
   });
 
   it("returns delivery OTP only for an owned arrived or delivered order", async () => {
-    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
     prisma.order.findFirst.mockResolvedValue({
       id: "order-1",
       orderNumber: "KGO-1",
@@ -151,14 +163,14 @@ describe("OrdersService", () => {
   });
 
   it("does not return delivery OTP for another customer's order", async () => {
-    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
     prisma.order.findFirst.mockResolvedValue(null);
 
     await expect(service.deliveryOtp("user-1", "order-2")).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it("hides delivery OTP before rider arrival", async () => {
-    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
     prisma.order.findFirst.mockResolvedValue({
       id: "order-1",
       orderNumber: "KGO-1",
@@ -170,7 +182,7 @@ describe("OrdersService", () => {
   });
 
   it("hides delivery OTP after completion or when it has been cleared", async () => {
-    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1" });
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
     prisma.order.findFirst.mockResolvedValue({
       id: "order-1",
       orderNumber: "KGO-1",
@@ -179,5 +191,26 @@ describe("OrdersService", () => {
     });
 
     await expect(service.deliveryOtp("user-1", "order-1")).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("sends a controlled transactional notification for parcel order creation", async () => {
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
+    prisma.address.count.mockResolvedValue(2);
+    prisma.order.create.mockImplementation(({ data }) => ({ ...data, id: "order-1", orderNumber: "KGO-PARCEL-1" }));
+
+    const result = await service.createParcelOrder("user-1", {
+      pickupAddressId: "address-1",
+      deliveryAddressId: "address-2",
+      recipientName: "Recipient",
+      recipientPhone: "+2348012345678",
+      itemDescription: "Documents"
+    });
+
+    expect(applicationNotifications.orderCreated).toHaveBeenCalledWith({
+      reference: result.orderNumber,
+      recipientName: "Demo Customer",
+      phoneNumber: "+2348030000000",
+      email: "customer@example.test"
+    });
   });
 });
