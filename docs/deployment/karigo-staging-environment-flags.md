@@ -31,6 +31,18 @@ PAYMENTS_LIVE_ENABLED=false
 
 Never set `PAYMENTS_LIVE_ENABLED=true` in staging or commit Paystack credentials to Git.
 
+Provider separation:
+
+- Paystack is for customer checkout/payment collection.
+- Accelerate.ng is the intended future service provider for airtime, data, electricity,
+  cable TV and other utility payments.
+- Termii is the intended future SMS provider for OTP, order updates, Delivery Captain
+  notifications, utility alerts, wallet/refund alerts and referral notifications.
+
+Paystack Test Mode, Accelerate utility services, and Termii SMS are integration-ready
+concepts only. Live payment collection, live utility fulfilment, wallet refund automation,
+SMS sending and payout automation remain disabled until separately approved.
+
 Taxi staging dispatch may be enabled only in staging for controlled tests:
 
 ```text

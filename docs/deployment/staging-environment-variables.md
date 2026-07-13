@@ -49,6 +49,22 @@ Store all Paystack values only in the staging secret manager. Do not commit cred
 test instruments or provider dashboard screenshots. Roll back by setting
 `PAYMENTS_PROVIDER=mock` and `PAYMENT_PROVIDER=mock`, then redeploying the backend.
 
+Provider separation:
+
+- Paystack is for customer checkout/payment collection only.
+- Accelerate.ng is the intended future utility payment provider for airtime, data,
+  electricity, cable TV and other supported bills/utilities.
+- Termii is the intended future SMS provider for OTP, order updates, Delivery Captain
+  notifications, utility alerts, wallet/refund alerts and referral notifications.
+
+Paystack Test Mode, Accelerate utility services, and Termii SMS are integration-ready
+concepts only. Live payment collection, live utility fulfilment, wallet refund automation,
+SMS sending and payout automation remain disabled until separately approved.
+
+Do not add Accelerate.ng API keys, merchant IDs, webhook secrets, Termii API keys, sender
+IDs, templates or test credentials to committed files. Wallet balances may later be used
+to pay for utilities through Accelerate.ng after a separate approved integration task.
+
 Frontend deployment variables:
 
 ```dotenv

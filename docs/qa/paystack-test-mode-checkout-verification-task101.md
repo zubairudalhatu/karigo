@@ -19,6 +19,18 @@ This pack covers:
 This task does not activate live Paystack, live payouts, wallet withdrawals, live rides,
 Pharmacy marketplace, provider login, or production payment processing.
 
+## Provider Integration Context
+
+| Provider | Intended responsibility | Task 101 status |
+| --- | --- | --- |
+| Paystack | Customer checkout and payment collection | Test Mode readiness only; no live payment activation |
+| Accelerate.ng | Future utility payment service provider for airtime, data, electricity, cable TV and other supported bills/utilities | Documentation context only; no live utility fulfilment |
+| Termii | Future SMS provider for OTP, order status SMS, Delivery Captain notifications, utility alerts, wallet/refund alerts and referral notifications | Documentation context only; no live SMS sending |
+
+Paystack Test Mode, Accelerate utility services, and Termii SMS are integration-ready
+concepts only. Live payment collection, live utility fulfilment, wallet refund automation,
+SMS sending and payout automation remain disabled until separately approved.
+
 ## Safety Rules
 
 - Use Paystack Test Mode only.
@@ -26,6 +38,7 @@ Pharmacy marketplace, provider login, or production payment processing.
   secrets, test instruments or payment-provider dashboard credentials.
 - Do not paste test card numbers or full provider payloads into Git.
 - Do not enable live payment collection.
+- Do not activate Accelerate.ng utility transactions or Termii SMS sending in this task.
 - Do not mark a payment successful from the frontend. KariGO backend verification is
   the only source of truth.
 - Keep mock payment as the rollback provider.
@@ -154,10 +167,24 @@ Expected result:
 - Customer wallet is view-only in staging.
 - Admin wallet adjustments are controlled manual ledger entries only.
 - Paystack Test Mode payment success must not automatically credit/debit wallet.
+- Wallet balances may later be used to pay for utilities through Accelerate.ng after
+  separate approval, provider integration, reconciliation and QA.
 - Refund approval currently updates KariGO internal payment/order state.
 - Provider-side Paystack refund submission/reconciliation remains pending and must be
   documented as not live.
 - Wallet refund crediting is future work and must not be represented as active.
+
+## Utility And SMS Provider Readiness Notes
+
+- Bills & Utilities remains safe/test-mode until a future dedicated Accelerate.ng
+  integration task is approved.
+- Do not commit Accelerate.ng API keys, tokens, merchant IDs, webhook secrets, test
+  credentials or `.env` files.
+- Termii remains a future SMS/notification provider only.
+- Do not commit Termii API keys, sender IDs, tokens, templates, test credentials or
+  `.env` files.
+- SMS sending must remain disabled unless a future dedicated Termii integration task is
+  approved.
 
 ## Evidence Template
 
@@ -223,3 +250,10 @@ Severity guide:
 - Amount mismatch is accepted.
 - Customer cannot complete or retry controlled test checkout.
 - Admin/Vendor UI exposes raw provider secrets or sensitive payloads.
+
+## Future Task Placeholders
+
+- Future Task: Accelerate.ng Utility Payment Integration
+- Future Task: Termii SMS/OTP Notification Integration
+- Future Task: Wallet-to-Utility Payment Flow
+- Future Task: Wallet Refund and Paystack Reconciliation Flow
