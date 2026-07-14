@@ -184,6 +184,25 @@ default, Accelerate.ng, Termii, wallet withdrawals, automatic refunds, live ride
 ride dispatch, payouts, Pharmacy marketplace and provider login remain inactive unless
 separately approved later.
 
+## Task 126 Pilot Batch 1 Invitation Execution Pack
+
+- Invitation execution pack:
+  `invitations/karigo-pilot-batch-1-invitation-execution-pack-task126.md`
+- Invitation tracker:
+  `invitations/karigo-pilot-batch-1-invitation-tracker-task126.md`
+- Support instructions:
+  `invitations/karigo-pilot-batch-1-support-instructions-task126.md`
+- Pause and continue rules:
+  `invitations/karigo-pilot-batch-1-pause-continue-rules-task126.md`
+- Invitation evidence log:
+  `invitations/karigo-pilot-batch-1-invitation-evidence-log-task126.md`
+
+Use this pack before sending Batch 1 invitations to selected Kano vendors, Delivery
+Captains and first pilot customers. Customer App and KariGO Captain APKs are recorded as
+verified OK for controlled pilot preparation. Mock payment remains the default, and live
+payments, utilities, rides, ride dispatch, payouts, wallet withdrawal/refund automation,
+Pharmacy marketplace, provider login and bulk messaging remain disabled.
+
 ## Controlled Pilot Preparation
 
 - Plan and scope: `controlled-soft-launch-plan.md`
