@@ -13,6 +13,7 @@ export const publicUserSelect = {
   accountStatus: true,
   phoneVerified: true,
   emailVerified: true,
+  profilePhotoUrl: true,
   lastLoginAt: true,
   createdAt: true,
   updatedAt: true

@@ -11,7 +11,15 @@ export default ({ config }: { config: Record<string, any> }) => ({
   name: isStaging ? "KariGO Customer Staging" : "KariGO Customer",
   slug: "karigo-customer",
   scheme: isStaging ? "karigo-customer-staging" : "karigo-customer",
-  plugins: ["expo-router"],
+  plugins: [
+    "expo-router",
+    [
+      "expo-image-picker",
+      {
+        photosPermission: "KariGO uses photo library access only when you choose a customer profile photo."
+      }
+    ]
+  ],
   icon: "./assets/karigo-logo.png",
   splash: {
     image: "./assets/karigo-logo.png",

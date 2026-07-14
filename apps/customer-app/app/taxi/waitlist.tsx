@@ -35,7 +35,7 @@ export default function TaxiWaitlist() {
         pickupArea: form.pickupArea || undefined,
         note: form.note || undefined
       });
-      setMessage(`You have joined the KariGO Taxi waitlist for ${entry.city}. We will contact you when Taxi service is ready in your area.`);
+      setMessage(`You have joined the KariGO Rides waitlist for ${entry.city}. We will contact you when ride service is ready in your area.`);
       setForm(initialForm);
     } catch (e) {
       setError(friendlyError(e));
@@ -45,11 +45,11 @@ export default function TaxiWaitlist() {
   }
 
   return <Protected>
-    <KariGoAppTopBar showBack title="Taxi Waitlist" />
-    <Screen title="Join Taxi Waitlist" topPadding={false}>
+    <KariGoAppTopBar showBack title="Ride Waitlist" />
+    <Screen title="Join Ride Waitlist" topPadding={false}>
       <Card>
-        <Text style={ui.cardTitle}>Taxi is coming soon</Text>
-        <Text style={ui.pageIntro}>KariGO is preparing verified drivers, vehicle checks, fare controls and safe taxi operations before launch.</Text>
+        <Text style={ui.cardTitle}>KariGO Rides is coming soon</Text>
+        <Text style={ui.pageIntro}>KariGO is preparing verified Ride Captains, vehicle checks, fare controls and safe ride operations before launch.</Text>
       </Card>
       <Message>{message}</Message>
       <Message error>{error}</Message>
@@ -59,8 +59,8 @@ export default function TaxiWaitlist() {
       <Field placeholder="City" value={form.city} onChangeText={(city) => setForm({ ...form, city })} />
       <Field placeholder="State" value={form.state} onChangeText={(state) => setForm({ ...form, state })} />
       <Field placeholder="Pickup area optional" value={form.pickupArea} onChangeText={(pickupArea) => setForm({ ...form, pickupArea })} />
-      <Field placeholder="Tell us your taxi needs optional" value={form.note} onChangeText={(note) => setForm({ ...form, note })} multiline />
-      <Button title={loading ? "Joining..." : "Join Taxi Waitlist"} disabled={loading || !form.fullName || !form.phoneNumber || !form.city || !form.state} onPress={submit} />
+      <Field placeholder="Tell us your ride needs optional" value={form.note} onChangeText={(note) => setForm({ ...form, note })} multiline />
+      <Button title={loading ? "Joining..." : "Join Ride Waitlist"} disabled={loading || !form.fullName || !form.phoneNumber || !form.city || !form.state} onPress={submit} />
     </Screen>
   </Protected>;
 }

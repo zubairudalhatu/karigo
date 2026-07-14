@@ -103,6 +103,12 @@ enum ServiceProviderType {
   CARPENTER
   AC_TECHNICIAN
   GENERATOR_REPAIR
+  APPLIANCE_REPAIR
+  FUMIGATION
+  WELDER
+  TILER
+  CCTV_TECHNICIAN
+  MOVING_HELP
   HEALTH_PROFESSIONAL
   OTHER
 }
@@ -474,6 +480,7 @@ model User {
   accountStatus                       AccountStatus                @default(PENDING)
   phoneVerified                       Boolean                      @default(false)
   emailVerified                       Boolean                      @default(false)
+  profilePhotoUrl                     String?
   lastLoginAt                         DateTime?
   deletedAt                           DateTime?
   createdAt                           DateTime                     @default(now())

@@ -10,6 +10,12 @@ export type ServiceProviderType =
   | "CARPENTER"
   | "AC_TECHNICIAN"
   | "GENERATOR_REPAIR"
+  | "APPLIANCE_REPAIR"
+  | "FUMIGATION"
+  | "WELDER"
+  | "TILER"
+  | "CCTV_TECHNICIAN"
+  | "MOVING_HELP"
   | "HEALTH_PROFESSIONAL"
   | "OTHER";
 

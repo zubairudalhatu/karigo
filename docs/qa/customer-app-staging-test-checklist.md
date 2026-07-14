@@ -27,8 +27,12 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 | Bottom navigation appears | Authenticated screens show Home, Browse, Cart, Orders and Profile | Fixed | Hidden on auth/onboarding routes |
 | Bottom navigation cart badge updates | Badge count changes immediately after cart add/update/clear | Fixed | Uses customer cart context count |
 | Home quick-link clutter removed | Addresses, Cart, Orders, Profile and Support are not shown as dense homepage text links | Fixed | Addresses/Support/Notifications moved into Profile |
-| Compact service grid displays | Home shows Food Delivery, Groceries, Taxi, Market Items, Pharmacy, Parcel Delivery, SME Services, Airtime, Data, Electricity and Cable TV in compact tiles | Fixed | Taxi/Bills/disabled Pharmacy route to readiness screens |
-| Taxi readiness is safe | Taxi tap shows coming-soon message and does not request a ride | Fixed | No Rider dispatch integration |
+| Compact service grid displays | Home shows Food Delivery, Groceries, KariGO Rides, Market Items, Pharmacy, Parcel Delivery, SME Services, Airtime, Data, Electricity and Cable TV in compact tiles | Fixed | Rides/Bills/disabled Pharmacy route to readiness screens |
+| Ride readiness is safe | KariGO Rides tap shows coming-soon message and does not request a live ride | Fixed | No live ride dispatch integration |
+| Parcel duplicate submit is blocked | Parcel create button changes to an in-flight state and prevents repeat order creation while the request is submitting | Fixed | Retest on fresh Customer APK |
+| Parcel detail fields are clear | Parcel form collects recipient, item category, package size, declared value, fragile handling and notes | Fixed | Extra details are stored in the parcel note; no order schema change |
+| Customer profile photo upload works | Customer can choose, save, display and remove a profile photo from Profile | Fixed | Uses authenticated profile update only; no external storage credentials |
+| SME Services categories expanded | SME Services includes appliance repair, fumigation/pest control, welder, tiler, CCTV/security technician and moving/loading help | Fixed | Health professional remains readiness-only |
 | Bills & Utilities readiness is safe | Airtime, Data, Electricity and Cable TV show coming-soon readiness message | Fixed | No live provider checkout |
 | Pharmacy readiness gate works | Pharmacy routes to readiness unless explicitly enabled by environment | Fixed | No prescription or pharmacy approval automation |
 | Category filtering is server-scoped | Food, Groceries and Market Items request backend category filters | Fixed | Uses `GET /products?category=...` |
@@ -74,7 +78,8 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 - Admin Portal reflected the order, GMV, delivery fee, and support activity.
 - Defects fixed after this test: route-name leakage, missing checkout delivery-fee line, mixed promo success/error state, reused-promo copy, discount reset after failed promo validation, support list refresh after ticket creation, secure customer delivery-code reveal for Rider completion, and content-first Customer App visual polish.
 - Task 51 fixes add bottom navigation, instant cart feedback, cart badge updates, server-scoped category requests and a simplified homepage with account-management items moved to Profile.
-- Task 53 fixes compact the homepage service grid and add readiness-gated Taxi plus Bills & Utilities entries without activating live provider flows.
+- Task 53 fixes compact the homepage service grid and add readiness-gated KariGO Rides plus Bills & Utilities entries without activating live provider flows.
+- Task 123 fixes customer-facing Ride wording, duplicate parcel submit protection, upgraded parcel fields, profile photo upload and expanded SME Services categories.
 
 ## Visual Polish Retest
 

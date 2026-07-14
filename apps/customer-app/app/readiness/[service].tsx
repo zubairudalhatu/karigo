@@ -4,10 +4,10 @@ import { ReadinessScreen } from "../../src/components/readiness-screen";
 
 const readinessContent: Record<string, { title: string; message: string; icon: keyof typeof Feather.glyphMap; secondaryCta?: string; onSecondaryPress?: () => void }> = {
   taxi: {
-    title: "Taxi is coming soon",
-    message: "Taxi is coming soon. KariGO is preparing verified driver onboarding, vehicle checks, fare controls, maps, safety reviews and dispatch operations before launch.",
+    title: "KariGO Rides is coming soon",
+    message: "KariGO Rides is coming soon. KariGO is preparing verified Ride Captain onboarding, vehicle checks, fare controls, maps, safety reviews and ride operations before launch.",
     icon: "navigation",
-    secondaryCta: "Join Taxi Waitlist",
+    secondaryCta: "Join Ride Waitlist",
     onSecondaryPress: () => router.push("/taxi/waitlist")
   },
   airtime: {

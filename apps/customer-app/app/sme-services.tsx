@@ -17,6 +17,12 @@ const fallbackCatalogue: ServiceProviderCategory[] = [
   { type: "CARPENTER", label: "Carpenter", description: "Furniture repair, fittings and light woodwork requests.", readinessOnly: false, statusLabel: "Staging request" },
   { type: "AC_TECHNICIAN", label: "AC technician", description: "AC inspection, servicing and repair requests.", readinessOnly: false, statusLabel: "Staging request" },
   { type: "GENERATOR_REPAIR", label: "Generator repair technician", description: "Generator inspection, servicing and repair requests.", readinessOnly: false, statusLabel: "Staging request" },
+  { type: "APPLIANCE_REPAIR", label: "Appliance repair technician", description: "Home and shop appliance inspection and repair requests.", readinessOnly: false, statusLabel: "Staging request" },
+  { type: "FUMIGATION", label: "Fumigation / pest control", description: "Pest-control and fumigation requests for homes, shops and offices.", readinessOnly: false, statusLabel: "Staging request" },
+  { type: "WELDER", label: "Welder", description: "Metalwork, gate, burglary-proof and light fabrication requests.", readinessOnly: false, statusLabel: "Staging request" },
+  { type: "TILER", label: "Tiler", description: "Tile fitting, repair and finishing requests.", readinessOnly: false, statusLabel: "Staging request" },
+  { type: "CCTV_TECHNICIAN", label: "CCTV / security technician", description: "CCTV, access-control and light security-device support requests.", readinessOnly: false, statusLabel: "Staging request" },
+  { type: "MOVING_HELP", label: "Moving / loading help", description: "Manual moving, loading and small relocation support requests.", readinessOnly: false, statusLabel: "Staging request" },
   { type: "HEALTH_PROFESSIONAL", label: "Doctor / health professional", description: "Readiness-only until future health-service approval.", readinessOnly: true, statusLabel: "Future approval required" },
   { type: "OTHER", label: "Other approved service provider", description: "Describe another service need for KariGO review.", readinessOnly: false, statusLabel: "Staging request" }
 ];
@@ -30,6 +36,12 @@ const icons: Record<ServiceProviderType, keyof typeof Feather.glyphMap> = {
   CARPENTER: "tool",
   AC_TECHNICIAN: "wind",
   GENERATOR_REPAIR: "settings",
+  APPLIANCE_REPAIR: "cpu",
+  FUMIGATION: "shield",
+  WELDER: "aperture",
+  TILER: "grid",
+  CCTV_TECHNICIAN: "video",
+  MOVING_HELP: "archive",
   HEALTH_PROFESSIONAL: "plus-square",
   OTHER: "briefcase"
 };
@@ -100,7 +112,7 @@ export default function SmeServices() {
     </Card>
     <Card>
       <Text style={ui.cardTitle}>Choose a service provider</Text>
-      <Text style={ui.muted}>Painter, plumber, mechanic, electrician, cleaner, carpenter, AC technician, generator repair technician and other approved providers can be requested in staging.</Text>
+      <Text style={ui.muted}>Painter, plumber, mechanic, electrician, cleaner, carpenter, AC technician, generator repair, appliance repair, fumigation, welder, tiler, CCTV/security, moving help and other approved providers can be requested in staging.</Text>
       {loading ? <Loading label="Loading service categories..." /> : <View style={styles.categoryGrid}>
         {catalogue.map((item) => {
           const selected = item.type === selectedType;

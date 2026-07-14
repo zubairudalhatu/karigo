@@ -7,7 +7,7 @@ import { KariGoAppTopBar } from "../../src/components/kari-go-app-top-bar";
 import { Button, Card, Field, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError } from "../../src/lib/errors";
 
-const stagingNotice = "Taxi is running in staging test mode. No real taxi ride or payment is guaranteed.";
+const stagingNotice = "KariGO Rides is running in staging test mode. No real ride or payment is guaranteed.";
 const initialForm = {
   pickupAddress: "",
   destinationAddress: "",
@@ -78,10 +78,10 @@ export default function TaxiRequest() {
   }
 
   return <Protected>
-    <KariGoAppTopBar showBack title="Taxi Test Mode" />
-    <Screen title={taxiEnabled ? "Request Test Taxi" : "Taxi is coming soon"} topPadding={false}>
-      <Card><Text style={ui.cardTitle}>{taxiEnabled ? "Taxi Test Mode" : "Join the Taxi Waitlist"}</Text><Text style={ui.pageIntro}>{taxiEnabled ? stagingNotice : "Taxi is not active for public booking yet. Please use the waitlist while KariGO prepares verified drivers, fare controls and safety operations."}</Text></Card>
-      {!taxiEnabled ? <Button title="Join Taxi Waitlist" onPress={() => router.push("/taxi/waitlist")} /> : <>
+    <KariGoAppTopBar showBack title="Ride Test Mode" />
+    <Screen title={taxiEnabled ? "Request Test Ride" : "KariGO Rides is coming soon"} topPadding={false}>
+      <Card><Text style={ui.cardTitle}>{taxiEnabled ? "Ride Test Mode" : "Join the Ride Waitlist"}</Text><Text style={ui.pageIntro}>{taxiEnabled ? stagingNotice : "KariGO Rides is not active for public booking yet. Please use the waitlist while KariGO prepares verified Ride Captains, fare controls and safety operations."}</Text></Card>
+      {!taxiEnabled ? <Button title="Join Ride Waitlist" onPress={() => router.push("/taxi/waitlist")} /> : <>
         <Message error>{error}</Message>
         <Field placeholder="Pickup address" value={form.pickupAddress} onChangeText={(pickupAddress) => setForm({ ...form, pickupAddress })} />
         <Field placeholder="Destination address" value={form.destinationAddress} onChangeText={(destinationAddress) => setForm({ ...form, destinationAddress })} />
@@ -97,19 +97,19 @@ export default function TaxiRequest() {
           <Button title={loading ? "Creating..." : "Confirm Test Trip"} disabled={loading} onPress={createTrip} />
         </Card> : null}
         {created ? <Card>
-          <Text style={ui.cardTitle}>Test Taxi Trip created</Text>
+          <Text style={ui.cardTitle}>Test ride request created</Text>
           <Text>Reference: {created.tripReference}</Text>
           <StatusBadge status={created.status} />
           {created.tripPin ? <Text style={ui.otpCode}>{created.tripPin.slice(0, 3)} {created.tripPin.slice(3)}</Text> : null}
-          <Text style={ui.muted}>Only share this test trip PIN with the approved test driver after pickup.</Text>
+          <Text style={ui.muted}>Only share this test ride PIN with the approved Ride Captain after pickup.</Text>
         </Card> : null}
-        <Text style={ui.sectionTitle}>Recent test taxi trips</Text>
+        <Text style={ui.sectionTitle}>Recent test ride requests</Text>
         {trips.map((trip) => <Card key={trip.id}>
           <Text style={ui.cardTitle}>{trip.tripReference}</Text>
           <Text>{trip.pickupAddress} to {trip.destinationAddress}</Text>
           <Text>{money(trip.estimatedFareKobo)}</Text>
           <StatusBadge status={trip.status} />
-          {trip.driver ? <Text style={ui.muted}>Driver: {trip.driver.fullName} - {trip.driver.vehiclePlateNumber ?? "vehicle pending"}</Text> : <Text style={ui.muted}>Driver not assigned yet.</Text>}
+          {trip.driver ? <Text style={ui.muted}>Ride Captain: {trip.driver.fullName} - {trip.driver.vehiclePlateNumber ?? "vehicle pending"}</Text> : <Text style={ui.muted}>Ride Captain not assigned yet.</Text>}
         </Card>)}
       </>}
     </Screen>

@@ -32,6 +32,12 @@ const SERVICE_CATALOGUE: Array<{
   { type: ServiceProviderType.CARPENTER, label: "Carpenter", description: "Furniture repair, fittings and light woodwork requests." },
   { type: ServiceProviderType.AC_TECHNICIAN, label: "AC technician", description: "AC inspection, servicing and repair requests." },
   { type: ServiceProviderType.GENERATOR_REPAIR, label: "Generator repair technician", description: "Generator inspection, servicing and repair requests." },
+  { type: ServiceProviderType.APPLIANCE_REPAIR, label: "Appliance repair technician", description: "Home and shop appliance inspection and repair requests." },
+  { type: ServiceProviderType.FUMIGATION, label: "Fumigation / pest control", description: "Pest-control and fumigation requests for homes, shops and offices." },
+  { type: ServiceProviderType.WELDER, label: "Welder", description: "Metalwork, gate, burglary-proof and light fabrication requests." },
+  { type: ServiceProviderType.TILER, label: "Tiler", description: "Tile fitting, repair and finishing requests." },
+  { type: ServiceProviderType.CCTV_TECHNICIAN, label: "CCTV / security technician", description: "CCTV, access-control and light security-device support requests." },
+  { type: ServiceProviderType.MOVING_HELP, label: "Moving / loading help", description: "Manual moving, loading and small relocation support requests." },
   {
     type: ServiceProviderType.HEALTH_PROFESSIONAL,
     label: "Doctor / health professional",

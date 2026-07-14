@@ -1,8 +1,9 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
+import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { CustomerProfile, customerApi, RetentionSummary } from "../src/api/customer.api";
 import { KariGoAppTopBar } from "../src/components/kari-go-app-top-bar";
 import { Button, Card, Field, Loading, Message, Protected, Screen, ui } from "../src/components/ui";
@@ -54,6 +55,8 @@ const futureItems: PlaceholderItem[] = [
   { title: "KariGO Plus", description: "Subscription perks are a future placeholder, not a live plan.", icon: "star", badge: "Coming soon" },
   { title: "Privacy & security", description: "More account controls and notification preferences will be added later.", icon: "shield", badge: "Planned" }
 ];
+
+const maxProfilePhotoDataLength = 1900000;
 
 function initialsFor(name: string) {
   const letters = name
@@ -109,6 +112,7 @@ export default function Profile() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
+  const [photoSaving, setPhotoSaving] = useState(false);
 
   useEffect(() => {
     Promise.all([customerApi.profile(), customerApi.retention().catch(() => null)])
@@ -139,6 +143,64 @@ export default function Profile() {
     }
   }
 
+  async function pickProfilePhoto() {
+    if (!profile || photoSaving) return;
+    setPhotoSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError("Please allow photo access to upload a profile photo.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.45,
+        base64: true
+      });
+
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.base64) {
+        setError("Unable to read the selected photo. Please try another image.");
+        return;
+      }
+
+      const mimeType = asset.mimeType ?? "image/jpeg";
+      const profilePhotoUrl = `data:${mimeType};base64,${asset.base64}`;
+      if (profilePhotoUrl.length > maxProfilePhotoDataLength) {
+        setError("Please choose a smaller profile photo.");
+        return;
+      }
+
+      setProfile(await customerApi.update({ profilePhotoUrl }));
+      setSuccess("Profile photo updated.");
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setPhotoSaving(false);
+    }
+  }
+
+  async function removeProfilePhoto() {
+    if (!profile || photoSaving) return;
+    setPhotoSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      setProfile(await customerApi.update({ profilePhotoUrl: null }));
+      setSuccess("Profile photo removed.");
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setPhotoSaving(false);
+    }
+  }
+
   if (!profile && !error) return <Loading />;
 
   return <Protected>
@@ -148,7 +210,9 @@ export default function Profile() {
       <Message>{success}</Message>
       {profile ? <>
         <View style={styles.hero}>
-          <View style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></View>
+          <View style={styles.avatar}>
+            {profile.profilePhotoUrl ? <Image source={{ uri: profile.profilePhotoUrl }} style={styles.avatarImage} /> : <Text style={styles.avatarText}>{initials}</Text>}
+          </View>
           <View style={styles.heroCopy}>
             <Text style={styles.eyebrow}>Your KariGO account</Text>
             <Text style={styles.heroTitle}>{displayName}</Text>
@@ -172,6 +236,10 @@ export default function Profile() {
         <Card>
           <Text style={ui.cardTitle}>Account details</Text>
           <Text style={ui.muted}>Keep your name and email current for receipts, support and service updates.</Text>
+          <View style={styles.photoActions}>
+            <Button title={photoSaving ? "Updating photo..." : profile.profilePhotoUrl ? "Change profile photo" : "Upload profile photo"} tone="muted" disabled={photoSaving} onPress={pickProfilePhoto} />
+            {profile.profilePhotoUrl ? <Button title="Remove photo" tone="muted" disabled={photoSaving} onPress={removeProfilePhoto} /> : null}
+          </View>
           <Field
             accessibilityLabel="Full name"
             placeholder="Full name"
@@ -223,7 +291,8 @@ export default function Profile() {
 
 const styles = StyleSheet.create({
   actionRow: { gap: 10 },
-  avatar: { alignItems: "center", backgroundColor: brand.colors.white, borderRadius: 999, height: 70, justifyContent: "center", width: 70 },
+  avatar: { alignItems: "center", backgroundColor: brand.colors.white, borderRadius: 999, height: 70, justifyContent: "center", overflow: "hidden", width: 70 },
+  avatarImage: { height: "100%", width: "100%" },
   avatarText: { color: brand.colors.primary, fontSize: 22, fontWeight: "900" },
   contactRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   contactText: { color: brand.colors.white, fontSize: 13, fontWeight: "700", opacity: 0.92 },
@@ -246,6 +315,7 @@ const styles = StyleSheet.create({
   placeholderIcon: { alignItems: "center", backgroundColor: brand.colors.white, borderRadius: 999, height: 34, justifyContent: "center", width: 34 },
   placeholderText: { color: brand.colors.muted, fontSize: 12, lineHeight: 17 },
   placeholderTitle: { color: brand.colors.charcoal, fontSize: 14, fontWeight: "900" },
+  photoActions: { gap: 10 },
   smallBadge: { backgroundColor: "#FFF7ED", borderRadius: 999, color: brand.colors.warning, fontSize: 11, fontWeight: "900", overflow: "hidden", paddingHorizontal: 8, paddingVertical: 3 },
   statLabel: { color: brand.colors.muted, fontSize: 11, fontWeight: "800", textAlign: "center" },
   statPill: { alignItems: "center", backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, flex: 1, gap: 2, padding: 12 },

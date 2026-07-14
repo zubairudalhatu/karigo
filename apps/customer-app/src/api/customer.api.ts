@@ -5,6 +5,7 @@ export interface CustomerProfile {
   fullName: string;
   phoneNumber: string;
   email?: string | null;
+  profilePhotoUrl?: string | null;
 }
 
 export interface RetentionSummary {
@@ -18,6 +19,6 @@ export interface RetentionSummary {
 
 export const customerApi = {
   profile: () => api.get<CustomerProfile>("customers/me"),
-  update: (body: { fullName?: string; email?: string }) => api.patch<CustomerProfile>("customers/me", body),
+  update: (body: { fullName?: string; email?: string; profilePhotoUrl?: string | null }) => api.patch<CustomerProfile>("customers/me", body),
   retention: () => api.get<RetentionSummary>("customers/me/retention-summary")
 };
