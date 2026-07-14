@@ -48,6 +48,7 @@ evidence. They do not authorize real-customer launch by themselves.
 ## Mobile Staging Tests
 
 - `customer-app-staging-test-checklist.md`
+- `results/karigo-customer-app-fresh-apk-rc-verification-task124.md`
 - `rider-app-staging-test-checklist.md`
 - `customer-app-staging-test-evidence.md`
 - `rider-app-staging-test-evidence.md`

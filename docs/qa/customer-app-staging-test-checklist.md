@@ -14,6 +14,7 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 | Check | Expected result | Status | Notes |
 | --- | --- | --- | --- |
 | App installs | Internal build installs without replacing production app | Pending |  |
+| Fresh Task 123 APK release candidate verified | Fresh Customer APK includes Ride wording, parcel duplicate protection, parcel field upgrades, profile photo support and expanded SME Services categories | Passed | See `docs/qa/results/karigo-customer-app-fresh-apk-rc-verification-task124.md` |
 | Splash/logo loads | KariGO logo displays cleanly | Pending |  |
 | Registration screen loads | Sign-up route is usable | Pending |  |
 | Mock OTP flow works | Registration returns mock OTP flow in staging/mock mode | Pending | Do not record OTP |
@@ -80,6 +81,7 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 - Task 51 fixes add bottom navigation, instant cart feedback, cart badge updates, server-scoped category requests and a simplified homepage with account-management items moved to Profile.
 - Task 53 fixes compact the homepage service grid and add readiness-gated KariGO Rides plus Bills & Utilities entries without activating live provider flows.
 - Task 123 fixes customer-facing Ride wording, duplicate parcel submit protection, upgraded parcel fields, profile photo upload and expanded SME Services categories.
+- Task 124 records the fresh Customer App APK release-candidate verification and marks the APK as ready for controlled Kano pilot customer distribution under the documented guardrails.
 
 ## Visual Polish Retest
 
