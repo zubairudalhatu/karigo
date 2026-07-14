@@ -18,6 +18,7 @@ details in Git.
 | Check | Expected result | Status | Notes |
 | --- | --- | --- | --- |
 | App installs | Internal build installs without replacing production app | Pending |  |
+| Captain APK release-candidate verification record created | Fresh KariGO Captain APK verification is ready for controlled Delivery Captain pilot execution | Pending | See `docs/qa/results/karigo-captain-apk-rc-verification-task125.md` |
 | Splash/logo loads | KariGO logo displays cleanly | Pending |  |
 | Login works | Demo captain can sign in with the approved delivery account | Pending | Use secure credential handover |
 | Password visibility toggle works | Captain can show/hide the password field while typing | Pending | Do not record passwords |

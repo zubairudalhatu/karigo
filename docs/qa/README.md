@@ -50,6 +50,7 @@ evidence. They do not authorize real-customer launch by themselves.
 - `customer-app-staging-test-checklist.md`
 - `results/karigo-customer-app-fresh-apk-rc-verification-task124.md`
 - `rider-app-staging-test-checklist.md`
+- `results/karigo-captain-apk-rc-verification-task125.md`
 - `customer-app-staging-test-evidence.md`
 - `rider-app-staging-test-evidence.md`
 
