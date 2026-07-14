@@ -112,10 +112,11 @@ Mock payment uses `PAYMENT_PROVIDER=mock`. External notification channels remain
 
 ## Production Provider Planning
 
-The current provider abstractions are intentionally mock-first. Paystack, Flutterwave,
-Monnify, and Squad payment classes are registered placeholders. SMS, email, WhatsApp, and
-push channels also route through mock placeholders. Switch providers only through
-environment variables after implementing and testing the selected adapter.
+The current provider abstractions are intentionally mock-first. Paystack Test Mode,
+Monnify Sandbox/Test Mode, and Squad Sandbox/Test Mode are implemented for controlled
+staging verification only; Flutterwave remains a placeholder. SMS, email, WhatsApp, and
+push channels remain gated by their own approved provider flags. Switch providers only
+through environment variables after approval and testing.
 
 - Provider readiness audit: `docs/providers/provider-readiness-audit.md`
 - Payment integration plan: `docs/providers/payment-provider-integration-plan.md`
@@ -123,13 +124,12 @@ environment variables after implementing and testing the selected adapter.
 - Provider environment variables: `docs/providers/provider-environment-variables.md`
 - Implementation roadmap: `docs/providers/provider-implementation-roadmap.md`
 
-Paystack sandbox is the recommended first real-provider integration. Never commit live
-credentials or expose backend provider secrets to frontend applications.
-
-Paystack sandbox backend initiation, direct verification, amount/currency checks, and
-signed webhook parsing are now implemented. Keep `PAYMENT_PROVIDER=mock` for the internal
-demo until an approved Paystack test account and customer checkout redirect flow are
-configured. See `docs/providers/paystack-sandbox-integration.md`.
+Sandbox payment verification is available for Paystack, Monnify, and Squad. Never commit
+live credentials or expose backend provider secrets to frontend applications. Keep
+`PAYMENT_PROVIDER=mock` and `PAYMENTS_PROVIDER=mock` for the Kano pilot default unless a
+short controlled sandbox test window is approved. See
+`docs/payments/multi-provider-sandbox-payment-foundation-task121.md` and
+`docs/deployment/sandbox-payment-verification-runbook-task122.md`.
 
 Task 32 sandbox activation remains waiting for approval, secure credentials, deployed
 staging evidence, and customer callback handling. Use

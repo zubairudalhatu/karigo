@@ -16,6 +16,11 @@ evidence. They do not authorize real-customer launch by themselves.
 - `staging-smoke-test-script.md`
 - `staging-known-issues-register.md`
 - `payment-sandbox-test-script.md`
+- `multi-provider-sandbox-payment-test-plan-task121.md`
+- `results/paystack-sandbox-verification-record-task122.md`
+- `results/monnify-sandbox-verification-record-task122.md`
+- `results/squad-sandbox-verification-record-task122.md`
+- `results/multi-provider-sandbox-payment-closeout-task122.md`
 - `sms-otp-sandbox-test-script.md`
 - `termii-resend-auth-activation-test-plan-task112.md`
 - `results/termii-resend-live-pilot-verification-record-task114.md`
