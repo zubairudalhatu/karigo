@@ -44,14 +44,16 @@ export class PaymentsController {
   async webhook(
     @Param("gateway") gateway: string,
     @Body() payload: Record<string, unknown>,
-    @Headers("x-paystack-signature") signature: string | undefined,
+    @Headers("x-paystack-signature") paystackSignature: string | undefined,
+    @Headers("monnify-signature") monnifySignature: string | undefined,
+    @Headers("x-squad-encrypted-body") squadSignature: string | undefined,
     @Req() request: RawBodyRequest<Request>
   ) {
     return {
       message: "Webhook received",
       data: await this.paymentsService.webhook(gateway, payload, {
         rawBody: request.rawBody,
-        signature
+        signature: paystackSignature ?? monnifySignature ?? squadSignature
       })
     };
   }

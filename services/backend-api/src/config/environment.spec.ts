@@ -26,6 +26,11 @@ describe("environment configuration", () => {
     expect(result.RESEND_BASE_URL).toBe("https://api.resend.com");
     expect(result.KARIGO_EMAIL_LOGO_URL).toBe("");
     expect(result.KARIGO_PILOT_EMAIL_LABEL).toBe("Kano controlled early access");
+    expect(result.PAYMENTS_LIVE_ENABLED).toBe(false);
+    expect(result.PAYMENT_PROVIDER).toBe("mock");
+    expect(result.PAYMENTS_PROVIDER).toBe("mock");
+    expect(result.MONNIFY_BASE_URL).toBe("https://sandbox.monnify.com");
+    expect(result.SQUAD_BASE_URL).toBe("https://sandbox-api-d.squadco.com");
     expect(result.APPLICATION_NOTIFICATIONS_ENABLED).toBe(false);
     expect(result.TRANSACTIONAL_EMAIL_NOTIFICATION_PROVIDER).toBe("mock");
     expect(result.TRANSACTIONAL_SMS_NOTIFICATION_PROVIDER).toBe("mock");
@@ -91,6 +96,83 @@ describe("environment configuration", () => {
       PAYMENT_PROVIDER: "paystack",
       PAYSTACK_SECRET_KEY: "live-key-do-not-use"
     })).toThrow("PAYSTACK_SECRET_KEY must be a Paystack test key");
+  });
+
+  it("honors PAYMENTS_PROVIDER as the active payment provider alias", () => {
+    const result = validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      PAYMENTS_PROVIDER: "mock"
+    });
+
+    expect(result.PAYMENT_PROVIDER).toBe("mock");
+    expect(result.PAYMENTS_PROVIDER).toBe("mock");
+  });
+
+  it("allows Monnify sandbox selection with test-mode credentials", () => {
+    const result = validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      PAYMENT_PROVIDER: "monnify",
+      MONNIFY_MODE: "test",
+      MONNIFY_API_KEY: "monnify-test-api-key-not-real",
+      MONNIFY_SECRET_KEY: "monnify-test-secret-not-real",
+      MONNIFY_CONTRACT_CODE: "1234567890"
+    });
+
+    expect(result.PAYMENT_PROVIDER).toBe("monnify");
+    expect(result.MONNIFY_BASE_URL).toBe("https://sandbox.monnify.com");
+  });
+
+  it("does not allow Monnify selection without sandbox credentials", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      PAYMENT_PROVIDER: "monnify",
+      MONNIFY_MODE: "test"
+    })).toThrow("Missing required environment variable: MONNIFY_API_KEY");
+  });
+
+  it("rejects Monnify unless sandbox mode is explicit", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      PAYMENT_PROVIDER: "monnify",
+      MONNIFY_API_KEY: "monnify-test-api-key-not-real",
+      MONNIFY_SECRET_KEY: "monnify-test-secret-not-real",
+      MONNIFY_CONTRACT_CODE: "1234567890"
+    })).toThrow("MONNIFY_MODE must be test or sandbox");
+  });
+
+  it("allows Squad sandbox selection with a sandbox key", () => {
+    const result = validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      PAYMENT_PROVIDER: "squad",
+      SQUAD_MODE: "test",
+      SQUAD_SECRET_KEY: "sandbox_sk_not-a-real-key"
+    });
+
+    expect(result.PAYMENT_PROVIDER).toBe("squad");
+    expect(result.SQUAD_BASE_URL).toBe("https://sandbox-api-d.squadco.com");
+  });
+
+  it("rejects Squad live keys while sandbox integration is enabled", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      PAYMENT_PROVIDER: "squad",
+      SQUAD_MODE: "test",
+      SQUAD_SECRET_KEY: "non-sandbox-key-do-not-use"
+    })).toThrow("SQUAD_SECRET_KEY must be a Squad sandbox key");
+  });
+
+  it("keeps live payment activation blocked globally", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      PAYMENTS_LIVE_ENABLED: "true"
+    })).toThrow("PAYMENTS_LIVE_ENABLED must remain false");
   });
 
   it("allows Termii preparation only with configured non-production credentials", () => {

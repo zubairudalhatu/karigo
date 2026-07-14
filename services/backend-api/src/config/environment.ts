@@ -101,10 +101,15 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       throw new Error("Termii is restricted to sandbox preparation until production SMS approval");
     }
   }
+  const paymentsLiveEnabled = booleanFlag(config.PAYMENTS_LIVE_ENABLED, "PAYMENTS_LIVE_ENABLED", false);
+  const configuredPaymentProvider = firstConfigured(config, ["PAYMENTS_PROVIDER", "PAYMENT_PROVIDER"]);
   const paymentProvider =
-    typeof config.PAYMENT_PROVIDER === "string" ? config.PAYMENT_PROVIDER.toLowerCase() : "mock";
+    typeof configuredPaymentProvider === "string" ? configuredPaymentProvider.toLowerCase() : "mock";
   if (!["mock", "paystack", "flutterwave", "monnify", "squad"].includes(paymentProvider)) {
     throw new Error("PAYMENT_PROVIDER must be mock, paystack, flutterwave, monnify or squad");
+  }
+  if (paymentsLiveEnabled) {
+    throw new Error("PAYMENTS_LIVE_ENABLED must remain false until live payment approval");
   }
   if (paymentProvider === "paystack") {
     const secret = requireValue(config, "PAYSTACK_SECRET_KEY");
@@ -115,6 +120,37 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       ? config.PAYSTACK_BASE_URL.trim()
       : "https://api.paystack.co";
     if (!baseUrl.startsWith("https://")) throw new Error("PAYSTACK_BASE_URL must use HTTPS");
+  }
+  if (paymentProvider === "monnify") {
+    requireValue(config, "MONNIFY_API_KEY");
+    requireValue(config, "MONNIFY_SECRET_KEY");
+    requireValue(config, "MONNIFY_CONTRACT_CODE");
+    const mode = typeof config.MONNIFY_MODE === "string" ? config.MONNIFY_MODE.trim().toLowerCase() : "";
+    if (!["test", "sandbox"].includes(mode)) {
+      throw new Error("MONNIFY_MODE must be test or sandbox while sandbox integration is enabled");
+    }
+    const baseUrl = typeof config.MONNIFY_BASE_URL === "string" && config.MONNIFY_BASE_URL.trim()
+      ? config.MONNIFY_BASE_URL.trim()
+      : "https://sandbox.monnify.com";
+    if (!baseUrl.startsWith("https://")) throw new Error("MONNIFY_BASE_URL must use HTTPS");
+    if (baseUrl.includes("api.monnify.com")) throw new Error("MONNIFY_BASE_URL must not point to the live Monnify API host");
+  }
+  if (paymentProvider === "squad") {
+    const secret = requireValue(config, "SQUAD_SECRET_KEY");
+    if (!secret.startsWith("sandbox_sk_")) {
+      throw new Error("SQUAD_SECRET_KEY must be a Squad sandbox key while sandbox integration is enabled");
+    }
+    const mode = typeof config.SQUAD_MODE === "string" ? config.SQUAD_MODE.trim().toLowerCase() : "";
+    if (!["test", "sandbox"].includes(mode)) {
+      throw new Error("SQUAD_MODE must be test or sandbox while sandbox integration is enabled");
+    }
+    const baseUrl = typeof config.SQUAD_BASE_URL === "string" && config.SQUAD_BASE_URL.trim()
+      ? config.SQUAD_BASE_URL.trim()
+      : "https://sandbox-api-d.squadco.com";
+    if (!baseUrl.startsWith("https://")) throw new Error("SQUAD_BASE_URL must use HTTPS");
+    if (baseUrl.includes("api-d.squadco.com") && !baseUrl.includes("sandbox")) {
+      throw new Error("SQUAD_BASE_URL must not point to the live Squad API host");
+    }
   }
   const notificationProvider =
     typeof config.NOTIFICATION_PROVIDER === "string" ? config.NOTIFICATION_PROVIDER.toLowerCase() : "mock";
@@ -336,10 +372,18 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       : "https://api.ng.termii.com",
     STANDARD_DELIVERY_FEE: positiveInteger(config.STANDARD_DELIVERY_FEE, "STANDARD_DELIVERY_FEE", 1000),
     PARCEL_DELIVERY_FEE: positiveInteger(config.PARCEL_DELIVERY_FEE, "PARCEL_DELIVERY_FEE", 1500),
+    PAYMENTS_LIVE_ENABLED: paymentsLiveEnabled,
     PAYMENT_PROVIDER: paymentProvider,
+    PAYMENTS_PROVIDER: paymentProvider,
     PAYSTACK_BASE_URL: typeof config.PAYSTACK_BASE_URL === "string" && config.PAYSTACK_BASE_URL.trim()
       ? config.PAYSTACK_BASE_URL.trim()
       : "https://api.paystack.co",
+    MONNIFY_BASE_URL: typeof config.MONNIFY_BASE_URL === "string" && config.MONNIFY_BASE_URL.trim()
+      ? config.MONNIFY_BASE_URL.trim()
+      : "https://sandbox.monnify.com",
+    SQUAD_BASE_URL: typeof config.SQUAD_BASE_URL === "string" && config.SQUAD_BASE_URL.trim()
+      ? config.SQUAD_BASE_URL.trim()
+      : "https://sandbox-api-d.squadco.com",
     NOTIFICATION_PROVIDER: notificationProvider,
     EMAIL_PROVIDER: emailProvider,
     EMAIL_FROM: typeof config.EMAIL_FROM === "string" && config.EMAIL_FROM.trim()
