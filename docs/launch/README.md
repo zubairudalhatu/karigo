@@ -239,6 +239,25 @@ expand Batch 1. It does not activate live payments, utilities, rides, ride dispa
 payouts, wallet withdrawal/refund automation, Pharmacy marketplace, provider login or
 bulk messaging.
 
+## Task 129 Batch 1 Live Execution Update And Signoff
+
+- Live execution update:
+  `batch-1/karigo-batch-1-live-execution-update-task129.md`
+- Internal order live signoff:
+  `batch-1/karigo-batch-1-internal-order-live-signoff-task129.md`
+- First pilot order live signoff:
+  `batch-1/karigo-batch-1-first-pilot-order-live-signoff-task129.md`
+- Live execution issue log:
+  `batch-1/karigo-batch-1-live-execution-issue-log-task129.md`
+- Operations signoff:
+  `batch-1/karigo-batch-1-operations-signoff-task129.md`
+
+Use this pack when the internal order and first real pilot order are actually executed.
+It records live updates, issue observations and operations signoff without inventing
+pilot results. Mock payment remains default; live payments, utilities, rides, ride
+dispatch, payouts, wallet withdrawal/refund automation, Pharmacy marketplace, provider
+login and bulk messaging remain disabled.
+
 ## Controlled Pilot Preparation
 
 - Plan and scope: `controlled-soft-launch-plan.md`
