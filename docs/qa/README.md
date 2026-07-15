@@ -54,6 +54,12 @@ evidence. They do not authorize real-customer launch by themselves.
 - `customer-app-staging-test-evidence.md`
 - `rider-app-staging-test-evidence.md`
 
+## Governance And Vendor Operations
+
+- `results/karigo-governance-vendor-operations-verification-task132.md`
+- `results/karigo-governance-vendor-operations-issue-register-task132.md`
+- `results/karigo-governance-vendor-operations-signoff-task132.md`
+
 ## Evidence Rules
 
 - Do not store real credentials, OTP values, full phone numbers, device tokens, provider
