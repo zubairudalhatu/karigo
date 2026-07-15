@@ -203,6 +203,25 @@ verified OK for controlled pilot preparation. Mock payment remains the default, 
 payments, utilities, rides, ride dispatch, payouts, wallet withdrawal/refund automation,
 Pharmacy marketplace, provider login and bulk messaging remain disabled.
 
+## Task 127 Batch 1 Activation And First Order Records
+
+- Activation execution record:
+  `batch-1/karigo-batch-1-activation-execution-record-task127.md`
+- Internal test order record:
+  `batch-1/karigo-batch-1-internal-test-order-record-task127.md`
+- First real pilot order record:
+  `batch-1/karigo-batch-1-first-real-pilot-order-record-task127.md`
+- Issue observation log:
+  `batch-1/karigo-batch-1-issue-observation-log-task127.md`
+- Go/Pause decision record:
+  `batch-1/karigo-batch-1-go-pause-decision-record-task127.md`
+
+Use this pack when Batch 1 is activated. It records operational checks, the internal
+test order, the first real pilot order, issue observations and the decision before
+inviting more customers. Mock payment remains the pilot payment mode; live payments,
+utilities, rides, ride dispatch, payouts, wallet withdrawal/refund automation, Pharmacy
+marketplace, provider login and bulk messaging remain disabled.
+
 ## Controlled Pilot Preparation
 
 - Plan and scope: `controlled-soft-launch-plan.md`
