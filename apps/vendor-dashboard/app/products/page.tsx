@@ -1,8 +1,9 @@
 "use client";
 
 import type { ProductCategory, ProductOptionGroupInput, ProductOptionInput, ProductSummary, VendorProductInput } from "@karigo/shared-types";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { productsApi } from "../../src/api/products.api";
+import { vendorApi } from "../../src/api/vendor.api";
 import { DashboardShell } from "../../src/components/dashboard";
 import { friendlyError } from "../../src/lib/errors";
 
@@ -37,6 +38,7 @@ export default function Products() {
   const [category, setCategory] = useState<ProductCategory | "">("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -104,6 +106,18 @@ export default function Products() {
     finally { setSaving(false); }
   }
 
+  async function uploadProductImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true); setError(""); setMessage("");
+    try {
+      const uploaded = await vendorApi.uploadFile(file, "product-image");
+      setForm((current) => ({ ...current, imageUrl: uploaded.url }));
+      setMessage("Product image uploaded. Save the product to keep this image.");
+    } catch (e) { setError(friendlyError(e, "form")); }
+    finally { setUploadingImage(false); event.target.value = ""; }
+  }
+
   async function toggle(product: ProductSummary) {
     setError(""); setMessage("");
     try { await productsApi.updateAvailability(product.id, { isAvailable: !product.isAvailable }); setMessage(product.isAvailable ? "Product marked unavailable." : "Product marked available."); await load(); }
@@ -118,7 +132,7 @@ export default function Products() {
   }
 
   return <DashboardShell>
-    <header className="topbar"><div><p className="muted">Vendor catalogue</p><h1>Products</h1><p className="muted">Manage your menu, availability and product options.</p></div><button onClick={resetForm}>Add product</button></header>
+    <header className="topbar"><div><p className="muted">Vendor catalogue</p><h1>Products</h1><p className="muted">Manage food, grocery and market items. SME Services vendors should use the Services workspace.</p></div><button onClick={resetForm}>Add product</button></header>
     <section className="grid"><div className="card"><p className="muted">Total products</p><p className="metric">{summary.total}</p></div><div className="card"><p className="muted">Available products</p><p className="metric">{summary.available}</p></div><div className="card"><p className="muted">Unavailable products</p><p className="metric">{summary.unavailable}</p></div></section>
     {message ? <p className="success">{message}</p> : null}{error ? <p className="error">{error}</p> : null}
     <section className="product-layout">
@@ -129,7 +143,9 @@ export default function Products() {
         <input placeholder="Display category, e.g. Rice" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} />
         <select value={form.productCategory} onChange={(event) => setForm({ ...form, productCategory: event.target.value as ProductCategory })}>{categories.filter((item) => item.value).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
         <input placeholder="Price" type="number" min="1" step="1" value={form.price || ""} onChange={(event) => setForm({ ...form, price: Number(event.target.value) })} required />
-        <input placeholder="HTTPS image URL" type="url" value={form.imageUrl} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} required />
+        <label className="file-drop">Upload product image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => void uploadProductImage(event)} /></label>
+        {uploadingImage ? <p className="muted">Uploading product image...</p> : null}
+        <input placeholder="Product image URL" type="url" value={form.imageUrl} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} required />
         {form.imageUrl ? <img className="product-preview" src={form.imageUrl} alt="" /> : null}
         <label className="check-row"><input type="checkbox" checked={!!form.isAvailable} onChange={(event) => setForm({ ...form, isAvailable: event.target.checked })} /> Available</label>
         <label className="check-row"><input type="checkbox" checked={!!form.isFeatured} onChange={(event) => setForm({ ...form, isFeatured: event.target.checked })} /> Featured</label>

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -11,7 +12,13 @@ import { UpdateVendorProfileDto } from "./dto/update-vendor-profile.dto";
 import { ListVendorsQueryDto } from "./dto/list-vendors-query.dto";
 import { InviteVendorTeamMemberDto, UpdateVendorTeamMemberDto } from "./dto/vendor-team.dto";
 import { UpsertVendorBranchDto } from "./dto/vendor-branch.dto";
-import { VendorsService } from "./vendors.service";
+import { UpdateVendorServiceDto, VendorServiceInputDto } from "./dto/vendor-service.dto";
+import { VendorUploadDto } from "./dto/vendor-upload.dto";
+import { VendorsService, VendorUploadedFile } from "./vendors.service";
+
+interface RequestWithHeaders {
+  headers: Record<string, string | string[] | undefined>;
+}
 
 @ApiTags("Vendors")
 @Controller("vendors")
@@ -126,6 +133,52 @@ export class VendorsController {
     return { message: "Vendor onboarding document submitted", data: await this.vendorsService.uploadOnboardingDocument(user.id, dto) };
   }
 
+  @Post("uploads")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Upload a vendor-scoped file for onboarding, catalogue images or branding" })
+  async uploadFile(@CurrentUser() user: AuthenticatedUser, @Body() dto: VendorUploadDto, @UploadedFile() file?: VendorUploadedFile, @Req() request?: RequestWithHeaders) {
+    return { message: "Vendor file uploaded", data: await this.vendorsService.uploadFile(user.id, dto.purpose, file, this.requestBaseUrl(request)) };
+  }
+
+  @Get("services")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "List authenticated vendor service catalogue entries" })
+  async services(@CurrentUser() user: AuthenticatedUser) {
+    return { message: "Vendor services retrieved", data: await this.vendorsService.services(user.id) };
+  }
+
+  @Post("services")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Create a vendor service catalogue entry" })
+  async createService(@CurrentUser() user: AuthenticatedUser, @Body() dto: VendorServiceInputDto) {
+    return { message: "Vendor service created", data: await this.vendorsService.createService(user.id, dto) };
+  }
+
+  @Patch("services/:serviceId")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Update a vendor service catalogue entry" })
+  async updateService(@CurrentUser() user: AuthenticatedUser, @Param("serviceId", ParseUUIDPipe) serviceId: string, @Body() dto: UpdateVendorServiceDto) {
+    return { message: "Vendor service updated", data: await this.vendorsService.updateService(user.id, serviceId, dto) };
+  }
+
+  @Delete("services/:serviceId")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Archive a vendor service catalogue entry" })
+  async archiveService(@CurrentUser() user: AuthenticatedUser, @Param("serviceId", ParseUUIDPipe) serviceId: string) {
+    return { message: "Vendor service archived", data: await this.vendorsService.archiveService(user.id, serviceId) };
+  }
+
   @Get()
   @ApiOperation({ summary: "List active vendors" })
   async list(@Query() query: ListVendorsQueryDto) {
@@ -136,5 +189,13 @@ export class VendorsController {
   @ApiOperation({ summary: "Get an active vendor" })
   async detail(@Param("vendorId", ParseUUIDPipe) vendorId: string) {
     return { message: "Vendor retrieved", data: await this.vendorsService.publicDetail(vendorId) };
+  }
+
+  private requestBaseUrl(request?: RequestWithHeaders) {
+    const rawHost = request?.headers["x-forwarded-host"] ?? request?.headers.host;
+    const rawProtocol = request?.headers["x-forwarded-proto"] ?? "https";
+    const host = Array.isArray(rawHost) ? rawHost[0] : rawHost;
+    const protocol = Array.isArray(rawProtocol) ? rawProtocol[0] : rawProtocol;
+    return host ? `${protocol}://${host}` : undefined;
   }
 }

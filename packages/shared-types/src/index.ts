@@ -19,6 +19,33 @@ export const productCategories = [
 ] as const;
 export type ProductCategory = (typeof productCategories)[number];
 
+export const serviceProviderTypes = [
+  "PAINTER",
+  "PLUMBER",
+  "MECHANIC",
+  "ELECTRICIAN",
+  "CLEANER",
+  "CARPENTER",
+  "AC_TECHNICIAN",
+  "GENERATOR_REPAIR",
+  "APPLIANCE_REPAIR",
+  "FUMIGATION",
+  "WELDER",
+  "TILER",
+  "CCTV_TECHNICIAN",
+  "MOVING_HELP",
+  "HEALTH_PROFESSIONAL",
+  "OTHER"
+] as const;
+export type ServiceProviderType = (typeof serviceProviderTypes)[number];
+
+export const vendorServiceStatuses = [
+  "ACTIVE",
+  "INACTIVE",
+  "ARCHIVED"
+] as const;
+export type VendorServiceStatus = (typeof vendorServiceStatuses)[number];
+
 export const orderStatuses = [
   "DRAFT",
   "AWAITING_PAYMENT",

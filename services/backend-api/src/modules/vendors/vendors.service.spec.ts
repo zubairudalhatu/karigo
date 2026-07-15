@@ -1,11 +1,13 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, ServiceProviderType, VendorServiceStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { VendorUploadPurpose } from "./dto/vendor-upload.dto";
 import { VendorsService } from "./vendors.service";
 
 describe("VendorsService public listing", () => {
   const prisma = {
     vendor: { findMany: jest.fn(), findFirst: jest.fn() },
     vendorOnboardingDocument: { create: jest.fn() },
+    vendorService: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     vendorAuditLog: { create: jest.fn() }
   };
   const service = new VendorsService(prisma as unknown as PrismaService);
@@ -92,4 +94,81 @@ describe("VendorsService public listing", () => {
       })
     }));
   });
+
+  it("creates vendor-owned service catalogue entries", async () => {
+    prisma.vendor.findFirst.mockResolvedValue({
+      id: "vendor-1",
+      userId: "vendor-user-1",
+      businessName: "Kano Repairs"
+    });
+    prisma.vendorService.create.mockResolvedValue({
+      id: "service-1",
+      vendorId: "vendor-1",
+      serviceType: ServiceProviderType.PLUMBER,
+      name: "Plumbing repairs",
+      description: "Leak inspection and repair",
+      basePrice: new Prisma.Decimal(5000),
+      priceNote: "Final price after inspection",
+      durationEstimate: "1-2 hours",
+      serviceAreas: ["Tarauni", "Nassarawa"],
+      imageUrl: null,
+      status: VendorServiceStatus.ACTIVE,
+      isAvailable: true,
+      readinessOnly: false,
+      internalNote: null,
+      createdAt: new Date("2026-07-15T10:00:00.000Z"),
+      updatedAt: new Date("2026-07-15T10:00:00.000Z")
+    });
+
+    const service = await serviceUnderTest().createService("vendor-user-1", {
+      serviceType: ServiceProviderType.PLUMBER,
+      name: "Plumbing repairs",
+      description: "Leak inspection and repair",
+      basePrice: 5000,
+      priceNote: "Final price after inspection",
+      durationEstimate: "1-2 hours",
+      serviceAreas: ["Tarauni", "Nassarawa"],
+      isAvailable: true
+    });
+
+    expect(service).toMatchObject({
+      id: "service-1",
+      vendorId: "vendor-1",
+      serviceType: ServiceProviderType.PLUMBER,
+      basePrice: 5000,
+      serviceAreas: ["Tarauni", "Nassarawa"]
+    });
+    expect(prisma.vendorService.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        vendorId: "vendor-1",
+        serviceType: ServiceProviderType.PLUMBER,
+        basePrice: expect.any(Prisma.Decimal)
+      })
+    }));
+    expect(prisma.vendorAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        vendorId: "vendor-1",
+        action: "vendor.service.created"
+      })
+    }));
+  });
+
+  it("rejects unsupported vendor upload file types before writing files", async () => {
+    prisma.vendor.findFirst.mockResolvedValue({
+      id: "vendor-1",
+      userId: "vendor-user-1",
+      businessName: "Kano Kitchen"
+    });
+
+    await expect(serviceUnderTest().uploadFile("vendor-user-1", VendorUploadPurpose.PRODUCT_IMAGE, {
+      originalname: "notes.txt",
+      mimetype: "text/plain",
+      size: 12,
+      buffer: Buffer.from("not an image")
+    })).rejects.toThrow("Unsupported file type");
+  });
+
+  function serviceUnderTest() {
+    return new VendorsService(prisma as unknown as PrismaService);
+  }
 });

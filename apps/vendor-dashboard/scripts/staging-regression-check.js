@@ -30,6 +30,7 @@ assert(!payoutApi.includes("admin/vendor-payout-accounts"), "Vendor dashboard mu
 
 const shell = read("src", "components", "dashboard.tsx");
 assert(shell.includes("Payout account"), "Vendor sidebar must include the payout account page.");
+assert(shell.includes("Services"), "Vendor sidebar must include the services catalogue page.");
 
 const notificationsPage = read("app", "notifications", "page.tsx");
 assert(notificationsPage.includes("notification-title"), "Notifications must render title separately.");
@@ -50,11 +51,11 @@ assert(productsPage.includes("productsApi.update("), "Products page must support
 assert(productsPage.includes("productsApi.updateAvailability"), "Products page must support availability toggles.");
 assert(productsPage.includes("productsApi.archive"), "Products page must support safe archive.");
 assert(productsPage.includes("Vendor catalogue"), "Products page must show the polished vendor catalogue eyebrow.");
-assert(productsPage.includes("Manage your menu, availability and product options."), "Products page must show the approved supporting copy.");
+assert(productsPage.includes("SME Services vendors should use the Services workspace."), "Products page must route SME Services vendors to the services workspace.");
 assert(productsPage.includes("Options & add-ons"), "Products page must expose an options and add-ons section.");
 assert(productsPage.includes("Add option group"), "Products page must let vendors add option groups.");
 assert(productsPage.includes("priceAdjustmentKobo"), "Product options must use integer kobo price adjustments.");
-assert(productsPage.includes("HTTPS image URL"), "Products page must expose image URL input.");
+assert(productsPage.includes("Upload product image"), "Products page must expose device image upload.");
 assert(productsPage.includes("Total products"), "Products page must show total product summary.");
 assert(productsPage.includes("Available products"), "Products page must show available product summary.");
 assert(productsPage.includes("Unavailable products"), "Products page must show unavailable product summary.");
@@ -70,5 +71,19 @@ assert(css.includes(".product-preview"), "Image preview styling must exist.");
 assert(css.includes(".options-panel"), "Options and add-ons panel styling must exist.");
 assert(css.includes(".option-group"), "Option group styling must exist.");
 assert(css.includes(".option-grid"), "Option row grid styling must exist.");
+assert(css.includes(".file-drop"), "Upload control styling must exist.");
+
+const servicesPage = read("app", "services", "page.tsx");
+assert(servicesPage.includes("vendorApi.services"), "Services page must load vendor-owned services.");
+assert(servicesPage.includes("vendorApi.createService"), "Services page must support service creation.");
+assert(servicesPage.includes("vendorApi.updateService"), "Services page must support service editing.");
+assert(servicesPage.includes("vendorApi.archiveService"), "Services page must support safe service archiving.");
+assert(servicesPage.includes("SME Services vendors"), "Services page must clearly identify SME Services workflow.");
+assert(servicesPage.includes("does not activate automatic dispatch"), "Services page must preserve dispatch/payment guardrail copy.");
+assert(servicesPage.includes("HEALTH_PROFESSIONAL"), "Services page must handle health professional readiness-only services.");
+
+const vendorApi = read("src", "api", "vendor.api.ts");
+assert(vendorApi.includes("vendors/uploads"), "Vendor API must include vendor-scoped upload endpoint.");
+assert(vendorApi.includes("vendors/services"), "Vendor API must include vendor-scoped service catalogue endpoints.");
 
 console.log("Vendor dashboard staging regression checks passed.");

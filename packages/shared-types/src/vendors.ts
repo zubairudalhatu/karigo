@@ -1,4 +1,4 @@
-import type { ProductCategory, ServiceCategory } from "./index";
+import type { ProductCategory, ServiceCategory, ServiceProviderType, VendorServiceStatus } from "./index";
 
 export interface VendorSummary {
   id: string;
@@ -84,4 +84,49 @@ export interface ProductOptionGroup {
   maxSelections: number;
   displayOrder: number;
   options: ProductOption[];
+}
+
+export type VendorUploadPurpose = "onboarding-document" | "product-image" | "service-image" | "logo" | "cover";
+
+export interface VendorUploadResult {
+  url: string;
+  relativeUrl: string;
+  purpose: VendorUploadPurpose;
+  originalName: string;
+  mimeType: string;
+  size: number;
+}
+
+export interface VendorServiceSummary {
+  id: string;
+  vendorId: string;
+  serviceType: ServiceProviderType;
+  name: string;
+  description: string;
+  basePrice?: number | null;
+  priceNote?: string | null;
+  durationEstimate?: string | null;
+  serviceAreas: string[];
+  imageUrl?: string | null;
+  status: VendorServiceStatus;
+  isAvailable: boolean;
+  readinessOnly: boolean;
+  internalNote?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VendorServiceInput {
+  serviceType: ServiceProviderType;
+  name: string;
+  description?: string;
+  basePrice?: number | null;
+  priceNote?: string;
+  durationEstimate?: string;
+  serviceAreas?: string[];
+  imageUrl?: string;
+  status?: VendorServiceStatus;
+  isAvailable?: boolean;
+  readinessOnly?: boolean;
+  internalNote?: string;
 }
