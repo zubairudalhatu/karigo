@@ -222,6 +222,23 @@ inviting more customers. Mock payment remains the pilot payment mode; live payme
 utilities, rides, ride dispatch, payouts, wallet withdrawal/refund automation, Pharmacy
 marketplace, provider login and bulk messaging remain disabled.
 
+## Task 128 Batch 1 Results Review And Fix Prioritisation
+
+- Results review:
+  `batch-1/karigo-batch-1-results-review-task128.md`
+- Fix prioritisation register:
+  `batch-1/karigo-batch-1-fix-prioritisation-register-task128.md`
+- Fix owner assignment tracker:
+  `batch-1/karigo-batch-1-fix-owner-assignment-tracker-task128.md`
+- Continue/Pause/Expand decision:
+  `batch-1/karigo-batch-1-continue-pause-expand-decision-task128.md`
+
+Use this pack after Batch 1 activation evidence is available. It reviews actual pilot
+results, prioritises issues, assigns fixes and records whether to continue, pause or
+expand Batch 1. It does not activate live payments, utilities, rides, ride dispatch,
+payouts, wallet withdrawal/refund automation, Pharmacy marketplace, provider login or
+bulk messaging.
+
 ## Controlled Pilot Preparation
 
 - Plan and scope: `controlled-soft-launch-plan.md`
