@@ -48,7 +48,16 @@ export class UpdateVendorProfileDto {
   closingTime?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  logoUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  coverImageUrl?: string;
+
+  @IsOptional()
   @IsBoolean()
   isOpen?: boolean;
 }
-

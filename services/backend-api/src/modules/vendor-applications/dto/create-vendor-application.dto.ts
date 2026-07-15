@@ -1,6 +1,7 @@
 import { PreferredContactMethod, VendorApplicationCategory } from "@prisma/client";
 import { Transform } from "class-transformer";
 import { IsBoolean, IsEmail, IsEnum, IsIn, IsOptional, IsString, Matches, MaxLength } from "class-validator";
+import { ApplicationDocumentDto } from "../../../common/dto/application-document.dto";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../../common/utils/phone.util";
 
 const trim = ({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value;
@@ -145,6 +146,9 @@ export class CreateVendorApplicationDto {
 
   @IsOptional()
   documentPlaceholders?: Record<string, unknown>;
+
+  @IsOptional()
+  documents?: ApplicationDocumentDto[];
 
   @IsBoolean()
   declarationAccepted!: boolean;

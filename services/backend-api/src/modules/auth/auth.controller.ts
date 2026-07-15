@@ -4,6 +4,7 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { AuthService } from "./auth.service";
+import { ActivateVendorAccountDto } from "./dto/activate-vendor-account.dto";
 import { LoginDto } from "./dto/login.dto";
 import { LogoutDto } from "./dto/logout.dto";
 import { RegisterCustomerDto } from "./dto/register-customer.dto";
@@ -49,6 +50,15 @@ export class AuthController {
     return {
       message: "Login successful",
       data: await this.authService.login(dto)
+    };
+  }
+
+  @Post("vendor/activate")
+  @ApiOperation({ summary: "Activate an approved vendor account with a one-time setup token" })
+  async activateVendorAccount(@Body() dto: ActivateVendorAccountDto) {
+    return {
+      message: "Vendor account activated",
+      data: await this.authService.activateVendorAccount(dto)
     };
   }
 

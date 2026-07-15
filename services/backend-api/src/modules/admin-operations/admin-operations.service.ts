@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import {
   AccountStatus,
   OrderStatus,
@@ -8,8 +9,10 @@ import {
   SettlementStatus,
   SupportTicketStatus,
   UserRole,
+  VendorActivationInvitationStatus,
   VendorStatus
 } from "@prisma/client";
+import { createHash, randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ListAdminOrdersQueryDto } from "./dto/list-admin-orders-query.dto";
@@ -34,7 +37,11 @@ const VENDOR_CLEANUP_SELECT = {
 
 @Injectable()
 export class AdminOperationsService {
-  constructor(private readonly prisma: PrismaService, private readonly audit: AdminAuditService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AdminAuditService,
+    private readonly config?: ConfigService
+  ) {}
 
   async dashboard() {
     const today = new Date();
@@ -345,6 +352,98 @@ export class AdminOperationsService {
     return this.prisma.rider.findMany({ where: { deletedAt: null }, select: { id: true, riderCode: true, phoneNumber: true, vehicleType: true, availabilityStatus: true, verificationStatus: true, currentLatitude: true, currentLongitude: true, currentLocationUpdatedAt: true, user: { select: { fullName: true, accountStatus: true } } } });
   }
 
+  auditLogs() {
+    return this.prisma.adminAuditLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 150,
+      include: { adminUser: { select: { id: true, fullName: true, phoneNumber: true, email: true, adminRole: true } } }
+    });
+  }
+
+  loginActivity() {
+    return this.prisma.userLoginActivity.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 150,
+      include: { user: { select: { id: true, fullName: true, phoneNumber: true, email: true, role: true, adminRole: true } } }
+    });
+  }
+
+  integrationSettings() {
+    const paymentsProvider = this.configValue("PAYMENTS_PROVIDER", this.configValue("PAYMENT_PROVIDER", "mock"));
+    const paymentsLiveEnabled = this.configValue("PAYMENTS_LIVE_ENABLED", "false") === "true";
+    return {
+      environment: this.configValue("APP_ENV", "development"),
+      payments: {
+        provider: paymentsProvider,
+        liveEnabled: paymentsLiveEnabled,
+        mockFallbackAvailable: true,
+        livePaymentCollectionDisabled: !paymentsLiveEnabled,
+        sandboxProviders: {
+          paystackConfigured: Boolean(this.configValue("PAYSTACK_SECRET_KEY")),
+          monnifyConfigured: Boolean(this.configValue("MONNIFY_API_KEY")),
+          squadConfigured: Boolean(this.configValue("SQUAD_SECRET_KEY"))
+        }
+      },
+      utilities: {
+        accelerateConfigured: Boolean(this.configValue("ACCELERATE_API_KEY")),
+        liveUtilityFulfilmentEnabled: false
+      },
+      notifications: {
+        termiiConfigured: Boolean(this.configValue("TERMII_API_KEY")),
+        resendConfigured: Boolean(this.configValue("RESEND_API_KEY")),
+        marketingEnabled: false,
+        bulkMessagingEnabled: false
+      },
+      biometricReadiness: {
+        credentialStorageModelReady: true,
+        passwordlessLoginEnabled: false,
+        note: "Biometric/fingerprint support is data-model ready only and is not active for login."
+      }
+    };
+  }
+
+  async createVendorActivationLink(adminUserId: string, vendorId: string) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { id: vendorId },
+      select: { id: true, userId: true, businessName: true, deletedAt: true, user: { select: { role: true } } }
+    });
+    if (!vendor) throw new NotFoundException("Vendor not found");
+    if (vendor.deletedAt) throw new BadRequestException("Trashed vendors cannot receive activation links.");
+    if (vendor.user.role !== UserRole.VENDOR) throw new BadRequestException("Activation links can only be created for vendor users.");
+
+    const token = randomBytes(40).toString("base64url");
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.vendorAccountActivation.updateMany({
+        where: { vendorId: vendor.id, status: VendorActivationInvitationStatus.PENDING },
+        data: { status: VendorActivationInvitationStatus.REVOKED, revokedAt: new Date() }
+      });
+      await tx.vendorAccountActivation.create({
+        data: {
+          vendorId: vendor.id,
+          userId: vendor.userId,
+          tokenHash: this.hashSecret(token),
+          expiresAt,
+          createdByAdminId: adminUserId
+        }
+      });
+    });
+
+    await this.audit.record(adminUserId, "admin.vendor.activation_link.created", "Vendor", vendor.id, {
+      businessName: vendor.businessName,
+      expiresAt: expiresAt.toISOString()
+    });
+
+    return {
+      vendorId: vendor.id,
+      businessName: vendor.businessName,
+      expiresAt: expiresAt.toISOString(),
+      activationUrl: `${this.vendorDashboardUrl()}/activate?token=${encodeURIComponent(token)}`,
+      tokenVisibleOnce: true,
+      deliveryWarning: "Share this activation link only through an approved secure channel. KariGO does not store the plaintext token."
+    };
+  }
+
   private async findVendorForCleanup(vendorId: string) {
     const vendor = await this.prisma.vendor.findUnique({
       where: { id: vendorId },
@@ -401,6 +500,15 @@ export class AdminOperationsService {
 
   private dateWhere(range: { dateFrom?: string; dateTo?: string }) {
     return (range.dateFrom || range.dateTo) ? { createdAt: { ...(range.dateFrom ? { gte: new Date(range.dateFrom) } : {}), ...(range.dateTo ? { lte: new Date(range.dateTo) } : {}) } } : {};
+  }
+  private configValue(key: string, fallback = "") {
+    return this.config?.get<string>(key) ?? fallback;
+  }
+  private vendorDashboardUrl() {
+    return this.configValue("VENDOR_DASHBOARD_URL", "https://vendor.karigo.com.ng").replace(/\/+$/, "");
+  }
+  private hashSecret(value: string) {
+    return createHash("sha256").update(value).digest("hex");
   }
   private sum(values: Prisma.Decimal[]) {
     return values.reduce((total, value) => total.add(value), new Prisma.Decimal(0));

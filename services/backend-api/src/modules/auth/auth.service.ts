@@ -1,7 +1,7 @@
 import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { AccountStatus } from "@prisma/client";
+import { AccountStatus, LoginActivityOutcome, UserRole, VendorActivationInvitationStatus } from "@prisma/client";
 import { compare, hash } from "bcrypt";
 import { createHash, randomBytes } from "crypto";
 import { LoginDto } from "./dto/login.dto";
@@ -14,6 +14,7 @@ import { OtpService } from "./otp.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { UsersService } from "../users/users.service";
 import { AccountActivationEmailService } from "./account-activation-email.service";
+import { ActivateVendorAccountDto } from "./dto/activate-vendor-account.dto";
 
 @Injectable()
 export class AuthService {
@@ -94,13 +95,87 @@ export class AuthService {
       user.accountStatus !== AccountStatus.ACTIVE ||
       user.deletedAt
     ) {
+      await this.recordLoginActivity({
+        userId: user?.id,
+        phoneNumber: dto.phoneNumber,
+        role: user?.role,
+        outcome: user && !passwordMatches ? LoginActivityOutcome.FAILED : LoginActivityOutcome.BLOCKED,
+        reason: "Invalid login attempt"
+      });
       throw new UnauthorizedException("Invalid phone number or password");
     }
 
     const publicUser = await this.usersService.markLogin(user.id);
+    await this.recordLoginActivity({
+      userId: user.id,
+      phoneNumber: user.phoneNumber,
+      role: user.role,
+      outcome: LoginActivityOutcome.SUCCESS,
+      reason: "Login successful"
+    });
     return {
       user: publicUser,
       ...(await this.issueSession(user.id, user.role))
+    };
+  }
+
+  async activateVendorAccount(dto: ActivateVendorAccountDto) {
+    const tokenHash = this.hashRefreshToken(dto.token);
+    const activation = await this.prisma.vendorAccountActivation.findUnique({
+      where: { tokenHash },
+      include: { user: true, vendor: true }
+    });
+
+    if (
+      !activation ||
+      activation.status !== VendorActivationInvitationStatus.PENDING ||
+      activation.revokedAt ||
+      activation.usedAt ||
+      activation.expiresAt.getTime() <= Date.now() ||
+      activation.user.role !== UserRole.VENDOR ||
+      activation.vendor.deletedAt
+    ) {
+      throw new UnauthorizedException("Activation link is invalid or expired.");
+    }
+
+    const passwordHash = await hash(dto.password, 12);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: activation.userId },
+        data: {
+          passwordHash,
+          accountStatus: AccountStatus.ACTIVE,
+          phoneVerified: true
+        }
+      });
+      await tx.vendorAccountActivation.update({
+        where: { id: activation.id },
+        data: { status: VendorActivationInvitationStatus.USED, usedAt: new Date() }
+      });
+      await tx.vendorAuditLog.create({
+        data: {
+          vendorId: activation.vendorId,
+          actorUserId: activation.userId,
+          action: "vendor.account.activated",
+          entityType: "Vendor",
+          entityId: activation.vendorId,
+          newValue: { activatedBy: "activation_link" }
+        }
+      });
+    });
+
+    const publicUser = await this.usersService.markLogin(activation.userId);
+    await this.recordLoginActivity({
+      userId: activation.userId,
+      phoneNumber: activation.user.phoneNumber,
+      role: activation.user.role,
+      outcome: LoginActivityOutcome.SUCCESS,
+      reason: "Vendor activation login"
+    });
+
+    return {
+      user: publicUser,
+      ...(await this.issueSession(activation.userId, activation.user.role))
     };
   }
 
@@ -198,5 +273,31 @@ export class AuthService {
     } catch {
       this.logger.warn("Account activation email notification failed");
     }
+  }
+
+  private async recordLoginActivity(input: {
+    userId?: string;
+    phoneNumber: string;
+    role?: UserRole;
+    outcome: LoginActivityOutcome;
+    reason: string;
+  }) {
+    try {
+      await this.prisma.userLoginActivity.create({
+        data: {
+          userId: input.userId,
+          phoneNumberMasked: this.maskPhone(input.phoneNumber),
+          role: input.role,
+          outcome: input.outcome,
+          reason: input.reason
+        }
+      });
+    } catch {
+      this.logger.warn("Login activity logging failed");
+    }
+  }
+
+  private maskPhone(phoneNumber: string) {
+    return phoneNumber.length <= 4 ? "****" : `${phoneNumber.slice(0, 4)}***${phoneNumber.slice(-4)}`;
   }
 }

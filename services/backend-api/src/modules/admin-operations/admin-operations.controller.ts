@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AdminRole, UserRole } from "@prisma/client";
 import { AdminRoles } from "../../common/decorators/admin-roles.decorator";
@@ -58,7 +58,20 @@ export class AdminOperationsController {
   async permanentlyDeleteVendor(@CurrentUser() user: AuthenticatedUser, @Param("vendorId", ParseUUIDPipe) vendorId: string) {
     return { message: "Vendor permanently deleted", data: await this.operations.permanentlyDeleteVendor(user.id, vendorId) };
   }
+  @Post("vendors/:vendorId/activation-link")
+  async createVendorActivationLink(@CurrentUser() user: AuthenticatedUser, @Param("vendorId", ParseUUIDPipe) vendorId: string) {
+    return { message: "Vendor activation link created", data: await this.operations.createVendorActivationLink(user.id, vendorId) };
+  }
   @Get("riders") riders() {
     return this.operations.riders().then((data) => ({ message: "Riders retrieved", data }));
+  }
+  @Get("audit-logs") auditLogs() {
+    return this.operations.auditLogs().then((data) => ({ message: "Admin audit logs retrieved", data }));
+  }
+  @Get("login-activity") loginActivity() {
+    return this.operations.loginActivity().then((data) => ({ message: "Login activity retrieved", data }));
+  }
+  @Get("settings/integration-modes") integrationSettings() {
+    return { message: "Integration mode settings retrieved", data: this.operations.integrationSettings() };
   }
 }

@@ -32,7 +32,8 @@ const DELIVERY_CAPTAIN_APPLICATION_SELECT = {
   applicantVisibleNote: true,
   reviewedAt: true,
   createdAt: true,
-  updatedAt: true
+  updatedAt: true,
+  documents: { orderBy: { uploadedAt: "desc" } }
 } satisfies Prisma.DeliveryCaptainApplicationSelect;
 
 @Injectable()
@@ -86,9 +87,17 @@ export class RidersService {
         vehicleType: dto.vehicleType,
         vehiclePlateNumber: this.optionalText(dto.vehiclePlateNumber),
         riderExperience: this.optionalText(dto.riderExperience),
+        profilePhotoUrl: this.optionalText(dto.profilePhotoUrl),
         guarantorName: dto.guarantorName.trim(),
         guarantorPhone: this.normalizePhone(dto.guarantorPhone),
-        notes: this.optionalText(dto.notes)
+        notes: this.optionalText(dto.notes),
+        documents: dto.documents?.length ? {
+          create: dto.documents.map((document) => ({
+            documentType: document.documentType,
+            documentName: document.documentName,
+            documentUrl: document.documentUrl
+          }))
+        } : undefined
       },
       select: DELIVERY_CAPTAIN_APPLICATION_SELECT
     });
@@ -230,6 +239,13 @@ export class RidersService {
       reviewedAt: application.reviewedAt?.toISOString() ?? null,
       createdAt: application.createdAt.toISOString(),
       updatedAt: application.updatedAt.toISOString(),
+      documents: (application.documents ?? []).map((document) => ({
+        ...document,
+        uploadedAt: document.uploadedAt.toISOString(),
+        verifiedAt: document.verifiedAt?.toISOString() ?? null,
+        createdAt: document.createdAt.toISOString(),
+        updatedAt: document.updatedAt.toISOString()
+      })),
       deliveryOnly: true,
       launchWarning: "Review approval does not create a Captain login, activate live dispatch, payouts or KariGO Rides access."
     };

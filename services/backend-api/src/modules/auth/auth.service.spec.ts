@@ -1,6 +1,6 @@
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { AccountStatus, UserRole } from "@prisma/client";
+import { AccountStatus, UserRole, VendorActivationInvitationStatus } from "@prisma/client";
 import { hash } from "bcrypt";
 import { AuthService } from "./auth.service";
 import { AccountActivationEmailService } from "./account-activation-email.service";
@@ -18,13 +18,23 @@ describe("AuthService", () => {
   };
   const otpService = { issue: jest.fn(), verify: jest.fn() };
   const accountActivationEmail = { sendAccountActivatedEmail: jest.fn().mockResolvedValue({ accepted: true }) };
+  const tx = {
+    user: { update: jest.fn() },
+    vendorAccountActivation: { update: jest.fn() },
+    vendorAuditLog: { create: jest.fn() }
+  };
   const prisma = {
     refreshToken: {
       create: jest.fn().mockResolvedValue({ id: "refresh-token-id" }),
       findUnique: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn()
-    }
+    },
+    userLoginActivity: { create: jest.fn() },
+    vendorAccountActivation: { findUnique: jest.fn(), update: jest.fn() },
+    user: { update: jest.fn() },
+    vendorAuditLog: { create: jest.fn() },
+    $transaction: jest.fn((callback) => callback(tx))
   };
   const jwtService = { signAsync: jest.fn().mockResolvedValue("signed-token") };
   const config = {
@@ -181,6 +191,7 @@ describe("AuthService", () => {
     const user = {
       id: "user-1",
       role: UserRole.CUSTOMER,
+      phoneNumber: "+2348012345678",
       passwordHash,
       phoneVerified: true,
       accountStatus: AccountStatus.ACTIVE,
@@ -197,6 +208,36 @@ describe("AuthService", () => {
     expect(result.accessToken).toBe("signed-token");
     expect(result.refreshToken).toEqual(expect.any(String));
     expect(usersService.markLogin).toHaveBeenCalledWith(user.id);
+    expect(prisma.userLoginActivity.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ userId: user.id, outcome: "SUCCESS" })
+    }));
+  });
+
+  it("activates a vendor account with a valid setup token", async () => {
+    prisma.vendorAccountActivation.findUnique.mockResolvedValue({
+      id: "activation-1",
+      vendorId: "vendor-1",
+      userId: "vendor-user-1",
+      status: VendorActivationInvitationStatus.PENDING,
+      revokedAt: null,
+      usedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      user: { id: "vendor-user-1", role: UserRole.VENDOR, phoneNumber: "+2348012345678" },
+      vendor: { id: "vendor-1", deletedAt: null }
+    });
+    usersService.markLogin.mockResolvedValue({ id: "vendor-user-1", role: UserRole.VENDOR });
+
+    const result = await service.activateVendorAccount({ token: "activation-token-value-1234567890", password: "Password1" });
+
+    expect(tx.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "vendor-user-1" },
+      data: expect.objectContaining({ accountStatus: AccountStatus.ACTIVE, phoneVerified: true })
+    }));
+    expect(tx.vendorAccountActivation.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "activation-1" },
+      data: expect.objectContaining({ status: VendorActivationInvitationStatus.USED })
+    }));
+    expect(result.accessToken).toBe("signed-token");
   });
 
   it("refreshes a valid refresh token with rotation", async () => {

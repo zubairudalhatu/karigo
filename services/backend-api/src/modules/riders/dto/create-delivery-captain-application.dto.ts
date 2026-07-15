@@ -1,6 +1,7 @@
 import { DeliveryCaptainVehicleType } from "@prisma/client";
 import { Transform } from "class-transformer";
 import { IsBoolean, IsEmail, IsEnum, IsIn, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from "class-validator";
+import { ApplicationDocumentDto } from "../../../common/dto/application-document.dto";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../../common/utils/phone.util";
 
 const trim = ({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value;
@@ -67,6 +68,12 @@ export class CreateDeliveryCaptainApplicationDto {
   @Transform(trim)
   riderExperience?: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  @Transform(trim)
+  profilePhotoUrl?: string;
+
   @IsString()
   @IsNotEmpty()
   @MaxLength(120)
@@ -85,6 +92,9 @@ export class CreateDeliveryCaptainApplicationDto {
   @MaxLength(700)
   @Transform(trim)
   notes?: string;
+
+  @IsOptional()
+  documents?: ApplicationDocumentDto[];
 
   @IsBoolean()
   declarationAccepted!: boolean;

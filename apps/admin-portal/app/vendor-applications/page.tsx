@@ -37,9 +37,10 @@ export default function VendorApplicationsPage() {
     <section className="section">
       {applications.length ? applications.map((application) => <article className="card" key={application.id}>
         <strong>{application.businessName}</strong>
-        <p className="muted">{application.reference} · {application.businessCategory} · {application.city}, {application.state}</p>
-        <p>{application.contactFullName} · {application.contactEmail}</p>
+        <p className="muted">{application.reference} - {application.businessCategory} - {application.city}, {application.state}</p>
+        <p>{application.contactFullName} - {application.contactEmail}</p>
         <p><Badge>{application.status}</Badge></p>
+        {application.documents?.length ? <div className="notice"><strong>Documents</strong>{application.documents.map((document) => <p key={document.id}><a href={document.documentUrl} target="_blank" rel="noreferrer">{document.documentName || document.documentType}</a> <Badge>{document.verificationStatus}</Badge></p>)}</div> : <p className="muted">No application documents supplied yet.</p>}
         <div className="filters">{reviewStatuses.map((status) => <button key={status} className="secondary" onClick={() => void review(application.id, status)}>{status.replaceAll("_", " ")}</button>)}</div>
       </article>) : <Empty>No vendor applications found.</Empty>}
     </section>

@@ -33,6 +33,47 @@ enum AccountStatus {
   BLOCKED
 }
 
+enum LoginActivityOutcome {
+  SUCCESS
+  FAILED
+  BLOCKED
+}
+
+enum VendorTeamRole {
+  OWNER
+  MANAGER
+  ORDER_MANAGER
+  CATALOG_MANAGER
+  FINANCE
+  SUPPORT
+  VIEWER
+}
+
+enum VendorTeamInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum VendorBranchStatus {
+  ACTIVE
+  INACTIVE
+  CLOSED
+}
+
+enum VendorActivationInvitationStatus {
+  PENDING
+  USED
+  REVOKED
+  EXPIRED
+}
+
+enum BiometricCredentialStatus {
+  REGISTERED
+  DISABLED
+}
+
 enum VendorStatus {
   PENDING_APPROVAL
   ACTIVE
@@ -470,21 +511,21 @@ enum TaxiTripActorType {
 }
 
 model User {
-  id                                  String                       @id @default(uuid()) @db.Uuid
+  id                                  String                               @id @default(uuid()) @db.Uuid
   fullName                            String
-  phoneNumber                         String                       @unique
-  email                               String?                      @unique
+  phoneNumber                         String                               @unique
+  email                               String?                              @unique
   passwordHash                        String
   role                                UserRole
   adminRole                           AdminRole?
-  accountStatus                       AccountStatus                @default(PENDING)
-  phoneVerified                       Boolean                      @default(false)
-  emailVerified                       Boolean                      @default(false)
+  accountStatus                       AccountStatus                        @default(PENDING)
+  phoneVerified                       Boolean                              @default(false)
+  emailVerified                       Boolean                              @default(false)
   profilePhotoUrl                     String?
   lastLoginAt                         DateTime?
   deletedAt                           DateTime?
-  createdAt                           DateTime                     @default(now())
-  updatedAt                           DateTime                     @updatedAt
+  createdAt                           DateTime                             @default(now())
+  updatedAt                           DateTime                             @updatedAt
   customerProfile                     CustomerProfile?
   vendor                              Vendor?
   rider                               Rider?
@@ -492,23 +533,66 @@ model User {
   notifications                       Notification[]
   deviceTokens                        DeviceToken[]
   refreshTokens                       RefreshToken[]
-  statusChanges                       OrderStatusHistory[]         @relation("StatusChangedBy")
-  verifiedDocuments                   RiderDocument[]              @relation("DocumentVerifiedBy")
-  assignedTickets                     SupportTicket[]              @relation("TicketAssignedAdmin")
+  statusChanges                       OrderStatusHistory[]                 @relation("StatusChangedBy")
+  verifiedDocuments                   RiderDocument[]                      @relation("DocumentVerifiedBy")
+  assignedTickets                     SupportTicket[]                      @relation("TicketAssignedAdmin")
   ticketMessages                      SupportTicketMessage[]
   adminAuditLogs                      AdminAuditLog[]
-  assignedServiceRequests             ServiceProviderRequest[]     @relation("ServiceProviderRequestAssignedBy")
-  reviewedServiceProviderApplications ServiceProviderApplication[] @relation("ServiceProviderApplicationReviewedBy")
-  createdPromoCodes                   PromoCode[]                  @relation("PromoCreatedBy")
+  assignedServiceRequests             ServiceProviderRequest[]             @relation("ServiceProviderRequestAssignedBy")
+  reviewedServiceProviderApplications ServiceProviderApplication[]         @relation("ServiceProviderApplicationReviewedBy")
+  createdPromoCodes                   PromoCode[]                          @relation("PromoCreatedBy")
   otpVerifications                    OtpVerification[]
-  verifiedPayoutAccounts              VendorPayoutAccount[]        @relation("PayoutVerifiedBy")
-  taxiDriverApplications              TaxiDriverApplication[]      @relation("TaxiApplicant")
-  reviewedTaxiApplications            TaxiDriverApplication[]      @relation("TaxiReviewedBy")
+  verifiedPayoutAccounts              VendorPayoutAccount[]                @relation("PayoutVerifiedBy")
+  taxiDriverApplications              TaxiDriverApplication[]              @relation("TaxiApplicant")
+  reviewedTaxiApplications            TaxiDriverApplication[]              @relation("TaxiReviewedBy")
   taxiDriverProfiles                  TaxiDriverProfile[]
-  createdWalletLedgerEntries          CustomerWalletLedgerEntry[]  @relation("WalletLedgerEntryCreatedByAdmin")
-  createdReferralRewardRules          CustomerReferralRewardRule[] @relation("ReferralRewardRuleCreatedBy")
+  createdWalletLedgerEntries          CustomerWalletLedgerEntry[]          @relation("WalletLedgerEntryCreatedByAdmin")
+  createdReferralRewardRules          CustomerReferralRewardRule[]         @relation("ReferralRewardRuleCreatedBy")
+  loginActivities                     UserLoginActivity[]
+  biometricCredentials                BiometricCredential[]
+  vendorTeamMemberships               VendorTeamMember[]                   @relation("VendorTeamUser")
+  sentVendorTeamInvitations           VendorTeamMember[]                   @relation("VendorTeamInvitedBy")
+  vendorAuditLogs                     VendorAuditLog[]                     @relation("VendorAuditActor")
+  verifiedVendorApplicationDocuments  VendorApplicationDocument[]          @relation("VendorApplicationDocumentVerifiedBy")
+  verifiedDeliveryCaptainDocuments    DeliveryCaptainApplicationDocument[] @relation("DeliveryCaptainApplicationDocumentVerifiedBy")
+  vendorActivationAccounts            VendorAccountActivation[]            @relation("VendorActivationUser")
+  createdVendorActivationInvitations  VendorAccountActivation[]            @relation("VendorActivationCreatedBy")
 
   @@map("users")
+}
+
+model UserLoginActivity {
+  id                String               @id @default(uuid()) @db.Uuid
+  userId            String?              @db.Uuid
+  phoneNumberMasked String?
+  role              UserRole?
+  outcome           LoginActivityOutcome
+  reason            String?
+  appSurface        AppSurface?
+  createdAt         DateTime             @default(now())
+  user              User?                @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([outcome, createdAt])
+  @@map("user_login_activities")
+}
+
+model BiometricCredential {
+  id               String                    @id @default(uuid()) @db.Uuid
+  userId           String                    @db.Uuid
+  credentialIdHash String                    @unique
+  appSurface       AppSurface
+  platform         DevicePlatform?
+  displayName      String?
+  status           BiometricCredentialStatus @default(REGISTERED)
+  lastUsedAt       DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  user             User                      @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@index([appSurface, status])
+  @@map("biometric_credentials")
 }
 
 model RefreshToken {
@@ -564,8 +648,8 @@ model TaxiDriverApplication {
 }
 
 model DeliveryCaptainApplication {
-  id                   String                           @id @default(uuid()) @db.Uuid
-  applicationReference String                           @unique
+  id                   String                               @id @default(uuid()) @db.Uuid
+  applicationReference String                               @unique
   fullName             String
   phoneNumber          String
   email                String?
@@ -576,20 +660,42 @@ model DeliveryCaptainApplication {
   vehicleType          DeliveryCaptainVehicleType
   vehiclePlateNumber   String?
   riderExperience      String?
+  profilePhotoUrl      String?
   guarantorName        String
   guarantorPhone       String
   notes                String?
-  status               DeliveryCaptainApplicationStatus @default(SUBMITTED)
+  status               DeliveryCaptainApplicationStatus     @default(SUBMITTED)
   adminNote            String?
   applicantVisibleNote String?
   reviewedAt           DateTime?
-  createdAt            DateTime                         @default(now())
-  updatedAt            DateTime                         @updatedAt
+  createdAt            DateTime                             @default(now())
+  updatedAt            DateTime                             @updatedAt
+  documents            DeliveryCaptainApplicationDocument[]
 
   @@index([status, createdAt])
   @@index([phoneNumber])
   @@index([city, state])
   @@map("delivery_captain_applications")
+}
+
+model DeliveryCaptainApplicationDocument {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  applicationId      String                     @db.Uuid
+  documentType       String
+  documentName       String?
+  documentUrl        String
+  verificationStatus DocumentVerificationStatus @default(PENDING)
+  adminNote          String?
+  uploadedAt         DateTime                   @default(now())
+  verifiedByAdminId  String?                    @db.Uuid
+  verifiedAt         DateTime?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  application        DeliveryCaptainApplication @relation(fields: [applicationId], references: [id])
+  verifiedByAdmin    User?                      @relation("DeliveryCaptainApplicationDocumentVerifiedBy", fields: [verifiedByAdminId], references: [id])
+
+  @@index([applicationId, verificationStatus])
+  @@map("delivery_captain_application_documents")
 }
 
 model TaxiWaitlistEntry {
@@ -1061,11 +1167,32 @@ model VendorApplication {
   updatedAt              DateTime                         @updatedAt
   reviews                VendorApplicationReview[]
   statusHistory          VendorApplicationStatusHistory[]
+  documents              VendorApplicationDocument[]
 
   @@index([status])
   @@index([businessCategory])
   @@index([submittedAt])
   @@map("vendor_applications")
+}
+
+model VendorApplicationDocument {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  applicationId      String                     @db.Uuid
+  documentType       String
+  documentName       String?
+  documentUrl        String
+  verificationStatus DocumentVerificationStatus @default(PENDING)
+  adminNote          String?
+  uploadedAt         DateTime                   @default(now())
+  verifiedByAdminId  String?                    @db.Uuid
+  verifiedAt         DateTime?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  application        VendorApplication          @relation(fields: [applicationId], references: [id])
+  verifiedByAdmin    User?                      @relation("VendorApplicationDocumentVerifiedBy", fields: [verifiedByAdminId], references: [id])
+
+  @@index([applicationId, verificationStatus])
+  @@map("vendor_application_documents")
 }
 
 model VendorApplicationReview {
@@ -1097,44 +1224,134 @@ model VendorApplicationStatusHistory {
 }
 
 model Vendor {
-  id               String               @id @default(uuid()) @db.Uuid
-  userId           String               @unique @db.Uuid
-  categoryId       String?              @db.Uuid
-  businessName     String
-  businessCategory String
-  description      String?
-  phoneNumber      String
-  email            String?
-  address          String
-  city             String
-  state            String
-  latitude         Decimal?             @db.Decimal(10, 7)
-  longitude        Decimal?             @db.Decimal(10, 7)
-  logoUrl          String?
-  coverImageUrl    String?
-  openingTime      String?
-  closingTime      String?
-  isOpen           Boolean              @default(false)
-  commissionRate   Decimal              @default(15) @db.Decimal(5, 2)
-  bankName         String?
-  accountNumber    String?
-  accountName      String?
-  status           VendorStatus         @default(PENDING_APPROVAL)
-  rating           Decimal?             @db.Decimal(3, 2)
-  totalOrders      Int                  @default(0)
-  deletedAt        DateTime?
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
-  user             User                 @relation(fields: [userId], references: [id])
-  category         VendorCategory?      @relation(fields: [categoryId], references: [id])
-  products         Product[]
-  orders           Order[]
-  settlements      VendorSettlement[]
-  promoCodes       PromoCode[]
-  payoutAccount    VendorPayoutAccount?
+  id                    String                    @id @default(uuid()) @db.Uuid
+  userId                String                    @unique @db.Uuid
+  categoryId            String?                   @db.Uuid
+  businessName          String
+  businessCategory      String
+  description           String?
+  phoneNumber           String
+  email                 String?
+  address               String
+  city                  String
+  state                 String
+  latitude              Decimal?                  @db.Decimal(10, 7)
+  longitude             Decimal?                  @db.Decimal(10, 7)
+  logoUrl               String?
+  coverImageUrl         String?
+  openingTime           String?
+  closingTime           String?
+  isOpen                Boolean                   @default(false)
+  commissionRate        Decimal                   @default(15) @db.Decimal(5, 2)
+  bankName              String?
+  accountNumber         String?
+  accountName           String?
+  status                VendorStatus              @default(PENDING_APPROVAL)
+  rating                Decimal?                  @db.Decimal(3, 2)
+  totalOrders           Int                       @default(0)
+  deletedAt             DateTime?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  user                  User                      @relation(fields: [userId], references: [id])
+  category              VendorCategory?           @relation(fields: [categoryId], references: [id])
+  products              Product[]
+  orders                Order[]
+  settlements           VendorSettlement[]
+  promoCodes            PromoCode[]
+  payoutAccount         VendorPayoutAccount?
+  branches              VendorBranch[]
+  teamMembers           VendorTeamMember[]
+  auditLogs             VendorAuditLog[]
+  activationInvitations VendorAccountActivation[]
 
   @@index([status, city])
   @@map("vendors")
+}
+
+model VendorBranch {
+  id          String             @id @default(uuid()) @db.Uuid
+  vendorId    String             @db.Uuid
+  name        String
+  address     String
+  city        String
+  state       String
+  area        String?
+  phoneNumber String?
+  latitude    Decimal?           @db.Decimal(10, 7)
+  longitude   Decimal?           @db.Decimal(10, 7)
+  isPrimary   Boolean            @default(false)
+  status      VendorBranchStatus @default(ACTIVE)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  vendor      Vendor             @relation(fields: [vendorId], references: [id])
+
+  @@index([vendorId, status])
+  @@map("vendor_branches")
+}
+
+model VendorTeamMember {
+  id                  String                     @id @default(uuid()) @db.Uuid
+  vendorId            String                     @db.Uuid
+  userId              String?                    @db.Uuid
+  fullName            String
+  email               String?
+  phoneNumber         String?
+  role                VendorTeamRole             @default(VIEWER)
+  invitationStatus    VendorTeamInvitationStatus @default(PENDING)
+  invitationTokenHash String?
+  invitedByUserId     String?                    @db.Uuid
+  acceptedAt          DateTime?
+  revokedAt           DateTime?
+  expiresAt           DateTime?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  vendor              Vendor                     @relation(fields: [vendorId], references: [id])
+  user                User?                      @relation("VendorTeamUser", fields: [userId], references: [id])
+  invitedBy           User?                      @relation("VendorTeamInvitedBy", fields: [invitedByUserId], references: [id])
+
+  @@index([vendorId, invitationStatus])
+  @@index([phoneNumber])
+  @@map("vendor_team_members")
+}
+
+model VendorAuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  vendorId    String   @db.Uuid
+  actorUserId String?  @db.Uuid
+  action      String
+  entityType  String
+  entityId    String?  @db.Uuid
+  oldValue    Json?
+  newValue    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  vendor      Vendor   @relation(fields: [vendorId], references: [id])
+  actor       User?    @relation("VendorAuditActor", fields: [actorUserId], references: [id])
+
+  @@index([vendorId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("vendor_audit_logs")
+}
+
+model VendorAccountActivation {
+  id               String                           @id @default(uuid()) @db.Uuid
+  vendorId         String                           @db.Uuid
+  userId           String                           @db.Uuid
+  tokenHash        String                           @unique
+  status           VendorActivationInvitationStatus @default(PENDING)
+  expiresAt        DateTime
+  usedAt           DateTime?
+  revokedAt        DateTime?
+  createdByAdminId String?                          @db.Uuid
+  createdAt        DateTime                         @default(now())
+  updatedAt        DateTime                         @updatedAt
+  vendor           Vendor                           @relation(fields: [vendorId], references: [id])
+  user             User                             @relation("VendorActivationUser", fields: [userId], references: [id])
+  createdByAdmin   User?                            @relation("VendorActivationCreatedBy", fields: [createdByAdminId], references: [id])
+
+  @@index([vendorId, status])
+  @@index([userId, status])
+  @@map("vendor_account_activations")
 }
 
 model Product {

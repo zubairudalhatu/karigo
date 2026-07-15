@@ -1,5 +1,13 @@
 import { api } from "./client";
 
+export interface VendorApplicationDocument {
+  id: string;
+  documentType: string;
+  documentName?: string | null;
+  documentUrl: string;
+  verificationStatus: string;
+}
+
 export interface VendorApplication {
   id: string;
   reference: string;
@@ -12,6 +20,7 @@ export interface VendorApplication {
   contactEmail: string;
   status: string;
   submittedAt: string;
+  documents?: VendorApplicationDocument[];
 }
 
 export const vendorApplicationsApi = {

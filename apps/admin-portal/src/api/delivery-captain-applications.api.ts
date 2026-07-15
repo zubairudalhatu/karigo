@@ -8,6 +8,14 @@ export type DeliveryCaptainApplicationStatus =
   | "APPROVED"
   | "REJECTED";
 
+export interface DeliveryCaptainApplicationDocument {
+  id: string;
+  documentType: string;
+  documentName?: string | null;
+  documentUrl: string;
+  verificationStatus: string;
+}
+
 export interface DeliveryCaptainApplication {
   id: string;
   applicationReference: string;
@@ -21,6 +29,7 @@ export interface DeliveryCaptainApplication {
   vehicleType: string;
   vehiclePlateNumber?: string | null;
   riderExperience?: string | null;
+  profilePhotoUrl?: string | null;
   guarantorName: string;
   guarantorPhone: string;
   notes?: string | null;
@@ -30,6 +39,7 @@ export interface DeliveryCaptainApplication {
   reviewedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  documents?: DeliveryCaptainApplicationDocument[];
   deliveryOnly: boolean;
   launchWarning: string;
 }

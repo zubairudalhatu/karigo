@@ -82,6 +82,18 @@ export default function VendorsPage() {
     }
   }
 
+  async function createActivationLink(vendor: AdminVendor) {
+    try {
+      setError("");
+      setMessage("");
+      const result = await managementApi.createVendorActivationLink(vendor.id);
+      window.prompt("Copy this one-time vendor activation link. It will not be stored in plaintext.", result.activationUrl);
+      setMessage(`Activation link created for ${vendor.businessName}. Expires ${new Date(result.expiresAt).toLocaleString()}.`);
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    }
+  }
+
   return <PortalShell>
     <h1>Vendors</h1>
     <p className="muted">Clean up staging and pilot test vendor accounts safely. Move vendors to Trash first; permanent deletion is allowed only when the backend confirms there are no protected operational records.</p>
@@ -97,6 +109,7 @@ export default function VendorsPage() {
         <p><Badge>{vendor.status}</Badge> <Badge>{vendor.user.accountStatus}</Badge></p>
         <p className="muted">Orders recorded: {vendor.totalOrders} - Open now: {vendor.isOpen ? "Yes" : "No"}</p>
         <div className="actions">
+          <button className="secondary" onClick={() => void createActivationLink(vendor)}>Create activation link</button>
           <button className="secondary" onClick={() => void trashVendor(vendor)}>Move to Trash</button>
         </div>
       </article>) : <Empty>No active vendors found.</Empty>}

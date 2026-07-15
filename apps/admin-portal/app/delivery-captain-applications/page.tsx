@@ -58,6 +58,8 @@ export default function DeliveryCaptainApplicationsPage() {
         <p>{application.vehicleType.replaceAll("_", " ")}{application.vehiclePlateNumber ? ` - ${application.vehiclePlateNumber}` : ""}</p>
         <p>Guarantor: {application.guarantorName} - {application.guarantorPhone}</p>
         {application.riderExperience ? <p className="muted">Experience: {application.riderExperience}</p> : null}
+        {application.profilePhotoUrl ? <p><a href={application.profilePhotoUrl} target="_blank" rel="noreferrer">View profile photo</a></p> : null}
+        {application.documents?.length ? <div className="notice"><strong>Documents</strong>{application.documents.map((document) => <p key={document.id}><a href={document.documentUrl} target="_blank" rel="noreferrer">{document.documentName || document.documentType}</a> <Badge>{document.verificationStatus}</Badge></p>)}</div> : <p className="muted">No application documents supplied yet.</p>}
         {application.notes ? <p className="muted">Applicant notes: {application.notes}</p> : null}
         {application.applicantVisibleNote ? <p>Applicant note: {application.applicantVisibleNote}</p> : null}
         {application.adminNote ? <p className="muted">Internal note: {application.adminNote}</p> : null}

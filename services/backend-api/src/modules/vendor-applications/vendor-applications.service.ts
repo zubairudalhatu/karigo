@@ -47,7 +47,8 @@ const APPLICATION_SELECT = {
   createdAt: true,
   updatedAt: true,
   reviews: { orderBy: { createdAt: "desc" }, take: 5 },
-  statusHistory: { orderBy: { createdAt: "desc" }, take: 10 }
+  statusHistory: { orderBy: { createdAt: "desc" }, take: 10 },
+  documents: { orderBy: { uploadedAt: "desc" } }
 } satisfies Prisma.VendorApplicationSelect;
 
 @Injectable()
@@ -91,6 +92,13 @@ export class VendorApplicationsService {
         existingDelivery: dto.existingDelivery,
         brandAssets: this.json(dto.brandAssets),
         documentPlaceholders: this.json(dto.documentPlaceholders),
+        documents: dto.documents?.length ? {
+          create: dto.documents.map((document) => ({
+            documentType: document.documentType,
+            documentName: document.documentName,
+            documentUrl: document.documentUrl
+          }))
+        } : undefined,
         declarationAccepted: dto.declarationAccepted,
         privacyAccepted: dto.privacyAccepted,
         contactConsentAccepted: dto.contactConsentAccepted,
@@ -238,7 +246,14 @@ export class VendorApplicationsService {
       createdAt: application.createdAt.toISOString(),
       updatedAt: application.updatedAt.toISOString(),
       reviews: application.reviews.map((review) => ({ ...review, createdAt: review.createdAt.toISOString() })),
-      statusHistory: application.statusHistory.map((history) => ({ ...history, createdAt: history.createdAt.toISOString() }))
+      statusHistory: application.statusHistory.map((history) => ({ ...history, createdAt: history.createdAt.toISOString() })),
+      documents: (application.documents ?? []).map((document) => ({
+        ...document,
+        uploadedAt: document.uploadedAt.toISOString(),
+        verifiedAt: document.verifiedAt?.toISOString() ?? null,
+        createdAt: document.createdAt.toISOString(),
+        updatedAt: document.updatedAt.toISOString()
+      }))
     };
   }
 
