@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import {
+  AccountStatus,
   OrderStatus,
   PaymentStatus,
   Prisma,
@@ -15,6 +16,21 @@ import { ListAdminOrdersQueryDto } from "./dto/list-admin-orders-query.dto";
 import { ReportDateRangeDto } from "./dto/report-date-range.dto";
 
 const CLOSED_ORDERS = [OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.FAILED, OrderStatus.REFUNDED];
+const VENDOR_CLEANUP_SELECT = {
+  id: true,
+  userId: true,
+  businessName: true,
+  businessCategory: true,
+  city: true,
+  state: true,
+  status: true,
+  isOpen: true,
+  totalOrders: true,
+  deletedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  user: { select: { accountStatus: true, deletedAt: true } }
+} satisfies Prisma.VendorSelect;
 
 @Injectable()
 export class AdminOperationsService {
@@ -216,10 +232,171 @@ export class AdminOperationsService {
     return this.prisma.user.findMany({ where: { deletedAt: null }, select: { id: true, fullName: true, phoneNumber: true, email: true, role: true, adminRole: true, accountStatus: true, createdAt: true }, orderBy: { createdAt: "desc" } });
   }
   vendors() {
-    return this.prisma.vendor.findMany({ where: { deletedAt: null }, select: { id: true, businessName: true, businessCategory: true, city: true, state: true, status: true, isOpen: true, totalOrders: true, user: { select: { accountStatus: true } } } });
+    return this.prisma.vendor.findMany({
+      where: { deletedAt: null },
+      select: VENDOR_CLEANUP_SELECT,
+      orderBy: { createdAt: "desc" }
+    }).then((vendors) => vendors.map((vendor) => this.vendorCleanupView(vendor)));
+  }
+
+  trashedVendors() {
+    return this.prisma.vendor.findMany({
+      where: { deletedAt: { not: null } },
+      select: VENDOR_CLEANUP_SELECT,
+      orderBy: { deletedAt: "desc" }
+    }).then(async (vendors) => Promise.all(vendors.map(async (vendor) => ({
+      ...this.vendorCleanupView(vendor),
+      cleanupSafety: await this.vendorCleanupSafety(vendor.id)
+    }))));
+  }
+
+  async trashVendor(adminUserId: string, vendorId: string, reason?: string) {
+    const vendor = await this.findVendorForCleanup(vendorId);
+    if (vendor.deletedAt) {
+      return { ...this.vendorCleanupView(vendor), cleanupSafety: await this.vendorCleanupSafety(vendor.id) };
+    }
+
+    const trashedAt = new Date();
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: vendor.userId }, data: { deletedAt: trashedAt } });
+      const next = await tx.vendor.update({
+        where: { id: vendor.id },
+        data: { deletedAt: trashedAt, isOpen: false },
+        select: VENDOR_CLEANUP_SELECT
+      });
+      await tx.refreshToken.updateMany({ where: { userId: vendor.userId, revokedAt: null }, data: { revokedAt: trashedAt } });
+      await tx.deviceToken.updateMany({ where: { userId: vendor.userId, isActive: true }, data: { isActive: false } });
+      return next;
+    });
+
+    await this.audit.record(adminUserId, "admin.vendor.trash", "Vendor", vendor.id, {
+      reason: reason ?? null,
+      businessName: vendor.businessName
+    });
+
+    return { ...this.vendorCleanupView(updated), cleanupSafety: await this.vendorCleanupSafety(updated.id) };
+  }
+
+  async restoreVendor(adminUserId: string, vendorId: string, reason?: string) {
+    const vendor = await this.findVendorForCleanup(vendorId);
+    if (!vendor.deletedAt) {
+      return this.vendorCleanupView(vendor);
+    }
+
+    const restored = await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: vendor.userId }, data: { deletedAt: null } });
+      return tx.vendor.update({
+        where: { id: vendor.id },
+        data: { deletedAt: null },
+        select: VENDOR_CLEANUP_SELECT
+      });
+    });
+
+    await this.audit.record(adminUserId, "admin.vendor.restore", "Vendor", vendor.id, {
+      reason: reason ?? null,
+      businessName: vendor.businessName
+    });
+
+    return this.vendorCleanupView(restored);
+  }
+
+  async permanentlyDeleteVendor(adminUserId: string, vendorId: string) {
+    const vendor = await this.findVendorForCleanup(vendorId);
+    const safety = await this.vendorCleanupSafety(vendor.id);
+
+    if (!safety.canPermanentlyDelete) {
+      throw new BadRequestException({
+        message: "Vendor cannot be permanently deleted. Move it to Trash first and ensure it has no protected operational records.",
+        details: safety
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const products = await tx.product.findMany({ where: { vendorId: vendor.id }, select: { id: true } });
+      const productIds = products.map((product) => product.id);
+      if (productIds.length) {
+        await tx.productOption.deleteMany({ where: { optionGroup: { productId: { in: productIds } } } });
+        await tx.productOptionGroup.deleteMany({ where: { productId: { in: productIds } } });
+      }
+      await tx.product.deleteMany({ where: { vendorId: vendor.id } });
+      await tx.notification.deleteMany({ where: { userId: vendor.userId } });
+      await tx.deviceToken.deleteMany({ where: { userId: vendor.userId } });
+      await tx.refreshToken.deleteMany({ where: { userId: vendor.userId } });
+      await tx.otpVerification.deleteMany({ where: { userId: vendor.userId } });
+      await tx.vendor.delete({ where: { id: vendor.id } });
+      await tx.user.delete({ where: { id: vendor.userId } });
+      await tx.adminAuditLog.create({
+        data: {
+          adminUserId,
+          action: "admin.vendor.permanent_delete",
+          entityType: "Vendor",
+          entityId: vendor.id,
+          newValue: {
+            businessName: vendor.businessName,
+            cleanupSafety: safety
+          } as Prisma.InputJsonValue
+        }
+      });
+    });
+
+    return { vendorId: vendor.id, permanentlyDeleted: true };
   }
   riders() {
     return this.prisma.rider.findMany({ where: { deletedAt: null }, select: { id: true, riderCode: true, phoneNumber: true, vehicleType: true, availabilityStatus: true, verificationStatus: true, currentLatitude: true, currentLongitude: true, currentLocationUpdatedAt: true, user: { select: { fullName: true, accountStatus: true } } } });
+  }
+
+  private async findVendorForCleanup(vendorId: string) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { id: vendorId },
+      select: VENDOR_CLEANUP_SELECT
+    });
+    if (!vendor) throw new NotFoundException("Vendor not found");
+    return vendor;
+  }
+
+  private vendorCleanupView(vendor: Prisma.VendorGetPayload<{ select: typeof VENDOR_CLEANUP_SELECT }>) {
+    return {
+      ...vendor,
+      inTrash: Boolean(vendor.deletedAt),
+      user: {
+        ...vendor.user,
+        accountStatus: vendor.user.deletedAt ? AccountStatus.DEACTIVATED : vendor.user.accountStatus
+      }
+    };
+  }
+
+  private async vendorCleanupSafety(vendorId: string) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { id: vendorId },
+      select: { deletedAt: true }
+    });
+    if (!vendor) throw new NotFoundException("Vendor not found");
+
+    const [orders, settlements, promoCodes, payoutAccounts, orderItems, products] = await Promise.all([
+      this.prisma.order.count({ where: { vendorId } }),
+      this.prisma.vendorSettlement.count({ where: { vendorId } }),
+      this.prisma.promoCode.count({ where: { vendorId } }),
+      this.prisma.vendorPayoutAccount.count({ where: { vendorId } }),
+      this.prisma.orderItem.count({ where: { product: { vendorId } } }),
+      this.prisma.product.count({ where: { vendorId } })
+    ]);
+
+    const protectedRecordCounts = { orders, settlements, promoCodes, payoutAccounts, orderItems };
+    const blockedBy = [
+      ...(!vendor.deletedAt ? ["Vendor must be moved to Trash before permanent deletion."] : []),
+      ...(orders ? ["Vendor has order history."] : []),
+      ...(settlements ? ["Vendor has settlement history."] : []),
+      ...(promoCodes ? ["Vendor has promo codes."] : []),
+      ...(payoutAccounts ? ["Vendor has payout account records."] : []),
+      ...(orderItems ? ["Vendor products are linked to order items."] : [])
+    ];
+
+    return {
+      canPermanentlyDelete: blockedBy.length === 0,
+      blockedBy,
+      protectedRecordCounts,
+      removableCatalogRecords: { products }
+    };
   }
 
   private dateWhere(range: { dateFrom?: string; dateTo?: string }) {

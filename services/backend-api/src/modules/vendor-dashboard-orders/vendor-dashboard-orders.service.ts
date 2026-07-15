@@ -150,7 +150,7 @@ export class VendorDashboardOrdersService {
   }
 
   private async requireVendor(userId: string) {
-    const vendor = await this.prisma.vendor.findUnique({ where: { userId }, select: { id: true } });
+    const vendor = await this.prisma.vendor.findFirst({ where: { userId, deletedAt: null }, select: { id: true } });
     if (!vendor) {
       throw new NotFoundException("Vendor profile not found");
     }
@@ -159,7 +159,7 @@ export class VendorDashboardOrdersService {
 
   private async requireOwnedOrder(userId: string, orderId: string) {
     const order = await this.prisma.order.findFirst({
-      where: { id: orderId, vendor: { userId } },
+      where: { id: orderId, vendor: { userId, deletedAt: null } },
       include: this.detailInclude()
     });
     if (!order) {

@@ -61,7 +61,7 @@ export class VendorSettlementsService {
   }
 
   private async requireVendor(userId: string) {
-    const vendor = await this.prisma.vendor.findUnique({ where: { userId }, select: { id: true } });
+    const vendor = await this.prisma.vendor.findFirst({ where: { userId, deletedAt: null }, select: { id: true } });
     if (!vendor) {
       throw new NotFoundException("Vendor profile not found");
     }

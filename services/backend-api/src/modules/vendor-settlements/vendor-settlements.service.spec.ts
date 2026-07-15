@@ -5,7 +5,7 @@ import { VendorSettlementsService } from "./vendor-settlements.service";
 
 describe("VendorSettlementsService", () => {
   const prisma = {
-    vendor: { findUnique: jest.fn() },
+    vendor: { findFirst: jest.fn() },
     vendorSettlement: { findMany: jest.fn() }
   };
   const service = new VendorSettlementsService(prisma as unknown as PrismaService);
@@ -13,13 +13,13 @@ describe("VendorSettlementsService", () => {
   beforeEach(() => jest.clearAllMocks());
 
   it("queries only settlements belonging to the authenticated vendor", async () => {
-    prisma.vendor.findUnique.mockResolvedValue({ id: "vendor-a" });
+    prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-a" });
     prisma.vendorSettlement.findMany.mockResolvedValue([]);
 
     await service.list("vendor-user-a", {});
 
-    expect(prisma.vendor.findUnique).toHaveBeenCalledWith({
-      where: { userId: "vendor-user-a" },
+    expect(prisma.vendor.findFirst).toHaveBeenCalledWith({
+      where: { userId: "vendor-user-a", deletedAt: null },
       select: { id: true }
     });
     expect(prisma.vendorSettlement.findMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -28,7 +28,7 @@ describe("VendorSettlementsService", () => {
   });
 
   it("applies safe status filtering for vendor settlements", async () => {
-    prisma.vendor.findUnique.mockResolvedValue({ id: "vendor-a" });
+    prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-a" });
     prisma.vendorSettlement.findMany.mockResolvedValue([]);
 
     await service.list("vendor-user-a", { status: SettlementStatus.PAID as never });
@@ -39,7 +39,7 @@ describe("VendorSettlementsService", () => {
   });
 
   it("returns read-only settlement rows and summary values", async () => {
-    prisma.vendor.findUnique.mockResolvedValue({ id: "vendor-a" });
+    prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-a" });
     prisma.vendorSettlement.findMany.mockResolvedValue([
       {
         id: "settlement-1",
@@ -93,7 +93,7 @@ describe("VendorSettlementsService", () => {
   });
 
   it("does not expose another vendor's records when the authenticated vendor is missing", async () => {
-    prisma.vendor.findUnique.mockResolvedValue(null);
+    prisma.vendor.findFirst.mockResolvedValue(null);
 
     await expect(service.list("missing-vendor-user", {})).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.vendorSettlement.findMany).not.toHaveBeenCalled();

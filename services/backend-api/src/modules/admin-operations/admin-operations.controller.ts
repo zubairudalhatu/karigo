@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AdminRole, UserRole } from "@prisma/client";
 import { AdminRoles } from "../../common/decorators/admin-roles.decorator";
@@ -11,6 +11,7 @@ import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.in
 import { AdminOperationsService } from "./admin-operations.service";
 import { ListAdminOrdersQueryDto } from "./dto/list-admin-orders-query.dto";
 import { OrderStatusNoteDto } from "./dto/order-status-note.dto";
+import { VendorCleanupNoteDto } from "./dto/vendor-cleanup-note.dto";
 
 const OPS_ADMINS = [AdminRole.SUPER_ADMIN, AdminRole.OPERATIONS_ADMIN, AdminRole.FINANCE_OFFICER, AdminRole.DISPATCH_OFFICER];
 
@@ -41,6 +42,21 @@ export class AdminOperationsController {
   }
   @Get("vendors") vendors() {
     return this.operations.vendors().then((data) => ({ message: "Vendors retrieved", data }));
+  }
+  @Get("vendors/trash") trashedVendors() {
+    return this.operations.trashedVendors().then((data) => ({ message: "Trashed vendors retrieved", data }));
+  }
+  @Patch("vendors/:vendorId/trash")
+  async trashVendor(@CurrentUser() user: AuthenticatedUser, @Param("vendorId", ParseUUIDPipe) vendorId: string, @Body() dto: VendorCleanupNoteDto) {
+    return { message: "Vendor moved to Trash", data: await this.operations.trashVendor(user.id, vendorId, dto.reason) };
+  }
+  @Patch("vendors/:vendorId/restore")
+  async restoreVendor(@CurrentUser() user: AuthenticatedUser, @Param("vendorId", ParseUUIDPipe) vendorId: string, @Body() dto: VendorCleanupNoteDto) {
+    return { message: "Vendor restored from Trash", data: await this.operations.restoreVendor(user.id, vendorId, dto.reason) };
+  }
+  @Delete("vendors/:vendorId")
+  async permanentlyDeleteVendor(@CurrentUser() user: AuthenticatedUser, @Param("vendorId", ParseUUIDPipe) vendorId: string) {
+    return { message: "Vendor permanently deleted", data: await this.operations.permanentlyDeleteVendor(user.id, vendorId) };
   }
   @Get("riders") riders() {
     return this.operations.riders().then((data) => ({ message: "Riders retrieved", data }));

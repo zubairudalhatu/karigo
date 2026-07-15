@@ -12,7 +12,7 @@ describe("VendorDashboardOrdersService", () => {
     order: { update: jest.fn() }
   };
   const prisma = {
-    vendor: { findUnique: jest.fn() },
+    vendor: { findFirst: jest.fn() },
     order: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     $transaction: jest.fn((callback) => callback(tx))
   };
@@ -26,13 +26,13 @@ describe("VendorDashboardOrdersService", () => {
   beforeEach(() => jest.clearAllMocks());
 
   it("scopes listings to the authenticated vendor profile", async () => {
-    prisma.vendor.findUnique.mockResolvedValue({ id: "vendor-1" });
+    prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-1" });
     prisma.order.findMany.mockResolvedValue([]);
 
     await service.list("vendor-user-1", { status: OrderStatus.PAID });
 
-    expect(prisma.vendor.findUnique).toHaveBeenCalledWith({
-      where: { userId: "vendor-user-1" },
+    expect(prisma.vendor.findFirst).toHaveBeenCalledWith({
+      where: { userId: "vendor-user-1", deletedAt: null },
       select: { id: true }
     });
     expect(prisma.order.findMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -44,7 +44,7 @@ describe("VendorDashboardOrdersService", () => {
     prisma.order.findFirst.mockResolvedValue(null);
     await expect(service.detail("vendor-user-1", "order-2")).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.order.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: "order-2", vendor: { userId: "vendor-user-1" } }
+      where: { id: "order-2", vendor: { userId: "vendor-user-1", deletedAt: null } }
     }));
   });
 

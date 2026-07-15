@@ -36,7 +36,7 @@ const { accountNumber: _accountNumber, verifiedByAdminId: _verifiedByAdminId, re
 
 describe("VendorPayoutAccountsService", () => {
   const prisma = {
-    vendor: { findUnique: jest.fn() },
+    vendor: { findFirst: jest.fn() },
     vendorPayoutAccount: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
@@ -56,7 +56,7 @@ describe("VendorPayoutAccountsService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    prisma.vendor.findUnique.mockResolvedValue({ id: "vendor-a", userId: "vendor-user-a", businessName: "Kano Kitchen" });
+    prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-a", userId: "vendor-user-a", businessName: "Kano Kitchen" });
     notifications.createNotification.mockResolvedValue({});
     audit.record.mockResolvedValue({});
   });
@@ -73,8 +73,8 @@ describe("VendorPayoutAccountsService", () => {
       confirmAccountNumber: "0000000201"
     });
 
-    expect(prisma.vendor.findUnique).toHaveBeenCalledWith({
-      where: { userId: "vendor-user-a" },
+    expect(prisma.vendor.findFirst).toHaveBeenCalledWith({
+      where: { userId: "vendor-user-a", deletedAt: null },
       select: { id: true, userId: true, businessName: true }
     });
     expect(prisma.vendorPayoutAccount.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -179,7 +179,7 @@ describe("VendorPayoutAccountsService", () => {
   });
 
   it("does not expose another vendor's account when the authenticated vendor profile is missing", async () => {
-    prisma.vendor.findUnique.mockResolvedValue(null);
+    prisma.vendor.findFirst.mockResolvedValue(null);
     await expect(service.getVendorAccount("not-a-vendor")).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.vendorPayoutAccount.findUnique).not.toHaveBeenCalled();
   });

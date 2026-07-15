@@ -1,1 +1,120 @@
-"use client";import{managementApi}from"../../src/api/management.api";import{ManagementPage}from"../../src/components/management-page";export default function Vendors(){return <ManagementPage title="Vendors"load={managementApi.vendors}headers={["Business","Category","Location","Status","Open"]}cells={x=>[x.businessName,x.businessCategory,`${x.city}, ${x.state}`,x.status,x.isOpen?"Yes":"No"]}/>}
+"use client";
+
+import { useEffect, useState } from "react";
+import { AdminVendor, managementApi } from "../../src/api/management.api";
+import { Badge, Empty, ErrorMessage, PortalShell } from "../../src/components/portal";
+import { friendlyError } from "../../src/lib/errors";
+
+function vendorLocation(vendor: AdminVendor) {
+  return `${vendor.city}, ${vendor.state}`;
+}
+
+function safetySummary(vendor: AdminVendor) {
+  const safety = vendor.cleanupSafety;
+  if (!safety) return "Safety check not loaded.";
+  if (safety.canPermanentlyDelete) {
+    return `Safe to permanently delete. ${safety.removableCatalogRecords.products} catalog product(s) will also be removed.`;
+  }
+  return safety.blockedBy.join(" ");
+}
+
+export default function VendorsPage() {
+  const [vendors, setVendors] = useState<AdminVendor[]>([]);
+  const [trashedVendors, setTrashedVendors] = useState<AdminVendor[]>([]);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      const [active, trash] = await Promise.all([managementApi.vendors(), managementApi.trashedVendors()]);
+      setVendors(active);
+      setTrashedVendors(trash);
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { void load(); }, []);
+
+  async function trashVendor(vendor: AdminVendor) {
+    const reason = window.prompt(`Move ${vendor.businessName} to Trash? Add an internal cleanup note.`) ?? undefined;
+    try {
+      setError("");
+      setMessage("");
+      await managementApi.trashVendor(vendor.id, reason);
+      setMessage(`${vendor.businessName} was moved to Trash.`);
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    }
+  }
+
+  async function restoreVendor(vendor: AdminVendor) {
+    const reason = window.prompt(`Restore ${vendor.businessName} from Trash? Add an internal note.`) ?? undefined;
+    try {
+      setError("");
+      setMessage("");
+      await managementApi.restoreVendor(vendor.id, reason);
+      setMessage(`${vendor.businessName} was restored from Trash.`);
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    }
+  }
+
+  async function permanentlyDeleteVendor(vendor: AdminVendor) {
+    if (!vendor.cleanupSafety?.canPermanentlyDelete) return;
+    const confirmed = window.confirm(`Permanently delete ${vendor.businessName}? This only works for trashed test vendors with no protected operational records.`);
+    if (!confirmed) return;
+    try {
+      setError("");
+      setMessage("");
+      await managementApi.permanentlyDeleteVendor(vendor.id);
+      setMessage(`${vendor.businessName} was permanently deleted.`);
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    }
+  }
+
+  return <PortalShell>
+    <h1>Vendors</h1>
+    <p className="muted">Clean up staging and pilot test vendor accounts safely. Move vendors to Trash first; permanent deletion is allowed only when the backend confirms there are no protected operational records.</p>
+    <p className="success">{message}</p>
+    <ErrorMessage>{error}</ErrorMessage>
+    <div className="actions"><button className="secondary" onClick={() => void load()}>{loading ? "Refreshing..." : "Refresh"}</button></div>
+
+    <section className="section">
+      <h2>Active vendors</h2>
+      {vendors.length ? vendors.map((vendor) => <article className="card" key={vendor.id}>
+        <strong>{vendor.businessName}</strong>
+        <p className="muted">{vendor.businessCategory} - {vendorLocation(vendor)}</p>
+        <p><Badge>{vendor.status}</Badge> <Badge>{vendor.user.accountStatus}</Badge></p>
+        <p className="muted">Orders recorded: {vendor.totalOrders} - Open now: {vendor.isOpen ? "Yes" : "No"}</p>
+        <div className="actions">
+          <button className="secondary" onClick={() => void trashVendor(vendor)}>Move to Trash</button>
+        </div>
+      </article>) : <Empty>No active vendors found.</Empty>}
+    </section>
+
+    <section className="section">
+      <h2>Trash</h2>
+      <p className="muted">Trashed vendors are hidden from public discovery and vendor dashboard operations. Restore if needed, or permanently delete only safe test accounts.</p>
+      {trashedVendors.length ? trashedVendors.map((vendor) => <article className="card internal" key={vendor.id}>
+        <strong>{vendor.businessName}</strong>
+        <p className="muted">{vendor.businessCategory} - {vendorLocation(vendor)}</p>
+        <p><Badge>In Trash</Badge> <Badge>{vendor.user.accountStatus}</Badge></p>
+        <p>{safetySummary(vendor)}</p>
+        <div className="actions">
+          <button className="secondary" onClick={() => void restoreVendor(vendor)}>Restore</button>
+          <button disabled={!vendor.cleanupSafety?.canPermanentlyDelete} onClick={() => void permanentlyDeleteVendor(vendor)}>Delete permanently</button>
+        </div>
+      </article>) : <Empty>No vendors in Trash.</Empty>}
+    </section>
+  </PortalShell>;
+}
