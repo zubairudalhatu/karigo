@@ -21,6 +21,13 @@ export interface VendorApplication {
   status: string;
   submittedAt: string;
   documents?: VendorApplicationDocument[];
+  vendor?: {
+    id: string;
+    businessName: string;
+    status: string;
+    user: { accountStatus: string; email?: string | null; phoneNumber: string };
+    activationInvitations?: Array<{ id: string; status: string; expiresAt: string; usedAt?: string | null; revokedAt?: string | null; createdAt: string }>;
+  } | null;
 }
 
 export const vendorApplicationsApi = {

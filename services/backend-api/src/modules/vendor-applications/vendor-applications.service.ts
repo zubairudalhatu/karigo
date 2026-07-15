@@ -1,5 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, VendorApplicationStatus } from "@prisma/client";
+import { ConfigService } from "@nestjs/config";
+import { AccountStatus, Prisma, UserRole, VendorActivationInvitationStatus, VendorApplicationStatus, VendorStatus } from "@prisma/client";
+import { hash } from "bcrypt";
+import { createHash, randomBytes } from "crypto";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -44,16 +47,34 @@ const APPLICATION_SELECT = {
   status: true,
   submittedAt: true,
   reviewedAt: true,
+  vendorId: true,
   createdAt: true,
   updatedAt: true,
   reviews: { orderBy: { createdAt: "desc" }, take: 5 },
   statusHistory: { orderBy: { createdAt: "desc" }, take: 10 },
-  documents: { orderBy: { uploadedAt: "desc" } }
+  documents: { orderBy: { uploadedAt: "desc" } },
+  vendor: {
+    select: {
+      id: true,
+      businessName: true,
+      status: true,
+      user: { select: { id: true, accountStatus: true, email: true, phoneNumber: true } },
+      activationInvitations: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { id: true, status: true, expiresAt: true, usedAt: true, revokedAt: true, createdAt: true }
+      }
+    }
+  }
 } satisfies Prisma.VendorApplicationSelect;
 
 @Injectable()
 export class VendorApplicationsService {
-  constructor(private readonly prisma: PrismaService, private readonly applicationNotifications: ApplicationNotificationsService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly applicationNotifications: ApplicationNotificationsService,
+    private readonly config?: ConfigService
+  ) {}
 
   async create(dto: CreateVendorApplicationDto) {
     if (!dto.declarationAccepted || !dto.privacyAccepted || !dto.contactConsentAccepted) {
@@ -167,9 +188,16 @@ export class VendorApplicationsService {
   async review(applicationId: string, reviewerId: string, dto: ReviewVendorApplicationDto) {
     const current = await this.prisma.vendorApplication.findUnique({
       where: { id: applicationId },
-      select: { id: true, status: true }
+      select: APPLICATION_SELECT
     });
     if (!current) throw new NotFoundException("Vendor application not found");
+
+    const shouldApprove = dto.status === VendorApplicationStatus.APPROVED;
+    const activationToken = shouldApprove ? randomBytes(40).toString("base64url") : null;
+    const activationExpiresAt = shouldApprove ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null;
+    const placeholderPasswordHash = shouldApprove ? await hash(randomBytes(32).toString("hex"), 12) : null;
+    let activationUrl: string | null = null;
+    let activationExpiresAtText: string | null = null;
 
     const application = await this.prisma.$transaction(async (tx) => {
       await tx.vendorApplicationReview.create({
@@ -190,11 +218,45 @@ export class VendorApplicationsService {
           changedById: reviewerId
         }
       });
+      const linkedVendor = shouldApprove
+        ? await this.ensureVendorAccountForApplication(tx, current, reviewerId, placeholderPasswordHash ?? "")
+        : null;
+      if (linkedVendor && activationToken && activationExpiresAt && linkedVendor.userAccountStatus !== AccountStatus.ACTIVE) {
+        await tx.vendorAccountActivation.updateMany({
+          where: { vendorId: linkedVendor.vendorId, status: VendorActivationInvitationStatus.PENDING },
+          data: { status: VendorActivationInvitationStatus.REVOKED, revokedAt: new Date() }
+        });
+        await tx.vendorAccountActivation.create({
+          data: {
+            vendorId: linkedVendor.vendorId,
+            userId: linkedVendor.userId,
+            tokenHash: this.hashSecret(activationToken),
+            expiresAt: activationExpiresAt,
+            createdByAdminId: reviewerId
+          }
+        });
+        await tx.vendorAuditLog.create({
+          data: {
+            vendorId: linkedVendor.vendorId,
+            actorUserId: reviewerId,
+            action: "vendor.application.approved.activation_link_created",
+            entityType: "VendorApplication",
+            entityId: applicationId,
+            newValue: {
+              applicationReference: current.reference,
+              activationExpiresAt: activationExpiresAt.toISOString()
+            } as Prisma.InputJsonValue
+          }
+        });
+        activationUrl = `${this.vendorDashboardUrl()}/activate?token=${encodeURIComponent(activationToken)}`;
+        activationExpiresAtText = activationExpiresAt.toISOString();
+      }
       return tx.vendorApplication.update({
         where: { id: applicationId },
         data: {
           status: dto.status,
-          reviewedAt: new Date()
+          reviewedAt: new Date(),
+          ...(linkedVendor ? { vendorId: linkedVendor.vendorId } : {})
         },
         select: APPLICATION_SELECT
       });
@@ -205,7 +267,9 @@ export class VendorApplicationsService {
       recipientName: application.contactFullName,
       phoneNumber: application.contactPhoneNumber,
       email: application.contactEmail,
-      status: application.status
+      status: application.status,
+      activationUrl,
+      activationExpiresAt: activationExpiresAtText
     });
 
     return this.toAdminDetail(application);
@@ -259,6 +323,123 @@ export class VendorApplicationsService {
 
   private json(value: unknown): Prisma.InputJsonValue | undefined {
     return value === undefined ? undefined : value as Prisma.InputJsonValue;
+  }
+
+  private async ensureVendorAccountForApplication(
+    tx: Prisma.TransactionClient,
+    application: Prisma.VendorApplicationGetPayload<{ select: typeof APPLICATION_SELECT }>,
+    reviewerId: string,
+    placeholderPasswordHash: string
+  ) {
+    if (application.vendorId && application.vendor) {
+      return {
+        vendorId: application.vendor.id,
+        userId: application.vendor.user.id,
+        userAccountStatus: application.vendor.user.accountStatus
+      };
+    }
+
+    const existingUser = await tx.user.findFirst({
+      where: {
+        OR: [
+          { phoneNumber: application.contactPhoneNumber },
+          { email: { equals: application.contactEmail, mode: "insensitive" } }
+        ]
+      },
+      select: { id: true, role: true, accountStatus: true, email: true, phoneNumber: true, vendor: { select: { id: true } } }
+    });
+
+    if (existingUser && existingUser.role !== UserRole.VENDOR) {
+      throw new BadRequestException("The applicant phone number or email is already linked to another account. Use a separate vendor onboarding contact.");
+    }
+
+    const user = existingUser ?? await tx.user.create({
+      data: {
+        fullName: application.contactFullName,
+        phoneNumber: application.contactPhoneNumber,
+        email: application.contactEmail,
+        passwordHash: placeholderPasswordHash,
+        role: UserRole.VENDOR,
+        accountStatus: AccountStatus.PENDING,
+        phoneVerified: false,
+        emailVerified: false
+      },
+      select: { id: true, role: true, accountStatus: true, email: true, phoneNumber: true, vendor: { select: { id: true } } }
+    });
+
+    if (user.vendor) {
+      await tx.vendorApplication.update({
+        where: { id: application.id },
+        data: { vendorId: user.vendor.id }
+      });
+      return { vendorId: user.vendor.id, userId: user.id, userAccountStatus: user.accountStatus };
+    }
+
+    const vendor = await tx.vendor.create({
+      data: {
+        userId: user.id,
+        businessName: application.tradingName || application.businessName,
+        businessCategory: application.businessCategory,
+        description: application.businessDescription,
+        phoneNumber: application.businessPhoneNumber,
+        email: application.businessEmail,
+        address: application.businessAddress,
+        city: application.city,
+        state: application.state,
+        status: VendorStatus.PENDING_APPROVAL,
+        isOpen: false,
+        branches: {
+          create: {
+            name: "Main branch",
+            address: application.businessAddress,
+            city: application.city,
+            state: application.state,
+            area: application.area,
+            phoneNumber: application.businessPhoneNumber,
+            isPrimary: true
+          }
+        },
+        auditLogs: {
+          create: {
+            actorUserId: reviewerId,
+            action: "vendor.created_from_application",
+            entityType: "VendorApplication",
+            entityId: application.id,
+            newValue: {
+              applicationReference: application.reference,
+              initialStatus: VendorStatus.PENDING_APPROVAL
+            } as Prisma.InputJsonValue
+          }
+        }
+      },
+      select: { id: true, userId: true }
+    });
+
+    await tx.adminAuditLog.create({
+      data: {
+        adminUserId: reviewerId,
+        action: "admin.vendor_application.approved.vendor_created",
+        entityType: "VendorApplication",
+        entityId: application.id,
+        newValue: {
+          vendorId: vendor.id,
+          applicationReference: application.reference,
+          businessName: application.businessName
+        } as Prisma.InputJsonValue
+      }
+    });
+
+    return { vendorId: vendor.id, userId: vendor.userId, userAccountStatus: user.accountStatus };
+  }
+
+  private vendorDashboardUrl() {
+    return (this.config?.get<string>("VENDOR_DASHBOARD_URL")
+      ?? this.config?.get<string>("VENDOR_PORTAL_URL")
+      ?? "https://vendor.karigo.com.ng").replace(/\/+$/, "");
+  }
+
+  private hashSecret(value: string) {
+    return createHash("sha256").update(value).digest("hex");
   }
 
   private assertKanoPilotLocation(dto: Pick<CreateVendorApplicationDto, "city" | "state">) {

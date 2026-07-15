@@ -59,6 +59,7 @@ evidence. They do not authorize real-customer launch by themselves.
 - `results/karigo-governance-vendor-operations-verification-task132.md`
 - `results/karigo-governance-vendor-operations-issue-register-task132.md`
 - `results/karigo-governance-vendor-operations-signoff-task132.md`
+- `results/karigo-vendor-approval-activation-verification-task133.md`
 
 ## Evidence Rules
 

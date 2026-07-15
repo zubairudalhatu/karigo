@@ -4,7 +4,9 @@ import { VendorsService } from "./vendors.service";
 
 describe("VendorsService public listing", () => {
   const prisma = {
-    vendor: { findMany: jest.fn(), findFirst: jest.fn() }
+    vendor: { findMany: jest.fn(), findFirst: jest.fn() },
+    vendorOnboardingDocument: { create: jest.fn() },
+    vendorAuditLog: { create: jest.fn() }
   };
   const service = new VendorsService(prisma as unknown as PrismaService);
 
@@ -52,6 +54,41 @@ describe("VendorsService public listing", () => {
             { category: { slug: "pharmacy" } }
           ]
         })]
+      })
+    }));
+  });
+
+  it("uploads onboarding document metadata for only the authenticated vendor", async () => {
+    prisma.vendor.findFirst.mockResolvedValue({
+      id: "vendor-1",
+      userId: "vendor-user-1",
+      businessName: "Kano Kitchen"
+    });
+    prisma.vendorOnboardingDocument.create.mockResolvedValue({
+      id: "doc-1",
+      vendorId: "vendor-1",
+      documentType: "CAC_CERTIFICATE",
+      documentName: "CAC certificate",
+      documentUrl: "https://example.test/documents/vendor-1/cac.pdf",
+      verificationStatus: "PENDING"
+    });
+
+    await expect(service.uploadOnboardingDocument("vendor-user-1", {
+      documentType: "CAC_CERTIFICATE",
+      documentName: "CAC certificate",
+      documentUrl: "https://example.test/documents/vendor-1/cac.pdf"
+    })).resolves.toMatchObject({ id: "doc-1", vendorId: "vendor-1" });
+
+    expect(prisma.vendorOnboardingDocument.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        vendorId: "vendor-1",
+        documentType: "CAC_CERTIFICATE"
+      })
+    });
+    expect(prisma.vendorAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        vendorId: "vendor-1",
+        action: "vendor.onboarding_document.uploaded"
       })
     }));
   });

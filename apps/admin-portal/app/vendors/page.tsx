@@ -18,6 +18,13 @@ function safetySummary(vendor: AdminVendor) {
   return safety.blockedBy.join(" ");
 }
 
+function documentSummary(vendor: AdminVendor) {
+  const documents = vendor.onboardingDocuments ?? [];
+  if (!documents.length) return "No onboarding documents submitted.";
+  const approved = documents.filter((document) => document.verificationStatus === "APPROVED").length;
+  return `${approved}/${documents.length} onboarding document(s) approved.`;
+}
+
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<AdminVendor[]>([]);
   const [trashedVendors, setTrashedVendors] = useState<AdminVendor[]>([]);
@@ -94,6 +101,32 @@ export default function VendorsPage() {
     }
   }
 
+  async function reviewDocument(vendor: AdminVendor, documentId: string, status: "APPROVED" | "REJECTED") {
+    const adminNote = window.prompt(`Admin note for ${status.toLowerCase()} document review`) ?? undefined;
+    try {
+      setError("");
+      setMessage("");
+      await managementApi.reviewVendorOnboardingDocument(vendor.id, documentId, status, adminNote);
+      setMessage(`Onboarding document ${status.toLowerCase()} for ${vendor.businessName}.`);
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    }
+  }
+
+  async function updateVendorStatus(vendor: AdminVendor, status: "PENDING_APPROVAL" | "ACTIVE" | "SUSPENDED" | "CLOSED" | "REJECTED") {
+    const note = window.prompt(`Update ${vendor.businessName} status to ${status.replaceAll("_", " ")}? Add an internal note.`) ?? undefined;
+    try {
+      setError("");
+      setMessage("");
+      await managementApi.updateVendorStatus(vendor.id, status, note);
+      setMessage(`${vendor.businessName} status updated to ${status.replaceAll("_", " ")}.`);
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    }
+  }
+
   return <PortalShell>
     <h1>Vendors</h1>
     <p className="muted">Clean up staging and pilot test vendor accounts safely. Move vendors to Trash first; permanent deletion is allowed only when the backend confirms there are no protected operational records.</p>
@@ -108,8 +141,22 @@ export default function VendorsPage() {
         <p className="muted">{vendor.businessCategory} - {vendorLocation(vendor)}</p>
         <p><Badge>{vendor.status}</Badge> <Badge>{vendor.user.accountStatus}</Badge></p>
         <p className="muted">Orders recorded: {vendor.totalOrders} - Open now: {vendor.isOpen ? "Yes" : "No"}</p>
+        <p className="muted">{documentSummary(vendor)}</p>
+        {vendor.onboardingDocuments?.length ? <div className="notice">
+          <strong>Onboarding documents</strong>
+          {vendor.onboardingDocuments.map((document) => <div className="list-row" key={document.id}>
+            <span><a href={document.documentUrl} target="_blank" rel="noreferrer">{document.documentName || document.documentType}</a> <Badge>{document.verificationStatus}</Badge></span>
+            <span className="actions">
+              <button className="secondary" onClick={() => void reviewDocument(vendor, document.id, "APPROVED")}>Approve</button>
+              <button className="secondary" onClick={() => void reviewDocument(vendor, document.id, "REJECTED")}>Reject</button>
+            </span>
+          </div>)}
+        </div> : null}
         <div className="actions">
           <button className="secondary" onClick={() => void createActivationLink(vendor)}>Create activation link</button>
+          <button className="secondary" onClick={() => void updateVendorStatus(vendor, "PENDING_APPROVAL")}>Mark pending</button>
+          <button className="secondary" onClick={() => void updateVendorStatus(vendor, "ACTIVE")}>Mark operational</button>
+          <button className="secondary" onClick={() => void updateVendorStatus(vendor, "SUSPENDED")}>Suspend</button>
           <button className="secondary" onClick={() => void trashVendor(vendor)}>Move to Trash</button>
         </div>
       </article>) : <Empty>No active vendors found.</Empty>}

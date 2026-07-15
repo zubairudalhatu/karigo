@@ -554,6 +554,7 @@ model User {
   sentVendorTeamInvitations           VendorTeamMember[]                   @relation("VendorTeamInvitedBy")
   vendorAuditLogs                     VendorAuditLog[]                     @relation("VendorAuditActor")
   verifiedVendorApplicationDocuments  VendorApplicationDocument[]          @relation("VendorApplicationDocumentVerifiedBy")
+  reviewedVendorOnboardingDocuments   VendorOnboardingDocument[]           @relation("VendorOnboardingDocumentReviewedBy")
   verifiedDeliveryCaptainDocuments    DeliveryCaptainApplicationDocument[] @relation("DeliveryCaptainApplicationDocumentVerifiedBy")
   vendorActivationAccounts            VendorAccountActivation[]            @relation("VendorActivationUser")
   createdVendorActivationInvitations  VendorAccountActivation[]            @relation("VendorActivationCreatedBy")
@@ -1163,11 +1164,13 @@ model VendorApplication {
   status                 VendorApplicationStatus          @default(SUBMITTED)
   submittedAt            DateTime                         @default(now())
   reviewedAt             DateTime?
+  vendorId               String?                          @unique @db.Uuid
   createdAt              DateTime                         @default(now())
   updatedAt              DateTime                         @updatedAt
   reviews                VendorApplicationReview[]
   statusHistory          VendorApplicationStatusHistory[]
   documents              VendorApplicationDocument[]
+  vendor                 Vendor?                          @relation("VendorApplicationApprovedVendor", fields: [vendorId], references: [id])
 
   @@index([status])
   @@index([businessCategory])
@@ -1263,6 +1266,8 @@ model Vendor {
   teamMembers           VendorTeamMember[]
   auditLogs             VendorAuditLog[]
   activationInvitations VendorAccountActivation[]
+  onboardingDocuments   VendorOnboardingDocument[]
+  sourceApplication     VendorApplication?         @relation("VendorApplicationApprovedVendor")
 
   @@index([status, city])
   @@map("vendors")
@@ -1352,6 +1357,26 @@ model VendorAccountActivation {
   @@index([vendorId, status])
   @@index([userId, status])
   @@map("vendor_account_activations")
+}
+
+model VendorOnboardingDocument {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  vendorId           String                     @db.Uuid
+  documentType       String
+  documentName       String?
+  documentUrl        String
+  verificationStatus DocumentVerificationStatus @default(PENDING)
+  adminNote          String?
+  uploadedAt         DateTime                   @default(now())
+  reviewedByAdminId  String?                    @db.Uuid
+  reviewedAt         DateTime?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  vendor             Vendor                     @relation(fields: [vendorId], references: [id])
+  reviewedByAdmin    User?                      @relation("VendorOnboardingDocumentReviewedBy", fields: [reviewedByAdminId], references: [id])
+
+  @@index([vendorId, verificationStatus])
+  @@map("vendor_onboarding_documents")
 }
 
 model Product {

@@ -6,6 +6,7 @@ import { Roles } from "../../common/decorators/roles.decorator";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
+import { ApplicationDocumentDto } from "../../common/dto/application-document.dto";
 import { UpdateVendorProfileDto } from "./dto/update-vendor-profile.dto";
 import { ListVendorsQueryDto } from "./dto/list-vendors-query.dto";
 import { InviteVendorTeamMemberDto, UpdateVendorTeamMemberDto } from "./dto/vendor-team.dto";
@@ -105,6 +106,24 @@ export class VendorsController {
   @ApiOperation({ summary: "List authenticated vendor audit logs" })
   async auditLogs(@CurrentUser() user: AuthenticatedUser) {
     return { message: "Vendor audit logs retrieved", data: await this.vendorsService.auditLogs(user.id) };
+  }
+
+  @Get("onboarding-documents")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "List authenticated vendor onboarding documents" })
+  async onboardingDocuments(@CurrentUser() user: AuthenticatedUser) {
+    return { message: "Vendor onboarding documents retrieved", data: await this.vendorsService.onboardingDocuments(user.id) };
+  }
+
+  @Post("onboarding-documents")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Submit vendor onboarding document metadata" })
+  async uploadOnboardingDocument(@CurrentUser() user: AuthenticatedUser, @Body() dto: ApplicationDocumentDto) {
+    return { message: "Vendor onboarding document submitted", data: await this.vendorsService.uploadOnboardingDocument(user.id, dto) };
   }
 
   @Get()

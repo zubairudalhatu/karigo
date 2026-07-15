@@ -43,10 +43,13 @@ const vendorApplication = {
   status: VendorApplicationStatus.SUBMITTED,
   submittedAt: now,
   reviewedAt: null,
+  vendorId: null,
   createdAt: now,
   updatedAt: now,
   reviews: [],
-  statusHistory: []
+  statusHistory: [],
+  documents: [],
+  vendor: null
 };
 
 describe("VendorApplicationsService", () => {
@@ -154,9 +157,25 @@ describe("VendorApplicationsService", () => {
     const tx = {
       vendorApplicationReview: { create: jest.fn() },
       vendorApplicationStatusHistory: { create: jest.fn() },
-      vendorApplication: { update: jest.fn().mockResolvedValue(reviewedApplication) }
+      vendorApplication: { update: jest.fn().mockResolvedValue(reviewedApplication) },
+      user: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({
+          id: "00000000-0000-0000-0000-00000000vusr",
+          role: "VENDOR",
+          accountStatus: "PENDING",
+          email: vendorApplication.contactEmail,
+          phoneNumber: vendorApplication.contactPhoneNumber,
+          vendor: null
+        })
+      },
+      vendor: { create: jest.fn().mockResolvedValue({ id: "00000000-0000-0000-0000-00000000v001", userId: "00000000-0000-0000-0000-00000000vusr" }) },
+      vendorAccountActivation: { updateMany: jest.fn(), create: jest.fn() },
+      vendorAuditLog: { create: jest.fn() },
+      adminAuditLog: { create: jest.fn() }
     };
     prisma.vendorApplication.findUnique.mockResolvedValueOnce({
+      ...vendorApplication,
       id: vendorApplication.id,
       status: VendorApplicationStatus.SUBMITTED
     });
@@ -172,7 +191,22 @@ describe("VendorApplicationsService", () => {
       recipientName: vendorApplication.contactFullName,
       phoneNumber: vendorApplication.contactPhoneNumber,
       email: vendorApplication.contactEmail,
-      status: VendorApplicationStatus.APPROVED
+      status: VendorApplicationStatus.APPROVED,
+      activationUrl: expect.stringContaining("/activate?token="),
+      activationExpiresAt: expect.any(String)
     });
+    expect(tx.vendor.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        businessName: vendorApplication.businessName,
+        status: "PENDING_APPROVAL",
+        isOpen: false
+      })
+    }));
+    expect(tx.vendorAccountActivation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        vendorId: "00000000-0000-0000-0000-00000000v001",
+        userId: "00000000-0000-0000-0000-00000000vusr"
+      })
+    }));
   });
 });

@@ -26,6 +26,18 @@ export interface AdminVendor {
   inTrash: boolean;
   user: { accountStatus: string; deletedAt?: string | null };
   cleanupSafety?: VendorCleanupSafety;
+  onboardingDocuments?: VendorOnboardingDocument[];
+}
+
+export interface VendorOnboardingDocument {
+  id: string;
+  documentType: string;
+  documentName?: string | null;
+  documentUrl: string;
+  verificationStatus: string;
+  adminNote?: string | null;
+  uploadedAt: string;
+  reviewedAt?: string | null;
 }
 
 export interface AdminAuditLog {
@@ -64,6 +76,10 @@ export const managementApi = {
   restoreVendor: (vendorId: string, reason?: string) => api.patch<AdminVendor>(`admin/vendors/${vendorId}/restore`, { reason }),
   permanentlyDeleteVendor: (vendorId: string) => api.delete<{ vendorId: string; permanentlyDeleted: boolean }>(`admin/vendors/${vendorId}`),
   createVendorActivationLink: (vendorId: string) => api.post<{ activationUrl: string; expiresAt: string; tokenVisibleOnce: boolean; deliveryWarning: string }>(`admin/vendors/${vendorId}/activation-link`),
+  updateVendorStatus: (vendorId: string, status: string, note?: string) => api.patch<AdminVendor>(`admin/vendors/${vendorId}/status`, { status, note }),
+  vendorOnboardingDocuments: (vendorId: string) => api.get<VendorOnboardingDocument[]>(`admin/vendors/${vendorId}/onboarding-documents`),
+  reviewVendorOnboardingDocument: (vendorId: string, documentId: string, status: string, adminNote?: string) =>
+    api.patch<VendorOnboardingDocument>(`admin/vendors/${vendorId}/onboarding-documents/${documentId}/review`, { status, adminNote }),
   riders: () => api.get<any[]>("admin/riders"),
   auditLogs: () => api.get<AdminAuditLog[]>("admin/audit-logs"),
   loginActivity: () => api.get<LoginActivity[]>("admin/login-activity"),

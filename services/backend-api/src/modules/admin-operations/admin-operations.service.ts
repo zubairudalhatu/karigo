@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { ConfigService } from "@nestjs/config";
 import {
   AccountStatus,
+  DocumentVerificationStatus,
   OrderStatus,
   PaymentStatus,
   Prisma,
@@ -32,7 +33,23 @@ const VENDOR_CLEANUP_SELECT = {
   deletedAt: true,
   createdAt: true,
   updatedAt: true,
-  user: { select: { accountStatus: true, deletedAt: true } }
+  user: { select: { accountStatus: true, deletedAt: true } },
+  onboardingDocuments: {
+    orderBy: { uploadedAt: "desc" },
+    take: 20,
+    select: {
+      id: true,
+      documentType: true,
+      documentName: true,
+      documentUrl: true,
+      verificationStatus: true,
+      adminNote: true,
+      uploadedAt: true,
+      reviewedAt: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  }
 } satisfies Prisma.VendorSelect;
 
 @Injectable()
@@ -330,6 +347,7 @@ export class AdminOperationsService {
       await tx.deviceToken.deleteMany({ where: { userId: vendor.userId } });
       await tx.refreshToken.deleteMany({ where: { userId: vendor.userId } });
       await tx.otpVerification.deleteMany({ where: { userId: vendor.userId } });
+      await tx.vendorOnboardingDocument.deleteMany({ where: { vendorId: vendor.id } });
       await tx.vendor.delete({ where: { id: vendor.id } });
       await tx.user.delete({ where: { id: vendor.userId } });
       await tx.adminAuditLog.create({
@@ -444,12 +462,85 @@ export class AdminOperationsService {
     };
   }
 
+  async vendorOnboardingDocuments(vendorId: string) {
+    await this.assertVendorExists(vendorId);
+    return this.prisma.vendorOnboardingDocument.findMany({
+      where: { vendorId },
+      orderBy: { uploadedAt: "desc" },
+      include: { reviewedByAdmin: { select: { id: true, fullName: true, adminRole: true } } }
+    });
+  }
+
+  async reviewVendorOnboardingDocument(adminUserId: string, vendorId: string, documentId: string, status: DocumentVerificationStatus, adminNote?: string) {
+    await this.assertVendorExists(vendorId);
+    const document = await this.prisma.vendorOnboardingDocument.findFirst({ where: { id: documentId, vendorId } });
+    if (!document) throw new NotFoundException("Vendor onboarding document not found");
+    const reviewed = await this.prisma.vendorOnboardingDocument.update({
+      where: { id: document.id },
+      data: {
+        verificationStatus: status,
+        adminNote,
+        reviewedByAdminId: adminUserId,
+        reviewedAt: new Date()
+      },
+      include: { reviewedByAdmin: { select: { id: true, fullName: true, adminRole: true } } }
+    });
+    await this.audit.record(adminUserId, "admin.vendor_onboarding_document.reviewed", "VendorOnboardingDocument", document.id, {
+      vendorId,
+      status,
+      hasAdminNote: Boolean(adminNote)
+    });
+    return reviewed;
+  }
+
+  async updateVendorStatus(adminUserId: string, vendorId: string, status: VendorStatus, note?: string) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { id: vendorId },
+      select: {
+        id: true,
+        businessName: true,
+        status: true,
+        deletedAt: true,
+        onboardingDocuments: { select: { id: true, verificationStatus: true } }
+      }
+    });
+    if (!vendor) throw new NotFoundException("Vendor not found");
+    if (vendor.deletedAt) throw new BadRequestException("Trashed vendors cannot be marked operational.");
+    if (status === VendorStatus.ACTIVE) {
+      if (!vendor.onboardingDocuments.length) {
+        throw new BadRequestException("At least one approved onboarding document is required before marking this vendor operational.");
+      }
+      const unapproved = vendor.onboardingDocuments.filter((document) => document.verificationStatus !== DocumentVerificationStatus.APPROVED);
+      if (unapproved.length) {
+        throw new BadRequestException("All submitted onboarding documents must be approved before marking this vendor operational.");
+      }
+    }
+    const updated = await this.prisma.vendor.update({
+      where: { id: vendor.id },
+      data: { status },
+      select: VENDOR_CLEANUP_SELECT
+    });
+    await this.audit.record(adminUserId, "admin.vendor.status_updated", "Vendor", vendor.id, {
+      fromStatus: vendor.status,
+      toStatus: status,
+      note
+    });
+    return this.vendorCleanupView(updated);
+  }
+
   private async findVendorForCleanup(vendorId: string) {
     const vendor = await this.prisma.vendor.findUnique({
       where: { id: vendorId },
       select: VENDOR_CLEANUP_SELECT
     });
     if (!vendor) throw new NotFoundException("Vendor not found");
+    return vendor;
+  }
+
+  private async assertVendorExists(vendorId: string) {
+    const vendor = await this.prisma.vendor.findUnique({ where: { id: vendorId }, select: { id: true, deletedAt: true } });
+    if (!vendor) throw new NotFoundException("Vendor not found");
+    if (vendor.deletedAt) throw new BadRequestException("Trashed vendors cannot be reviewed for onboarding.");
     return vendor;
   }
 

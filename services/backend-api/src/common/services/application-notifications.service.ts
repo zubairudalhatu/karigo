@@ -11,6 +11,8 @@ interface ApplicationNotificationInput {
 interface ApplicationReviewNotificationInput extends ApplicationNotificationInput {
   status: string;
   note?: string | null;
+  activationUrl?: string | null;
+  activationExpiresAt?: string | null;
 }
 
 interface GuarantorNotificationInput {
@@ -64,11 +66,19 @@ export class ApplicationNotificationsService {
   async vendorApplicationReviewed(input: ApplicationReviewNotificationInput): Promise<void> {
     const statusText = this.statusText(input.status);
     const noteText = input.note ? ` Note from KariGO: ${input.note}` : "";
-    const message = `KariGO vendor application ${input.reference} has been updated to ${statusText}.${noteText} Approval does not automatically activate live payments, payouts or public marketplace visibility.`;
+    const baseMessage = `KariGO vendor application ${input.reference} has been updated to ${statusText}.${noteText} Approval does not automatically activate live payments, payouts or public marketplace visibility.`;
+    const activationText = input.activationUrl
+      ? ` Set up your KariGO Vendor Dashboard password using this secure link: ${input.activationUrl}${input.activationExpiresAt ? ` This link expires ${input.activationExpiresAt}.` : ""}`
+      : "";
+    const smsMessage = input.activationUrl
+      ? `${baseMessage} Check your email for the secure Vendor Dashboard password setup link.`
+      : baseMessage;
     await this.sendApplicantNotification("vendor_application_reviewed", input, {
       subject: "KariGO vendor application update",
       heading: "Your vendor application has been updated",
-      message
+      message: baseMessage,
+      emailMessage: `${baseMessage}${activationText}`,
+      smsMessage
     });
   }
 
@@ -139,7 +149,7 @@ export class ApplicationNotificationsService {
   private async sendApplicantNotification(
     type: ApplicationNotificationType,
     input: ApplicationNotificationInput,
-    content: { subject: string; heading: string; message: string },
+    content: { subject: string; heading: string; message: string; emailMessage?: string; smsMessage?: string },
     options?: { emailEnabled?: boolean; smsEnabled?: boolean }
   ): Promise<void> {
     const smsEnabled = options?.smsEnabled ?? this.smsEnabled();
@@ -154,10 +164,10 @@ export class ApplicationNotificationsService {
         recipientName: input.recipientName,
         subject: content.subject,
         heading: content.heading,
-        message: content.message,
+        message: content.emailMessage ?? content.message,
         reference: input.reference
       }, emailEnabled, activeEmailProvider),
-      this.sendApplicationSms(input.phoneNumber, content.message, this.typeLabel(type), smsEnabled, activeSmsProvider)
+      this.sendApplicationSms(input.phoneNumber, content.smsMessage ?? content.message, this.typeLabel(type), smsEnabled, activeSmsProvider)
     ]);
     this.logDecision({
       type,

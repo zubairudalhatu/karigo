@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, ProductCategory, ServiceCategory } from "@prisma/client";
 import { createHash, randomBytes } from "crypto";
+import { ApplicationDocumentDto } from "../../common/dto/application-document.dto";
 import { PrismaService } from "../../prisma/prisma.service";
 import { publicUserSelect } from "../users/users.service";
 import { ListVendorsQueryDto } from "./dto/list-vendors-query.dto";
@@ -19,7 +20,8 @@ export class VendorsService {
         user: { select: publicUserSelect },
         category: true,
         branches: { orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }] },
-        teamMembers: { orderBy: { createdAt: "desc" }, take: 20 }
+        teamMembers: { orderBy: { createdAt: "desc" }, take: 20 },
+        onboardingDocuments: { orderBy: { uploadedAt: "desc" } }
       }
     });
 
@@ -153,6 +155,31 @@ export class VendorsService {
       take: 100,
       include: { actor: { select: publicUserSelect } }
     });
+  }
+
+  async onboardingDocuments(userId: string) {
+    const vendor = await this.requireVendorForUser(userId);
+    return this.prisma.vendorOnboardingDocument.findMany({
+      where: { vendorId: vendor.id },
+      orderBy: { uploadedAt: "desc" }
+    });
+  }
+
+  async uploadOnboardingDocument(userId: string, dto: ApplicationDocumentDto) {
+    const vendor = await this.requireVendorForUser(userId);
+    const document = await this.prisma.vendorOnboardingDocument.create({
+      data: {
+        vendorId: vendor.id,
+        documentType: dto.documentType,
+        documentName: dto.documentName,
+        documentUrl: dto.documentUrl
+      }
+    });
+    await this.logVendorAudit(vendor.id, userId, "vendor.onboarding_document.uploaded", "VendorOnboardingDocument", document.id, {
+      documentType: document.documentType,
+      hasDocumentName: Boolean(document.documentName)
+    });
+    return document;
   }
 
   async listPublic(query: ListVendorsQueryDto) {

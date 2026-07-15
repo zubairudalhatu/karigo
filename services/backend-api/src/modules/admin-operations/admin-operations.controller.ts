@@ -11,6 +11,8 @@ import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.in
 import { AdminOperationsService } from "./admin-operations.service";
 import { ListAdminOrdersQueryDto } from "./dto/list-admin-orders-query.dto";
 import { OrderStatusNoteDto } from "./dto/order-status-note.dto";
+import { ReviewVendorOnboardingDocumentDto } from "../vendors/dto/review-vendor-onboarding-document.dto";
+import { UpdateVendorStatusDto } from "./dto/update-vendor-status.dto";
 import { VendorCleanupNoteDto } from "./dto/vendor-cleanup-note.dto";
 
 const OPS_ADMINS = [AdminRole.SUPER_ADMIN, AdminRole.OPERATIONS_ADMIN, AdminRole.FINANCE_OFFICER, AdminRole.DISPATCH_OFFICER];
@@ -61,6 +63,23 @@ export class AdminOperationsController {
   @Post("vendors/:vendorId/activation-link")
   async createVendorActivationLink(@CurrentUser() user: AuthenticatedUser, @Param("vendorId", ParseUUIDPipe) vendorId: string) {
     return { message: "Vendor activation link created", data: await this.operations.createVendorActivationLink(user.id, vendorId) };
+  }
+  @Get("vendors/:vendorId/onboarding-documents")
+  async vendorOnboardingDocuments(@Param("vendorId", ParseUUIDPipe) vendorId: string) {
+    return { message: "Vendor onboarding documents retrieved", data: await this.operations.vendorOnboardingDocuments(vendorId) };
+  }
+  @Patch("vendors/:vendorId/onboarding-documents/:documentId/review")
+  async reviewVendorOnboardingDocument(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("vendorId", ParseUUIDPipe) vendorId: string,
+    @Param("documentId", ParseUUIDPipe) documentId: string,
+    @Body() dto: ReviewVendorOnboardingDocumentDto
+  ) {
+    return { message: "Vendor onboarding document reviewed", data: await this.operations.reviewVendorOnboardingDocument(user.id, vendorId, documentId, dto.status, dto.adminNote) };
+  }
+  @Patch("vendors/:vendorId/status")
+  async updateVendorStatus(@CurrentUser() user: AuthenticatedUser, @Param("vendorId", ParseUUIDPipe) vendorId: string, @Body() dto: UpdateVendorStatusDto) {
+    return { message: "Vendor status updated", data: await this.operations.updateVendorStatus(user.id, vendorId, dto.status, dto.note) };
   }
   @Get("riders") riders() {
     return this.operations.riders().then((data) => ({ message: "Riders retrieved", data }));
