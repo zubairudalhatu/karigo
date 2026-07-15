@@ -5,11 +5,34 @@ import { vendorApi, VendorProfile } from "../../src/api/vendor.api";
 import { DashboardShell, ErrorMessage, Loading } from "../../src/components/dashboard";
 import { friendlyError } from "../../src/lib/errors";
 
+type VendorProfileUpdatePayload = Pick<
+  VendorProfile,
+  "businessName" | "description" | "phoneNumber" | "email" | "address" | "city" | "state" | "openingTime" | "closingTime" | "logoUrl" | "coverImageUrl" | "isOpen"
+>;
+
+function profileUpdatePayload(profile: VendorProfile): VendorProfileUpdatePayload {
+  return {
+    businessName: profile.businessName,
+    description: profile.description ?? "",
+    phoneNumber: profile.phoneNumber,
+    email: profile.email ?? "",
+    address: profile.address,
+    city: profile.city,
+    state: profile.state,
+    openingTime: profile.openingTime ?? undefined,
+    closingTime: profile.closingTime ?? undefined,
+    logoUrl: profile.logoUrl ?? "",
+    coverImageUrl: profile.coverImageUrl ?? "",
+    isOpen: profile.isOpen
+  };
+}
+
 export default function Profile() {
   const [profile, setProfile] = useState<VendorProfile | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [uploading, setUploading] = useState<"logo" | "cover" | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     vendorApi.profile().then(setProfile).catch((e) => setError(friendlyError(e)));
@@ -38,13 +61,16 @@ export default function Profile() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!profile) return;
+    setSaving(true);
     try {
       setError("");
       setSuccess("");
-      setProfile(await vendorApi.update(profile));
+      setProfile(await vendorApi.update(profileUpdatePayload(profile)));
       setSuccess("Business profile updated.");
     } catch (err) {
-      setError(friendlyError(err));
+      setError(friendlyError(err, "form"));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -76,7 +102,7 @@ export default function Profile() {
       <p className="muted">Images are stored by KariGO for staging/pilot use. Do not upload documents containing passwords, OTPs, payment secrets or private identity numbers.</p>
       <label className="check-row"><input type="checkbox" checked={profile.isOpen} onChange={(event) => setProfile({ ...profile, isOpen: event.target.checked })} /> Store open</label>
       {uploading ? <p className="muted">Uploading {uploading === "logo" ? "logo" : "cover image"}...</p> : null}
-      <button>Save profile</button>
+      <button disabled={saving || Boolean(uploading)}>{saving ? "Saving..." : "Save profile"}</button>
     </form> : null}
   </DashboardShell>;
 }

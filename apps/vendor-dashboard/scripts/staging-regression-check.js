@@ -86,4 +86,10 @@ const vendorApi = read("src", "api", "vendor.api.ts");
 assert(vendorApi.includes("vendors/uploads"), "Vendor API must include vendor-scoped upload endpoint.");
 assert(vendorApi.includes("vendors/services"), "Vendor API must include vendor-scoped service catalogue endpoints.");
 
+const profilePage = read("app", "profile", "page.tsx");
+assert(profilePage.includes("profileUpdatePayload"), "Profile page must sanitize profile update payloads before saving.");
+assert(profilePage.includes("vendorApi.update(profileUpdatePayload(profile))"), "Profile save must not send hydrated vendor profile objects.");
+assert(profilePage.includes("friendlyError(err, \"form\")"), "Profile save errors must show form-level API messages.");
+assert(profilePage.includes("disabled={saving || Boolean(uploading)}"), "Profile save must be disabled while uploads or saves are in progress.");
+
 console.log("Vendor dashboard staging regression checks passed.");
