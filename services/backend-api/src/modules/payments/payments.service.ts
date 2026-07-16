@@ -7,6 +7,7 @@ import {
   Logger,
   NotFoundException
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import {
   OrderStatus,
   NotificationType,
@@ -17,12 +18,21 @@ import {
 import { randomBytes } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 import { InitiatePaymentDto } from "./dto/initiate-payment.dto";
-import { PaymentProviderRegistry } from "./providers/payment-provider.registry";
-import { PaymentWebhookContext } from "./providers/payment-provider.interface";
+import { CUSTOMER_TEST_PAYMENT_PROVIDERS, PaymentProviderRegistry } from "./providers/payment-provider.registry";
+import { PaymentProviderName, PaymentWebhookContext } from "./providers/payment-provider.interface";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { NotificationsService } from "../notifications/notifications.service";
 
 type TransactionClient = Prisma.TransactionClient;
+type ReadinessStatus = "READY" | "WAITING_FOR_CONFIGURATION" | "BLOCKED";
+
+interface ProviderRequirement {
+  name: string;
+  required: boolean;
+  configured: boolean;
+  purpose: string;
+  issue?: string;
+}
 
 @Injectable()
 export class PaymentsService {
@@ -32,7 +42,8 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly providerRegistry: PaymentProviderRegistry,
     private readonly audit: AdminAuditService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly config: ConfigService
   ) {}
 
   async initiate(userId: string, dto: InitiatePaymentDto) {
@@ -117,6 +128,66 @@ export class PaymentsService {
         payment.gateway
       ),
       alreadyProcessed: false
+    };
+  }
+
+  providerReadiness() {
+    const activeProvider = this.configuredProvider();
+    const livePaymentsEnabled = this.livePaymentsEnabled();
+    const providers = [
+      this.mockReadiness(activeProvider),
+      this.providerReadinessRecord("paystack", [
+        this.modeRequirement("PAYSTACK_MODE", ["test"]),
+        this.secretRequirement("PAYSTACK_SECRET_KEY", "Paystack server-side test secret key", "sk_test_"),
+        this.optionalRequirement("PAYSTACK_PUBLIC_KEY", "Client-safe public key; not used by the current hosted-checkout backend flow"),
+        this.urlRequirement("PAYSTACK_BASE_URL", "Paystack API base URL; defaults to the Paystack API host when omitted"),
+        this.optionalRequirement("PAYSTACK_CALLBACK_URL", "Hosted checkout callback URL configured in the provider dashboard"),
+        this.optionalRequirement("PAYSTACK_WEBHOOK_SECRET", "Webhook signature secret; provider falls back to the test secret if omitted")
+      ], activeProvider, livePaymentsEnabled),
+      this.providerReadinessRecord("monnify", [
+        this.modeRequirement("MONNIFY_MODE", ["test", "sandbox"]),
+        this.secretRequirement("MONNIFY_API_KEY", "Monnify sandbox API key"),
+        this.secretRequirement("MONNIFY_SECRET_KEY", "Monnify sandbox secret key"),
+        this.secretRequirement("MONNIFY_CONTRACT_CODE", "Monnify sandbox contract code"),
+        this.urlRequirement("MONNIFY_BASE_URL", "Monnify sandbox API base URL; defaults to sandbox when omitted", "api.monnify.com"),
+        this.optionalRequirement("MONNIFY_CALLBACK_URL", "Monnify checkout redirect URL configured in the provider dashboard"),
+        this.optionalRequirement("MONNIFY_WEBHOOK_SECRET", "Webhook signature secret; provider falls back to the sandbox secret if omitted")
+      ], activeProvider, livePaymentsEnabled),
+      this.providerReadinessRecord("squad", [
+        this.modeRequirement("SQUAD_MODE", ["test", "sandbox"]),
+        this.secretRequirement("SQUAD_SECRET_KEY", "Squad sandbox secret key", "sandbox_sk_"),
+        this.optionalRequirement("SQUAD_PUBLIC_KEY", "Client-safe public key; not used by the current hosted-checkout backend flow"),
+        this.urlRequirement("SQUAD_BASE_URL", "Squad sandbox API base URL; defaults to sandbox when omitted", "api-d.squadco.com", "sandbox"),
+        this.optionalRequirement("SQUAD_CALLBACK_URL", "Squad hosted checkout callback URL configured in the provider dashboard"),
+        this.optionalRequirement("SQUAD_WEBHOOK_SECRET", "Webhook signature secret; provider falls back to the sandbox secret if omitted")
+      ], activeProvider, livePaymentsEnabled)
+    ];
+
+    return {
+      activeProvider,
+      legacyActiveProvider: this.optionalValue("PAYMENT_PROVIDER") ? "configured" : "not_configured",
+      paymentsLiveEnabled: livePaymentsEnabled,
+      customerSelectableSandboxProviders: CUSTOMER_TEST_PAYMENT_PROVIDERS,
+      providerEnabledFlags: {
+        PAYMENTS_PROVIDER: this.optionalValue("PAYMENTS_PROVIDER") ? "configured" : "default_or_unset",
+        PAYMENT_PROVIDER: this.optionalValue("PAYMENT_PROVIDER") ? "configured" : "default_or_unset",
+        PAYMENTS_LIVE_ENABLED: livePaymentsEnabled ? "true" : "false_or_unset"
+      },
+      webhookRoutes: {
+        paystack: "/api/v1/payments/webhook/paystack",
+        monnify: "/api/v1/payments/webhook/monnify",
+        squad: "/api/v1/payments/webhook/squad"
+      },
+      providers,
+      liveActivation: {
+        supportedByCurrentCode: false,
+        status: "BLOCKED",
+        blockers: [
+          "Current Paystack, Monnify and Squad adapters are sandbox/test guarded.",
+          "Live provider activation requires a separate engineering and finance approval gate.",
+          "Production credentials must be stored only in the production secret manager."
+        ]
+      }
     };
   }
 
@@ -384,6 +455,130 @@ export class PaymentsService {
     return `KGO-${gateway.toUpperCase()}-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
   }
 
+  private configuredProvider(): string {
+    return this.optionalValue("PAYMENTS_PROVIDER") ?? this.optionalValue("PAYMENT_PROVIDER") ?? "mock";
+  }
+
+  private livePaymentsEnabled(): boolean {
+    return this.optionalValue("PAYMENTS_LIVE_ENABLED")?.toLowerCase() === "true";
+  }
+
+  private mockReadiness(activeProvider: string) {
+    return {
+      provider: "mock",
+      status: "READY" as ReadinessStatus,
+      activeByEnvironment: activeProvider === "mock",
+      customerSelectableInStaging: true,
+      readyForSandboxCheckout: true,
+      readyForLiveCheckout: false,
+      requirements: [],
+      issues: [],
+      recommendedActions: ["Keep mock payment available as the rollback provider."]
+    };
+  }
+
+  private providerReadinessRecord(
+    provider: PaymentProviderName,
+    requirements: ProviderRequirement[],
+    activeProvider: string,
+    livePaymentsEnabled: boolean
+  ) {
+    const requiredIssues = requirements
+      .filter((requirement) => requirement.required && (!requirement.configured || requirement.issue))
+      .map((requirement) => requirement.issue ?? `missing ${requirement.name}`);
+    const recommendedIssues = requirements
+      .filter((requirement) => !requirement.required && requirement.issue)
+      .map((requirement) => requirement.issue);
+    const liveIssue = livePaymentsEnabled
+      ? ["PAYMENTS_LIVE_ENABLED must be false for sandbox provider checkout"]
+      : [];
+    const issues = [...liveIssue, ...requiredIssues];
+    const status: ReadinessStatus = issues.length ? "WAITING_FOR_CONFIGURATION" : "READY";
+
+    return {
+      provider,
+      status,
+      activeByEnvironment: activeProvider === provider,
+      customerSelectableInStaging: CUSTOMER_TEST_PAYMENT_PROVIDERS.some((item) => item === provider),
+      readyForSandboxCheckout: status === "READY",
+      readyForLiveCheckout: false,
+      requirements,
+      issues,
+      recommendations: [
+        ...recommendedIssues,
+        "Verify callback and webhook URLs in the provider dashboard before sandbox certification.",
+        "Do not add provider credentials to source code, screenshots or Git-tracked documentation."
+      ].filter(Boolean)
+    };
+  }
+
+  private modeRequirement(name: string, allowed: string[]): ProviderRequirement {
+    const value = this.optionalValue(name)?.toLowerCase();
+    return {
+      name,
+      required: true,
+      configured: Boolean(value),
+      purpose: `Must be ${allowed.join(" or ")} for sandbox checkout`,
+      issue: !value
+        ? `missing ${name}`
+        : allowed.includes(value)
+          ? undefined
+          : `${name} must be ${allowed.join(" or ")}`
+    };
+  }
+
+  private secretRequirement(name: string, purpose: string, expectedPrefix?: string): ProviderRequirement {
+    const value = this.optionalValue(name);
+    return {
+      name,
+      required: true,
+      configured: Boolean(value),
+      purpose,
+      issue: !value
+        ? `missing ${name}`
+        : expectedPrefix && !value.startsWith(expectedPrefix)
+          ? `${name} does not match the expected sandbox key format`
+          : undefined
+    };
+  }
+
+  private optionalRequirement(name: string, purpose: string): ProviderRequirement {
+    return {
+      name,
+      required: false,
+      configured: Boolean(this.optionalValue(name)),
+      purpose,
+      issue: this.optionalValue(name) ? undefined : `${name} is not configured`
+    };
+  }
+
+  private urlRequirement(
+    name: string,
+    purpose: string,
+    forbiddenHost?: string,
+    requiredSubstring?: string
+  ): ProviderRequirement {
+    const value = this.optionalValue(name);
+    return {
+      name,
+      required: false,
+      configured: Boolean(value),
+      purpose,
+      issue: !value
+        ? undefined
+        : !value.startsWith("https://")
+          ? `${name} must use HTTPS`
+          : forbiddenHost && value.includes(forbiddenHost) && (!requiredSubstring || !value.includes(requiredSubstring))
+            ? `${name} points at a live provider host instead of sandbox`
+            : undefined
+    };
+  }
+
+  private optionalValue(name: string): string | undefined {
+    const value = this.config.get<string>(name)?.trim();
+    return value || undefined;
+  }
+
   private async recordInitializationFailure(
     paymentId: string,
     orderId: string,
@@ -423,10 +618,7 @@ export class PaymentsService {
     );
   }
 
-  private safeInitializationException(providerName: string, error: unknown): HttpException {
-    if (error instanceof HttpException) {
-      return error;
-    }
+  private safeInitializationException(providerName: string, _error: unknown): HttpException {
     return new BadGatewayException(
       `${this.providerLabel(providerName)} could not be started. Please use mock payment or retry the sandbox provider later.`
     );

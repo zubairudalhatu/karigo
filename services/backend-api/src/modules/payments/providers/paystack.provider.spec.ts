@@ -124,7 +124,7 @@ describe("PaystackProvider", () => {
     });
 
     await expect(provider.verify("KGO-PAYSTACK-123"))
-      .rejects.toThrow("Paystack Test Mode must be explicitly enabled");
+      .rejects.toThrow("missing PAYSTACK_MODE=test");
   });
 
   it("rejects non-test Paystack secret keys", async () => {
@@ -138,6 +138,6 @@ describe("PaystackProvider", () => {
     });
 
     await expect(provider.verify("KGO-PAYSTACK-123"))
-      .rejects.toThrow("Paystack Test Mode requires a test secret key");
+      .rejects.toThrow("PAYSTACK_SECRET_KEY does not match the expected test key format");
   });
 });

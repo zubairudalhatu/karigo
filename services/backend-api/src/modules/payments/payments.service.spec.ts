@@ -43,11 +43,15 @@ describe("PaymentsService", () => {
   };
   const audit = { record: jest.fn() };
   const notifications = { createNotification: jest.fn() };
+  const config = {
+    get: jest.fn((_: string, fallback?: string) => fallback)
+  };
   const service = new PaymentsService(
     prisma as unknown as PrismaService,
     registry as unknown as PaymentProviderRegistry,
     audit as never,
-    notifications as never
+    notifications as never,
+    config as never
   );
 
   beforeEach(() => {
@@ -55,6 +59,7 @@ describe("PaymentsService", () => {
     registry.active.mockReturnValue(mockProvider);
     registry.customerTestProvider.mockReturnValue(mockProvider);
     registry.get.mockReturnValue(mockProvider);
+    config.get.mockImplementation((_: string, fallback?: string) => fallback);
     prisma.$transaction.mockImplementation((callback) => callback(tx));
   });
 
@@ -134,7 +139,13 @@ describe("PaymentsService", () => {
     }));
   });
 
-  it("preserves provider initialization errors when failure notification recording fails", async () => {
+  it("logs provider initialization reasons while returning a safe customer error", async () => {
+    const paystackProvider = {
+      name: "paystack",
+      initialize: jest.fn(),
+      verify: jest.fn(),
+      parseWebhook: jest.fn()
+    };
     prisma.order.findFirst.mockResolvedValue({
       id: "order-paystack",
       orderNumber: "KGO-003",
@@ -148,19 +159,48 @@ describe("PaymentsService", () => {
       id: "payment-paystack",
       currency: "NGN"
     });
-    mockProvider.initialize.mockRejectedValue(new BadRequestException("Paystack Test Mode credentials are not configured"));
+    registry.customerTestProvider.mockReturnValue(paystackProvider);
+    paystackProvider.initialize.mockRejectedValue(new BadRequestException("missing PAYSTACK_SECRET_KEY"));
     notifications.createNotification.mockRejectedValueOnce(new Error("notification write failed"));
 
     await expect(service.initiate("user-1", {
       orderId: "order-paystack",
       amount: 8500,
       paymentProvider: "paystack"
-    })).rejects.toThrow("Paystack Test Mode credentials are not configured");
+    })).rejects.toThrow("Paystack Test Mode could not be started. Please use mock payment or retry the sandbox provider later.");
 
     expect(prisma.payment.update).toHaveBeenCalledWith({
       where: { id: "payment-paystack" },
       data: { paymentStatus: PaymentStatus.FAILED }
     });
+  });
+
+  it("reports payment provider readiness without exposing configured secret values", () => {
+    config.get.mockImplementation((key: string, fallback?: string) => {
+      const values: Record<string, string> = {
+        PAYMENTS_PROVIDER: "paystack",
+        PAYMENTS_LIVE_ENABLED: "false",
+        PAYSTACK_MODE: "test",
+        MONNIFY_MODE: "sandbox",
+        MONNIFY_API_KEY: "configured-monnify-api-key",
+        MONNIFY_SECRET_KEY: "configured-monnify-secret",
+        SQUAD_MODE: "sandbox",
+        SQUAD_SECRET_KEY: "sandbox_sk_configured_squad_secret"
+      };
+      return values[key] ?? fallback;
+    });
+
+    const readiness = service.providerReadiness();
+    const paystack = readiness.providers.find((provider) => provider.provider === "paystack");
+    const monnify = readiness.providers.find((provider) => provider.provider === "monnify");
+    const serialized = JSON.stringify(readiness);
+
+    expect(readiness.activeProvider).toBe("paystack");
+    expect(paystack?.issues).toContain("missing PAYSTACK_SECRET_KEY");
+    expect(monnify?.issues).toContain("missing MONNIFY_CONTRACT_CODE");
+    expect(serialized).not.toContain("configured-monnify-secret");
+    expect(serialized).not.toContain("sandbox_sk_configured_squad_secret");
+    expect(readiness.liveActivation.supportedByCurrentCode).toBe(false);
   });
 
   it("rejects a frontend amount that does not match the order total", async () => {

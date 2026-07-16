@@ -117,7 +117,7 @@ describe("SquadProvider", () => {
     });
 
     await expect(provider.verify("KGO-SQUAD-123"))
-      .rejects.toThrow("Squad sandbox mode must be explicitly enabled");
+      .rejects.toThrow("missing SQUAD_MODE=test or sandbox");
   });
 
   it("uses a generated sandbox email when a customer email is unavailable", async () => {

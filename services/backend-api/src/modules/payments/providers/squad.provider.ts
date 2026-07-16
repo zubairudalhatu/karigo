@@ -119,10 +119,10 @@ export class SquadProvider implements PaymentProvider {
     this.assertSandboxOnly();
     const key = this.config.get<string>("SQUAD_SECRET_KEY")?.trim();
     if (!key) {
-      throw new BadRequestException("Squad sandbox credentials are not configured");
+      throw new BadRequestException("missing SQUAD_SECRET_KEY");
     }
     if (!key.startsWith(SQUAD_SANDBOX_SECRET_PREFIX)) {
-      throw new BadRequestException("Squad sandbox mode requires a sandbox secret key");
+      throw new BadRequestException("SQUAD_SECRET_KEY does not match the expected sandbox key format");
     }
     return key;
   }
@@ -138,9 +138,9 @@ export class SquadProvider implements PaymentProvider {
   private assertSandboxOnly(): void {
     const mode = this.config.get<string>("SQUAD_MODE")?.trim().toLowerCase();
     const liveEnabled = this.config.get<string>("PAYMENTS_LIVE_ENABLED", "false").trim().toLowerCase() === "true";
-    if (liveEnabled) throw new BadRequestException("Live Squad payments are disabled");
+    if (liveEnabled) throw new BadRequestException("PAYMENTS_LIVE_ENABLED must be false for Squad Sandbox");
     if (!["test", "sandbox"].includes(mode ?? "")) {
-      throw new BadRequestException("Squad sandbox mode must be explicitly enabled");
+      throw new BadRequestException("missing SQUAD_MODE=test or sandbox");
     }
   }
 

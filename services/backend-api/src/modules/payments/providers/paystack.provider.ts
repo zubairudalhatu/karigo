@@ -127,10 +127,10 @@ export class PaystackProvider implements PaymentProvider {
     this.assertTestModeOnly();
     const key = this.config.get<string>("PAYSTACK_SECRET_KEY")?.trim();
     if (!key) {
-      throw new BadRequestException("Paystack Test Mode credentials are not configured");
+      throw new BadRequestException("missing PAYSTACK_SECRET_KEY");
     }
     if (!key.startsWith(PAYSTACK_TEST_SECRET_PREFIX)) {
-      throw new BadRequestException("Paystack Test Mode requires a test secret key");
+      throw new BadRequestException("PAYSTACK_SECRET_KEY does not match the expected test key format");
     }
     return key;
   }
@@ -138,7 +138,11 @@ export class PaystackProvider implements PaymentProvider {
     return this.config.get<string>("PAYSTACK_WEBHOOK_SECRET") || this.secretKey();
   }
   private baseUrl(): string {
-    return this.config.get<string>("PAYSTACK_BASE_URL", "https://api.paystack.co").replace(/\/+$/, "");
+    const value = this.config.get<string>("PAYSTACK_BASE_URL", "https://api.paystack.co").replace(/\/+$/, "");
+    if (!value.startsWith("https://")) {
+      throw new BadRequestException("PAYSTACK_BASE_URL must use HTTPS");
+    }
+    return value;
   }
   private record(value: unknown): Record<string, unknown> {
     return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -166,10 +170,10 @@ export class PaystackProvider implements PaymentProvider {
     const mode = this.config.get<string>("PAYSTACK_MODE")?.trim().toLowerCase();
     const liveEnabled = this.config.get<string>("PAYMENTS_LIVE_ENABLED", "false").trim().toLowerCase() === "true";
     if (liveEnabled) {
-      throw new BadRequestException("Live Paystack payments are disabled");
+      throw new BadRequestException("PAYMENTS_LIVE_ENABLED must be false for Paystack Test Mode");
     }
     if (mode !== "test") {
-      throw new BadRequestException("Paystack Test Mode must be explicitly enabled");
+      throw new BadRequestException("missing PAYSTACK_MODE=test");
     }
   }
 }

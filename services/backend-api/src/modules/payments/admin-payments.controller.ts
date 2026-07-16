@@ -1,4 +1,4 @@
-import { Controller, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
+import { Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -16,6 +16,15 @@ import { PaymentsService } from "./payments.service";
 export class AdminPaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  @Get("provider-readiness")
+  @ApiOperation({ summary: "Inspect safe payment provider configuration readiness" })
+  async providerReadiness(): Promise<{ message: string; data: unknown }> {
+    return {
+      message: "Payment provider readiness retrieved",
+      data: this.paymentsService.providerReadiness()
+    };
+  }
+
   @Post(":paymentId/approve-refund")
   @ApiOperation({ summary: "Approve a pending refund request" })
   async approveRefund(
@@ -25,4 +34,3 @@ export class AdminPaymentsController {
     return { message: "Refund approved", data: await this.paymentsService.approveRefund(user.id, paymentId) };
   }
 }
-

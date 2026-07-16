@@ -135,7 +135,7 @@ describe("MonnifyProvider", () => {
     });
 
     await expect(provider.verify("KGO-MONNIFY-123"))
-      .rejects.toThrow("Monnify sandbox mode must be explicitly enabled");
+      .rejects.toThrow("missing MONNIFY_MODE=test or sandbox");
   });
 
   it("uses a generated sandbox email when a customer email is unavailable", async () => {

@@ -137,20 +137,20 @@ export class MonnifyProvider implements PaymentProvider {
 
   private apiKey(): string {
     const key = this.config.get<string>("MONNIFY_API_KEY")?.trim();
-    if (!key) throw new BadRequestException("Monnify sandbox credentials are not configured");
+    if (!key) throw new BadRequestException("missing MONNIFY_API_KEY");
     return key;
   }
 
   private secretKey(): string {
     this.assertSandboxOnly();
     const key = this.config.get<string>("MONNIFY_SECRET_KEY")?.trim();
-    if (!key) throw new BadRequestException("Monnify sandbox credentials are not configured");
+    if (!key) throw new BadRequestException("missing MONNIFY_SECRET_KEY");
     return key;
   }
 
   private contractCode(): string {
     const code = this.config.get<string>("MONNIFY_CONTRACT_CODE")?.trim();
-    if (!code) throw new BadRequestException("Monnify contract code is not configured");
+    if (!code) throw new BadRequestException("missing MONNIFY_CONTRACT_CODE");
     return code;
   }
 
@@ -165,9 +165,9 @@ export class MonnifyProvider implements PaymentProvider {
   private assertSandboxOnly(): void {
     const mode = this.config.get<string>("MONNIFY_MODE")?.trim().toLowerCase();
     const liveEnabled = this.config.get<string>("PAYMENTS_LIVE_ENABLED", "false").trim().toLowerCase() === "true";
-    if (liveEnabled) throw new BadRequestException("Live Monnify payments are disabled");
+    if (liveEnabled) throw new BadRequestException("PAYMENTS_LIVE_ENABLED must be false for Monnify Sandbox");
     if (!["test", "sandbox"].includes(mode ?? "")) {
-      throw new BadRequestException("Monnify sandbox mode must be explicitly enabled");
+      throw new BadRequestException("missing MONNIFY_MODE=test or sandbox");
     }
   }
 
