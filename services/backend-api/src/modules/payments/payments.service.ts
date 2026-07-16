@@ -19,7 +19,7 @@ import { randomBytes } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 import { InitiatePaymentDto } from "./dto/initiate-payment.dto";
 import { SandboxInitializationTestProvider } from "./dto/test-payment-provider.dto";
-import { CUSTOMER_TEST_PAYMENT_PROVIDERS, PaymentProviderRegistry } from "./providers/payment-provider.registry";
+import { CustomerTestPaymentProviderName, PaymentProviderRegistry } from "./providers/payment-provider.registry";
 import { PaymentProvider, PaymentProviderName, PaymentWebhookContext } from "./providers/payment-provider.interface";
 import { paymentInitializationDiagnostic } from "./providers/payment-provider-diagnostics";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
@@ -136,6 +136,7 @@ export class PaymentsService {
   providerReadiness() {
     const activeProvider = this.configuredProvider();
     const livePaymentsEnabled = this.livePaymentsEnabled();
+    const customerSelectableSandboxProviders = this.providerRegistry.customerCheckoutProviders();
     const providers = [
       this.mockReadiness(activeProvider),
       this.providerReadinessRecord("paystack", [
@@ -145,7 +146,7 @@ export class PaymentsService {
         this.urlRequirement("PAYSTACK_BASE_URL", "Paystack API base URL; defaults to the Paystack API host when omitted"),
         this.optionalRequirement("PAYSTACK_CALLBACK_URL", "Hosted checkout callback URL configured in the provider dashboard"),
         this.optionalRequirement("PAYSTACK_WEBHOOK_SECRET", "Webhook signature secret; provider falls back to the test secret if omitted")
-      ], activeProvider, livePaymentsEnabled),
+      ], activeProvider, livePaymentsEnabled, customerSelectableSandboxProviders),
       this.providerReadinessRecord("monnify", [
         this.modeRequirement("MONNIFY_MODE", ["test", "sandbox"]),
         this.secretRequirement("MONNIFY_API_KEY", "Monnify sandbox API key"),
@@ -154,7 +155,7 @@ export class PaymentsService {
         this.urlRequirement("MONNIFY_BASE_URL", "Monnify sandbox API base URL; defaults to sandbox when omitted", "api.monnify.com"),
         this.optionalRequirement("MONNIFY_CALLBACK_URL", "Monnify checkout redirect URL configured in the provider dashboard"),
         this.optionalRequirement("MONNIFY_WEBHOOK_SECRET", "Webhook signature secret; provider falls back to the sandbox secret if omitted")
-      ], activeProvider, livePaymentsEnabled),
+      ], activeProvider, livePaymentsEnabled, customerSelectableSandboxProviders),
       this.providerReadinessRecord("squad", [
         this.modeRequirement("SQUAD_MODE", ["test", "sandbox"]),
         this.secretRequirement("SQUAD_SECRET_KEY", "Squad sandbox secret key", "sandbox_sk_"),
@@ -162,18 +163,21 @@ export class PaymentsService {
         this.urlRequirement("SQUAD_BASE_URL", "Squad sandbox API base URL; defaults to sandbox when omitted", "api-d.squadco.com", "sandbox"),
         this.optionalRequirement("SQUAD_CALLBACK_URL", "Squad hosted checkout callback URL configured in the provider dashboard"),
         this.optionalRequirement("SQUAD_WEBHOOK_SECRET", "Webhook signature secret; provider falls back to the sandbox secret if omitted")
-      ], activeProvider, livePaymentsEnabled)
+      ], activeProvider, livePaymentsEnabled, customerSelectableSandboxProviders)
     ];
 
     return {
       activeProvider,
       legacyActiveProvider: this.optionalValue("PAYMENT_PROVIDER") ? "configured" : "not_configured",
       paymentsLiveEnabled: livePaymentsEnabled,
-      customerSelectableSandboxProviders: CUSTOMER_TEST_PAYMENT_PROVIDERS,
+      customerSelectableSandboxProviders,
       providerEnabledFlags: {
         PAYMENTS_PROVIDER: this.optionalValue("PAYMENTS_PROVIDER") ? "configured" : "default_or_unset",
         PAYMENT_PROVIDER: this.optionalValue("PAYMENT_PROVIDER") ? "configured" : "default_or_unset",
-        PAYMENTS_LIVE_ENABLED: livePaymentsEnabled ? "true" : "false_or_unset"
+        PAYMENTS_LIVE_ENABLED: livePaymentsEnabled ? "true" : "false_or_unset",
+        SQUAD_CUSTOMER_CHECKOUT_ENABLED: this.optionalValue("SQUAD_CUSTOMER_CHECKOUT_ENABLED")?.toLowerCase() === "true"
+          ? "true"
+          : "false_or_unset"
       },
       webhookRoutes: {
         paystack: "/api/v1/payments/webhook/paystack",
@@ -194,7 +198,7 @@ export class PaymentsService {
   }
 
   async testProviderInitialization(providerName: SandboxInitializationTestProvider) {
-    const provider = this.providerRegistry.customerTestProvider(providerName);
+    const provider = this.providerRegistry.get(providerName);
     const transactionReference = this.transactionReference(`${provider.name}-test`);
     const timestamp = new Date().toISOString();
     const input = {
@@ -535,8 +539,10 @@ export class PaymentsService {
     provider: PaymentProviderName,
     requirements: ProviderRequirement[],
     activeProvider: string,
-    livePaymentsEnabled: boolean
+    livePaymentsEnabled: boolean,
+    customerSelectableSandboxProviders: CustomerTestPaymentProviderName[]
   ) {
+    const launchProfile = this.providerLaunchProfile(provider, customerSelectableSandboxProviders.includes(provider as CustomerTestPaymentProviderName));
     const requiredIssues = requirements
       .filter((requirement) => requirement.required && (!requirement.configured || requirement.issue))
       .map((requirement) => requirement.issue ?? `missing ${requirement.name}`);
@@ -553,12 +559,15 @@ export class PaymentsService {
       provider,
       status,
       activeByEnvironment: activeProvider === provider,
-      customerSelectableInStaging: CUSTOMER_TEST_PAYMENT_PROVIDERS.some((item) => item === provider),
+      customerSelectableInStaging: customerSelectableSandboxProviders.some((item) => item === provider),
+      launchStatus: launchProfile.status,
+      launchNote: launchProfile.note,
       readyForSandboxCheckout: status === "READY",
       readyForLiveCheckout: false,
       requirements,
       issues,
       recommendations: [
+        launchProfile.recommendation,
         ...recommendedIssues,
         "Verify callback and webhook URLs in the provider dashboard before sandbox certification.",
         "Do not add provider credentials to source code, screenshots or Git-tracked documentation."
@@ -637,6 +646,41 @@ export class PaymentsService {
       return String(value);
     }
     return undefined;
+  }
+
+  private providerLaunchProfile(provider: PaymentProviderName, customerSelectable: boolean) {
+    switch (provider) {
+      case "monnify":
+        return {
+          status: "PRIMARY_LAUNCH_PROVIDER",
+          note: "Monnify is the primary launch payment provider for sandbox verification.",
+          recommendation: "Prioritize Monnify sandbox verification before controlled live activation review."
+        };
+      case "paystack":
+        return {
+          status: "SECONDARY_LAUNCH_PROVIDER",
+          note: "Paystack is the secondary launch payment provider for sandbox verification.",
+          recommendation: "Keep Paystack available as the secondary sandbox checkout path."
+        };
+      case "squad":
+        return customerSelectable
+          ? {
+              status: "OPTIONAL_LATER_ENABLED",
+              note: "Squad is explicitly enabled for customer checkout, but remains lower launch priority.",
+              recommendation: "Confirm Squad provider setup and API payload before offering it broadly."
+            }
+          : {
+              status: "DEFERRED_FOR_LAUNCH",
+              note: "Squad remains visible for diagnostics but hidden from Customer checkout until provider setup/API payload is confirmed.",
+              recommendation: "Keep SQUAD_CUSTOMER_CHECKOUT_ENABLED unset or false for the launch candidate."
+            };
+      default:
+        return {
+          status: "INTERNAL_OR_FALLBACK",
+          note: "Provider is not part of the Monnify/Paystack launch priority.",
+          recommendation: undefined
+        };
+    }
   }
 
   private async recordInitializationFailure(

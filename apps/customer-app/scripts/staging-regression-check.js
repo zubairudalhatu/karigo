@@ -337,7 +337,9 @@ assert(checkout.includes("isExternalPaymentAuthorizationUrl"), "Checkout must de
 assert(checkout.includes("openExternalPaymentAuthorization"), "Checkout must open Paystack Test Mode authorization through the safe helper.");
 assert(checkout.includes("customerTestPaymentProviderOptions"), "Checkout must expose customer-selectable sandbox payment provider options.");
 assert(checkout.includes("paymentProvider: selectedPaymentProvider"), "Checkout must send the selected sandbox payment provider to the backend.");
-assert(paymentStatus.includes("Mock, Paystack Test Mode, Monnify Sandbox and Squad Sandbox"), "Payment copy must list supported sandbox providers.");
+assert(paymentStatus.includes("Mock, Monnify Sandbox and Paystack Test Mode"), "Payment copy must list the launch checkout providers.");
+assert(!paymentStatus.includes('value: "squad"'), "Customer checkout must hide Squad Sandbox until provider setup/API payload is confirmed.");
+assert(paymentStatus.includes("Squad sandbox is deferred until provider setup/API payload is confirmed."), "Customer payment config must document why Squad is hidden.");
 assert(paymentStatus.includes("Complete the ${providerLabel} checkout page"), "Checkout must show provider-specific authorization guidance.");
 assert(paymentStatus.includes("KariGO will only mark the order paid after backend verification."), "Payment copy must state backend verification is required.");
 assert(paymentStatus.includes("Payment could not be verified yet."), "Payment failures must have a clear retry-oriented message.");

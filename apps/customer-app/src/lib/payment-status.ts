@@ -7,12 +7,13 @@ export type PaymentStatusView = {
 };
 
 const paymentProviderLabels: Record<CustomerTestPaymentProvider, string> = {
-  mock: "Mock payment",
+  mock: "Mock Payment",
   paystack: "Paystack Test Mode",
   monnify: "Monnify Sandbox",
   squad: "Squad Sandbox"
 };
 
+// Squad sandbox is deferred until provider setup/API payload is confirmed.
 export const customerTestPaymentProviderOptions: Array<{
   value: CustomerTestPaymentProvider;
   title: string;
@@ -20,13 +21,8 @@ export const customerTestPaymentProviderOptions: Array<{
 }> = [
   {
     value: "mock",
-    title: "Mock payment",
+    title: "Mock Payment",
     description: "Instant staging fallback for the Kano pilot."
-  },
-  {
-    value: "paystack",
-    title: "Paystack Test Mode",
-    description: "Opens a Paystack sandbox checkout page when test credentials are configured."
   },
   {
     value: "monnify",
@@ -34,9 +30,9 @@ export const customerTestPaymentProviderOptions: Array<{
     description: "Opens a Monnify sandbox checkout page when sandbox credentials are configured."
   },
   {
-    value: "squad",
-    title: "Squad Sandbox",
-    description: "Opens a Squad sandbox checkout page when sandbox credentials are configured."
+    value: "paystack",
+    title: "Paystack Test Mode",
+    description: "Opens a Paystack sandbox checkout page when test credentials are configured."
   }
 ];
 
@@ -48,7 +44,7 @@ export function paymentProviderLabel(provider?: string | null): string {
 }
 
 export const paymentSafetyNote =
-  "Mock, Paystack Test Mode, Monnify Sandbox and Squad Sandbox are for staging checkout verification only. Live payments, wallet funding, automatic refunds and payout automation remain disabled.";
+  "Mock, Monnify Sandbox and Paystack Test Mode are for staging checkout verification only. Live payments, wallet funding, automatic refunds and payout automation remain disabled.";
 
 export const walletRefundFutureNote =
   "KariGO Wallet refunds and wallet-to-utility payments are future workflows. Refunds remain admin-reviewed until separately approved.";

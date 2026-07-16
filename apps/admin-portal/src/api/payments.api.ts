@@ -15,6 +15,8 @@ export interface PaymentProviderReadinessItem {
   status: PaymentReadinessStatus;
   activeByEnvironment: boolean;
   customerSelectableInStaging: boolean;
+  launchStatus?: string;
+  launchNote?: string;
   readyForSandboxCheckout: boolean;
   readyForLiveCheckout: boolean;
   requirements: PaymentProviderRequirement[];

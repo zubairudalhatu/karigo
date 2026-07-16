@@ -61,6 +61,9 @@ assert(paymentReadinessPage.includes("Do not paste keys"), "Payment Readiness pa
 assert(paymentReadinessPage.includes("Test sandbox initialization"), "Payment Readiness page must expose a safe admin-only sandbox initialization test action.");
 assert(paymentReadinessPage.includes("Stage: {testResult.stage}"), "Payment Readiness page must show the provider initialization failure stage.");
 assert(paymentReadinessPage.includes("Authorization URL present"), "Payment Readiness page must show only authorization URL presence, not URL values.");
+assert(paymentReadinessPage.includes("provider.launchStatus"), "Payment Readiness page must show launch status such as Deferred for launch.");
+assert(paymentReadinessPage.includes("provider.launchNote"), "Payment Readiness page must show provider launch notes.");
+assert(paymentReadinessPage.includes("Deferred for launch"), "Payment Readiness page must label deferred providers in user-friendly copy.");
 assert(paymentReadinessPage.includes("1 Monnify"), "Payment Readiness page must show Monnify as launch priority one.");
 assert(paymentReadinessPage.includes("2 Paystack, 3 Squad later"), "Payment Readiness page must show Paystack second and Squad later.");
 const liveSecretPrefix = ["sk", "live"].join("_");

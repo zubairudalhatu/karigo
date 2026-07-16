@@ -40,6 +40,7 @@ describe("PaymentsService", () => {
   const registry = {
     active: jest.fn(() => mockProvider),
     customerTestProvider: jest.fn(() => mockProvider),
+    customerCheckoutProviders: jest.fn(() => ["mock", "monnify", "paystack"]),
     get: jest.fn(() => mockProvider)
   };
   const audit = { record: jest.fn() };
@@ -59,6 +60,7 @@ describe("PaymentsService", () => {
     jest.clearAllMocks();
     registry.active.mockReturnValue(mockProvider);
     registry.customerTestProvider.mockReturnValue(mockProvider);
+    registry.customerCheckoutProviders.mockReturnValue(["mock", "monnify", "paystack"]);
     registry.get.mockReturnValue(mockProvider);
     config.get.mockImplementation((_: string, fallback?: unknown) => fallback);
     prisma.$transaction.mockImplementation((callback) => callback(tx));
@@ -200,6 +202,11 @@ describe("PaymentsService", () => {
     expect(readiness.paymentsLiveEnabled).toBe(false);
     expect(paystack?.issues).toContain("missing PAYSTACK_SECRET_KEY");
     expect(monnify?.issues).toContain("missing MONNIFY_CONTRACT_CODE");
+    expect(readiness.customerSelectableSandboxProviders).toEqual(["mock", "monnify", "paystack"]);
+    expect(readiness.providerEnabledFlags.SQUAD_CUSTOMER_CHECKOUT_ENABLED).toBe("false_or_unset");
+    const squad = readiness.providers.find((provider) => provider.provider === "squad");
+    expect(squad?.customerSelectableInStaging).toBe(false);
+    expect(squad).toMatchObject({ launchStatus: "DEFERRED_FOR_LAUNCH" });
     expect(serialized).not.toContain("configured-monnify-secret");
     expect(serialized).not.toContain("sandbox_sk_configured_squad_secret");
     expect(readiness.liveActivation.supportedByCurrentCode).toBe(false);
@@ -212,7 +219,7 @@ describe("PaymentsService", () => {
       verify: jest.fn(),
       parseWebhook: jest.fn()
     };
-    registry.customerTestProvider.mockReturnValue(monnifyProvider);
+    registry.get.mockReturnValue(monnifyProvider);
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       if (key === "MONNIFY_MODE") return "sandbox";
       return fallback;
@@ -233,6 +240,8 @@ describe("PaymentsService", () => {
       authorizationUrlPresent: true,
       accessCodePresent: true
     }));
+    expect(registry.get).toHaveBeenCalledWith("monnify");
+    expect(registry.customerTestProvider).not.toHaveBeenCalled();
     expect(monnifyProvider.initialize).toHaveBeenCalledWith(expect.objectContaining({
       amount: "100.00",
       currency: "NGN",
@@ -251,7 +260,7 @@ describe("PaymentsService", () => {
       verify: jest.fn(),
       parseWebhook: jest.fn()
     };
-    registry.customerTestProvider.mockReturnValue(paystackProvider);
+    registry.get.mockReturnValue(paystackProvider);
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       if (key === "PAYSTACK_MODE") return "test";
       return fallback;

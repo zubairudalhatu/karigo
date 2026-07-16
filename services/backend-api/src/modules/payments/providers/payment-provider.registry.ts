@@ -10,6 +10,7 @@ import { SquadProvider } from "./squad.provider";
 
 export const CUSTOMER_TEST_PAYMENT_PROVIDERS = ["mock", "paystack", "monnify", "squad"] as const;
 export type CustomerTestPaymentProviderName = (typeof CUSTOMER_TEST_PAYMENT_PROVIDERS)[number];
+export const DEFAULT_CUSTOMER_CHECKOUT_PAYMENT_PROVIDERS = ["mock", "monnify", "paystack"] as const satisfies readonly CustomerTestPaymentProviderName[];
 
 @Injectable()
 export class PaymentProviderRegistry {
@@ -39,10 +40,21 @@ export class PaymentProviderRegistry {
     if (!CUSTOMER_TEST_PAYMENT_PROVIDERS.includes(name)) {
       throw new BadRequestException("Unsupported customer test payment provider");
     }
+    if (!this.customerCheckoutProviders().includes(name)) {
+      throw new BadRequestException(`${this.providerLabel(name)} is deferred for customer checkout`);
+    }
     if (name !== "mock" && this.livePaymentsEnabled()) {
       throw new BadRequestException("Live payment providers are disabled for customer checkout");
     }
     return this.get(name);
+  }
+
+  customerCheckoutProviders(): CustomerTestPaymentProviderName[] {
+    const providers: CustomerTestPaymentProviderName[] = [...DEFAULT_CUSTOMER_CHECKOUT_PAYMENT_PROVIDERS];
+    if (this.squadCustomerCheckoutEnabled()) {
+      providers.push("squad");
+    }
+    return providers;
   }
 
   get(name: string): PaymentProvider {
@@ -54,5 +66,19 @@ export class PaymentProviderRegistry {
 
   private livePaymentsEnabled(): boolean {
     return configText(this.config.get<unknown>("PAYMENTS_LIVE_ENABLED", "false"))?.toLowerCase() === "true";
+  }
+
+  private squadCustomerCheckoutEnabled(): boolean {
+    return configText(this.config.get<unknown>("SQUAD_CUSTOMER_CHECKOUT_ENABLED", "false"))?.toLowerCase() === "true";
+  }
+
+  private providerLabel(name: CustomerTestPaymentProviderName): string {
+    switch (name) {
+      case "paystack": return "Paystack Test Mode";
+      case "monnify": return "Monnify Sandbox";
+      case "squad": return "Squad Sandbox";
+      case "mock": return "Mock payment";
+      default: return "Selected provider";
+    }
   }
 }

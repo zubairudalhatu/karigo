@@ -24,6 +24,17 @@ function providerLabel(value: string) {
   }
 }
 
+function launchStatusLabel(value?: string) {
+  switch (value) {
+    case "PRIMARY_LAUNCH_PROVIDER": return "Primary launch provider";
+    case "SECONDARY_LAUNCH_PROVIDER": return "Secondary launch provider";
+    case "DEFERRED_FOR_LAUNCH": return "Deferred for launch";
+    case "OPTIONAL_LATER_ENABLED": return "Optional later";
+    case "INTERNAL_OR_FALLBACK": return "Internal or fallback";
+    default: return value ?? "";
+  }
+}
+
 function modeStatus(provider: PaymentProviderReadinessItem) {
   const modeRequirement = provider.requirements.find((requirement) => requirement.name.endsWith("_MODE"));
   if (!modeRequirement) return "Not required";
@@ -155,6 +166,8 @@ export default function PaymentReadinessPage() {
                   <article className="card" key={provider.provider}>
                     <h3>{providerLabel(provider.provider)}</h3>
                     <p><Badge>{provider.status}</Badge> {provider.activeByEnvironment ? <Badge>Environment selected</Badge> : <Badge>Not selected</Badge>}</p>
+                    {provider.launchStatus ? <p><Badge>{launchStatusLabel(provider.launchStatus)}</Badge></p> : null}
+                    {provider.launchNote ? <p className="muted">{provider.launchNote}</p> : null}
                     <p className="muted">Mode: {modeStatus(provider)}</p>
                     <p className="muted">Customer selectable: {provider.customerSelectableInStaging ? "Yes" : "No"} | Sandbox ready: {provider.readyForSandboxCheckout ? "Yes" : "No"}</p>
                     <div className="item"><span>Enabled/disabled</span><strong>{provider.activeByEnvironment ? "Enabled by env" : provider.customerSelectableInStaging ? "Selectable when configured" : "Fallback only"}</strong></div>
