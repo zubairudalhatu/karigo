@@ -134,6 +134,35 @@ describe("PaymentsService", () => {
     }));
   });
 
+  it("preserves provider initialization errors when failure notification recording fails", async () => {
+    prisma.order.findFirst.mockResolvedValue({
+      id: "order-paystack",
+      orderNumber: "KGO-003",
+      customerId: "customer-1",
+      totalAmount: new Prisma.Decimal(8500),
+      paymentStatus: PaymentStatus.PENDING,
+      orderStatus: OrderStatus.AWAITING_PAYMENT,
+      customer: { user: { email: null, phoneNumber: "+2348012345678" } }
+    });
+    prisma.payment.create.mockResolvedValue({
+      id: "payment-paystack",
+      currency: "NGN"
+    });
+    mockProvider.initialize.mockRejectedValue(new BadRequestException("Paystack Test Mode credentials are not configured"));
+    notifications.createNotification.mockRejectedValueOnce(new Error("notification write failed"));
+
+    await expect(service.initiate("user-1", {
+      orderId: "order-paystack",
+      amount: 8500,
+      paymentProvider: "paystack"
+    })).rejects.toThrow("Paystack Test Mode credentials are not configured");
+
+    expect(prisma.payment.update).toHaveBeenCalledWith({
+      where: { id: "payment-paystack" },
+      data: { paymentStatus: PaymentStatus.FAILED }
+    });
+  });
+
   it("rejects a frontend amount that does not match the order total", async () => {
     prisma.order.findFirst.mockResolvedValue({
       totalAmount: new Prisma.Decimal(6000),

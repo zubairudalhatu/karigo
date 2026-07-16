@@ -341,8 +341,11 @@ assert(paymentStatus.includes("Mock, Paystack Test Mode, Monnify Sandbox and Squ
 assert(paymentStatus.includes("Complete the ${providerLabel} checkout page"), "Checkout must show provider-specific authorization guidance.");
 assert(paymentStatus.includes("KariGO will only mark the order paid after backend verification."), "Payment copy must state backend verification is required.");
 assert(paymentStatus.includes("Payment could not be verified yet."), "Payment failures must have a clear retry-oriented message.");
+assert(paymentStatus.includes("paymentInitializationFailureMessage"), "Payment initialization failures must have a provider-specific retry/mock fallback message.");
+assert(paymentStatus.includes("You can select Mock payment"), "Sandbox provider startup failures must guide testers back to mock payment.");
 assert(paymentStatus.includes("wallet funding, automatic refunds and payout automation remain disabled."), "Payment copy must keep wallet/refund automation disabled.");
 assert(checkout.includes("Verify payment status"), "Checkout must let customers verify payment status through the backend after provider checkout.");
+assert(checkout.includes("paymentInitializationFailureMessage"), "Checkout must show safe provider-specific initialization errors.");
 const paymentFlow = read("src", "lib", "payment-flow.ts");
 assert(paymentFlow.includes("Linking.openURL"), "Customer payment flow must open external authorization with React Native Linking.");
 assert(paymentFlow.includes("^https:\\/\\/"), "Customer payment flow must only accept HTTPS external authorization URLs.");
@@ -362,6 +365,7 @@ assert(orderDetail.includes("customerTestPaymentProviderOptions"), "Order detail
 assert(orderDetail.includes("paymentProvider: selectedPaymentProvider"), "Order detail retry payment must send the selected sandbox payment provider to the backend.");
 assert(orderDetail.includes("pendingAuthorizationCopy"), "Order detail must show sandbox authorization guidance for retry payments.");
 assert(orderDetail.includes("Verify payment status"), "Order detail must let customers verify provider checkout through the backend.");
+assert(orderDetail.includes("paymentInitializationFailureMessage"), "Order detail retry payment must show safe provider-specific initialization errors.");
 
 const ordersApi = read("src", "api", "orders.api.ts");
 assert(ordersApi.includes("orders/${id}/delivery-otp"), "Customer app must use the delivery OTP endpoint.");

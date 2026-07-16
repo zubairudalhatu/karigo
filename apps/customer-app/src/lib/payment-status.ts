@@ -100,3 +100,11 @@ export function pendingAuthorizationCopy(providerLabel = "Sandbox payment"): Pay
 export function paymentVerificationFailureMessage(message: string): string {
   return `Payment could not be verified yet. ${message} If you cancelled or did not complete checkout, reopen the payment page and try again.`;
 }
+
+export function paymentInitializationFailureMessage(providerLabel: string, message: string): string {
+  const normalizedMessage = message.trim();
+  const safeMessage = /^internal server error$/i.test(normalizedMessage)
+    ? "The sandbox provider could not be started safely."
+    : normalizedMessage || "The sandbox provider could not be started safely.";
+  return `${providerLabel} could not be started. ${safeMessage} You can select Mock payment to continue staging checkout while sandbox configuration is reviewed.`;
+}

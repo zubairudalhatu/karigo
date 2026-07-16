@@ -1,25 +1,27 @@
-import { BadRequestException, UnauthorizedException } from "@nestjs/common";
+import { UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createHmac } from "crypto";
 import { PaystackProvider } from "./paystack.provider";
 
 describe("PaystackProvider", () => {
   const secret = ["sk", "test", "not-a-real-key"].join("_");
+  const defaultConfigGet = (key: string, fallback?: string) => {
+    if (key === "PAYSTACK_SECRET_KEY") return secret;
+    if (key === "PAYSTACK_WEBHOOK_SECRET") return secret;
+    if (key === "PAYSTACK_BASE_URL") return "https://api.paystack.co";
+    if (key === "PAYSTACK_MODE") return "test";
+    if (key === "PAYMENTS_LIVE_ENABLED") return "false";
+    return fallback;
+  };
   const config = {
-    get: jest.fn((key: string, fallback?: string) => {
-      if (key === "PAYSTACK_SECRET_KEY") return secret;
-      if (key === "PAYSTACK_WEBHOOK_SECRET") return secret;
-      if (key === "PAYSTACK_BASE_URL") return "https://api.paystack.co";
-      if (key === "PAYSTACK_MODE") return "test";
-      if (key === "PAYMENTS_LIVE_ENABLED") return "false";
-      return fallback;
-    }),
+    get: jest.fn(defaultConfigGet),
     getOrThrow: jest.fn(() => secret)
   };
   const provider = new PaystackProvider(config as unknown as ConfigService);
 
   beforeEach(() => {
     jest.restoreAllMocks();
+    config.get.mockImplementation(defaultConfigGet);
   });
 
   it("initializes a sandbox transaction in kobo without exposing the secret", async () => {
@@ -50,14 +52,28 @@ describe("PaystackProvider", () => {
     expect(result.authorizationUrl).toBe("https://checkout.paystack.com/test");
   });
 
-  it("requires an email address for Paystack initiation", async () => {
-    await expect(provider.initialize({
+  it("uses a generated sandbox email when a customer email is unavailable", async () => {
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      status: true,
+      message: "Authorization URL created",
+      data: {
+        authorization_url: "https://checkout.paystack.com/test",
+        access_code: "test-access",
+        reference: "KGO-PAYSTACK-123"
+      }
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await provider.initialize({
       transactionReference: "KGO-PAYSTACK-123",
       amount: "6000.00",
       currency: "NGN",
       customerPhone: "+2348012345678",
       metadata: {}
-    })).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(requestInit.body as string);
+    expect(body.email).toBe("checkout+kgo-paystack-123@sandbox.karigo.com.ng");
   });
 
   it("returns amount and currency evidence from verification", async () => {

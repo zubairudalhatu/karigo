@@ -1,24 +1,26 @@
-import { BadRequestException, UnauthorizedException } from "@nestjs/common";
+import { UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createHmac } from "crypto";
 import { SquadProvider } from "./squad.provider";
 
 describe("SquadProvider", () => {
   const secret = "sandbox_sk_not-a-real-key";
+  const defaultConfigGet = (key: string, fallback?: string) => {
+    if (key === "SQUAD_SECRET_KEY") return secret;
+    if (key === "SQUAD_WEBHOOK_SECRET") return secret;
+    if (key === "SQUAD_BASE_URL") return "https://sandbox-api-d.squadco.com";
+    if (key === "SQUAD_MODE") return "test";
+    if (key === "PAYMENTS_LIVE_ENABLED") return "false";
+    return fallback;
+  };
   const config = {
-    get: jest.fn((key: string, fallback?: string) => {
-      if (key === "SQUAD_SECRET_KEY") return secret;
-      if (key === "SQUAD_WEBHOOK_SECRET") return secret;
-      if (key === "SQUAD_BASE_URL") return "https://sandbox-api-d.squadco.com";
-      if (key === "SQUAD_MODE") return "test";
-      if (key === "PAYMENTS_LIVE_ENABLED") return "false";
-      return fallback;
-    })
+    get: jest.fn(defaultConfigGet)
   };
   const provider = new SquadProvider(config as unknown as ConfigService);
 
   beforeEach(() => {
     jest.restoreAllMocks();
+    config.get.mockImplementation(defaultConfigGet);
   });
 
   it("initializes a sandbox checkout transaction in kobo without exposing secrets", async () => {
@@ -118,13 +120,28 @@ describe("SquadProvider", () => {
       .rejects.toThrow("Squad sandbox mode must be explicitly enabled");
   });
 
-  it("requires an email address for Squad initiation", async () => {
-    await expect(provider.initialize({
+  it("uses a generated sandbox email when a customer email is unavailable", async () => {
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      status: 200,
+      success: true,
+      message: "success",
+      data: {
+        checkout_url: "https://sandbox-pay.squadco.com/KGO-SQUAD-123",
+        access_token: "squad-access",
+        transaction_ref: "KGO-SQUAD-123"
+      }
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await provider.initialize({
       transactionReference: "KGO-SQUAD-123",
       amount: "6000.00",
       currency: "NGN",
       customerPhone: "+2348012345678",
       metadata: {}
-    })).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(requestInit.body as string);
+    expect(body.email).toBe("checkout+kgo-squad-123@sandbox.karigo.com.ng");
   });
 });

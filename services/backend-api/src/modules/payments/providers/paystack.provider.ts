@@ -30,10 +30,7 @@ export class PaystackProvider implements PaymentProvider {
   constructor(private readonly config: ConfigService) {}
 
   async initialize(input: InitializePaymentInput): Promise<InitializePaymentResult> {
-    const email = input.customerEmail?.trim();
-    if (!email) {
-      throw new BadRequestException("An email address is required for Paystack payment");
-    }
+    const email = this.customerEmail(input);
     const response = await this.request("/transaction/initialize", {
       method: "POST",
       body: JSON.stringify({
@@ -151,6 +148,19 @@ export class PaystackProvider implements PaymentProvider {
   }
   private number(value: unknown): number | undefined {
     return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  }
+  private customerEmail(input: InitializePaymentInput): string {
+    const email = input.customerEmail?.trim();
+    if (email) return email;
+    this.assertTestModeOnly();
+    return `checkout+${this.safeReference(input.transactionReference)}@sandbox.karigo.com.ng`;
+  }
+  private safeReference(reference: string): string {
+    return reference
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || "payment";
   }
   private assertTestModeOnly(): void {
     const mode = this.config.get<string>("PAYSTACK_MODE")?.trim().toLowerCase();

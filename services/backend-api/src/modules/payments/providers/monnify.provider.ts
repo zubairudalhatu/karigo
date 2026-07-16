@@ -29,10 +29,7 @@ export class MonnifyProvider implements PaymentProvider {
   constructor(private readonly config: ConfigService) {}
 
   async initialize(input: InitializePaymentInput): Promise<InitializePaymentResult> {
-    const email = input.customerEmail?.trim();
-    if (!email) {
-      throw new BadRequestException("An email address is required for Monnify payment");
-    }
+    const email = this.customerEmail(input);
     const token = await this.accessToken();
     const response = await this.request("/api/v1/merchant/transactions/init-transaction", {
       method: "POST",
@@ -217,5 +214,20 @@ export class MonnifyProvider implements PaymentProvider {
 
   private string(value: unknown): string | undefined {
     return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  }
+
+  private customerEmail(input: InitializePaymentInput): string {
+    const email = input.customerEmail?.trim();
+    if (email) return email;
+    this.assertSandboxOnly();
+    return `checkout+${this.safeReference(input.transactionReference)}@sandbox.karigo.com.ng`;
+  }
+
+  private safeReference(reference: string): string {
+    return reference
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || "payment";
   }
 }

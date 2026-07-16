@@ -1,7 +1,10 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
+  Logger,
   NotFoundException
 } from "@nestjs/common";
 import {
@@ -23,6 +26,8 @@ type TransactionClient = Prisma.TransactionClient;
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly providerRegistry: PaymentProviderRegistry,
@@ -81,19 +86,8 @@ export class PaymentsService {
         }
       });
     } catch (error) {
-      await this.prisma.payment.update({
-        where: { id: payment.id },
-        data: { paymentStatus: PaymentStatus.FAILED }
-      });
-      await this.notifications.createNotification({
-        userId,
-        title: "Payment failed",
-        message: `Payment initialization for order ${order.orderNumber} failed.`,
-        type: NotificationType.PAYMENT_FAILED,
-        entityType: "Order",
-        entityId: order.id
-      });
-      throw error;
+      await this.recordInitializationFailure(payment.id, order.id, order.orderNumber, userId, provider.name, error);
+      throw this.safeInitializationException(provider.name, error);
     }
 
     const initializedPayment = await this.prisma.payment.update({
@@ -388,6 +382,68 @@ export class PaymentsService {
 
   private transactionReference(gateway: string): string {
     return `KGO-${gateway.toUpperCase()}-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
+  }
+
+  private async recordInitializationFailure(
+    paymentId: string,
+    orderId: string,
+    orderNumber: string,
+    userId: string,
+    providerName: string,
+    error: unknown
+  ) {
+    try {
+      await this.prisma.payment.update({
+        where: { id: paymentId },
+        data: { paymentStatus: PaymentStatus.FAILED }
+      });
+    } catch (updateError) {
+      this.logger.warn(
+        `Payment initialization failure status update failed provider=${providerName} paymentId=${paymentId} reason=${this.safeErrorMessage(updateError)}`
+      );
+    }
+
+    try {
+      await this.notifications.createNotification({
+        userId,
+        title: "Payment failed",
+        message: `Payment initialization for order ${orderNumber} failed.`,
+        type: NotificationType.PAYMENT_FAILED,
+        entityType: "Order",
+        entityId: orderId
+      });
+    } catch (notificationError) {
+      this.logger.warn(
+        `Payment initialization failure notification skipped provider=${providerName} paymentId=${paymentId} reason=${this.safeErrorMessage(notificationError)}`
+      );
+    }
+
+    this.logger.warn(
+      `Payment initialization failed provider=${providerName} paymentId=${paymentId} reason=${this.safeErrorMessage(error)}`
+    );
+  }
+
+  private safeInitializationException(providerName: string, error: unknown): HttpException {
+    if (error instanceof HttpException) {
+      return error;
+    }
+    return new BadGatewayException(
+      `${this.providerLabel(providerName)} could not be started. Please use mock payment or retry the sandbox provider later.`
+    );
+  }
+
+  private providerLabel(providerName: string): string {
+    switch (providerName) {
+      case "paystack": return "Paystack Test Mode";
+      case "monnify": return "Monnify Sandbox";
+      case "squad": return "Squad Sandbox";
+      case "mock": return "Mock payment";
+      default: return "Selected payment provider";
+    }
+  }
+
+  private safeErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 
   private assertProviderEvidence(

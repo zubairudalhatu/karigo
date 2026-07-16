@@ -1,26 +1,28 @@
-import { BadRequestException, UnauthorizedException } from "@nestjs/common";
+import { UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createHmac } from "crypto";
 import { MonnifyProvider } from "./monnify.provider";
 
 describe("MonnifyProvider", () => {
   const secret = "monnify-test-secret-not-real";
+  const defaultConfigGet = (key: string, fallback?: string) => {
+    if (key === "MONNIFY_API_KEY") return "monnify-test-api-key-not-real";
+    if (key === "MONNIFY_SECRET_KEY") return secret;
+    if (key === "MONNIFY_WEBHOOK_SECRET") return secret;
+    if (key === "MONNIFY_CONTRACT_CODE") return "1234567890";
+    if (key === "MONNIFY_BASE_URL") return "https://sandbox.monnify.com";
+    if (key === "MONNIFY_MODE") return "test";
+    if (key === "PAYMENTS_LIVE_ENABLED") return "false";
+    return fallback;
+  };
   const config = {
-    get: jest.fn((key: string, fallback?: string) => {
-      if (key === "MONNIFY_API_KEY") return "monnify-test-api-key-not-real";
-      if (key === "MONNIFY_SECRET_KEY") return secret;
-      if (key === "MONNIFY_WEBHOOK_SECRET") return secret;
-      if (key === "MONNIFY_CONTRACT_CODE") return "1234567890";
-      if (key === "MONNIFY_BASE_URL") return "https://sandbox.monnify.com";
-      if (key === "MONNIFY_MODE") return "test";
-      if (key === "PAYMENTS_LIVE_ENABLED") return "false";
-      return fallback;
-    })
+    get: jest.fn(defaultConfigGet)
   };
   const provider = new MonnifyProvider(config as unknown as ConfigService);
 
   beforeEach(() => {
     jest.restoreAllMocks();
+    config.get.mockImplementation(defaultConfigGet);
   });
 
   it("initializes a sandbox hosted-checkout transaction without exposing secrets", async () => {
@@ -136,13 +138,31 @@ describe("MonnifyProvider", () => {
       .rejects.toThrow("Monnify sandbox mode must be explicitly enabled");
   });
 
-  it("requires an email address for Monnify initiation", async () => {
-    await expect(provider.initialize({
+  it("uses a generated sandbox email when a customer email is unavailable", async () => {
+    const fetchMock = jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        requestSuccessful: true,
+        responseBody: { accessToken: "monnify-access-token" }
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        requestSuccessful: true,
+        responseBody: {
+          paymentReference: "KGO-MONNIFY-123",
+          transactionReference: "MNFY-123",
+          checkoutUrl: "https://sandbox.monnify.com/checkout/KGO-MONNIFY-123"
+        }
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await provider.initialize({
       transactionReference: "KGO-MONNIFY-123",
       amount: "6000.00",
       currency: "NGN",
       customerPhone: "+2348012345678",
       metadata: {}
-    })).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    const initBody = JSON.parse((fetchMock as jest.Mock).mock.calls[1][1].body);
+    expect(initBody.customerEmail).toBe("checkout+kgo-monnify-123@sandbox.karigo.com.ng");
+    expect(initBody.customerName).toBe("checkout+kgo-monnify-123@sandbox.karigo.com.ng");
   });
 });

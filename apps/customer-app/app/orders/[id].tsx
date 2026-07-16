@@ -16,6 +16,7 @@ import {
   customerTestPaymentProviderOptions,
   paymentSafetyNote,
   paymentProviderLabel,
+  paymentInitializationFailureMessage,
   paymentStatusView,
   paymentVerificationFailureMessage,
   pendingAuthorizationCopy,
@@ -68,7 +69,7 @@ export default function OrderTracking() {
         throw new Error("Payment authorization link was not accepted.");
       }
       await verifyPayment(started.payment.transactionReference);
-    } catch (e) { setError(friendlyError(e)); } finally { setBusy(false); }
+    } catch (e) { setError(paymentInitializationFailureMessage(selectedProviderLabel, friendlyError(e))); } finally { setBusy(false); }
   }
 
   async function verifyPayment(reference: string) {

@@ -18,6 +18,7 @@ import {
   customerTestPaymentProviderOptions,
   paymentSafetyNote,
   paymentProviderLabel,
+  paymentInitializationFailureMessage,
   paymentStatusView,
   paymentVerificationFailureMessage,
   pendingAuthorizationCopy,
@@ -180,7 +181,7 @@ export default function Checkout() {
       }
       await verifyPayment(started.payment.transactionReference);
     } catch (e) {
-      setError(friendlyError(e));
+      setError(paymentInitializationFailureMessage(selectedProviderLabel, friendlyError(e)));
     } finally {
       setBusy(false);
     }
