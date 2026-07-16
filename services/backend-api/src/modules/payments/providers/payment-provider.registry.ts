@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { FlutterwaveProvider } from "./flutterwave.provider";
 import { MockPaymentProvider } from "./mock-payment.provider";
 import { MonnifyProvider } from "./monnify.provider";
+import { configText } from "./payment-provider-diagnostics";
 import { PaymentProvider, PaymentProviderName, PAYMENT_PROVIDERS } from "./payment-provider.interface";
 import { PaystackProvider } from "./paystack.provider";
 import { SquadProvider } from "./squad.provider";
@@ -52,6 +53,6 @@ export class PaymentProviderRegistry {
   }
 
   private livePaymentsEnabled(): boolean {
-    return this.config.get<string>("PAYMENTS_LIVE_ENABLED", "false").trim().toLowerCase() === "true";
+    return configText(this.config.get<unknown>("PAYMENTS_LIVE_ENABLED", "false"))?.toLowerCase() === "true";
   }
 }

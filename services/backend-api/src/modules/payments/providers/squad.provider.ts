@@ -14,6 +14,11 @@ import {
   VerifyPaymentResult,
   WebhookPaymentResult
 } from "./payment-provider.interface";
+import {
+  configText,
+  PaymentInitializationStage,
+  PaymentProviderInitializationException
+} from "./payment-provider-diagnostics";
 
 interface SquadEnvelope {
   status?: number | string;
@@ -43,7 +48,7 @@ export class SquadProvider implements PaymentProvider {
         callback_url: this.config.get<string>("SQUAD_CALLBACK_URL") || undefined,
         metadata: input.metadata
       })
-    });
+    }, "initialize-transaction");
     const data = this.record(response.data) ?? {};
     return {
       transactionReference: this.string(data.transaction_ref) ?? input.transactionReference,
@@ -89,7 +94,11 @@ export class SquadProvider implements PaymentProvider {
     };
   }
 
-  private async request(path: string, init: RequestInit): Promise<SquadEnvelope> {
+  private async request(
+    path: string,
+    init: RequestInit,
+    stage: PaymentInitializationStage = "provider-response"
+  ): Promise<SquadEnvelope> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
     try {
@@ -104,12 +113,16 @@ export class SquadProvider implements PaymentProvider {
       });
       const body = await response.json().catch(() => ({})) as SquadEnvelope;
       if (!response.ok || body.success === false || (typeof body.status === "number" && body.status >= 400)) {
-        throw new BadGatewayException(body.message || "Squad request failed");
+        throw this.initializationException(stage, body.message || "Squad request failed", response.status);
       }
       return body;
     } catch (error) {
-      if (error instanceof BadGatewayException || error instanceof BadRequestException) throw error;
-      throw new BadGatewayException("Squad is currently unavailable");
+      if (
+        error instanceof PaymentProviderInitializationException
+        || error instanceof BadGatewayException
+        || error instanceof BadRequestException
+      ) throw error;
+      throw this.initializationException(stage, "Squad is currently unavailable");
     } finally {
       clearTimeout(timeout);
     }
@@ -117,7 +130,7 @@ export class SquadProvider implements PaymentProvider {
 
   private secretKey(): string {
     this.assertSandboxOnly();
-    const key = this.config.get<string>("SQUAD_SECRET_KEY")?.trim();
+    const key = configText(this.config.get<unknown>("SQUAD_SECRET_KEY"));
     if (!key) {
       throw new BadRequestException("missing SQUAD_SECRET_KEY");
     }
@@ -128,7 +141,7 @@ export class SquadProvider implements PaymentProvider {
   }
 
   private baseUrl(): string {
-    const value = this.config.get<string>("SQUAD_BASE_URL", "https://sandbox-api-d.squadco.com").replace(/\/+$/, "");
+    const value = (configText(this.config.get<unknown>("SQUAD_BASE_URL", "https://sandbox-api-d.squadco.com")) ?? "https://sandbox-api-d.squadco.com").replace(/\/+$/, "");
     if (!value.startsWith("https://") || value.includes("api-d.squadco.com") && !value.includes("sandbox")) {
       throw new BadRequestException("Squad sandbox base URL must use HTTPS and must not be the live API host");
     }
@@ -136,8 +149,8 @@ export class SquadProvider implements PaymentProvider {
   }
 
   private assertSandboxOnly(): void {
-    const mode = this.config.get<string>("SQUAD_MODE")?.trim().toLowerCase();
-    const liveEnabled = this.config.get<string>("PAYMENTS_LIVE_ENABLED", "false").trim().toLowerCase() === "true";
+    const mode = configText(this.config.get<unknown>("SQUAD_MODE"))?.toLowerCase();
+    const liveEnabled = configText(this.config.get<unknown>("PAYMENTS_LIVE_ENABLED", "false"))?.toLowerCase() === "true";
     if (liveEnabled) throw new BadRequestException("PAYMENTS_LIVE_ENABLED must be false for Squad Sandbox");
     if (!["test", "sandbox"].includes(mode ?? "")) {
       throw new BadRequestException("missing SQUAD_MODE=test or sandbox");
@@ -145,7 +158,7 @@ export class SquadProvider implements PaymentProvider {
   }
 
   private validSignature(rawBody: Buffer, supplied: string): boolean {
-    const secret = this.config.get<string>("SQUAD_WEBHOOK_SECRET")?.trim() || this.secretKey();
+    const secret = configText(this.config.get<unknown>("SQUAD_WEBHOOK_SECRET")) || this.secretKey();
     const expected = createHmac("sha512", secret).update(rawBody).digest("hex").toUpperCase();
     const received = supplied.trim().replace(/\s+/g, "").toUpperCase();
     if (received.length !== expected.length) return false;
@@ -184,5 +197,19 @@ export class SquadProvider implements PaymentProvider {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 64) || "payment";
+  }
+
+  private initializationException(
+    stage: PaymentInitializationStage,
+    message: string,
+    httpStatusCode?: number
+  ): PaymentProviderInitializationException {
+    return new PaymentProviderInitializationException({
+      provider: this.name,
+      stage,
+      message,
+      httpStatusCode,
+      providerMessage: message
+    });
   }
 }

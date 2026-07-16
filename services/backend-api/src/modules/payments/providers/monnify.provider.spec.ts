@@ -12,7 +12,7 @@ describe("MonnifyProvider", () => {
     if (key === "MONNIFY_CONTRACT_CODE") return "1234567890";
     if (key === "MONNIFY_BASE_URL") return "https://sandbox.monnify.com";
     if (key === "MONNIFY_MODE") return "test";
-    if (key === "PAYMENTS_LIVE_ENABLED") return "false";
+    if (key === "PAYMENTS_LIVE_ENABLED") return false;
     return fallback;
   };
   const config = {
@@ -130,7 +130,7 @@ describe("MonnifyProvider", () => {
       if (key === "MONNIFY_CONTRACT_CODE") return "1234567890";
       if (key === "MONNIFY_BASE_URL") return "https://sandbox.monnify.com";
       if (key === "MONNIFY_MODE") return undefined;
-      if (key === "PAYMENTS_LIVE_ENABLED") return "false";
+      if (key === "PAYMENTS_LIVE_ENABLED") return false;
       return fallback;
     });
 

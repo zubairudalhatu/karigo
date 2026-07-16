@@ -14,6 +14,11 @@ import {
   VerifyPaymentResult,
   WebhookPaymentResult
 } from "./payment-provider.interface";
+import {
+  configText,
+  PaymentInitializationStage,
+  PaymentProviderInitializationException
+} from "./payment-provider-diagnostics";
 
 interface MonnifyEnvelope {
   requestSuccessful?: boolean;
@@ -44,7 +49,7 @@ export class MonnifyProvider implements PaymentProvider {
         customerName: email,
         metaData: input.metadata
       })
-    }, token);
+    }, token, true, "initialize-transaction");
     const data = this.body(response);
     return {
       transactionReference: this.string(data.paymentReference) ?? input.transactionReference,
@@ -96,10 +101,12 @@ export class MonnifyProvider implements PaymentProvider {
     const response = await this.request("/api/v1/auth/login", {
       method: "POST",
       headers: { Authorization: `Basic ${credentials}` }
-    }, undefined, false);
+    }, undefined, false, "auth-token");
     const data = this.body(response);
     const token = this.string(data.accessToken) ?? this.string(data.token);
-    if (!token) throw new BadGatewayException("Monnify authentication did not return an access token");
+    if (!token) {
+      throw this.initializationException("auth-token", "Monnify authentication did not return an access token");
+    }
     return token;
   }
 
@@ -107,7 +114,8 @@ export class MonnifyProvider implements PaymentProvider {
     path: string,
     init: RequestInit,
     bearerToken?: string,
-    includeJsonHeader = true
+    includeJsonHeader = true,
+    stage: PaymentInitializationStage = "provider-response"
   ): Promise<MonnifyEnvelope> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
@@ -124,38 +132,42 @@ export class MonnifyProvider implements PaymentProvider {
       const body = await response.json().catch(() => ({})) as MonnifyEnvelope;
       const successful = body.requestSuccessful !== false;
       if (!response.ok || !successful) {
-        throw new BadGatewayException(body.responseMessage || "Monnify request failed");
+        throw this.initializationException(stage, body.responseMessage || "Monnify request failed", response.status);
       }
       return body;
     } catch (error) {
-      if (error instanceof BadGatewayException || error instanceof BadRequestException) throw error;
-      throw new BadGatewayException("Monnify is currently unavailable");
+      if (
+        error instanceof PaymentProviderInitializationException
+        || error instanceof BadGatewayException
+        || error instanceof BadRequestException
+      ) throw error;
+      throw this.initializationException(stage, "Monnify is currently unavailable");
     } finally {
       clearTimeout(timeout);
     }
   }
 
   private apiKey(): string {
-    const key = this.config.get<string>("MONNIFY_API_KEY")?.trim();
+    const key = configText(this.config.get<unknown>("MONNIFY_API_KEY"));
     if (!key) throw new BadRequestException("missing MONNIFY_API_KEY");
     return key;
   }
 
   private secretKey(): string {
     this.assertSandboxOnly();
-    const key = this.config.get<string>("MONNIFY_SECRET_KEY")?.trim();
+    const key = configText(this.config.get<unknown>("MONNIFY_SECRET_KEY"));
     if (!key) throw new BadRequestException("missing MONNIFY_SECRET_KEY");
     return key;
   }
 
   private contractCode(): string {
-    const code = this.config.get<string>("MONNIFY_CONTRACT_CODE")?.trim();
+    const code = configText(this.config.get<unknown>("MONNIFY_CONTRACT_CODE"));
     if (!code) throw new BadRequestException("missing MONNIFY_CONTRACT_CODE");
     return code;
   }
 
   private baseUrl(): string {
-    const value = this.config.get<string>("MONNIFY_BASE_URL", "https://sandbox.monnify.com").replace(/\/+$/, "");
+    const value = (configText(this.config.get<unknown>("MONNIFY_BASE_URL", "https://sandbox.monnify.com")) ?? "https://sandbox.monnify.com").replace(/\/+$/, "");
     if (!value.startsWith("https://") || value.includes("api.monnify.com")) {
       throw new BadRequestException("Monnify sandbox base URL must use HTTPS and must not be the live API host");
     }
@@ -163,8 +175,8 @@ export class MonnifyProvider implements PaymentProvider {
   }
 
   private assertSandboxOnly(): void {
-    const mode = this.config.get<string>("MONNIFY_MODE")?.trim().toLowerCase();
-    const liveEnabled = this.config.get<string>("PAYMENTS_LIVE_ENABLED", "false").trim().toLowerCase() === "true";
+    const mode = configText(this.config.get<unknown>("MONNIFY_MODE"))?.toLowerCase();
+    const liveEnabled = configText(this.config.get<unknown>("PAYMENTS_LIVE_ENABLED", "false"))?.toLowerCase() === "true";
     if (liveEnabled) throw new BadRequestException("PAYMENTS_LIVE_ENABLED must be false for Monnify Sandbox");
     if (!["test", "sandbox"].includes(mode ?? "")) {
       throw new BadRequestException("missing MONNIFY_MODE=test or sandbox");
@@ -172,7 +184,7 @@ export class MonnifyProvider implements PaymentProvider {
   }
 
   private validSignature(rawBody: Buffer, supplied: string): boolean {
-    const secret = this.config.get<string>("MONNIFY_WEBHOOK_SECRET")?.trim() || this.secretKey();
+    const secret = configText(this.config.get<unknown>("MONNIFY_WEBHOOK_SECRET")) || this.secretKey();
     const hmacSignature = createHmac("sha512", secret).update(rawBody).digest("hex");
     const shaSignature = createHash("sha512").update(`${secret}${rawBody.toString("utf8")}`).digest("hex");
     return this.safeEqual(hmacSignature, supplied) || this.safeEqual(shaSignature, supplied);
@@ -229,5 +241,19 @@ export class MonnifyProvider implements PaymentProvider {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 64) || "payment";
+  }
+
+  private initializationException(
+    stage: PaymentInitializationStage,
+    message: string,
+    httpStatusCode?: number
+  ): PaymentProviderInitializationException {
+    return new PaymentProviderInitializationException({
+      provider: this.name,
+      stage,
+      message,
+      httpStatusCode,
+      providerMessage: message
+    });
   }
 }

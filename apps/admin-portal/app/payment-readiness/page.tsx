@@ -2,10 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { KariGoApiError } from "@karigo/shared-types";
-import { PaymentProviderReadiness, PaymentProviderReadinessItem, paymentsApi } from "../../src/api/payments.api";
+import {
+  PaymentProviderInitializationTestResult,
+  PaymentProviderReadiness,
+  PaymentProviderReadinessItem,
+  SandboxInitializationTestProvider,
+  paymentsApi
+} from "../../src/api/payments.api";
 import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
 
 const providerPriority = ["monnify", "paystack", "squad"];
+const sandboxTestProviders = ["paystack", "monnify", "squad"];
 
 function providerLabel(value: string) {
   switch (value) {
@@ -50,10 +57,27 @@ function paymentReadinessError(error: unknown) {
   return base;
 }
 
+function paymentInitializationTestError(error: unknown) {
+  const base = "Sandbox initialization test could not be completed. Please confirm backend access and admin session.";
+  if (error instanceof KariGoApiError) {
+    if (error.status === 401 || error.status === 403) return base;
+    if (error.status && error.status >= 500) return `${base} Backend returned ${error.status}.`;
+    return `${base} ${error.message}`;
+  }
+  return base;
+}
+
+function isSandboxTestProvider(provider: string): provider is SandboxInitializationTestProvider {
+  return sandboxTestProviders.includes(provider);
+}
+
 export default function PaymentReadinessPage() {
   const [readiness, setReadiness] = useState<PaymentProviderReadiness | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [testError, setTestError] = useState("");
+  const [testingProvider, setTestingProvider] = useState("");
+  const [testResults, setTestResults] = useState<Record<string, PaymentProviderInitializationTestResult>>({});
 
   const providers = useMemo(() => readiness ? sortProviders(readiness.providers) : [], [readiness]);
 
@@ -64,6 +88,15 @@ export default function PaymentReadinessPage() {
       .then(setReadiness)
       .catch((e) => setError(paymentReadinessError(e)))
       .finally(() => setLoading(false));
+  }
+
+  function testProvider(provider: SandboxInitializationTestProvider) {
+    setTestError("");
+    setTestingProvider(provider);
+    paymentsApi.testProviderReadiness(provider)
+      .then((result) => setTestResults((current) => ({ ...current, [provider]: result })))
+      .catch((e) => setTestError(paymentInitializationTestError(e)))
+      .finally(() => setTestingProvider(""));
   }
 
   useEffect(() => { load(); }, []);
@@ -79,6 +112,7 @@ export default function PaymentReadinessPage() {
       </header>
       <p className="muted">Admin-only configuration readiness for mock payment, Paystack Test Mode, Monnify Sandbox and Squad Sandbox. This page does not expose secret values and does not activate live checkout, wallet funding, refunds, payouts or settlements.</p>
       <ErrorMessage>{error}</ErrorMessage>
+      <ErrorMessage>{testError}</ErrorMessage>
 
       {loading ? <Loading /> : readiness ? (
         <>
@@ -115,6 +149,8 @@ export default function PaymentReadinessPage() {
             <div className="grid">
               {providers.map((provider) => {
                 const missing = missingRequired(provider);
+                const testResult = testResults[provider.provider];
+                const sandboxProvider = isSandboxTestProvider(provider.provider) ? provider.provider : null;
                 return (
                   <article className="card" key={provider.provider}>
                     <h3>{providerLabel(provider.provider)}</h3>
@@ -130,6 +166,27 @@ export default function PaymentReadinessPage() {
                     ) : <p className="success">No required configuration gaps reported.</p>}
                     {provider.recommendations?.length ? <p className="muted">{provider.recommendations[0]}</p> : null}
                     {provider.recommendedActions?.length ? <p className="muted">{provider.recommendedActions[0]}</p> : null}
+                    {sandboxProvider ? (
+                      <>
+                        <button
+                          className="secondary"
+                          onClick={() => testProvider(sandboxProvider)}
+                          disabled={testingProvider === sandboxProvider}
+                        >
+                          {testingProvider === sandboxProvider ? "Testing..." : "Test sandbox initialization"}
+                        </button>
+                        {testResult ? (
+                          <div className="item">
+                            <span>Latest initialization test</span>
+                            <strong>{testResult.success ? "Accepted by provider" : "Failed safely"}</strong>
+                            <p className="muted">Stage: {testResult.stage} | Mode: {testResult.mode} | Time: {testResult.timestamp}</p>
+                            {testResult.httpStatusCode ? <p className="muted">Provider HTTP status: {testResult.httpStatusCode}</p> : null}
+                            {testResult.providerMessage ? <p className="muted">Safe provider message: {testResult.providerMessage}</p> : null}
+                            <p className="muted">Authorization URL present: {testResult.authorizationUrlPresent ? "Yes" : "No"} | Access code present: {testResult.accessCodePresent ? "Yes" : "No"}</p>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : null}
                   </article>
                 );
               })}

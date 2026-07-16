@@ -38,7 +38,25 @@ export interface PaymentProviderReadiness {
   };
 }
 
+export type SandboxInitializationTestProvider = "paystack" | "monnify" | "squad";
+
+export interface PaymentProviderInitializationTestResult {
+  success: boolean;
+  provider: SandboxInitializationTestProvider | string;
+  mode: string;
+  stage: string;
+  transactionReference: string;
+  authorizationUrlPresent?: boolean;
+  accessCodePresent?: boolean;
+  httpStatusCode?: number;
+  providerMessage?: string;
+  message?: string;
+  timestamp: string;
+}
+
 export const paymentsApi = {
   approveRefund: (id: string) => api.post(`admin/payments/${id}/approve-refund`),
-  providerReadiness: () => api.get<PaymentProviderReadiness>("admin/payments/provider-readiness")
+  providerReadiness: () => api.get<PaymentProviderReadiness>("admin/payments/provider-readiness"),
+  testProviderReadiness: (provider: SandboxInitializationTestProvider) =>
+    api.post<PaymentProviderInitializationTestResult>("admin/payments/provider-readiness/test", { provider })
 };

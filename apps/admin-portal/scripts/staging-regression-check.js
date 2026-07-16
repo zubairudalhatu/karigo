@@ -58,6 +58,9 @@ assert(paymentReadinessPage.includes("paymentsApi.providerReadiness"), "Admin Pa
 assert(paymentReadinessPage.includes("Payment readiness could not be loaded. Please confirm backend access and admin session."), "Payment Readiness page must use a page-specific safe error message.");
 assert(paymentReadinessPage.includes("Mock payment remains the default rollback path"), "Payment Readiness page must state mock rollback guardrail.");
 assert(paymentReadinessPage.includes("Do not paste keys"), "Payment Readiness page must warn against exposing secrets.");
+assert(paymentReadinessPage.includes("Test sandbox initialization"), "Payment Readiness page must expose a safe admin-only sandbox initialization test action.");
+assert(paymentReadinessPage.includes("Stage: {testResult.stage}"), "Payment Readiness page must show the provider initialization failure stage.");
+assert(paymentReadinessPage.includes("Authorization URL present"), "Payment Readiness page must show only authorization URL presence, not URL values.");
 assert(paymentReadinessPage.includes("1 Monnify"), "Payment Readiness page must show Monnify as launch priority one.");
 assert(paymentReadinessPage.includes("2 Paystack, 3 Squad later"), "Payment Readiness page must show Paystack second and Squad later.");
 const liveSecretPrefix = ["sk", "live"].join("_");
@@ -65,7 +68,9 @@ const livePublicPrefix = ["pk", "live"].join("_");
 assert(!paymentReadinessPage.includes(liveSecretPrefix) && !paymentReadinessPage.includes(livePublicPrefix), "Payment Readiness page must not contain live payment key values.");
 const paymentsApiSource = read("src", "api", "payments.api.ts");
 assert(paymentsApiSource.includes("admin/payments/provider-readiness"), "Admin payments API must call provider readiness endpoint.");
+assert(paymentsApiSource.includes("admin/payments/provider-readiness/test"), "Admin payments API must call provider readiness initialization test endpoint.");
 assert(paymentsApiSource.includes("PaymentProviderReadiness"), "Admin payments API must type provider readiness response.");
+assert(paymentsApiSource.includes("PaymentProviderInitializationTestResult"), "Admin payments API must type initialization test response.");
 
 const smeServicesSummaryPage = read("app", "sme-services", "summary", "page.tsx");
 assert(smeServicesSummaryPage.includes("SME Services operations summary"), "Admin SME Services summary page must exist.");

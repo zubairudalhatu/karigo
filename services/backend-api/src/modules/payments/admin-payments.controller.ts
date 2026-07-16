@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -6,6 +6,7 @@ import { Roles } from "../../common/decorators/roles.decorator";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
+import { TestPaymentProviderDto } from "./dto/test-payment-provider.dto";
 import { PaymentsService } from "./payments.service";
 
 @ApiTags("Admin Payments")
@@ -22,6 +23,15 @@ export class AdminPaymentsController {
     return {
       message: "Payment provider readiness retrieved",
       data: this.paymentsService.providerReadiness()
+    };
+  }
+
+  @Post("provider-readiness/test")
+  @ApiOperation({ summary: "Run a safe sandbox payment provider initialization test" })
+  async testProviderReadiness(@Body() dto: TestPaymentProviderDto): Promise<{ message: string; data: unknown }> {
+    return {
+      message: "Payment provider initialization test completed",
+      data: await this.paymentsService.testProviderInitialization(dto.provider)
     };
   }
 

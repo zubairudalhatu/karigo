@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException } from "@nestjs/common";
 import { OrderStatus, PaymentStatus, Prisma, ServiceCategory } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { PaymentsService } from "./payments.service";
+import { PaymentProviderInitializationException } from "./providers/payment-provider-diagnostics";
 import { PaymentProviderRegistry } from "./providers/payment-provider.registry";
 
 describe("PaymentsService", () => {
@@ -202,6 +203,81 @@ describe("PaymentsService", () => {
     expect(serialized).not.toContain("configured-monnify-secret");
     expect(serialized).not.toContain("sandbox_sk_configured_squad_secret");
     expect(readiness.liveActivation.supportedByCurrentCode).toBe(false);
+  });
+
+  it("runs a safe admin sandbox initialization test without storing a payment", async () => {
+    const monnifyProvider = {
+      name: "monnify",
+      initialize: jest.fn(),
+      verify: jest.fn(),
+      parseWebhook: jest.fn()
+    };
+    registry.customerTestProvider.mockReturnValue(monnifyProvider);
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      if (key === "MONNIFY_MODE") return "sandbox";
+      return fallback;
+    });
+    monnifyProvider.initialize.mockResolvedValue({
+      transactionReference: "KGO-MONNIFY-TEST-123",
+      authorizationUrl: "https://sandbox.monnify.com/checkout",
+      accessCode: "MNFY-123",
+      providerResponse: { requestSuccessful: true }
+    });
+
+    const result = await service.testProviderInitialization("monnify");
+
+    expect(result).toEqual(expect.objectContaining({
+      success: true,
+      provider: "monnify",
+      mode: "sandbox",
+      authorizationUrlPresent: true,
+      accessCodePresent: true
+    }));
+    expect(monnifyProvider.initialize).toHaveBeenCalledWith(expect.objectContaining({
+      amount: "100.00",
+      currency: "NGN",
+      customerEmail: expect.stringContaining("@sandbox.karigo.com.ng"),
+      metadata: expect.objectContaining({
+        purpose: "admin-provider-readiness-test"
+      })
+    }));
+    expect(prisma.payment.create).not.toHaveBeenCalled();
+  });
+
+  it("returns safe stage diagnostics when an admin sandbox initialization test fails", async () => {
+    const paystackProvider = {
+      name: "paystack",
+      initialize: jest.fn(),
+      verify: jest.fn(),
+      parseWebhook: jest.fn()
+    };
+    registry.customerTestProvider.mockReturnValue(paystackProvider);
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      if (key === "PAYSTACK_MODE") return "test";
+      return fallback;
+    });
+    paystackProvider.initialize.mockRejectedValue(new PaymentProviderInitializationException({
+      provider: "paystack",
+      stage: "initialize-transaction",
+      message: "Paystack request failed",
+      httpStatusCode: 400,
+      providerMessage: "Invalid callback URL"
+    }));
+
+    const result = await service.testProviderInitialization("paystack");
+    const serialized = JSON.stringify(result);
+
+    expect(result).toEqual(expect.objectContaining({
+      success: false,
+      provider: "paystack",
+      mode: "test",
+      stage: "initialize-transaction",
+      httpStatusCode: 400,
+      providerMessage: "Invalid callback URL"
+    }));
+    expect(serialized).not.toContain("SECRET_KEY");
+    expect(serialized).not.toContain("sk_");
+    expect(prisma.payment.create).not.toHaveBeenCalled();
   });
 
   it("rejects a frontend amount that does not match the order total", async () => {

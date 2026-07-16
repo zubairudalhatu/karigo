@@ -14,6 +14,11 @@ import {
   VerifyPaymentResult,
   WebhookPaymentResult
 } from "./payment-provider.interface";
+import {
+  configText,
+  PaymentInitializationStage,
+  PaymentProviderInitializationException
+} from "./payment-provider-diagnostics";
 
 interface PaystackEnvelope {
   status?: boolean;
@@ -41,7 +46,7 @@ export class PaystackProvider implements PaymentProvider {
         callback_url: this.config.get<string>("PAYSTACK_CALLBACK_URL") || undefined,
         metadata: input.metadata
       })
-    });
+    }, "initialize-transaction");
     const data = response.data ?? {};
     return {
       transactionReference: this.string(data.reference) ?? input.transactionReference,
@@ -83,7 +88,11 @@ export class PaystackProvider implements PaymentProvider {
     };
   }
 
-  private async request(path: string, init: RequestInit = {}): Promise<PaystackEnvelope> {
+  private async request(
+    path: string,
+    init: RequestInit = {},
+    stage: PaymentInitializationStage = "provider-response"
+  ): Promise<PaystackEnvelope> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
     try {
@@ -98,12 +107,16 @@ export class PaystackProvider implements PaymentProvider {
       });
       const body = await response.json() as PaystackEnvelope;
       if (!response.ok || body.status !== true) {
-        throw new BadGatewayException(body.message || "Paystack request failed");
+        throw this.initializationException(stage, body.message || "Paystack request failed", response.status);
       }
       return body;
     } catch (error) {
-      if (error instanceof BadGatewayException || error instanceof BadRequestException) throw error;
-      throw new BadGatewayException("Paystack is currently unavailable");
+      if (
+        error instanceof PaymentProviderInitializationException
+        || error instanceof BadGatewayException
+        || error instanceof BadRequestException
+      ) throw error;
+      throw this.initializationException(stage, "Paystack is currently unavailable");
     } finally {
       clearTimeout(timeout);
     }
@@ -125,7 +138,7 @@ export class PaystackProvider implements PaymentProvider {
 
   private secretKey(): string {
     this.assertTestModeOnly();
-    const key = this.config.get<string>("PAYSTACK_SECRET_KEY")?.trim();
+    const key = configText(this.config.get<unknown>("PAYSTACK_SECRET_KEY"));
     if (!key) {
       throw new BadRequestException("missing PAYSTACK_SECRET_KEY");
     }
@@ -135,10 +148,10 @@ export class PaystackProvider implements PaymentProvider {
     return key;
   }
   private webhookSecret(): string {
-    return this.config.get<string>("PAYSTACK_WEBHOOK_SECRET") || this.secretKey();
+    return configText(this.config.get<unknown>("PAYSTACK_WEBHOOK_SECRET")) || this.secretKey();
   }
   private baseUrl(): string {
-    const value = this.config.get<string>("PAYSTACK_BASE_URL", "https://api.paystack.co").replace(/\/+$/, "");
+    const value = (configText(this.config.get<unknown>("PAYSTACK_BASE_URL", "https://api.paystack.co")) ?? "https://api.paystack.co").replace(/\/+$/, "");
     if (!value.startsWith("https://")) {
       throw new BadRequestException("PAYSTACK_BASE_URL must use HTTPS");
     }
@@ -167,13 +180,27 @@ export class PaystackProvider implements PaymentProvider {
       .slice(0, 64) || "payment";
   }
   private assertTestModeOnly(): void {
-    const mode = this.config.get<string>("PAYSTACK_MODE")?.trim().toLowerCase();
-    const liveEnabled = this.config.get<string>("PAYMENTS_LIVE_ENABLED", "false").trim().toLowerCase() === "true";
+    const mode = configText(this.config.get<unknown>("PAYSTACK_MODE"))?.toLowerCase();
+    const liveEnabled = configText(this.config.get<unknown>("PAYMENTS_LIVE_ENABLED", "false"))?.toLowerCase() === "true";
     if (liveEnabled) {
       throw new BadRequestException("PAYMENTS_LIVE_ENABLED must be false for Paystack Test Mode");
     }
     if (mode !== "test") {
       throw new BadRequestException("missing PAYSTACK_MODE=test");
     }
+  }
+
+  private initializationException(
+    stage: PaymentInitializationStage,
+    message: string,
+    httpStatusCode?: number
+  ): PaymentProviderInitializationException {
+    return new PaymentProviderInitializationException({
+      provider: this.name,
+      stage,
+      message,
+      httpStatusCode,
+      providerMessage: message
+    });
   }
 }

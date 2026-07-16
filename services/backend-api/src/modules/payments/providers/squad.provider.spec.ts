@@ -10,7 +10,7 @@ describe("SquadProvider", () => {
     if (key === "SQUAD_WEBHOOK_SECRET") return secret;
     if (key === "SQUAD_BASE_URL") return "https://sandbox-api-d.squadco.com";
     if (key === "SQUAD_MODE") return "test";
-    if (key === "PAYMENTS_LIVE_ENABLED") return "false";
+    if (key === "PAYMENTS_LIVE_ENABLED") return false;
     return fallback;
   };
   const config = {
@@ -112,7 +112,7 @@ describe("SquadProvider", () => {
       if (key === "SQUAD_SECRET_KEY") return secret;
       if (key === "SQUAD_BASE_URL") return "https://sandbox-api-d.squadco.com";
       if (key === "SQUAD_MODE") return undefined;
-      if (key === "PAYMENTS_LIVE_ENABLED") return "false";
+      if (key === "PAYMENTS_LIVE_ENABLED") return false;
       return fallback;
     });
 

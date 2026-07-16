@@ -10,7 +10,7 @@ describe("PaystackProvider", () => {
     if (key === "PAYSTACK_WEBHOOK_SECRET") return secret;
     if (key === "PAYSTACK_BASE_URL") return "https://api.paystack.co";
     if (key === "PAYSTACK_MODE") return "test";
-    if (key === "PAYMENTS_LIVE_ENABLED") return "false";
+    if (key === "PAYMENTS_LIVE_ENABLED") return false;
     return fallback;
   };
   const config = {
@@ -119,7 +119,7 @@ describe("PaystackProvider", () => {
       if (key === "PAYSTACK_WEBHOOK_SECRET") return secret;
       if (key === "PAYSTACK_BASE_URL") return "https://api.paystack.co";
       if (key === "PAYSTACK_MODE") return undefined;
-      if (key === "PAYMENTS_LIVE_ENABLED") return "false";
+      if (key === "PAYMENTS_LIVE_ENABLED") return false;
       return fallback;
     });
 
@@ -133,7 +133,7 @@ describe("PaystackProvider", () => {
       if (key === "PAYSTACK_WEBHOOK_SECRET") return secret;
       if (key === "PAYSTACK_BASE_URL") return "https://api.paystack.co";
       if (key === "PAYSTACK_MODE") return "test";
-      if (key === "PAYMENTS_LIVE_ENABLED") return "false";
+      if (key === "PAYMENTS_LIVE_ENABLED") return false;
       return fallback;
     });
 

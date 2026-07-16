@@ -18,8 +18,10 @@ import {
 import { randomBytes } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 import { InitiatePaymentDto } from "./dto/initiate-payment.dto";
+import { SandboxInitializationTestProvider } from "./dto/test-payment-provider.dto";
 import { CUSTOMER_TEST_PAYMENT_PROVIDERS, PaymentProviderRegistry } from "./providers/payment-provider.registry";
-import { PaymentProviderName, PaymentWebhookContext } from "./providers/payment-provider.interface";
+import { PaymentProvider, PaymentProviderName, PaymentWebhookContext } from "./providers/payment-provider.interface";
+import { paymentInitializationDiagnostic } from "./providers/payment-provider-diagnostics";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { NotificationsService } from "../notifications/notifications.service";
 
@@ -189,6 +191,58 @@ export class PaymentsService {
         ]
       }
     };
+  }
+
+  async testProviderInitialization(providerName: SandboxInitializationTestProvider) {
+    const provider = this.providerRegistry.customerTestProvider(providerName);
+    const transactionReference = this.transactionReference(`${provider.name}-test`);
+    const timestamp = new Date().toISOString();
+    const input = {
+      transactionReference,
+      amount: "100.00",
+      currency: "NGN",
+      customerEmail: `checkout+${this.safeReference(transactionReference)}@sandbox.karigo.com.ng`,
+      customerPhone: "+2348000000000",
+      metadata: {
+        purpose: "admin-provider-readiness-test",
+        provider: provider.name,
+        generatedBy: "admin-payment-readiness"
+      }
+    };
+
+    try {
+      const result = await provider.initialize(input);
+      this.logger.log(
+        `Payment provider initialization test succeeded provider=${provider.name} mode=${this.providerMode(provider.name)} stage=initialize-transaction reference=${transactionReference} authorizationUrlPresent=${Boolean(result.authorizationUrl)}`
+      );
+      return {
+        success: true,
+        provider: provider.name,
+        mode: this.providerMode(provider.name),
+        stage: "initialize-transaction",
+        transactionReference,
+        authorizationUrlPresent: Boolean(result.authorizationUrl),
+        accessCodePresent: Boolean(result.accessCode),
+        providerMessage: "Provider accepted sandbox initialization request.",
+        timestamp
+      };
+    } catch (error) {
+      const diagnostic = paymentInitializationDiagnostic(provider.name, error);
+      this.logger.warn(
+        `Payment provider initialization test failed provider=${provider.name} mode=${this.providerMode(provider.name)} stage=${diagnostic.stage} status=${diagnostic.httpStatusCode ?? "n/a"} reason=${diagnostic.providerMessage ?? diagnostic.message}`
+      );
+      return {
+        success: false,
+        provider: provider.name,
+        mode: this.providerMode(provider.name),
+        stage: diagnostic.stage,
+        transactionReference,
+        httpStatusCode: diagnostic.httpStatusCode,
+        providerMessage: diagnostic.providerMessage ?? diagnostic.message,
+        message: "Provider sandbox initialization could not be completed.",
+        timestamp
+      };
+    }
   }
 
   async webhook(gateway: string, payload: Record<string, unknown>, context?: PaymentWebhookContext) {
@@ -620,7 +674,7 @@ export class PaymentsService {
     }
 
     this.logger.warn(
-      `Payment initialization failed provider=${providerName} paymentId=${paymentId} reason=${this.safeErrorMessage(error)}`
+      `Payment initialization failed provider=${providerName} paymentId=${paymentId} ${this.safeInitializationDiagnostic(providerName, error)}`
     );
   }
 
@@ -642,6 +696,29 @@ export class PaymentsService {
 
   private safeErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+  }
+
+  private safeInitializationDiagnostic(providerName: string, error: unknown): string {
+    const diagnostic = paymentInitializationDiagnostic(providerName, error);
+    return `stage=${diagnostic.stage} status=${diagnostic.httpStatusCode ?? "n/a"} reason=${diagnostic.providerMessage ?? diagnostic.message}`;
+  }
+
+  private providerMode(providerName: PaymentProvider["name"]): string {
+    switch (providerName) {
+      case "paystack": return this.optionalValue("PAYSTACK_MODE") ?? "not_configured";
+      case "monnify": return this.optionalValue("MONNIFY_MODE") ?? "not_configured";
+      case "squad": return this.optionalValue("SQUAD_MODE") ?? "not_configured";
+      case "mock": return "mock";
+      default: return "unknown";
+    }
+  }
+
+  private safeReference(reference: string): string {
+    return reference
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || "payment";
   }
 
   private assertProviderEvidence(
