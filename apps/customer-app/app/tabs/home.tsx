@@ -3,7 +3,8 @@ import { brand } from "@karigo/config";
 import type { ServiceCategory, VendorSummary } from "@karigo/shared-types";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { adsApi, CustomerHomeAd } from "../../src/api/ads.api";
 import { vendorsApi } from "../../src/api/vendors.api";
 import { Button, Card, Empty, Loading, Message, Screen, ui } from "../../src/components/ui";
 import { KariGoAppTopBar } from "../../src/components/kari-go-app-top-bar";
@@ -42,8 +43,6 @@ const categories: {
   { label: "Cable TV", icon: "tv", href: "/utilities/cable-tv", tone: "#FEF2F2", state: "readiness", statusLabel: "Test mode", requiresAuth: true }
 ];
 
-const utilityServices = categories.filter((category) => ["Airtime", "Data", "Electricity", "Cable TV"].includes(category.label));
-
 function firstName(fullName?: string | null) {
   const name = fullName?.trim();
   if (!name) return "to KariGO";
@@ -73,6 +72,7 @@ export default function CustomerHome() {
   const { user, loading: authLoading } = useAuth();
   const { width } = useWindowDimensions();
   const [vendors, setVendors] = useState<VendorSummary[]>([]);
+  const [ads, setAds] = useState<CustomerHomeAd[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [guestPrompt, setGuestPrompt] = useState("");
@@ -84,7 +84,14 @@ export default function CustomerHome() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    adsApi.customerHome()
+      .then((response) => setAds(response.items))
+      .catch(() => setAds([]));
+  }, []);
+
   const featured = useMemo(() => vendors.filter((vendor) => vendor.isOpen).slice(0, 3), [vendors]);
+  const homeAd = ads[0];
   const columns = width >= 380 ? 3 : 2;
   const serviceTileBasis = `${(100 / columns) - 2}%` as const;
 
@@ -95,6 +102,15 @@ export default function CustomerHome() {
     }
     setGuestPrompt("");
     router.push(category.href as never);
+  }
+
+  function openAd(ad: CustomerHomeAd) {
+    if (!ad.ctaUrl) return;
+    if (ad.ctaUrl.startsWith("/")) {
+      router.push(ad.ctaUrl as never);
+      return;
+    }
+    void Linking.openURL(ad.ctaUrl);
   }
 
   if (authLoading) return <Loading label="Opening KariGO..." />;
@@ -143,31 +159,18 @@ export default function CustomerHome() {
         ? <Empty message="No featured vendor is available right now. Please check Browse for more options." />
         : featured.map((vendor) => <VendorSpotlight key={vendor.id} vendor={vendor} />)}
 
-      <View style={styles.utilitiesSection}>
-        <View>
-          <Text style={ui.sectionTitle}>Bills & Utilities</Text>
-          <Text style={ui.pageIntro}>Run safe test-mode utility transactions while live providers are still disabled.</Text>
-        </View>
-        <View style={styles.utilityGrid}>
-          {utilityServices.map((service) => <Pressable
-            key={service.label}
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${service.label} test mode`}
-            onPress={() => openCategory(service)}
-            style={({ pressed }) => [styles.utilityTile, pressed && styles.categoryPressed]}
-          >
-            <Feather name={service.icon} size={19} color={brand.colors.primary} />
-            <Text style={styles.utilityLabel}>{service.label}</Text>
-            <Text style={styles.serviceStatus}>Test mode</Text>
-          </Pressable>)}
-        </View>
-      </View>
-
-      <View style={styles.adPlacement}>
+      <Pressable
+        accessibilityRole={homeAd?.ctaUrl ? "button" : "text"}
+        accessibilityLabel={homeAd ? `${homeAd.label}: ${homeAd.title}` : "Ad campaign placement available"}
+        onPress={() => homeAd ? openAd(homeAd) : undefined}
+        style={styles.adPlacement}
+      >
         <Text style={styles.adLabel}>Ad</Text>
-        <Text style={styles.adTitle}>Campaign placement available</Text>
-        <Text style={ui.muted}>Approved KariGO campaigns may appear here. Ads are labelled and never affect checkout pricing or delivery quotes.</Text>
-      </View>
+        <Text style={styles.adTitle}>{homeAd?.title ?? "Campaign placement available"}</Text>
+        <Text style={ui.muted}>{homeAd?.body ?? "Approved KariGO campaigns may appear here. Ads are labelled and never affect checkout pricing or delivery quotes."}</Text>
+        <Text style={styles.adSponsor}>{homeAd ? `Sponsored by ${homeAd.sponsorName}` : "Vendor and partner ads require Admin approval."}</Text>
+        {homeAd?.ctaLabel ? <Text style={styles.link}>{homeAd.ctaLabel}</Text> : null}
+      </Pressable>
     </Screen>
   </>;
 }
@@ -186,11 +189,8 @@ const styles = StyleSheet.create({
   vendorLogo: { alignItems: "center", backgroundColor: "#FEF2F2", borderRadius: 18, height: 54, justifyContent: "center", width: 54 },
   vendorLogoText: { color: brand.colors.primaryDark, fontSize: 22, fontWeight: "900" },
   link: { color: brand.colors.primary, fontWeight: "900" },
-  utilitiesSection: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 20, borderWidth: 1, gap: 14, padding: 16 },
-  utilityGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
-  utilityTile: { alignItems: "center", backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, flexBasis: "47%", flexGrow: 1, gap: 5, minHeight: 86, padding: 10 },
-  utilityLabel: { color: brand.colors.charcoal, fontSize: 13, fontWeight: "900", textAlign: "center" },
   adPlacement: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 20, borderStyle: "dashed", borderWidth: 1, gap: 8, padding: 16 },
   adLabel: { alignSelf: "flex-start", backgroundColor: "#F3F4F6", borderRadius: 999, color: brand.colors.muted, fontSize: 11, fontWeight: "900", paddingHorizontal: 8, paddingVertical: 4 },
-  adTitle: { color: brand.colors.charcoal, fontSize: 17, fontWeight: "900" }
+  adTitle: { color: brand.colors.charcoal, fontSize: 17, fontWeight: "900" },
+  adSponsor: { color: brand.colors.muted, fontSize: 12, fontWeight: "800" }
 });

@@ -729,7 +729,10 @@ describe("ServiceProviderRequestsService admin operations", () => {
     prisma.serviceProviderRequest.findFirst.mockResolvedValue({
       ...request,
       adminNote: "Internal admin follow-up",
-      customerUpdateNote: "KariGO is matching a suitable provider."
+      customerUpdateNote: "KariGO is matching a suitable provider.",
+      preferredProvider: null,
+      assignedProvider: null,
+      review: null
     });
 
     const result = await service.detail("user-1", request.id);
@@ -739,8 +742,47 @@ describe("ServiceProviderRequestsService admin operations", () => {
     }));
     expect(result.customerUpdateNote).toBe("KariGO is matching a suitable provider.");
     expect(result).not.toHaveProperty("adminNote");
-    expect(result).not.toHaveProperty("assignedProvider");
+    expect(result.assignedProvider).toBeNull();
+    expect(JSON.stringify(result)).not.toContain("phoneNumber");
+    expect(JSON.stringify(result)).not.toContain("provider@karigo.local");
     expect(result).not.toHaveProperty("assignmentNote");
+  });
+
+  it("lists customer-selectable providers without private contact details", async () => {
+    prisma.serviceProvider.findMany.mockResolvedValue([provider]);
+
+    const result = await service.customerProviders({
+      serviceType: ServiceProviderType.PLUMBER,
+      city: "Kano"
+    });
+
+    expect(prisma.serviceProvider.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        status: ServiceProviderStatus.APPROVED,
+        readinessOnly: false,
+        serviceType: ServiceProviderType.PLUMBER,
+        city: { contains: "Kano", mode: "insensitive" }
+      })
+    }));
+    expect(result.items[0]).toMatchObject({
+      id: provider.id,
+      providerCode: provider.providerCode,
+      displayName: "Demo Plumbing",
+      serviceType: ServiceProviderType.PLUMBER,
+      city: "Kano"
+    });
+    expect(JSON.stringify(result.items[0])).not.toContain("+2348022222222");
+    expect(JSON.stringify(result.items[0])).not.toContain("provider@karigo.local");
+  });
+
+  it("keeps health professional providers out of customer marketplace selection", async () => {
+    const result = await service.customerProviders({
+      serviceType: ServiceProviderType.HEALTH_PROFESSIONAL
+    });
+
+    expect(prisma.serviceProvider.findMany).not.toHaveBeenCalled();
+    expect(result.items).toEqual([]);
+    expect(result.guardrails.liveDispatchEnabled).toBe(false);
   });
 
   it("does not return another customer's SME Services request notes", async () => {

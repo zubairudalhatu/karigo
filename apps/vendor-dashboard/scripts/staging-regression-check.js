@@ -31,6 +31,7 @@ assert(!payoutApi.includes("admin/vendor-payout-accounts"), "Vendor dashboard mu
 const shell = read("src", "components", "dashboard.tsx");
 assert(shell.includes("Payout account"), "Vendor sidebar must include the payout account page.");
 assert(shell.includes("Services"), "Vendor sidebar must include the services catalogue page.");
+assert(shell.includes("Ads"), "Vendor sidebar must include the ads page.");
 
 const notificationsPage = read("app", "notifications", "page.tsx");
 assert(notificationsPage.includes("notification-title"), "Notifications must render title separately.");
@@ -85,6 +86,16 @@ assert(servicesPage.includes("HEALTH_PROFESSIONAL"), "Services page must handle 
 const vendorApi = read("src", "api", "vendor.api.ts");
 assert(vendorApi.includes("vendors/uploads"), "Vendor API must include vendor-scoped upload endpoint.");
 assert(vendorApi.includes("vendors/services"), "Vendor API must include vendor-scoped service catalogue endpoints.");
+
+const adsPage = read("app", "ads", "page.tsx");
+assert(adsPage.includes("Ads"), "Vendor ads page must exist.");
+assert(adsPage.includes("adsApi.dashboard"), "Vendor ads page must load vendor campaigns and controlled ad credit.");
+assert(adsPage.includes("adsApi.create"), "Vendor ads page must submit ad requests.");
+assert(adsPage.includes("KariGO Admin approval is required"), "Vendor ads page must state admin approval is required.");
+assert(adsPage.includes("does not charge your wallet or collect real money"), "Vendor ads page must state no live ad billing.");
+assert(!adsPage.includes("Pay now") && !adsPage.includes("Top up wallet"), "Vendor ads page must not expose live ad payment actions.");
+const adsApiSource = read("src", "api", "ads.api.ts");
+assert(adsApiSource.includes("vendor/ads"), "Vendor ads API must call vendor-scoped ad endpoints.");
 
 const profilePage = read("app", "profile", "page.tsx");
 assert(profilePage.includes("profileUpdatePayload"), "Profile page must sanitize profile update payloads before saving.");

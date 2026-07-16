@@ -25,6 +25,7 @@ assert(shell.includes("Payout Accounts"), "Admin sidebar must include payout acc
 assert(shell.includes("Delivery Captain Applications"), "Admin sidebar must include Delivery Captain applications.");
 assert(shell.includes("Wallets"), "Admin sidebar must include Wallets.");
 assert(shell.includes("Referrals"), "Admin sidebar must include Referrals.");
+assert(shell.includes("Ads"), "Admin sidebar must include Ads.");
 assert(shell.includes("Utilities"), "Admin sidebar must include Utilities.");
 assert(shell.includes("Ride Operations"), "Admin sidebar must include Ride Operations.");
 assert(shell.includes("SME Services Summary"), "Admin sidebar must include SME Services operations summary.");
@@ -215,6 +216,19 @@ assert(referralsApiSource.includes("markdown: string"), "Admin referral report t
 assert(referralsApiSource.includes("admin/referrals/${referralId}"), "Admin referral API must call referral detail endpoint.");
 assert(referralsApiSource.includes("admin/referrals/${referralId}/review"), "Admin referral API must call referral review endpoint.");
 assert(referralsApiSource.includes("admin/referrals/reward-rules"), "Admin referral API must call reward rules endpoint.");
+
+const adsPage = read("app", "ads", "page.tsx");
+assert(adsPage.includes("Ads"), "Admin ads page must exist.");
+assert(adsPage.includes("adsApi.list"), "Admin ads page must load campaigns.");
+assert(adsPage.includes("adsApi.create"), "Admin ads page must create admin-managed campaigns.");
+assert(adsPage.includes("adsApi.update"), "Admin ads page must review/update campaigns.");
+assert(adsPage.includes("adsApi.grantVendorCredit"), "Admin ads page must grant controlled vendor ad credits.");
+assert(adsPage.includes("Live payments, wallet top-up and automatic ad billing remain disabled."), "Admin ads page must state disabled payment/billing guardrails.");
+assert(adsPage.includes("Controlled vendor ad credit"), "Admin ads page must describe controlled ad credit.");
+assert(!adsPage.includes("Charge card") && !adsPage.includes("Pay now"), "Admin ads page must not expose live ad payment actions.");
+const adsApiSource = read("src", "api", "ads.api.ts");
+assert(adsApiSource.includes("admin/ads"), "Admin ads API must call admin ads endpoints.");
+assert(adsApiSource.includes("admin/ads/vendor-credit/"), "Admin ads API must call controlled vendor credit endpoint.");
 
 const taxiPage = read("app", "taxi", "page.tsx");
 assert(taxiPage.includes("Ride Applications"), "Admin ride operations page must show ride applications.");

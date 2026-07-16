@@ -8,6 +8,10 @@ export class CreateServiceProviderRequestDto {
   @IsUUID()
   serviceAddressId!: string;
 
+  @IsOptional()
+  @IsUUID()
+  preferredProviderId?: string;
+
   @IsString()
   @IsNotEmpty()
   @MaxLength(600)

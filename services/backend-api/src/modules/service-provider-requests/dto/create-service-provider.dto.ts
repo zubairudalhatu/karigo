@@ -42,6 +42,16 @@ export class CreateServiceProviderDto {
   serviceAreas?: string[];
 
   @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  publicBio?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  profileImageUrl?: string;
+
+  @IsOptional()
   @IsEnum(ServiceProviderStatus)
   status?: ServiceProviderStatus;
 

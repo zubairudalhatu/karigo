@@ -176,6 +176,39 @@ enum ServiceProviderStatus {
   INACTIVE
 }
 
+enum AdCampaignStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  ACTIVE
+  PAUSED
+  EXPIRED
+  CANCELLED
+}
+
+enum AdSponsorType {
+  VENDOR
+  EXTERNAL
+}
+
+enum AdPlacementSurface {
+  CUSTOMER_HOME_FEATURED
+}
+
+enum VendorAdCreditLedgerEntryType {
+  ADMIN_GRANT
+  AD_CAMPAIGN_RESERVATION
+  AD_CAMPAIGN_RELEASE
+  AD_CAMPAIGN_SPEND
+}
+
+enum VendorAdCreditLedgerDirection {
+  CREDIT
+  DEBIT
+}
+
 enum ServiceProviderApplicationStatus {
   SUBMITTED
   UNDER_REVIEW
@@ -564,6 +597,7 @@ model User {
   verifiedDeliveryCaptainDocuments    DeliveryCaptainApplicationDocument[] @relation("DeliveryCaptainApplicationDocumentVerifiedBy")
   vendorActivationAccounts            VendorAccountActivation[]            @relation("VendorActivationUser")
   createdVendorActivationInvitations  VendorAccountActivation[]            @relation("VendorActivationCreatedBy")
+  reviewedAdCampaigns                 AdCampaign[]                         @relation("AdCampaignReviewedBy")
 
   @@map("users")
 }
@@ -853,6 +887,7 @@ model CustomerProfile {
   referralProfile         CustomerReferralProfile?
   referralsMade           CustomerReferral[]          @relation("CustomerReferralReferredBy")
   referralReceived        CustomerReferral?           @relation("CustomerReferralReferredCustomer")
+  serviceProviderReviews  ServiceProviderReview[]
 
   @@map("customer_profiles")
 }
@@ -952,6 +987,7 @@ model ServiceProviderRequest {
   id                  String                       @id @default(uuid()) @db.Uuid
   requestNumber       String                       @unique
   customerId          String                       @db.Uuid
+  preferredProviderId String?                      @db.Uuid
   assignedProviderId  String?                      @db.Uuid
   assignedByAdminId   String?                      @db.Uuid
   serviceType         ServiceProviderType
@@ -971,11 +1007,14 @@ model ServiceProviderRequest {
   createdAt           DateTime                     @default(now())
   updatedAt           DateTime                     @updatedAt
   customer            CustomerProfile              @relation(fields: [customerId], references: [id])
-  assignedProvider    ServiceProvider?             @relation(fields: [assignedProviderId], references: [id])
+  preferredProvider   ServiceProvider?             @relation("ServiceProviderPreferredRequests", fields: [preferredProviderId], references: [id])
+  assignedProvider    ServiceProvider?             @relation("ServiceProviderAssignedRequests", fields: [assignedProviderId], references: [id])
   assignedByAdmin     User?                        @relation("ServiceProviderRequestAssignedBy", fields: [assignedByAdminId], references: [id])
   serviceAddress      Address                      @relation("ServiceRequestAddress", fields: [serviceAddressId], references: [id])
+  review              ServiceProviderReview?
 
   @@index([customerId, createdAt])
+  @@index([preferredProviderId, status])
   @@index([assignedProviderId, status])
   @@index([serviceType, status, createdAt])
   @@index([status, createdAt])
@@ -994,6 +1033,11 @@ model ServiceProvider {
   city                String
   state               String
   serviceAreas        Json?
+  publicBio           String?
+  profileImageUrl     String?
+  averageRating       Decimal?                    @db.Decimal(3, 2)
+  reviewCount         Int                         @default(0)
+  completedServices   Int                         @default(0)
   status              ServiceProviderStatus       @default(PENDING_REVIEW)
   readinessOnly       Boolean                     @default(false)
   notes               String?
@@ -1001,12 +1045,33 @@ model ServiceProvider {
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt
   sourceApplication   ServiceProviderApplication? @relation("ServiceProviderApplicationConvertedProvider", fields: [sourceApplicationId], references: [id])
-  assignedRequests    ServiceProviderRequest[]
+  preferredRequests   ServiceProviderRequest[]    @relation("ServiceProviderPreferredRequests")
+  assignedRequests    ServiceProviderRequest[]    @relation("ServiceProviderAssignedRequests")
+  reviews             ServiceProviderReview[]
 
   @@index([serviceType, status])
   @@index([city, state])
   @@index([phoneNumber])
   @@map("service_providers")
+}
+
+model ServiceProviderReview {
+  id         String                 @id @default(uuid()) @db.Uuid
+  requestId  String                 @unique @db.Uuid
+  customerId String                 @db.Uuid
+  providerId String                 @db.Uuid
+  rating     Int
+  comment    String?
+  isVisible  Boolean                @default(true)
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+  request    ServiceProviderRequest @relation(fields: [requestId], references: [id])
+  customer   CustomerProfile        @relation(fields: [customerId], references: [id])
+  provider   ServiceProvider        @relation(fields: [providerId], references: [id])
+
+  @@index([providerId, createdAt])
+  @@index([customerId, createdAt])
+  @@map("service_provider_reviews")
 }
 
 model ServiceProviderApplication {
@@ -1265,6 +1330,8 @@ model Vendor {
   category              VendorCategory?           @relation(fields: [categoryId], references: [id])
   products              Product[]
   services              VendorService[]
+  adCampaigns           AdCampaign[]
+  adCreditAccount       VendorAdCreditAccount?
   orders                Order[]
   settlements           VendorSettlement[]
   promoCodes            PromoCode[]
@@ -1409,6 +1476,80 @@ model VendorService {
   @@index([vendorId, status, isAvailable])
   @@index([serviceType, status])
   @@map("vendor_services")
+}
+
+model AdCampaign {
+  id                    String                       @id @default(uuid()) @db.Uuid
+  campaignReference     String                       @unique
+  sponsorType           AdSponsorType
+  vendorId              String?                      @db.Uuid
+  placementSurface      AdPlacementSurface           @default(CUSTOMER_HOME_FEATURED)
+  title                 String
+  body                  String
+  imageUrl              String?
+  ctaLabel              String?
+  ctaUrl                String?
+  advertiserName        String?
+  advertiserContactName String?
+  advertiserEmail       String?
+  advertiserPhone       String?
+  requestedBudgetKobo   Int                          @default(0)
+  reservedCreditKobo    Int                          @default(0)
+  status                AdCampaignStatus             @default(SUBMITTED)
+  startsAt              DateTime?
+  endsAt                DateTime?
+  adminNote             String?
+  rejectionReason       String?
+  reviewedByAdminId     String?                      @db.Uuid
+  reviewedAt            DateTime?
+  submittedAt           DateTime                     @default(now())
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  vendor                Vendor?                      @relation(fields: [vendorId], references: [id])
+  reviewedByAdmin       User?                        @relation("AdCampaignReviewedBy", fields: [reviewedByAdminId], references: [id])
+  creditLedgerEntries   VendorAdCreditLedgerEntry[]
+
+  @@index([status, placementSurface])
+  @@index([vendorId, status])
+  @@map("ad_campaigns")
+}
+
+model VendorAdCreditAccount {
+  id                  String                      @id @default(uuid()) @db.Uuid
+  vendorId            String                      @unique @db.Uuid
+  balanceKobo         Int                         @default(0)
+  reservedKobo        Int                         @default(0)
+  lifetimeGrantedKobo Int                         @default(0)
+  lifetimeSpentKobo   Int                         @default(0)
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  vendor              Vendor                      @relation(fields: [vendorId], references: [id])
+  ledgerEntries       VendorAdCreditLedgerEntry[]
+
+  @@map("vendor_ad_credit_accounts")
+}
+
+model VendorAdCreditLedgerEntry {
+  id                String                         @id @default(uuid()) @db.Uuid
+  accountId         String                         @db.Uuid
+  vendorId          String                         @db.Uuid
+  campaignId        String?                        @db.Uuid
+  entryType         VendorAdCreditLedgerEntryType
+  direction         VendorAdCreditLedgerDirection
+  amountKobo        Int
+  balanceBeforeKobo Int
+  balanceAfterKobo  Int
+  reference         String                         @unique
+  description       String?
+  createdByAdminId  String?                        @db.Uuid
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+  account           VendorAdCreditAccount          @relation(fields: [accountId], references: [id])
+  campaign          AdCampaign?                    @relation(fields: [campaignId], references: [id])
+
+  @@index([vendorId, createdAt])
+  @@index([campaignId])
+  @@map("vendor_ad_credit_ledger_entries")
 }
 
 model Product {

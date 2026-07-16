@@ -8,6 +8,8 @@ export interface Address {
   state: string;
   country: string;
   deliveryNote?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   isDefault: boolean;
 }
 

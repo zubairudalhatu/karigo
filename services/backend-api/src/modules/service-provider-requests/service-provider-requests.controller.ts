@@ -9,6 +9,7 @@ import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { AssignServiceProviderDto } from "./dto/assign-service-provider.dto";
+import { CreateServiceProviderReviewDto } from "./dto/create-service-provider-review.dto";
 import { CreateServiceProviderDto } from "./dto/create-service-provider.dto";
 import { CreateServiceProviderRequestDto } from "./dto/create-service-provider-request.dto";
 import { CreateSmeServicesPilotParticipantDto } from "./dto/create-sme-services-pilot-participant.dto";
@@ -39,6 +40,12 @@ export class ServiceProviderRequestsController {
     return { message: "SME Services catalogue retrieved", data: this.serviceRequests.catalogue() };
   }
 
+  @Get("providers")
+  @ApiOperation({ summary: "List approved SME Services providers for customer marketplace selection" })
+  async providers(@Query() query: ListServiceProvidersQueryDto) {
+    return { message: "SME Services providers retrieved", data: await this.serviceRequests.customerProviders(query) };
+  }
+
   @Post()
   @ApiOperation({ summary: "Create an SME Services provider request" })
   async create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateServiceProviderRequestDto) {
@@ -55,6 +62,16 @@ export class ServiceProviderRequestsController {
   @ApiOperation({ summary: "Get an owned SME Services request" })
   async detail(@CurrentUser() user: AuthenticatedUser, @Param("requestId", ParseUUIDPipe) requestId: string) {
     return { message: "SME Services request retrieved", data: await this.serviceRequests.detail(user.id, requestId) };
+  }
+
+  @Post(":requestId/review")
+  @ApiOperation({ summary: "Review an assigned SME Services provider after a completed request" })
+  async review(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("requestId", ParseUUIDPipe) requestId: string,
+    @Body() dto: CreateServiceProviderReviewDto
+  ) {
+    return { message: "SME Services provider review recorded", data: await this.serviceRequests.reviewProvider(user.id, requestId, dto) };
   }
 }
 

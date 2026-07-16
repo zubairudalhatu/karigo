@@ -4,6 +4,7 @@ import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AssignServiceProviderDto } from "./dto/assign-service-provider.dto";
+import { CreateServiceProviderReviewDto } from "./dto/create-service-provider-review.dto";
 import { CreateServiceProviderDto } from "./dto/create-service-provider.dto";
 import { CreateServiceProviderRequestDto } from "./dto/create-service-provider-request.dto";
 import { CreateSmeServicesPilotParticipantDto } from "./dto/create-sme-services-pilot-participant.dto";
@@ -251,6 +252,55 @@ export class ServiceProviderRequestsService {
     }));
   }
 
+  async customerProviders(query: ListServiceProvidersQueryDto) {
+    if (query.serviceType === ServiceProviderType.HEALTH_PROFESSIONAL) {
+      return {
+        items: [],
+        guardrails: {
+          liveDispatchEnabled: false,
+          providerLoginEnabled: false,
+          paymentRequiredNow: false,
+          privateProviderContactExposed: false,
+          note: "Health professional booking is readiness-only and requires future approval before customer selection is enabled."
+        }
+      };
+    }
+
+    const where: Prisma.ServiceProviderWhereInput = {
+      status: ServiceProviderStatus.APPROVED,
+      readinessOnly: false,
+      serviceType: { not: ServiceProviderType.HEALTH_PROFESSIONAL },
+      ...(query.serviceType ? { serviceType: query.serviceType } : {}),
+      ...(query.city ? { city: { contains: query.city.trim(), mode: "insensitive" as const } } : {}),
+      ...(query.search ? {
+        OR: [
+          { fullName: { contains: query.search, mode: "insensitive" as const } },
+          { businessName: { contains: query.search, mode: "insensitive" as const } },
+          { city: { contains: query.search, mode: "insensitive" as const } },
+          { state: { contains: query.search, mode: "insensitive" as const } }
+        ]
+      } : {})
+    };
+
+    const items = await this.prisma.serviceProvider.findMany({
+      where,
+      select: this.publicProviderSelect(),
+      orderBy: [{ averageRating: "desc" }, { completedServices: "desc" }, { createdAt: "desc" }],
+      take: 50
+    });
+
+    return {
+      items: items.map((provider) => this.publicProvider(provider)),
+      guardrails: {
+        liveDispatchEnabled: false,
+        providerLoginEnabled: false,
+        paymentRequiredNow: false,
+        privateProviderContactExposed: false,
+        note: "Provider selection records a customer preference only. KariGO Admin still reviews and coordinates each SME Services request manually."
+      }
+    };
+  }
+
   async create(userId: string, dto: CreateServiceProviderRequestDto) {
     const category = SERVICE_CATALOGUE.find((item) => item.type === dto.serviceType);
     if (!category) {
@@ -268,11 +318,15 @@ export class ServiceProviderRequestsService {
     if (!serviceAddress) {
       throw new NotFoundException("Service address not found");
     }
+    const preferredProvider = dto.preferredProviderId
+      ? await this.requireSelectableProvider(dto.preferredProviderId, dto.serviceType)
+      : null;
 
     const request = await this.prisma.serviceProviderRequest.create({
       data: {
         requestNumber: await this.uniqueRequestNumber(),
         customerId: customer.id,
+        preferredProviderId: preferredProvider?.id,
         serviceType: dto.serviceType,
         serviceLabel: category.label,
         serviceAddressId: dto.serviceAddressId,
@@ -286,6 +340,54 @@ export class ServiceProviderRequestsService {
       include: this.customerInclude()
     });
     return this.customerRequest(request);
+  }
+
+  async reviewProvider(userId: string, requestId: string, dto: CreateServiceProviderReviewDto) {
+    const customer = await this.requireCustomer(userId);
+    const request = await this.prisma.serviceProviderRequest.findFirst({
+      where: { id: requestId, customerId: customer.id },
+      include: { review: true }
+    });
+    if (!request) {
+      throw new NotFoundException("SME Services request not found");
+    }
+    if (request.status !== ServiceProviderRequestStatus.COMPLETED || !request.assignedProviderId) {
+      throw new BadRequestException("You can review an SME Services provider only after a completed assigned request.");
+    }
+    if (request.review) {
+      throw new BadRequestException("This SME Services request has already been reviewed.");
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const provider = await tx.serviceProvider.findUnique({ where: { id: request.assignedProviderId! } });
+      if (!provider) {
+        throw new NotFoundException("SME Services provider not found");
+      }
+      const review = await tx.serviceProviderReview.create({
+        data: {
+          requestId,
+          customerId: customer.id,
+          providerId: provider.id,
+          rating: dto.rating,
+          comment: this.optionalText(dto.comment)
+        },
+        include: { provider: { select: this.publicProviderSelect() } }
+      });
+      const previousCount = provider.reviewCount;
+      const previousAverage = Number(provider.averageRating ?? 0);
+      const nextCount = previousCount + 1;
+      const nextAverage = new Prisma.Decimal((((previousAverage * previousCount) + dto.rating) / nextCount).toFixed(2));
+      await tx.serviceProvider.update({
+        where: { id: provider.id },
+        data: {
+          reviewCount: nextCount,
+          averageRating: nextAverage
+        }
+      });
+      return review;
+    });
+
+    return this.customerReview(result);
   }
 
   async listMine(userId: string) {
@@ -1031,6 +1133,13 @@ export class ServiceProviderRequestsService {
       customerUpdateNoteProvided: dto.customerNote !== undefined
     });
 
+    if (dto.status === ServiceProviderRequestStatus.COMPLETED && existing.status !== ServiceProviderRequestStatus.COMPLETED && existing.assignedProviderId) {
+      await this.prisma.serviceProvider.update({
+        where: { id: existing.assignedProviderId },
+        data: { completedServices: { increment: 1 } }
+      });
+    }
+
     return this.adminRequest(updated);
   }
 
@@ -1084,6 +1193,8 @@ export class ServiceProviderRequestsService {
         city: dto.city.trim(),
         state: dto.state.trim(),
         serviceAreas: this.serviceAreas(dto.serviceAreas),
+        publicBio: this.optionalText(dto.publicBio),
+        profileImageUrl: this.optionalText(dto.profileImageUrl),
         status: dto.status ?? ServiceProviderStatus.PENDING_REVIEW,
         readinessOnly,
         notes: this.optionalText(dto.notes),
@@ -1130,6 +1241,8 @@ export class ServiceProviderRequestsService {
         ...(dto.city === undefined ? {} : { city: dto.city.trim() }),
         ...(dto.state === undefined ? {} : { state: dto.state.trim() }),
         ...(dto.serviceAreas === undefined ? {} : { serviceAreas: this.serviceAreas(dto.serviceAreas) }),
+        ...(dto.publicBio === undefined ? {} : { publicBio: this.optionalText(dto.publicBio) }),
+        ...(dto.profileImageUrl === undefined ? {} : { profileImageUrl: this.optionalText(dto.profileImageUrl) }),
         ...(dto.status === undefined ? {} : { status: dto.status }),
         ...(dto.readinessOnly === undefined ? {} : { readinessOnly: dto.readinessOnly }),
         ...(dto.notes === undefined ? {} : { notes: this.optionalText(dto.notes) }),
@@ -1206,6 +1319,23 @@ export class ServiceProviderRequestsService {
       throw new NotFoundException("Customer profile not found");
     }
     return customer;
+  }
+
+  private async requireSelectableProvider(providerId: string, serviceType: ServiceProviderType) {
+    const provider = await this.prisma.serviceProvider.findUnique({
+      where: { id: providerId },
+      select: { id: true, serviceType: true, status: true, readinessOnly: true }
+    });
+    if (!provider) {
+      throw new NotFoundException("Selected SME Services provider not found");
+    }
+    if (provider.status !== ServiceProviderStatus.APPROVED || provider.readinessOnly || provider.serviceType === ServiceProviderType.HEALTH_PROFESSIONAL) {
+      throw new BadRequestException("Selected SME Services provider is not available for customer requests.");
+    }
+    if (provider.serviceType !== serviceType) {
+      throw new BadRequestException("Selected provider does not match the requested service category.");
+    }
+    return provider;
   }
 
   private async uniqueRequestNumber() {
@@ -1371,6 +1501,16 @@ export class ServiceProviderRequestsService {
 
   private customerInclude() {
     return {
+      preferredProvider: { select: this.publicProviderSelect() },
+      assignedProvider: { select: this.publicProviderSelect() },
+      review: {
+        select: {
+          id: true,
+          rating: true,
+          comment: true,
+          createdAt: true
+        }
+      },
       serviceAddress: {
         select: {
           id: true,
@@ -1405,6 +1545,37 @@ export class ServiceProviderRequestsService {
           city: true,
           state: true,
           serviceAreas: true,
+          publicBio: true,
+          profileImageUrl: true,
+          averageRating: true,
+          reviewCount: true,
+          completedServices: true,
+          status: true,
+          readinessOnly: true,
+          notes: true,
+          verificationNote: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      },
+      preferredProvider: {
+        select: {
+          id: true,
+          sourceApplicationId: true,
+          providerCode: true,
+          fullName: true,
+          businessName: true,
+          serviceType: true,
+          phoneNumber: true,
+          email: true,
+          city: true,
+          state: true,
+          serviceAreas: true,
+          publicBio: true,
+          profileImageUrl: true,
+          averageRating: true,
+          reviewCount: true,
+          completedServices: true,
           status: true,
           readinessOnly: true,
           notes: true,
@@ -1443,6 +1614,14 @@ export class ServiceProviderRequestsService {
       customerUpdateNote: request.customerUpdateNote,
       status: request.status,
       readinessOnly: request.readinessOnly,
+      preferredProvider: request.preferredProvider ? this.publicProvider(request.preferredProvider) : null,
+      assignedProvider: request.assignedProvider ? this.publicProvider(request.assignedProvider) : null,
+      review: request.review ? {
+        id: request.review.id,
+        rating: request.review.rating,
+        comment: request.review.comment,
+        createdAt: request.review.createdAt
+      } : null,
       serviceAddress: request.serviceAddress,
       createdAt: request.createdAt,
       updatedAt: request.updatedAt
@@ -1466,6 +1645,7 @@ export class ServiceProviderRequestsService {
       customerUpdateNote: request.customerUpdateNote,
       assignmentNote: list ? undefined : request.assignmentNote,
       assignedAt: request.assignedAt,
+      preferredProvider: request.preferredProvider ? this.adminProvider(request.preferredProvider) : null,
       assignedProvider: request.assignedProvider ? this.adminProvider(request.assignedProvider) : null,
       assignedByAdmin: list ? undefined : request.assignedByAdmin,
       customer: request.customer,
@@ -1487,12 +1667,67 @@ export class ServiceProviderRequestsService {
       city: provider.city,
       state: provider.state,
       serviceAreas: Array.isArray(provider.serviceAreas) ? provider.serviceAreas : [],
+      publicBio: provider.publicBio,
+      profileImageUrl: provider.profileImageUrl,
+      averageRating: provider.averageRating ? Number(provider.averageRating) : null,
+      reviewCount: provider.reviewCount,
+      completedServices: provider.completedServices,
       status: provider.status,
       readinessOnly: provider.readinessOnly,
       notes: provider.notes,
       verificationNote: provider.verificationNote,
       createdAt: provider.createdAt,
       updatedAt: provider.updatedAt
+    };
+  }
+
+  private publicProviderSelect() {
+    return {
+      id: true,
+      providerCode: true,
+      fullName: true,
+      businessName: true,
+      serviceType: true,
+      city: true,
+      state: true,
+      serviceAreas: true,
+      publicBio: true,
+      profileImageUrl: true,
+      averageRating: true,
+      reviewCount: true,
+      completedServices: true,
+      createdAt: true,
+      updatedAt: true
+    } as const;
+  }
+
+  private publicProvider(provider: Prisma.ServiceProviderGetPayload<{ select: ReturnType<ServiceProviderRequestsService["publicProviderSelect"]> }>) {
+    return {
+      id: provider.id,
+      providerCode: provider.providerCode,
+      displayName: provider.businessName || provider.fullName,
+      serviceType: provider.serviceType,
+      city: provider.city,
+      state: provider.state,
+      serviceAreas: Array.isArray(provider.serviceAreas) ? provider.serviceAreas : [],
+      publicBio: provider.publicBio,
+      profileImageUrl: provider.profileImageUrl,
+      averageRating: provider.averageRating ? Number(provider.averageRating) : null,
+      reviewCount: provider.reviewCount,
+      completedServices: provider.completedServices,
+      createdAt: provider.createdAt,
+      updatedAt: provider.updatedAt
+    };
+  }
+
+  private customerReview(review: Prisma.ServiceProviderReviewGetPayload<{ include: { provider: { select: ReturnType<ServiceProviderRequestsService["publicProviderSelect"]> } } }>) {
+    return {
+      id: review.id,
+      requestId: review.requestId,
+      rating: review.rating,
+      comment: review.comment,
+      createdAt: review.createdAt,
+      provider: this.publicProvider(review.provider)
     };
   }
 }

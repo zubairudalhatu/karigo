@@ -4,6 +4,7 @@ import { validateEnvironment } from "./config/environment";
 import { DomainModule } from "./domain/domain.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { AddressesModule } from "./modules/addresses/addresses.module";
+import { AdsModule } from "./modules/ads/ads.module";
 import { AdminOperationsModule } from "./modules/admin-operations/admin-operations.module";
 import { CustomersModule } from "./modules/customers/customers.module";
 import { DispatchModule } from "./modules/dispatch/dispatch.module";
@@ -53,6 +54,7 @@ import { ServiceProviderRequestsModule } from "./modules/service-provider-reques
     AuthModule,
     CustomersModule,
     AddressesModule,
+    AdsModule,
     VendorsModule,
     ProductsModule,
     MarketplaceDiscoveryModule,
