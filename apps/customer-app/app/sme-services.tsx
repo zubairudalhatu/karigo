@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
+import * as Location from "expo-location";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -152,24 +153,22 @@ export default function SmeServices() {
 
   function detectLocation() {
     setLocationMessage("");
-    const nav = typeof navigator === "undefined" ? undefined : navigator;
-    if (!nav?.geolocation) {
-      setLocationMessage("Location detection is not available in this app build. Enter the service address manually.");
-      return;
-    }
     setLocating(true);
-    nav.geolocation.getCurrentPosition(
-      (position) => {
+    Location.requestForegroundPermissionsAsync()
+      .then((permission) => {
+        if (permission.status !== "granted") {
+          setLocationMessage("Location permission was not granted. You can still enter the address manually.");
+          return null;
+        }
+        return Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      })
+      .then((position) => {
+        if (!position) return;
         updateNewAddress({ latitude: position.coords.latitude, longitude: position.coords.longitude });
         setLocationMessage("Location captured. Please still enter the written address so KariGO operations can coordinate safely.");
-        setLocating(false);
-      },
-      () => {
-        setLocationMessage("Unable to detect location. You can still enter the address manually.");
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
+      })
+      .catch(() => setLocationMessage("Unable to detect location. You can still enter the address manually."))
+      .finally(() => setLocating(false));
   }
 
   async function resolveServiceAddressId() {

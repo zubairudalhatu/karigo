@@ -18,6 +18,12 @@ export default ({ config }: { config: Record<string, any> }) => ({
       {
         photosPermission: "KariGO uses photo library access only when you choose a customer profile photo."
       }
+    ],
+    [
+      "expo-location",
+      {
+        locationWhenInUsePermission: "KariGO uses your location only when you choose to detect a delivery or service address."
+      }
     ]
   ],
   icon: "./assets/karigo-logo.png",

@@ -138,7 +138,9 @@ assert(smeServices.includes("Let KariGO match me"), "SME Services must allow cus
 assert(smeServices.includes("Private phone and email details stay hidden."), "SME Services provider cards must state contact privacy.");
 assert(smeServices.includes("addressesApi.create"), "SME Services must support creating a new service address inline.");
 assert(smeServices.includes("Use current location"), "SME Services must expose location detection convenience.");
-assert(smeServices.includes("navigator") && smeServices.includes("geolocation"), "SME Services location detection must use the platform geolocation API safely.");
+assert(smeServices.includes("expo-location"), "SME Services location detection must use the Expo Location API.");
+assert(smeServices.includes("requestForegroundPermissionsAsync"), "SME Services location detection must request foreground permission.");
+assert(smeServices.includes("getCurrentPositionAsync"), "SME Services location detection must capture the current device position.");
 assert(smeServices.includes("View my SME Services requests"), "SME Services screen must link to request history.");
 assert(smeServices.includes("View submitted request status"), "SME Services screen must link to the submitted request detail.");
 assert(smeServices.includes("Doctor / health professional booking is readiness-only"), "Health professional category must remain readiness-only.");
@@ -293,6 +295,10 @@ assert(!signupScreen.includes("walletApi") && !signupScreen.includes("paymentsAp
 assert(signupScreen.includes("PasswordField") && signupScreen.includes("passwordVisible"), "Signup password field must support visibility toggling.");
 const loginScreen = read("app", "auth", "login.tsx");
 assert(loginScreen.includes("PasswordField") && loginScreen.includes("passwordVisible"), "Login password field must support visibility toggling.");
+
+const appConfig = read("app.config.ts");
+assert(appConfig.includes("expo-location"), "Customer App config must include Expo Location.");
+assert(appConfig.includes("locationWhenInUsePermission"), "Customer App config must include safe location permission copy.");
 
 const utilitiesApi = read("src", "api", "utilities.api.ts");
 assert(utilitiesApi.includes("utilities/providers"), "Customer utilities API must load public providers.");
