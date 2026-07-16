@@ -258,6 +258,24 @@ pilot results. Mock payment remains default; live payments, utilities, rides, ri
 dispatch, payouts, wallet withdrawal/refund automation, Pharmacy marketplace, provider
 login and bulk messaging remain disabled.
 
+## Task 141 Go-Live Readiness And Payment Activation
+
+- Go-live readiness checklist:
+  `karigo-go-live-readiness-checklist-task141.md`
+- Live payment activation checklist:
+  `../payments/live-payment-activation-checklist-task141.md`
+- Production cutover and rollback plan:
+  `../operations/production-cutover-and-rollback-plan-task141.md`
+- Go-live payment and cutover QA verification:
+  `../qa/go-live-payment-and-cutover-verification-task141.md`
+
+Use this pack to prepare a controlled production go-live decision. It documents
+payment-provider selection, sandbox certification, production secret review,
+cutover, rollback and post-cutover verification. It does not activate live payments.
+Current provider adapters remain test/sandbox guarded, so live payment activation
+requires a separate approved engineering and finance gate before any production key
+can be used.
+
 ## Controlled Pilot Preparation
 
 - Plan and scope: `controlled-soft-launch-plan.md`
