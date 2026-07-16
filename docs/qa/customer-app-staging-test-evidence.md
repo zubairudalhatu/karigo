@@ -32,3 +32,12 @@ identifiers, or screenshots containing sensitive data.
 | Checkout/order pricing | Fixed | Subtotal, delivery fee, discount, and payable are shown from backend quote/order fields |
 | Checkout quote integrity | Fixed | Create order is blocked until a backend quote is loaded; missing quote no longer renders delivery fee as NGN 0 |
 | Support refresh | Fixed | Created tickets appear immediately and list refreshes on focus/pull |
+
+## Task 139 Evidence References
+
+| Area | Result | Evidence reference |
+| --- | --- | --- |
+| Fresh Customer APK with `expo-location` | Pending | `docs/qa/results/karigo-sme-marketplace-location-ads-apk-qa-closeout-task139.md` |
+| SME Services provider marketplace | Pending | Store masked device evidence outside Git |
+| Managed homepage ads | Pending | Store Admin/Vendor/Customer screenshots outside Git with private details masked |
+| Payment provider selector visibility | Pending | Do not record payment secrets, provider keys or card details |

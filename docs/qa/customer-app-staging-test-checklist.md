@@ -15,6 +15,7 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 | --- | --- | --- | --- |
 | App installs | Internal build installs without replacing production app | Pending |  |
 | Fresh Task 123 APK release candidate verified | Fresh Customer APK includes Ride wording, parcel duplicate protection, parcel field upgrades, profile photo support and expanded SME Services categories | Passed | See `docs/qa/results/karigo-customer-app-fresh-apk-rc-verification-task124.md` |
+| Fresh Task 139 APK closeout required | Fresh Customer APK includes Task 138 `expo-location`, SME provider marketplace, managed ads and payment selector verification | Pending | See `docs/qa/results/karigo-sme-marketplace-location-ads-apk-qa-closeout-task139.md` |
 | Splash/logo loads | KariGO logo displays cleanly | Pending |  |
 | Registration screen loads | Sign-up route is usable | Pending |  |
 | Mock OTP flow works | Registration returns mock OTP flow in staging/mock mode | Pending | Do not record OTP |
@@ -82,6 +83,7 @@ OTPs, bearer tokens, full phone numbers, or real customer details in Git.
 - Task 53 fixes compact the homepage service grid and add readiness-gated KariGO Rides plus Bills & Utilities entries without activating live provider flows.
 - Task 123 fixes customer-facing Ride wording, duplicate parcel submit protection, upgraded parcel fields, profile photo upload and expanded SME Services categories.
 - Task 124 records the fresh Customer App APK release-candidate verification and marks the APK as ready for controlled Kano pilot customer distribution under the documented guardrails.
+- Task 139 records the required post-deployment and fresh APK verification for the SME Services provider marketplace, native location detection, managed ads and Customer checkout payment provider selector.
 
 ## Visual Polish Retest
 
