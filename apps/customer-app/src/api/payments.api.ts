@@ -2,7 +2,7 @@ import type { InitiatePaymentRequest } from "@karigo/shared-types";
 import { api } from "./client";
 
 export interface PaymentInitiation {
-  payment: { id: string; transactionReference: string; paymentStatus: string };
+  payment: { id: string; transactionReference: string; paymentStatus: string; gateway?: string };
   authorization: {
     transactionReference: string;
     authorizationUrl?: string | null;

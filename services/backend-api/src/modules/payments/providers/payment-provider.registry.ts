@@ -7,6 +7,9 @@ import { PaymentProvider, PaymentProviderName, PAYMENT_PROVIDERS } from "./payme
 import { PaystackProvider } from "./paystack.provider";
 import { SquadProvider } from "./squad.provider";
 
+export const CUSTOMER_TEST_PAYMENT_PROVIDERS = ["mock", "paystack", "monnify", "squad"] as const;
+export type CustomerTestPaymentProviderName = (typeof CUSTOMER_TEST_PAYMENT_PROVIDERS)[number];
+
 @Injectable()
 export class PaymentProviderRegistry {
   private readonly providers: Map<PaymentProviderName, PaymentProvider>;
@@ -31,10 +34,24 @@ export class PaymentProviderRegistry {
     );
   }
 
+  customerTestProvider(name: CustomerTestPaymentProviderName): PaymentProvider {
+    if (!CUSTOMER_TEST_PAYMENT_PROVIDERS.includes(name)) {
+      throw new BadRequestException("Unsupported customer test payment provider");
+    }
+    if (name !== "mock" && this.livePaymentsEnabled()) {
+      throw new BadRequestException("Live payment providers are disabled for customer checkout");
+    }
+    return this.get(name);
+  }
+
   get(name: string): PaymentProvider {
     if (!PAYMENT_PROVIDERS.includes(name as PaymentProviderName)) {
       throw new BadRequestException("Unsupported payment gateway");
     }
     return this.providers.get(name as PaymentProviderName)!;
+  }
+
+  private livePaymentsEnabled(): boolean {
+    return this.config.get<string>("PAYMENTS_LIVE_ENABLED", "false").trim().toLowerCase() === "true";
   }
 }

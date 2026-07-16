@@ -49,7 +49,9 @@ export class PaymentsService {
       throw new BadRequestException("Payment amount does not match the order total");
     }
 
-    const provider = this.providerRegistry.active();
+    const provider = dto.paymentProvider
+      ? this.providerRegistry.customerTestProvider(dto.paymentProvider)
+      : this.providerRegistry.active();
     const transactionReference = this.transactionReference(provider.name);
     const payment = await this.prisma.payment.create({
       data: {
@@ -71,7 +73,12 @@ export class PaymentsService {
         currency: payment.currency,
         customerEmail: order.customer.user.email,
         customerPhone: order.customer.user.phoneNumber,
-        metadata: { orderId: order.id, orderNumber: order.orderNumber, paymentId: payment.id }
+        metadata: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          paymentId: payment.id,
+          selectedPaymentProvider: dto.paymentProvider ?? "environment-default"
+        }
       });
     } catch (error) {
       await this.prisma.payment.update({

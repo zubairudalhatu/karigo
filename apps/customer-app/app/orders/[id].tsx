@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
+import type { CustomerTestPaymentProvider } from "@karigo/shared-types";
 import { Order, ordersApi } from "../../src/api/orders.api";
 import { paymentsApi } from "../../src/api/payments.api";
 import { Button, Card, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
@@ -12,7 +13,9 @@ import {
   openExternalPaymentAuthorization
 } from "../../src/lib/payment-flow";
 import {
+  customerTestPaymentProviderOptions,
   paymentSafetyNote,
+  paymentProviderLabel,
   paymentStatusView,
   paymentVerificationFailureMessage,
   pendingAuthorizationCopy,
@@ -28,8 +31,10 @@ export default function OrderTracking() {
   const [deliveryOtp, setDeliveryOtp] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState("");
+  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<CustomerTestPaymentProvider>("mock");
   const [pendingPaymentReference, setPendingPaymentReference] = useState("");
   const [pendingAuthorizationUrl, setPendingAuthorizationUrl] = useState("");
+  const [pendingPaymentProvider, setPendingPaymentProvider] = useState("");
   const load = () => ordersApi.detail(id).then(setOrder).catch((e) => setError(friendlyError(e)));
 
   useEffect(() => { void load(); }, [id]);
@@ -42,12 +47,20 @@ export default function OrderTracking() {
     if (!order) return;
     setBusy(true); setError("");
     try {
-      const started = await paymentsApi.initiate({ orderId: order.id, amount: Number(order.totalAmount), paymentMethod: "card" });
+      const started = await paymentsApi.initiate({
+        orderId: order.id,
+        amount: Number(order.totalAmount),
+        paymentMethod: selectedPaymentProvider === "mock" ? "mock" : "card",
+        paymentProvider: selectedPaymentProvider
+      });
       const authorizationUrl = started.authorization.authorizationUrl;
+      const startedProvider = started.payment.gateway ?? selectedPaymentProvider;
+      const startedProviderLabel = paymentProviderLabel(startedProvider);
       if (isExternalPaymentAuthorizationUrl(authorizationUrl)) {
         setPendingPaymentReference(started.payment.transactionReference);
         setPendingAuthorizationUrl(authorizationUrl);
-        setMessage("Paystack Test Mode opened. Return to KariGO and tap Verify payment after completing the test checkout.");
+        setPendingPaymentProvider(startedProvider);
+        setMessage(`${startedProviderLabel} opened. Return to KariGO and tap Verify payment after completing the sandbox checkout.`);
         await openExternalPaymentAuthorization(authorizationUrl);
         return;
       }
@@ -62,6 +75,7 @@ export default function OrderTracking() {
     await paymentsApi.verify(reference);
     setPendingPaymentReference("");
     setPendingAuthorizationUrl("");
+    setPendingPaymentProvider("");
     setMessage("Payment successful. Your order is now being processed.");
     await load();
   }
@@ -113,7 +127,9 @@ export default function OrderTracking() {
   const canRevealDeliveryOtp = order ? ["ARRIVED_DESTINATION", "DELIVERED"].includes(order.orderStatus) : false;
   const groupedOtp = deliveryOtp ? `${deliveryOtp.slice(0, 3)} ${deliveryOtp.slice(3)}` : "";
   const paymentView = paymentStatusView(order?.paymentStatus);
-  const pendingView = pendingAuthorizationCopy();
+  const selectedProviderLabel = paymentProviderLabel(selectedPaymentProvider);
+  const pendingProviderLabel = paymentProviderLabel(pendingPaymentProvider || selectedPaymentProvider);
+  const pendingView = pendingAuthorizationCopy(pendingProviderLabel);
 
   return <Protected><Screen title={order?.orderNumber ?? "Order details"}><Message>{message}</Message><Message error>{error}</Message>
     {order && pricing ? <>
@@ -132,12 +148,32 @@ export default function OrderTracking() {
         <View style={ui.priceRow}><Text style={ui.sectionTitle}>Payable:</Text><Text style={ui.payable}>{money(pricing.payableAmount)}</Text></View>
       </Card>
       {order.paymentStatus === "PENDING" ? <>
-        <Button title={busy ? "Preparing payment..." : `Continue to payment - ${money(order.totalAmount)}`} onPress={pay} disabled={busy || !!pendingPaymentReference} />
+        <Card>
+          <Text style={ui.cardTitle}>Test payment provider</Text>
+          <Text style={ui.cardText}>Choose how to verify this staging checkout. Mock payment remains the safe pilot default.</Text>
+          {customerTestPaymentProviderOptions.map((option) => (
+            <View key={option.value}>
+              <Button
+                title={`${selectedPaymentProvider === option.value ? "Selected - " : ""}${option.title}`}
+                tone={selectedPaymentProvider === option.value ? "primary" : "muted"}
+                onPress={() => {
+                  setSelectedPaymentProvider(option.value);
+                  setMessage("");
+                  setError("");
+                }}
+                disabled={busy || !!pendingPaymentReference}
+              />
+              <Text style={ui.muted}>{option.description}</Text>
+            </View>
+          ))}
+          <Text style={ui.muted}>Do not use live card, bank or account details during sandbox tests.</Text>
+        </Card>
+        <Button title={busy ? "Preparing payment..." : `Continue with ${selectedProviderLabel} - ${money(order.totalAmount)}`} onPress={pay} disabled={busy || !!pendingPaymentReference} />
         {pendingPaymentReference ? <Card>
           <Text style={ui.cardTitle}>{pendingView.title}</Text>
           <Text style={ui.cardText}>{pendingView.body}</Text>
           <Text style={ui.muted}>{pendingView.actionHint}</Text>
-          <Text style={ui.muted}>Do not use live card details during staging tests.</Text>
+          <Text style={ui.muted}>Do not use live card, bank or account details during staging tests.</Text>
           <Button title="Open payment page again" tone="muted" onPress={reopenPaymentAuthorization} disabled={busy} />
           <Button title={busy ? "Verifying payment..." : "Verify payment status"} onPress={verifyPendingPayment} disabled={busy} />
         </Card> : null}

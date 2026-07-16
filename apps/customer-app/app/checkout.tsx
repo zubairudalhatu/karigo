@@ -1,7 +1,7 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
-import type { CheckoutQuote } from "@karigo/shared-types";
+import type { CheckoutQuote, CustomerTestPaymentProvider } from "@karigo/shared-types";
 import { Address, addressesApi } from "../src/api/addresses.api";
 import { Order, ordersApi } from "../src/api/orders.api";
 import { paymentsApi } from "../src/api/payments.api";
@@ -15,7 +15,9 @@ import {
   openExternalPaymentAuthorization
 } from "../src/lib/payment-flow";
 import {
+  customerTestPaymentProviderOptions,
   paymentSafetyNote,
+  paymentProviderLabel,
   paymentStatusView,
   paymentVerificationFailureMessage,
   pendingAuthorizationCopy,
@@ -36,8 +38,10 @@ export default function Checkout() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<CustomerTestPaymentProvider>("mock");
   const [pendingPaymentReference, setPendingPaymentReference] = useState("");
   const [pendingAuthorizationUrl, setPendingAuthorizationUrl] = useState("");
+  const [pendingPaymentProvider, setPendingPaymentProvider] = useState("");
 
   const items = useMemo(() => cart.items.map((i) => ({ productId: i.product.id, quantity: i.quantity })), [cart.items]);
   const quoteKey = useMemo(() => JSON.stringify({
@@ -154,12 +158,20 @@ export default function Checkout() {
     setBusy(true);
     setError("");
     try {
-      const started = await paymentsApi.initiate({ orderId: order.id, amount: Number(order.totalAmount), paymentMethod: "card" });
+      const started = await paymentsApi.initiate({
+        orderId: order.id,
+        amount: Number(order.totalAmount),
+        paymentMethod: selectedPaymentProvider === "mock" ? "mock" : "card",
+        paymentProvider: selectedPaymentProvider
+      });
       const authorizationUrl = started.authorization.authorizationUrl;
+      const startedProvider = started.payment.gateway ?? selectedPaymentProvider;
+      const startedProviderLabel = paymentProviderLabel(startedProvider);
       if (isExternalPaymentAuthorizationUrl(authorizationUrl)) {
         setPendingPaymentReference(started.payment.transactionReference);
         setPendingAuthorizationUrl(authorizationUrl);
-        setMessage("Paystack Test Mode opened. Return to KariGO and tap Verify payment after completing the test checkout.");
+        setPendingPaymentProvider(startedProvider);
+        setMessage(`${startedProviderLabel} opened. Return to KariGO and tap Verify payment after completing the sandbox checkout.`);
         await openExternalPaymentAuthorization(authorizationUrl);
         return;
       }
@@ -181,6 +193,7 @@ export default function Checkout() {
     cart.clear();
     setPendingPaymentReference("");
     setPendingAuthorizationUrl("");
+    setPendingPaymentProvider("");
     router.replace(`/orders/${orderId}`);
   }
 
@@ -215,7 +228,9 @@ export default function Checkout() {
   const pricing = quote ? pricingFromServer(quote) : null;
   const quoteReady = !!quote && !quoteLoading && !quoteError;
   const paymentView = paymentStatusView(order?.paymentStatus);
-  const pendingView = pendingAuthorizationCopy();
+  const selectedProviderLabel = paymentProviderLabel(selectedPaymentProvider);
+  const pendingProviderLabel = paymentProviderLabel(pendingPaymentProvider || selectedPaymentProvider);
+  const pendingView = pendingAuthorizationCopy(pendingProviderLabel);
 
   return <Protected><Screen title="Checkout">
     {addresses.length === 0 ? <><Empty message="Add a delivery address before checkout." /><Button title="Add address" onPress={() => router.push("/addresses")} /></> :
@@ -241,12 +256,32 @@ export default function Checkout() {
           <Text style={ui.muted}>{paymentView.actionHint}</Text>
           <Text style={ui.muted}>{paymentSafetyNote}</Text>
         </Card>
-        <Button title={busy ? "Preparing payment..." : `Continue to payment - ${money(order.totalAmount)}`} onPress={pay} disabled={busy || !!pendingPaymentReference} />
+        <Card>
+          <Text style={ui.cardTitle}>Test payment provider</Text>
+          <Text style={ui.cardText}>Choose how to verify this staging checkout. Mock payment remains the safe pilot default.</Text>
+          {customerTestPaymentProviderOptions.map((option) => (
+            <View key={option.value}>
+              <Button
+                title={`${selectedPaymentProvider === option.value ? "Selected - " : ""}${option.title}`}
+                tone={selectedPaymentProvider === option.value ? "primary" : "muted"}
+                onPress={() => {
+                  setSelectedPaymentProvider(option.value);
+                  setMessage("");
+                  setError("");
+                }}
+                disabled={busy || !!pendingPaymentReference}
+              />
+              <Text style={ui.muted}>{option.description}</Text>
+            </View>
+          ))}
+          <Text style={ui.muted}>Do not use live card, bank or account details during sandbox tests.</Text>
+        </Card>
+        <Button title={busy ? "Preparing payment..." : `Continue with ${selectedProviderLabel} - ${money(order.totalAmount)}`} onPress={pay} disabled={busy || !!pendingPaymentReference} />
         {pendingPaymentReference ? <Card>
           <Text style={ui.cardTitle}>{pendingView.title}</Text>
           <Text style={ui.cardText}>{pendingView.body}</Text>
           <Text style={ui.muted}>{pendingView.actionHint}</Text>
-          <Text style={ui.muted}>Do not use live card details during staging tests.</Text>
+          <Text style={ui.muted}>Do not use live card, bank or account details during staging tests.</Text>
           <Button title="Open payment page again" tone="muted" onPress={reopenPaymentAuthorization} disabled={busy} />
           <Button title={busy ? "Verifying payment..." : "Verify payment status"} onPress={verifyPendingPayment} disabled={busy} />
         </Card> : null}

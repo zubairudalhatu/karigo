@@ -38,6 +38,7 @@ describe("PaymentsService", () => {
   };
   const registry = {
     active: jest.fn(() => mockProvider),
+    customerTestProvider: jest.fn(() => mockProvider),
     get: jest.fn(() => mockProvider)
   };
   const audit = { record: jest.fn() };
@@ -49,7 +50,13 @@ describe("PaymentsService", () => {
     notifications as never
   );
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    registry.active.mockReturnValue(mockProvider);
+    registry.customerTestProvider.mockReturnValue(mockProvider);
+    registry.get.mockReturnValue(mockProvider);
+    prisma.$transaction.mockImplementation((callback) => callback(tx));
+  });
 
   it("initiates payment using the server-owned order total", async () => {
     prisma.order.findFirst.mockResolvedValue({
@@ -77,6 +84,54 @@ describe("PaymentsService", () => {
       })
     });
     expect(result.authorization.authorizationUrl).toBe("mock://payment/reference");
+  });
+
+  it("initiates payment with a customer-selected sandbox provider", async () => {
+    const monnifyProvider = {
+      name: "monnify",
+      initialize: jest.fn(),
+      verify: jest.fn(),
+      parseWebhook: jest.fn()
+    };
+    prisma.order.findFirst.mockResolvedValue({
+      id: "order-monnify",
+      orderNumber: "KGO-002",
+      customerId: "customer-1",
+      totalAmount: new Prisma.Decimal(7500),
+      paymentStatus: PaymentStatus.PENDING,
+      orderStatus: OrderStatus.AWAITING_PAYMENT,
+      customer: { user: { email: "customer@example.com", phoneNumber: "+2348012345678" } }
+    });
+    prisma.payment.create.mockResolvedValue({
+      id: "payment-monnify",
+      currency: "NGN"
+    });
+    registry.customerTestProvider.mockReturnValue(monnifyProvider);
+    monnifyProvider.initialize.mockResolvedValue({
+      authorizationUrl: "https://sandbox.monnify.com/checkout",
+      providerResponse: {}
+    });
+
+    await service.initiate("user-1", {
+      orderId: "order-monnify",
+      amount: 7500,
+      paymentMethod: "card",
+      paymentProvider: "monnify"
+    });
+
+    expect(registry.customerTestProvider).toHaveBeenCalledWith("monnify");
+    expect(registry.active).not.toHaveBeenCalled();
+    expect(prisma.payment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        gateway: "monnify",
+        paymentMethod: "card"
+      })
+    });
+    expect(monnifyProvider.initialize).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({
+        selectedPaymentProvider: "monnify"
+      })
+    }));
   });
 
   it("rejects a frontend amount that does not match the order total", async () => {

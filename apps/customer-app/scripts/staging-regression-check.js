@@ -313,10 +313,13 @@ assert(checkout.includes("loadQuote(code, { promoAttempt: true })"), "Promo succ
 assert(checkout.includes("await loadQuote(\"\", { keepUiError: true })"), "Promo failure must refresh a non-promo quote.");
 assert(checkout.includes("isExternalPaymentAuthorizationUrl"), "Checkout must detect external payment authorization URLs.");
 assert(checkout.includes("openExternalPaymentAuthorization"), "Checkout must open Paystack Test Mode authorization through the safe helper.");
-assert(paymentStatus.includes("Paystack Test Mode authorization"), "Checkout must show a Paystack Test Mode authorization state.");
+assert(checkout.includes("customerTestPaymentProviderOptions"), "Checkout must expose customer-selectable sandbox payment provider options.");
+assert(checkout.includes("paymentProvider: selectedPaymentProvider"), "Checkout must send the selected sandbox payment provider to the backend.");
+assert(paymentStatus.includes("Mock, Paystack Test Mode, Monnify Sandbox and Squad Sandbox"), "Payment copy must list supported sandbox providers.");
+assert(paymentStatus.includes("Complete the ${providerLabel} checkout page"), "Checkout must show provider-specific authorization guidance.");
 assert(paymentStatus.includes("KariGO will only mark the order paid after backend verification."), "Payment copy must state backend verification is required.");
 assert(paymentStatus.includes("Payment could not be verified yet."), "Payment failures must have a clear retry-oriented message.");
-assert(paymentStatus.includes("Wallet funding, automatic refunds and payout automation remain disabled."), "Payment copy must keep wallet/refund automation disabled.");
+assert(paymentStatus.includes("wallet funding, automatic refunds and payout automation remain disabled."), "Payment copy must keep wallet/refund automation disabled.");
 assert(checkout.includes("Verify payment status"), "Checkout must let customers verify payment status through the backend after provider checkout.");
 const paymentFlow = read("src", "lib", "payment-flow.ts");
 assert(paymentFlow.includes("Linking.openURL"), "Customer payment flow must open external authorization with React Native Linking.");
@@ -333,7 +336,9 @@ assert(orderDetail.includes("Only share this code after you have received your o
 assert(orderDetail.includes("Retry delivery code"), "Delivery OTP fetch failures must have a retry action.");
 assert(orderDetail.includes("setDeliveryOtp(\"\")"), "Delivery OTP must reset when status/order changes or fetch fails.");
 assert(orderDetail.includes("isExternalPaymentAuthorizationUrl"), "Order detail retry payment must detect external payment authorization URLs.");
-assert(orderDetail.includes("pendingAuthorizationCopy"), "Order detail must show Paystack Test Mode authorization guidance for retry payments.");
+assert(orderDetail.includes("customerTestPaymentProviderOptions"), "Order detail retry payment must expose customer-selectable sandbox payment provider options.");
+assert(orderDetail.includes("paymentProvider: selectedPaymentProvider"), "Order detail retry payment must send the selected sandbox payment provider to the backend.");
+assert(orderDetail.includes("pendingAuthorizationCopy"), "Order detail must show sandbox authorization guidance for retry payments.");
 assert(orderDetail.includes("Verify payment status"), "Order detail must let customers verify provider checkout through the backend.");
 
 const ordersApi = read("src", "api", "orders.api.ts");
