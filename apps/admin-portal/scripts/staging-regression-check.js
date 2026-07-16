@@ -28,6 +28,7 @@ assert(shell.includes("Referrals"), "Admin sidebar must include Referrals.");
 assert(shell.includes("Ads"), "Admin sidebar must include Ads.");
 assert(shell.includes("Utilities"), "Admin sidebar must include Utilities.");
 assert(shell.includes("Ride Operations"), "Admin sidebar must include Ride Operations.");
+assert(shell.includes("Payment Readiness"), "Admin sidebar must include Payment Readiness.");
 assert(shell.includes("SME Services Summary"), "Admin sidebar must include SME Services operations summary.");
 assert(shell.includes("SME Pilot Readiness"), "Admin sidebar must include SME Services pilot readiness.");
 assert(shell.includes("SME Launch Control"), "Admin sidebar must include SME Services pilot launch control.");
@@ -50,6 +51,20 @@ const deliveryCaptainApplicationsApi = read("src", "api", "delivery-captain-appl
 assert(deliveryCaptainApplicationsApi.includes("admin/delivery-captain-applications"), "Admin Delivery Captain API must call admin application endpoints.");
 assert(deliveryCaptainApplicationsApi.includes("applicantVisibleNote"), "Admin Delivery Captain API must support applicant-visible review notes.");
 assert(deliveryCaptainApplicationsApi.includes("adminNote"), "Admin Delivery Captain API must support internal review notes.");
+
+const paymentReadinessPage = read("app", "payment-readiness", "page.tsx");
+assert(paymentReadinessPage.includes("Payment Readiness"), "Admin Payment Readiness page must exist.");
+assert(paymentReadinessPage.includes("paymentsApi.providerReadiness"), "Admin Payment Readiness page must call provider readiness endpoint.");
+assert(paymentReadinessPage.includes("Mock payment remains the default rollback path"), "Payment Readiness page must state mock rollback guardrail.");
+assert(paymentReadinessPage.includes("Do not paste keys"), "Payment Readiness page must warn against exposing secrets.");
+assert(paymentReadinessPage.includes("1 Monnify"), "Payment Readiness page must show Monnify as launch priority one.");
+assert(paymentReadinessPage.includes("2 Paystack, 3 Squad later"), "Payment Readiness page must show Paystack second and Squad later.");
+const liveSecretPrefix = ["sk", "live"].join("_");
+const livePublicPrefix = ["pk", "live"].join("_");
+assert(!paymentReadinessPage.includes(liveSecretPrefix) && !paymentReadinessPage.includes(livePublicPrefix), "Payment Readiness page must not contain live payment key values.");
+const paymentsApiSource = read("src", "api", "payments.api.ts");
+assert(paymentsApiSource.includes("admin/payments/provider-readiness"), "Admin payments API must call provider readiness endpoint.");
+assert(paymentsApiSource.includes("PaymentProviderReadiness"), "Admin payments API must type provider readiness response.");
 
 const smeServicesSummaryPage = read("app", "sme-services", "summary", "page.tsx");
 assert(smeServicesSummaryPage.includes("SME Services operations summary"), "Admin SME Services summary page must exist.");
