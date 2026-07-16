@@ -111,6 +111,7 @@ describe("Backend foundation (HTTP)", () => {
     await request(app!.getHttpServer())
       .post("/api/v1/admin/payments/00000000-0000-0000-0000-000000000000/approve-refund")
       .expect(401);
+    await request(app!.getHttpServer()).get("/api/v1/admin/payments/provider-readiness").expect(401);
   });
 
   it("exposes the public active-vendor listing", async () => {

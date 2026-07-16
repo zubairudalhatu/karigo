@@ -575,8 +575,14 @@ export class PaymentsService {
   }
 
   private optionalValue(name: string): string | undefined {
-    const value = this.config.get<string>(name)?.trim();
-    return value || undefined;
+    const value = this.config.get<unknown>(name);
+    if (typeof value === "string") {
+      return value.trim() || undefined;
+    }
+    if (typeof value === "boolean" || typeof value === "number") {
+      return String(value);
+    }
+    return undefined;
   }
 
   private async recordInitializationFailure(

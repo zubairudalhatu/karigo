@@ -44,7 +44,7 @@ describe("PaymentsService", () => {
   const audit = { record: jest.fn() };
   const notifications = { createNotification: jest.fn() };
   const config = {
-    get: jest.fn((_: string, fallback?: string) => fallback)
+    get: jest.fn((_: string, fallback?: unknown) => fallback)
   };
   const service = new PaymentsService(
     prisma as unknown as PrismaService,
@@ -59,7 +59,7 @@ describe("PaymentsService", () => {
     registry.active.mockReturnValue(mockProvider);
     registry.customerTestProvider.mockReturnValue(mockProvider);
     registry.get.mockReturnValue(mockProvider);
-    config.get.mockImplementation((_: string, fallback?: string) => fallback);
+    config.get.mockImplementation((_: string, fallback?: unknown) => fallback);
     prisma.$transaction.mockImplementation((callback) => callback(tx));
   });
 
@@ -176,10 +176,10 @@ describe("PaymentsService", () => {
   });
 
   it("reports payment provider readiness without exposing configured secret values", () => {
-    config.get.mockImplementation((key: string, fallback?: string) => {
-      const values: Record<string, string> = {
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      const values: Record<string, string | boolean> = {
         PAYMENTS_PROVIDER: "paystack",
-        PAYMENTS_LIVE_ENABLED: "false",
+        PAYMENTS_LIVE_ENABLED: false,
         PAYSTACK_MODE: "test",
         MONNIFY_MODE: "sandbox",
         MONNIFY_API_KEY: "configured-monnify-api-key",
@@ -196,6 +196,7 @@ describe("PaymentsService", () => {
     const serialized = JSON.stringify(readiness);
 
     expect(readiness.activeProvider).toBe("paystack");
+    expect(readiness.paymentsLiveEnabled).toBe(false);
     expect(paystack?.issues).toContain("missing PAYSTACK_SECRET_KEY");
     expect(monnify?.issues).toContain("missing MONNIFY_CONTRACT_CODE");
     expect(serialized).not.toContain("configured-monnify-secret");

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { KariGoApiError } from "@karigo/shared-types";
 import { PaymentProviderReadiness, PaymentProviderReadinessItem, paymentsApi } from "../../src/api/payments.api";
 import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
-import { friendlyError } from "../../src/lib/errors";
 
 const providerPriority = ["monnify", "paystack", "squad"];
 
@@ -40,6 +40,16 @@ function sortProviders(providers: PaymentProviderReadinessItem[]) {
   });
 }
 
+function paymentReadinessError(error: unknown) {
+  const base = "Payment readiness could not be loaded. Please confirm backend access and admin session.";
+  if (error instanceof KariGoApiError) {
+    if (error.status === 401 || error.status === 403) return base;
+    if (error.status && error.status >= 500) return `${base} Backend returned ${error.status}.`;
+    return `${base} ${error.message}`;
+  }
+  return base;
+}
+
 export default function PaymentReadinessPage() {
   const [readiness, setReadiness] = useState<PaymentProviderReadiness | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,7 +62,7 @@ export default function PaymentReadinessPage() {
     setError("");
     paymentsApi.providerReadiness()
       .then(setReadiness)
-      .catch((e) => setError(friendlyError(e)))
+      .catch((e) => setError(paymentReadinessError(e)))
       .finally(() => setLoading(false));
   }
 
@@ -156,7 +166,7 @@ export default function PaymentReadinessPage() {
             </div>
           </section>
         </>
-      ) : <Empty>Payment readiness could not be loaded.</Empty>}
+      ) : <Empty>Payment readiness could not be loaded. Please confirm backend access and admin session.</Empty>}
     </PortalShell>
   );
 }

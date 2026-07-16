@@ -55,6 +55,7 @@ assert(deliveryCaptainApplicationsApi.includes("adminNote"), "Admin Delivery Cap
 const paymentReadinessPage = read("app", "payment-readiness", "page.tsx");
 assert(paymentReadinessPage.includes("Payment Readiness"), "Admin Payment Readiness page must exist.");
 assert(paymentReadinessPage.includes("paymentsApi.providerReadiness"), "Admin Payment Readiness page must call provider readiness endpoint.");
+assert(paymentReadinessPage.includes("Payment readiness could not be loaded. Please confirm backend access and admin session."), "Payment Readiness page must use a page-specific safe error message.");
 assert(paymentReadinessPage.includes("Mock payment remains the default rollback path"), "Payment Readiness page must state mock rollback guardrail.");
 assert(paymentReadinessPage.includes("Do not paste keys"), "Payment Readiness page must warn against exposing secrets.");
 assert(paymentReadinessPage.includes("1 Monnify"), "Payment Readiness page must show Monnify as launch priority one.");
