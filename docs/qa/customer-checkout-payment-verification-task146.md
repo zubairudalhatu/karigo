@@ -29,7 +29,7 @@ Admin Payment Readiness should still show:
 - Paystack Test Mode
 - Squad Sandbox
 
-Squad should be labelled as deferred/optional for launch and remain available for diagnostic testing only.
+Task 155 supersedes the original launch priority. Squad by GTBank should now be labelled as the primary launch provider, while live checkout remains gated until environment verification and approval.
 
 ## Verification Steps
 
@@ -44,7 +44,7 @@ Squad should be labelled as deferred/optional for launch and remain available fo
 9. Return to KariGO and verify that the order is not marked paid until backend verification succeeds.
 10. Repeat with Paystack Test Mode.
 11. Open Admin Portal Payment Readiness.
-12. Confirm Squad remains visible for diagnostics and is marked deferred/optional.
+12. Confirm Squad is marked as primary launch provider and still gated until environment verification.
 
 ## Expected Results
 
@@ -81,7 +81,8 @@ Squad should be labelled as deferred/optional for launch and remain available fo
 
 Launch-candidate payment provider order:
 
-1. Monnify primary
-2. Paystack secondary
+1. Squad by GTBank primary, pending live environment verification
+2. Monnify pending approval / future secondary
+3. Paystack pending approval / future secondary
 3. Mock fallback
-4. Squad deferred
+4. Mock payment staging fallback only

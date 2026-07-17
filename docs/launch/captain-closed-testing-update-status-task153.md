@@ -63,7 +63,7 @@ This build supersedes the Task 149 Captain build `6f0bea0e-9402-4102-bde4-4afc05
 ```text
 Mock payment remains available.
 Monnify and Paystack remain sandbox/test candidates only.
-Squad remains deferred.
+Squad by GTBank is now the primary launch payment candidate, with live activation still pending environment verification and approval.
 Live payments remain disabled.
 Live rides and ride dispatch remain disabled.
 No direct artifact URLs, Play testing links, tester data or credentials should be committed.

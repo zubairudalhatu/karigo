@@ -29,6 +29,7 @@ This checklist applies after the Customer App and KariGO Captain App AAB artifac
 | Add product to cart | Cart updates once without duplicate submit issues | Pending |
 | Checkout quote | Server quote shows subtotal, delivery fee, discount and payable amount | Pending |
 | Mock payment | Mock payment remains available as staging fallback | Pending |
+| Squad by GTBank | Primary launch provider remains gated until live verification is approved | Pending |
 | Monnify Sandbox | Sandbox initialization works or safe error is recorded | Pending |
 | Paystack Test Mode | Test-mode initialization works or safe error is recorded | Pending |
 | Order history/detail | Created orders appear with correct status and totals | Pending |
@@ -55,9 +56,9 @@ This checklist applies after the Customer App and KariGO Captain App AAB artifac
 ## Payment Testing Rules
 
 - Live payments remain disabled.
-- Monnify and Paystack are sandbox/test only.
-- Squad is deferred for launch.
-- Mock payment remains the staging fallback.
+- Squad by GTBank is the primary launch payment candidate, but live activation remains gated.
+- Monnify and Paystack are pending approval and sandbox/test only.
+- Mock payment remains the staging fallback only.
 - No real customer payment should be collected during closed testing unless management explicitly approves a separate controlled live test.
 - Any payment failure must be logged with time, device, app, selected provider, expected result and safe screenshot/reference.
 
@@ -89,7 +90,7 @@ Go if:
 - Testers can install both apps.
 - Login works.
 - Customer checkout reaches payment selection.
-- Monnify/Paystack sandbox behavior is confirmed.
+- Squad launch gating and Monnify/Paystack sandbox behavior are confirmed.
 - Mock payment works for staging fallback.
 - Captain core delivery flow works.
 - No critical crash exists.

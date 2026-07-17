@@ -28,6 +28,7 @@ interface SquadEnvelope {
 }
 
 const SQUAD_SANDBOX_SECRET_PREFIX = ["sandbox", "sk", ""].join("_");
+type SquadMode = "sandbox" | "live";
 
 @Injectable()
 export class SquadProvider implements PaymentProvider {
@@ -129,36 +130,76 @@ export class SquadProvider implements PaymentProvider {
   }
 
   private secretKey(): string {
-    this.assertSandboxOnly();
+    const mode = this.assertConfiguredMode();
     const key = configText(this.config.get<unknown>("SQUAD_SECRET_KEY"));
     if (!key) {
       throw new BadRequestException("missing SQUAD_SECRET_KEY");
     }
-    if (!key.startsWith(SQUAD_SANDBOX_SECRET_PREFIX)) {
+    if (mode === "sandbox" && !key.startsWith(SQUAD_SANDBOX_SECRET_PREFIX)) {
       throw new BadRequestException("SQUAD_SECRET_KEY does not match the expected sandbox key format");
+    }
+    if (mode === "live" && key.startsWith(SQUAD_SANDBOX_SECRET_PREFIX)) {
+      throw new BadRequestException("SQUAD_SECRET_KEY must be a live Squad key when SQUAD_MODE=live");
     }
     return key;
   }
 
   private baseUrl(): string {
-    const value = (configText(this.config.get<unknown>("SQUAD_BASE_URL", "https://sandbox-api-d.squadco.com")) ?? "https://sandbox-api-d.squadco.com").replace(/\/+$/, "");
-    if (!value.startsWith("https://") || value.includes("api-d.squadco.com") && !value.includes("sandbox")) {
+    const mode = this.assertConfiguredMode();
+    const fallback = mode === "sandbox" ? "https://sandbox-api-d.squadco.com" : undefined;
+    const value = configText(this.config.get<unknown>("SQUAD_BASE_URL", fallback))?.replace(/\/+$/, "");
+    if (!value) {
+      throw new BadRequestException("missing SQUAD_BASE_URL");
+    }
+    if (!value.startsWith("https://")) {
+      throw new BadRequestException("SQUAD_BASE_URL must use HTTPS");
+    }
+    if (mode === "sandbox" && value.includes("api-d.squadco.com") && !value.includes("sandbox")) {
       throw new BadRequestException("Squad sandbox base URL must use HTTPS and must not be the live API host");
+    }
+    if (mode === "live" && value.toLowerCase().includes("sandbox")) {
+      throw new BadRequestException("SQUAD_BASE_URL must be a live Squad API host when SQUAD_MODE=live");
     }
     return value;
   }
 
-  private assertSandboxOnly(): void {
+  private assertConfiguredMode(): SquadMode {
     const mode = configText(this.config.get<unknown>("SQUAD_MODE"))?.toLowerCase();
     const liveEnabled = configText(this.config.get<unknown>("PAYMENTS_LIVE_ENABLED", "false"))?.toLowerCase() === "true";
+    if (mode === "live") {
+      if (!liveEnabled) {
+        throw new BadRequestException("PAYMENTS_LIVE_ENABLED must be true for Squad live mode");
+      }
+      const selectedProvider = configText(this.config.get<unknown>("PAYMENTS_PROVIDER"))
+        ?? configText(this.config.get<unknown>("PAYMENT_PROVIDER"));
+      if (selectedProvider !== "squad") {
+        throw new BadRequestException("PAYMENTS_PROVIDER must be squad for Squad live mode");
+      }
+      if (configText(this.config.get<unknown>("SQUAD_LIVE_ACTIVATION_APPROVED"))?.toLowerCase() !== "true") {
+        throw new BadRequestException("SQUAD_LIVE_ACTIVATION_APPROVED must be true for Squad live mode");
+      }
+      if (!configText(this.config.get<unknown>("SQUAD_CALLBACK_URL"))?.startsWith("https://")) {
+        throw new BadRequestException("SQUAD_CALLBACK_URL must use HTTPS for Squad live mode");
+      }
+      if (!configText(this.config.get<unknown>("SQUAD_WEBHOOK_SECRET"))) {
+        throw new BadRequestException("missing SQUAD_WEBHOOK_SECRET");
+      }
+      return "live";
+    }
     if (liveEnabled) throw new BadRequestException("PAYMENTS_LIVE_ENABLED must be false for Squad Sandbox");
     if (!["test", "sandbox"].includes(mode ?? "")) {
       throw new BadRequestException("missing SQUAD_MODE=test or sandbox");
     }
+    return "sandbox";
   }
 
   private validSignature(rawBody: Buffer, supplied: string): boolean {
-    const secret = configText(this.config.get<unknown>("SQUAD_WEBHOOK_SECRET")) || this.secretKey();
+    const mode = this.assertConfiguredMode();
+    const secret = configText(this.config.get<unknown>("SQUAD_WEBHOOK_SECRET"))
+      || (mode === "sandbox" ? this.secretKey() : undefined);
+    if (!secret) {
+      throw new BadRequestException("missing SQUAD_WEBHOOK_SECRET");
+    }
     const expected = createHmac("sha512", secret).update(rawBody).digest("hex").toUpperCase();
     const received = supplied.trim().replace(/\s+/g, "").toUpperCase();
     if (received.length !== expected.length) return false;
@@ -187,7 +228,9 @@ export class SquadProvider implements PaymentProvider {
   private customerEmail(input: InitializePaymentInput): string {
     const email = input.customerEmail?.trim();
     if (email) return email;
-    this.assertSandboxOnly();
+    if (this.assertConfiguredMode() === "live") {
+      throw new BadRequestException("Customer email is required for Squad live checkout");
+    }
     return `checkout+${this.safeReference(input.transactionReference)}@sandbox.karigo.com.ng`;
   }
 

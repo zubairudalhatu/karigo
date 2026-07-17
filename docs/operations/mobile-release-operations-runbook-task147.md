@@ -38,9 +38,9 @@ This runbook does not publish apps or activate live payments.
 5. Confirm store review/test accounts are available through secure channel.
 6. Confirm payment posture:
    - Mock fallback available.
-   - Monnify primary.
-   - Paystack secondary.
-   - Squad deferred.
+   - Squad by GTBank primary, pending live environment verification.
+   - Monnify pending approval / future secondary.
+   - Paystack pending approval / future secondary.
    - Live payments disabled.
 7. Confirm support coverage window.
 8. Confirm rollback/pause owner.

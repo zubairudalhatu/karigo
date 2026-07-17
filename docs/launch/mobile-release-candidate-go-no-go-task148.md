@@ -46,8 +46,9 @@ Public release: Not approved
 
 ```text
 Live payments: Disabled
-Monnify: Sandbox-ready, primary launch candidate
-Paystack: Test-mode-ready, secondary launch candidate
+Squad by GTBank: Primary launch candidate, pending live environment verification
+Monnify: Pending approval / future secondary provider
+Paystack: Pending approval / future secondary provider
 Squad: Deferred from customer checkout
 ```
 

@@ -37,7 +37,7 @@ describe("PaymentProviderRegistry", () => {
     config.get.mockImplementation((_: string, fallback?: unknown) => fallback);
   });
 
-  it("keeps Squad deferred from customer checkout by default", () => {
+  it("keeps Squad hidden from sandbox customer checkout by default", () => {
     const paymentRegistry = registry();
 
     expect(paymentRegistry.customerCheckoutProviders()).toEqual(["mock", "monnify", "paystack"]);
@@ -58,13 +58,42 @@ describe("PaymentProviderRegistry", () => {
     expect(paymentRegistry.customerTestProvider("squad")).toBe(squad);
   });
 
-  it("still blocks non-mock checkout providers when live payments are enabled", () => {
+  it("blocks all live checkout when Squad live configuration is incomplete", () => {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       if (key === "PAYMENTS_LIVE_ENABLED") return true;
       return fallback;
     });
 
-    expect(() => registry().customerTestProvider("monnify"))
-      .toThrow("Live payment providers are disabled for customer checkout");
+    const paymentRegistry = registry();
+
+    expect(paymentRegistry.customerCheckoutProviders()).toEqual([]);
+    expect(() => paymentRegistry.customerTestProvider("squad"))
+      .toThrow("PAYMENTS_PROVIDER must be squad before live payment checkout is enabled");
+    expect(() => paymentRegistry.customerTestProvider("monnify"))
+      .toThrow("Only Squad by GTBank is allowed for live customer checkout");
+  });
+
+  it("allows only Squad when live payment checkout is fully approved", () => {
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      const values: Record<string, string | boolean> = {
+        PAYMENTS_PROVIDER: "squad",
+        PAYMENTS_LIVE_ENABLED: true,
+        SQUAD_MODE: "live",
+        SQUAD_SECRET_KEY: "live-squad-key-placeholder",
+        SQUAD_BASE_URL: "https://api-d.squadco.com",
+        SQUAD_CALLBACK_URL: "https://api.karigo.com.ng/api/v1/payments/callback/squad",
+        SQUAD_WEBHOOK_SECRET: "live-webhook-secret-placeholder",
+        SQUAD_LIVE_ACTIVATION_APPROVED: "true"
+      };
+      return values[key] ?? fallback;
+    });
+
+    const paymentRegistry = registry();
+
+    expect(paymentRegistry.customerCheckoutProviders()).toEqual(["squad"]);
+    expect(paymentRegistry.customerTestProvider("squad")).toBe(squad);
+    expect(paymentRegistry.active()).toBe(squad);
+    expect(() => paymentRegistry.customerTestProvider("mock"))
+      .toThrow("Only Squad by GTBank is allowed for live customer checkout");
   });
 });

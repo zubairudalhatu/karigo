@@ -26,7 +26,7 @@ This document is for validation and evidence capture only. It does not authorize
 - [ ] Production profiles do not contain API keys or provider secrets.
 - [ ] Mobile apps use only the public API base URL.
 - [ ] Live payments remain disabled server-side.
-- [ ] Squad remains deferred from customer checkout.
+- [ ] Squad by GTBank remains gated until live environment verification and approval are complete.
 - [ ] App-store submission is not started.
 
 ## Expo Config Validation

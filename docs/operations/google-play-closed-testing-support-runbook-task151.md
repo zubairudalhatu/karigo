@@ -75,9 +75,9 @@ Do not share OTPs, passwords, private phone numbers or payment details.
 
 - Live payments remain disabled.
 - No tester should make a real payment.
-- Monnify and Paystack must be treated as sandbox/test only.
-- Squad is deferred.
-- Mock payment remains fallback.
+- Squad by GTBank is the primary launch payment candidate, but live activation is still pending environment verification and approval.
+- Monnify and Paystack remain pending approval and must be treated as sandbox/test only until approved.
+- Mock payment remains staging/testing fallback only.
 - If a tester believes they were charged, pause testing and escalate immediately.
 
 ## Escalation Path

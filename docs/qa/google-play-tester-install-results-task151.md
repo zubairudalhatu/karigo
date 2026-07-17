@@ -69,9 +69,9 @@ Current Captain build for new closed-testing installs: `79123804-7a58-45ad-807e-
 
 - Live payments remain disabled.
 - No real customer charges should be collected.
-- Monnify and Paystack are sandbox/test only.
-- Squad is deferred for launch.
-- Mock payment remains fallback.
+- Squad by GTBank is the primary launch payment candidate but is not live until environment verification and approval are complete.
+- Monnify and Paystack remain pending approval and are sandbox/test only.
+- Mock payment remains staging/testing fallback only.
 - Payment failures must be recorded with app, device, time, selected provider, expected result, actual result and safe screenshot/reference.
 
 ## Current Result Summary

@@ -15,7 +15,8 @@ This is a planning document only. It does not create store builds, submit binari
 - Use iOS production builds through App Store Connect/TestFlight.
 - Keep live payments disabled until a separate payment activation approval.
 - Keep Squad hidden from customer checkout for launch.
-- Keep Monnify primary and Paystack secondary for sandbox-readiness evidence.
+- Keep Squad by GTBank as the primary launch payment candidate, with live activation gated by environment verification and approval.
+- Keep Monnify and Paystack as pending-approval future secondary providers.
 - Do not put production secrets, API keys, app-store credentials, signing keys or `.env` files in Git.
 
 ## Current Build Configuration Status

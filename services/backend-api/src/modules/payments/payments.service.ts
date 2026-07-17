@@ -136,11 +136,12 @@ export class PaymentsService {
   providerReadiness() {
     const activeProvider = this.configuredProvider();
     const livePaymentsEnabled = this.livePaymentsEnabled();
+    const squadLiveRequested = this.squadLiveRequested(livePaymentsEnabled, activeProvider);
     const customerSelectableSandboxProviders = this.providerRegistry.customerCheckoutProviders();
     const providers = [
-      this.mockReadiness(activeProvider),
+      this.mockReadiness(activeProvider, livePaymentsEnabled),
       this.providerReadinessRecord("paystack", [
-        this.modeRequirement("PAYSTACK_MODE", ["test"]),
+        this.modeRequirement("PAYSTACK_MODE", ["test"], "Must be test until Paystack provider approval is recorded"),
         this.secretRequirement("PAYSTACK_SECRET_KEY", "Paystack server-side test secret key", "sk_test_"),
         this.optionalRequirement("PAYSTACK_PUBLIC_KEY", "Client-safe public key; not used by the current hosted-checkout backend flow"),
         this.urlRequirement("PAYSTACK_BASE_URL", "Paystack API base URL; defaults to the Paystack API host when omitted"),
@@ -148,7 +149,7 @@ export class PaymentsService {
         this.optionalRequirement("PAYSTACK_WEBHOOK_SECRET", "Webhook signature secret; provider falls back to the test secret if omitted")
       ], activeProvider, livePaymentsEnabled, customerSelectableSandboxProviders),
       this.providerReadinessRecord("monnify", [
-        this.modeRequirement("MONNIFY_MODE", ["test", "sandbox"]),
+        this.modeRequirement("MONNIFY_MODE", ["test", "sandbox"], "Must be test or sandbox until Monnify provider approval is recorded"),
         this.secretRequirement("MONNIFY_API_KEY", "Monnify sandbox API key"),
         this.secretRequirement("MONNIFY_SECRET_KEY", "Monnify sandbox secret key"),
         this.secretRequirement("MONNIFY_CONTRACT_CODE", "Monnify sandbox contract code"),
@@ -156,14 +157,14 @@ export class PaymentsService {
         this.optionalRequirement("MONNIFY_CALLBACK_URL", "Monnify checkout redirect URL configured in the provider dashboard"),
         this.optionalRequirement("MONNIFY_WEBHOOK_SECRET", "Webhook signature secret; provider falls back to the sandbox secret if omitted")
       ], activeProvider, livePaymentsEnabled, customerSelectableSandboxProviders),
-      this.providerReadinessRecord("squad", [
-        this.modeRequirement("SQUAD_MODE", ["test", "sandbox"]),
-        this.secretRequirement("SQUAD_SECRET_KEY", "Squad sandbox secret key", "sandbox_sk_"),
-        this.optionalRequirement("SQUAD_PUBLIC_KEY", "Client-safe public key; not used by the current hosted-checkout backend flow"),
-        this.urlRequirement("SQUAD_BASE_URL", "Squad sandbox API base URL; defaults to sandbox when omitted", "api-d.squadco.com", "sandbox"),
-        this.optionalRequirement("SQUAD_CALLBACK_URL", "Squad hosted checkout callback URL configured in the provider dashboard"),
-        this.optionalRequirement("SQUAD_WEBHOOK_SECRET", "Webhook signature secret; provider falls back to the sandbox secret if omitted")
-      ], activeProvider, livePaymentsEnabled, customerSelectableSandboxProviders)
+      this.providerReadinessRecord(
+        "squad",
+        this.squadReadinessRequirements(squadLiveRequested),
+        activeProvider,
+        livePaymentsEnabled,
+        customerSelectableSandboxProviders,
+        squadLiveRequested
+      )
     ];
 
     return {
@@ -185,15 +186,7 @@ export class PaymentsService {
         squad: "/api/v1/payments/webhook/squad"
       },
       providers,
-      liveActivation: {
-        supportedByCurrentCode: false,
-        status: "BLOCKED",
-        blockers: [
-          "Current Paystack, Monnify and Squad adapters are sandbox/test guarded.",
-          "Live provider activation requires a separate engineering and finance approval gate.",
-          "Production credentials must be stored only in the production secret manager."
-        ]
-      }
+      liveActivation: this.squadLiveActivationReadiness(activeProvider)
     };
   }
 
@@ -201,6 +194,18 @@ export class PaymentsService {
     const provider = this.providerRegistry.get(providerName);
     const transactionReference = this.transactionReference(`${provider.name}-test`);
     const timestamp = new Date().toISOString();
+    if (this.livePaymentsEnabled() || this.providerMode(provider.name).toLowerCase() === "live") {
+      return {
+        success: false,
+        provider: provider.name,
+        mode: this.providerMode(provider.name),
+        stage: "config-read",
+        transactionReference,
+        providerMessage: "Sandbox initialization tests are disabled while live payment mode is configured.",
+        message: "Provider sandbox initialization could not be completed.",
+        timestamp
+      };
+    }
     const input = {
       transactionReference,
       amount: "100.00",
@@ -521,17 +526,19 @@ export class PaymentsService {
     return this.optionalValue("PAYMENTS_LIVE_ENABLED")?.toLowerCase() === "true";
   }
 
-  private mockReadiness(activeProvider: string) {
+  private mockReadiness(activeProvider: string, livePaymentsEnabled: boolean) {
     return {
       provider: "mock",
       status: "READY" as ReadinessStatus,
       activeByEnvironment: activeProvider === "mock",
-      customerSelectableInStaging: true,
+      customerSelectableInStaging: !livePaymentsEnabled,
       readyForSandboxCheckout: true,
       readyForLiveCheckout: false,
       requirements: [],
       issues: [],
-      recommendedActions: ["Keep mock payment available as the rollback provider."]
+      launchStatus: "INTERNAL_OR_FALLBACK",
+      launchNote: "Mock payment is a staging/testing fallback only and must be hidden for public live checkout.",
+      recommendedActions: ["Keep mock payment available for staging rollback, but do not expose it in public live checkout."]
     };
   }
 
@@ -540,7 +547,8 @@ export class PaymentsService {
     requirements: ProviderRequirement[],
     activeProvider: string,
     livePaymentsEnabled: boolean,
-    customerSelectableSandboxProviders: CustomerTestPaymentProviderName[]
+    customerSelectableSandboxProviders: CustomerTestPaymentProviderName[],
+    liveMode = false
   ) {
     const launchProfile = this.providerLaunchProfile(provider, customerSelectableSandboxProviders.includes(provider as CustomerTestPaymentProviderName));
     const requiredIssues = requirements
@@ -549,7 +557,7 @@ export class PaymentsService {
     const recommendedIssues = requirements
       .filter((requirement) => !requirement.required && requirement.issue)
       .map((requirement) => requirement.issue);
-    const liveIssue = livePaymentsEnabled
+    const liveIssue = livePaymentsEnabled && !liveMode
       ? ["PAYMENTS_LIVE_ENABLED must be false for sandbox provider checkout"]
       : [];
     const issues = [...liveIssue, ...requiredIssues];
@@ -562,26 +570,28 @@ export class PaymentsService {
       customerSelectableInStaging: customerSelectableSandboxProviders.some((item) => item === provider),
       launchStatus: launchProfile.status,
       launchNote: launchProfile.note,
-      readyForSandboxCheckout: status === "READY",
-      readyForLiveCheckout: false,
+      readyForSandboxCheckout: !liveMode && status === "READY",
+      readyForLiveCheckout: liveMode && status === "READY",
       requirements,
       issues,
       recommendations: [
         launchProfile.recommendation,
         ...recommendedIssues,
-        "Verify callback and webhook URLs in the provider dashboard before sandbox certification.",
+        liveMode
+          ? "Verify Squad callback and webhook URLs in the Squad dashboard before live launch approval."
+          : "Verify callback and webhook URLs in the provider dashboard before sandbox certification.",
         "Do not add provider credentials to source code, screenshots or Git-tracked documentation."
       ].filter(Boolean)
     };
   }
 
-  private modeRequirement(name: string, allowed: string[]): ProviderRequirement {
+  private modeRequirement(name: string, allowed: string[], purpose?: string): ProviderRequirement {
     const value = this.optionalValue(name)?.toLowerCase();
     return {
       name,
       required: true,
       configured: Boolean(value),
-      purpose: `Must be ${allowed.join(" or ")} for sandbox checkout`,
+      purpose: purpose ?? `Must be ${allowed.join(" or ")} for sandbox checkout`,
       issue: !value
         ? `missing ${name}`
         : allowed.includes(value)
@@ -637,6 +647,84 @@ export class PaymentsService {
     };
   }
 
+  private requiredUrlRequirement(
+    name: string,
+    purpose: string,
+    options?: { rejectSandbox?: boolean }
+  ): ProviderRequirement {
+    const value = this.optionalValue(name);
+    return {
+      name,
+      required: true,
+      configured: Boolean(value),
+      purpose,
+      issue: !value
+        ? `missing ${name}`
+        : !value.startsWith("https://")
+          ? `${name} must use HTTPS`
+          : options?.rejectSandbox && value.toLowerCase().includes("sandbox")
+            ? `${name} must use a live provider URL`
+            : undefined
+    };
+  }
+
+  private requiredFlagRequirement(name: string, purpose: string): ProviderRequirement {
+    const value = this.optionalValue(name)?.toLowerCase();
+    return {
+      name,
+      required: true,
+      configured: Boolean(value),
+      purpose,
+      issue: value === "true" ? undefined : `${name} must be true`
+    };
+  }
+
+  private squadReadinessRequirements(liveMode: boolean): ProviderRequirement[] {
+    if (liveMode) {
+      return [
+        this.modeRequirement("SQUAD_MODE", ["live"], "Must be live for approved Squad launch checkout"),
+        this.secretRequirement("SQUAD_SECRET_KEY", "Squad live server-side secret key"),
+        this.optionalRequirement("SQUAD_PUBLIC_KEY", "Client-safe public key if Squad dashboard or future frontend flow requires it"),
+        this.requiredUrlRequirement("SQUAD_BASE_URL", "Squad live API base URL from the approved Squad dashboard", { rejectSandbox: true }),
+        this.requiredUrlRequirement("SQUAD_CALLBACK_URL", "Public HTTPS callback/redirect URL configured in the Squad dashboard"),
+        this.secretRequirement("SQUAD_WEBHOOK_SECRET", "Squad live webhook signing secret"),
+        this.requiredFlagRequirement("SQUAD_LIVE_ACTIVATION_APPROVED", "Finance/management approval record for live Squad checkout")
+      ];
+    }
+    return [
+      this.modeRequirement("SQUAD_MODE", ["test", "sandbox"], "Must be test or sandbox for Squad sandbox checkout"),
+      this.secretRequirement("SQUAD_SECRET_KEY", "Squad sandbox secret key", "sandbox_sk_"),
+      this.optionalRequirement("SQUAD_PUBLIC_KEY", "Client-safe public key; not used by the current hosted-checkout backend flow"),
+      this.urlRequirement("SQUAD_BASE_URL", "Squad sandbox API base URL; defaults to sandbox when omitted", "api-d.squadco.com", "sandbox"),
+      this.optionalRequirement("SQUAD_CALLBACK_URL", "Squad hosted checkout callback URL configured in the provider dashboard"),
+      this.optionalRequirement("SQUAD_WEBHOOK_SECRET", "Webhook signature secret; provider falls back to the sandbox secret if omitted")
+    ];
+  }
+
+  private squadLiveRequested(livePaymentsEnabled: boolean, activeProvider: string): boolean {
+    return livePaymentsEnabled || activeProvider === "squad" || this.optionalValue("SQUAD_MODE")?.toLowerCase() === "live";
+  }
+
+  private squadLiveActivationReadiness(activeProvider: string) {
+    const livePaymentsEnabled = this.livePaymentsEnabled();
+    const blockers = [
+      livePaymentsEnabled ? undefined : "PAYMENTS_LIVE_ENABLED must be true",
+      activeProvider === "squad" ? undefined : "PAYMENTS_PROVIDER must be squad",
+      ...this.squadReadinessRequirements(true)
+        .filter((requirement) => requirement.required && (!requirement.configured || requirement.issue))
+        .map((requirement) => requirement.issue ?? `missing ${requirement.name}`),
+      livePaymentsEnabled && this.providerRegistry.customerCheckoutProviders().includes("mock")
+        ? "Mock payment must be hidden from public live checkout"
+        : undefined
+    ].filter(Boolean) as string[];
+
+    return {
+      supportedByCurrentCode: true,
+      status: blockers.length ? "WAITING_FOR_CONFIGURATION" : "READY",
+      blockers
+    };
+  }
+
   private optionalValue(name: string): string | undefined {
     const value = this.config.get<unknown>(name);
     if (typeof value === "string") {
@@ -652,27 +740,27 @@ export class PaymentsService {
     switch (provider) {
       case "monnify":
         return {
-          status: "PRIMARY_LAUNCH_PROVIDER",
-          note: "Monnify is the primary launch payment provider for sandbox verification.",
-          recommendation: "Prioritize Monnify sandbox verification before controlled live activation review."
+          status: "PENDING_APPROVAL_SECONDARY_PROVIDER",
+          note: "Monnify provider approval is pending; keep it as a future secondary provider after approval.",
+          recommendation: "Do not expose Monnify for public live checkout until provider approval and live credentials are recorded."
         };
       case "paystack":
         return {
-          status: "SECONDARY_LAUNCH_PROVIDER",
-          note: "Paystack is the secondary launch payment provider for sandbox verification.",
-          recommendation: "Keep Paystack available as the secondary sandbox checkout path."
+          status: "PENDING_APPROVAL_SECONDARY_PROVIDER",
+          note: "Paystack provider approval is pending; keep it as a future secondary provider after approval.",
+          recommendation: "Do not expose Paystack for public live checkout until provider approval and live credentials are recorded."
         };
       case "squad":
         return customerSelectable
           ? {
-              status: "OPTIONAL_LATER_ENABLED",
-              note: "Squad is explicitly enabled for customer checkout, but remains lower launch priority.",
-              recommendation: "Confirm Squad provider setup and API payload before offering it broadly."
+              status: "PRIMARY_LAUNCH_PROVIDER",
+              note: "Squad by GTBank is the primary launch provider and is explicitly enabled for checkout.",
+              recommendation: "Complete live credential, webhook and finance approval verification before public rollout."
             }
           : {
-              status: "DEFERRED_FOR_LAUNCH",
-              note: "Squad remains visible for diagnostics but hidden from Customer checkout until provider setup/API payload is confirmed.",
-              recommendation: "Keep SQUAD_CUSTOMER_CHECKOUT_ENABLED unset or false for the launch candidate."
+              status: "PRIMARY_LAUNCH_PROVIDER",
+              note: "Squad by GTBank is the primary launch provider. Customer visibility remains gated until environment verification is complete.",
+              recommendation: "Set live Squad environment variables only in Render/secret manager after approval; do not commit credentials."
             };
       default:
         return {
@@ -723,6 +811,11 @@ export class PaymentsService {
   }
 
   private safeInitializationException(providerName: string, _error: unknown): HttpException {
+    if (this.livePaymentsEnabled()) {
+      return new BadGatewayException(
+        `${this.providerLabel(providerName)} could not be started safely. Please retry payment or contact KariGO support.`
+      );
+    }
     return new BadGatewayException(
       `${this.providerLabel(providerName)} could not be started. Please use mock payment or retry the sandbox provider later.`
     );
@@ -732,7 +825,7 @@ export class PaymentsService {
     switch (providerName) {
       case "paystack": return "Paystack Test Mode";
       case "monnify": return "Monnify Sandbox";
-      case "squad": return "Squad Sandbox";
+      case "squad": return this.livePaymentsEnabled() ? "Squad by GTBank" : "Squad Sandbox";
       case "mock": return "Mock payment";
       default: return "Selected payment provider";
     }

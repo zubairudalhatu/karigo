@@ -59,7 +59,7 @@ GET /api/v1/health
 | `T143-MONNIFY-002` | Monnify checkout | Hosted checkout starts and backend verification controls paid status | `Pending / Pass / Fail / Blocked` |  |
 | `T143-PAYSTACK-001` | Paystack readiness | Paystack shows ready after required variables are set | `Pending / Pass / Fail / Blocked` |  |
 | `T143-PAYSTACK-002` | Paystack checkout | Hosted checkout starts and backend verification controls paid status | `Pending / Pass / Fail / Blocked` |  |
-| `T143-SQUAD-001` | Squad readiness | Squad shows ready or remains intentionally deferred | `Pending / Pass / Fail / Deferred` |  |
+| `T143-SQUAD-001` | Squad readiness | Squad shows ready or remains gated until approved environment verification | `Pending / Pass / Fail / Gated` |  |
 | `T143-ROLLBACK-001` | Mock rollback | Setting provider back to mock restores safe checkout | `Pending / Pass / Fail` |  |
 
 ## Evidence Rules

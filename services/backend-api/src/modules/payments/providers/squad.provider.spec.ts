@@ -5,7 +5,7 @@ import { SquadProvider } from "./squad.provider";
 
 describe("SquadProvider", () => {
   const secret = "sandbox_sk_not-a-real-key";
-  const defaultConfigGet = (key: string, fallback?: string) => {
+  const defaultConfigGet = (key: string, fallback?: unknown): unknown => {
     if (key === "SQUAD_SECRET_KEY") return secret;
     if (key === "SQUAD_WEBHOOK_SECRET") return secret;
     if (key === "SQUAD_BASE_URL") return "https://sandbox-api-d.squadco.com";
@@ -108,7 +108,7 @@ describe("SquadProvider", () => {
   });
 
   it("requires explicit Squad sandbox mode before contacting Squad", async () => {
-    config.get.mockImplementation((key: string, fallback?: string) => {
+    config.get.mockImplementation((key: string, fallback?: unknown): unknown => {
       if (key === "SQUAD_SECRET_KEY") return secret;
       if (key === "SQUAD_BASE_URL") return "https://sandbox-api-d.squadco.com";
       if (key === "SQUAD_MODE") return undefined;
@@ -143,5 +143,62 @@ describe("SquadProvider", () => {
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(requestInit.body as string);
     expect(body.email).toBe("checkout+kgo-squad-123@sandbox.karigo.com.ng");
+  });
+
+  it("rejects sandbox keys when Squad live mode is configured", async () => {
+    config.get.mockImplementation((key: string, fallback?: unknown): unknown => {
+      if (key === "SQUAD_SECRET_KEY") return secret;
+      if (key === "SQUAD_BASE_URL") return "https://api-d.squadco.com";
+      if (key === "SQUAD_CALLBACK_URL") return "https://api.karigo.com.ng/api/v1/payments/callback/squad";
+      if (key === "SQUAD_WEBHOOK_SECRET") return "live-webhook-secret-placeholder";
+      if (key === "SQUAD_MODE") return "live";
+      if (key === "PAYMENTS_PROVIDER") return "squad";
+      if (key === "PAYMENTS_LIVE_ENABLED") return true;
+      if (key === "SQUAD_LIVE_ACTIVATION_APPROVED") return "true";
+      return fallback;
+    });
+
+    await expect(provider.verify("KGO-SQUAD-LIVE-123"))
+      .rejects.toThrow("SQUAD_SECRET_KEY must be a live Squad key when SQUAD_MODE=live");
+  });
+
+  it("initializes a guarded Squad live checkout only with complete live configuration", async () => {
+    const liveSecret = "live-squad-secret-placeholder";
+    config.get.mockImplementation((key: string, fallback?: unknown): unknown => {
+      if (key === "SQUAD_SECRET_KEY") return liveSecret;
+      if (key === "SQUAD_BASE_URL") return "https://api-d.squadco.com";
+      if (key === "SQUAD_CALLBACK_URL") return "https://api.karigo.com.ng/api/v1/payments/callback/squad";
+      if (key === "SQUAD_WEBHOOK_SECRET") return "live-webhook-secret-placeholder";
+      if (key === "SQUAD_MODE") return "live";
+      if (key === "PAYMENTS_PROVIDER") return "squad";
+      if (key === "PAYMENTS_LIVE_ENABLED") return true;
+      if (key === "SQUAD_LIVE_ACTIVATION_APPROVED") return "true";
+      return fallback;
+    });
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      status: 200,
+      success: true,
+      message: "success",
+      data: {
+        checkout_url: "https://pay.squadco.com/KGO-SQUAD-LIVE-123",
+        transaction_ref: "KGO-SQUAD-LIVE-123"
+      }
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    const result = await provider.initialize({
+      transactionReference: "KGO-SQUAD-LIVE-123",
+      amount: "5000.00",
+      currency: "NGN",
+      customerEmail: "customer@example.com",
+      customerPhone: "+2348012345678",
+      metadata: { orderId: "order-live" }
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("https://api-d.squadco.com/transaction/initiate", expect.objectContaining({
+      method: "POST",
+      headers: expect.objectContaining({ Authorization: `Bearer ${liveSecret}` })
+    }));
+    expect(result.authorizationUrl).toBe("https://pay.squadco.com/KGO-SQUAD-LIVE-123");
+    expect(JSON.stringify(result)).not.toContain(liveSecret);
   });
 });

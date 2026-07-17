@@ -33,7 +33,7 @@ Closed testing may proceed if:
 - Live payments remain disabled.
 - Mock payment remains available.
 - Monnify Sandbox and Paystack Test Mode are treated as test-only.
-- Squad remains deferred from customer checkout.
+- Squad by GTBank is the primary launch payment candidate, but live checkout remains gated until environment verification and approval are complete.
 
 ## No-Go Criteria
 

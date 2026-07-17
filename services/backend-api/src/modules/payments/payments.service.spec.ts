@@ -206,10 +206,50 @@ describe("PaymentsService", () => {
     expect(readiness.providerEnabledFlags.SQUAD_CUSTOMER_CHECKOUT_ENABLED).toBe("false_or_unset");
     const squad = readiness.providers.find((provider) => provider.provider === "squad");
     expect(squad?.customerSelectableInStaging).toBe(false);
-    expect(squad).toMatchObject({ launchStatus: "DEFERRED_FOR_LAUNCH" });
+    expect(squad).toMatchObject({ launchStatus: "PRIMARY_LAUNCH_PROVIDER" });
     expect(serialized).not.toContain("configured-monnify-secret");
     expect(serialized).not.toContain("sandbox_sk_configured_squad_secret");
-    expect(readiness.liveActivation.supportedByCurrentCode).toBe(false);
+    expect(readiness.liveActivation.supportedByCurrentCode).toBe(true);
+    expect(readiness.liveActivation.blockers).toContain("PAYMENTS_PROVIDER must be squad");
+  });
+
+  it("reports live Squad readiness only when all live activation gates are configured", () => {
+    registry.customerCheckoutProviders.mockReturnValue(["squad"]);
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      const values: Record<string, string | boolean> = {
+        PAYMENTS_PROVIDER: "squad",
+        PAYMENTS_LIVE_ENABLED: true,
+        SQUAD_MODE: "live",
+        SQUAD_SECRET_KEY: "live-squad-secret-placeholder",
+        SQUAD_PUBLIC_KEY: "live-squad-public-placeholder",
+        SQUAD_BASE_URL: "https://api-d.squadco.com",
+        SQUAD_CALLBACK_URL: "https://api.karigo.com.ng/api/v1/payments/callback/squad",
+        SQUAD_WEBHOOK_SECRET: "live-webhook-secret-placeholder",
+        SQUAD_LIVE_ACTIVATION_APPROVED: "true"
+      };
+      return values[key] ?? fallback;
+    });
+
+    const readiness = service.providerReadiness();
+    const squad = readiness.providers.find((provider) => provider.provider === "squad");
+    const serialized = JSON.stringify(readiness);
+
+    expect(readiness.activeProvider).toBe("squad");
+    expect(readiness.paymentsLiveEnabled).toBe(true);
+    expect(readiness.customerSelectableSandboxProviders).toEqual(["squad"]);
+    expect(squad).toMatchObject({
+      launchStatus: "PRIMARY_LAUNCH_PROVIDER",
+      readyForLiveCheckout: true,
+      readyForSandboxCheckout: false,
+      status: "READY"
+    });
+    expect(readiness.liveActivation).toEqual({
+      supportedByCurrentCode: true,
+      status: "READY",
+      blockers: []
+    });
+    expect(serialized).not.toContain("live-squad-secret-placeholder");
+    expect(serialized).not.toContain("live-webhook-secret-placeholder");
   });
 
   it("runs a safe admin sandbox initialization test without storing a payment", async () => {
@@ -287,6 +327,32 @@ describe("PaymentsService", () => {
     expect(serialized).not.toContain("SECRET_KEY");
     expect(serialized).not.toContain("sk_");
     expect(prisma.payment.create).not.toHaveBeenCalled();
+  });
+
+  it("does not run admin sandbox initialization tests while live payments are configured", async () => {
+    const squadProvider = {
+      name: "squad",
+      initialize: jest.fn(),
+      verify: jest.fn(),
+      parseWebhook: jest.fn()
+    };
+    registry.get.mockReturnValue(squadProvider);
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      if (key === "PAYMENTS_LIVE_ENABLED") return true;
+      if (key === "SQUAD_MODE") return "live";
+      return fallback;
+    });
+
+    const result = await service.testProviderInitialization("squad");
+
+    expect(result).toEqual(expect.objectContaining({
+      success: false,
+      provider: "squad",
+      mode: "live",
+      stage: "config-read",
+      providerMessage: "Sandbox initialization tests are disabled while live payment mode is configured."
+    }));
+    expect(squadProvider.initialize).not.toHaveBeenCalled();
   });
 
   it("rejects a frontend amount that does not match the order total", async () => {

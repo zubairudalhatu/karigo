@@ -16,9 +16,14 @@ import {
 } from "../src/lib/payment-flow";
 import {
   customerTestPaymentProviderOptions,
+  defaultCustomerPaymentProvider,
   paymentSafetyNote,
   paymentProviderLabel,
   paymentInitializationFailureMessage,
+  paymentProviderSelectionBody,
+  paymentProviderSelectionTitle,
+  paymentProviderSensitiveDataNote,
+  paymentAuthorizationOpenedMessage,
   paymentStatusView,
   paymentVerificationFailureMessage,
   pendingAuthorizationCopy,
@@ -39,7 +44,7 @@ export default function Checkout() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<CustomerTestPaymentProvider>("mock");
+  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<CustomerTestPaymentProvider>(defaultCustomerPaymentProvider);
   const [pendingPaymentReference, setPendingPaymentReference] = useState("");
   const [pendingAuthorizationUrl, setPendingAuthorizationUrl] = useState("");
   const [pendingPaymentProvider, setPendingPaymentProvider] = useState("");
@@ -172,7 +177,7 @@ export default function Checkout() {
         setPendingPaymentReference(started.payment.transactionReference);
         setPendingAuthorizationUrl(authorizationUrl);
         setPendingPaymentProvider(startedProvider);
-        setMessage(`${startedProviderLabel} opened. Return to KariGO and tap Verify payment after completing the sandbox checkout.`);
+        setMessage(paymentAuthorizationOpenedMessage(startedProviderLabel));
         await openExternalPaymentAuthorization(authorizationUrl);
         return;
       }
@@ -258,8 +263,8 @@ export default function Checkout() {
           <Text style={ui.muted}>{paymentSafetyNote}</Text>
         </Card>
         <Card>
-          <Text style={ui.cardTitle}>Test payment provider</Text>
-          <Text style={ui.cardText}>Choose how to verify this staging checkout. Mock payment remains the safe pilot default.</Text>
+          <Text style={ui.cardTitle}>{paymentProviderSelectionTitle}</Text>
+          <Text style={ui.cardText}>{paymentProviderSelectionBody}</Text>
           {customerTestPaymentProviderOptions.map((option) => (
             <View key={option.value}>
               <Button
@@ -275,14 +280,14 @@ export default function Checkout() {
               <Text style={ui.muted}>{option.description}</Text>
             </View>
           ))}
-          <Text style={ui.muted}>Do not use live card, bank or account details during sandbox tests.</Text>
+          <Text style={ui.muted}>{paymentProviderSensitiveDataNote}</Text>
         </Card>
         <Button title={busy ? "Preparing payment..." : `Continue with ${selectedProviderLabel} - ${money(order.totalAmount)}`} onPress={pay} disabled={busy || !!pendingPaymentReference} />
         {pendingPaymentReference ? <Card>
           <Text style={ui.cardTitle}>{pendingView.title}</Text>
           <Text style={ui.cardText}>{pendingView.body}</Text>
           <Text style={ui.muted}>{pendingView.actionHint}</Text>
-          <Text style={ui.muted}>Do not use live card, bank or account details during staging tests.</Text>
+          <Text style={ui.muted}>{paymentProviderSensitiveDataNote}</Text>
           <Button title="Open payment page again" tone="muted" onPress={reopenPaymentAuthorization} disabled={busy} />
           <Button title={busy ? "Verifying payment..." : "Verify payment status"} onPress={verifyPendingPayment} disabled={busy} />
         </Card> : null}

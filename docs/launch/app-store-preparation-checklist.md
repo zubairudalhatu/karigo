@@ -11,7 +11,7 @@ Current Task 147 posture:
 Production store submission: Not approved
 Controlled launch build planning: Ready
 Live payments: Disabled
-Squad checkout: Deferred
+Squad by GTBank: Primary launch payment candidate; live activation pending environment verification
 Monnify: Primary launch payment candidate
 Paystack: Secondary launch payment candidate
 ```

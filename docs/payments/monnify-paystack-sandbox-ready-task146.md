@@ -2,6 +2,21 @@
 
 Date: 2026-07-16
 
+## Task 155 Supersession Note
+
+Task 155 changed KariGO's current launch payment priority after Squad by GTBank approved KariGO while Monnify and Paystack approvals remained pending.
+
+Current source of truth:
+
+```text
+1. Squad by GTBank - Primary launch provider
+2. Monnify - Pending approval / future secondary provider
+3. Paystack - Pending approval / future secondary provider
+4. Mock payment - staging/testing fallback only
+```
+
+The original Task 146 record below remains historical sandbox evidence.
+
 ## Current Launch Payment Strategy
 
 1. Monnify Sandbox is the primary launch verification provider.

@@ -11,14 +11,14 @@ import {
 } from "../../src/api/payments.api";
 import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
 
-const providerPriority = ["monnify", "paystack", "squad"];
+const providerPriority = ["squad", "monnify", "paystack"];
 const sandboxTestProviders = ["paystack", "monnify", "squad"];
 
 function providerLabel(value: string) {
   switch (value) {
-    case "paystack": return "Paystack Test Mode";
-    case "monnify": return "Monnify Sandbox";
-    case "squad": return "Squad Sandbox";
+    case "paystack": return "Paystack";
+    case "monnify": return "Monnify";
+    case "squad": return "Squad by GTBank";
     case "mock": return "Mock payment";
     default: return value;
   }
@@ -28,6 +28,7 @@ function launchStatusLabel(value?: string) {
   switch (value) {
     case "PRIMARY_LAUNCH_PROVIDER": return "Primary launch provider";
     case "SECONDARY_LAUNCH_PROVIDER": return "Secondary launch provider";
+    case "PENDING_APPROVAL_SECONDARY_PROVIDER": return "Pending approval / future secondary";
     case "DEFERRED_FOR_LAUNCH": return "Deferred for launch";
     case "OPTIONAL_LATER_ENABLED": return "Optional later";
     case "INTERNAL_OR_FALLBACK": return "Internal or fallback";
@@ -116,12 +117,12 @@ export default function PaymentReadinessPage() {
     <PortalShell>
       <header className="topbar">
         <div>
-          <p className="muted">Sandbox payment diagnostics</p>
+          <p className="muted">Payment launch diagnostics</p>
           <h1>Payment Readiness</h1>
         </div>
         <button className="secondary" onClick={load} disabled={loading}>Refresh</button>
       </header>
-      <p className="muted">Admin-only configuration readiness for mock payment, Paystack Test Mode, Monnify Sandbox and Squad Sandbox. This page does not expose secret values and does not activate live checkout, wallet funding, refunds, payouts or settlements.</p>
+      <p className="muted">Admin-only configuration readiness for Squad by GTBank, Monnify, Paystack and mock payment. This page shows key names and safe status only; it does not expose secret values and does not activate live checkout, wallet funding, refunds, payouts or settlements.</p>
       <ErrorMessage>{error}</ErrorMessage>
       <ErrorMessage>{testError}</ErrorMessage>
 
@@ -138,8 +139,8 @@ export default function PaymentReadinessPage() {
             </article>
             <article className="card">
               <span className="muted">Launch priority</span>
-              <p className="metric">1 Monnify</p>
-              <p className="muted">2 Paystack, 3 Squad later</p>
+              <p className="metric">1 Squad by GTBank</p>
+              <p className="muted">2 Monnify pending approval, 3 Paystack pending approval</p>
             </article>
             <article className="card">
               <span className="muted">Live activation</span>
@@ -151,7 +152,7 @@ export default function PaymentReadinessPage() {
           <section className="section">
             <article className="card internal">
               <h2>Safety guardrail</h2>
-              <p>Mock payment remains the default rollback path. Configure sandbox credentials only in Render environment variables or the approved secret manager. Do not paste keys, webhook secrets, test cards or provider dashboard secrets into this page, docs, tickets or screenshots.</p>
+              <p>Squad by GTBank is the primary launch provider, but live checkout remains blocked until Render environment verification, webhook secret setup and finance/management approval are complete. Mock payment remains a staging rollback path only and must be hidden from public live checkout. Do not paste keys, webhook secrets, test cards or provider dashboard secrets into this page, docs, tickets or screenshots.</p>
             </article>
           </section>
 
