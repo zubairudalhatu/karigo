@@ -12,7 +12,7 @@ This status document does not approve production publishing.
 
 | Area | Customer App | KariGO Captain App |
 | --- | --- | --- |
-| Build ID | `ec1716bb-258c-4022-bb8a-1708895920fb` | `6f0bea0e-9402-4102-bde4-4afc05c078fe` |
+| Build ID | `ec1716bb-258c-4022-bb8a-1708895920fb` | `79123804-7a58-45ad-807e-d9d87dffea1f` |
 | Package | `com.karigo.customer` | `com.karigo.rider` |
 | Track | Internal testing or Closed testing | Internal testing or Closed testing |
 | AAB upload | Pending operator evidence | Pending operator evidence |
@@ -20,6 +20,8 @@ This status document does not approve production publishing.
 | Test link status | Pending operator evidence | Pending operator evidence |
 | Tester install status | Pending | Pending |
 | Production publish | Not approved | Not approved |
+
+Task 153 supersedes the previous Captain Task 149 build `6f0bea0e-9402-4102-bde4-4afc05c078fe` for future Captain closed-testing updates.
 
 ## Go Criteria
 

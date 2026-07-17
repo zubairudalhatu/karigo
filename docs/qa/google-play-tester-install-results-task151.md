@@ -51,6 +51,8 @@ Do not record private tester emails, phone numbers, OTPs, payment references, di
 
 ## KariGO Captain App Closed Testing Checklist
 
+Current Captain build for new closed-testing installs: `79123804-7a58-45ad-807e-d9d87dffea1f`.
+
 | Scenario | Expected result | Status |
 | --- | --- | --- |
 | Install from testing link | App installs from Google Play testing link | Pending |

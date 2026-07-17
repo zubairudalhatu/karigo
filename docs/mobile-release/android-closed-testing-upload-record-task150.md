@@ -13,9 +13,11 @@ This record is for controlled testing only. It does not approve production publi
 | App | Google Play app | Target track | Artifact source | Build ID | Package |
 | --- | --- | --- | --- | --- | --- |
 | Customer App | KariGO Customer | Internal testing or Closed testing | Task 149 Android AAB | `ec1716bb-258c-4022-bb8a-1708895920fb` | `com.karigo.customer` |
-| KariGO Captain App | KariGO Captain | Internal testing or Closed testing | Task 149 Android AAB | `6f0bea0e-9402-4102-bde4-4afc05c078fe` | `com.karigo.rider` |
+| KariGO Captain App | KariGO Captain | Internal testing or Closed testing | Task 153 Android AAB | `79123804-7a58-45ad-807e-d9d87dffea1f` | `com.karigo.rider` |
 
 Direct artifact URLs and downloaded AAB files must not be committed to Git.
+
+Task 153 supersedes the previous Captain Task 149 build `6f0bea0e-9402-4102-bde4-4afc05c078fe` for future Captain closed-testing uploads.
 
 ## Intended Upload Location
 
@@ -35,8 +37,8 @@ KariGO Captain App:
 Console: Google Play Console
 App: KariGO Captain
 Track: Internal testing or Closed testing
-Artifact: Captain Android AAB from Task 149
-Build ID: 6f0bea0e-9402-4102-bde4-4afc05c078fe
+Artifact: Captain Android AAB from Task 153
+Build ID: 79123804-7a58-45ad-807e-d9d87dffea1f
 ```
 
 ## Upload Operator Checklist
