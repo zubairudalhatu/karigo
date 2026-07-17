@@ -25,6 +25,17 @@
         "APP_VARIANT": "staging",
         "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1"
       }
+    },
+    "captain-production": {
+      "distribution": "store",
+      "channel": "captain-production",
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "APP_VARIANT": "production",
+        "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1"
+      }
     }
   },
   "submit": {}

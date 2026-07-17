@@ -22,9 +22,9 @@ This is a planning document only. It does not create store builds, submit binari
 
 | App | Current Working Profile | Store Profile Status |
 | --- | --- | --- |
-| Customer App | `customer-staging` internal Android APK | Production profile not configured |
+| Customer App | `customer-staging` internal Android APK | `customer-production` configured in Task 148 |
 | Customer App iOS | `customer-staging-ios-simulator` | TestFlight/store profile not configured |
-| KariGO Captain App | `rider-staging` internal Android APK | Production profile not configured |
+| KariGO Captain App | `rider-staging` internal Android APK | `captain-production` configured in Task 148 |
 | KariGO Captain App iOS | `rider-staging-ios-simulator` | TestFlight/store profile not configured |
 
 ## Required Production Profiles
@@ -82,7 +82,7 @@ cd apps/rider-app
 npx eas-cli build --platform ios --profile captain-production
 ```
 
-Do not run these commands until the profiles exist and the production API base URL is approved.
+Task 148 configured the production release-candidate profiles. Do not run these commands until release-candidate build approval is explicitly given.
 
 ## Controlled Build Sequence
 
@@ -149,8 +149,8 @@ Rollback actions:
 ## Current Decision
 
 ```text
-Production store profiles: Not yet configured
+Production store profiles: Configured for release-candidate build setup in Task 148
 Production store upload: Not approved
 Controlled launch build planning: Ready
-Next step: create production EAS profiles after production API/store metadata signoff
+Next step: approve and run release-candidate builds only after QA/security signoff
 ```

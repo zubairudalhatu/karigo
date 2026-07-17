@@ -8,6 +8,12 @@ Current Task 147 documents:
 - `controlled-launch-build-plan-task147.md`
 - `app-store-assets-and-metadata-checklist-task147.md`
 
+Current Task 148 documents:
+
+- `production-eas-profile-configuration-task148.md`
+- `docs/qa/mobile-release-candidate-build-validation-task148.md`
+- `docs/launch/mobile-release-candidate-go-no-go-task148.md`
+
 Related documents:
 
 - `docs/qa/mobile-production-release-candidate-qa-task147.md`
@@ -18,7 +24,8 @@ Current posture:
 
 ```text
 Production app-store submission: Not approved
-Controlled launch build planning: Ready
+Production EAS release-candidate profiles: Configured
+Controlled launch builds: Hold until explicitly approved
 Live payments: Disabled
 Squad checkout: Deferred
 Monnify: Primary launch payment candidate

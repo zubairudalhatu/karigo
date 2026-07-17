@@ -16,6 +16,16 @@ Monnify: Primary launch payment candidate
 Paystack: Secondary launch payment candidate
 ```
 
+Task 148 update:
+
+```text
+Customer production EAS profile: customer-production configured
+Captain production EAS profile: captain-production configured
+Release-candidate builds: Hold until explicitly approved
+Store submission: Still not approved
+Live payments: Still disabled
+```
+
 ## Customer App
 
 - [ ] App name approved
