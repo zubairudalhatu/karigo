@@ -4,6 +4,7 @@ export interface RiderProfile {
   id: string;
   riderCode: string;
   phoneNumber: string;
+  photoUrl?: string | null;
   vehicleType?: string | null;
   plateNumber?: string | null;
   licenseNumber?: string | null;
@@ -18,7 +19,7 @@ export interface RiderProfile {
 
 export const riderApi = {
   profile: () => api.get<RiderProfile>("riders/me"),
-  updateProfile: (body: Partial<Pick<RiderProfile, "vehicleType" | "plateNumber" | "licenseNumber">>) => api.patch<RiderProfile>("riders/me", body),
+  updateProfile: (body: Partial<Pick<RiderProfile, "photoUrl" | "vehicleType" | "plateNumber" | "licenseNumber">>) => api.patch<RiderProfile>("riders/me", body),
   updateAvailability: (availability: "ONLINE" | "OFFLINE") => api.patch<RiderProfile>("rider/availability", { availability }),
   updateLocation: (latitude: number, longitude: number) => api.patch<RiderProfile>("rider/location", { latitude, longitude })
 };

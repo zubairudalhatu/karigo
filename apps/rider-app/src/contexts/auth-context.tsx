@@ -2,7 +2,7 @@ import type { AuthenticatedUser, LoginRequest } from "@karigo/shared-types";
 import { KariGoApiError } from "@karigo/shared-types";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { authApi } from "../api/auth.api";
-import { onUnauthorized, tokenStore } from "../api/client";
+import { onUnauthorized, refreshTokenStore, tokenStore } from "../api/client";
 import { normalizeNigerianPhoneNumber } from "../lib/phone";
 
 interface AuthValue { user: AuthenticatedUser | null; loading: boolean; login(body: LoginRequest): Promise<void>; logout(): Promise<void>; }
@@ -21,7 +21,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function bootstrap() {
       const token = await tokenStore.getToken();
-      if (!token) {
+      const refreshToken = await refreshTokenStore.getToken();
+      if (!token && !refreshToken) {
         if (active) setLoading(false);
         return;
       }
@@ -51,9 +52,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         phoneNumber: normalizeNigerianPhoneNumber(body.phoneNumber)
       });
       if (result.user.role !== "RIDER") throw new Error("This account cannot use the Captain app.");
-      await tokenStore.setToken?.(result.accessToken); setUser(result.user);
+      await tokenStore.setToken?.(result.accessToken);
+      if (result.refreshToken) await refreshTokenStore.setToken(result.refreshToken);
+      setUser(result.user);
     },
-    logout: async () => { await tokenStore.clearToken?.(); setUser(null); }
+    logout: async () => {
+      const refreshToken = await refreshTokenStore.getToken();
+      if (refreshToken) {
+        await authApi.logout({ refreshToken }).catch(() => undefined);
+      }
+      await tokenStore.clearToken?.();
+      setUser(null);
+    }
   }}>{children}</AuthContext.Provider>;
 }
 export function useAuth() { const value = useContext(AuthContext); if (!value) throw new Error("useAuth must be used inside AuthProvider"); return value; }

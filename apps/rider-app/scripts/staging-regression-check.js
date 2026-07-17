@@ -17,6 +17,7 @@ const rootLayout = read("app/_layout.tsx");
 const apiClient = read("src/api/client.ts");
 const authContext = read("src/contexts/auth-context.tsx");
 const loginScreen = read("app/auth/login.tsx");
+const applicationScreen = read("app/auth/apply.tsx");
 const dashboard = read("app/tabs/dashboard.tsx");
 const jobsIndex = read("app/jobs/index.tsx");
 const jobDetail = read("app/jobs/[id].tsx");
@@ -25,6 +26,7 @@ const profile = read("app/profile.tsx");
 const riderNav = read("src/components/rider-navigation.tsx");
 const taxiReadiness = read("app/taxi-readiness.tsx");
 const taxiApi = read("src/api/taxi.api.ts");
+const deliveryCaptainApplicationsApi = read("src/api/delivery-captain-applications.api.ts");
 const ui = read("src/components/ui.tsx");
 const captainModes = read("src/lib/captain-modes.ts");
 
@@ -49,17 +51,26 @@ expect(appConfig.includes('policy: "appVersion"'), "Rider runtimeVersion must us
 expect(packageJson.dependencies?.["expo-updates"] === "~0.28.18", "Rider app must use the Expo SDK 53-compatible expo-updates package.");
 
 expect(apiClient.includes("karigo_rider_access_token"), "Rider token storage key must be rider-specific.");
+expect(apiClient.includes("karigo_rider_refresh_token"), "Rider refresh token storage key must be rider-specific.");
+expect(apiClient.includes("refreshAuth"), "Captain app must refresh sessions when access tokens expire.");
 expect(apiClient.includes("createApiClient"), "Rider app must use the shared API client.");
 expect(authContext.includes('role !== "RIDER"'), "Captain app must reject non-rider accounts until a backend Captain role exists.");
 expect(authContext.includes("cannot use the Captain app"), "Role rejection copy must use Captain branding.");
+expect(authContext.includes("authApi.logout") && authContext.includes("refreshTokenStore"), "Captain logout must clear persisted refresh sessions safely.");
 expect(ui.includes("PasswordField"), "Rider shared UI must include a password visibility field.");
 expect(ui.includes("visible ? \"Hide\" : \"Show\""), "Rider password field must expose show/hide toggle copy.");
 expect(loginScreen.includes("PasswordField") && loginScreen.includes("passwordVisible"), "Rider login password field must support visibility toggling.");
+expect(loginScreen.includes("Apply to become a Captain"), "Captain login must link to in-app applicant signup.");
+expect(applicationScreen.includes("Submit Captain application"), "Captain app must include an in-app application submission flow.");
+expect(applicationScreen.includes("Ride Captain readiness interest"), "Captain application must keep Ride Captain readiness gated.");
+expect(applicationScreen.includes("does not activate dispatch, payouts, live rides or a Captain login account"), "Captain application must state safe review-only limits.");
+expect(deliveryCaptainApplicationsApi.includes("delivery-captain-applications"), "Captain application must call the existing public Delivery Captain endpoint.");
 
 expect(rootLayout.includes("headerTitle: \"\""), "Native route titles must be hidden.");
 expect(rootLayout.includes("headerTintColor: brand.colors.charcoal"), "Back arrow should use KariGO charcoal styling.");
 expect(rootLayout.includes("jobs/[id]"), "Job detail route must keep a configured header/back area.");
 expect(rootLayout.includes("taxi-readiness"), "Ride readiness route must be configured with back-only navigation.");
+expect(rootLayout.includes("auth/apply"), "Captain application route must be registered.");
 expect(rootLayout.includes("CaptainBottomNav"), "Root layout must mount the Captain bottom navigation.");
 expect(!rootLayout.includes("headerTintColor: brand.colors.primary"), "Rider headers should not use the older red default title styling.");
 
@@ -68,6 +79,7 @@ expect(ui.includes("paddingBottom: 112"), "Shared Rider screens must leave room 
 expect(ui.includes("RefreshControl"), "Rider screens must support pull-to-refresh where used.");
 expect(ui.includes("heroTitle"), "Shared Rider UI must include stronger hero titles.");
 expect(riderNav.includes("Home") && riderNav.includes("Deliveries") && riderNav.includes("Earnings") && riderNav.includes("Profile"), "Captain bottom nav must expose Home, Deliveries, Earnings and Profile tabs.");
+expect(riderNav.includes("@expo/vector-icons") && riderNav.includes("Feather"), "Captain bottom nav must use proper icons.");
 expect(riderNav.includes("pathname.startsWith(\"/auth\")"), "Rider bottom nav must hide on auth screens.");
 expect(riderNav.includes("pathname.startsWith(\"/taxi-readiness\")"), "Captain bottom nav must hide on Ride readiness flow.");
 expect(captainModes.includes("DELIVERY_CAPTAIN") && captainModes.includes("DRIVER_CAPTAIN"), "Captain mode helper must define delivery and ride modes.");
@@ -78,10 +90,10 @@ expect(dashboard.includes("karigo-logo.png"), "Dashboard must use compact KariGO
 expect(dashboard.includes("Delivery Captain availability"), "Dashboard must show a clear Delivery Captain availability section.");
 expect(dashboard.includes("Loading Captain status"), "Dashboard fallback copy must use Captain branding.");
 expect(dashboard.includes("Only active approved Delivery Captains"), "Dashboard approval copy must use Captain branding.");
-expect(dashboard.includes("Manage Delivery Captain assignments today. Ride Captain readiness stays gated until KariGO Rides is approved."), "Dashboard must include polished Captain-facing intro copy.");
+expect(dashboard.includes("Manage your delivery assignments and availability."), "Dashboard must include polished Captain-facing intro copy.");
 expect(dashboard.includes("Captain modes"), "Dashboard must show role-based Captain modes.");
 expect(dashboard.includes("Ride readiness"), "Dashboard must expose Ride Captain readiness without live ride dispatch.");
-expect(dashboard.includes("Available") && dashboard.includes("Unavailable") && dashboard.includes("On delivery") && dashboard.includes("Offline"), "Dashboard must expose captain-friendly availability states.");
+expect(dashboard.includes("Online") && dashboard.includes("Unavailable") && dashboard.includes("On delivery") && dashboard.includes("Offline"), "Dashboard must expose captain-friendly online/offline states.");
 expect(dashboard.includes("Go online") && dashboard.includes("Go offline"), "Dashboard must expose online/offline availability.");
 expect(dashboard.includes("Today's assigned deliveries"), "Dashboard must show today's assigned deliveries.");
 expect(dashboard.includes("Completed deliveries"), "Dashboard must show completed delivery summary.");
@@ -91,12 +103,15 @@ expect(dashboard.includes("Support and help"), "Dashboard must include support/h
 expect(dashboard.includes("Staging safety note"), "Dashboard must include a staging safety note.");
 expect(dashboard.includes("Live payouts, withdrawals, live ride booking and live payment collection are disabled."), "Dashboard must state inactive live operations.");
 expect(dashboard.includes("Apply for Ride readiness"), "Dashboard must link to ride readiness application.");
+expect(dashboard.includes("Captain tools"), "Dashboard must include an improved Captain tools section.");
 expect(riderNav.includes("Deliveries"), "Captain bottom nav must use delivery-focused copy.");
 expect(jobsIndex.includes("Assigned Jobs"), "Jobs screen title must stay clear for dispatch assignments.");
 expect(jobsIndex.includes("No delivery jobs assigned yet. Stay online to receive jobs."), "Jobs list must have a captain-friendly empty state.");
 expect(earnings.includes("Live wallet withdrawals and payout requests are not enabled in staging."), "Earnings screen must state withdrawal guardrails.");
 expect(profile.includes("Captain Profile"), "Profile screen must use polished Captain Profile title.");
 expect(profile.includes("Captain tools"), "Profile must use Captain tool branding.");
+expect(profile.includes("photoUrl") && profile.includes("Profile photo URL optional"), "Profile must support a safe profile photo URL update.");
+expect(profile.includes("Completed deliveries") && profile.includes("Ride Captain readiness"), "Profile must show delivery stats and Ride Captain readiness status.");
 expect(profile.includes("Activity feed and notifications"), "Profile must link to notifications.");
 expect(jobDetail.includes("Accept job") && jobDetail.includes("Reject job"), "Job detail must support accept/reject actions.");
 expect(jobDetail.includes("RIDER_ARRIVING_PICKUP") && jobDetail.includes("PICKED_UP"), "Job detail must support pickup status progression.");

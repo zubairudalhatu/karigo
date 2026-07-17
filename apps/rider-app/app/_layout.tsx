@@ -30,6 +30,7 @@ export default function RootLayout() {
         >
           <Stack.Screen name="index" options={hiddenHeader} />
           <Stack.Screen name="auth/login" options={hiddenHeader} />
+          <Stack.Screen name="auth/apply" options={hiddenHeader} />
           <Stack.Screen name="tabs/dashboard" options={hiddenHeader} />
           <Stack.Screen name="jobs/index" options={backOnlyHeader} />
           <Stack.Screen name="jobs/[id]" options={backOnlyHeader} />

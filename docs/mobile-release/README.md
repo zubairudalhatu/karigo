@@ -34,6 +34,11 @@ Current Task 151 documents:
 - `docs/launch/google-play-closed-testing-status-task151.md`
 - `docs/operations/google-play-closed-testing-support-runbook-task151.md`
 
+Current Task 152 documents:
+
+- `captain-app-polish-task152.md`
+- `docs/qa/captain-app-ui-session-signup-verification-task152.md`
+
 Related documents:
 
 - `docs/qa/mobile-production-release-candidate-qa-task147.md`
@@ -48,6 +53,7 @@ Production EAS release-candidate profiles: Configured
 Android release-candidate builds: Generated
 Google Play internal/closed testing upload: Pending operator evidence
 Tester install results: Pending
+Captain App release-candidate polish: Implemented
 Live payments: Disabled
 Squad checkout: Deferred
 Monnify: Primary launch payment candidate

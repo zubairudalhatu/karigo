@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import { brand } from "@karigo/config";
 import { riderApi, RiderProfile } from "../src/api/rider.api";
 import { Button, Card, Field, Loading, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
@@ -18,6 +18,7 @@ export default function Profile() {
   const [profile, setProfile] = useState<RiderProfile | null>(null);
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -27,6 +28,7 @@ export default function Profile() {
         setProfile(p);
         setLat(String(p.currentLatitude ?? ""));
         setLng(String(p.currentLongitude ?? ""));
+        setPhotoUrl(p.photoUrl ?? "");
       })
       .catch((e) => setError(friendlyError(e)));
   }, []);
@@ -36,7 +38,15 @@ export default function Profile() {
   async function saveProfile() {
     if (!profile) return;
     try {
-      setProfile(await riderApi.updateProfile({ vehicleType: profile.vehicleType, plateNumber: profile.plateNumber }));
+      if (photoUrl.trim() && !isSecureImageUrl(photoUrl)) {
+        throw new Error("Profile photo must be a secure image URL ending in PNG, JPG, JPEG or WEBP.");
+      }
+      setProfile(await riderApi.updateProfile({
+        photoUrl: photoUrl.trim() || null,
+        vehicleType: profile.vehicleType,
+        plateNumber: profile.plateNumber,
+        licenseNumber: profile.licenseNumber
+      }));
       setMessage("Profile updated.");
       setError("");
     } catch (e) {
@@ -56,11 +66,12 @@ export default function Profile() {
   }
 
   const modes = captainModes(profile);
+  const isOnline = profile?.availabilityStatus === "ONLINE";
 
   return <Protected><Screen title="Captain Profile" subtitle="Manage your Captain record, vehicle details and staging location."><Message error>{error}</Message><Message>{message}</Message>{profile ? <>
     <Card tone="soft">
       <View style={styles.headerRow}>
-        <View style={styles.avatar}><Text style={styles.avatarText}>{initials(profile.user?.fullName).toUpperCase()}</Text></View>
+        {profile.photoUrl ? <Image source={{ uri: profile.photoUrl }} style={styles.avatarImage} /> : <View style={styles.avatar}><Text style={styles.avatarText}>{initials(profile.user?.fullName).toUpperCase()}</Text></View>}
         <View style={styles.headerText}>
           <Text style={ui.heroTitle}>{profile.user?.fullName ?? profile.riderCode}</Text>
           <Text style={ui.muted}>{profile.phoneNumber}</Text>
@@ -69,9 +80,12 @@ export default function Profile() {
       </View>
       <View style={styles.badgeRow}>
         <StatusBadge status={profile.verificationStatus} />
-        <StatusBadge status={profile.availabilityStatus} />
+        <StatusBadge status={isOnline ? "Online" : profile.availabilityStatus} />
       </View>
-      <Text style={ui.pageIntro}>{profile.totalDeliveries} completed deliveries recorded in KariGO.</Text>
+      <View style={styles.statsGrid}>
+        <View style={styles.statBox}><Text style={styles.statValue}>{profile.totalDeliveries}</Text><Text style={ui.muted}>Completed deliveries</Text></View>
+        <View style={styles.statBox}><Text style={styles.statValue}>{isOnline ? "Online" : "Offline"}</Text><Text style={ui.muted}>Availability</Text></View>
+      </View>
     </Card>
 
     <Card>
@@ -87,8 +101,12 @@ export default function Profile() {
 
     <Card>
       <Text style={ui.sectionTitle}>Vehicle details</Text>
+      <Field value={photoUrl} placeholder="Profile photo URL optional" autoCapitalize="none" onChangeText={setPhotoUrl} />
+      {photoUrl.trim() && isSecureImageUrl(photoUrl) ? <Image source={{ uri: photoUrl.trim() }} style={styles.photoPreview} /> : null}
+      <Text style={ui.muted}>Device upload is not enabled in this build. Add a secure image URL now; permanent in-app upload will follow backend storage approval.</Text>
       <Field value={profile.vehicleType ?? ""} placeholder="Vehicle type" onChangeText={(vehicleType) => setProfile({ ...profile, vehicleType })} />
       <Field value={profile.plateNumber ?? ""} placeholder="Plate number" onChangeText={(plateNumber) => setProfile({ ...profile, plateNumber })} />
+      <Field value={profile.licenseNumber ?? ""} placeholder="Driver licence number optional" onChangeText={(licenseNumber) => setProfile({ ...profile, licenseNumber })} />
       <Button title="Save profile" onPress={saveProfile} />
     </Card>
 
@@ -102,8 +120,14 @@ export default function Profile() {
 
     <Card>
       <Text style={ui.sectionTitle}>Captain tools</Text>
-      <NavLink href="/notifications" label="Activity feed and notifications" />
-      <NavLink href="/taxi-readiness" label="Ride readiness" />
+      <View style={styles.toolGrid}>
+        <View style={styles.toolCard}><Text style={styles.toolTitle}>Delivery availability</Text><Text style={ui.muted}>Use Home to go online or offline.</Text></View>
+        <View style={styles.toolCard}><Text style={styles.toolTitle}>Assigned deliveries</Text><NavLink href="/jobs" label="Open deliveries" /></View>
+        <View style={styles.toolCard}><Text style={styles.toolTitle}>Earnings</Text><NavLink href="/earnings" label="View earnings" /></View>
+        <View style={styles.toolCard}><Text style={styles.toolTitle}>Support</Text><Text style={ui.muted}>Use the approved pilot support channel for urgent dispatch issues.</Text></View>
+        <View style={styles.toolCard}><Text style={styles.toolTitle}>Ride Captain readiness</Text><NavLink href="/taxi-readiness" label="Readiness only" /></View>
+        <View style={styles.toolCard}><Text style={styles.toolTitle}>Activity feed and notifications</Text><NavLink href="/notifications" label="Open notifications" /></View>
+      </View>
     </Card>
 
     <Button tone="muted" title="Log out" onPress={async () => { await logout(); router.replace("/auth/login"); }} />
@@ -114,7 +138,19 @@ const styles = StyleSheet.create({
   headerRow: { alignItems: "center", flexDirection: "row", gap: 14 },
   headerText: { flex: 1, gap: 2 },
   avatar: { alignItems: "center", backgroundColor: brand.colors.primary, borderRadius: 28, height: 56, justifyContent: "center", width: 56 },
+  avatarImage: { borderRadius: 32, height: 64, width: 64 },
   avatarText: { color: brand.colors.white, fontSize: 19, fontWeight: "900" },
   badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  modeRow: { borderTopColor: brand.colors.border, borderTopWidth: 1, gap: 8, paddingTop: 12 }
+  statsGrid: { gap: 10 },
+  statBox: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 3, padding: 12 },
+  statValue: { color: brand.colors.charcoal, fontSize: 18, fontWeight: "900" },
+  photoPreview: { borderRadius: 18, height: 84, width: 84 },
+  modeRow: { borderTopColor: brand.colors.border, borderTopWidth: 1, gap: 8, paddingTop: 12 },
+  toolGrid: { gap: 10 },
+  toolCard: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 4, padding: 12 },
+  toolTitle: { color: brand.colors.charcoal, fontWeight: "900" }
 });
+
+function isSecureImageUrl(value: string) {
+  return !value.trim() || /^https:\/\/.+\.(png|jpe?g|webp)(\?.*)?$/i.test(value.trim());
+}
