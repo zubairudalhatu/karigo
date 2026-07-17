@@ -1,5 +1,21 @@
 # App Store And Play Store Preparation Checklist
 
+Task 147 adds the official production mobile release planning pack under
+`docs/mobile-release/`, with related QA, operations and Go/No-Go records. Use
+that pack as the source of truth before creating production EAS profiles or
+submitting apps to store review.
+
+Current Task 147 posture:
+
+```text
+Production store submission: Not approved
+Controlled launch build planning: Ready
+Live payments: Disabled
+Squad checkout: Deferred
+Monnify: Primary launch payment candidate
+Paystack: Secondary launch payment candidate
+```
+
 ## Customer App
 
 - [ ] App name approved
