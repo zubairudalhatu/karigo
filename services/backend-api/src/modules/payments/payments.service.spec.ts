@@ -252,6 +252,54 @@ describe("PaymentsService", () => {
     expect(serialized).not.toContain("live-webhook-secret-placeholder");
   });
 
+  it("returns public-safe staging payment config", () => {
+    const configResult = service.publicPaymentConfig();
+
+    expect(configResult).toEqual({
+      livePaymentsEnabled: false,
+      activeProvider: "mock",
+      customerSelectableProviders: ["mock", "monnify", "paystack"],
+      launchProviderLabel: "Staging payment providers",
+      mockPaymentVisible: true,
+      squadReady: false,
+      monnifyVisible: true,
+      paystackVisible: true
+    });
+  });
+
+  it("returns public-safe live Squad payment config without secrets", () => {
+    registry.customerCheckoutProviders.mockReturnValue(["squad"]);
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      const values: Record<string, string | boolean> = {
+        PAYMENTS_PROVIDER: "squad",
+        PAYMENTS_LIVE_ENABLED: true,
+        SQUAD_MODE: "live",
+        SQUAD_SECRET_KEY: "live-squad-secret-placeholder",
+        SQUAD_BASE_URL: "https://api-d.squadco.com",
+        SQUAD_CALLBACK_URL: "https://api.karigo.com.ng/api/v1/payments/callback/squad",
+        SQUAD_WEBHOOK_SECRET: "live-webhook-secret-placeholder",
+        SQUAD_LIVE_ACTIVATION_APPROVED: "true"
+      };
+      return values[key] ?? fallback;
+    });
+
+    const configResult = service.publicPaymentConfig();
+    const serialized = JSON.stringify(configResult);
+
+    expect(configResult).toEqual({
+      livePaymentsEnabled: true,
+      activeProvider: "squad",
+      customerSelectableProviders: ["squad"],
+      launchProviderLabel: "Squad by GTBank",
+      mockPaymentVisible: false,
+      squadReady: true,
+      monnifyVisible: false,
+      paystackVisible: false
+    });
+    expect(serialized).not.toContain("live-squad-secret-placeholder");
+    expect(serialized).not.toContain("live-webhook-secret-placeholder");
+  });
+
   it("runs a safe admin sandbox initialization test without storing a payment", async () => {
     const monnifyProvider = {
       name: "monnify",

@@ -8,6 +8,11 @@ import { configureSwagger } from "./swagger.setup";
 
 describe("Backend foundation (HTTP)", () => {
   let app: INestApplication | undefined;
+  const previousPaymentEnv = {
+    PAYMENTS_LIVE_ENABLED: process.env.PAYMENTS_LIVE_ENABLED,
+    PAYMENTS_PROVIDER: process.env.PAYMENTS_PROVIDER,
+    PAYMENT_PROVIDER: process.env.PAYMENT_PROVIDER
+  };
   const prismaMock = {
     vendor: {
       findMany: jest.fn().mockResolvedValue([])
@@ -17,6 +22,9 @@ describe("Backend foundation (HTTP)", () => {
   beforeAll(async () => {
     process.env.DATABASE_URL = "TEST_DATABASE_URL_PLACEHOLDER";
     process.env.JWT_SECRET = "test-secret";
+    process.env.PAYMENTS_LIVE_ENABLED = "false";
+    process.env.PAYMENTS_PROVIDER = "mock";
+    process.env.PAYMENT_PROVIDER = "mock";
     const { AppModule } = await import("./app.module");
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -32,6 +40,13 @@ describe("Backend foundation (HTTP)", () => {
 
   afterAll(async () => {
     await app?.close();
+    for (const [key, value] of Object.entries(previousPaymentEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   });
 
   it("serves the health endpoint under the global API prefix", async () => {
@@ -125,5 +140,20 @@ describe("Backend foundation (HTTP)", () => {
       message: "Active vendors retrieved",
       data: []
     });
+  });
+
+  it("exposes public-safe payment configuration without admin authentication", async () => {
+    const response = await request(app!.getHttpServer()).get("/api/v1/payments/public-config").expect(200);
+
+    expect(response.body.success).toBe(true);
+    expect(response.body.message).toBe("Payment configuration retrieved");
+    expect(response.body.data).toEqual(expect.objectContaining({
+      livePaymentsEnabled: false,
+      activeProvider: "mock",
+      customerSelectableProviders: ["mock", "monnify", "paystack"],
+      mockPaymentVisible: true
+    }));
+    expect(JSON.stringify(response.body)).not.toContain("SECRET_KEY");
+    expect(JSON.stringify(response.body)).not.toContain("WEBHOOK_SECRET");
   });
 });

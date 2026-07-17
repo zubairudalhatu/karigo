@@ -8,6 +8,17 @@ export interface InitiatePaymentRequest {
   paymentProvider?: CustomerTestPaymentProvider;
 }
 
+export interface PublicPaymentConfig {
+  livePaymentsEnabled: boolean;
+  activeProvider: string;
+  customerSelectableProviders: CustomerTestPaymentProvider[];
+  launchProviderLabel: string;
+  mockPaymentVisible: boolean;
+  squadReady: boolean;
+  monnifyVisible: boolean;
+  paystackVisible: boolean;
+}
+
 export interface PaymentAuthorization {
   paymentId: string;
   transactionReference: string;

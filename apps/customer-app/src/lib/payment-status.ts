@@ -1,4 +1,4 @@
-import type { CustomerTestPaymentProvider } from "@karigo/shared-types";
+import type { CustomerTestPaymentProvider, PublicPaymentConfig } from "@karigo/shared-types";
 
 export type PaymentStatusView = {
   title: string;
@@ -16,11 +16,13 @@ const paymentProviderLabels: Record<CustomerTestPaymentProvider, string> = {
 const squadLiveLaunchMode = process.env.EXPO_PUBLIC_PAYMENT_LAUNCH_MODE === "squad_live";
 const squadSandboxCheckoutEnabled = process.env.EXPO_PUBLIC_SQUAD_SANDBOX_CHECKOUT_ENABLED === "true";
 
-const stagingPaymentProviderOptions: Array<{
+export type CustomerPaymentProviderOption = {
   value: CustomerTestPaymentProvider;
   title: string;
   description: string;
-}> = [
+};
+
+const stagingPaymentProviderOptions: CustomerPaymentProviderOption[] = [
   {
     value: "mock",
     title: "Mock Payment",
@@ -43,11 +45,55 @@ const stagingPaymentProviderOptions: Array<{
   }
 ];
 
-export const customerTestPaymentProviderOptions: Array<{
-  value: CustomerTestPaymentProvider;
-  title: string;
-  description: string;
-}> = squadLiveLaunchMode
+const squadLivePaymentProviderOptions: CustomerPaymentProviderOption[] = [
+  {
+    value: "squad",
+    title: "Squad by GTBank",
+    description: "Squad by GTBank is KariGO's approved launch payment provider."
+  }
+];
+
+export const fallbackCustomerPaymentConfig: PublicPaymentConfig = squadLiveLaunchMode
+  ? {
+      livePaymentsEnabled: true,
+      activeProvider: "squad",
+      customerSelectableProviders: ["squad"],
+      launchProviderLabel: "Squad by GTBank",
+      mockPaymentVisible: false,
+      squadReady: true,
+      monnifyVisible: false,
+      paystackVisible: false
+    }
+  : {
+      livePaymentsEnabled: false,
+      activeProvider: "mock",
+      customerSelectableProviders: stagingPaymentProviderOptions.map((option) => option.value),
+      launchProviderLabel: "Staging payment providers",
+      mockPaymentVisible: true,
+      squadReady: squadSandboxCheckoutEnabled,
+      monnifyVisible: true,
+      paystackVisible: true
+    };
+
+export function isSquadLivePaymentConfig(config: PublicPaymentConfig = fallbackCustomerPaymentConfig): boolean {
+  return (
+    config.livePaymentsEnabled &&
+    config.activeProvider === "squad" &&
+    config.customerSelectableProviders.length === 1 &&
+    config.customerSelectableProviders[0] === "squad"
+  );
+}
+
+export function customerPaymentProviderOptions(
+  config: PublicPaymentConfig = fallbackCustomerPaymentConfig
+): CustomerPaymentProviderOption[] {
+  if (isSquadLivePaymentConfig(config)) {
+    return squadLivePaymentProviderOptions;
+  }
+  return stagingPaymentProviderOptions.filter((option) => config.customerSelectableProviders.includes(option.value));
+}
+
+export const customerTestPaymentProviderOptions: CustomerPaymentProviderOption[] = squadLiveLaunchMode
   ? [{
       value: "squad",
       title: "Squad by GTBank",
@@ -57,27 +103,49 @@ export const customerTestPaymentProviderOptions: Array<{
 
 export const defaultCustomerPaymentProvider: CustomerTestPaymentProvider = customerTestPaymentProviderOptions[0]?.value ?? "mock";
 
-export function paymentProviderLabel(provider?: string | null): string {
+export function defaultCustomerPaymentProviderForConfig(
+  config: PublicPaymentConfig = fallbackCustomerPaymentConfig
+): CustomerTestPaymentProvider {
+  return customerPaymentProviderOptions(config)[0]?.value ?? "mock";
+}
+
+export function paymentProviderLabel(provider?: string | null, config: PublicPaymentConfig = fallbackCustomerPaymentConfig): string {
+  if (provider === "squad" && isSquadLivePaymentConfig(config)) return "Squad by GTBank";
   if (provider && provider in paymentProviderLabels) {
     return paymentProviderLabels[provider as CustomerTestPaymentProvider];
   }
   return "Sandbox payment";
 }
 
-export const paymentSafetyNote =
-  squadLiveLaunchMode
-    ? "Squad by GTBank is the primary launch checkout provider. KariGO verifies payment server-side before marking an order paid. Wallet funding, automatic refunds and payout automation remain disabled."
+export function paymentSafetyNoteForConfig(config: PublicPaymentConfig = fallbackCustomerPaymentConfig): string {
+  return isSquadLivePaymentConfig(config)
+    ? "Squad by GTBank is KariGO's approved launch payment provider. KariGO verifies payment server-side before marking an order paid. Wallet funding, automatic refunds and payout automation remain disabled."
     : "Mock Payment is for staging fallback. Squad Sandbox is hidden unless explicitly enabled; Monnify and Paystack remain pending approval and are for controlled sandbox/test checks only. Live payments, wallet funding, automatic refunds and payout automation remain disabled.";
+}
 
-export const paymentProviderSelectionTitle = squadLiveLaunchMode ? "Payment provider" : "Test payment provider";
+export const paymentSafetyNote = paymentSafetyNoteForConfig();
 
-export const paymentProviderSelectionBody = squadLiveLaunchMode
-  ? "Squad by GTBank is the approved primary launch checkout provider."
-  : "Choose how to verify this staging checkout. Mock payment remains the safe pilot fallback.";
+export function paymentProviderSelectionTitleForConfig(config: PublicPaymentConfig = fallbackCustomerPaymentConfig): string {
+  return isSquadLivePaymentConfig(config) ? "Payment provider" : "Test payment provider";
+}
 
-export const paymentProviderSensitiveDataNote = squadLiveLaunchMode
-  ? "Use only your own approved payment details. KariGO will not mark the order paid until backend verification succeeds."
-  : "Do not use live card, bank or account details during sandbox tests.";
+export const paymentProviderSelectionTitle = paymentProviderSelectionTitleForConfig();
+
+export function paymentProviderSelectionBodyForConfig(config: PublicPaymentConfig = fallbackCustomerPaymentConfig): string {
+  return isSquadLivePaymentConfig(config)
+    ? "Pay securely using KariGO's approved payment provider."
+    : "Choose how to verify this staging checkout. Mock payment remains the safe pilot fallback.";
+}
+
+export const paymentProviderSelectionBody = paymentProviderSelectionBodyForConfig();
+
+export function paymentProviderSensitiveDataNoteForConfig(config: PublicPaymentConfig = fallbackCustomerPaymentConfig): string {
+  return isSquadLivePaymentConfig(config)
+    ? "Use only your own approved payment details. KariGO will not mark the order paid until backend verification succeeds."
+    : "Do not use live card, bank or account details during sandbox tests.";
+}
+
+export const paymentProviderSensitiveDataNote = paymentProviderSensitiveDataNoteForConfig();
 
 export const walletRefundFutureNote =
   "KariGO Wallet refunds and wallet-to-utility payments are future workflows. Refunds remain admin-reviewed until separately approved.";
@@ -118,6 +186,22 @@ export function paymentStatusView(status?: string): PaymentStatusView {
   }
 }
 
+export function paymentStatusViewForConfig(
+  status?: string,
+  config: PublicPaymentConfig = fallbackCustomerPaymentConfig
+): PaymentStatusView {
+  const view = paymentStatusView(status);
+  if (status === "PENDING" || !status) {
+    return {
+      ...view,
+      actionHint: isSquadLivePaymentConfig(config)
+        ? "Continue with Squad by GTBank when you are ready."
+        : "Use mock payment or an approved sandbox payment provider only."
+    };
+  }
+  return view;
+}
+
 export function pendingAuthorizationCopy(providerLabel = "Sandbox payment"): PaymentStatusView {
   return {
     title: `${providerLabel} authorization`,
@@ -126,8 +210,11 @@ export function pendingAuthorizationCopy(providerLabel = "Sandbox payment"): Pay
   };
 }
 
-export function paymentAuthorizationOpenedMessage(providerLabel: string): string {
-  const checkoutType = squadLiveLaunchMode ? "payment checkout" : "sandbox checkout";
+export function paymentAuthorizationOpenedMessage(
+  providerLabel: string,
+  config: PublicPaymentConfig = fallbackCustomerPaymentConfig
+): string {
+  const checkoutType = isSquadLivePaymentConfig(config) ? "payment checkout" : "sandbox checkout";
   return `${providerLabel} opened. Return to KariGO and tap Verify payment after completing the ${checkoutType}.`;
 }
 
@@ -135,16 +222,23 @@ export function paymentVerificationFailureMessage(message: string): string {
   return `Payment could not be verified yet. ${message} If you cancelled or did not complete checkout, reopen the payment page and try again.`;
 }
 
-export function paymentInitializationFailureMessage(providerLabel: string, message: string): string {
+export function paymentInitializationFailureMessage(
+  providerLabel: string,
+  message: string,
+  config: PublicPaymentConfig = fallbackCustomerPaymentConfig
+): string {
   const normalizedMessage = message.trim();
-  const defaultFailure = squadLiveLaunchMode
+  const isLiveSquad = isSquadLivePaymentConfig(config);
+  const defaultFailure = isLiveSquad
     ? "The payment provider could not be started safely."
     : "The sandbox provider could not be started safely.";
   const safeMessage = /^internal server error$/i.test(normalizedMessage)
     ? defaultFailure
     : normalizedMessage || defaultFailure;
-  const fallback = squadLiveLaunchMode
-    ? "Please retry payment or contact KariGO support if this continues."
+  const fallback = isLiveSquad
+    ? "Please try again or contact KariGO support."
     : "You can select Mock payment to continue staging checkout while provider configuration is reviewed.";
-  return `${providerLabel} could not be started. ${safeMessage} ${fallback}`;
+  return isLiveSquad
+    ? `Squad payment could not be started. ${fallback}`
+    : `${providerLabel} could not be started. ${safeMessage} ${fallback}`;
 }

@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
-import type { CustomerTestPaymentProvider } from "@karigo/shared-types";
+import type { CustomerTestPaymentProvider, PublicPaymentConfig } from "@karigo/shared-types";
 import { Order, ordersApi } from "../../src/api/orders.api";
 import { paymentsApi } from "../../src/api/payments.api";
 import { Button, Card, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
@@ -13,16 +13,19 @@ import {
   openExternalPaymentAuthorization
 } from "../../src/lib/payment-flow";
 import {
-  customerTestPaymentProviderOptions,
+  customerPaymentProviderOptions,
   defaultCustomerPaymentProvider,
-  paymentSafetyNote,
+  defaultCustomerPaymentProviderForConfig,
+  fallbackCustomerPaymentConfig,
+  isSquadLivePaymentConfig,
+  paymentSafetyNoteForConfig,
   paymentProviderLabel,
   paymentInitializationFailureMessage,
-  paymentProviderSelectionBody,
-  paymentProviderSelectionTitle,
-  paymentProviderSensitiveDataNote,
+  paymentProviderSelectionBodyForConfig,
+  paymentProviderSelectionTitleForConfig,
+  paymentProviderSensitiveDataNoteForConfig,
   paymentAuthorizationOpenedMessage,
-  paymentStatusView,
+  paymentStatusViewForConfig,
   paymentVerificationFailureMessage,
   pendingAuthorizationCopy,
   walletRefundFutureNote
@@ -41,16 +44,50 @@ export default function OrderTracking() {
   const [pendingPaymentReference, setPendingPaymentReference] = useState("");
   const [pendingAuthorizationUrl, setPendingAuthorizationUrl] = useState("");
   const [pendingPaymentProvider, setPendingPaymentProvider] = useState("");
+  const [paymentConfig, setPaymentConfig] = useState<PublicPaymentConfig | null>(null);
+  const [paymentConfigLoading, setPaymentConfigLoading] = useState(false);
+  const [paymentConfigError, setPaymentConfigError] = useState("");
   const load = () => ordersApi.detail(id).then(setOrder).catch((e) => setError(friendlyError(e)));
+  const effectivePaymentConfig = paymentConfig ?? fallbackCustomerPaymentConfig;
+  const paymentProviderOptions = useMemo(
+    () => customerPaymentProviderOptions(effectivePaymentConfig),
+    [effectivePaymentConfig]
+  );
+  const paymentConfigReady = !!paymentConfig && !paymentConfigLoading && !paymentConfigError;
+  const paymentProviderAvailable = paymentConfigReady && paymentProviderOptions.length > 0;
 
   useEffect(() => { void load(); }, [id]);
   useEffect(() => {
     setDeliveryOtp("");
     setOtpError("");
   }, [order?.id, order?.orderStatus]);
+  useEffect(() => { void loadPaymentConfig(); }, []);
+
+  async function loadPaymentConfig() {
+    setPaymentConfigLoading(true);
+    setPaymentConfigError("");
+    try {
+      const nextConfig = await paymentsApi.publicConfig();
+      setPaymentConfig(nextConfig);
+      const nextDefault = defaultCustomerPaymentProviderForConfig(nextConfig);
+      const nextOptions = customerPaymentProviderOptions(nextConfig);
+      setSelectedPaymentProvider((current) =>
+        nextOptions.some((option) => option.value === current) ? current : nextDefault
+      );
+    } catch {
+      setPaymentConfig(null);
+      setPaymentConfigError("Payment provider could not be loaded. Please retry before continuing.");
+    } finally {
+      setPaymentConfigLoading(false);
+    }
+  }
 
   async function pay() {
     if (!order) return;
+    if (!paymentProviderAvailable) {
+      setError("Payment provider is not ready yet. Please retry payment provider setup.");
+      return;
+    }
     setBusy(true); setError("");
     try {
       const started = await paymentsApi.initiate({
@@ -61,12 +98,12 @@ export default function OrderTracking() {
       });
       const authorizationUrl = started.authorization.authorizationUrl;
       const startedProvider = started.payment.gateway ?? selectedPaymentProvider;
-      const startedProviderLabel = paymentProviderLabel(startedProvider);
+      const startedProviderLabel = paymentProviderLabel(startedProvider, effectivePaymentConfig);
       if (isExternalPaymentAuthorizationUrl(authorizationUrl)) {
         setPendingPaymentReference(started.payment.transactionReference);
         setPendingAuthorizationUrl(authorizationUrl);
         setPendingPaymentProvider(startedProvider);
-        setMessage(paymentAuthorizationOpenedMessage(startedProviderLabel));
+        setMessage(paymentAuthorizationOpenedMessage(startedProviderLabel, effectivePaymentConfig));
         await openExternalPaymentAuthorization(authorizationUrl);
         return;
       }
@@ -74,7 +111,7 @@ export default function OrderTracking() {
         throw new Error("Payment authorization link was not accepted.");
       }
       await verifyPayment(started.payment.transactionReference);
-    } catch (e) { setError(paymentInitializationFailureMessage(selectedProviderLabel, friendlyError(e))); } finally { setBusy(false); }
+    } catch (e) { setError(paymentInitializationFailureMessage(selectedProviderLabel, friendlyError(e), effectivePaymentConfig)); } finally { setBusy(false); }
   }
 
   async function verifyPayment(reference: string) {
@@ -132,10 +169,14 @@ export default function OrderTracking() {
   const pricing = order ? pricingFromServer(order) : null;
   const canRevealDeliveryOtp = order ? ["ARRIVED_DESTINATION", "DELIVERED"].includes(order.orderStatus) : false;
   const groupedOtp = deliveryOtp ? `${deliveryOtp.slice(0, 3)} ${deliveryOtp.slice(3)}` : "";
-  const paymentView = paymentStatusView(order?.paymentStatus);
-  const selectedProviderLabel = paymentProviderLabel(selectedPaymentProvider);
-  const pendingProviderLabel = paymentProviderLabel(pendingPaymentProvider || selectedPaymentProvider);
+  const paymentView = paymentStatusViewForConfig(order?.paymentStatus, effectivePaymentConfig);
+  const selectedProviderLabel = paymentProviderLabel(selectedPaymentProvider, effectivePaymentConfig);
+  const pendingProviderLabel = paymentProviderLabel(pendingPaymentProvider || selectedPaymentProvider, effectivePaymentConfig);
   const pendingView = pendingAuthorizationCopy(pendingProviderLabel);
+  const liveSquadMode = isSquadLivePaymentConfig(effectivePaymentConfig);
+  const paymentButtonTitle = liveSquadMode
+    ? `Pay with Squad - ${money(order?.totalAmount ?? 0)}`
+    : `Continue with ${selectedProviderLabel} - ${money(order?.totalAmount ?? 0)}`;
 
   return <Protected><Screen title={order?.orderNumber ?? "Order details"}><Message>{message}</Message><Message error>{error}</Message>
     {order && pricing ? <>
@@ -145,7 +186,7 @@ export default function OrderTracking() {
         <StatusBadge status={order.paymentStatus} />
         <Text style={ui.cardText}>{paymentView.body}</Text>
         <Text style={ui.muted}>{paymentView.actionHint}</Text>
-        <Text style={ui.muted}>{paymentSafetyNote}</Text>
+        <Text style={ui.muted}>{paymentSafetyNoteForConfig(effectivePaymentConfig)}</Text>
       </Card>
       <Card>
         <View style={ui.priceRow}><Text style={ui.priceLabel}>Cart subtotal:</Text><Text style={ui.priceValue}>{money(pricing.subtotal)}</Text></View>
@@ -154,10 +195,12 @@ export default function OrderTracking() {
         <View style={ui.priceRow}><Text style={ui.sectionTitle}>Payable:</Text><Text style={ui.payable}>{money(pricing.payableAmount)}</Text></View>
       </Card>
       {order.paymentStatus === "PENDING" ? <>
-        <Card>
-          <Text style={ui.cardTitle}>{paymentProviderSelectionTitle}</Text>
-          <Text style={ui.cardText}>{paymentProviderSelectionBody}</Text>
-          {customerTestPaymentProviderOptions.map((option) => (
+        {paymentConfigLoading ? <Message>Loading payment provider...</Message> : null}
+        {paymentConfigError ? <><Message error>{paymentConfigError}</Message><Button title="Retry payment provider" tone="muted" onPress={loadPaymentConfig} disabled={paymentConfigLoading || busy} /></> : null}
+        {paymentConfigReady ? <Card>
+          <Text style={ui.cardTitle}>{paymentProviderSelectionTitleForConfig(effectivePaymentConfig)}</Text>
+          <Text style={ui.cardText}>{paymentProviderSelectionBodyForConfig(effectivePaymentConfig)}</Text>
+          {paymentProviderOptions.map((option) => (
             <View key={option.value}>
               <Button
                 title={`${selectedPaymentProvider === option.value ? "Selected - " : ""}${option.title}`}
@@ -172,14 +215,15 @@ export default function OrderTracking() {
               <Text style={ui.muted}>{option.description}</Text>
             </View>
           ))}
-          <Text style={ui.muted}>{paymentProviderSensitiveDataNote}</Text>
-        </Card>
-        <Button title={busy ? "Preparing payment..." : `Continue with ${selectedProviderLabel} - ${money(order.totalAmount)}`} onPress={pay} disabled={busy || !!pendingPaymentReference} />
+          {paymentProviderOptions.length === 0 ? <Text style={ui.muted}>No customer payment provider is currently available. Please contact KariGO support.</Text> : null}
+          <Text style={ui.muted}>{paymentProviderSensitiveDataNoteForConfig(effectivePaymentConfig)}</Text>
+        </Card> : null}
+        <Button title={busy ? "Preparing payment..." : paymentButtonTitle} onPress={pay} disabled={busy || !!pendingPaymentReference || !paymentProviderAvailable} />
         {pendingPaymentReference ? <Card>
           <Text style={ui.cardTitle}>{pendingView.title}</Text>
           <Text style={ui.cardText}>{pendingView.body}</Text>
           <Text style={ui.muted}>{pendingView.actionHint}</Text>
-          <Text style={ui.muted}>{paymentProviderSensitiveDataNote}</Text>
+          <Text style={ui.muted}>{paymentProviderSensitiveDataNoteForConfig(effectivePaymentConfig)}</Text>
           <Button title="Open payment page again" tone="muted" onPress={reopenPaymentAuthorization} disabled={busy} />
           <Button title={busy ? "Verifying payment..." : "Verify payment status"} onPress={verifyPendingPayment} disabled={busy} />
         </Card> : null}

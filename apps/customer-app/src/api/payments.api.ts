@@ -1,4 +1,4 @@
-import type { InitiatePaymentRequest } from "@karigo/shared-types";
+import type { InitiatePaymentRequest, PublicPaymentConfig } from "@karigo/shared-types";
 import { api } from "./client";
 
 export interface PaymentInitiation {
@@ -12,6 +12,7 @@ export interface PaymentInitiation {
 }
 
 export const paymentsApi = {
+  publicConfig: () => api.get<PublicPaymentConfig>("payments/public-config", { authenticated: false }),
   initiate: (body: InitiatePaymentRequest) => api.post<PaymentInitiation>("payments/initiate", body),
   verify: (reference: string) => api.get<{ payment: { paymentStatus: string }; alreadyProcessed: boolean }>(`payments/verify/${reference}`)
 };

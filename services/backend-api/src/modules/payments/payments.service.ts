@@ -15,6 +15,7 @@ import {
   Prisma,
   ServiceCategory
 } from "@prisma/client";
+import type { PublicPaymentConfig } from "@karigo/shared-types";
 import { randomBytes } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 import { InitiatePaymentDto } from "./dto/initiate-payment.dto";
@@ -187,6 +188,25 @@ export class PaymentsService {
       },
       providers,
       liveActivation: this.squadLiveActivationReadiness(activeProvider)
+    };
+  }
+
+  publicPaymentConfig(): PublicPaymentConfig {
+    const activeProvider = this.configuredProvider();
+    const livePaymentsEnabled = this.livePaymentsEnabled();
+    const customerSelectableProviders = this.providerRegistry.customerCheckoutProviders();
+    const liveActivation = this.squadLiveActivationReadiness(activeProvider);
+    const squadVisible = customerSelectableProviders.includes("squad");
+
+    return {
+      livePaymentsEnabled,
+      activeProvider,
+      customerSelectableProviders,
+      launchProviderLabel: livePaymentsEnabled ? "Squad by GTBank" : "Staging payment providers",
+      mockPaymentVisible: customerSelectableProviders.includes("mock") && !livePaymentsEnabled,
+      squadReady: squadVisible && (!livePaymentsEnabled || liveActivation.status === "READY"),
+      monnifyVisible: customerSelectableProviders.includes("monnify") && !livePaymentsEnabled,
+      paystackVisible: customerSelectableProviders.includes("paystack") && !livePaymentsEnabled
     };
   }
 

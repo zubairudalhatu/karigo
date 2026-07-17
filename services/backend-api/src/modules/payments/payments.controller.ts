@@ -15,6 +15,12 @@ import { PaymentsService } from "./payments.service";
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  @Get("public-config")
+  @ApiOperation({ summary: "Retrieve public-safe customer payment configuration" })
+  publicConfig() {
+    return { message: "Payment configuration retrieved", data: this.paymentsService.publicPaymentConfig() };
+  }
+
   @Post("initiate")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CUSTOMER)
