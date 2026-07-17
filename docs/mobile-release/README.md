@@ -27,6 +27,13 @@ Current Task 150 documents:
 - `docs/launch/android-closed-testing-go-no-go-task150.md`
 - `docs/operations/android-closed-testing-operations-runbook-task150.md`
 
+Current Task 151 documents:
+
+- `google-play-upload-execution-record-task151.md`
+- `docs/qa/google-play-tester-install-results-task151.md`
+- `docs/launch/google-play-closed-testing-status-task151.md`
+- `docs/operations/google-play-closed-testing-support-runbook-task151.md`
+
 Related documents:
 
 - `docs/qa/mobile-production-release-candidate-qa-task147.md`
@@ -39,8 +46,8 @@ Current posture:
 Production app-store submission: Not approved
 Production EAS release-candidate profiles: Configured
 Android release-candidate builds: Generated
-Google Play internal/closed testing upload: Prepared, pending operator action
-Controlled artifact QA: Pending Play testing install
+Google Play internal/closed testing upload: Pending operator evidence
+Tester install results: Pending
 Live payments: Disabled
 Squad checkout: Deferred
 Monnify: Primary launch payment candidate
