@@ -14,6 +14,12 @@ Current Task 148 documents:
 - `docs/qa/mobile-release-candidate-build-validation-task148.md`
 - `docs/launch/mobile-release-candidate-go-no-go-task148.md`
 
+Current Task 149 documents:
+
+- `production-android-rc-build-record-task149.md`
+- `docs/qa/mobile-android-rc-artifact-verification-task149.md`
+- `docs/launch/mobile-rc-build-closeout-task149.md`
+
 Related documents:
 
 - `docs/qa/mobile-production-release-candidate-qa-task147.md`
@@ -25,7 +31,8 @@ Current posture:
 ```text
 Production app-store submission: Not approved
 Production EAS release-candidate profiles: Configured
-Controlled launch builds: Hold until explicitly approved
+Android release-candidate builds: Generated
+Controlled artifact QA: Pending
 Live payments: Disabled
 Squad checkout: Deferred
 Monnify: Primary launch payment candidate

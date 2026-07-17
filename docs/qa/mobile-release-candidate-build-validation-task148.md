@@ -116,7 +116,14 @@ KariGO Captain App:
 
 ```text
 Release-candidate profiles: Configured
-Release-candidate builds: Not run
+Android release-candidate builds: Generated in Task 149
 Store submission: Not approved
 Live payments: Disabled
 ```
+
+Task 149 Android build results:
+
+| App | Build ID | Result |
+| --- | --- | --- |
+| Customer App | `ec1716bb-258c-4022-bb8a-1708895920fb` | Passed |
+| KariGO Captain App | `6f0bea0e-9402-4102-bde4-4afc05c078fe` | Passed |
