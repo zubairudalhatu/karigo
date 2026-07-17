@@ -46,7 +46,8 @@ export default ({ config }: ExpoConfigInput) => {
     },
     android: {
       ...config.android,
-      package: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider"
+      package: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider",
+      versionCode: 2
     },
     ios: {
       ...config.ios,
