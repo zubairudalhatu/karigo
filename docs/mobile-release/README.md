@@ -20,6 +20,13 @@ Current Task 149 documents:
 - `docs/qa/mobile-android-rc-artifact-verification-task149.md`
 - `docs/launch/mobile-rc-build-closeout-task149.md`
 
+Current Task 150 documents:
+
+- `android-closed-testing-upload-record-task150.md`
+- `docs/qa/android-closed-testing-qa-checklist-task150.md`
+- `docs/launch/android-closed-testing-go-no-go-task150.md`
+- `docs/operations/android-closed-testing-operations-runbook-task150.md`
+
 Related documents:
 
 - `docs/qa/mobile-production-release-candidate-qa-task147.md`
@@ -32,7 +39,8 @@ Current posture:
 Production app-store submission: Not approved
 Production EAS release-candidate profiles: Configured
 Android release-candidate builds: Generated
-Controlled artifact QA: Pending
+Google Play internal/closed testing upload: Prepared, pending operator action
+Controlled artifact QA: Pending Play testing install
 Live payments: Disabled
 Squad checkout: Deferred
 Monnify: Primary launch payment candidate
