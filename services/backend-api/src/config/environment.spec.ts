@@ -2,6 +2,22 @@ import { normalizeApiPrefix, validateEnvironment } from "./environment";
 
 describe("environment configuration", () => {
   const testDatabaseUrl = "TEST_DATABASE_URL_PLACEHOLDER";
+  const baseConfig = () => ({
+    DATABASE_URL: testDatabaseUrl,
+    JWT_SECRET: "test-secret"
+  });
+  const squadLiveConfig = (overrides: Record<string, unknown> = {}) => ({
+    ...baseConfig(),
+    PAYMENTS_LIVE_ENABLED: "true",
+    PAYMENT_PROVIDER: "squad",
+    SQUAD_MODE: "live",
+    SQUAD_SECRET_KEY: "live-squad-secret-placeholder",
+    SQUAD_BASE_URL: "https://api-d.squadco.com",
+    SQUAD_CALLBACK_URL: "https://api.karigo.com.ng/api/v1/payments/callback/squad",
+    SQUAD_WEBHOOK_SECRET: "live-webhook-secret-placeholder",
+    SQUAD_LIVE_ACTIVATION_APPROVED: "true",
+    ...overrides
+  });
 
   it("normalizes the API prefix", () => {
     expect(normalizeApiPrefix("/api/v1/")).toBe("api/v1");
@@ -167,12 +183,72 @@ describe("environment configuration", () => {
     })).toThrow("SQUAD_SECRET_KEY must be a Squad sandbox key");
   });
 
-  it("keeps live payment activation blocked globally", () => {
+  it("allows startup when live payments are disabled", () => {
+    const result = validateEnvironment(squadLiveConfig({
+      PAYMENTS_LIVE_ENABLED: "false",
+      PAYMENT_PROVIDER: "mock"
+    }));
+
+    expect(result.PAYMENTS_LIVE_ENABLED).toBe(false);
+    expect(result.PAYMENT_PROVIDER).toBe("mock");
+    expect(result.PAYMENTS_PROVIDER).toBe("mock");
+  });
+
+  it("rejects live payments unless Squad is the selected provider", () => {
     expect(() => validateEnvironment({
       DATABASE_URL: testDatabaseUrl,
       JWT_SECRET: "test-secret",
-      PAYMENTS_LIVE_ENABLED: "true"
-    })).toThrow("PAYMENTS_LIVE_ENABLED must remain false");
+      PAYMENTS_LIVE_ENABLED: "true",
+      PAYMENT_PROVIDER: "paystack"
+    })).toThrow("Live payments require PAYMENT_PROVIDER=squad");
+  });
+
+  it("rejects live Squad payments unless Squad mode is live", () => {
+    expect(() => validateEnvironment(squadLiveConfig({
+      SQUAD_MODE: "sandbox"
+    }))).toThrow("Live Squad payments require SQUAD_MODE=live");
+  });
+
+  it("rejects live Squad payments without a secret key", () => {
+    expect(() => validateEnvironment(squadLiveConfig({
+      SQUAD_SECRET_KEY: ""
+    }))).toThrow("Live Squad payments require SQUAD_SECRET_KEY");
+  });
+
+  it("rejects live Squad payments without a webhook secret", () => {
+    expect(() => validateEnvironment(squadLiveConfig({
+      SQUAD_WEBHOOK_SECRET: ""
+    }))).toThrow("Live Squad payments require SQUAD_WEBHOOK_SECRET");
+  });
+
+  it("rejects live Squad payments when the base URL is not HTTPS", () => {
+    expect(() => validateEnvironment(squadLiveConfig({
+      SQUAD_BASE_URL: "http://api-d.squadco.com"
+    }))).toThrow("Live Squad payments require HTTPS SQUAD_BASE_URL");
+  });
+
+  it("rejects live Squad payments when the callback URL is not HTTPS", () => {
+    expect(() => validateEnvironment(squadLiveConfig({
+      SQUAD_CALLBACK_URL: "http://api.karigo.com.ng/api/v1/payments/callback/squad"
+    }))).toThrow("Live Squad payments require HTTPS SQUAD_CALLBACK_URL");
+  });
+
+  it("rejects live Squad payments without explicit activation approval", () => {
+    expect(() => validateEnvironment(squadLiveConfig({
+      SQUAD_LIVE_ACTIVATION_APPROVED: "false"
+    }))).toThrow("Live Squad payments require SQUAD_LIVE_ACTIVATION_APPROVED=true");
+  });
+
+  it("allows approved live Squad payment configuration", () => {
+    const result = validateEnvironment(squadLiveConfig({
+      PAYMENTS_PROVIDER: "squad",
+      PAYMENT_PROVIDER: undefined
+    }));
+
+    expect(result.PAYMENTS_LIVE_ENABLED).toBe(true);
+    expect(result.PAYMENT_PROVIDER).toBe("squad");
+    expect(result.PAYMENTS_PROVIDER).toBe("squad");
+    expect(result.SQUAD_BASE_URL).toBe("https://api-d.squadco.com");
   });
 
   it("allows Termii preparation only with configured non-production credentials", () => {

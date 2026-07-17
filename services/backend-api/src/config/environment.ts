@@ -79,6 +79,50 @@ function stringAlias(config: Record<string, unknown>, keys: string[], fallback: 
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
+function requireLiveValue(config: Record<string, unknown>, key: string, message: string): string {
+  const value = config[key];
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(message);
+  }
+  return value.trim();
+}
+
+function requireLiveHttpsUrl(config: Record<string, unknown>, key: string, message: string): string {
+  const value = requireLiveValue(config, key, `Live Squad payments require ${key}`);
+  if (!value.startsWith("https://")) {
+    throw new Error(message);
+  }
+  return value;
+}
+
+function validateSquadLivePaymentGate(config: Record<string, unknown>, paymentProvider: string): void {
+  if (paymentProvider !== "squad") {
+    throw new Error("Live payments require PAYMENT_PROVIDER=squad");
+  }
+
+  const squadMode = typeof config.SQUAD_MODE === "string" ? config.SQUAD_MODE.trim().toLowerCase() : "";
+  if (squadMode !== "live") {
+    throw new Error("Live Squad payments require SQUAD_MODE=live");
+  }
+
+  const secretKey = requireLiveValue(config, "SQUAD_SECRET_KEY", "Live Squad payments require SQUAD_SECRET_KEY");
+  if (secretKey.startsWith("sandbox_sk_")) {
+    throw new Error("Live Squad payments require a live SQUAD_SECRET_KEY");
+  }
+
+  const baseUrl = requireLiveHttpsUrl(config, "SQUAD_BASE_URL", "Live Squad payments require HTTPS SQUAD_BASE_URL");
+  if (baseUrl.toLowerCase().includes("sandbox")) {
+    throw new Error("Live Squad payments require live SQUAD_BASE_URL");
+  }
+
+  requireLiveHttpsUrl(config, "SQUAD_CALLBACK_URL", "Live Squad payments require HTTPS SQUAD_CALLBACK_URL");
+  requireLiveValue(config, "SQUAD_WEBHOOK_SECRET", "Live Squad payments require SQUAD_WEBHOOK_SECRET");
+
+  if (!booleanFlag(config.SQUAD_LIVE_ACTIVATION_APPROVED, "SQUAD_LIVE_ACTIVATION_APPROVED", false)) {
+    throw new Error("Live Squad payments require SQUAD_LIVE_ACTIVATION_APPROVED=true");
+  }
+}
+
 export function validateEnvironment(config: Record<string, unknown>): Record<string, unknown> {
   const appEnvironment = typeof config.APP_ENV === "string" ? config.APP_ENV : "development";
   const otpProvider =
@@ -109,7 +153,7 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     throw new Error("PAYMENT_PROVIDER must be mock, paystack, flutterwave, monnify or squad");
   }
   if (paymentsLiveEnabled) {
-    throw new Error("PAYMENTS_LIVE_ENABLED must remain false until live payment approval");
+    validateSquadLivePaymentGate(config, paymentProvider);
   }
   if (paymentProvider === "paystack") {
     const secret = requireValue(config, "PAYSTACK_SECRET_KEY");
@@ -136,20 +180,22 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     if (baseUrl.includes("api.monnify.com")) throw new Error("MONNIFY_BASE_URL must not point to the live Monnify API host");
   }
   if (paymentProvider === "squad") {
-    const secret = requireValue(config, "SQUAD_SECRET_KEY");
-    if (!secret.startsWith("sandbox_sk_")) {
-      throw new Error("SQUAD_SECRET_KEY must be a Squad sandbox key while sandbox integration is enabled");
-    }
-    const mode = typeof config.SQUAD_MODE === "string" ? config.SQUAD_MODE.trim().toLowerCase() : "";
-    if (!["test", "sandbox"].includes(mode)) {
-      throw new Error("SQUAD_MODE must be test or sandbox while sandbox integration is enabled");
-    }
-    const baseUrl = typeof config.SQUAD_BASE_URL === "string" && config.SQUAD_BASE_URL.trim()
-      ? config.SQUAD_BASE_URL.trim()
-      : "https://sandbox-api-d.squadco.com";
-    if (!baseUrl.startsWith("https://")) throw new Error("SQUAD_BASE_URL must use HTTPS");
-    if (baseUrl.includes("api-d.squadco.com") && !baseUrl.includes("sandbox")) {
-      throw new Error("SQUAD_BASE_URL must not point to the live Squad API host");
+    if (!paymentsLiveEnabled) {
+      const secret = requireValue(config, "SQUAD_SECRET_KEY");
+      if (!secret.startsWith("sandbox_sk_")) {
+        throw new Error("SQUAD_SECRET_KEY must be a Squad sandbox key while sandbox integration is enabled");
+      }
+      const mode = typeof config.SQUAD_MODE === "string" ? config.SQUAD_MODE.trim().toLowerCase() : "";
+      if (!["test", "sandbox"].includes(mode)) {
+        throw new Error("SQUAD_MODE must be test or sandbox while sandbox integration is enabled");
+      }
+      const baseUrl = typeof config.SQUAD_BASE_URL === "string" && config.SQUAD_BASE_URL.trim()
+        ? config.SQUAD_BASE_URL.trim()
+        : "https://sandbox-api-d.squadco.com";
+      if (!baseUrl.startsWith("https://")) throw new Error("SQUAD_BASE_URL must use HTTPS");
+      if (baseUrl.includes("api-d.squadco.com") && !baseUrl.includes("sandbox")) {
+        throw new Error("SQUAD_BASE_URL must not point to the live Squad API host");
+      }
     }
   }
   const notificationProvider =
