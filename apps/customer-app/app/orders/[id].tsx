@@ -190,7 +190,7 @@ export default function OrderTracking() {
       </Card>
       {order.paymentMethod ? <Card>
         <Text style={ui.cardTitle}>Payment method</Text>
-        <Text style={ui.cardText}>{order.paymentMethod === "CASH_ON_DELIVERY" ? "Pay on Delivery / Cash" : order.paymentMethod === "WALLET" ? "KariGO Wallet" : "Squad by GTBank"}</Text>
+        <Text style={ui.cardText}>{order.paymentMethod === "CASH_ON_DELIVERY" ? "Pay on Delivery" : order.paymentMethod === "WALLET" ? "KariGO Wallet" : "Squad by GTBank"}</Text>
         {order.paymentMethod === "CASH_ON_DELIVERY" ? <>
           <Text style={ui.muted}>Cash status: {order.cashCollectionStatus?.replaceAll("_", " ").toLowerCase() ?? "pending collection"}</Text>
           <Text style={ui.muted}>Please pay only the amount shown in the app. Amount due: {money(order.totalAmount)}.</Text>

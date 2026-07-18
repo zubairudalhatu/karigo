@@ -372,7 +372,8 @@ assert(paymentStatus.includes("You can select Mock payment"), "Sandbox provider 
 assert(paymentStatus.includes("wallet funding, automatic refunds and payout automation remain disabled."), "Payment copy must keep wallet/refund automation disabled.");
 assert(checkout.includes("Verify payment status"), "Checkout must let customers verify payment status through the backend after provider checkout.");
 assert(checkout.includes("paymentInitializationFailureMessage"), "Checkout must show safe provider-specific initialization errors.");
-assert(checkout.includes("Pay on Delivery / Cash"), "Checkout must expose Cash/POD readiness copy.");
+assert(checkout.includes("Pay on Delivery"), "Checkout must expose Cash/POD readiness copy.");
+assert(checkout.includes("cashPaymentEnabled"), "Checkout must reflect backend Cash/POD readiness flags.");
 assert(checkout.includes("Please pay only the amount shown in the app."), "Checkout Cash/POD copy must warn customers not to pay outside the app total.");
 assert(checkout.includes("Wallet top-up via Squad"), "Checkout must explain wallet top-up readiness.");
 assert(checkout.includes("walletPaymentsEnabled"), "Checkout must reflect backend wallet payment readiness flags.");
@@ -401,7 +402,7 @@ assert(orderDetail.includes("paymentProvider: selectedPaymentProvider"), "Order 
 assert(orderDetail.includes("pendingAuthorizationCopy"), "Order detail must show sandbox authorization guidance for retry payments.");
 assert(orderDetail.includes("Verify payment status"), "Order detail must let customers verify provider checkout through the backend.");
 assert(orderDetail.includes("paymentInitializationFailureMessage"), "Order detail retry payment must show safe provider-specific initialization errors.");
-assert(orderDetail.includes("Pay on Delivery / Cash"), "Order detail must expose Cash/POD readiness copy for pending payment flows.");
+assert(orderDetail.includes("Pay on Delivery"), "Order detail must expose Cash/POD readiness copy for pending payment flows.");
 assert(orderDetail.includes("Please pay only the amount shown in the app."), "Order detail Cash/POD copy must warn customers not to pay outside the app total.");
 assert(orderDetail.includes("Wallet top-up via Squad"), "Order detail must explain wallet top-up readiness.");
 assert(orderDetail.includes("walletPaymentsEnabled"), "Order detail must reflect backend wallet payment readiness flags.");

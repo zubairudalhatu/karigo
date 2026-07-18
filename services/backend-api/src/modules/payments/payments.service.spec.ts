@@ -204,6 +204,24 @@ describe("PaymentsService", () => {
     expect(monnify?.issues).toContain("missing MONNIFY_CONTRACT_CODE");
     expect(readiness.customerSelectableSandboxProviders).toEqual(["mock", "monnify", "paystack"]);
     expect(readiness.providerEnabledFlags.SQUAD_CUSTOMER_CHECKOUT_ENABLED).toBe("false_or_unset");
+    expect(readiness.providerEnabledFlags.CASH_ON_DELIVERY_ENABLED).toBe("false_or_unset");
+    expect(readiness.launchPaymentOptions.cashOnDelivery).toMatchObject({
+      enabled: false,
+      launchCities: ["Kano", "Abuja"],
+      customerSelectable: false,
+      requiresReconciliation: true,
+      adminReconciliationAvailable: true,
+      captainCashCollectionConfirmationAvailable: true,
+      vendorVisibilityAvailable: true
+    });
+    expect(readiness.launchPaymentOptions.wallet).toMatchObject({
+      walletTopUpEnabled: false,
+      walletPaymentsEnabled: false,
+      providerForTopUp: "Squad by GTBank",
+      backendVerificationRequired: true,
+      clientSideCreditDisabled: true,
+      adminWalletVisibilityAvailable: true
+    });
     const squad = readiness.providers.find((provider) => provider.provider === "squad");
     expect(squad?.customerSelectableInStaging).toBe(false);
     expect(squad).toMatchObject({ launchStatus: "PRIMARY_LAUNCH_PROVIDER" });
@@ -250,6 +268,33 @@ describe("PaymentsService", () => {
     });
     expect(serialized).not.toContain("live-squad-secret-placeholder");
     expect(serialized).not.toContain("live-webhook-secret-placeholder");
+  });
+
+  it("reports launch Cash/POD readiness when the cash flag is enabled and wallet remains disabled", () => {
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      const values: Record<string, string | boolean> = {
+        CASH_ON_DELIVERY_ENABLED: "true",
+        WALLET_TOP_UP_ENABLED: "false",
+        WALLET_PAYMENTS_ENABLED: "false"
+      };
+      return values[key] ?? fallback;
+    });
+
+    const readiness = service.providerReadiness();
+    const configResult = service.publicPaymentConfig();
+
+    expect(readiness.providerEnabledFlags.CASH_ON_DELIVERY_ENABLED).toBe("true");
+    expect(readiness.providerEnabledFlags.WALLET_TOP_UP_ENABLED).toBe("false_or_unset");
+    expect(readiness.providerEnabledFlags.WALLET_PAYMENTS_ENABLED).toBe("false_or_unset");
+    expect(readiness.launchPaymentOptions.cashOnDelivery.customerSelectable).toBe(true);
+    expect(readiness.launchPaymentOptions.wallet.walletTopUpEnabled).toBe(false);
+    expect(readiness.launchPaymentOptions.wallet.walletPaymentsEnabled).toBe(false);
+    expect(configResult).toEqual(expect.objectContaining({
+      cashPaymentEnabled: true,
+      walletTopUpEnabled: false,
+      walletPaymentsEnabled: false,
+      launchCities: ["Kano", "Abuja"]
+    }));
   });
 
   it("returns public-safe staging payment config", () => {

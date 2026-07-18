@@ -31,6 +31,32 @@ export interface PaymentProviderReadiness {
   paymentsLiveEnabled: boolean;
   customerSelectableSandboxProviders: string[];
   providerEnabledFlags: Record<string, string>;
+  launchPaymentOptions?: {
+    cashOnDelivery: {
+      enabled: boolean;
+      label: string;
+      launchCities: string[];
+      customerSelectable: boolean;
+      requiresReconciliation: boolean;
+      adminReconciliationAvailable: boolean;
+      captainCashCollectionConfirmationAvailable: boolean;
+      vendorVisibilityAvailable: boolean;
+      envFlag: string;
+      recommendedValue: string;
+      note: string;
+    };
+    wallet: {
+      walletTopUpEnabled: boolean;
+      walletPaymentsEnabled: boolean;
+      providerForTopUp: string;
+      backendVerificationRequired: boolean;
+      clientSideCreditDisabled: boolean;
+      adminWalletVisibilityAvailable: boolean;
+      envFlags: string[];
+      recommendedValues: Record<string, string>;
+      note: string;
+    };
+  };
   webhookRoutes: Record<string, string>;
   providers: PaymentProviderReadinessItem[];
   liveActivation: {

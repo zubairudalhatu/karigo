@@ -343,12 +343,13 @@ export default function Checkout() {
         />
         <Text style={ui.muted}>Secure online checkout through Squad by GTBank. KariGO confirms payment server-side.</Text>
         <Button
-          title={`${selectedCheckoutMethod === "cash_on_delivery" ? "Selected - " : ""}Pay on Delivery / Cash`}
+          title={`${selectedCheckoutMethod === "cash_on_delivery" ? "Selected - " : ""}Pay on Delivery`}
           tone={selectedCheckoutMethod === "cash_on_delivery" ? "primary" : "muted"}
           onPress={() => setSelectedCheckoutMethod("cash_on_delivery")}
           disabled={busy || !cashEnabled}
         />
-        <Text style={ui.muted}>Pay cash to the assigned KariGO Captain/vendor at delivery. Please pay only the amount shown in the app.</Text>
+        <Text style={ui.muted}>Pay cash to the assigned KariGO Captain/vendor at delivery.</Text>
+        <Text style={ui.muted}>Please pay only the amount shown in the app.</Text>
         <Button
           title={`${selectedCheckoutMethod === "wallet" ? "Selected - " : ""}Pay from Wallet`}
           tone={selectedCheckoutMethod === "wallet" ? "primary" : "muted"}

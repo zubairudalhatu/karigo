@@ -151,7 +151,12 @@ describe("Backend foundation (HTTP)", () => {
       livePaymentsEnabled: false,
       activeProvider: "mock",
       customerSelectableProviders: ["mock", "monnify", "paystack"],
-      mockPaymentVisible: true
+      mockPaymentVisible: true,
+      cashPaymentEnabled: false,
+      cashPaymentLabel: "Pay on Delivery",
+      walletTopUpEnabled: false,
+      walletPaymentsEnabled: false,
+      launchCities: ["Kano", "Abuja"]
     }));
     expect(JSON.stringify(response.body)).not.toContain("SECRET_KEY");
     expect(JSON.stringify(response.body)).not.toContain("WEBHOOK_SECRET");

@@ -70,6 +70,12 @@ assert(paymentReadinessPage.includes("Pending approval / future secondary"), "Pa
 assert(paymentReadinessPage.includes("1 Squad by GTBank"), "Payment Readiness page must show Squad as launch priority one.");
 assert(paymentReadinessPage.includes("2 Monnify pending approval, 3 Paystack pending approval"), "Payment Readiness page must show Monnify and Paystack as pending secondary providers.");
 assert(paymentReadinessPage.includes("Mock payment remains a staging rollback path only"), "Payment Readiness page must state mock is staging fallback only.");
+assert(paymentReadinessPage.includes("Launch payment options"), "Payment Readiness page must show Cash/POD and wallet launch options.");
+assert(paymentReadinessPage.includes("Cash / Pay on Delivery"), "Payment Readiness page must show Cash/POD readiness.");
+assert(paymentReadinessPage.includes("Captain cash collection confirmation available"), "Payment Readiness page must show Captain Cash/POD confirmation readiness.");
+assert(paymentReadinessPage.includes("Vendor visibility available"), "Payment Readiness page must show vendor Cash/POD visibility readiness.");
+assert(paymentReadinessPage.includes("Wallet readiness"), "Payment Readiness page must show wallet readiness.");
+assert(paymentReadinessPage.includes("Client-side credit disabled"), "Payment Readiness page must show client-side wallet credit remains disabled.");
 const liveSecretPrefix = ["sk", "live"].join("_");
 const livePublicPrefix = ["pk", "live"].join("_");
 assert(!paymentReadinessPage.includes(liveSecretPrefix) && !paymentReadinessPage.includes(livePublicPrefix), "Payment Readiness page must not contain live payment key values.");
@@ -78,6 +84,7 @@ assert(paymentsApiSource.includes("admin/payments/provider-readiness"), "Admin p
 assert(paymentsApiSource.includes("admin/payments/provider-readiness/test"), "Admin payments API must call provider readiness initialization test endpoint.");
 assert(paymentsApiSource.includes("PaymentProviderReadiness"), "Admin payments API must type provider readiness response.");
 assert(paymentsApiSource.includes("PaymentProviderInitializationTestResult"), "Admin payments API must type initialization test response.");
+assert(paymentsApiSource.includes("launchPaymentOptions"), "Admin payment readiness API type must include launch payment option visibility.");
 
 const settingsPage = read("app", "settings", "page.tsx");
 assert(settingsPage.includes("Squad by GTBank is the primary launch provider"), "Admin Developer Settings must show Squad as the launch provider in live mode.");

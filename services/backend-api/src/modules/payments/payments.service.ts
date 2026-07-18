@@ -278,8 +278,12 @@ export class PaymentsService {
         PAYMENTS_LIVE_ENABLED: livePaymentsEnabled ? "true" : "false_or_unset",
         SQUAD_CUSTOMER_CHECKOUT_ENABLED: this.optionalValue("SQUAD_CUSTOMER_CHECKOUT_ENABLED")?.toLowerCase() === "true"
           ? "true"
-          : "false_or_unset"
+          : "false_or_unset",
+        CASH_ON_DELIVERY_ENABLED: this.flagValue("CASH_ON_DELIVERY_ENABLED", false) ? "true" : "false_or_unset",
+        WALLET_TOP_UP_ENABLED: this.flagValue("WALLET_TOP_UP_ENABLED", false) ? "true" : "false_or_unset",
+        WALLET_PAYMENTS_ENABLED: this.flagValue("WALLET_PAYMENTS_ENABLED", false) ? "true" : "false_or_unset"
       },
+      launchPaymentOptions: this.launchPaymentOptions(),
       webhookRoutes: {
         paystack: "/api/v1/payments/webhook/paystack",
         monnify: "/api/v1/payments/webhook/monnify",
@@ -772,6 +776,38 @@ export class PaymentsService {
       launchStatus: "INTERNAL_OR_FALLBACK",
       launchNote: "Mock payment is a staging/testing fallback only and must be hidden for public live checkout.",
       recommendedActions: ["Keep mock payment available for staging rollback, but do not expose it in public live checkout."]
+    };
+  }
+
+  private launchPaymentOptions() {
+    return {
+      cashOnDelivery: {
+        enabled: this.flagValue("CASH_ON_DELIVERY_ENABLED", false),
+        label: "Cash / Pay on Delivery",
+        launchCities: ["Kano", "Abuja"],
+        customerSelectable: this.flagValue("CASH_ON_DELIVERY_ENABLED", false),
+        requiresReconciliation: true,
+        adminReconciliationAvailable: true,
+        captainCashCollectionConfirmationAvailable: true,
+        vendorVisibilityAvailable: true,
+        envFlag: "CASH_ON_DELIVERY_ENABLED",
+        recommendedValue: "true",
+        note: "Cash/POD orders stay CASH_PENDING until KariGO Operations manually reconciles collection."
+      },
+      wallet: {
+        walletTopUpEnabled: this.flagValue("WALLET_TOP_UP_ENABLED", false),
+        walletPaymentsEnabled: this.flagValue("WALLET_PAYMENTS_ENABLED", false),
+        providerForTopUp: "Squad by GTBank",
+        backendVerificationRequired: true,
+        clientSideCreditDisabled: true,
+        adminWalletVisibilityAvailable: true,
+        envFlags: ["WALLET_TOP_UP_ENABLED", "WALLET_PAYMENTS_ENABLED"],
+        recommendedValues: {
+          WALLET_TOP_UP_ENABLED: "false",
+          WALLET_PAYMENTS_ENABLED: "false"
+        },
+        note: "Wallet top-up and wallet checkout must remain disabled until Squad wallet top-up verification is completed end to end."
+      }
     };
   }
 

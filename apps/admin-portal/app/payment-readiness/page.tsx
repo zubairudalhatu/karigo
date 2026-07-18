@@ -88,6 +88,10 @@ function requirementConfigured(provider: PaymentProviderReadinessItem, name: str
   return Boolean(requirement?.configured && !requirement.issue);
 }
 
+function yesNo(value?: boolean) {
+  return value ? "Yes" : "No";
+}
+
 export default function PaymentReadinessPage() {
   const [readiness, setReadiness] = useState<PaymentProviderReadiness | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,7 +131,7 @@ export default function PaymentReadinessPage() {
         </div>
         <button className="secondary" onClick={load} disabled={loading}>Refresh</button>
       </header>
-      <p className="muted">Admin-only configuration readiness for Squad by GTBank, Monnify, Paystack and mock payment. This page shows key names and safe status only; it does not expose secret values and does not activate live checkout, wallet funding, refunds, payouts or settlements.</p>
+      <p className="muted">Admin-only configuration readiness for Squad by GTBank, Cash / Pay on Delivery, Wallet, Monnify, Paystack and mock payment. This page shows key names and safe status only; it does not expose secret values and does not activate live checkout, wallet funding, refunds, payouts or settlements.</p>
       <ErrorMessage>{error}</ErrorMessage>
       <ErrorMessage>{testError}</ErrorMessage>
 
@@ -160,6 +164,36 @@ export default function PaymentReadinessPage() {
               <p>Squad by GTBank is the primary launch provider, but live checkout remains blocked until Render environment verification, webhook secret setup and finance/management approval are complete. Mock payment remains a staging rollback path only and must be hidden from public live checkout. Do not paste keys, webhook secrets, test cards or provider dashboard secrets into this page, docs, tickets or screenshots.</p>
             </article>
           </section>
+
+          {readiness.launchPaymentOptions ? (
+            <section className="section">
+              <h2>Launch payment options</h2>
+              <div className="grid">
+                <article className="card">
+                  <h3>{readiness.launchPaymentOptions.cashOnDelivery.label}</h3>
+                  <p><Badge>{readiness.launchPaymentOptions.cashOnDelivery.enabled ? "Enabled" : "Disabled"}</Badge></p>
+                  <div className="item"><span>Launch cities</span><strong>{readiness.launchPaymentOptions.cashOnDelivery.launchCities.join(", ")}</strong></div>
+                  <div className="item"><span>Customer selectable</span><strong>{yesNo(readiness.launchPaymentOptions.cashOnDelivery.customerSelectable)}</strong></div>
+                  <div className="item"><span>Requires reconciliation</span><strong>{yesNo(readiness.launchPaymentOptions.cashOnDelivery.requiresReconciliation)}</strong></div>
+                  <div className="item"><span>Admin reconciliation available</span><strong>{yesNo(readiness.launchPaymentOptions.cashOnDelivery.adminReconciliationAvailable)}</strong></div>
+                  <div className="item"><span>Captain cash collection confirmation available</span><strong>{yesNo(readiness.launchPaymentOptions.cashOnDelivery.captainCashCollectionConfirmationAvailable)}</strong></div>
+                  <div className="item"><span>Vendor visibility available</span><strong>{yesNo(readiness.launchPaymentOptions.cashOnDelivery.vendorVisibilityAvailable)}</strong></div>
+                  <p className="muted">Flag: {readiness.launchPaymentOptions.cashOnDelivery.envFlag}={readiness.launchPaymentOptions.cashOnDelivery.recommendedValue}</p>
+                  <p className="muted">{readiness.launchPaymentOptions.cashOnDelivery.note}</p>
+                </article>
+                <article className="card">
+                  <h3>Wallet readiness</h3>
+                  <p><Badge>{readiness.launchPaymentOptions.wallet.walletTopUpEnabled ? "Top-up enabled" : "Top-up disabled"}</Badge> <Badge>{readiness.launchPaymentOptions.wallet.walletPaymentsEnabled ? "Payments enabled" : "Payments disabled"}</Badge></p>
+                  <div className="item"><span>Provider for top-up</span><strong>{readiness.launchPaymentOptions.wallet.providerForTopUp}</strong></div>
+                  <div className="item"><span>Backend verification required</span><strong>{yesNo(readiness.launchPaymentOptions.wallet.backendVerificationRequired)}</strong></div>
+                  <div className="item"><span>Client-side credit disabled</span><strong>{yesNo(readiness.launchPaymentOptions.wallet.clientSideCreditDisabled)}</strong></div>
+                  <div className="item"><span>Admin wallet visibility available</span><strong>{yesNo(readiness.launchPaymentOptions.wallet.adminWalletVisibilityAvailable)}</strong></div>
+                  <p className="muted">Recommended initial values: WALLET_TOP_UP_ENABLED={readiness.launchPaymentOptions.wallet.recommendedValues.WALLET_TOP_UP_ENABLED}, WALLET_PAYMENTS_ENABLED={readiness.launchPaymentOptions.wallet.recommendedValues.WALLET_PAYMENTS_ENABLED}</p>
+                  <p className="muted">{readiness.launchPaymentOptions.wallet.note}</p>
+                </article>
+              </div>
+            </section>
+          ) : null}
 
           <section className="section">
             <h2>Provider readiness</h2>
