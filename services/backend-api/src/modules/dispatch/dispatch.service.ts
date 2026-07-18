@@ -1,7 +1,10 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import {
   AccountStatus,
+  CashCollectionStatus,
+  OrderPaymentMethod,
   OrderStatus,
+  PaymentStatus,
   Prisma,
   RiderStatus,
   SettlementStatus
@@ -246,6 +249,10 @@ export class DispatchService {
     if (!order.deliveryOtp || order.deliveryOtp !== dto.deliveryOtp) {
       throw new BadRequestException("Invalid delivery OTP");
     }
+    const isCashPod = order.paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY || order.paymentStatus === PaymentStatus.CASH_PENDING;
+    if (isCashPod && !dto.cashCollected) {
+      throw new BadRequestException("Confirm cash collection before completing this Pay on Delivery order");
+    }
 
     const riderPayout = order.deliveryFee;
     const completedAt = new Date();
@@ -290,6 +297,14 @@ export class DispatchService {
           orderStatus: OrderStatus.COMPLETED,
           completedAt,
           deliveryOtp: null,
+          ...(isCashPod
+            ? {
+                cashCollectionStatus: CashCollectionStatus.COLLECTED,
+                cashCollectedAmount: order.totalAmount,
+                cashCollectedAt: completedAt,
+                cashCollectedByRiderId: rider.id
+              }
+            : {}),
           statusHistory: {
             create: {
               previousStatus: order.orderStatus,
@@ -387,9 +402,14 @@ export class DispatchService {
       serviceCategory: true,
       orderStatus: true,
       paymentStatus: true,
+      paymentMethod: true,
+      cashCollectionStatus: true,
+      cashCollectedAmount: true,
+      cashCollectedAt: true,
       itemDescription: true,
       customerNote: true,
       deliveryFee: true,
+      totalAmount: true,
       createdAt: true,
       updatedAt: true,
       vendor: { select: { businessName: true, address: true, city: true, phoneNumber: true } },

@@ -280,11 +280,35 @@ enum OrderStatus {
 
 enum PaymentStatus {
   PENDING
+  CASH_PENDING
   SUCCESSFUL
   FAILED
   CANCELLED
   REFUND_PENDING
   REFUNDED
+}
+
+enum OrderPaymentMethod {
+  SQUAD
+  WALLET
+  CASH_ON_DELIVERY
+  MOCK
+  MONNIFY
+  PAYSTACK
+}
+
+enum CashCollectionStatus {
+  NOT_REQUIRED
+  PENDING_COLLECTION
+  COLLECTED
+  RECONCILED
+  DISPUTED
+  CANCELLED
+}
+
+enum PaymentPurpose {
+  ORDER_PAYMENT
+  WALLET_TOP_UP
 }
 
 enum WalletStatus {
@@ -1298,9 +1322,9 @@ model VendorApplicationStatusHistory {
 }
 
 model Vendor {
-  id                    String                    @id @default(uuid()) @db.Uuid
-  userId                String                    @unique @db.Uuid
-  categoryId            String?                   @db.Uuid
+  id                    String                     @id @default(uuid()) @db.Uuid
+  userId                String                     @unique @db.Uuid
+  categoryId            String?                    @db.Uuid
   businessName          String
   businessCategory      String
   description           String?
@@ -1309,25 +1333,25 @@ model Vendor {
   address               String
   city                  String
   state                 String
-  latitude              Decimal?                  @db.Decimal(10, 7)
-  longitude             Decimal?                  @db.Decimal(10, 7)
+  latitude              Decimal?                   @db.Decimal(10, 7)
+  longitude             Decimal?                   @db.Decimal(10, 7)
   logoUrl               String?
   coverImageUrl         String?
   openingTime           String?
   closingTime           String?
-  isOpen                Boolean                   @default(false)
-  commissionRate        Decimal                   @default(15) @db.Decimal(5, 2)
+  isOpen                Boolean                    @default(false)
+  commissionRate        Decimal                    @default(15) @db.Decimal(5, 2)
   bankName              String?
   accountNumber         String?
   accountName           String?
-  status                VendorStatus              @default(PENDING_APPROVAL)
-  rating                Decimal?                  @db.Decimal(3, 2)
-  totalOrders           Int                       @default(0)
+  status                VendorStatus               @default(PENDING_APPROVAL)
+  rating                Decimal?                   @db.Decimal(3, 2)
+  totalOrders           Int                        @default(0)
   deletedAt             DateTime?
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
-  user                  User                      @relation(fields: [userId], references: [id])
-  category              VendorCategory?           @relation(fields: [categoryId], references: [id])
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  user                  User                       @relation(fields: [userId], references: [id])
+  category              VendorCategory?            @relation(fields: [categoryId], references: [id])
   products              Product[]
   services              VendorService[]
   adCampaigns           AdCampaign[]
@@ -1479,11 +1503,11 @@ model VendorService {
 }
 
 model AdCampaign {
-  id                    String                       @id @default(uuid()) @db.Uuid
-  campaignReference     String                       @unique
+  id                    String                      @id @default(uuid()) @db.Uuid
+  campaignReference     String                      @unique
   sponsorType           AdSponsorType
-  vendorId              String?                      @db.Uuid
-  placementSurface      AdPlacementSurface           @default(CUSTOMER_HOME_FEATURED)
+  vendorId              String?                     @db.Uuid
+  placementSurface      AdPlacementSurface          @default(CUSTOMER_HOME_FEATURED)
   title                 String
   body                  String
   imageUrl              String?
@@ -1493,20 +1517,20 @@ model AdCampaign {
   advertiserContactName String?
   advertiserEmail       String?
   advertiserPhone       String?
-  requestedBudgetKobo   Int                          @default(0)
-  reservedCreditKobo    Int                          @default(0)
-  status                AdCampaignStatus             @default(SUBMITTED)
+  requestedBudgetKobo   Int                         @default(0)
+  reservedCreditKobo    Int                         @default(0)
+  status                AdCampaignStatus            @default(SUBMITTED)
   startsAt              DateTime?
   endsAt                DateTime?
   adminNote             String?
   rejectionReason       String?
-  reviewedByAdminId     String?                      @db.Uuid
+  reviewedByAdminId     String?                     @db.Uuid
   reviewedAt            DateTime?
-  submittedAt           DateTime                     @default(now())
-  createdAt             DateTime                     @default(now())
-  updatedAt             DateTime                     @updatedAt
-  vendor                Vendor?                      @relation(fields: [vendorId], references: [id])
-  reviewedByAdmin       User?                        @relation("AdCampaignReviewedBy", fields: [reviewedByAdminId], references: [id])
+  submittedAt           DateTime                    @default(now())
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  vendor                Vendor?                     @relation(fields: [vendorId], references: [id])
+  reviewedByAdmin       User?                       @relation("AdCampaignReviewedBy", fields: [reviewedByAdminId], references: [id])
   creditLedgerEntries   VendorAdCreditLedgerEntry[]
 
   @@index([status, placementSurface])
@@ -1530,22 +1554,22 @@ model VendorAdCreditAccount {
 }
 
 model VendorAdCreditLedgerEntry {
-  id                String                         @id @default(uuid()) @db.Uuid
-  accountId         String                         @db.Uuid
-  vendorId          String                         @db.Uuid
-  campaignId        String?                        @db.Uuid
+  id                String                        @id @default(uuid()) @db.Uuid
+  accountId         String                        @db.Uuid
+  vendorId          String                        @db.Uuid
+  campaignId        String?                       @db.Uuid
   entryType         VendorAdCreditLedgerEntryType
   direction         VendorAdCreditLedgerDirection
   amountKobo        Int
   balanceBeforeKobo Int
   balanceAfterKobo  Int
-  reference         String                         @unique
+  reference         String                        @unique
   description       String?
-  createdByAdminId  String?                        @db.Uuid
-  createdAt         DateTime                       @default(now())
-  updatedAt         DateTime                       @updatedAt
-  account           VendorAdCreditAccount          @relation(fields: [accountId], references: [id])
-  campaign          AdCampaign?                    @relation(fields: [campaignId], references: [id])
+  createdByAdminId  String?                       @db.Uuid
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+  account           VendorAdCreditAccount         @relation(fields: [accountId], references: [id])
+  campaign          AdCampaign?                   @relation(fields: [campaignId], references: [id])
 
   @@index([vendorId, createdAt])
   @@index([campaignId])
@@ -1657,48 +1681,58 @@ model RiderDocument {
 }
 
 model Order {
-  id                 String               @id @default(uuid()) @db.Uuid
-  orderNumber        String               @unique
-  customerId         String               @db.Uuid
-  vendorId           String?              @db.Uuid
-  riderId            String?              @db.Uuid
-  serviceCategory    ServiceCategory
-  orderStatus        OrderStatus          @default(DRAFT)
-  paymentStatus      PaymentStatus        @default(PENDING)
-  pickupAddressId    String?              @db.Uuid
-  deliveryAddressId  String?              @db.Uuid
-  recipientName      String?
-  recipientPhone     String?
-  itemDescription    String?
-  subtotal           Decimal              @default(0) @db.Decimal(12, 2)
-  deliveryFee        Decimal              @default(0) @db.Decimal(12, 2)
-  serviceFee         Decimal              @default(0) @db.Decimal(12, 2)
-  discountAmount     Decimal              @default(0) @db.Decimal(12, 2)
-  promoCodeId        String?              @db.Uuid
-  totalAmount        Decimal              @default(0) @db.Decimal(12, 2)
-  deliveryOtp        String?
-  customerNote       String?
-  cancellationReason String?
-  completedAt        DateTime?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  customer           CustomerProfile      @relation(fields: [customerId], references: [id])
-  vendor             Vendor?              @relation(fields: [vendorId], references: [id])
-  rider              Rider?               @relation(fields: [riderId], references: [id])
-  pickupAddress      Address?             @relation("PickupAddress", fields: [pickupAddressId], references: [id])
-  deliveryAddress    Address?             @relation("DeliveryAddress", fields: [deliveryAddressId], references: [id])
-  items              OrderItem[]
-  statusHistory      OrderStatusHistory[]
-  payments           Payment[]
-  settlements        VendorSettlement[]
-  riderEarnings      RiderEarning[]
-  supportTickets     SupportTicket[]
-  promoCodeUsages    PromoCodeUsage[]
-  promoCode          PromoCode?           @relation(fields: [promoCodeId], references: [id])
+  id                      String               @id @default(uuid()) @db.Uuid
+  orderNumber             String               @unique
+  customerId              String               @db.Uuid
+  vendorId                String?              @db.Uuid
+  riderId                 String?              @db.Uuid
+  serviceCategory         ServiceCategory
+  orderStatus             OrderStatus          @default(DRAFT)
+  paymentStatus           PaymentStatus        @default(PENDING)
+  paymentMethod           OrderPaymentMethod?
+  cashCollectionStatus    CashCollectionStatus @default(NOT_REQUIRED)
+  cashCollectedAmount     Decimal?             @db.Decimal(12, 2)
+  cashCollectedAt         DateTime?
+  cashCollectedByRiderId  String?              @db.Uuid
+  cashReconciledAt        DateTime?
+  cashReconciledByAdminId String?              @db.Uuid
+  cashReconciliationNote  String?
+  pickupAddressId         String?              @db.Uuid
+  deliveryAddressId       String?              @db.Uuid
+  recipientName           String?
+  recipientPhone          String?
+  itemDescription         String?
+  subtotal                Decimal              @default(0) @db.Decimal(12, 2)
+  deliveryFee             Decimal              @default(0) @db.Decimal(12, 2)
+  serviceFee              Decimal              @default(0) @db.Decimal(12, 2)
+  discountAmount          Decimal              @default(0) @db.Decimal(12, 2)
+  promoCodeId             String?              @db.Uuid
+  totalAmount             Decimal              @default(0) @db.Decimal(12, 2)
+  deliveryOtp             String?
+  customerNote            String?
+  cancellationReason      String?
+  completedAt             DateTime?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  customer                CustomerProfile      @relation(fields: [customerId], references: [id])
+  vendor                  Vendor?              @relation(fields: [vendorId], references: [id])
+  rider                   Rider?               @relation(fields: [riderId], references: [id])
+  pickupAddress           Address?             @relation("PickupAddress", fields: [pickupAddressId], references: [id])
+  deliveryAddress         Address?             @relation("DeliveryAddress", fields: [deliveryAddressId], references: [id])
+  items                   OrderItem[]
+  statusHistory           OrderStatusHistory[]
+  payments                Payment[]
+  settlements             VendorSettlement[]
+  riderEarnings           RiderEarning[]
+  supportTickets          SupportTicket[]
+  promoCodeUsages         PromoCodeUsage[]
+  promoCode               PromoCode?           @relation(fields: [promoCodeId], references: [id])
 
   @@index([customerId, createdAt])
   @@index([orderStatus, createdAt])
   @@index([riderId, orderStatus])
+  @@index([paymentMethod, paymentStatus])
+  @@index([cashCollectionStatus, createdAt])
   @@map("orders")
 }
 
@@ -1738,22 +1772,26 @@ model OrderStatusHistory {
 
 model Payment {
   id                   String          @id @default(uuid()) @db.Uuid
-  orderId              String          @db.Uuid
+  orderId              String?         @db.Uuid
   customerId           String          @db.Uuid
   gateway              String
   transactionReference String          @unique
   amount               Decimal         @db.Decimal(12, 2)
   currency             String          @default("NGN")
+  paymentPurpose       PaymentPurpose  @default(ORDER_PAYMENT)
+  walletLedgerEntryId  String?         @db.Uuid
   paymentMethod        String?
   paymentStatus        PaymentStatus   @default(PENDING)
   gatewayResponse      Json?
   paidAt               DateTime?
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
-  order                Order           @relation(fields: [orderId], references: [id])
+  order                Order?          @relation(fields: [orderId], references: [id])
   customer             CustomerProfile @relation(fields: [customerId], references: [id])
 
   @@index([orderId, paymentStatus])
+  @@index([paymentPurpose, paymentStatus])
+  @@index([walletLedgerEntryId])
   @@map("payments")
 }
 

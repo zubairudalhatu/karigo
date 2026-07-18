@@ -11,14 +11,21 @@ import { ConfigService } from "@nestjs/config";
 import {
   OrderStatus,
   NotificationType,
+  OrderPaymentMethod,
+  PaymentPurpose,
   PaymentStatus,
   Prisma,
-  ServiceCategory
+  ServiceCategory,
+  WalletLedgerDirection,
+  WalletLedgerEntryStatus,
+  WalletLedgerEntryType,
+  WalletStatus
 } from "@prisma/client";
 import type { PublicPaymentConfig } from "@karigo/shared-types";
 import { randomBytes } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 import { InitiatePaymentDto } from "./dto/initiate-payment.dto";
+import { InitiateWalletTopUpDto } from "./dto/initiate-wallet-top-up.dto";
 import { SandboxInitializationTestProvider } from "./dto/test-payment-provider.dto";
 import { CustomerTestPaymentProviderName, PaymentProviderRegistry } from "./providers/payment-provider.registry";
 import { PaymentProvider, PaymentProviderName, PaymentWebhookContext } from "./providers/payment-provider.interface";
@@ -61,6 +68,9 @@ export class PaymentsService {
     if (order.paymentStatus === PaymentStatus.SUCCESSFUL) {
       throw new ConflictException("Order has already been paid");
     }
+    if (order.paymentStatus === PaymentStatus.CASH_PENDING || order.paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY) {
+      throw new BadRequestException("Cash/POD orders cannot start electronic payment");
+    }
     if (order.orderStatus !== OrderStatus.AWAITING_PAYMENT) {
       throw new BadRequestException("Order is not awaiting payment");
     }
@@ -81,6 +91,7 @@ export class PaymentsService {
         amount: order.totalAmount,
         currency: "NGN",
         paymentMethod: dto.paymentMethod,
+        paymentPurpose: PaymentPurpose.ORDER_PAYMENT,
         paymentStatus: PaymentStatus.PENDING
       }
     });
@@ -110,6 +121,94 @@ export class PaymentsService {
     });
 
     return { payment: initializedPayment, authorization };
+  }
+
+  async initiateWalletTopUp(userId: string, dto: InitiateWalletTopUpDto) {
+    if (!this.flagValue("WALLET_TOP_UP_ENABLED", false)) {
+      throw new BadRequestException("Wallet top-up is not enabled for this launch stage");
+    }
+    const customer = await this.requireCustomer(userId);
+    const amount = new Prisma.Decimal(dto.amount).toDecimalPlaces(2);
+    if (amount.lessThan(100)) {
+      throw new BadRequestException("Wallet top-up amount must be at least NGN 100");
+    }
+
+    const provider = this.providerRegistry.active();
+    if (provider.name !== "squad") {
+      throw new BadRequestException("Wallet top-up currently requires Squad by GTBank as the active provider");
+    }
+    const transactionReference = this.transactionReference("wallet-topup");
+
+    const { payment, ledger } = await this.prisma.$transaction(async (tx) => {
+      const wallet = await tx.customerWallet.upsert({
+        where: { customerId: customer.id },
+        update: {},
+        create: { customerId: customer.id }
+      });
+      if (wallet.status !== WalletStatus.ACTIVE) {
+        throw new BadRequestException("Only active wallets can be topped up");
+      }
+      const ledgerEntry = await tx.customerWalletLedgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          customerId: customer.id,
+          entryType: WalletLedgerEntryType.TOP_UP,
+          direction: WalletLedgerDirection.CREDIT,
+          status: WalletLedgerEntryStatus.PENDING,
+          amount,
+          currency: wallet.currency,
+          balanceBefore: wallet.availableBalance,
+          balanceAfter: wallet.availableBalance,
+          reference: transactionReference,
+          sourceType: "PAYMENT",
+          description: "Pending Squad wallet top-up"
+        }
+      });
+      const paymentRecord = await tx.payment.create({
+        data: {
+          orderId: null,
+          customerId: customer.id,
+          gateway: provider.name,
+          transactionReference,
+          amount,
+          currency: wallet.currency,
+          paymentPurpose: PaymentPurpose.WALLET_TOP_UP,
+          walletLedgerEntryId: ledgerEntry.id,
+          paymentMethod: "squad_wallet_top_up",
+          paymentStatus: PaymentStatus.PENDING
+        }
+      });
+      return { payment: paymentRecord, ledger: ledgerEntry };
+    });
+
+    let authorization;
+    try {
+      authorization = await provider.initialize({
+        transactionReference,
+        amount: amount.toFixed(2),
+        currency: payment.currency,
+        customerEmail: customer.user.email,
+        customerPhone: customer.user.phoneNumber,
+        metadata: {
+          paymentId: payment.id,
+          walletLedgerEntryId: ledger.id,
+          purpose: "wallet_top_up"
+        }
+      });
+    } catch (error) {
+      await this.prisma.$transaction([
+        this.prisma.payment.update({ where: { id: payment.id }, data: { paymentStatus: PaymentStatus.FAILED } }),
+        this.prisma.customerWalletLedgerEntry.update({ where: { id: ledger.id }, data: { status: WalletLedgerEntryStatus.FAILED } })
+      ]);
+      throw this.safeInitializationException(provider.name, error);
+    }
+
+    const initializedPayment = await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: { gatewayResponse: authorization.providerResponse as Prisma.InputJsonValue }
+    });
+
+    return { payment: initializedPayment, walletLedgerEntry: ledger, authorization };
   }
 
   async verify(userId: string, transactionReference: string) {
@@ -340,15 +439,20 @@ export class PaymentsService {
     if (payment.paymentStatus !== PaymentStatus.SUCCESSFUL) {
       throw new BadRequestException("Only successful payments can be refunded");
     }
+    if (!payment.order || !payment.orderId) {
+      throw new BadRequestException("Wallet top-up refunds require manual admin wallet review");
+    }
+    const order = payment.order;
+    const orderId = payment.orderId;
 
     const result = await this.prisma.$transaction(async (tx) => {
       const updatedPayment = await tx.payment.update({
         where: { id: payment.id },
         data: { paymentStatus: PaymentStatus.REFUND_PENDING }
       });
-      const shouldMoveToRefundRequested = payment.order.orderStatus !== OrderStatus.REFUND_REQUESTED;
+      const shouldMoveToRefundRequested = order.orderStatus !== OrderStatus.REFUND_REQUESTED;
       await tx.order.update({
-        where: { id: payment.orderId },
+        where: { id: orderId },
         data: {
           paymentStatus: PaymentStatus.REFUND_PENDING,
           ...(shouldMoveToRefundRequested
@@ -356,7 +460,7 @@ export class PaymentsService {
                 orderStatus: OrderStatus.REFUND_REQUESTED,
                 statusHistory: {
                   create: {
-                    previousStatus: payment.order.orderStatus,
+                    previousStatus: order.orderStatus,
                     newStatus: OrderStatus.REFUND_REQUESTED,
                     changedByUserId: userId,
                     changedByRole: "CUSTOMER",
@@ -387,21 +491,26 @@ export class PaymentsService {
     if (payment.paymentStatus !== PaymentStatus.REFUND_PENDING) {
       throw new BadRequestException("Payment does not have a pending refund request");
     }
+    if (!payment.order || !payment.orderId) {
+      throw new BadRequestException("Wallet top-up refunds require manual wallet adjustment review");
+    }
+    const order = payment.order;
+    const orderId = payment.orderId;
 
     const result = await this.prisma.$transaction(async (tx) => {
       const updatedPayment = await tx.payment.update({
         where: { id: payment.id },
         data: { paymentStatus: PaymentStatus.REFUNDED }
       });
-      if (payment.order.orderStatus !== OrderStatus.REFUNDED) {
+      if (order.orderStatus !== OrderStatus.REFUNDED) {
         await tx.order.update({
-          where: { id: payment.orderId },
+          where: { id: orderId },
           data: {
             orderStatus: OrderStatus.REFUNDED,
             paymentStatus: PaymentStatus.REFUNDED,
             statusHistory: {
               create: {
-                previousStatus: payment.order.orderStatus,
+                previousStatus: order.orderStatus,
                 newStatus: OrderStatus.REFUNDED,
                 changedByUserId: adminUserId,
                 changedByRole: "ADMIN",
@@ -447,6 +556,12 @@ export class PaymentsService {
     }
     if (payment.paymentStatus === PaymentStatus.SUCCESSFUL) {
       return payment;
+    }
+    if (payment.paymentPurpose === PaymentPurpose.WALLET_TOP_UP) {
+      return this.processSuccessfulWalletTopUpWithClient(tx, payment, providerResponse);
+    }
+    if (!payment.order || !payment.orderId) {
+      throw new BadRequestException("Order payment record is missing its order");
     }
 
     const updatedPayment = await tx.payment.update({
@@ -530,6 +645,86 @@ export class PaymentsService {
     return updatedPayment;
   }
 
+  private async processSuccessfulWalletTopUpWithClient(
+    tx: TransactionClient,
+    payment: Prisma.PaymentGetPayload<{ include: { order: true } }>,
+    providerResponse: Record<string, unknown>
+  ) {
+    if (!payment.walletLedgerEntryId) {
+      throw new BadRequestException("Wallet top-up payment is missing its ledger entry");
+    }
+    const ledger = await tx.customerWalletLedgerEntry.findUnique({
+      where: { id: payment.walletLedgerEntryId }
+    });
+    if (!ledger) {
+      throw new NotFoundException("Wallet top-up ledger entry not found");
+    }
+    if (ledger.status === WalletLedgerEntryStatus.POSTED) {
+      return payment;
+    }
+    if (ledger.status !== WalletLedgerEntryStatus.PENDING) {
+      throw new BadRequestException("Wallet top-up ledger entry is not pending");
+    }
+    const wallet = await tx.customerWallet.findUnique({
+      where: { id: ledger.walletId }
+    });
+    if (!wallet) {
+      throw new NotFoundException("Customer wallet not found");
+    }
+    if (wallet.status !== WalletStatus.ACTIVE) {
+      throw new BadRequestException("Only active wallets can receive top-up credit");
+    }
+    const now = new Date();
+    const balanceBefore = wallet.availableBalance;
+    const balanceAfter = wallet.availableBalance.add(payment.amount);
+    await tx.customerWallet.update({
+      where: { id: wallet.id },
+      data: {
+        availableBalance: balanceAfter,
+        ledgerBalance: balanceAfter,
+        lastActivityAt: now
+      }
+    });
+    await tx.customerWalletLedgerEntry.update({
+      where: { id: ledger.id },
+      data: {
+        status: WalletLedgerEntryStatus.POSTED,
+        balanceBefore,
+        balanceAfter,
+        sourceId: payment.id,
+        description: "Squad wallet top-up verified",
+        metadata: {
+          paymentId: payment.id,
+          provider: payment.gateway,
+          transactionReference: payment.transactionReference
+        } as Prisma.InputJsonValue,
+        postedAt: now
+      }
+    });
+    const updatedPayment = await tx.payment.update({
+      where: { id: payment.id },
+      data: {
+        paymentStatus: PaymentStatus.SUCCESSFUL,
+        paidAt: now,
+        gatewayResponse: providerResponse as Prisma.InputJsonValue
+      }
+    });
+    const customer = await tx.customerProfile.findUnique({ where: { id: payment.customerId }, select: { userId: true } });
+    if (customer) {
+      await tx.notification.create({
+        data: {
+          userId: customer.userId,
+          title: "Wallet top-up successful",
+          message: `Your KariGO Wallet was credited with NGN ${payment.amount.toFixed(2)}.`,
+          type: NotificationType.PAYMENT_SUCCESSFUL,
+          entityType: "CustomerWalletLedgerEntry",
+          entityId: ledger.id
+        }
+      });
+    }
+    return updatedPayment;
+  }
+
   private async requireCustomerPaymentByReference(userId: string, transactionReference: string) {
     const payment = await this.prisma.payment.findFirst({
       where: { transactionReference, customer: { userId } },
@@ -539,6 +734,17 @@ export class PaymentsService {
       throw new NotFoundException("Payment not found");
     }
     return payment;
+  }
+
+  private async requireCustomer(userId: string) {
+    const customer = await this.prisma.customerProfile.findUnique({
+      where: { userId },
+      include: { user: { select: { fullName: true, phoneNumber: true, email: true } } }
+    });
+    if (!customer) {
+      throw new NotFoundException("Customer profile not found");
+    }
+    return customer;
   }
 
   private transactionReference(gateway: string): string {

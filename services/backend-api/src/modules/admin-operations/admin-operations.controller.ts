@@ -9,6 +9,7 @@ import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { AdminOperationsService } from "./admin-operations.service";
+import { CashReconciliationDto } from "./dto/cash-reconciliation.dto";
 import { ListAdminOrdersQueryDto } from "./dto/list-admin-orders-query.dto";
 import { OrderStatusNoteDto } from "./dto/order-status-note.dto";
 import { ReviewVendorOnboardingDocumentDto } from "../vendors/dto/review-vendor-onboarding-document.dto";
@@ -38,6 +39,10 @@ export class AdminOperationsController {
   @Patch("orders/:orderId/status-note")
   async note(@CurrentUser() user: AuthenticatedUser, @Param("orderId", ParseUUIDPipe) orderId: string, @Body() dto: OrderStatusNoteDto) {
     return { message: "Order status note added", data: await this.operations.orderNote(user.id, orderId, dto.note) };
+  }
+  @Patch("orders/:orderId/cash-reconcile")
+  async reconcileCash(@CurrentUser() user: AuthenticatedUser, @Param("orderId", ParseUUIDPipe) orderId: string, @Body() dto: CashReconciliationDto) {
+    return { message: "Cash/POD order reconciled", data: await this.operations.reconcileCashOrder(user.id, orderId, dto.note) };
   }
   @Get("users") users() {
     return this.operations.users().then((data) => ({ message: "Users retrieved", data }));

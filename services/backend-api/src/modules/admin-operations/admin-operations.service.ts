@@ -2,7 +2,9 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { ConfigService } from "@nestjs/config";
 import {
   AccountStatus,
+  CashCollectionStatus,
   DocumentVerificationStatus,
+  OrderPaymentMethod,
   OrderStatus,
   PaymentStatus,
   Prisma,
@@ -121,7 +123,8 @@ export class AdminOperationsService {
       },
       select: {
         id: true, orderNumber: true, serviceCategory: true, orderStatus: true, paymentStatus: true,
-        totalAmount: true, createdAt: true, updatedAt: true,
+        paymentMethod: true, cashCollectionStatus: true, cashCollectedAmount: true, cashCollectedAt: true,
+        cashReconciledAt: true, totalAmount: true, createdAt: true, updatedAt: true,
         vendor: { select: { id: true, businessName: true } },
         rider: { select: { id: true, riderCode: true } },
         customer: { select: { id: true, user: { select: { fullName: true } } } }
@@ -135,6 +138,9 @@ export class AdminOperationsService {
       where: { id: orderId },
       select: {
         id: true, orderNumber: true, serviceCategory: true, orderStatus: true, paymentStatus: true,
+        paymentMethod: true, cashCollectionStatus: true, cashCollectedAmount: true, cashCollectedAt: true,
+        cashCollectedByRiderId: true, cashReconciledAt: true, cashReconciledByAdminId: true,
+        cashReconciliationNote: true,
         subtotal: true, deliveryFee: true, serviceFee: true, discountAmount: true, totalAmount: true,
         customerNote: true, createdAt: true, updatedAt: true, completedAt: true,
         customer: { select: { id: true, user: { select: { fullName: true, phoneNumber: true, email: true } } } },
@@ -250,6 +256,55 @@ export class AdminOperationsService {
     await this.order(orderId);
     await this.audit.record(adminUserId, "admin.order.status_note", "Order", orderId, { note });
     return { orderId, note };
+  }
+
+  async reconcileCashOrder(adminUserId: string, orderId: string, note: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        orderNumber: true,
+        orderStatus: true,
+        paymentMethod: true,
+        paymentStatus: true,
+        cashCollectionStatus: true,
+        cashCollectedAmount: true,
+        totalAmount: true
+      }
+    });
+    if (!order) throw new NotFoundException("Order not found");
+    if (order.paymentMethod !== OrderPaymentMethod.CASH_ON_DELIVERY || order.paymentStatus !== PaymentStatus.CASH_PENDING) {
+      throw new BadRequestException("Only Cash/POD orders can be manually reconciled here.");
+    }
+    if (order.cashCollectionStatus === CashCollectionStatus.RECONCILED) {
+      return this.order(orderId);
+    }
+    const updated = await this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        cashCollectionStatus: CashCollectionStatus.RECONCILED,
+        cashCollectedAmount: order.cashCollectedAmount ?? order.totalAmount,
+        cashReconciledAt: new Date(),
+        cashReconciledByAdminId: adminUserId,
+        cashReconciliationNote: note,
+        statusHistory: {
+          create: {
+            previousStatus: order.orderStatus,
+            newStatus: order.orderStatus,
+            changedByUserId: adminUserId,
+            changedByRole: "ADMIN",
+            note: `Cash/POD manually reconciled: ${note}`
+          }
+        }
+      },
+      select: { id: true }
+    });
+    await this.audit.record(adminUserId, "order.cash.reconciled", "Order", orderId, {
+      orderNumber: order.orderNumber,
+      amount: (order.cashCollectedAmount ?? order.totalAmount).toFixed(2),
+      note
+    });
+    return this.order(updated.id);
   }
 
   users() {
@@ -421,8 +476,10 @@ export class AdminOperationsService {
       },
       biometricReadiness: {
         credentialStorageModelReady: true,
-        passwordlessLoginEnabled: false,
-        note: "Credential storage ready; biometric login pending app activation."
+        passwordlessLoginEnabled: this.configFlag("PASSWORDLESS_LOGIN_ENABLED", false),
+        note: this.configFlag("PASSWORDLESS_LOGIN_ENABLED", false)
+          ? "Passwordless readiness flag is enabled. App biometric activation must still use secure token storage and fallback login."
+          : "Credential storage ready; biometric login pending app activation."
       }
     };
   }

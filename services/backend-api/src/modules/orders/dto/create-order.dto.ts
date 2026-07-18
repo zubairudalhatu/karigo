@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsEnum, IsOptional, IsString, IsUUID, MaxLength, ValidateNested } from "class-validator";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsEnum, IsIn, IsOptional, IsString, IsUUID, MaxLength, ValidateNested } from "class-validator";
 import { ServiceCategory } from "@prisma/client";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { CreateOrderItemDto } from "./create-order-item.dto";
@@ -36,4 +36,13 @@ export class CreateOrderDto {
   @IsString()
   @MaxLength(40)
   promoCode?: string;
+
+  @ApiPropertyOptional({
+    enum: ["SQUAD", "WALLET", "CASH_ON_DELIVERY", "squad", "wallet", "cash_on_delivery"],
+    description: "Optional checkout payment method. Defaults to Squad/electronic payment when omitted."
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(["SQUAD", "WALLET", "CASH_ON_DELIVERY", "squad", "wallet", "cash_on_delivery"])
+  paymentMethod?: string;
 }

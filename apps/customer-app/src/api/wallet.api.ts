@@ -37,7 +37,19 @@ export interface CustomerWalletLedgerResult {
   items: CustomerWalletLedgerEntry[];
 }
 
+export interface WalletTopUpInitiation {
+  payment: { id: string; transactionReference: string; paymentStatus: string; gateway?: string };
+  walletLedgerEntry: CustomerWalletLedgerEntry;
+  authorization: {
+    transactionReference: string;
+    authorizationUrl?: string | null;
+    accessCode?: string | null;
+    providerResponse?: unknown;
+  };
+}
+
 export const walletApi = {
   summary: () => api.get<CustomerWallet>("wallet"),
-  transactions: () => api.get<CustomerWalletLedgerResult>("wallet/transactions")
+  transactions: () => api.get<CustomerWalletLedgerResult>("wallet/transactions"),
+  initiateTopUp: (amount: number) => api.post<WalletTopUpInitiation>("payments/wallet-top-ups", { amount })
 };

@@ -14,6 +14,7 @@ export default function Detail() {
   const [captains, setCaptains] = useState<AvailableRider[]>([]);
   const [captainId, setCaptainId] = useState("");
   const [note, setNote] = useState("");
+  const [cashNote, setCashNote] = useState("");
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
 
@@ -66,6 +67,25 @@ export default function Detail() {
         <article className="card">
           <h2>Financial</h2>
           <p>Total: {money(order.totalAmount)}</p>
+          <p>Payment method: {order.paymentMethod === "CASH_ON_DELIVERY" ? "Cash / Pay on Delivery" : order.paymentMethod === "WALLET" ? "KariGO Wallet" : order.paymentMethod === "SQUAD" ? "Squad by GTBank" : order.paymentStatus}</p>
+          {order.paymentMethod === "CASH_ON_DELIVERY" ? <div>
+            <p>Cash status: {order.cashCollectionStatus?.replaceAll("_", " ") ?? "PENDING COLLECTION"}</p>
+            <p>Expected cash: {money(order.totalAmount)}</p>
+            <p>Cash collected amount: {order.cashCollectedAmount ? money(order.cashCollectedAmount) : "Not recorded"}</p>
+            <p>Collected at: {order.cashCollectedAt ? new Date(order.cashCollectedAt).toLocaleString() : "Not recorded"}</p>
+            <p>Reconciled at: {order.cashReconciledAt ? new Date(order.cashReconciledAt).toLocaleString() : "Not reconciled"}</p>
+            {order.cashReconciliationNote ? <p className="muted">Reconciliation note: {order.cashReconciliationNote}</p> : null}
+            {order.cashCollectionStatus !== "RECONCILED" ? <>
+              <textarea value={cashNote} onChange={(event) => setCashNote(event.target.value)} placeholder="Cash reconciliation note required" />
+              <button disabled={cashNote.trim().length < 5} onClick={async () => {
+                if (!confirm("Mark this Cash/POD order reconciled? This does not trigger payout automation.")) return;
+                await ordersApi.reconcileCash(id, cashNote);
+                setMsg("Cash/POD order reconciled.");
+                setCashNote("");
+                await load();
+              }}>Mark cash reconciled</button>
+            </> : null}
+          </div> : null}
           {order.payments?.map((payment: any) => <div key={payment.id}>
             <p>{payment.gateway}: {payment.paymentStatus} · {money(payment.amount)}</p>
             {payment.paymentStatus === "REFUND_PENDING" ? <button onClick={async () => {

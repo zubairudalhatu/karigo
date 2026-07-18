@@ -9,9 +9,14 @@ export interface RiderJob {
   serviceCategory: string;
   orderStatus: string;
   paymentStatus: string;
+  paymentMethod?: string | null;
+  cashCollectionStatus?: string | null;
+  cashCollectedAmount?: string | number | null;
+  cashCollectedAt?: string | null;
   itemDescription?: string | null;
   customerNote?: string | null;
   deliveryFee: string | number;
+  totalAmount?: string | number;
   vendor?: { businessName: string; address?: string; city?: string; phoneNumber?: string } | null;
   pickupAddress?: JobAddress | null;
   deliveryAddress?: JobAddress | null;
@@ -26,5 +31,5 @@ export const jobsApi = {
   accept: (id: string) => api.post<RiderJob>(`rider/jobs/${id}/accept`),
   reject: (id: string, reason: RiderRejectionReason, details?: string) => api.post<RiderJob & { reassignmentRequired: boolean }>(`rider/jobs/${id}/reject`, { reason, details }),
   status: (id: string, status: DeliveryStatus) => api.post<RiderJob>(`rider/jobs/${id}/status`, { status }),
-  complete: (id: string, deliveryOtp: string) => api.post<RiderJob>(`rider/jobs/${id}/complete`, { deliveryOtp })
+  complete: (id: string, deliveryOtp: string, cashCollected?: boolean) => api.post<RiderJob>(`rider/jobs/${id}/complete`, { deliveryOtp, cashCollected })
 };

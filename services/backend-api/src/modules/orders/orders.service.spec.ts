@@ -9,13 +9,14 @@ import { ApplicationNotificationsService } from "../../common/services/applicati
 
 describe("OrdersService", () => {
   const validDeliveryOtp = ["1", "2", "3", "4", "5", "6"].join("");
-  const prisma = {
+  const prisma: any = {
     customerProfile: { findUnique: jest.fn() },
     vendor: { findFirst: jest.fn() },
     address: { findFirst: jest.fn(), count: jest.fn() },
     product: { findMany: jest.fn() },
     order: { create: jest.fn(), findFirst: jest.fn(), findMany: jest.fn() }
   };
+  prisma.$transaction = jest.fn((callback: (tx: typeof prisma) => unknown) => callback(prisma));
   const config = {
     get: jest.fn((key: string, fallback: number) => fallback)
   };
@@ -43,7 +44,7 @@ describe("OrdersService", () => {
     prisma.product.findMany.mockResolvedValue([
       { id: "product-1", name: "Jollof Rice", price: new Prisma.Decimal(2500) }
     ]);
-    prisma.order.create.mockImplementation(({ data }) => {
+    prisma.order.create.mockImplementation(({ data }: { data: Record<string, any> }) => {
       createData = data;
       return data;
     });
@@ -120,7 +121,7 @@ describe("OrdersService", () => {
       discountAmount: new Prisma.Decimal(500),
       finalPayableAmount: new Prisma.Decimal(5500)
     });
-    prisma.order.create.mockImplementation(({ data }) => data);
+    prisma.order.create.mockImplementation(({ data }: { data: Record<string, any> }) => data);
 
     const result = await service.createVendorOrder("user-1", {
       vendorId: "vendor-1",
@@ -196,7 +197,7 @@ describe("OrdersService", () => {
   it("sends a controlled transactional notification for parcel order creation", async () => {
     prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
     prisma.address.count.mockResolvedValue(2);
-    prisma.order.create.mockImplementation(({ data }) => ({ ...data, id: "order-1", orderNumber: "KGO-PARCEL-1" }));
+    prisma.order.create.mockImplementation(({ data }: { data: Record<string, any> }) => ({ ...data, id: "order-1", orderNumber: "KGO-PARCEL-1" }));
 
     const result = await service.createParcelOrder("user-1", {
       pickupAddressId: "address-1",

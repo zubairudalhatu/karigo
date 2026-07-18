@@ -5,6 +5,7 @@ import type { CheckoutQuote, CustomerTestPaymentProvider, PublicPaymentConfig } 
 import { Address, addressesApi } from "../src/api/addresses.api";
 import { Order, ordersApi } from "../src/api/orders.api";
 import { paymentsApi } from "../src/api/payments.api";
+import { CustomerWallet, walletApi } from "../src/api/wallet.api";
 import { Button, Card, Empty, Field, Message, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
 import { useCart } from "../src/contexts/cart-context";
 import { pricingFromServer } from "../src/lib/checkout-pricing";
@@ -34,6 +35,8 @@ import {
 } from "../src/lib/payment-status";
 import { promoErrorMessage } from "../src/lib/promo-state";
 
+type CheckoutPaymentMethod = "squad" | "cash_on_delivery" | "wallet";
+
 export default function Checkout() {
   const cart = useCart();
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -54,6 +57,9 @@ export default function Checkout() {
   const [paymentConfig, setPaymentConfig] = useState<PublicPaymentConfig | null>(null);
   const [paymentConfigLoading, setPaymentConfigLoading] = useState(false);
   const [paymentConfigError, setPaymentConfigError] = useState("");
+  const [wallet, setWallet] = useState<CustomerWallet | null>(null);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [selectedCheckoutMethod, setSelectedCheckoutMethod] = useState<CheckoutPaymentMethod>("squad");
 
   const items = useMemo(() => cart.items.map((i) => ({ productId: i.product.id, quantity: i.quantity })), [cart.items]);
   const effectivePaymentConfig = paymentConfig ?? fallbackCustomerPaymentConfig;
@@ -100,6 +106,18 @@ export default function Checkout() {
   }, []);
 
   useEffect(() => { void loadPaymentConfig(); }, [loadPaymentConfig]);
+
+  useEffect(() => {
+    if (!effectivePaymentConfig.walletPaymentsEnabled) {
+      setWallet(null);
+      return;
+    }
+    setWalletLoading(true);
+    walletApi.summary()
+      .then(setWallet)
+      .catch(() => setWallet(null))
+      .finally(() => setWalletLoading(false));
+  }, [effectivePaymentConfig.walletPaymentsEnabled]);
 
   const loadQuote = useCallback(async (promo: string, options?: { promoAttempt?: boolean; keepUiError?: boolean }) => {
     if (!cart.vendor || !addressId || !cart.items.length) {
@@ -171,7 +189,12 @@ export default function Checkout() {
         deliveryAddressId: addressId,
         serviceCategory: cart.serviceCategory,
         items,
-        promoCode: validPromoCode || undefined
+        promoCode: validPromoCode || undefined,
+        paymentMethod: selectedCheckoutMethod === "cash_on_delivery"
+          ? "CASH_ON_DELIVERY"
+          : selectedCheckoutMethod === "wallet"
+            ? "WALLET"
+            : "SQUAD"
       });
       setOrder(created);
       setQuote({
@@ -183,6 +206,11 @@ export default function Checkout() {
         promoCode: validPromoCode || undefined,
         createdAt: new Date().toISOString()
       });
+      if (selectedCheckoutMethod === "cash_on_delivery" || selectedCheckoutMethod === "wallet") {
+        cart.clear();
+        router.replace(`/orders/${created.id}`);
+        return;
+      }
       setMessage("Your order has been created successfully.");
     } catch (e) {
       setValidPromoCode("");
@@ -279,6 +307,14 @@ export default function Checkout() {
   const paymentButtonTitle = liveSquadMode
     ? `Pay with Squad - ${money(order?.totalAmount ?? 0)}`
     : `Continue with ${selectedProviderLabel} - ${money(order?.totalAmount ?? 0)}`;
+  const walletBalance = Number(wallet?.availableBalance ?? 0);
+  const walletSufficient = !!pricing && walletBalance >= pricing.payableAmount;
+  const cashEnabled = Boolean(effectivePaymentConfig.cashPaymentEnabled);
+  const walletEnabled = Boolean(effectivePaymentConfig.walletPaymentsEnabled);
+  const checkoutMethodBlocked =
+    selectedCheckoutMethod === "cash_on_delivery" ? !cashEnabled :
+      selectedCheckoutMethod === "wallet" ? !walletEnabled || !walletSufficient :
+        false;
 
   return <Protected><Screen title="Checkout">
     {addresses.length === 0 ? <><Empty message="Add a delivery address before checkout." /><Button title="Add address" onPress={() => router.push("/addresses")} /></> :
@@ -295,7 +331,34 @@ export default function Checkout() {
     {quoteLoading ? <Message>Updating delivery total...</Message> : null}
     {quoteError ? <><Message error>{quoteError}</Message><Button title="Retry delivery total" tone="muted" onPress={() => { void loadQuote(validPromoCode); }} /></> : null}
     <Message>{message}</Message><Message error>{error}</Message>
-    {!order ? <Button title={busy ? "Creating order..." : "Create order"} onPress={createOrder} disabled={busy || !addressId || !quoteReady} /> :
+    {!order ? <>
+      <Card>
+        <Text style={ui.cardTitle}>Choose payment method</Text>
+        <Text style={ui.cardText}>KariGO launch checkout supports Squad, Pay on Delivery and wallet payment where enabled in Kano and Abuja.</Text>
+        <Button
+          title={`${selectedCheckoutMethod === "squad" ? "Selected - " : ""}Pay with Squad`}
+          tone={selectedCheckoutMethod === "squad" ? "primary" : "muted"}
+          onPress={() => setSelectedCheckoutMethod("squad")}
+          disabled={busy}
+        />
+        <Text style={ui.muted}>Secure online checkout through Squad by GTBank. KariGO confirms payment server-side.</Text>
+        <Button
+          title={`${selectedCheckoutMethod === "cash_on_delivery" ? "Selected - " : ""}Pay on Delivery / Cash`}
+          tone={selectedCheckoutMethod === "cash_on_delivery" ? "primary" : "muted"}
+          onPress={() => setSelectedCheckoutMethod("cash_on_delivery")}
+          disabled={busy || !cashEnabled}
+        />
+        <Text style={ui.muted}>Pay cash to the assigned KariGO Captain/vendor at delivery. Please pay only the amount shown in the app.</Text>
+        <Button
+          title={`${selectedCheckoutMethod === "wallet" ? "Selected - " : ""}Pay from Wallet`}
+          tone={selectedCheckoutMethod === "wallet" ? "primary" : "muted"}
+          onPress={() => setSelectedCheckoutMethod("wallet")}
+          disabled={busy || !walletEnabled || !walletSufficient}
+        />
+        <Text style={ui.muted}>{walletLoading ? "Checking wallet balance..." : `Wallet balance: ${money(walletBalance)}${walletEnabled && pricing && !walletSufficient ? " - insufficient for this order" : ""}`}</Text>
+      </Card>
+      <Button title={busy ? "Creating order..." : selectedCheckoutMethod === "squad" ? "Create order and continue to payment" : "Create order"} onPress={createOrder} disabled={busy || !addressId || !quoteReady || checkoutMethodBlocked} />
+    </> :
       <>
         <Card>
           <Text style={ui.cardTitle}>{paymentView.title}</Text>
@@ -327,13 +390,6 @@ export default function Checkout() {
           {paymentProviderOptions.length === 0 ? <Text style={ui.muted}>No customer payment provider is currently available. Please contact KariGO support.</Text> : null}
           <Text style={ui.muted}>{paymentProviderSensitiveDataNoteForConfig(effectivePaymentConfig)}</Text>
         </Card> : null}
-        <Card>
-          <Text style={ui.cardTitle}>Pay on Delivery / Cash</Text>
-          <Text style={ui.cardText}>{effectivePaymentConfig.cashPaymentEnabled ? "Available where KariGO Operations has enabled manual cash collection." : "Cash payment is being prepared for Kano and Abuja launch operations."}</Text>
-          <Text style={ui.muted}>{effectivePaymentConfig.cashPaymentNote ?? "Cash/POD orders must remain unpaid until collection is verified by KariGO Operations."}</Text>
-          <Text style={ui.muted}>Please pay only the amount shown in the app.</Text>
-          <Button title={effectivePaymentConfig.cashPaymentEnabled ? "Cash/POD confirmation pending" : "Cash/POD not available yet"} tone="muted" disabled />
-        </Card>
         <Button title={busy ? "Preparing payment..." : paymentButtonTitle} onPress={pay} disabled={busy || !!pendingPaymentReference || !paymentProviderAvailable} />
         {pendingPaymentReference ? <Card>
           <Text style={ui.cardTitle}>{pendingView.title}</Text>

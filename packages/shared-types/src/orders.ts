@@ -13,6 +13,7 @@ export interface CreateOrderRequest {
   items: OrderItemInput[];
   customerNote?: string;
   promoCode?: string;
+  paymentMethod?: "SQUAD" | "WALLET" | "CASH_ON_DELIVERY" | "squad" | "wallet" | "cash_on_delivery";
 }
 
 export type QuoteOrderRequest = CreateOrderRequest;
@@ -33,6 +34,8 @@ export interface OrderSummary {
   serviceCategory: ServiceCategory;
   orderStatus: OrderStatus;
   paymentStatus: string;
+  paymentMethod?: string | null;
+  cashCollectionStatus?: string | null;
   subtotal: number;
   deliveryFee: number;
   discountAmount?: number;

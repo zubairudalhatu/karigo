@@ -266,15 +266,17 @@ assert(!profile.includes("wallet top-up"), "Profile must not activate wallet top
 const walletScreen = read("app", "profile", "wallet.tsx");
 assert(walletScreen.includes("KariGO Wallet"), "Customer wallet screen must exist.");
 assert(walletScreen.includes("walletApi.transactions"), "Customer wallet screen must load wallet balance and ledger through the wallet API.");
-assert(walletScreen.includes("KariGO Wallet is currently view-only"), "Customer wallet screen must show view-only launch guardrail copy.");
-assert(walletScreen.includes("has not enabled live top-up, withdrawals, automatic refunds, wallet checkout, referral rewards or subscription billing"), "Customer wallet screen must state inactive wallet capabilities.");
+assert(walletScreen.includes("walletApi.initiateTopUp"), "Customer wallet screen must initiate top-up through the backend wallet top-up endpoint.");
+assert(walletScreen.includes("backend payment verification"), "Customer wallet screen must state that top-up credits require backend verification.");
+assert(walletScreen.includes("KariGO will not credit the wallet from the app alone"), "Customer wallet screen must prevent client-side wallet credit language.");
 assert(walletScreen.includes("Available later"), "Customer wallet screen must keep disabled future actions separate.");
 assert(walletScreen.includes("Wallet activity"), "Customer wallet screen must show ledger activity.");
 assert(walletScreen.includes("Wallet transactions will appear here after KariGO records approved wallet activity."), "Customer wallet screen must provide a safe empty state.");
-assert(!walletScreen.includes("Pay now") && !walletScreen.includes("Withdraw now") && !walletScreen.includes("Top up now"), "Customer wallet screen must not activate live wallet actions.");
+assert(!walletScreen.includes("Withdraw now") && !walletScreen.includes("Automatic refund now"), "Customer wallet screen must not activate withdrawals or automatic refunds.");
 const walletApi = read("src", "api", "wallet.api.ts");
 assert(walletApi.includes('api.get<CustomerWallet>("wallet")'), "Customer wallet API must call the wallet summary endpoint.");
 assert(walletApi.includes('api.get<CustomerWalletLedgerResult>("wallet/transactions")'), "Customer wallet API must call the wallet ledger endpoint.");
+assert(walletApi.includes('api.post<WalletTopUpInitiation>("payments/wallet-top-ups"'), "Customer wallet API must call the backend top-up endpoint.");
 
 const returnsRefundsScreen = read("app", "profile", "returns-refunds.tsx");
 assert(returnsRefundsScreen.includes("Returns and Refunds"), "Customer returns/refunds screen must exist.");

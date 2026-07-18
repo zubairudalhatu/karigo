@@ -6,6 +6,11 @@ export interface Order {
   orderNumber: string;
   orderStatus: string;
   paymentStatus: string;
+  paymentMethod?: string | null;
+  cashCollectionStatus?: string | null;
+  cashCollectedAmount?: number | string | null;
+  cashCollectedAt?: string | null;
+  cashReconciledAt?: string | null;
   serviceCategory: string;
   subtotal: number | string;
   deliveryFee: number | string;

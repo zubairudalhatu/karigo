@@ -1,6 +1,20 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { NotificationType, OrderStatus, PaymentStatus, Prisma, ServiceCategory, VendorStatus } from "@prisma/client";
+import {
+  CashCollectionStatus,
+  NotificationType,
+  OrderPaymentMethod,
+  OrderStatus,
+  PaymentPurpose,
+  PaymentStatus,
+  Prisma,
+  ServiceCategory,
+  VendorStatus,
+  WalletLedgerDirection,
+  WalletLedgerEntryStatus,
+  WalletLedgerEntryType,
+  WalletStatus
+} from "@prisma/client";
 import { randomBytes } from "crypto";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -19,6 +33,7 @@ const DELIVERY_OTP_VISIBLE_STATUSES: OrderStatus[] = [
   OrderStatus.ARRIVED_DESTINATION,
   OrderStatus.DELIVERED
 ];
+const LAUNCH_PAYMENT_CITIES = new Set(["kano", "abuja"]);
 
 @Injectable()
 export class OrdersService {
@@ -39,11 +54,11 @@ export class OrdersService {
       this.requireCustomer(userId),
       this.prisma.vendor.findFirst({
         where: { id: dto.vendorId, status: VendorStatus.ACTIVE, deletedAt: null },
-        select: { id: true }
+        select: { id: true, userId: true }
       }),
       this.prisma.address.findFirst({
         where: { id: dto.deliveryAddressId, userId },
-        select: { id: true }
+        select: { id: true, city: true }
       })
     ]);
 
@@ -107,11 +122,11 @@ export class OrdersService {
       this.requireCustomer(userId),
       this.prisma.vendor.findFirst({
         where: { id: dto.vendorId, status: VendorStatus.ACTIVE, deletedAt: null },
-        select: { id: true }
+        select: { id: true, userId: true }
       }),
       this.prisma.address.findFirst({
         where: { id: dto.deliveryAddressId, userId },
-        select: { id: true }
+        select: { id: true, city: true }
       })
     ]);
 
@@ -163,35 +178,117 @@ export class OrdersService {
       : null;
     const discountAmount = promo?.discountAmount ?? new Prisma.Decimal(0);
     const totalAmount = subtotal.add(deliveryFee).sub(discountAmount);
+    const paymentMethod = this.normalizePaymentMethod(dto.paymentMethod);
+    this.assertPaymentMethodAvailable(paymentMethod, deliveryAddress.city);
 
-    const order = await this.prisma.order.create({
-      data: {
-        orderNumber: this.orderNumber(),
-        customerId: customer.id,
-        vendorId: dto.vendorId,
-        serviceCategory: dto.serviceCategory,
-        orderStatus: OrderStatus.AWAITING_PAYMENT,
-        paymentStatus: PaymentStatus.PENDING,
-        deliveryAddressId: dto.deliveryAddressId,
-        customerNote: dto.customerNote,
-        subtotal,
-        deliveryFee,
-        discountAmount,
-        totalAmount,
-        promoCodeId: promo?.promo.id,
-        items: { create: items },
-        statusHistory: {
-          create: {
-            newStatus: OrderStatus.AWAITING_PAYMENT,
-            changedByUserId: userId,
-            changedByRole: "CUSTOMER",
-            note: "Order created and awaiting payment"
+    const order = await this.prisma.$transaction(async (tx) => {
+      const isCashOrder = paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY;
+      const isWalletOrder = paymentMethod === OrderPaymentMethod.WALLET;
+      const initialOrderStatus = isCashOrder || isWalletOrder ? OrderStatus.PAID : OrderStatus.AWAITING_PAYMENT;
+      const initialPaymentStatus = isCashOrder
+        ? PaymentStatus.CASH_PENDING
+        : isWalletOrder
+          ? PaymentStatus.SUCCESSFUL
+          : PaymentStatus.PENDING;
+      const statusNote = isCashOrder
+        ? "Pay on Delivery order created; cash collection is pending and requires manual reconciliation"
+        : isWalletOrder
+          ? "Order paid from KariGO Wallet"
+          : "Order created and awaiting payment";
+
+      let walletLedgerEntryId: string | undefined;
+      if (isWalletOrder) {
+        walletLedgerEntryId = await this.debitWalletForOrder(tx, customer.id, totalAmount, {
+          orderNumberPreview: "pending",
+          userId
+        });
+      }
+
+      const created = await tx.order.create({
+        data: {
+          orderNumber: this.orderNumber(),
+          customerId: customer.id,
+          vendorId: dto.vendorId,
+          serviceCategory: dto.serviceCategory,
+          orderStatus: initialOrderStatus,
+          paymentStatus: initialPaymentStatus,
+          paymentMethod,
+          cashCollectionStatus: isCashOrder ? CashCollectionStatus.PENDING_COLLECTION : CashCollectionStatus.NOT_REQUIRED,
+          deliveryAddressId: dto.deliveryAddressId,
+          customerNote: dto.customerNote,
+          subtotal,
+          deliveryFee,
+          discountAmount,
+          totalAmount,
+          promoCodeId: promo?.promo.id,
+          items: { create: items },
+          statusHistory: {
+            create: {
+              newStatus: initialOrderStatus,
+              changedByUserId: userId,
+              changedByRole: "CUSTOMER",
+              note: statusNote
+            }
           }
-        }
-      },
-      include: this.orderInclude()
+        },
+        include: this.orderInclude()
+      });
+
+      if (isWalletOrder && walletLedgerEntryId) {
+        const ledgerReference = `KGO-WALLET-ORDER-${created.orderNumber}`;
+        const wallet = await tx.customerWallet.findUniqueOrThrow({ where: { customerId: customer.id } });
+        const ledger = await tx.customerWalletLedgerEntry.update({
+          where: { id: walletLedgerEntryId },
+          data: {
+            reference: ledgerReference,
+            sourceId: created.id,
+            description: `Wallet payment for order ${created.orderNumber}`,
+            metadata: { orderNumber: created.orderNumber } as Prisma.InputJsonValue
+          }
+        });
+        await tx.payment.create({
+          data: {
+            orderId: created.id,
+            customerId: customer.id,
+            gateway: "wallet",
+            transactionReference: ledger.reference,
+            amount: totalAmount,
+            currency: wallet.currency,
+            paymentPurpose: PaymentPurpose.ORDER_PAYMENT,
+            walletLedgerEntryId: ledger.id,
+            paymentMethod: "wallet",
+            paymentStatus: PaymentStatus.SUCCESSFUL,
+            paidAt: ledger.postedAt
+          }
+        });
+      }
+
+      if ((isWalletOrder || isCashOrder) && promo?.promo.id && discountAmount.greaterThan(0)) {
+        await this.recordPromoUsage(tx, promo.promo.id, customer.id, created.id, discountAmount);
+      }
+
+      return created;
     });
-    await this.notifications.createNotification({ userId, title: "Order created", message: `Order ${order.orderNumber} was created and is awaiting payment.`, type: NotificationType.ORDER_CREATED, entityType: "Order", entityId: order.id });
+
+    const paymentCopy = order.paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY
+      ? "with Pay on Delivery. Please pay only the amount shown in the app."
+      : order.paymentMethod === OrderPaymentMethod.WALLET
+        ? "and paid from your KariGO Wallet."
+        : "and is awaiting payment.";
+    await this.notifications.createNotification({ userId, title: "Order created", message: `Order ${order.orderNumber} was created ${paymentCopy}`, type: NotificationType.ORDER_CREATED, entityType: "Order", entityId: order.id });
+    if (vendor.userId && order.orderStatus === OrderStatus.PAID) {
+      const vendorMessage = order.paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY
+        ? `Order ${order.orderNumber} is Pay on Delivery. Cash collection is pending.`
+        : `Order ${order.orderNumber} is ready for confirmation.`;
+      await this.notifications.createNotification({
+        userId: vendor.userId,
+        title: order.paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY ? "New Cash/POD order" : "New paid order",
+        message: vendorMessage,
+        type: NotificationType.ORDER_CREATED,
+        entityType: "Order",
+        entityId: order.id
+      });
+    }
     await this.applicationNotifications.orderCreated({
       reference: order.orderNumber,
       recipientName: customer.user.fullName,
@@ -199,6 +296,110 @@ export class OrdersService {
       email: customer.user.email
     });
     return order;
+  }
+
+  private async debitWalletForOrder(
+    tx: Prisma.TransactionClient,
+    customerId: string,
+    amount: Prisma.Decimal,
+    context: { orderNumberPreview: string; userId: string }
+  ): Promise<string> {
+    if (!this.flagValue("WALLET_PAYMENTS_ENABLED", false)) {
+      throw new BadRequestException("Wallet payments are not enabled for this launch stage");
+    }
+    const wallet = await tx.customerWallet.upsert({
+      where: { customerId },
+      update: {},
+      create: { customerId }
+    });
+    if (wallet.status !== WalletStatus.ACTIVE) {
+      throw new BadRequestException("Only active wallets can be used for order payment");
+    }
+    if (wallet.availableBalance.lessThan(amount)) {
+      throw new BadRequestException("Wallet balance is not sufficient for this order");
+    }
+    const balanceAfter = wallet.availableBalance.sub(amount);
+    const now = new Date();
+    await tx.customerWallet.update({
+      where: { id: wallet.id },
+      data: {
+        availableBalance: balanceAfter,
+        ledgerBalance: balanceAfter,
+        lastActivityAt: now
+      }
+    });
+    const entry = await tx.customerWalletLedgerEntry.create({
+      data: {
+        walletId: wallet.id,
+        customerId,
+        entryType: WalletLedgerEntryType.ORDER_PAYMENT,
+        direction: WalletLedgerDirection.DEBIT,
+        status: WalletLedgerEntryStatus.POSTED,
+        amount,
+        currency: wallet.currency,
+        balanceBefore: wallet.availableBalance,
+        balanceAfter,
+        reference: `KGO-WALLET-ORDER-PENDING-${Date.now()}-${randomBytes(3).toString("hex").toUpperCase()}`,
+        sourceType: "ORDER",
+        description: `Wallet payment for order ${context.orderNumberPreview}`,
+        metadata: { initiatedByUserId: context.userId } as Prisma.InputJsonValue,
+        postedAt: now
+      }
+    });
+    return entry.id;
+  }
+
+  private async recordPromoUsage(
+    tx: Prisma.TransactionClient,
+    promoCodeId: string,
+    customerId: string,
+    orderId: string,
+    discountAmount: Prisma.Decimal
+  ) {
+    const existingUsage = await tx.promoCodeUsage.findUnique({
+      where: { promoCodeId_orderId: { promoCodeId, orderId } }
+    });
+    if (existingUsage) return;
+    await tx.promoCodeUsage.create({
+      data: { promoCodeId, customerId, orderId, discountAmount }
+    });
+    await tx.promoCode.update({
+      where: { id: promoCodeId },
+      data: { usageCount: { increment: 1 } }
+    });
+  }
+
+  private normalizePaymentMethod(value?: string): OrderPaymentMethod {
+    const normalized = value?.trim().toUpperCase();
+    if (!normalized || normalized === "SQUAD") return OrderPaymentMethod.SQUAD;
+    if (normalized === "WALLET") return OrderPaymentMethod.WALLET;
+    if (normalized === "CASH_ON_DELIVERY" || normalized === "CASHONDELIVERY" || normalized === "CASH") {
+      return OrderPaymentMethod.CASH_ON_DELIVERY;
+    }
+    if (value?.trim().toLowerCase() === "cash_on_delivery") return OrderPaymentMethod.CASH_ON_DELIVERY;
+    throw new BadRequestException("Unsupported checkout payment method");
+  }
+
+  private assertPaymentMethodAvailable(paymentMethod: OrderPaymentMethod, city?: string | null) {
+    if (paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY || paymentMethod === OrderPaymentMethod.WALLET) {
+      if (!city || !LAUNCH_PAYMENT_CITIES.has(city.trim().toLowerCase())) {
+        throw new BadRequestException("Cash/POD and wallet payment are available only in Kano and Abuja during launch readiness");
+      }
+    }
+    if (paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY && !this.flagValue("CASH_ON_DELIVERY_ENABLED", false)) {
+      throw new BadRequestException("Pay on Delivery is not enabled for this launch stage");
+    }
+    if (paymentMethod === OrderPaymentMethod.WALLET && !this.flagValue("WALLET_PAYMENTS_ENABLED", false)) {
+      throw new BadRequestException("Wallet payments are not enabled for this launch stage");
+    }
+  }
+
+  private flagValue(name: string, fallback: boolean): boolean {
+    const value = this.config.get<unknown>(name);
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value === 1;
+    if (typeof value !== "string" || !value.trim()) return fallback;
+    return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
   }
 
   async createParcelOrder(userId: string, dto: CreateParcelOrderDto) {

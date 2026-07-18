@@ -155,6 +155,12 @@ export const walletRefundFutureNote =
 
 export function paymentStatusView(status?: string): PaymentStatusView {
   switch (status) {
+    case "CASH_PENDING":
+      return {
+        title: "Pay on Delivery",
+        body: "This order is marked for cash collection at delivery. It is not electronically paid.",
+        actionHint: "Please pay only the amount shown in KariGO to the assigned Captain/vendor."
+      };
     case "SUCCESSFUL":
       return {
         title: "Payment successful",

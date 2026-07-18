@@ -8,6 +8,7 @@ import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { InitiatePaymentDto } from "./dto/initiate-payment.dto";
+import { InitiateWalletTopUpDto } from "./dto/initiate-wallet-top-up.dto";
 import { PaymentsService } from "./payments.service";
 
 @ApiTags("Payments")
@@ -28,6 +29,15 @@ export class PaymentsController {
   @ApiOperation({ summary: "Initiate payment for an owned order" })
   async initiate(@CurrentUser() user: AuthenticatedUser, @Body() dto: InitiatePaymentDto) {
     return { message: "Payment initiated", data: await this.paymentsService.initiate(user.id, dto) };
+  }
+
+  @Post("wallet-top-ups")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CUSTOMER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Initiate a Squad-backed customer wallet top-up" })
+  async walletTopUp(@CurrentUser() user: AuthenticatedUser, @Body() dto: InitiateWalletTopUpDto) {
+    return { message: "Wallet top-up initiated", data: await this.paymentsService.initiateWalletTopUp(user.id, dto) };
   }
 
   @Get("verify/:transactionReference")
