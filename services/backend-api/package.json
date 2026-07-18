@@ -5,7 +5,7 @@
   "scripts": {
     "build": "nest build && node scripts/verify-render-build.cjs",
     "start": "nest start",
-    "start:prod": "node dist/main.js",
+    "start:prod": "node dist/services/backend-api/src/main.js",
     "start:dev": "nest start --watch",
     "prisma:format": "prisma format",
     "prisma:generate": "prisma generate",
