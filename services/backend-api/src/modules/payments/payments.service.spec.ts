@@ -1,5 +1,15 @@
 import { BadRequestException, ConflictException } from "@nestjs/common";
-import { OrderStatus, PaymentStatus, Prisma, ServiceCategory } from "@prisma/client";
+import {
+  OrderStatus,
+  PaymentPurpose,
+  PaymentStatus,
+  Prisma,
+  ServiceCategory,
+  WalletLedgerDirection,
+  WalletLedgerEntryStatus,
+  WalletLedgerEntryType,
+  WalletStatus
+} from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { PaymentsService } from "./payments.service";
 import { PaymentProviderInitializationException } from "./providers/payment-provider-diagnostics";
@@ -8,6 +18,7 @@ import { PaymentProviderRegistry } from "./providers/payment-provider.registry";
 describe("PaymentsService", () => {
   const tx = {
     payment: {
+      create: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn()
     },
@@ -16,6 +27,8 @@ describe("PaymentsService", () => {
     ,
     promoCodeUsage: { findUnique: jest.fn(), create: jest.fn() },
     promoCode: { update: jest.fn() },
+    customerWallet: { findUnique: jest.fn(), update: jest.fn(), upsert: jest.fn() },
+    customerWalletLedgerEntry: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
     customerProfile: { findUnique: jest.fn() },
     vendor: { findUnique: jest.fn() },
     notification: { create: jest.fn() }
@@ -28,6 +41,8 @@ describe("PaymentsService", () => {
       findFirst: jest.fn(),
       findUnique: jest.fn()
     },
+    customerWallet: { upsert: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+    customerWalletLedgerEntry: { create: jest.fn(), update: jest.fn(), findUnique: jest.fn() },
     customerProfile: { findUnique: jest.fn() },
     $transaction: jest.fn((callback) => callback(tx))
   };
@@ -220,7 +235,8 @@ describe("PaymentsService", () => {
       providerForTopUp: "Squad by GTBank",
       backendVerificationRequired: true,
       clientSideCreditDisabled: true,
-      adminWalletVisibilityAvailable: true
+      adminWalletVisibilityAvailable: true,
+      minimumTopUpAmount: 100
     });
     const squad = readiness.providers.find((provider) => provider.provider === "squad");
     expect(squad?.customerSelectableInStaging).toBe(false);
@@ -270,11 +286,11 @@ describe("PaymentsService", () => {
     expect(serialized).not.toContain("live-webhook-secret-placeholder");
   });
 
-  it("reports launch Cash/POD readiness when the cash flag is enabled and wallet remains disabled", () => {
+  it("reports launch Cash/POD and wallet top-up readiness while wallet order payments remain disabled", () => {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       const values: Record<string, string | boolean> = {
         CASH_ON_DELIVERY_ENABLED: "true",
-        WALLET_TOP_UP_ENABLED: "false",
+        WALLET_TOP_UP_ENABLED: "true",
         WALLET_PAYMENTS_ENABLED: "false"
       };
       return values[key] ?? fallback;
@@ -284,14 +300,17 @@ describe("PaymentsService", () => {
     const configResult = service.publicPaymentConfig();
 
     expect(readiness.providerEnabledFlags.CASH_ON_DELIVERY_ENABLED).toBe("true");
-    expect(readiness.providerEnabledFlags.WALLET_TOP_UP_ENABLED).toBe("false_or_unset");
+    expect(readiness.providerEnabledFlags.WALLET_TOP_UP_ENABLED).toBe("true");
     expect(readiness.providerEnabledFlags.WALLET_PAYMENTS_ENABLED).toBe("false_or_unset");
     expect(readiness.launchPaymentOptions.cashOnDelivery.customerSelectable).toBe(true);
-    expect(readiness.launchPaymentOptions.wallet.walletTopUpEnabled).toBe(false);
+    expect(readiness.launchPaymentOptions.wallet.walletTopUpEnabled).toBe(true);
     expect(readiness.launchPaymentOptions.wallet.walletPaymentsEnabled).toBe(false);
     expect(configResult).toEqual(expect.objectContaining({
       cashPaymentEnabled: true,
-      walletTopUpEnabled: false,
+      walletTopUpEnabled: true,
+      walletTopUpProvider: "squad",
+      walletTopUpProviderLabel: "Squad by GTBank",
+      walletMinimumTopUpAmount: 100,
       walletPaymentsEnabled: false,
       launchCities: ["Kano", "Abuja"]
     }));
@@ -314,6 +333,9 @@ describe("PaymentsService", () => {
       cashPaymentNote: "Cash/POD remains a manually reconciled launch option and must not be marked electronically paid.",
       walletTopUpEnabled: false,
       walletPaymentsEnabled: false,
+      walletTopUpProvider: "squad",
+      walletTopUpProviderLabel: "Squad by GTBank",
+      walletMinimumTopUpAmount: 100,
       walletPaymentNote: "Wallet top-up and wallet order payment require backend verification before balance or order status changes.",
       launchCities: ["Kano", "Abuja"]
     });
@@ -352,6 +374,9 @@ describe("PaymentsService", () => {
       cashPaymentNote: "Cash/POD remains a manually reconciled launch option and must not be marked electronically paid.",
       walletTopUpEnabled: false,
       walletPaymentsEnabled: false,
+      walletTopUpProvider: "squad",
+      walletTopUpProviderLabel: "Squad by GTBank",
+      walletMinimumTopUpAmount: 100,
       walletPaymentNote: "Wallet top-up and wallet order payment require backend verification before balance or order status changes.",
       launchCities: ["Kano", "Abuja"]
     });
@@ -434,6 +459,153 @@ describe("PaymentsService", () => {
     expect(serialized).not.toContain("SECRET_KEY");
     expect(serialized).not.toContain("sk_");
     expect(prisma.payment.create).not.toHaveBeenCalled();
+  });
+
+  it("blocks wallet top-up when the launch flag is disabled", async () => {
+    await expect(service.initiateWalletTopUp("user-1", { amount: 5000 }))
+      .rejects.toThrow("Wallet top-up is not enabled for this launch stage");
+  });
+
+  it("initiates Squad wallet top-up without crediting the wallet client-side", async () => {
+    const squadProvider = {
+      name: "squad",
+      initialize: jest.fn(),
+      verify: jest.fn(),
+      parseWebhook: jest.fn()
+    };
+    registry.active.mockReturnValue(squadProvider);
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      if (key === "WALLET_TOP_UP_ENABLED") return "true";
+      return fallback;
+    });
+    prisma.customerProfile.findUnique.mockResolvedValue({
+      id: "customer-1",
+      user: { email: "customer@example.com", phoneNumber: "+2348012345678" }
+    });
+    tx.customerWallet.upsert.mockResolvedValue({
+      id: "wallet-1",
+      customerId: "customer-1",
+      status: WalletStatus.ACTIVE,
+      currency: "NGN",
+      availableBalance: new Prisma.Decimal(0)
+    });
+    tx.customerWalletLedgerEntry.create.mockResolvedValue({
+      id: "ledger-1",
+      reference: "KGO-WALLET-TOPUP",
+      status: WalletLedgerEntryStatus.PENDING
+    });
+    tx.payment.create.mockResolvedValue({
+      id: "payment-wallet-topup",
+      currency: "NGN",
+      transactionReference: "KGO-WALLET-TOPUP"
+    });
+    prisma.payment.update.mockResolvedValue({
+      id: "payment-wallet-topup",
+      transactionReference: "KGO-WALLET-TOPUP"
+    });
+    squadProvider.initialize.mockResolvedValue({
+      authorizationUrl: "https://pay.squadco.com/wallet-top-up",
+      providerResponse: { status: "success" }
+    });
+
+    const result = await service.initiateWalletTopUp("user-1", { amount: 5000 });
+
+    expect(tx.customerWalletLedgerEntry.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        entryType: WalletLedgerEntryType.TOP_UP,
+        direction: WalletLedgerDirection.CREDIT,
+        status: WalletLedgerEntryStatus.PENDING,
+        amount: new Prisma.Decimal(5000)
+      })
+    });
+    expect(tx.payment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        gateway: "squad",
+        paymentPurpose: PaymentPurpose.WALLET_TOP_UP,
+        paymentStatus: PaymentStatus.PENDING
+      })
+    });
+    expect(tx.customerWallet.update).not.toHaveBeenCalled();
+    expect(result.authorization.authorizationUrl).toBe("https://pay.squadco.com/wallet-top-up");
+  });
+
+  it("credits wallet only after backend verification and avoids duplicate crediting", async () => {
+    const squadProvider = {
+      name: "squad",
+      initialize: jest.fn(),
+      verify: jest.fn(),
+      parseWebhook: jest.fn()
+    };
+    registry.get.mockReturnValue(squadProvider);
+    prisma.payment.findFirst.mockResolvedValue({
+      id: "payment-wallet-topup",
+      customerId: "customer-1",
+      gateway: "squad",
+      amount: new Prisma.Decimal(5000),
+      currency: "NGN",
+      transactionReference: "KGO-WALLET-TOPUP",
+      paymentPurpose: PaymentPurpose.WALLET_TOP_UP,
+      walletLedgerEntryId: "ledger-1",
+      paymentStatus: PaymentStatus.PENDING,
+      order: null
+    });
+    squadProvider.verify.mockResolvedValue({
+      transactionReference: "KGO-WALLET-TOPUP",
+      successful: true,
+      amountMinor: 500000,
+      currency: "NGN",
+      providerResponse: { status: "success" }
+    });
+    tx.payment.findUnique.mockResolvedValue({
+      id: "payment-wallet-topup",
+      customerId: "customer-1",
+      gateway: "squad",
+      amount: new Prisma.Decimal(5000),
+      currency: "NGN",
+      transactionReference: "KGO-WALLET-TOPUP",
+      paymentPurpose: PaymentPurpose.WALLET_TOP_UP,
+      walletLedgerEntryId: "ledger-1",
+      paymentStatus: PaymentStatus.PENDING,
+      order: null
+    });
+    tx.customerWalletLedgerEntry.findUnique.mockResolvedValue({
+      id: "ledger-1",
+      walletId: "wallet-1",
+      status: WalletLedgerEntryStatus.PENDING
+    });
+    tx.customerWallet.findUnique.mockResolvedValue({
+      id: "wallet-1",
+      status: WalletStatus.ACTIVE,
+      availableBalance: new Prisma.Decimal(1000)
+    });
+    tx.payment.update.mockResolvedValue({ id: "payment-wallet-topup", paymentStatus: PaymentStatus.SUCCESSFUL });
+    tx.customerProfile.findUnique.mockResolvedValue({ userId: "user-1" });
+
+    await service.verify("user-1", "KGO-WALLET-TOPUP");
+
+    expect(tx.customerWallet.update).toHaveBeenCalledWith({
+      where: { id: "wallet-1" },
+      data: expect.objectContaining({
+        availableBalance: new Prisma.Decimal(6000),
+        ledgerBalance: new Prisma.Decimal(6000)
+      })
+    });
+    expect(tx.customerWalletLedgerEntry.update).toHaveBeenCalledWith({
+      where: { id: "ledger-1" },
+      data: expect.objectContaining({
+        status: WalletLedgerEntryStatus.POSTED,
+        sourceId: "payment-wallet-topup"
+      })
+    });
+
+    jest.clearAllMocks();
+    prisma.payment.findFirst.mockResolvedValue({
+      id: "payment-wallet-topup",
+      paymentStatus: PaymentStatus.SUCCESSFUL
+    });
+    const duplicate = await service.verify("user-1", "KGO-WALLET-TOPUP");
+    expect(duplicate.alreadyProcessed).toBe(true);
+    expect(tx.customerWallet.update).not.toHaveBeenCalled();
   });
 
   it("does not run admin sandbox initialization tests while live payments are configured", async () => {

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, WalletLedgerDirection, WalletLedgerEntryStatus, WalletLedgerEntryType, WalletStatus } from "@prisma/client";
+import { PaymentPurpose, PaymentStatus, Prisma, WalletLedgerDirection, WalletLedgerEntryStatus, WalletLedgerEntryType, WalletStatus } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -101,6 +101,26 @@ export class WalletService {
     return {
       ...this.toAdminWallet(wallet),
       ledgerEntries: wallet.ledgerEntries.map((entry) => this.toAdminLedgerEntry(entry))
+    };
+  }
+
+  async adminTopUps() {
+    const payments = await this.prisma.payment.findMany({
+      where: { paymentPurpose: PaymentPurpose.WALLET_TOP_UP },
+      include: { customer: { select: { id: true, user: { select: { id: true, fullName: true, phoneNumber: true, email: true } } } } },
+      orderBy: { createdAt: "desc" },
+      take: 100
+    });
+    const ledgerIds = payments
+      .map((payment) => payment.walletLedgerEntryId)
+      .filter((id): id is string => Boolean(id));
+    const ledgers = ledgerIds.length
+      ? await this.prisma.customerWalletLedgerEntry.findMany({ where: { id: { in: ledgerIds } } })
+      : [];
+    const ledgerById = new Map(ledgers.map((entry) => [entry.id, entry]));
+
+    return {
+      items: payments.map((payment) => this.toAdminTopUp(payment, payment.walletLedgerEntryId ? ledgerById.get(payment.walletLedgerEntryId) : undefined))
     };
   }
 
@@ -263,6 +283,28 @@ export class WalletService {
       createdByAdmin: entry.createdByAdmin,
       reversedAt: entry.reversedAt?.toISOString() ?? null,
       updatedAt: entry.updatedAt.toISOString()
+    };
+  }
+
+  private toAdminTopUp(
+    payment: Prisma.PaymentGetPayload<{ include: { customer: { select: { id: true; user: { select: { id: true; fullName: true; phoneNumber: true; email: true } } } } } }>,
+    ledger?: Prisma.CustomerWalletLedgerEntryGetPayload<object>
+  ) {
+    return {
+      id: payment.id,
+      customer: payment.customer,
+      amount: payment.amount,
+      currency: payment.currency,
+      reference: payment.transactionReference,
+      status: payment.paymentStatus,
+      provider: payment.gateway,
+      walletLedgerEntryId: payment.walletLedgerEntryId,
+      ledgerStatus: ledger?.status ?? null,
+      createdAt: payment.createdAt.toISOString(),
+      verifiedAt: payment.paidAt?.toISOString() ?? ledger?.postedAt?.toISOString() ?? null,
+      safeFailureReason: payment.paymentStatus === PaymentStatus.FAILED
+        ? "Wallet top-up failed during provider initialization or verification. Review provider dashboard and backend logs; no wallet credit was posted."
+        : null
     };
   }
 }

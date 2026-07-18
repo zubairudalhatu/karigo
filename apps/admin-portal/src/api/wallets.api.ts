@@ -78,6 +78,25 @@ export interface WalletAdjustmentResult {
   duplicate: boolean;
 }
 
+export interface AdminWalletTopUp {
+  id: string;
+  customer: AdminWallet["customer"];
+  amount: string | number;
+  currency: string;
+  reference: string;
+  status: string;
+  provider: string;
+  walletLedgerEntryId?: string | null;
+  ledgerStatus?: string | null;
+  createdAt: string;
+  verifiedAt?: string | null;
+  safeFailureReason?: string | null;
+}
+
+export interface AdminWalletTopUpsResult {
+  items: AdminWalletTopUp[];
+}
+
 function query(params: Record<string, string | undefined>) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => { if (value) search.set(key, value); });
@@ -88,6 +107,7 @@ function query(params: Record<string, string | undefined>) {
 export const walletsApi = {
   list: (filters: { status?: WalletStatus | "ALL"; search?: string } = {}) =>
     api.get<AdminWalletsResult>(`admin/wallets${query({ status: filters.status === "ALL" ? undefined : filters.status, search: filters.search })}`),
+  topUps: () => api.get<AdminWalletTopUpsResult>("admin/wallets/top-ups"),
   detail: (id: string) => api.get<AdminWalletDetail>(`admin/wallets/${id}`),
   adjustment: (id: string, payload: WalletAdjustmentPayload) =>
     api.post<WalletAdjustmentResult>(`admin/wallets/${id}/adjustments`, payload)

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { AdminWalletDetail, walletsApi, WalletLedgerDirection, WalletStatus } from "../../src/api/wallets.api";
+import { AdminWalletDetail, AdminWalletTopUp, walletsApi, WalletLedgerDirection, WalletStatus } from "../../src/api/wallets.api";
 import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
 import { friendlyError, money } from "../../src/lib/errors";
 
@@ -24,6 +24,7 @@ export default function WalletsPage() {
   const [status, setStatus] = useState<WalletStatus | "ALL">("ALL");
   const [search, setSearch] = useState("");
   const [data, setData] = useState<Awaited<ReturnType<typeof walletsApi.list>> | null>(null);
+  const [topUps, setTopUps] = useState<AdminWalletTopUp[]>([]);
   const [detail, setDetail] = useState<AdminWalletDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -39,8 +40,14 @@ export default function WalletsPage() {
   const load = () => {
     setLoading(true);
     setError("");
-    walletsApi.list({ status, search })
-      .then(setData)
+    Promise.all([
+      walletsApi.list({ status, search }),
+      walletsApi.topUps()
+    ])
+      .then(([wallets, topUpData]) => {
+        setData(wallets);
+        setTopUps(topUpData.items);
+      })
       .catch((e) => setError(friendlyError(e)))
       .finally(() => setLoading(false));
   };
@@ -109,6 +116,7 @@ export default function WalletsPage() {
         <button className="secondary" onClick={load} disabled={loading}>Refresh</button>
       </header>
       <p className="muted">View customer wallet balances and ledger activity. Manual adjustments are controlled admin ledger entries only; this page does not activate live top-up, withdrawals, automatic refunds, wallet checkout, referral rewards or subscription billing.</p>
+      <p className="muted">Wallet top-up records are read-only here. Credits must come only from backend Squad verification or a verified webhook; this page does not manually mark provider payments successful.</p>
       <p className="success">{message}</p>
       <ErrorMessage>{error}</ErrorMessage>
 
@@ -127,6 +135,30 @@ export default function WalletsPage() {
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customer name, phone or email" />
           <button className="secondary" onClick={load} disabled={loading}>Search</button>
         </div>
+      </section>
+
+      <section className="section">
+        <h2>Wallet top-up records</h2>
+        <p className="muted">Recent Squad wallet top-up payments. Raw provider payloads and secrets are never shown.</p>
+        {topUps.length ? (
+          <table className="table">
+            <thead><tr><th>Customer</th><th>Amount</th><th>Reference</th><th>Status</th><th>Provider</th><th>Created</th><th>Verified</th><th>Safe note</th></tr></thead>
+            <tbody>
+              {topUps.map((topUp) => (
+                <tr key={topUp.id}>
+                  <td>{topUp.customer.user.fullName}<br /><small className="muted">{topUp.customer.user.phoneNumber}</small></td>
+                  <td>{money(topUp.amount)}</td>
+                  <td>{topUp.reference}</td>
+                  <td><Badge>{topUp.status}</Badge>{topUp.ledgerStatus ? <><br /><small className="muted">Ledger: {topUp.ledgerStatus}</small></> : null}</td>
+                  <td>{topUp.provider}</td>
+                  <td>{formatDate(topUp.createdAt)}</td>
+                  <td>{formatDate(topUp.verifiedAt)}</td>
+                  <td>{topUp.safeFailureReason ?? "No failure recorded."}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <Empty>No wallet top-up records yet.</Empty>}
       </section>
 
       <section className="detail-grid">

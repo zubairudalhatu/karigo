@@ -52,6 +52,7 @@ export interface PaymentProviderReadiness {
       backendVerificationRequired: boolean;
       clientSideCreditDisabled: boolean;
       adminWalletVisibilityAvailable: boolean;
+      minimumTopUpAmount: number;
       envFlags: string[];
       recommendedValues: Record<string, string>;
       note: string;

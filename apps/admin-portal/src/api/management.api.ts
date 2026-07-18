@@ -62,7 +62,22 @@ export interface LoginActivity {
 
 export interface IntegrationSettings {
   environment: string;
-  payments: { provider: string; liveEnabled: boolean; mockFallbackAvailable: boolean; livePaymentCollectionDisabled: boolean; sandboxProviders: Record<string, boolean> };
+  payments: {
+    provider: string;
+    liveEnabled: boolean;
+    mockFallbackAvailable: boolean;
+    livePaymentCollectionDisabled: boolean;
+    sandboxProviders: Record<string, boolean>;
+    wallet?: {
+      walletTopUpEnabled: boolean;
+      walletPaymentsEnabled: boolean;
+      providerForTopUp: string;
+      backendVerificationRequired: boolean;
+      clientSideCreditDisabled: boolean;
+      minimumTopUpAmount: number;
+      note: string;
+    };
+  };
   utilities: { accelerateConfigured: boolean; liveUtilityFulfilmentEnabled: boolean };
   notifications: { termiiConfigured: boolean; resendConfigured: boolean; marketingEnabled: boolean; bulkMessagingEnabled: boolean };
   biometricReadiness: { credentialStorageModelReady: boolean; passwordlessLoginEnabled: boolean; note: string };

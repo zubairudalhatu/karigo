@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
+import type { PublicPaymentConfig } from "@karigo/shared-types";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { CustomerWalletLedgerResult, walletApi, WalletLedgerDirection, WalletLedgerEntryType } from "../../src/api/wallet.api";
@@ -7,6 +8,7 @@ import { paymentsApi } from "../../src/api/payments.api";
 import { Button, Card, Empty, Field, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError, money } from "../../src/lib/errors";
 import { isExternalPaymentAuthorizationUrl, openExternalPaymentAuthorization } from "../../src/lib/payment-flow";
+import { fallbackCustomerPaymentConfig } from "../../src/lib/payment-status";
 
 const titleForType: Record<WalletLedgerEntryType, string> = {
   TOP_UP: "Top-up",
@@ -37,6 +39,8 @@ export default function CustomerWalletScreen() {
   const [topUpError, setTopUpError] = useState("");
   const [pendingTopUpReference, setPendingTopUpReference] = useState("");
   const [pendingTopUpUrl, setPendingTopUpUrl] = useState("");
+  const [paymentConfig, setPaymentConfig] = useState<PublicPaymentConfig>(fallbackCustomerPaymentConfig);
+  const [paymentConfigError, setPaymentConfigError] = useState("");
 
   const load = async () => {
     setError("");
@@ -50,12 +54,30 @@ export default function CustomerWalletScreen() {
     }
   };
 
-  useEffect(() => { void load(); }, []);
+  async function loadPaymentConfig() {
+    try {
+      setPaymentConfig(await paymentsApi.publicConfig());
+      setPaymentConfigError("");
+    } catch {
+      setPaymentConfig(fallbackCustomerPaymentConfig);
+      setPaymentConfigError("Wallet top-up availability could not be refreshed. Please retry.");
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    void loadPaymentConfig();
+  }, []);
 
   async function initiateTopUp() {
+    if (!paymentConfig.walletTopUpEnabled) {
+      setTopUpError("Wallet top-up is not available yet.");
+      return;
+    }
     const amount = Number(topUpAmount);
-    if (!Number.isFinite(amount) || amount < 100) {
-      setTopUpError("Enter a top-up amount of at least NGN 100.");
+    const minimumAmount = paymentConfig.walletMinimumTopUpAmount ?? 100;
+    if (!Number.isFinite(amount) || amount < minimumAmount) {
+      setTopUpError(`Enter a top-up amount of at least ${money(minimumAmount)}.`);
       return;
     }
     setTopUpBusy(true);
@@ -67,7 +89,7 @@ export default function CustomerWalletScreen() {
       setPendingTopUpReference(result.payment.transactionReference);
       if (isExternalPaymentAuthorizationUrl(url)) {
         setPendingTopUpUrl(url);
-        setTopUpMessage("Squad wallet top-up checkout opened. Return here and verify after completing payment.");
+        setTopUpMessage("Squad wallet top-up checkout opened. Return here and verify after completing payment. Pending verification.");
         await openExternalPaymentAuthorization(url);
       } else {
         await paymentsApi.verify(result.payment.transactionReference);
@@ -106,8 +128,9 @@ export default function CustomerWalletScreen() {
   const wallet = data?.wallet;
 
   return <Protected>
-    <Screen title="KariGO Wallet" refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }}>
+    <Screen title="KariGO Wallet" refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); void loadPaymentConfig(); }}>
       <Message error>{error}</Message>
+      <Message error>{paymentConfigError}</Message>
 
       {wallet ? <View style={styles.balanceCard}>
         <View style={styles.balanceHeader}>
@@ -127,13 +150,17 @@ export default function CustomerWalletScreen() {
 
       <Card>
         <Text style={ui.cardTitle}>Top up with Squad</Text>
-        <Text style={ui.muted}>Enter an amount, complete Squad checkout, return to KariGO, then verify. KariGO will not credit the wallet from the app alone.</Text>
+        <Text style={ui.muted}>Provider: {paymentConfig.walletTopUpProviderLabel ?? "Squad by GTBank"}</Text>
+        <Text style={ui.muted}>Minimum amount: {money(paymentConfig.walletMinimumTopUpAmount ?? 100)}</Text>
+        <Text style={ui.muted}>{paymentConfig.walletTopUpEnabled ? "Enter an amount, complete Squad checkout, return to KariGO, then verify. KariGO will not credit the wallet from the app alone." : "Wallet top-up is not active yet. KariGO will enable it after Squad verification is approved."}</Text>
         <Message>{topUpMessage}</Message>
         <Message error>{topUpError}</Message>
         <Field keyboardType="decimal-pad" value={topUpAmount} onChangeText={setTopUpAmount} placeholder="Amount e.g. 5000" />
-        <Button title={topUpBusy ? "Starting top-up..." : "Start wallet top-up"} onPress={initiateTopUp} disabled={topUpBusy || !!pendingTopUpReference} />
+        <Button title={topUpBusy ? "Starting top-up..." : "Start wallet top-up"} onPress={initiateTopUp} disabled={topUpBusy || !!pendingTopUpReference || !paymentConfig.walletTopUpEnabled} />
         {pendingTopUpUrl ? <Button title="Open Squad checkout again" tone="muted" onPress={() => openExternalPaymentAuthorization(pendingTopUpUrl)} disabled={topUpBusy} /> : null}
         {pendingTopUpReference ? <Button title={topUpBusy ? "Verifying..." : "Verify wallet top-up"} onPress={verifyTopUp} disabled={topUpBusy} /> : null}
+        {pendingTopUpReference ? <Text style={ui.muted}>Pending verification. Your balance updates only after backend verification or webhook confirmation.</Text> : null}
+        <Text style={ui.muted}>Wallet order payment: {paymentConfig.walletPaymentsEnabled ? "Available when your balance covers an order." : "Disabled until top-up verification is complete."}</Text>
       </Card>
 
       <Card>

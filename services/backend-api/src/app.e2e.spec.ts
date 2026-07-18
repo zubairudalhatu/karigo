@@ -94,6 +94,7 @@ describe("Backend foundation (HTTP)", () => {
     await request(app!.getHttpServer()).get("/api/v1/admin/dashboard").expect(401);
     await request(app!.getHttpServer()).get("/api/v1/admin/reports/operations").expect(401);
     await request(app!.getHttpServer()).get("/api/v1/admin/wallets").expect(401);
+    await request(app!.getHttpServer()).get("/api/v1/admin/wallets/top-ups").expect(401);
     await request(app!.getHttpServer())
       .post("/api/v1/admin/wallets/00000000-0000-0000-0000-000000000000/adjustments")
       .send({})
@@ -156,6 +157,9 @@ describe("Backend foundation (HTTP)", () => {
       cashPaymentLabel: "Pay on Delivery",
       walletTopUpEnabled: false,
       walletPaymentsEnabled: false,
+      walletTopUpProvider: "squad",
+      walletTopUpProviderLabel: "Squad by GTBank",
+      walletMinimumTopUpAmount: 100,
       launchCities: ["Kano", "Abuja"]
     }));
     expect(JSON.stringify(response.body)).not.toContain("SECRET_KEY");

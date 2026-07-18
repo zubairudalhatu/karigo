@@ -89,6 +89,10 @@ assert(paymentsApiSource.includes("launchPaymentOptions"), "Admin payment readin
 const settingsPage = read("app", "settings", "page.tsx");
 assert(settingsPage.includes("Squad by GTBank is the primary launch provider"), "Admin Developer Settings must show Squad as the launch provider in live mode.");
 assert(settingsPage.includes("Mock payment is hidden in public live mode"), "Admin Developer Settings must explain mock is hidden from public live checkout.");
+assert(settingsPage.includes("Wallet Launch Controls"), "Admin Developer Settings must show wallet launch controls.");
+assert(settingsPage.includes("Wallet top-up enabled"), "Admin Developer Settings must show wallet top-up flag state.");
+assert(settingsPage.includes("Wallet payments enabled"), "Admin Developer Settings must show wallet payment flag state.");
+assert(settingsPage.includes("Client-side credit disabled"), "Admin Developer Settings must show wallet client-side credit guardrail.");
 
 const smeServicesSummaryPage = read("app", "sme-services", "summary", "page.tsx");
 assert(smeServicesSummaryPage.includes("SME Services operations summary"), "Admin SME Services summary page must exist.");
@@ -215,9 +219,13 @@ assert(smeServicesApiSource.includes("approve-create-provider"), "Admin portal m
 const walletsPage = read("app", "wallets", "page.tsx");
 assert(walletsPage.includes("Wallets"), "Admin wallets page must exist.");
 assert(walletsPage.includes("walletsApi.list"), "Admin wallets page must list customer wallets.");
+assert(walletsPage.includes("walletsApi.topUps"), "Admin wallets page must list wallet top-up records.");
 assert(walletsPage.includes("walletsApi.detail"), "Admin wallets page must inspect wallet detail and ledger entries.");
 assert(walletsPage.includes("walletsApi.adjustment"), "Admin wallets page must call the controlled manual adjustment endpoint.");
 assert(walletsPage.includes("controlled admin ledger entries only"), "Admin wallets page must state manual adjustment limits.");
+assert(walletsPage.includes("Wallet top-up records"), "Admin wallets page must show wallet top-up records.");
+assert(walletsPage.includes("Credits must come only from backend Squad verification"), "Admin wallets page must state backend-only crediting.");
+assert(walletsPage.includes("Raw provider payloads and secrets are never shown"), "Admin wallets page must hide sensitive provider payloads.");
 assert(walletsPage.includes("does not activate live top-up, withdrawals, automatic refunds, wallet checkout, referral rewards or subscription billing"), "Admin wallets page must not imply live wallet features are active.");
 assert(walletsPage.includes("Record manual adjustment"), "Admin wallets page must expose a controlled adjustment action.");
 assert(walletsPage.includes("window.confirm"), "Admin wallet adjustments must require confirmation.");
@@ -225,6 +233,7 @@ assert(walletsPage.includes("friendlyError(e, \"form\")"), "Admin wallet form er
 assert(!walletsPage.includes("Transfer funds") && !walletsPage.includes("Pay now"), "Admin wallets page must not expose live transfer or payment actions.");
 const walletsApiSource = read("src", "api", "wallets.api.ts");
 assert(walletsApiSource.includes("admin/wallets"), "Admin wallet API must call wallet list and detail endpoints.");
+assert(walletsApiSource.includes("admin/wallets/top-ups"), "Admin wallet API must call wallet top-up records endpoint.");
 assert(walletsApiSource.includes("admin/wallets/${id}/adjustments"), "Admin wallet API must call manual adjustment endpoint.");
 
 const referralsPage = read("app", "referrals", "page.tsx");

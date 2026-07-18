@@ -51,6 +51,12 @@ export class AdminWalletController {
     return { message: "Customer wallets retrieved", data: await this.wallet.adminList(query) };
   }
 
+  @Get("top-ups")
+  @ApiOperation({ summary: "List wallet top-up payment records for admin review" })
+  async topUps() {
+    return { message: "Wallet top-up records retrieved", data: await this.wallet.adminTopUps() };
+  }
+
   @Get(":walletId")
   @ApiOperation({ summary: "Get a customer wallet and recent ledger entries for admin review" })
   async detail(@Param("walletId", ParseUUIDPipe) walletId: string) {

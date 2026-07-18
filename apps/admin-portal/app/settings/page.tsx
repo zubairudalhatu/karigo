@@ -37,6 +37,14 @@ export default function SettingsPage() {
         <p className="muted">Paystack configured: {String(settings.payments.sandboxProviders.paystackConfigured)} - Monnify configured: {String(settings.payments.sandboxProviders.monnifyConfigured)} - Squad configured: {String(settings.payments.sandboxProviders.squadConfigured)}</p>
       </article>
       <article className="card">
+        <h2>Wallet Launch Controls</h2>
+        <p>Wallet top-up enabled: {flag(Boolean(settings.payments.wallet?.walletTopUpEnabled))} Wallet payments enabled: {flag(Boolean(settings.payments.wallet?.walletPaymentsEnabled))}</p>
+        <p>Provider for top-up: <strong>{settings.payments.wallet?.providerForTopUp ?? "Squad by GTBank"}</strong></p>
+        <p>Minimum top-up amount: <strong>NGN {settings.payments.wallet?.minimumTopUpAmount ?? 100}</strong></p>
+        <p>Backend verification required: {flag(Boolean(settings.payments.wallet?.backendVerificationRequired))} Client-side credit disabled: {flag(Boolean(settings.payments.wallet?.clientSideCreditDisabled))}</p>
+        <p className="muted">{settings.payments.wallet?.note ?? "Wallet top-up and wallet order payment remain controlled by backend launch flags."}</p>
+      </article>
+      <article className="card">
         <h2>Utilities and Notifications</h2>
         <p>Accelerate configured: {flag(settings.utilities.accelerateConfigured)} Live utility fulfilment: {flag(settings.utilities.liveUtilityFulfilmentEnabled)}</p>
         <p>Termii configured: {flag(settings.notifications.termiiConfigured)} Resend configured: {flag(settings.notifications.resendConfigured)}</p>

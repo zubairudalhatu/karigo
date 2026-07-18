@@ -66,6 +66,9 @@ describe("WalletService", () => {
       findUnique: jest.fn(),
       create: jest.fn()
     },
+    payment: {
+      findMany: jest.fn()
+    },
     $transaction: jest.fn()
   };
   const audit = { record: jest.fn() };
@@ -126,6 +129,38 @@ describe("WalletService", () => {
     });
     expect(result.items[0]).not.toHaveProperty("metadata");
     expect(result.items[0]).not.toHaveProperty("createdByAdmin");
+  });
+
+  it("returns safe admin wallet top-up records without provider payloads", async () => {
+    prisma.payment.findMany.mockResolvedValue([{
+      id: "payment-topup-1",
+      customerId: customer.id,
+      customer: wallet.customer,
+      amount: new Prisma.Decimal(5000),
+      currency: "NGN",
+      transactionReference: "KGO-WALLET-TOPUP-1",
+      paymentStatus: "SUCCESSFUL",
+      gateway: "squad",
+      walletLedgerEntryId: ledgerEntry.id,
+      createdAt: now,
+      paidAt: now
+    }]);
+    prisma.customerWalletLedgerEntry.findMany.mockResolvedValue([{ ...ledgerEntry, entryType: WalletLedgerEntryType.TOP_UP }]);
+
+    const result = await service.adminTopUps();
+
+    expect(prisma.payment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { paymentPurpose: "WALLET_TOP_UP" }
+    }));
+    expect(result.items[0]).toMatchObject({
+      customer: wallet.customer,
+      amount: new Prisma.Decimal(5000),
+      reference: "KGO-WALLET-TOPUP-1",
+      status: "SUCCESSFUL",
+      provider: "squad",
+      ledgerStatus: ledgerEntry.status
+    });
+    expect(result.items[0]).not.toHaveProperty("gatewayResponse");
   });
 
   it("creates a controlled admin credit adjustment and records an audit trail", async () => {

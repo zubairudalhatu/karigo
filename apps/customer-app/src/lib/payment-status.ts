@@ -65,7 +65,12 @@ export const fallbackCustomerPaymentConfig: PublicPaymentConfig = squadLiveLaunc
       mockPaymentVisible: false,
       squadReady: true,
       monnifyVisible: false,
-      paystackVisible: false
+      paystackVisible: false,
+      walletTopUpEnabled: false,
+      walletPaymentsEnabled: false,
+      walletTopUpProvider: "squad",
+      walletTopUpProviderLabel: "Squad by GTBank",
+      walletMinimumTopUpAmount: 100
     }
   : {
       livePaymentsEnabled: false,
@@ -75,7 +80,12 @@ export const fallbackCustomerPaymentConfig: PublicPaymentConfig = squadLiveLaunc
       mockPaymentVisible: true,
       squadReady: squadSandboxCheckoutEnabled,
       monnifyVisible: true,
-      paystackVisible: true
+      paystackVisible: true,
+      walletTopUpEnabled: false,
+      walletPaymentsEnabled: false,
+      walletTopUpProvider: "squad",
+      walletTopUpProviderLabel: "Squad by GTBank",
+      walletMinimumTopUpAmount: 100
     };
 
 export function isSquadLivePaymentConfig(config: PublicPaymentConfig = fallbackCustomerPaymentConfig): boolean {
@@ -122,8 +132,8 @@ export function paymentProviderLabel(provider?: string | null, config: PublicPay
 
 export function paymentSafetyNoteForConfig(config: PublicPaymentConfig = fallbackCustomerPaymentConfig): string {
   return isSquadLivePaymentConfig(config)
-    ? "Squad by GTBank is KariGO's approved launch payment provider. KariGO verifies payment server-side before marking an order paid. Wallet funding, automatic refunds and payout automation remain disabled."
-    : "Mock Payment is for staging fallback. Squad Sandbox is hidden unless explicitly enabled; Monnify and Paystack remain pending approval and are for controlled sandbox/test checks only. Live payments, wallet funding, automatic refunds and payout automation remain disabled.";
+    ? "Squad by GTBank is KariGO's approved launch payment provider. KariGO verifies payment server-side before marking an order paid. Wallet top-up is controlled by backend config; wallet order payment, automatic refunds and payout automation remain disabled until separately approved."
+    : "Mock Payment is for staging fallback. Squad Sandbox is hidden unless explicitly enabled; Monnify and Paystack remain pending approval and are for controlled sandbox/test checks only. Wallet top-up is controlled by backend config; wallet order payment, automatic refunds and payout automation remain disabled until separately approved.";
 }
 
 export const paymentSafetyNote = paymentSafetyNoteForConfig();

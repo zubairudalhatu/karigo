@@ -462,6 +462,17 @@ export class AdminOperationsService {
           paystackConfigured: Boolean(this.configValue("PAYSTACK_SECRET_KEY")),
           monnifyConfigured: Boolean(this.configValue("MONNIFY_API_KEY")),
           squadConfigured: squadLiveConfigured || Boolean(this.configValue("SQUAD_SECRET_KEY"))
+        },
+        wallet: {
+          walletTopUpEnabled: this.configFlag("WALLET_TOP_UP_ENABLED", false),
+          walletPaymentsEnabled: this.configFlag("WALLET_PAYMENTS_ENABLED", false),
+          providerForTopUp: "Squad by GTBank",
+          backendVerificationRequired: true,
+          clientSideCreditDisabled: true,
+          minimumTopUpAmount: this.configNumber("WALLET_MIN_TOP_UP_AMOUNT", 100),
+          note: this.configFlag("WALLET_TOP_UP_ENABLED", false)
+            ? "Wallet top-up is enabled through Squad by GTBank. Wallet order payment remains controlled by WALLET_PAYMENTS_ENABLED."
+            : "Wallet top-up remains disabled until WALLET_TOP_UP_ENABLED is set after verification approval."
         }
       },
       utilities: {
@@ -666,6 +677,10 @@ export class AdminOperationsService {
     const value = this.configValue(key);
     if (!value) return fallback;
     return ["true", "1", "yes", "on"].includes(value.toLowerCase());
+  }
+  private configNumber(key: string, fallback: number) {
+    const value = Number(this.configValue(key));
+    return Number.isFinite(value) && value > 0 ? value : fallback;
   }
   private vendorDashboardUrl() {
     return this.configValue("VENDOR_DASHBOARD_URL", "https://vendor.karigo.com.ng").replace(/\/+$/, "");

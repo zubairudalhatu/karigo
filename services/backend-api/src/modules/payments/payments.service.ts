@@ -129,8 +129,9 @@ export class PaymentsService {
     }
     const customer = await this.requireCustomer(userId);
     const amount = new Prisma.Decimal(dto.amount).toDecimalPlaces(2);
-    if (amount.lessThan(100)) {
-      throw new BadRequestException("Wallet top-up amount must be at least NGN 100");
+    const minimumTopUpAmount = this.walletMinimumTopUpAmount();
+    if (amount.lessThan(minimumTopUpAmount)) {
+      throw new BadRequestException(`Wallet top-up amount must be at least NGN ${minimumTopUpAmount}`);
     }
 
     const provider = this.providerRegistry.active();
@@ -315,6 +316,9 @@ export class PaymentsService {
       cashPaymentNote: "Cash/POD remains a manually reconciled launch option and must not be marked electronically paid.",
       walletTopUpEnabled: this.flagValue("WALLET_TOP_UP_ENABLED", false),
       walletPaymentsEnabled: this.flagValue("WALLET_PAYMENTS_ENABLED", false),
+      walletTopUpProvider: "squad",
+      walletTopUpProviderLabel: "Squad by GTBank",
+      walletMinimumTopUpAmount: this.walletMinimumTopUpAmount(),
       walletPaymentNote: "Wallet top-up and wallet order payment require backend verification before balance or order status changes.",
       launchCities: ["Kano", "Abuja"]
     };
@@ -801,12 +805,13 @@ export class PaymentsService {
         backendVerificationRequired: true,
         clientSideCreditDisabled: true,
         adminWalletVisibilityAvailable: true,
+        minimumTopUpAmount: this.walletMinimumTopUpAmount(),
         envFlags: ["WALLET_TOP_UP_ENABLED", "WALLET_PAYMENTS_ENABLED"],
         recommendedValues: {
-          WALLET_TOP_UP_ENABLED: "false",
+          WALLET_TOP_UP_ENABLED: "true",
           WALLET_PAYMENTS_ENABLED: "false"
         },
-        note: "Wallet top-up and wallet checkout must remain disabled until Squad wallet top-up verification is completed end to end."
+        note: "Wallet top-up may be enabled after Squad checkout verification is configured. Wallet order payment remains disabled until top-up crediting is verified end to end."
       }
     };
   }
@@ -1009,6 +1014,11 @@ export class PaymentsService {
     const value = this.optionalValue(name);
     if (!value) return fallback;
     return ["true", "1", "yes", "on"].includes(value.toLowerCase());
+  }
+
+  private walletMinimumTopUpAmount(): number {
+    const value = Number(this.optionalValue("WALLET_MIN_TOP_UP_AMOUNT") ?? 100);
+    return Number.isFinite(value) && value > 0 ? value : 100;
   }
 
   private providerLaunchProfile(provider: PaymentProviderName, customerSelectable: boolean) {
