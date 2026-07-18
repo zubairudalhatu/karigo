@@ -40,6 +40,21 @@ export class PaymentsController {
     return { message: "Wallet top-up initiated", data: await this.paymentsService.initiateWalletTopUp(user.id, dto) };
   }
 
+  @Get("wallet-top-ups/verify/:transactionReference")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CUSTOMER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Verify an owned wallet top-up payment" })
+  async verifyWalletTopUp(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("transactionReference") transactionReference: string
+  ) {
+    return {
+      message: "Wallet top-up verification completed",
+      data: await this.paymentsService.verifyWalletTopUp(user.id, transactionReference)
+    };
+  }
+
   @Get("verify/:transactionReference")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CUSTOMER)

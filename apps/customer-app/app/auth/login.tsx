@@ -6,7 +6,7 @@ import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 
 export default function CustomerLogin() {
-  const { login, sessionMessage } = useAuth();
+  const { biometricAvailable, biometricEnabled, login, refreshWithBiometrics, sessionMessage } = useAuth();
   const [phoneNumber, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -33,6 +33,19 @@ export default function CustomerLogin() {
     } catch (e) { setError(friendlyError(e, "login")); } finally { setBusy(false); }
   }
 
+  async function biometricSignIn() {
+    setBusy(true);
+    setError("");
+    try {
+      await refreshWithBiometrics();
+      router.replace("/tabs/home");
+    } catch (e) {
+      setError(friendlyError(e, "login"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return <Screen title="Customer login">
     <Text style={ui.muted}>Sign in to order, track deliveries and get support. If your phone is registered but not verified, KariGO will send a new OTP.</Text>
     <Field placeholder="+234..." value={phoneNumber} onChangeText={setPhone} keyboardType="phone-pad" autoCapitalize="none" />
@@ -40,6 +53,8 @@ export default function CustomerLogin() {
     <Message>{sessionMessage}</Message>
     <Message error>{error}</Message>
     <Button title={busy ? "Signing in..." : "Sign in"} onPress={submit} disabled={busy || !phoneNumber || !password} />
+    {biometricEnabled ? <Button title="Sign in with biometrics" tone="muted" onPress={biometricSignIn} disabled={busy || !biometricAvailable} /> : null}
+    <NavLink href="/auth/forgot-password" label="Forgot password?" />
     <NavLink href="/auth/signup" label="New to KariGO? Create account" />
   </Screen>;
 }

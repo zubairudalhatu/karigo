@@ -491,8 +491,8 @@ export class AdminOperationsService {
         credentialStorageModelReady: true,
         passwordlessLoginEnabled: this.configFlag("PASSWORDLESS_LOGIN_ENABLED", false),
         note: this.configFlag("PASSWORDLESS_LOGIN_ENABLED", false)
-          ? "Passwordless readiness flag is enabled. App biometric activation must still use secure token storage and fallback login."
-          : "Credential storage ready; biometric login pending app activation."
+          ? "Passwordless readiness flag is enabled. Customer and Captain apps use device biometrics only to refresh saved backend sessions with secure token storage and fallback login."
+          : "Customer and Captain biometric refresh sign-in is implemented, but public activation remains controlled by PASSWORDLESS_LOGIN_ENABLED."
       }
     };
   }

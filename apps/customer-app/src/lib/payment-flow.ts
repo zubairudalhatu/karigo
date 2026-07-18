@@ -20,12 +20,11 @@ export async function openExternalPaymentAuthorization(url: string): Promise<voi
   }
   const normalizedUrl = url.trim();
   if (Platform.OS === "web" && typeof window !== "undefined") {
-    window.open(normalizedUrl, "_blank", "noopener,noreferrer");
+    const opened = window.open(normalizedUrl, "_blank", "noopener,noreferrer");
+    if (!opened) {
+      throw new Error("Payment authorization link could not be opened.");
+    }
     return;
-  }
-  const canOpen = await Linking.canOpenURL(normalizedUrl);
-  if (!canOpen) {
-    throw new Error("Payment authorization link could not be opened.");
   }
   await Linking.openURL(normalizedUrl);
 }

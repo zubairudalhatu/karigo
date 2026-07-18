@@ -581,7 +581,7 @@ describe("PaymentsService", () => {
     tx.payment.update.mockResolvedValue({ id: "payment-wallet-topup", paymentStatus: PaymentStatus.SUCCESSFUL });
     tx.customerProfile.findUnique.mockResolvedValue({ userId: "user-1" });
 
-    await service.verify("user-1", "KGO-WALLET-TOPUP");
+    await service.verifyWalletTopUp("user-1", "KGO-WALLET-TOPUP");
 
     expect(tx.customerWallet.update).toHaveBeenCalledWith({
       where: { id: "wallet-1" },
@@ -601,11 +601,24 @@ describe("PaymentsService", () => {
     jest.clearAllMocks();
     prisma.payment.findFirst.mockResolvedValue({
       id: "payment-wallet-topup",
-      paymentStatus: PaymentStatus.SUCCESSFUL
+      paymentStatus: PaymentStatus.SUCCESSFUL,
+      paymentPurpose: PaymentPurpose.WALLET_TOP_UP
     });
-    const duplicate = await service.verify("user-1", "KGO-WALLET-TOPUP");
+    const duplicate = await service.verifyWalletTopUp("user-1", "KGO-WALLET-TOPUP");
     expect(duplicate.alreadyProcessed).toBe(true);
     expect(tx.customerWallet.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects order payment references on the wallet top-up verification route", async () => {
+    prisma.payment.findFirst.mockResolvedValue({
+      id: "payment-order",
+      paymentStatus: PaymentStatus.PENDING,
+      paymentPurpose: PaymentPurpose.ORDER_PAYMENT
+    });
+
+    await expect(service.verifyWalletTopUp("user-1", "KGO-ORDER-PAYMENT"))
+      .rejects.toThrow("Payment reference is not a wallet top-up");
+    expect(registry.get).not.toHaveBeenCalled();
   });
 
   it("does not run admin sandbox initialization tests while live payments are configured", async () => {

@@ -240,11 +240,11 @@ export default function Checkout() {
       const startedProvider = started.payment.gateway ?? selectedPaymentProvider;
       const startedProviderLabel = paymentProviderLabel(startedProvider, effectivePaymentConfig);
       if (isExternalPaymentAuthorizationUrl(authorizationUrl)) {
+        await openExternalPaymentAuthorization(authorizationUrl);
         setPendingPaymentReference(started.payment.transactionReference);
         setPendingAuthorizationUrl(authorizationUrl);
         setPendingPaymentProvider(startedProvider);
         setMessage(paymentAuthorizationOpenedMessage(startedProviderLabel, effectivePaymentConfig));
-        await openExternalPaymentAuthorization(authorizationUrl);
         return;
       }
       if (authorizationUrl && !isMockAuthorizationUrl(authorizationUrl)) {

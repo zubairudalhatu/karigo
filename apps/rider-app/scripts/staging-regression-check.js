@@ -50,6 +50,7 @@ expect(appConfig.includes("https://u.expo.dev/${riderEasProjectId}"), "Rider EAS
 expect(appConfig.includes('policy: "appVersion"'), "Rider runtimeVersion must use the appVersion policy.");
 expect(packageJson.dependencies?.["expo-updates"] === "~0.28.18", "Rider app must use the Expo SDK 53-compatible expo-updates package.");
 expect(packageJson.dependencies?.["expo-location"] === "~18.1.6", "Captain app must use the Expo SDK 53-compatible expo-location package.");
+expect(packageJson.dependencies?.["expo-local-authentication"] === "~16.0.5", "Captain app must use the Expo SDK 53-compatible expo-local-authentication package.");
 expect(appConfig.includes("expo-location") && appConfig.includes("locationWhenInUsePermission"), "Captain app config must include safe foreground location permission copy.");
 
 expect(apiClient.includes("karigo_rider_access_token"), "Rider token storage key must be rider-specific.");
@@ -59,9 +60,12 @@ expect(apiClient.includes("createApiClient"), "Rider app must use the shared API
 expect(authContext.includes('role !== "RIDER"'), "Captain app must reject non-rider accounts until a backend Captain role exists.");
 expect(authContext.includes("cannot use the Captain app"), "Role rejection copy must use Captain branding.");
 expect(authContext.includes("authApi.logout") && authContext.includes("refreshTokenStore"), "Captain logout must clear persisted refresh sessions safely.");
+expect(authContext.includes("refreshWithBiometrics") && authContext.includes("authApi.refresh"), "Captain biometric sign-in must refresh a saved backend session.");
+expect(authContext.includes("setBiometricSignIn"), "Captain auth context must expose biometric setup controls.");
 expect(ui.includes("PasswordField"), "Rider shared UI must include a password visibility field.");
 expect(ui.includes("visible ? \"Hide\" : \"Show\""), "Rider password field must expose show/hide toggle copy.");
 expect(loginScreen.includes("PasswordField") && loginScreen.includes("passwordVisible"), "Rider login password field must support visibility toggling.");
+expect(loginScreen.includes("Sign in with biometrics"), "Captain login must offer biometric sign-in when enabled.");
 expect(loginScreen.includes("Apply to become a Captain"), "Captain login must link to in-app applicant signup.");
 expect(applicationScreen.includes("Submit Captain application"), "Captain app must include an in-app application submission flow.");
 expect(applicationScreen.includes("City (Kano or Abuja)") && applicationScreen.includes("State (Kano or FCT)"), "Captain application must guide applicants to Kano/Abuja launch locations.");
@@ -116,6 +120,7 @@ expect(dashboard.includes("Support and help"), "Dashboard must include support/h
 expect(dashboard.includes("Operational guardrails"), "Dashboard must include launch guardrails.");
 expect(dashboard.includes("Payout automation, withdrawals and ride dispatch stay disabled"), "Dashboard must state inactive live operations.");
 expect(dashboard.includes("Apply for Ride review"), "Dashboard must link to ride review application.");
+expect((dashboard.match(/Apply for Ride review/g) || []).length === 1, "Dashboard must show only one Ride review entry point.");
 expect(dashboard.includes("Captain tools"), "Dashboard must include an improved Captain tools section.");
 expect(riderNav.includes("Deliveries"), "Captain bottom nav must use delivery-focused copy.");
 expect(jobsIndex.includes("Assigned Jobs"), "Jobs screen title must stay clear for dispatch assignments.");
@@ -124,9 +129,11 @@ expect(earnings.includes("Wallet withdrawals and payout requests require KariGO 
 expect(profile.includes("Captain Profile"), "Profile screen must use polished Captain Profile title.");
 expect(profile.includes("Captain tools"), "Profile must use Captain tool branding.");
 expect(profile.includes("photoUrl") && profile.includes("Profile photo URL optional"), "Profile must support a safe profile photo URL update.");
-expect(profile.includes("Completed deliveries") && profile.includes("Ride Captain review"), "Profile must show delivery stats and Ride Captain review status.");
+expect(profile.includes("Completed deliveries") && profile.includes("Captain modes"), "Profile must show delivery stats and Captain modes.");
 expect(profile.includes("Use device GPS now"), "Profile must expose a GPS location update action.");
 expect(profile.includes("disabled={profile.availabilityStatus === \"OFFLINE\"}"), "Profile must block live location updates while offline.");
+expect(profile.includes("Go online before updating live location."), "Profile must show a clear offline location update message.");
+expect(profile.includes("setBiometricSignIn") && profile.includes("Privacy Policy") && profile.includes("Terms"), "Profile must include biometric controls and in-app legal links.");
 expect(profile.includes("Activity feed and notifications"), "Profile must link to notifications.");
 expect(jobDetail.includes("Accept job") && jobDetail.includes("Reject job"), "Job detail must support accept/reject actions.");
 expect(jobDetail.includes("RIDER_ARRIVING_PICKUP") && jobDetail.includes("PICKED_UP"), "Job detail must support pickup status progression.");

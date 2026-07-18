@@ -117,7 +117,6 @@ export default function RiderDashboard() {
       <Card>
         <View style={ui.spaceBetween}>
           <Text style={ui.title}>Delivery Captain availability</Text>
-          <StatusBadge status={availabilityLabel(profile)} />
         </View>
         <Text style={ui.muted}>{availabilityCopy(profile)}</Text>
         <Text style={ui.muted}>Location is requested only when you go online or while you are on an active delivery.</Text>
@@ -151,7 +150,7 @@ export default function RiderDashboard() {
       </Card>
 
       <Card><Text style={ui.title}>Assigned jobs</Text><Text style={styles.metric}>{jobs.length}</Text><NavLink href="/jobs" label="View assigned jobs" /></Card>
-      <Card><Text style={ui.title}>Ride review</Text><Text style={ui.muted}>Apply for Ride Captain review while KariGO completes approved Ride onboarding, vehicle checks and operations controls.</Text><NavLink href="/taxi-readiness" label="Apply for Ride review" /></Card>
+      <Card><Text style={ui.title}>Ride review</Text><Text style={ui.muted}>KariGO Rides is not active yet. Apply for Ride Captain review if you want operations to assess your ride documents and vehicle readiness.</Text><NavLink href="/taxi-readiness" label="Apply for Ride review" /></Card>
       <Card><Text style={ui.title}>Support and help</Text><Text style={ui.muted}>For urgent delivery issues, contact the KariGO operations or dispatch lead through the approved support channel.</Text></Card>
       <Card><Text style={ui.title}>Operational guardrails</Text><Text style={ui.muted}>Payout automation, withdrawals and ride dispatch stay disabled until KariGO approves each control separately.</Text></Card>
       <Card>
@@ -162,7 +161,6 @@ export default function RiderDashboard() {
           <View style={styles.toolCard}><Text style={styles.toolTitle}>Earnings</Text><NavLink href="/earnings" label="View earnings" /></View>
           <View style={styles.toolCard}><Text style={styles.toolTitle}>Profile and vehicle</Text><NavLink href="/profile" label="Update profile" /></View>
           <View style={styles.toolCard}><Text style={styles.toolTitle}>Support</Text><Text style={ui.muted}>Use approved support channels for urgent dispatch issues.</Text></View>
-          <View style={styles.toolCard}><Text style={styles.toolTitle}>Ride Captain review</Text><NavLink href="/taxi-readiness" label="Apply for Ride review" /></View>
         </View>
         <NavLink href="/notifications" label={`Notifications (${unread} unread)`} />
       </Card>
@@ -171,15 +169,15 @@ export default function RiderDashboard() {
 }
 
 const styles = StyleSheet.create({
-  heroCard: { backgroundColor: brand.colors.charcoal, borderRadius: 24, gap: 10, overflow: "hidden", padding: 18 },
+  heroCard: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 24, borderWidth: 1, gap: 10, overflow: "hidden", padding: 18 },
   heroTopRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   kicker: { color: brand.colors.primary, fontSize: 12, fontWeight: "900", letterSpacing: 1.4, textTransform: "uppercase" },
-  title: { color: brand.colors.white, fontSize: 28, fontWeight: "900", letterSpacing: -0.4 },
-  heroCopy: { color: brand.colors.white, fontSize: 16, fontWeight: "800", lineHeight: 22 },
-  heroSubcopy: { color: "#E5E7EB", lineHeight: 20 },
+  title: { color: brand.colors.charcoal, fontSize: 28, fontWeight: "900", letterSpacing: -0.4 },
+  heroCopy: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "800", lineHeight: 22 },
+  heroSubcopy: { color: brand.colors.muted, lineHeight: 20 },
   logo: { height: 38, width: 128 },
-  statusChip: { backgroundColor: brand.colors.white, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
-  statusChipText: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "900" },
+  statusChip: { backgroundColor: "#FEF2F2", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
+  statusChipText: { color: brand.colors.primaryDark, fontSize: 12, fontWeight: "900" },
   metric: { color: brand.colors.charcoal, fontSize: 28, fontWeight: "800" },
   summaryGrid: { gap: 12 },
   jobRef: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "800" },

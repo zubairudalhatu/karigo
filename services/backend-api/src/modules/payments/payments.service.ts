@@ -234,6 +234,31 @@ export class PaymentsService {
     };
   }
 
+  async verifyWalletTopUp(userId: string, transactionReference: string) {
+    const payment = await this.requireCustomerPaymentByReference(userId, transactionReference);
+    if (payment.paymentPurpose !== PaymentPurpose.WALLET_TOP_UP) {
+      throw new BadRequestException("Payment reference is not a wallet top-up");
+    }
+    if (payment.paymentStatus === PaymentStatus.SUCCESSFUL) {
+      return { payment, alreadyProcessed: true };
+    }
+
+    const result = await this.providerRegistry.get(payment.gateway).verify(transactionReference);
+    if (!result.successful) {
+      throw new BadRequestException("Payment verification was not successful");
+    }
+    this.assertProviderEvidence(payment.amount, payment.currency, transactionReference, result);
+
+    return {
+      payment: await this.processSuccessfulPayment(
+        transactionReference,
+        result.providerResponse,
+        payment.gateway
+      ),
+      alreadyProcessed: false
+    };
+  }
+
   providerReadiness() {
     const activeProvider = this.configuredProvider();
     const livePaymentsEnabled = this.livePaymentsEnabled();

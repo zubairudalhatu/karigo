@@ -15,13 +15,14 @@ function initials(name?: string | null) {
 }
 
 export default function Profile() {
-  const { logout } = useAuth();
+  const { biometricAvailable, biometricEnabled, logout, setBiometricSignIn } = useAuth();
   const [profile, setProfile] = useState<RiderProfile | null>(null);
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [biometricBusy, setBiometricBusy] = useState(false);
 
   useEffect(() => {
     riderApi.profile()
@@ -57,6 +58,11 @@ export default function Profile() {
 
   async function updateLocation() {
     if (!profile) return;
+    if (profile.availabilityStatus === "OFFLINE") {
+      setError("Go online before updating live location.");
+      setMessage("");
+      return;
+    }
     try {
       setProfile(await riderApi.updateLocation(Number(lat), Number(lng)));
       setMessage("Location updated.");
@@ -68,6 +74,11 @@ export default function Profile() {
 
   async function updateDeviceLocation() {
     if (!profile) return;
+    if (profile.availabilityStatus === "OFFLINE") {
+      setError("Go online before updating live location.");
+      setMessage("");
+      return;
+    }
     try {
       const current = await requestCaptainForegroundLocation();
       const updated = await riderApi.updateLocation(current.latitude, current.longitude);
@@ -84,6 +95,20 @@ export default function Profile() {
 
   const modes = captainModes(profile);
   const isOnline = profile?.availabilityStatus === "ONLINE";
+
+  async function toggleBiometricSignIn() {
+    setBiometricBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await setBiometricSignIn(!biometricEnabled);
+      setMessage(!biometricEnabled ? "Biometric sign-in enabled on this device." : "Biometric sign-in disabled on this device.");
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setBiometricBusy(false);
+    }
+  }
 
   return <Protected><Screen title="Captain Profile" subtitle="Manage your Captain record, vehicle details and live location."><Message error>{error}</Message><Message>{message}</Message>{profile ? <>
     <Card tone="soft">
@@ -137,13 +162,23 @@ export default function Profile() {
     </Card>
 
     <Card>
+      <Text style={ui.sectionTitle}>Privacy and security</Text>
+      <Text style={ui.muted}>Biometric sign-in refreshes a saved backend session after device fingerprint or face unlock. Password sign-in is required if the saved session is missing or revoked.</Text>
+      <Text style={ui.muted}>Device support: {biometricAvailable ? "Available" : "Set up biometrics in your phone settings first."}</Text>
+      <Button title={biometricBusy ? "Updating..." : biometricEnabled ? "Disable biometric sign-in" : "Enable biometric sign-in"} tone="muted" onPress={toggleBiometricSignIn} disabled={biometricBusy || (!biometricAvailable && !biometricEnabled)} />
+      <View style={styles.legalLinks}>
+        <NavLink href="/legal/privacy" label="Privacy Policy" />
+        <NavLink href="/legal/terms" label="Terms" />
+      </View>
+    </Card>
+
+    <Card>
       <Text style={ui.sectionTitle}>Captain tools</Text>
       <View style={styles.toolGrid}>
         <View style={styles.toolCard}><Text style={styles.toolTitle}>Delivery availability</Text><Text style={ui.muted}>Use Home to go online or offline.</Text></View>
         <View style={styles.toolCard}><Text style={styles.toolTitle}>Assigned deliveries</Text><NavLink href="/jobs" label="Open deliveries" /></View>
         <View style={styles.toolCard}><Text style={styles.toolTitle}>Earnings</Text><NavLink href="/earnings" label="View earnings" /></View>
         <View style={styles.toolCard}><Text style={styles.toolTitle}>Support</Text><Text style={ui.muted}>Use the approved support channel for urgent dispatch issues.</Text></View>
-        <View style={styles.toolCard}><Text style={styles.toolTitle}>Ride Captain review</Text><NavLink href="/taxi-readiness" label="Apply for Ride review" /></View>
         <View style={styles.toolCard}><Text style={styles.toolTitle}>Activity feed and notifications</Text><NavLink href="/notifications" label="Open notifications" /></View>
       </View>
     </Card>
@@ -163,6 +198,7 @@ const styles = StyleSheet.create({
   statBox: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 3, padding: 12 },
   statValue: { color: brand.colors.charcoal, fontSize: 18, fontWeight: "900" },
   photoPreview: { borderRadius: 18, height: 84, width: 84 },
+  legalLinks: { gap: 4 },
   modeRow: { borderTopColor: brand.colors.border, borderTopWidth: 1, gap: 8, paddingTop: 12 },
   toolGrid: { gap: 10 },
   toolCard: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 4, padding: 12 },

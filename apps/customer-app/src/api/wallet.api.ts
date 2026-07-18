@@ -51,5 +51,7 @@ export interface WalletTopUpInitiation {
 export const walletApi = {
   summary: () => api.get<CustomerWallet>("wallet"),
   transactions: () => api.get<CustomerWalletLedgerResult>("wallet/transactions"),
-  initiateTopUp: (amount: number) => api.post<WalletTopUpInitiation>("payments/wallet-top-ups", { amount })
+  initiateTopUp: (amount: number) => api.post<WalletTopUpInitiation>("payments/wallet-top-ups", { amount }),
+  verifyTopUp: (reference: string) =>
+    api.get<{ payment: { paymentStatus: string }; alreadyProcessed: boolean }>(`payments/wallet-top-ups/verify/${reference}`)
 };

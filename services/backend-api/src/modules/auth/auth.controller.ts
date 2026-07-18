@@ -1,14 +1,20 @@
 import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import { Roles } from "../../common/decorators/roles.decorator";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
+import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { AuthService } from "./auth.service";
 import { ActivateVendorAccountDto } from "./dto/activate-vendor-account.dto";
+import { ChangePasswordDto } from "./dto/change-password.dto";
+import { ConfirmPasswordResetDto } from "./dto/confirm-password-reset.dto";
 import { LoginDto } from "./dto/login.dto";
 import { LogoutDto } from "./dto/logout.dto";
 import { RegisterCustomerDto } from "./dto/register-customer.dto";
 import { RefreshSessionDto } from "./dto/refresh-session.dto";
+import { RequestPasswordResetDto } from "./dto/request-password-reset.dto";
 import { RequestVendorActivationLinkDto } from "./dto/request-vendor-activation-link.dto";
 import { ResendOtpDto } from "./dto/resend-otp.dto";
 import { VerifyOtpDto } from "./dto/verify-otp.dto";
@@ -42,6 +48,24 @@ export class AuthController {
     return {
       message: "If the phone number is eligible, a new OTP has been sent.",
       data: await this.authService.resendOtp(dto)
+    };
+  }
+
+  @Post("password-reset/request")
+  @ApiOperation({ summary: "Request an OTP for customer password reset" })
+  async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
+    return {
+      message: "If the customer account is eligible, a password reset OTP has been sent.",
+      data: await this.authService.requestPasswordReset(dto)
+    };
+  }
+
+  @Post("password-reset/confirm")
+  @ApiOperation({ summary: "Confirm a customer password reset with OTP" })
+  async confirmPasswordReset(@Body() dto: ConfirmPasswordResetDto) {
+    return {
+      message: "Password reset completed",
+      data: await this.authService.confirmPasswordReset(dto)
     };
   }
 
@@ -90,6 +114,18 @@ export class AuthController {
     return {
       message: "Logged out",
       data: await this.authService.logout(user.id, dto)
+    };
+  }
+
+  @Post("change-password")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CUSTOMER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Change the authenticated customer password" })
+  async changePassword(@CurrentUser() user: AuthenticatedUser, @Body() dto: ChangePasswordDto) {
+    return {
+      message: "Password changed",
+      data: await this.authService.changeCustomerPassword(user.id, dto)
     };
   }
 

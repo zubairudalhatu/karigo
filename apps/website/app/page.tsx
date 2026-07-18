@@ -17,19 +17,19 @@ export default function HomePage() {
             <Link className="button secondary" href="/sme-services/apply">Become a Service Provider</Link>
           </div>
         </div>
-        <div className="app-visual" aria-label="KariGO app-style visual mockup">
+        <div className="app-visual" aria-label="KariGO app-style preview">
           <div className="phone-card">
-            <div className="screen-mock">
-              <div className="mock-bar"><strong>KariGO</strong><span className="mock-pill">Kano + Abuja</span></div>
-              <div className="mock-grid">
-                <div className="mock-tile">Food</div>
-                <div className="mock-tile">Groceries</div>
-                <div className="mock-tile">Rides</div>
-                <div className="mock-tile">Market</div>
-                <div className="mock-tile">Parcel</div>
-                <div className="mock-tile">Bills</div>
+            <div className="screen-preview">
+              <div className="preview-bar"><strong>KariGO</strong><span className="preview-pill">Kano + Abuja</span></div>
+              <div className="preview-grid">
+                <div className="preview-tile">Food</div>
+                <div className="preview-tile">Groceries</div>
+                <div className="preview-tile">Rides</div>
+                <div className="preview-tile">Market</div>
+                <div className="preview-tile">Parcel</div>
+                <div className="preview-tile">Bills</div>
               </div>
-              <div className="mock-order">
+              <div className="preview-order">
                 <strong>Kano Kitchen</strong>
                 <span>Order paid - vendor preparing</span>
                 <span className="badge">Track order</span>

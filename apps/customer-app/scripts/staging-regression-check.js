@@ -4,11 +4,12 @@ const assert = require("node:assert/strict");
 
 const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
+const packageJson = JSON.parse(read("package.json"));
 
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
-["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "profile/wallet", "profile/referrals", "profile/privacy-security", "profile/returns-refunds", "parcel", "sme-services", "sme-services/requests/index", "sme-services/requests/[id]", "vendor/apply", "vendor/application-status"]
+["auth/signup", "auth/otp", "auth/forgot-password", "auth/reset-password", "vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "profile/wallet", "profile/referrals", "profile/privacy-security", "profile/change-password", "profile/privacy-policy", "profile/terms", "profile/delete-account", "profile/returns-refunds", "parcel", "sme-services", "sme-services/requests/index", "sme-services/requests/[id]", "vendor/apply", "vendor/application-status"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
 assert(layout.includes('<Stack.Screen name="utilities/index" options={headerless}'), "Utilities hub must hide native header.");
 ["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
@@ -33,6 +34,7 @@ assert(client.includes("expo-secure-store"), "Customer session tokens must use E
 assert(client.includes("karigo_customer_refresh_token"), "Customer app must persist refresh tokens separately.");
 assert(client.includes("auth/refresh"), "Customer API client must support session refresh.");
 assert(!client.includes("AsyncStorage"), "Customer auth tokens must not use AsyncStorage.");
+assert(packageJson.dependencies?.["expo-local-authentication"] === "~16.0.5", "Customer app must use the Expo SDK 53-compatible expo-local-authentication package.");
 assert(ui.includes("paddingBottom: 112"), "Customer screens must leave room for bottom navigation.");
 assert(ui.includes("PasswordField"), "Shared UI must include a password visibility field.");
 assert(ui.includes("visible ? \"Hide\" : \"Show\""), "Password field must expose show/hide toggle copy.");
@@ -269,9 +271,19 @@ assert(!profile.includes("wallet top-up"), "Profile must not activate wallet top
 
 const privacySecurityScreen = read("app", "profile", "privacy-security.tsx");
 assert(privacySecurityScreen.includes("Privacy and security"), "Customer Privacy and Security screen must exist.");
-assert(privacySecurityScreen.includes("Change password") && privacySecurityScreen.includes("Use Support Centre if you need help changing your password"), "Privacy screen must keep password change support-managed unless backend support exists.");
-assert(privacySecurityScreen.includes("Biometric and passwordless sign-in are not enabled"), "Privacy screen must not falsely claim biometric login is active.");
-assert(privacySecurityScreen.includes("Linking.openURL"), "Privacy screen must link to public Privacy and Terms pages.");
+assert(privacySecurityScreen.includes("/profile/change-password"), "Privacy screen must route to in-app password change.");
+assert(privacySecurityScreen.includes("/profile/privacy-policy") && privacySecurityScreen.includes("/profile/terms"), "Privacy screen must route to in-app Privacy and Terms pages.");
+assert(privacySecurityScreen.includes("setBiometricSignIn"), "Privacy screen must expose biometric sign-in controls.");
+assert(privacySecurityScreen.includes("/profile/delete-account"), "Privacy screen must route to account deletion/deactivation request.");
+
+const loginScreen = read("app", "auth", "login.tsx");
+assert(loginScreen.includes("/auth/forgot-password"), "Customer login must link to forgot password recovery.");
+assert(loginScreen.includes("Sign in with biometrics"), "Customer login must offer biometric sign-in when enabled.");
+
+const forgotPasswordScreen = read("app", "auth", "forgot-password.tsx");
+assert(forgotPasswordScreen.includes("authApi.requestPasswordReset"), "Forgot password screen must request a backend OTP.");
+const resetPasswordScreen = read("app", "auth", "reset-password.tsx");
+assert(resetPasswordScreen.includes("authApi.confirmPasswordReset"), "Reset password screen must confirm OTP and new password through the backend.");
 
 const walletScreen = read("app", "profile", "wallet.tsx");
 assert(walletScreen.includes("KariGO Wallet"), "Customer wallet screen must exist.");
@@ -281,6 +293,8 @@ assert(walletScreen.includes("paymentsApi.publicConfig"), "Customer wallet scree
 assert(walletScreen.includes("walletTopUpEnabled"), "Customer wallet screen must gate top-up by backend walletTopUpEnabled.");
 assert(walletScreen.includes("walletTopUpProviderLabel"), "Customer wallet screen must show the backend wallet top-up provider label.");
 assert(walletScreen.includes("walletMinimumTopUpAmount"), "Customer wallet screen must use the backend wallet minimum top-up amount.");
+assert(walletScreen.includes("walletApi.verifyTopUp"), "Customer wallet screen must verify top-up through the dedicated wallet endpoint.");
+assert(walletScreen.includes("Payment not confirmed yet. Please try again after a moment."), "Wallet top-up verification failure must be retry-oriented.");
 assert(walletScreen.includes("Pending verification"), "Customer wallet screen must show pending verification after Squad checkout opens.");
 assert(walletScreen.includes("backend payment verification"), "Customer wallet screen must state that top-up credits require backend verification.");
 assert(walletScreen.includes("KariGO will not credit the wallet from the app alone"), "Customer wallet screen must prevent client-side wallet credit language.");
@@ -319,7 +333,6 @@ assert(signupScreen.includes("referralCode.trim().toUpperCase()"), "Customer sig
 assert(signupScreen.includes("Rewards are tracked for future review and are not issued automatically."), "Customer signup must not promise automatic referral rewards.");
 assert(!signupScreen.includes("walletApi") && !signupScreen.includes("paymentsApi"), "Customer signup must not issue wallet credits or payments for referrals.");
 assert(signupScreen.includes("PasswordField") && signupScreen.includes("passwordVisible"), "Signup password field must support visibility toggling.");
-const loginScreen = read("app", "auth", "login.tsx");
 assert(loginScreen.includes("PasswordField") && loginScreen.includes("passwordVisible"), "Login password field must support visibility toggling.");
 assert(loginScreen.includes("verificationRequired"), "Login must handle registered but unverified accounts by continuing OTP verification.");
 assert(loginScreen.includes("If your phone is registered but not verified"), "Login copy must explain OTP recovery.");
@@ -412,7 +425,7 @@ const paymentFlow = read("src", "lib", "payment-flow.ts");
 assert(paymentFlow.includes("Linking.openURL"), "Customer payment flow must open external authorization with React Native Linking.");
 assert(paymentFlow.includes("Platform.OS === \"web\""), "Customer payment flow must open hosted checkout externally on web builds.");
 assert(paymentFlow.includes("window.open(normalizedUrl"), "Customer payment flow must not route hosted checkout URLs through Expo Router on web.");
-assert(paymentFlow.includes("Linking.canOpenURL(normalizedUrl)"), "Customer payment flow must validate native external URL handling before opening.");
+assert(!paymentFlow.includes("Linking.canOpenURL(normalizedUrl)"), "Customer payment flow must not block valid HTTPS hosted checkout URLs with canOpenURL.");
 assert(paymentFlow.includes("parsed.protocol === \"https:\""), "Customer payment flow must only accept HTTPS external authorization URLs.");
 assert(paymentFlow.includes("mock://"), "Customer payment flow must preserve mock authorization handling.");
 

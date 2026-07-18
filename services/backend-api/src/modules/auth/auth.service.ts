@@ -17,6 +17,9 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { UsersService } from "../users/users.service";
 import { AccountActivationEmailService } from "./account-activation-email.service";
 import { ActivateVendorAccountDto } from "./dto/activate-vendor-account.dto";
+import { ChangePasswordDto } from "./dto/change-password.dto";
+import { ConfirmPasswordResetDto } from "./dto/confirm-password-reset.dto";
+import { RequestPasswordResetDto } from "./dto/request-password-reset.dto";
 import { RequestVendorActivationLinkDto } from "./dto/request-vendor-activation-link.dto";
 
 @Injectable()
@@ -131,6 +134,62 @@ export class AuthService {
       user: publicUser,
       ...(await this.issueSession(user.id, user.role))
     };
+  }
+
+  async requestPasswordReset(dto: RequestPasswordResetDto) {
+    const user = await this.usersService.findByPhoneForAuth(dto.phoneNumber);
+    if (!user || user.deletedAt || user.role !== UserRole.CUSTOMER) {
+      return { requestAccepted: true };
+    }
+
+    const verification = await this.otpService.issue(user.id, user.phoneNumber, { enforceCooldown: true });
+    return {
+      requestAccepted: true,
+      otpExpiresAt: verification.expiresAt,
+      ...(this.shouldExposeMockOtp() ? { mockOtp: verification.otp } : {})
+    };
+  }
+
+  async confirmPasswordReset(dto: ConfirmPasswordResetDto) {
+    const user = await this.usersService.findByPhoneForAuth(dto.phoneNumber);
+    if (!user || user.deletedAt || user.role !== UserRole.CUSTOMER) {
+      throw new BadRequestException("OTP is invalid or expired");
+    }
+
+    await this.otpService.verify(user.id, dto.otp);
+    const passwordHash = await hash(dto.newPassword, 12);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        phoneVerified: true,
+        ...(user.accountStatus === AccountStatus.PENDING
+          ? { accountStatus: AccountStatus.ACTIVE }
+          : {})
+      }
+    });
+
+    return { passwordReset: true };
+  }
+
+  async changeCustomerPassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.usersService.findByIdForAuth(userId);
+    const currentPasswordMatches = user ? await compare(dto.currentPassword, user.passwordHash) : false;
+    if (
+      !user ||
+      user.role !== UserRole.CUSTOMER ||
+      user.deletedAt ||
+      user.accountStatus !== AccountStatus.ACTIVE ||
+      !currentPasswordMatches
+    ) {
+      throw new BadRequestException("Current password is incorrect");
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: await hash(dto.newPassword, 12) }
+    });
+    return { passwordChanged: true };
   }
 
   async activateVendorAccount(dto: ActivateVendorAccountDto) {

@@ -59,3 +59,24 @@ export interface ResendOtpResult {
   otpExpiresAt?: string;
   mockOtp?: string;
 }
+
+export interface RequestPasswordResetRequest {
+  phoneNumber: string;
+}
+
+export interface RequestPasswordResetResult {
+  requestAccepted: boolean;
+  otpExpiresAt?: string;
+  mockOtp?: string;
+}
+
+export interface ConfirmPasswordResetRequest {
+  phoneNumber: string;
+  otp: string;
+  newPassword: string;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}

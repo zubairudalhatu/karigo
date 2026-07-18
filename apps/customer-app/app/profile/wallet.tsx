@@ -7,7 +7,7 @@ import { CustomerWalletLedgerResult, walletApi, WalletLedgerDirection, WalletLed
 import { paymentsApi } from "../../src/api/payments.api";
 import { Button, Card, Empty, Field, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError, money } from "../../src/lib/errors";
-import { isExternalPaymentAuthorizationUrl, openExternalPaymentAuthorization } from "../../src/lib/payment-flow";
+import { isExternalPaymentAuthorizationUrl, isMockAuthorizationUrl, openExternalPaymentAuthorization } from "../../src/lib/payment-flow";
 import { fallbackCustomerPaymentConfig } from "../../src/lib/payment-status";
 
 const titleForType: Record<WalletLedgerEntryType, string> = {
@@ -86,17 +86,19 @@ export default function CustomerWalletScreen() {
     try {
       const result = await walletApi.initiateTopUp(amount);
       const url = result.authorization.authorizationUrl;
-      setPendingTopUpReference(result.payment.transactionReference);
       if (isExternalPaymentAuthorizationUrl(url)) {
+        await openExternalPaymentAuthorization(url);
+        setPendingTopUpReference(result.payment.transactionReference);
         setPendingTopUpUrl(url);
         setTopUpMessage("Squad wallet top-up checkout opened. Return here and verify after completing payment. Pending verification.");
-        await openExternalPaymentAuthorization(url);
-      } else {
-        await paymentsApi.verify(result.payment.transactionReference);
+      } else if (!url || isMockAuthorizationUrl(url)) {
+        await walletApi.verifyTopUp(result.payment.transactionReference);
         setTopUpMessage("Wallet top-up verified.");
         setPendingTopUpReference("");
         setPendingTopUpUrl("");
         await load();
+      } else {
+        throw new Error("Wallet top-up authorization link was not accepted.");
       }
     } catch (e) {
       setTopUpError(friendlyError(e));
@@ -110,14 +112,28 @@ export default function CustomerWalletScreen() {
     setTopUpBusy(true);
     setTopUpError("");
     try {
-      await paymentsApi.verify(pendingTopUpReference);
+      await walletApi.verifyTopUp(pendingTopUpReference);
       setTopUpMessage("Wallet top-up verified and balance updated.");
       setPendingTopUpReference("");
       setPendingTopUpUrl("");
       setTopUpAmount("");
       await load();
     } catch (e) {
-      setTopUpError(`Top-up could not be verified yet. ${friendlyError(e)}`);
+      setTopUpError(`Payment not confirmed yet. Please try again after a moment. ${friendlyError(e)}`);
+    } finally {
+      setTopUpBusy(false);
+    }
+  }
+
+  async function reopenTopUpAuthorization() {
+    if (!pendingTopUpUrl) return;
+    setTopUpBusy(true);
+    setTopUpError("");
+    try {
+      await openExternalPaymentAuthorization(pendingTopUpUrl);
+      setTopUpMessage("Squad wallet top-up checkout reopened. Return here and verify after completing payment.");
+    } catch (e) {
+      setTopUpError(friendlyError(e));
     } finally {
       setTopUpBusy(false);
     }
@@ -157,10 +173,10 @@ export default function CustomerWalletScreen() {
         <Message error>{topUpError}</Message>
         <Field keyboardType="decimal-pad" value={topUpAmount} onChangeText={setTopUpAmount} placeholder="Amount e.g. 5000" />
         <Button title={topUpBusy ? "Starting top-up..." : "Start wallet top-up"} onPress={initiateTopUp} disabled={topUpBusy || !!pendingTopUpReference || !paymentConfig.walletTopUpEnabled} />
-        {pendingTopUpUrl ? <Button title="Open Squad checkout again" tone="muted" onPress={() => openExternalPaymentAuthorization(pendingTopUpUrl)} disabled={topUpBusy} /> : null}
+        {pendingTopUpUrl ? <Button title="Open Squad checkout again" tone="muted" onPress={reopenTopUpAuthorization} disabled={topUpBusy} /> : null}
         {pendingTopUpReference ? <Button title={topUpBusy ? "Verifying..." : "Verify wallet top-up"} onPress={verifyTopUp} disabled={topUpBusy} /> : null}
         {pendingTopUpReference ? <Text style={ui.muted}>Pending verification. Your balance updates only after backend verification or webhook confirmation.</Text> : null}
-        <Text style={ui.muted}>Wallet order payment: {paymentConfig.walletPaymentsEnabled ? "Available when your balance covers an order." : "Disabled until top-up verification is complete."}</Text>
+        <Text style={ui.muted}>Wallet order payment: {paymentConfig.walletPaymentsEnabled ? "Available when your balance covers an order." : "Disabled by backend config until wallet payments are enabled."}</Text>
       </Card>
 
       <Card>

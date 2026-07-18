@@ -7,7 +7,7 @@ import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 
 export default function CaptainLogin() {
-  const { login, loading, user } = useAuth();
+  const { biometricAvailable, biometricEnabled, login, loading, refreshWithBiometrics, user } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -18,6 +18,19 @@ export default function CaptainLogin() {
     setBusy(true); setError("");
     try {
       await login({ phoneNumber, password });
+      router.replace("/tabs/dashboard");
+    } catch (e) {
+      setError(friendlyError(e, "login"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function biometricSignIn() {
+    setBusy(true);
+    setError("");
+    try {
+      await refreshWithBiometrics();
       router.replace("/tabs/dashboard");
     } catch (e) {
       setError(friendlyError(e, "login"));
@@ -38,6 +51,7 @@ export default function CaptainLogin() {
       <PasswordField placeholder="Password" visible={passwordVisible} onToggleVisible={() => setPasswordVisible((visible) => !visible)} value={password} onChangeText={setPassword} />
       <Message error>{error}</Message>
       <Button title={busy ? "Signing in..." : "Sign in"} disabled={busy || !phoneNumber || !password} onPress={submit} />
+      {biometricEnabled ? <Button title="Sign in with biometrics" tone="muted" disabled={busy || !biometricAvailable} onPress={biometricSignIn} /> : null}
       <Text style={styles.applyCopy}>New to KariGO Captain?</Text>
       <Link href="/auth/apply" style={styles.applyLink}>Apply to become a Captain</Link>
     </Screen>

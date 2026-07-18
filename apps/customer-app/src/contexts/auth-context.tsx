@@ -3,6 +3,7 @@ import { KariGoApiError } from "@karigo/shared-types";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { authApi } from "../api/auth.api";
 import { onUnauthorized, refreshTokenStore, tokenStore } from "../api/client";
+import { authenticateWithBiometrics, getBiometricCapability, getBiometricSignInEnabled, setBiometricSignInEnabled } from "../lib/biometric-auth";
 import { normalizeNigerianPhoneNumber } from "../lib/phone";
 
 interface AuthContextValue {
@@ -12,6 +13,10 @@ interface AuthContextValue {
   register(body: RegisterCustomerRequest): ReturnType<typeof authApi.register>;
   verifyOtp(body: VerifyOtpRequest): Promise<void>;
   login(body: LoginRequest): Promise<void | LoginVerificationRequiredResult>;
+  biometricAvailable: boolean;
+  biometricEnabled: boolean;
+  refreshWithBiometrics(): Promise<void>;
+  setBiometricSignIn(enabled: boolean): Promise<void>;
   logout(): Promise<void>;
 }
 
@@ -25,6 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionMessage, setSessionMessage] = useState("");
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabledState] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onUnauthorized(() => {
@@ -34,6 +41,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
 
     async function bootstrap() {
+      const [capability, enabled] = await Promise.all([
+        getBiometricCapability().catch(() => ({ available: false, hasHardware: false, enrolled: false })),
+        getBiometricSignInEnabled().catch(() => false)
+      ]);
+      if (active) {
+        setBiometricAvailable(capability.available);
+        setBiometricEnabledState(enabled);
+      }
+
       const token = await tokenStore.getToken();
       const refreshToken = await refreshTokenStore.getToken();
       if (!token && !refreshToken) {
@@ -89,6 +105,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return result;
         }
         await saveSession(result.accessToken, result.refreshToken, result.user);
+      },
+      biometricAvailable,
+      biometricEnabled,
+      refreshWithBiometrics: async () => {
+        const refreshToken = await refreshTokenStore.getToken();
+        if (!refreshToken) throw new Error("Biometric sign-in needs a saved KariGO session. Please sign in with your password first.");
+        const enabled = await getBiometricSignInEnabled();
+        if (!enabled) throw new Error("Biometric sign-in is not enabled on this device.");
+        await authenticateWithBiometrics("Sign in to KariGO");
+        const result = await authApi.refresh({ refreshToken });
+        await saveSession(result.accessToken, result.refreshToken, result.user);
+      },
+      setBiometricSignIn: async (enabled) => {
+        if (!enabled) {
+          await setBiometricSignInEnabled(false);
+          setBiometricEnabledState(false);
+          return;
+        }
+        const capability = await getBiometricCapability();
+        setBiometricAvailable(capability.available);
+        if (!capability.available) {
+          throw new Error("Set up fingerprint or face unlock on this device before enabling biometric sign-in.");
+        }
+        const refreshToken = await refreshTokenStore.getToken();
+        if (!refreshToken) {
+          throw new Error("Please sign in with your password before enabling biometric sign-in.");
+        }
+        await authenticateWithBiometrics("Enable KariGO biometric sign-in");
+        await setBiometricSignInEnabled(true);
+        setBiometricEnabledState(true);
       },
       logout: async () => {
         const refreshToken = await refreshTokenStore.getToken();

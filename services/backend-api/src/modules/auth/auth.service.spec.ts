@@ -13,6 +13,7 @@ describe("AuthService", () => {
   const usersService = {
     createCustomer: jest.fn(),
     findByPhoneForAuth: jest.fn(),
+    findByIdForAuth: jest.fn(),
     markLogin: jest.fn(),
     markPhoneVerified: jest.fn(),
     findPublicById: jest.fn()
@@ -268,6 +269,79 @@ describe("AuthService", () => {
       password: "WrongPassword"
     })).rejects.toThrow("Invalid phone number or password");
     expect(otpService.issue).not.toHaveBeenCalled();
+  });
+
+  it("requests customer password reset OTP without exposing account existence", async () => {
+    usersService.findByPhoneForAuth.mockResolvedValue({
+      id: "user-1",
+      role: UserRole.CUSTOMER,
+      phoneNumber: "+2348012345678",
+      deletedAt: null
+    });
+    otpService.issue.mockResolvedValue({ otp: "123456", expiresAt: new Date("2030-01-01") });
+
+    const result = await service.requestPasswordReset({ phoneNumber: "+2348012345678" });
+
+    expect(result).toMatchObject({ requestAccepted: true, mockOtp: "123456" });
+    expect(otpService.issue).toHaveBeenCalledWith("user-1", "+2348012345678", { enforceCooldown: true });
+
+    usersService.findByPhoneForAuth.mockResolvedValueOnce(null);
+    const unmatched = await service.requestPasswordReset({ phoneNumber: "+2348099999999" });
+    expect(unmatched).toEqual({ requestAccepted: true });
+  });
+
+  it("confirms customer password reset and activates an unverified pending account", async () => {
+    usersService.findByPhoneForAuth.mockResolvedValue({
+      id: "user-1",
+      role: UserRole.CUSTOMER,
+      phoneNumber: "+2348012345678",
+      accountStatus: AccountStatus.PENDING,
+      deletedAt: null
+    });
+
+    const result = await service.confirmPasswordReset({
+      phoneNumber: "+2348012345678",
+      otp: "123456",
+      newPassword: "NewPassword1"
+    });
+
+    expect(result).toEqual({ passwordReset: true });
+    expect(otpService.verify).toHaveBeenCalledWith("user-1", "123456");
+    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "user-1" },
+      data: expect.objectContaining({
+        passwordHash: expect.any(String),
+        phoneVerified: true,
+        accountStatus: AccountStatus.ACTIVE
+      })
+    }));
+  });
+
+  it("changes customer password only after the current password matches", async () => {
+    const passwordHash = await hash("OldPassword1", 4);
+    usersService.findByIdForAuth.mockResolvedValue({
+      id: "user-1",
+      role: UserRole.CUSTOMER,
+      passwordHash,
+      accountStatus: AccountStatus.ACTIVE,
+      deletedAt: null
+    });
+
+    await expect(service.changeCustomerPassword("user-1", {
+      currentPassword: "WrongPassword1",
+      newPassword: "NewPassword1"
+    })).rejects.toThrow("Current password is incorrect");
+
+    const result = await service.changeCustomerPassword("user-1", {
+      currentPassword: "OldPassword1",
+      newPassword: "NewPassword1"
+    });
+
+    expect(result).toEqual({ passwordChanged: true });
+    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "user-1" },
+      data: expect.objectContaining({ passwordHash: expect.any(String) })
+    }));
   });
 
   it("activates a vendor account with a valid setup token", async () => {

@@ -18,6 +18,8 @@ export default function RootLayout() {
     <Stack.Screen name="auth/login" options={headerless} />
     <Stack.Screen name="auth/signup" options={backOnly} />
     <Stack.Screen name="auth/otp" options={backOnly} />
+    <Stack.Screen name="auth/forgot-password" options={backOnly} />
+    <Stack.Screen name="auth/reset-password" options={backOnly} />
     <Stack.Screen name="tabs/home" options={headerless} />
     <Stack.Screen name="vendors/[id]" options={backOnly} />
     <Stack.Screen name="catalogue/[category]" options={backOnly} />
@@ -42,6 +44,10 @@ export default function RootLayout() {
     <Stack.Screen name="profile/referrals" options={backOnly} />
     <Stack.Screen name="profile/returns-refunds" options={backOnly} />
     <Stack.Screen name="profile/privacy-security" options={backOnly} />
+    <Stack.Screen name="profile/change-password" options={backOnly} />
+    <Stack.Screen name="profile/privacy-policy" options={backOnly} />
+    <Stack.Screen name="profile/terms" options={backOnly} />
+    <Stack.Screen name="profile/delete-account" options={backOnly} />
     <Stack.Screen name="vendor/apply" options={backOnly} />
     <Stack.Screen name="vendor/application-status" options={backOnly} />
     <Stack.Screen name="parcel" options={backOnly} />
