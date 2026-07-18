@@ -35,8 +35,8 @@ export default function UtilityReceiptDetail() {
 
 function UtilityReceipt({ transaction }: { transaction: UtilityTransactionSummary }) {
   return <Card>
-    <Text style={ui.cardTitle}>Test transaction receipt</Text>
-    <Text style={ui.muted}>Bills & Utilities is currently in test mode. No real airtime, data, electricity token or cable subscription was delivered.</Text>
+    <Text style={ui.cardTitle}>Utility review receipt</Text>
+    <Text style={ui.muted}>Bills & Utilities is under provider review. No real airtime, data, electricity token or cable subscription was delivered from this build.</Text>
     <Text>Reference: {transaction.reference}</Text>
     <Text>Service: {transaction.serviceType.replace("_", " ")}</Text>
     <Text>Provider: {transaction.provider.name}</Text>

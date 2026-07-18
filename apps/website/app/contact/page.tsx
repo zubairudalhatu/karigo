@@ -4,7 +4,7 @@ import { ContactInquiryForm } from "../../src/components/contact-inquiry-form";
 
 export const metadata: Metadata = {
   title: "Contact",
-  description: "Send a KariGO inquiry for customers, vendors, Captains, Ride readiness and business partners."
+  description: "Send a KariGO inquiry for customers, vendors, Captains, Ride review and business partners."
 };
 
 export default function ContactPage() {
@@ -13,7 +13,7 @@ export default function ContactPage() {
       <section className="section">
         <p className="eyebrow">Contact</p>
         <h1>Talk to KariGO.</h1>
-        <p className="lead">Use the inquiry form below for customer, vendor, Captain, Ride readiness or business messages. Public contact details are intentionally not displayed on this page.</p>
+        <p className="lead">Use the inquiry form below for customer, vendor, Captain, Ride review or business messages. Public contact details are intentionally not displayed on this page.</p>
       </section>
       <section className="section soft split">
         <article className="contact-card">

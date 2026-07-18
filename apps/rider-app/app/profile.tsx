@@ -7,6 +7,7 @@ import { Button, Card, Field, Loading, Message, NavLink, Protected, Screen, Stat
 import { useAuth } from "../src/contexts/auth-context";
 import { friendlyError } from "../src/lib/errors";
 import { captainModes } from "../src/lib/captain-modes";
+import { requestCaptainForegroundLocation } from "../src/lib/location";
 
 function initials(name?: string | null) {
   const parts = name?.trim().split(/\s+/).filter(Boolean) ?? [];
@@ -65,10 +66,26 @@ export default function Profile() {
     }
   }
 
+  async function updateDeviceLocation() {
+    if (!profile) return;
+    try {
+      const current = await requestCaptainForegroundLocation();
+      const updated = await riderApi.updateLocation(current.latitude, current.longitude);
+      setProfile(updated);
+      setLat(String(updated.currentLatitude ?? current.latitude));
+      setLng(String(updated.currentLongitude ?? current.longitude));
+      setMessage("Live location updated from this device.");
+      setError("");
+    } catch (e) {
+      setError(friendlyError(e));
+      setMessage("");
+    }
+  }
+
   const modes = captainModes(profile);
   const isOnline = profile?.availabilityStatus === "ONLINE";
 
-  return <Protected><Screen title="Captain Profile" subtitle="Manage your Captain record, vehicle details and staging location."><Message error>{error}</Message><Message>{message}</Message>{profile ? <>
+  return <Protected><Screen title="Captain Profile" subtitle="Manage your Captain record, vehicle details and live location."><Message error>{error}</Message><Message>{message}</Message>{profile ? <>
     <Card tone="soft">
       <View style={styles.headerRow}>
         {profile.photoUrl ? <Image source={{ uri: profile.photoUrl }} style={styles.avatarImage} /> : <View style={styles.avatar}><Text style={styles.avatarText}>{initials(profile.user?.fullName).toUpperCase()}</Text></View>}
@@ -111,11 +128,12 @@ export default function Profile() {
     </Card>
 
     <Card>
-      <Text style={ui.sectionTitle}>Manual location update</Text>
-      <Text style={ui.pageIntro}>Live GPS is not connected yet. Enter coordinates only when dispatch needs your latest staging location.</Text>
+      <Text style={ui.sectionTitle}>Live location</Text>
+      <Text style={ui.pageIntro}>Use device GPS while you are online or on an active delivery. KariGO does not update your location while you are offline.</Text>
       <Field value={lat} onChangeText={setLat} keyboardType="decimal-pad" placeholder="Latitude" />
       <Field value={lng} onChangeText={setLng} keyboardType="decimal-pad" placeholder="Longitude" />
-      <Button tone="muted" title="Update location" onPress={updateLocation} />
+      <Button title="Use device GPS now" onPress={updateDeviceLocation} disabled={profile.availabilityStatus === "OFFLINE"} />
+      <Button tone="muted" title="Update manual coordinates" onPress={updateLocation} disabled={profile.availabilityStatus === "OFFLINE"} />
     </Card>
 
     <Card>
@@ -124,8 +142,8 @@ export default function Profile() {
         <View style={styles.toolCard}><Text style={styles.toolTitle}>Delivery availability</Text><Text style={ui.muted}>Use Home to go online or offline.</Text></View>
         <View style={styles.toolCard}><Text style={styles.toolTitle}>Assigned deliveries</Text><NavLink href="/jobs" label="Open deliveries" /></View>
         <View style={styles.toolCard}><Text style={styles.toolTitle}>Earnings</Text><NavLink href="/earnings" label="View earnings" /></View>
-        <View style={styles.toolCard}><Text style={styles.toolTitle}>Support</Text><Text style={ui.muted}>Use the approved pilot support channel for urgent dispatch issues.</Text></View>
-        <View style={styles.toolCard}><Text style={styles.toolTitle}>Ride Captain readiness</Text><NavLink href="/taxi-readiness" label="Readiness only" /></View>
+        <View style={styles.toolCard}><Text style={styles.toolTitle}>Support</Text><Text style={ui.muted}>Use the approved support channel for urgent dispatch issues.</Text></View>
+        <View style={styles.toolCard}><Text style={styles.toolTitle}>Ride Captain review</Text><NavLink href="/taxi-readiness" label="Apply for Ride review" /></View>
         <View style={styles.toolCard}><Text style={styles.toolTitle}>Activity feed and notifications</Text><NavLink href="/notifications" label="Open notifications" /></View>
       </View>
     </Card>

@@ -1,6 +1,7 @@
 import { BadRequestException } from "@nestjs/common";
-import { AccountStatus, DocumentVerificationStatus, VendorStatus } from "@prisma/client";
+import { AccountStatus, DocumentVerificationStatus, UserRole, VendorActivationInvitationStatus, VendorStatus } from "@prisma/client";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
+import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AdminOperationsService } from "./admin-operations.service";
 
@@ -16,6 +17,7 @@ describe("AdminOperationsService vendor cleanup", () => {
     product: { findMany: jest.fn(), deleteMany: jest.fn() },
     productOption: { deleteMany: jest.fn() },
     productOptionGroup: { deleteMany: jest.fn() },
+    vendorAccountActivation: { updateMany: jest.fn(), create: jest.fn() },
     adminAuditLog: { create: jest.fn() }
   };
   const prisma = {
@@ -30,9 +32,11 @@ describe("AdminOperationsService vendor cleanup", () => {
     $transaction: jest.fn((callback) => callback(tx))
   };
   const audit = { record: jest.fn() };
+  const applicationNotifications = { vendorApplicationReviewed: jest.fn() };
   const service = new AdminOperationsService(
     prisma as unknown as PrismaService,
-    audit as unknown as AdminAuditService
+    audit as unknown as AdminAuditService,
+    applicationNotifications as unknown as ApplicationNotificationsService
   );
 
   const vendor = {
@@ -48,7 +52,7 @@ describe("AdminOperationsService vendor cleanup", () => {
     deletedAt: null,
     createdAt: new Date("2026-07-15T00:00:00.000Z"),
     updatedAt: new Date("2026-07-15T00:00:00.000Z"),
-    user: { accountStatus: AccountStatus.ACTIVE, deletedAt: null },
+    user: { accountStatus: AccountStatus.ACTIVE, deletedAt: null, role: UserRole.VENDOR, fullName: "Vendor Owner", phoneNumber: "+2348012345678", email: "vendor@example.test" },
     onboardingDocuments: []
   };
 
@@ -61,6 +65,7 @@ describe("AdminOperationsService vendor cleanup", () => {
     prisma.vendorPayoutAccount.count.mockResolvedValue(0);
     prisma.orderItem.count.mockResolvedValue(0);
     prisma.product.count.mockResolvedValue(1);
+    applicationNotifications.vendorApplicationReviewed.mockResolvedValue(undefined);
     tx.vendor.update.mockResolvedValue({ ...vendor, deletedAt: new Date("2026-07-15T01:00:00.000Z") });
     tx.product.findMany.mockResolvedValue([{ id: "product-1" }]);
   });
@@ -147,5 +152,41 @@ describe("AdminOperationsService vendor cleanup", () => {
       vendorId: vendor.id,
       status: DocumentVerificationStatus.APPROVED
     }));
+  });
+
+  it("creates a vendor activation invitation without returning the plaintext URL", async () => {
+    prisma.vendor.findUnique.mockResolvedValueOnce({
+      id: vendor.id,
+      userId: vendor.userId,
+      businessName: vendor.businessName,
+      deletedAt: null,
+      user: { role: UserRole.VENDOR, fullName: "Vendor Owner", phoneNumber: "+2348012345678", email: "vendor@example.test" }
+    });
+
+    const result = await service.createVendorActivationLink("admin-1", vendor.id);
+
+    expect(tx.vendorAccountActivation.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { vendorId: vendor.id, status: VendorActivationInvitationStatus.PENDING }
+    }));
+    expect(tx.vendorAccountActivation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        vendorId: vendor.id,
+        userId: vendor.userId,
+        tokenHash: expect.any(String),
+        expiresAt: expect.any(Date),
+        createdByAdminId: "admin-1"
+      })
+    }));
+    expect(applicationNotifications.vendorApplicationReviewed).toHaveBeenCalledWith(expect.objectContaining({
+      reference: expect.stringMatching(/^VENDOR-/),
+      activationUrl: expect.stringContaining("/activate?token="),
+      activationExpiresAt: expect.any(String)
+    }));
+    expect(result).toEqual(expect.objectContaining({
+      vendorId: vendor.id,
+      tokenVisibleOnce: false,
+      notificationQueued: true
+    }));
+    expect(result).not.toHaveProperty("activationUrl");
   });
 });

@@ -9,6 +9,7 @@ import { LoginDto } from "./dto/login.dto";
 import { LogoutDto } from "./dto/logout.dto";
 import { RegisterCustomerDto } from "./dto/register-customer.dto";
 import { RefreshSessionDto } from "./dto/refresh-session.dto";
+import { RequestVendorActivationLinkDto } from "./dto/request-vendor-activation-link.dto";
 import { ResendOtpDto } from "./dto/resend-otp.dto";
 import { VerifyOtpDto } from "./dto/verify-otp.dto";
 
@@ -47,9 +48,10 @@ export class AuthController {
   @Post("login")
   @ApiOperation({ summary: "Log in with phone number and password" })
   async login(@Body() dto: LoginDto) {
+    const data = await this.authService.login(dto);
     return {
-      message: "Login successful",
-      data: await this.authService.login(dto)
+      message: "verificationRequired" in data ? "Phone verification required" : "Login successful",
+      data
     };
   }
 
@@ -59,6 +61,15 @@ export class AuthController {
     return {
       message: "Vendor account activated",
       data: await this.authService.activateVendorAccount(dto)
+    };
+  }
+
+  @Post("vendor/activation-link/request")
+  @ApiOperation({ summary: "Request a new approved-vendor activation link" })
+  async requestVendorActivationLink(@Body() dto: RequestVendorActivationLinkDto) {
+    return {
+      message: "If the approved vendor account is eligible, a new activation link has been sent.",
+      data: await this.authService.requestVendorActivationLink(dto)
     };
   }
 

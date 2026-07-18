@@ -33,7 +33,12 @@ export default ({ config }: ExpoConfigInput) => {
     name: isStaging ? "KariGO Captain Staging" : "KariGO Captain",
     slug: "karigo-rider",
     scheme: isStaging ? "karigo-rider-staging" : "karigo-rider",
-    plugins: ["expo-router"],
+    plugins: [
+      "expo-router",
+      ["expo-location", {
+        locationWhenInUsePermission: "KariGO Captain uses your location only while you are online or on an active delivery so dispatch can coordinate pickups and drop-offs."
+      }]
+    ],
     icon: "./assets/karigo-icon.png",
     splash: {
       image: "./assets/karigo-logo.png",

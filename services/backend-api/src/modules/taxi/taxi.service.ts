@@ -159,7 +159,7 @@ export class TaxiService {
       state: entry.state,
       pickupArea: entry.pickupArea,
       status: entry.status,
-      message: "You have joined the KariGO Taxi waitlist. We will contact you when Taxi service is ready in your area.",
+      message: "You have joined the KariGO Rides waitlist. We will contact you when Ride service is ready in your area.",
       createdAt: entry.createdAt.toISOString()
     };
   }
@@ -205,7 +205,7 @@ export class TaxiService {
       select: TAXI_APPLICATION_DETAIL_SELECT,
       orderBy: { createdAt: "desc" }
     });
-    if (!application) throw new NotFoundException("Taxi driver application status could not be found for the supplied phone number");
+    if (!application) throw new NotFoundException("Ride Captain application status could not be found for the supplied phone number");
     return this.formatPublicApplicationStatus(application);
   }
 
@@ -224,7 +224,7 @@ export class TaxiService {
       where: { id: applicationId },
       select: TAXI_APPLICATION_DETAIL_SELECT
     });
-    if (!application) throw new NotFoundException("Taxi driver application not found");
+    if (!application) throw new NotFoundException("Ride Captain application not found");
     return this.adminApplicationDetail(application);
   }
 
@@ -261,7 +261,7 @@ export class TaxiService {
 
   async waitlistDetail(entryId: string) {
     const entry = await this.prisma.taxiWaitlistEntry.findUnique({ where: { id: entryId }, select: TAXI_WAITLIST_SELECT });
-    if (!entry) throw new NotFoundException("Taxi waitlist entry not found");
+    if (!entry) throw new NotFoundException("Ride waitlist entry not found");
     return this.waitlistEntry(entry);
   }
 
@@ -325,8 +325,12 @@ export class TaxiService {
           actorType: TaxiTripActorType.CUSTOMER,
           actorId: userId,
           eventType: "taxi.trip.requested",
-          note: "Test Taxi Trip requested",
-          metadata: { isTestMode: true, estimatedFareKobo: estimate.estimatedFareKobo } as Prisma.InputJsonValue
+          note: "Ride request recorded",
+          metadata: {
+            isTestMode: true,
+            estimatedFareKobo: estimate.estimatedFareKobo,
+            pricing: estimate.pricing
+          } as Prisma.InputJsonValue
         }
       });
       return created;
@@ -357,7 +361,7 @@ export class TaxiService {
       where: { id: tripId, customerId: customer.id },
       include: this.tripInclude()
     });
-    if (!trip) throw new NotFoundException("Taxi trip not found");
+    if (!trip) throw new NotFoundException("Ride request not found");
     return this.formatTrip(trip);
   }
 
@@ -365,11 +369,11 @@ export class TaxiService {
     this.assertTaxiStagingEnabled();
     const customer = await this.requireCustomer(userId);
     const trip = await this.prisma.taxiTrip.findFirst({ where: { id: tripId, customerId: customer.id } });
-    if (!trip) throw new NotFoundException("Taxi trip not found");
-    if (CLOSED_TAXI_TRIP_STATUSES.includes(trip.status)) throw new BadRequestException("Taxi trip is already closed");
+    if (!trip) throw new NotFoundException("Ride request not found");
+    if (CLOSED_TAXI_TRIP_STATUSES.includes(trip.status)) throw new BadRequestException("Ride request is already closed");
     const supportCancelStatuses: TaxiTripStatus[] = [TaxiTripStatus.STARTED, TaxiTripStatus.ARRIVED_DESTINATION];
     if (supportCancelStatuses.includes(trip.status)) {
-      throw new BadRequestException("Contact support to cancel an active test taxi trip");
+      throw new BadRequestException("Contact support to cancel an active Ride request");
     }
     return this.cancelTrip(trip.id, TaxiTripStatus.CANCELLED_BY_CUSTOMER, userId, TaxiTripActorType.CUSTOMER, dto.reason);
   }
@@ -380,7 +384,7 @@ export class TaxiService {
       where: { userId },
       include: { application: true }
     });
-    if (!profile) throw new NotFoundException("Taxi driver test profile not found");
+    if (!profile) throw new NotFoundException("Ride Captain profile not found");
     return this.formatDriverProfile(profile);
   }
 
@@ -423,17 +427,17 @@ export class TaxiService {
     const profile = await this.requireActiveTaxiDriverProfile(userId);
     await this.assertDriverHasNoActiveTrip(profile.id, tripId);
     const trip = await this.prisma.taxiTrip.findUnique({ where: { id: tripId } });
-    if (!trip) throw new NotFoundException("Taxi trip not found");
-    if (trip.driverProfileId && trip.driverProfileId !== profile.id) throw new ConflictException("Taxi trip is assigned to another driver");
+    if (!trip) throw new NotFoundException("Ride request not found");
+    if (trip.driverProfileId && trip.driverProfileId !== profile.id) throw new ConflictException("Ride request is assigned to another Captain");
     const acceptableStatuses: TaxiTripStatus[] = [TaxiTripStatus.REQUESTED, TaxiTripStatus.DRIVER_ASSIGNED];
     if (!acceptableStatuses.includes(trip.status)) {
-      throw new BadRequestException("Taxi trip cannot be accepted from its current status");
+      throw new BadRequestException("Ride request cannot be accepted from its current status");
     }
     const updated = await this.updateTripWithEvent(trip.id, {
       driverProfile: { connect: { id: profile.id } },
       status: TaxiTripStatus.ACCEPTED,
       acceptedAt: new Date()
-    }, userId, TaxiTripActorType.DRIVER, "taxi.trip.accepted", "Driver accepted test taxi trip");
+    }, userId, TaxiTripActorType.DRIVER, "taxi.trip.accepted", "Ride Captain accepted ride request");
     return this.formatTrip(updated);
   }
 
@@ -444,14 +448,14 @@ export class TaxiService {
   async riderStartTrip(userId: string, tripId: string, dto: TaxiStartTripDto) {
     this.assertTaxiStagingEnabled();
     const { profile, trip } = await this.requireDriverTrip(userId, tripId);
-    if (trip.status !== TaxiTripStatus.ARRIVED_PICKUP) throw new BadRequestException("Driver must arrive at pickup before starting the trip");
+    if (trip.status !== TaxiTripStatus.ARRIVED_PICKUP) throw new BadRequestException("Ride Captain must arrive at pickup before starting the trip");
     if (!trip.tripPinHash || !(await bcrypt.compare(dto.tripPin, trip.tripPinHash))) {
       throw new BadRequestException("Invalid trip PIN");
     }
     const updated = await this.updateTripWithEvent(trip.id, {
       status: TaxiTripStatus.STARTED,
       startedAt: new Date()
-    }, userId, TaxiTripActorType.DRIVER, "taxi.trip.started", `Driver ${profile.fullName} started test taxi trip`);
+    }, userId, TaxiTripActorType.DRIVER, "taxi.trip.started", `Ride Captain ${profile.fullName} started ride request`);
     return this.formatTrip(updated);
   }
 
@@ -462,20 +466,20 @@ export class TaxiService {
   async riderCompleteTrip(userId: string, tripId: string) {
     this.assertTaxiStagingEnabled();
     const { trip } = await this.requireDriverTrip(userId, tripId);
-    if (trip.status !== TaxiTripStatus.ARRIVED_DESTINATION) throw new BadRequestException("Driver must arrive at destination before completing the trip");
+    if (trip.status !== TaxiTripStatus.ARRIVED_DESTINATION) throw new BadRequestException("Ride Captain must arrive at destination before completing the trip");
     const updated = await this.updateTripWithEvent(trip.id, {
       status: TaxiTripStatus.COMPLETED,
       completedAt: new Date(),
       finalFareKobo: trip.estimatedFareKobo,
       tripPinHash: null
-    }, userId, TaxiTripActorType.DRIVER, "taxi.trip.completed", "Test taxi trip completed");
+    }, userId, TaxiTripActorType.DRIVER, "taxi.trip.completed", "Ride request completed");
     return this.formatTrip(updated);
   }
 
   async riderCancelTrip(userId: string, tripId: string, dto: TaxiCancelDto) {
     this.assertTaxiStagingEnabled();
     const { trip } = await this.requireDriverTrip(userId, tripId);
-    if (CLOSED_TAXI_TRIP_STATUSES.includes(trip.status)) throw new BadRequestException("Taxi trip is already closed");
+    if (CLOSED_TAXI_TRIP_STATUSES.includes(trip.status)) throw new BadRequestException("Ride request is already closed");
     return this.cancelTrip(trip.id, TaxiTripStatus.CANCELLED_BY_DRIVER, userId, TaxiTripActorType.DRIVER, dto.reason);
   }
 
@@ -492,10 +496,10 @@ export class TaxiService {
   async adminCreateDriverProfileFromApplication(adminUserId: string, applicationId: string) {
     this.assertTaxiStagingEnabled();
     const application = await this.prisma.taxiDriverApplication.findUnique({ where: { id: applicationId } });
-    if (!application) throw new NotFoundException("Taxi driver application not found");
+    if (!application) throw new NotFoundException("Ride Captain application not found");
     const approvedStatuses: TaxiApplicationStatus[] = [TaxiApplicationStatus.APPROVED, TaxiApplicationStatus.PROVISIONALLY_APPROVED];
     if (!approvedStatuses.includes(application.status)) {
-      throw new BadRequestException("Only approved or provisionally approved applications can create a Taxi test profile");
+      throw new BadRequestException("Only approved or provisionally approved applications can create a Ride Captain profile");
     }
     const profile = await this.prisma.taxiDriverProfile.upsert({
       where: { applicationId },
@@ -565,7 +569,7 @@ export class TaxiService {
   async adminTrip(tripId: string) {
     this.assertTaxiStagingEnabled();
     const trip = await this.prisma.taxiTrip.findUnique({ where: { id: tripId }, include: this.tripInclude() });
-    if (!trip) throw new NotFoundException("Taxi trip not found");
+    if (!trip) throw new NotFoundException("Ride request not found");
     return this.formatTrip(trip);
   }
 
@@ -575,16 +579,16 @@ export class TaxiService {
       this.prisma.taxiTrip.findUnique({ where: { id: tripId } }),
       this.prisma.taxiDriverProfile.findUnique({ where: { id: dto.driverProfileId } })
     ]);
-    if (!trip) throw new NotFoundException("Taxi trip not found");
+    if (!trip) throw new NotFoundException("Ride request not found");
     if (!profile || profile.status !== TaxiDriverProfileStatus.ACTIVE_TEST || !profile.isAvailableForTaxi) {
-      throw new BadRequestException("Taxi driver profile is not active and available for staging");
+      throw new BadRequestException("Ride Captain profile is not active and available");
     }
-    if (trip.status !== TaxiTripStatus.REQUESTED) throw new BadRequestException("Only requested trips can be assigned");
+    if (trip.status !== TaxiTripStatus.REQUESTED) throw new BadRequestException("Only requested Ride requests can be assigned");
     await this.assertDriverHasNoActiveTrip(profile.id, trip.id);
     const updated = await this.updateTripWithEvent(trip.id, {
       driverProfile: { connect: { id: profile.id } },
       status: TaxiTripStatus.DRIVER_ASSIGNED
-    }, adminUserId, TaxiTripActorType.ADMIN, "taxi.trip.driver_assigned", "Admin assigned test taxi driver");
+    }, adminUserId, TaxiTripActorType.ADMIN, "taxi.trip.driver_assigned", "Admin assigned Ride Captain");
     await this.audit.record(adminUserId, "admin.taxi.trip.driver_assigned", "TaxiTrip", trip.id, {
       driverProfileId: profile.id,
       stagingOnly: true
@@ -595,8 +599,8 @@ export class TaxiService {
   async adminCancelTrip(adminUserId: string, tripId: string, dto: TaxiCancelDto) {
     this.assertTaxiStagingEnabled();
     const trip = await this.prisma.taxiTrip.findUnique({ where: { id: tripId } });
-    if (!trip) throw new NotFoundException("Taxi trip not found");
-    if (CLOSED_TAXI_TRIP_STATUSES.includes(trip.status)) throw new BadRequestException("Taxi trip is already closed");
+    if (!trip) throw new NotFoundException("Ride request not found");
+    if (CLOSED_TAXI_TRIP_STATUSES.includes(trip.status)) throw new BadRequestException("Ride request is already closed");
     const updated = await this.cancelTrip(trip.id, TaxiTripStatus.CANCELLED_BY_ADMIN, adminUserId, TaxiTripActorType.ADMIN, dto.reason);
     await this.audit.record(adminUserId, "admin.taxi.trip.cancelled", "TaxiTrip", trip.id, {
       reason: dto.reason,
@@ -622,6 +626,7 @@ export class TaxiService {
       activeTrips,
       completedTrips,
       cancelledTrips,
+      pricingDefaults: this.ridePricingDefaults(),
       testModeNotice: this.testModeNotice()
     };
   }
@@ -677,36 +682,68 @@ export class TaxiService {
 
   private assertTaxiStagingEnabled() {
     if (!this.config.get<boolean>("TAXI_SERVICE_ENABLED", false) || !this.config.get<boolean>("TAXI_STAGING_DISPATCH_ENABLED", false)) {
-      throw new ForbiddenException("Taxi staging dispatch is disabled. Taxi remains waitlist/readiness only.");
+      throw new ForbiddenException("KariGO Rides dispatch is disabled. Ride requests remain behind operations approval.");
     }
   }
 
   private calculateFare(dto: TaxiFareEstimateDto) {
     const distance = Number(dto.estimatedDistanceKm ?? 5);
     const duration = Math.round(Number(dto.estimatedDurationMin ?? Math.max(10, distance * 4)));
+    const waitingMinutes = Math.max(0, Math.round(Number(dto.waitingMinutes ?? 0)));
     if (!Number.isFinite(distance) || distance <= 0) throw new BadRequestException("Estimated distance must be greater than zero");
     if (!Number.isFinite(duration) || duration <= 0) throw new BadRequestException("Estimated duration must be greater than zero");
+    if (!Number.isFinite(waitingMinutes)) throw new BadRequestException("Waiting minutes must be a valid number");
 
-    const baseFareKobo = this.config.get<number>("TAXI_BASE_FARE_KOBO", 70000);
-    const perKmKobo = this.config.get<number>("TAXI_PER_KM_KOBO", 25000);
-    const perMinuteKobo = this.config.get<number>("TAXI_PER_MINUTE_KOBO", 4000);
-    const minimumFareKobo = this.config.get<number>("TAXI_MINIMUM_FARE_KOBO", 120000);
-    const estimatedFareKobo = Math.max(minimumFareKobo, Math.round(baseFareKobo + distance * perKmKobo + duration * perMinuteKobo));
+    const pricing = this.ridePricingDefaults();
+    const billableWaitingMinutes = Math.max(0, waitingMinutes - pricing.waitingGraceMinutes);
+    const distanceFareKobo = Math.round(distance * pricing.perKmKobo);
+    const waitingChargeKobo = billableWaitingMinutes * pricing.waitingChargeKoboPerMinute;
+    const estimatedFareKobo = distanceFareKobo + waitingChargeKobo;
+    const karigoCommissionKobo = Math.round(estimatedFareKobo * (pricing.karigoCommissionPercent / 100));
+    const captainNetEstimateKobo = Math.max(0, estimatedFareKobo - karigoCommissionKobo);
 
     return {
       pickupAddress: dto.pickupAddress.trim(),
       destinationAddress: dto.destinationAddress.trim(),
       estimatedDistanceKm: Number(distance.toFixed(2)),
       estimatedDurationMin: duration,
+      waitingMinutes,
+      billableWaitingMinutes,
+      distanceFareKobo,
+      waitingChargeKobo,
       estimatedFareKobo,
+      karigoCommissionKobo,
+      captainNetEstimateKobo,
       currency: "NGN",
-      formula: { baseFareKobo, perKmKobo, perMinuteKobo, minimumFareKobo },
+      formula: {
+        perKmKobo: pricing.perKmKobo,
+        waitingChargeKoboPerMinute: pricing.waitingChargeKoboPerMinute,
+        waitingGraceMinutes: pricing.waitingGraceMinutes,
+        karigoCommissionPercent: pricing.karigoCommissionPercent,
+        vatTaxKobo: pricing.vatTaxKobo,
+        vatTaxConfigured: pricing.vatTaxConfigured
+      },
+      pricing,
       testModeNotice: this.testModeNotice()
     };
   }
 
+  private ridePricingDefaults() {
+    const vatTaxKobo = this.config.get<number>("RIDE_VAT_TAX_KOBO", 0);
+    return {
+      launchCities: ["Kano", "Abuja"],
+      perKmKobo: this.config.get<number>("RIDE_PER_KM_KOBO", 40000),
+      karigoCommissionPercent: this.config.get<number>("RIDE_CAPTAIN_COMMISSION_PERCENT", 10),
+      waitingChargeKoboPerMinute: this.config.get<number>("RIDE_WAITING_CHARGE_KOBO_PER_MINUTE", 500),
+      waitingGraceMinutes: this.config.get<number>("RIDE_WAITING_GRACE_MINUTES", 5),
+      vatTaxKobo,
+      vatTaxConfigured: vatTaxKobo > 0,
+      dispatchEnabled: this.config.get<boolean>("TAXI_STAGING_DISPATCH_ENABLED", false)
+    };
+  }
+
   private testModeNotice() {
-    return "Taxi is running in staging test mode. No real taxi ride or payment is guaranteed.";
+    return "KariGO Rides remains controlled by operations flags. No ride dispatch or ride payment is active unless approved.";
   }
 
   private decimalOrUndefined(value?: number) {
@@ -721,9 +758,9 @@ export class TaxiService {
 
   private async requireActiveTaxiDriverProfile(userId: string) {
     const profile = await this.prisma.taxiDriverProfile.findUnique({ where: { userId } });
-    if (!profile) throw new NotFoundException("Taxi driver test profile not found");
+    if (!profile) throw new NotFoundException("Ride Captain profile not found");
     if (profile.status !== TaxiDriverProfileStatus.ACTIVE_TEST) {
-      throw new BadRequestException("Taxi driver profile is not active for staging test trips");
+      throw new BadRequestException("Ride Captain profile is not active for Ride requests");
     }
     return profile;
   }
@@ -734,7 +771,7 @@ export class TaxiService {
       where: { id: tripId, driverProfileId: profile.id },
       include: this.tripInclude()
     });
-    if (!trip) throw new NotFoundException("Taxi trip not found for this driver");
+    if (!trip) throw new NotFoundException("Ride request not found for this Captain");
     return { profile, trip };
   }
 
@@ -747,7 +784,7 @@ export class TaxiService {
       },
       select: { id: true }
     });
-    if (active) throw new ConflictException("Driver already has an active test taxi trip");
+    if (active) throw new ConflictException("Ride Captain already has an active ride request");
   }
 
   private async riderTripTransition(
@@ -761,22 +798,22 @@ export class TaxiService {
     this.assertTaxiStagingEnabled();
     const { trip } = await this.requireDriverTrip(userId, tripId);
     if (trip.status !== expectedStatus) {
-      throw new BadRequestException(`Taxi trip must be ${expectedStatus.replaceAll("_", " ").toLowerCase()} before this action`);
+      throw new BadRequestException(`Ride request must be ${expectedStatus.replaceAll("_", " ").toLowerCase()} before this action`);
     }
     const updated = await this.updateTripWithEvent(trip.id, {
       ...data,
       status: nextStatus
-    }, userId, TaxiTripActorType.DRIVER, eventType, `Driver moved test taxi trip to ${nextStatus}`);
+    }, userId, TaxiTripActorType.DRIVER, eventType, `Ride Captain moved request to ${nextStatus}`);
     return this.formatTrip(updated);
   }
 
   private async cancelTrip(tripId: string, status: TaxiTripStatus, actorId: string, actorType: TaxiTripActorType, reason?: string) {
     const updated = await this.updateTripWithEvent(tripId, {
       status,
-      cancellationReason: reason?.trim() || "Test taxi trip cancelled",
+      cancellationReason: reason?.trim() || "Ride request cancelled",
       cancelledAt: new Date(),
       tripPinHash: null
-    }, actorId, actorType, "taxi.trip.cancelled", reason || "Test taxi trip cancelled");
+    }, actorId, actorType, "taxi.trip.cancelled", reason || "Ride request cancelled");
     return this.formatTrip(updated);
   }
 
@@ -918,7 +955,7 @@ export class TaxiService {
       updatedAt: application.updatedAt.toISOString(),
       reviewedAt: application.reviewedAt?.toISOString() ?? null,
       readinessOnly: true,
-      launchWarning: "Approval is readiness-only and does not activate live taxi dispatch."
+      launchWarning: "Approval records Ride Captain review status only. Ride dispatch remains controlled by KariGO operations."
     };
   }
 
@@ -934,12 +971,12 @@ export class TaxiService {
   private statusMessage(status: TaxiApplicationStatus, note?: string | null) {
     if (note) return note;
     const messages: Record<TaxiApplicationStatus, string> = {
-      SUBMITTED: "Your taxi driver readiness application has been submitted for review.",
-      UNDER_REVIEW: "Your taxi driver readiness application is under review.",
-      CHANGES_REQUESTED: "KariGO needs more information before continuing your taxi readiness review.",
-      PROVISIONALLY_APPROVED: "Your application is provisionally approved for taxi readiness. Taxi dispatch is not live yet.",
-      APPROVED: "Your application is approved for taxi readiness only. Live taxi dispatch is not active.",
-      REJECTED: "Your taxi readiness application was not approved at this time."
+      SUBMITTED: "Your Ride Captain application has been submitted for review.",
+      UNDER_REVIEW: "Your Ride Captain application is under review.",
+      CHANGES_REQUESTED: "KariGO needs more information before continuing your Ride Captain review.",
+      PROVISIONALLY_APPROVED: "Your application is provisionally approved for Ride Captain review. Ride dispatch still requires operations approval.",
+      APPROVED: "Your Ride Captain application is approved for review records. Ride dispatch is still controlled by KariGO operations.",
+      REJECTED: "Your Ride Captain application was not approved at this time."
     };
     return messages[status];
   }

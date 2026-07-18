@@ -31,6 +31,9 @@ const initial = {
   city: "Kano",
   state: "Kano",
   businessDescription: "",
+  businessRegistrationNumber: "",
+  businessRegistrationDocumentUrl: "",
+  cacEvidenceDocumentUrl: "",
   websiteOrSocialLink: "",
   notes: "",
   declarationAccepted: false,
@@ -73,6 +76,23 @@ export function VendorApplicationForm() {
           deliveryPreference: "KariGO review required",
           catalogueCategory: form.businessCategory,
           existingDelivery: form.notes || undefined,
+          documentPlaceholders: {
+            businessRegistrationNumber: form.businessRegistrationNumber || undefined,
+            businessRegistrationDocumentProvided: Boolean(form.businessRegistrationDocumentUrl),
+            cacEvidenceProvided: Boolean(form.cacEvidenceDocumentUrl)
+          },
+          documents: [
+            form.businessRegistrationDocumentUrl ? {
+              documentType: "BUSINESS_REGISTRATION",
+              documentName: "Business registration document",
+              documentUrl: form.businessRegistrationDocumentUrl
+            } : null,
+            form.cacEvidenceDocumentUrl ? {
+              documentType: "CAC_OR_BUSINESS_EVIDENCE",
+              documentName: "CAC or business evidence",
+              documentUrl: form.cacEvidenceDocumentUrl
+            } : null
+          ].filter(Boolean),
           declarationAccepted: form.declarationAccepted,
           privacyAccepted: form.privacyAccepted,
           contactConsentAccepted: form.contactConsentAccepted
@@ -93,7 +113,7 @@ export function VendorApplicationForm() {
 
   return (
     <form className="form-card" onSubmit={submit}>
-      <p className="muted">Vendor applications are currently open for Kano and Abuja launch onboarding.</p>
+      <p className="muted">Vendor applications are open for Kano and Abuja launch onboarding. Start with the phone and email for the business account; KariGO verifies the account and sends password setup after approval.</p>
       <div className="form-grid">
         <label>Business name<input required value={form.businessName} onChange={(event) => setForm({ ...form, businessName: event.target.value })} /></label>
         <label>Contact person name<input required value={form.contactFullName} onChange={(event) => setForm({ ...form, contactFullName: event.target.value })} /></label>
@@ -109,6 +129,12 @@ export function VendorApplicationForm() {
       </div>
       <label>Business address<textarea required value={form.businessAddress} onChange={(event) => setForm({ ...form, businessAddress: event.target.value })} /></label>
       <label>Description<textarea required value={form.businessDescription} onChange={(event) => setForm({ ...form, businessDescription: event.target.value })} /></label>
+      <div className="form-grid">
+        <label>Business registration number optional<input value={form.businessRegistrationNumber} onChange={(event) => setForm({ ...form, businessRegistrationNumber: event.target.value })} /></label>
+        <label>Business registration document HTTPS link optional<input value={form.businessRegistrationDocumentUrl} onChange={(event) => setForm({ ...form, businessRegistrationDocumentUrl: event.target.value })} /></label>
+        <label>CAC or business evidence HTTPS link optional<input value={form.cacEvidenceDocumentUrl} onChange={(event) => setForm({ ...form, cacEvidenceDocumentUrl: event.target.value })} /></label>
+      </div>
+      <p className="muted">If you do not have document links ready, KariGO can collect evidence during onboarding review. Do not upload passwords, OTPs or payment secrets.</p>
       <label>Notes optional<textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
       <label className="check-row"><input type="checkbox" checked={form.declarationAccepted} onChange={(event) => setForm({ ...form, declarationAccepted: event.target.checked })} /> I confirm these business details are accurate.</label>
       <label className="check-row"><input type="checkbox" checked={form.privacyAccepted} onChange={(event) => setForm({ ...form, privacyAccepted: event.target.checked })} /> I understand KariGO must review this application before onboarding.</label>

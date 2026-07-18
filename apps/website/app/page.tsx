@@ -24,10 +24,10 @@ export default function HomePage() {
               <div className="mock-grid">
                 <div className="mock-tile">Food</div>
                 <div className="mock-tile">Groceries</div>
-                <div className="mock-tile">Rides soon</div>
+                <div className="mock-tile">Rides</div>
                 <div className="mock-tile">Market</div>
                 <div className="mock-tile">Parcel</div>
-                <div className="mock-tile">Bills soon</div>
+                <div className="mock-tile">Bills</div>
               </div>
               <div className="mock-order">
                 <strong>Kano Kitchen</strong>
@@ -45,7 +45,7 @@ export default function HomePage() {
             <p className="eyebrow">Services</p>
             <h2>Everyday services, one trusted platform.</h2>
           </div>
-          <p>Coming-soon services are clearly marked before launch.</p>
+          <p>Services under provider or operations approval are clearly marked before activation.</p>
         </div>
         <div className="service-grid">{services.map((service) => <ServiceCard key={service.title} service={service} />)}</div>
       </section>
@@ -78,7 +78,7 @@ export default function HomePage() {
         <article className="info-card">
           <p className="eyebrow">For Captains</p>
           <h2>Earn with KariGO.</h2>
-          <p>Delivery Captains are supported now. Ride Captain onboarding is being prepared with verification, safety and operational controls before KariGO Rides launch.</p>
+          <p>Delivery Captains are supported now. Ride Captain applications are open for review with verification, safety and operational controls before Ride dispatch activation.</p>
           <div className="actions">
             <Link className="button secondary" href="/riders">Captain Details</Link>
             <Link className="button" href="/riders#ride-waitlist">Join Ride Waitlist</Link>
@@ -92,7 +92,7 @@ export default function HomePage() {
             <p className="eyebrow">Bills & Utilities</p>
             <h2>Secure utility payments are being prepared.</h2>
             <p className="lead">KariGO is preparing secure merchant integrations for airtime, data, electricity and cable TV payments.</p>
-            <p>These services are not live yet. KariGO will activate them only after provider, security and operational review.</p>
+            <p>KariGO will activate these services only after provider, security and operational review.</p>
           </article>
           <article className="info-card" id="download">
             <p className="eyebrow">Download App</p>
@@ -100,14 +100,14 @@ export default function HomePage() {
             <div className="store-badges" aria-label="Future app store availability">
               <div className="store-badge" aria-disabled="true">
                 <span className="store-mark" aria-hidden="true">GP</span>
-                <span><small>Coming soon on</small><strong>Google Play</strong></span>
+                <span><small>Preparing for</small><strong>Google Play</strong></span>
               </div>
               <div className="store-badge store-badge-muted" aria-disabled="true">
                 <span className="store-mark" aria-hidden="true">A</span>
                 <span><small>Planned for</small><strong>App Store</strong></span>
               </div>
             </div>
-            <p><strong>Android:</strong> Coming soon on Google Play. Controlled onboarding access is shared separately.</p>
+            <p><strong>Android:</strong> Preparing for Google Play release. Controlled onboarding access is shared separately.</p>
             <p><strong>iOS:</strong> Coming later.</p>
           </article>
         </div>

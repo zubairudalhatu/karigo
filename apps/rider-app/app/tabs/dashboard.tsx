@@ -7,6 +7,7 @@ import { notificationsApi } from "../../src/api/notifications.api";
 import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError } from "../../src/lib/errors";
 import { captainModes } from "../../src/lib/captain-modes";
+import { requestCaptainForegroundLocation } from "../../src/lib/location";
 
 const ACTIVE_DELIVERY_STATUSES = new Set([
   "RIDER_ASSIGNED",
@@ -45,6 +46,7 @@ export default function RiderDashboard() {
   const [jobs, setJobs] = useState<RiderJob[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   async function load() {
@@ -75,9 +77,24 @@ export default function RiderDashboard() {
     if (!profile) return;
     try {
       const next = profile.availabilityStatus === "ONLINE" ? "OFFLINE" : "ONLINE";
-      setProfile(await riderApi.updateAvailability(next));
+      let currentLocation: Awaited<ReturnType<typeof requestCaptainForegroundLocation>> | null = null;
+      if (next === "ONLINE") {
+        currentLocation = await requestCaptainForegroundLocation();
+      }
+      const updated = await riderApi.updateAvailability(next);
+      setProfile(updated);
+      if (next === "ONLINE" && currentLocation) {
+        const located = await riderApi.updateLocation(currentLocation.latitude, currentLocation.longitude);
+        setProfile(located);
+        setMessage("You are online and your live location has been shared with KariGO Dispatch.");
+      } else {
+        setMessage("You are offline. KariGO will not update your live location.");
+      }
       setError("");
-    } catch (e) { setError(friendlyError(e)); }
+    } catch (e) {
+      setError(friendlyError(e));
+      setMessage("");
+    }
   }
 
   const canToggle = !!profile && profile.verificationStatus === "ACTIVE" && profile.availabilityStatus !== "BUSY";
@@ -92,8 +109,9 @@ export default function RiderDashboard() {
         <Text style={styles.kicker}>KariGO Captain</Text>
         <Text style={styles.title}>Hi, {firstName(profile?.user?.fullName)}</Text>
         <Text style={styles.heroCopy}>Manage your delivery assignments and availability.</Text>
-        <Text style={styles.heroSubcopy}>Delivery Captain operations are active for approved pilot Captains. Ride Captain readiness stays gated until KariGO Rides is approved.</Text>
+        <Text style={styles.heroSubcopy}>Delivery Captain operations are active for approved Captains. Ride Captain review stays gated until KariGO Rides is approved.</Text>
       </View>
+      <Message>{message}</Message>
       <Message error>{error}</Message>
 
       <Card>
@@ -102,6 +120,7 @@ export default function RiderDashboard() {
           <StatusBadge status={availabilityLabel(profile)} />
         </View>
         <Text style={ui.muted}>{availabilityCopy(profile)}</Text>
+        <Text style={ui.muted}>Location is requested only when you go online or while you are on an active delivery.</Text>
         <Button title={profile?.availabilityStatus === "ONLINE" ? "Go offline" : "Go online"} disabled={!canToggle} onPress={toggle} />
       </Card>
 
@@ -132,9 +151,9 @@ export default function RiderDashboard() {
       </Card>
 
       <Card><Text style={ui.title}>Assigned jobs</Text><Text style={styles.metric}>{jobs.length}</Text><NavLink href="/jobs" label="View assigned jobs" /></Card>
-      <Card><Text style={ui.title}>Ride readiness</Text><Text style={ui.muted}>KariGO Rides is not live yet. Apply for readiness review while KariGO prepares approved Ride Captain onboarding and vehicle checks.</Text><NavLink href="/taxi-readiness" label="Apply for Ride readiness" /></Card>
-      <Card><Text style={ui.title}>Support and help</Text><Text style={ui.muted}>For staging incidents, contact the KariGO operations or dispatch lead through the approved pilot support channel.</Text></Card>
-      <Card><Text style={ui.title}>Staging safety note</Text><Text style={ui.muted}>Mock providers remain active. Live payouts, withdrawals, live ride booking and live payment collection are disabled.</Text></Card>
+      <Card><Text style={ui.title}>Ride review</Text><Text style={ui.muted}>Apply for Ride Captain review while KariGO completes approved Ride onboarding, vehicle checks and operations controls.</Text><NavLink href="/taxi-readiness" label="Apply for Ride review" /></Card>
+      <Card><Text style={ui.title}>Support and help</Text><Text style={ui.muted}>For urgent delivery issues, contact the KariGO operations or dispatch lead through the approved support channel.</Text></Card>
+      <Card><Text style={ui.title}>Operational guardrails</Text><Text style={ui.muted}>Payout automation, withdrawals and ride dispatch stay disabled until KariGO approves each control separately.</Text></Card>
       <Card>
         <Text style={ui.title}>Captain tools</Text>
         <View style={styles.toolGrid}>
@@ -142,8 +161,8 @@ export default function RiderDashboard() {
           <View style={styles.toolCard}><Text style={styles.toolTitle}>Assigned deliveries</Text><NavLink href="/jobs" label="Open deliveries" /></View>
           <View style={styles.toolCard}><Text style={styles.toolTitle}>Earnings</Text><NavLink href="/earnings" label="View earnings" /></View>
           <View style={styles.toolCard}><Text style={styles.toolTitle}>Profile and vehicle</Text><NavLink href="/profile" label="Update profile" /></View>
-          <View style={styles.toolCard}><Text style={styles.toolTitle}>Support</Text><Text style={ui.muted}>Use approved pilot support channels.</Text></View>
-          <View style={styles.toolCard}><Text style={styles.toolTitle}>Ride Captain readiness</Text><NavLink href="/taxi-readiness" label="Readiness only" /></View>
+          <View style={styles.toolCard}><Text style={styles.toolTitle}>Support</Text><Text style={ui.muted}>Use approved support channels for urgent dispatch issues.</Text></View>
+          <View style={styles.toolCard}><Text style={styles.toolTitle}>Ride Captain review</Text><NavLink href="/taxi-readiness" label="Apply for Ride review" /></View>
         </View>
         <NavLink href="/notifications" label={`Notifications (${unread} unread)`} />
       </Card>

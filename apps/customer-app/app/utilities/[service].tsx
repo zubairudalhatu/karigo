@@ -21,7 +21,7 @@ const configs: Record<string, {
     title: "Airtime",
     recipientLabel: "Phone number",
     amountLabel: "Amount in NGN",
-    description: "Run a safe test airtime purchase for a Nigerian phone number.",
+    description: "Review a safe airtime request for a Nigerian phone number.",
     needsProduct: false
   },
   data: {
@@ -29,7 +29,7 @@ const configs: Record<string, {
     title: "Data",
     recipientLabel: "Phone number",
     amountLabel: "Plan amount in NGN",
-    description: "Choose a demo data bundle and run a safe test transaction.",
+    description: "Choose a demo data bundle for provider review.",
     needsProduct: true
   },
   electricity: {
@@ -37,7 +37,7 @@ const configs: Record<string, {
     title: "Electricity",
     recipientLabel: "Meter number",
     amountLabel: "Amount in NGN",
-    description: "Validate a demo meter and receive a fictional test token.",
+    description: "Validate a demo meter for provider review.",
     needsProduct: false,
     showRecipientName: true
   },
@@ -46,7 +46,7 @@ const configs: Record<string, {
     title: "Cable TV",
     recipientLabel: "Smartcard / IUC number",
     amountLabel: "Package amount in NGN",
-    description: "Choose a demo cable package for a safe test subscription.",
+    description: "Choose a demo cable package for provider review.",
     needsProduct: true
   }
 };
@@ -155,7 +155,7 @@ export default function UtilityServiceFlow() {
 
   return <Protected><Screen title={config.title}>
     <Text style={ui.pageIntro}>{config.description}</Text>
-    <Message>Bills & Utilities is currently in test mode. No real airtime, data, electricity token or cable subscription will be delivered.</Message>
+    <Message>Bills & Utilities is under provider review. No real airtime, data, electricity token or cable subscription will be delivered from this build.</Message>
     <Message error>{error}</Message>
     {loading ? <Loading label={`Loading ${config.title} demo catalogue...`} /> : <>
       <Text style={ui.sectionTitle}>Provider</Text>
@@ -172,23 +172,23 @@ export default function UtilityServiceFlow() {
       <Field placeholder={config.recipientLabel} value={recipient} onChangeText={(value) => { setRecipient(value); setQuote(null); setTransaction(null); }} keyboardType={config.type === "AIRTIME" || config.type === "DATA" ? "phone-pad" : "number-pad"} />
       {config.showRecipientName ? <Field placeholder="Customer name (optional)" value={recipientName} onChangeText={setRecipientName} /> : null}
       <Field placeholder={config.amountLabel} value={amount} onChangeText={(value) => { setAmount(value); setQuote(null); setTransaction(null); }} keyboardType="numeric" editable={!selectedProduct?.amountKobo} />
-      <Button title={busy ? "Checking..." : "Review Test Transaction"} disabled={busy || !canQuote} onPress={quoteTransaction} />
+      <Button title={busy ? "Checking..." : "Review Utility Request"} disabled={busy || !canQuote} onPress={quoteTransaction} />
       {quote ? <Card>
-        <Text style={ui.cardTitle}>Confirm test transaction</Text>
+        <Text style={ui.cardTitle}>Confirm utility review</Text>
         <View style={ui.priceRow}><Text style={ui.priceLabel}>Amount:</Text><Text style={ui.priceValue}>{moneyKobo(quote.amountKobo)}</Text></View>
         <View style={ui.priceRow}><Text style={ui.priceLabel}>Fee:</Text><Text style={ui.priceValue}>{moneyKobo(quote.convenienceFeeKobo)}</Text></View>
         <View style={ui.priceRow}><Text style={ui.sectionTitle}>Total:</Text><Text style={ui.payable}>{moneyKobo(quote.totalKobo)}</Text></View>
         <Text style={ui.quoteText}>Quote: {quote.quoteReference}</Text>
-        <Button title={busy ? "Running test..." : "Run Test Transaction"} disabled={busy} onPress={runTestTransaction} />
+        <Button title={busy ? "Submitting..." : "Submit Review Record"} disabled={busy} onPress={runTestTransaction} />
       </Card> : null}
       {transaction ? <Card>
-        <Text style={ui.cardTitle}>Test receipt</Text>
+        <Text style={ui.cardTitle}>Utility review receipt</Text>
         <Text>Reference: {transaction.reference}</Text>
         <Text>Provider: {transaction.provider.name}</Text>
         <Text>Total: {moneyKobo(transaction.totalKobo)}</Text>
         {transaction.mockToken ? <Text style={ui.otpCode}>{transaction.mockToken}</Text> : null}
         <StatusBadge status={transaction.status} />
-        <Text style={ui.muted}>This is a test transaction. No live provider fulfilment occurred.</Text>
+        <Text style={ui.muted}>This is a provider-review record. No live provider fulfilment occurred.</Text>
         <Button title="View full receipt" tone="muted" onPress={() => router.push(`/utilities/transactions/${transaction.id}`)} />
       </Card> : null}
     </>}

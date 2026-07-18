@@ -31,9 +31,12 @@ const initialForm = {
   vehiclePlateNumber: "",
   licenceNumber: "",
   profilePhotoUrl: "",
+  licenceImageUrl: "",
+  vehicleParticularsUrl: "",
+  insuranceDocumentUrl: "",
   riderExperience: "",
   deliveryCaptainInterest: true,
-  rideCaptainReadinessInterest: false,
+  rideCaptainReviewInterest: false,
   guarantorName: "",
   guarantorPhone: "",
   confirmed: false
@@ -53,6 +56,30 @@ function isSecureImageUrl(value: string) {
   return !value.trim() || /^https:\/\/.+\.(png|jpe?g|webp)(\?.*)?$/i.test(value.trim());
 }
 
+function isSecureDocumentUrl(value: string) {
+  return !value.trim() || /^https:\/\/.+/i.test(value.trim());
+}
+
+function documentPayload(form: typeof initialForm) {
+  return [
+    form.licenceImageUrl.trim() ? {
+      documentType: "DRIVER_LICENCE_IMAGE",
+      documentName: "Driver licence image",
+      documentUrl: form.licenceImageUrl.trim()
+    } : null,
+    form.vehicleParticularsUrl.trim() ? {
+      documentType: "VEHICLE_PARTICULARS",
+      documentName: "Vehicle particulars",
+      documentUrl: form.vehicleParticularsUrl.trim()
+    } : null,
+    form.insuranceDocumentUrl.trim() ? {
+      documentType: "INSURANCE_DOCUMENT",
+      documentName: "Insurance document",
+      documentUrl: form.insuranceDocumentUrl.trim()
+    } : null
+  ].filter((document): document is { documentType: string; documentName: string; documentUrl: string } => Boolean(document));
+}
+
 export default function CaptainApplication() {
   const [form, setForm] = useState(initialForm);
   const [busy, setBusy] = useState(false);
@@ -66,10 +93,13 @@ export default function CaptainApplication() {
     try {
       if (!form.confirmed) throw new Error("Please confirm that the information provided is accurate.");
       if (!isSecureImageUrl(form.profilePhotoUrl)) throw new Error("Profile photo must be a secure image URL ending in PNG, JPG, JPEG or WEBP.");
+      if (![form.licenceImageUrl, form.vehicleParticularsUrl, form.insuranceDocumentUrl].every(isSecureDocumentUrl)) {
+        throw new Error("Document links must be secure HTTPS links.");
+      }
 
       const notes = [
         `Delivery Captain interest: ${form.deliveryCaptainInterest ? "Yes" : "No"}`,
-        `Ride Captain readiness interest: ${form.rideCaptainReadinessInterest ? "Yes" : "No"}`,
+        `Ride Captain review interest: ${form.rideCaptainReviewInterest ? "Yes" : "No"}`,
         form.licenceNumber.trim() ? `Driver licence number: ${form.licenceNumber.trim()}` : "Driver licence number: Not provided",
         !form.address.trim() ? "Address not provided in app application; collect during review." : ""
       ].filter(Boolean).join("\n");
@@ -86,6 +116,7 @@ export default function CaptainApplication() {
         vehiclePlateNumber: form.vehiclePlateNumber || undefined,
         riderExperience: form.riderExperience || undefined,
         profilePhotoUrl: form.profilePhotoUrl || undefined,
+        documents: documentPayload(form),
         guarantorName: form.guarantorName,
         guarantorPhone: normalizeNigerianPhoneNumber(form.guarantorPhone),
         notes,
@@ -102,7 +133,7 @@ export default function CaptainApplication() {
     }
   }
 
-  const canSubmit = Boolean(form.fullName.trim() && form.phoneNumber.trim() && form.guarantorName.trim() && form.guarantorPhone.trim() && form.confirmed);
+  const canSubmit = Boolean(form.fullName.trim() && form.phoneNumber.trim() && form.city.trim() && form.state.trim() && form.address.trim() && form.guarantorName.trim() && form.guarantorPhone.trim() && form.confirmed);
 
   return <Screen title="Apply to become a Captain" subtitle="Submit your Delivery Captain application for Kano or Abuja launch review. Approval is not automatic.">
     <Card tone="soft">
@@ -118,12 +149,12 @@ export default function CaptainApplication() {
       <Field placeholder="Email optional" keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={(email) => setForm({ ...form, email })} />
       <Field placeholder="City (Kano or Abuja)" value={form.city} onChangeText={(city) => setForm({ ...form, city })} />
       <Field placeholder="State (Kano or FCT)" value={form.state} onChangeText={(state) => setForm({ ...form, state })} />
-      <Field placeholder="Address optional" multiline value={form.address} onChangeText={(address) => setForm({ ...form, address })} />
+      <Field placeholder="Residential address required" multiline value={form.address} onChangeText={(address) => setForm({ ...form, address })} />
       <Field placeholder="Preferred launch zone optional" value={form.preferredZone} onChangeText={(preferredZone) => setForm({ ...form, preferredZone })} />
     </Card>
 
     <Card>
-      <Text style={ui.sectionTitle}>Vehicle and readiness</Text>
+      <Text style={ui.sectionTitle}>Vehicle and documents</Text>
       <Text style={ui.muted}>Vehicle type</Text>
       <View style={styles.chipGrid}>
         {vehicleOptions.map((option) => <Pressable key={option.value} accessibilityRole="button" onPress={() => setForm({ ...form, vehicleType: option.value })} style={[styles.chip, form.vehicleType === option.value && styles.chipActive]}>
@@ -135,8 +166,12 @@ export default function CaptainApplication() {
       <Field placeholder="Delivery experience note optional" multiline value={form.riderExperience} onChangeText={(riderExperience) => setForm({ ...form, riderExperience })} />
       <Field placeholder="Profile photo URL optional" autoCapitalize="none" value={form.profilePhotoUrl} onChangeText={(profilePhotoUrl) => setForm({ ...form, profilePhotoUrl })} />
       {isSecureImageUrl(form.profilePhotoUrl) && form.profilePhotoUrl.trim() ? <Image source={{ uri: form.profilePhotoUrl.trim() }} style={styles.preview} /> : null}
-      <ToggleRow label="Delivery Captain interest" checked={form.deliveryCaptainInterest} onPress={() => setForm({ ...form, deliveryCaptainInterest: !form.deliveryCaptainInterest })} helper="Delivery assignments are the approved pilot mode." />
-      <ToggleRow label="Ride Captain readiness interest" checked={form.rideCaptainReadinessInterest} onPress={() => setForm({ ...form, rideCaptainReadinessInterest: !form.rideCaptainReadinessInterest })} helper="KariGO Rides remains readiness-only and not live." />
+      <Field placeholder="Driver licence image HTTPS link optional" autoCapitalize="none" value={form.licenceImageUrl} onChangeText={(licenceImageUrl) => setForm({ ...form, licenceImageUrl })} />
+      <Field placeholder="Vehicle particulars HTTPS link optional" autoCapitalize="none" value={form.vehicleParticularsUrl} onChangeText={(vehicleParticularsUrl) => setForm({ ...form, vehicleParticularsUrl })} />
+      <Field placeholder="Insurance document HTTPS link optional" autoCapitalize="none" value={form.insuranceDocumentUrl} onChangeText={(insuranceDocumentUrl) => setForm({ ...form, insuranceDocumentUrl })} />
+      <Text style={ui.muted}>KariGO will review document evidence before approving any Captain account. Do not upload passwords, OTPs or payment details.</Text>
+      <ToggleRow label="Delivery Captain interest" checked={form.deliveryCaptainInterest} onPress={() => setForm({ ...form, deliveryCaptainInterest: !form.deliveryCaptainInterest })} helper="Delivery assignments are the approved active mode." />
+      <ToggleRow label="Ride Captain review interest" checked={form.rideCaptainReviewInterest} onPress={() => setForm({ ...form, rideCaptainReviewInterest: !form.rideCaptainReviewInterest })} helper="KariGO Rides requires separate operations approval before dispatch activation." />
     </Card>
 
     <Card>

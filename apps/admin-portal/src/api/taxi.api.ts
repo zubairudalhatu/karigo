@@ -3,6 +3,7 @@ import {
   TaxiDriverApplicationStatus,
   TaxiDriverProfile,
   TaxiDriverProfileStatus,
+  TaxiRidePricingDefaults,
   TaxiTrip,
   TaxiWaitlistEntry,
   TaxiWaitlistStatus
@@ -60,5 +61,14 @@ export const taxiApi = {
   assignDriver: (tripId: string, driverProfileId: string) =>
     api.patch<TaxiTrip>(`admin/taxi/trips/${tripId}/assign-driver`, { driverProfileId }),
   cancelTrip: (tripId: string, reason?: string) => api.post<TaxiTrip>(`admin/taxi/trips/${tripId}/cancel`, { reason }),
-  summary: () => api.get<{ driverProfiles: number; availableDrivers: number; requestedTrips: number; activeTrips: number; completedTrips: number; cancelledTrips: number; testModeNotice: string }>("admin/taxi/summary")
+  summary: () => api.get<{
+    driverProfiles: number;
+    availableDrivers: number;
+    requestedTrips: number;
+    activeTrips: number;
+    completedTrips: number;
+    cancelledTrips: number;
+    pricingDefaults: TaxiRidePricingDefaults;
+    testModeNotice: string;
+  }>("admin/taxi/summary")
 };

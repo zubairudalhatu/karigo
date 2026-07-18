@@ -15,6 +15,7 @@ type ProfileRoute =
   | "/profile/wallet"
   | "/profile/referrals"
   | "/profile/returns-refunds"
+  | "/profile/privacy-security"
   | "/addresses"
   | "/support"
   | "/notifications"
@@ -42,6 +43,7 @@ const primaryItems: HubItem[] = [
   { title: "KariGO Wallet", description: "View your wallet balance and safe ledger.", icon: "credit-card", href: "/profile/wallet", badge: "View only" },
   { title: "Referral rewards", description: "View and share your KariGO referral code.", icon: "gift", href: "/profile/referrals", badge: "Tracking only" },
   { title: "Returns and Refunds", description: "Review how to report issues and request refund review.", icon: "rotate-ccw", href: "/profile/returns-refunds" },
+  { title: "Privacy & security", description: "Manage password support, sessions, privacy links and account safety.", icon: "shield", href: "/profile/privacy-security" },
   { title: "Saved addresses", description: "Manage home, office and delivery locations.", icon: "map-pin", href: "/addresses" },
   { title: "Notifications", description: "Review order, support and account updates.", icon: "bell", href: "/notifications" },
   { title: "Support centre", description: "Open tickets and get help from KariGO.", icon: "headphones", href: "/support" }
@@ -49,13 +51,12 @@ const primaryItems: HubItem[] = [
 
 const serviceItems: HubItem[] = [
   { title: "SME Services requests", description: "View service request status and updates.", icon: "briefcase", href: "/sme-services/requests" },
-  { title: "Utility test history", description: "Review safe Bills & Utilities test records.", icon: "zap", href: "/utilities/history", badge: "Test mode" },
+  { title: "Utility records", description: "Review Bills & Utilities request records.", icon: "zap", href: "/utilities/history", badge: "Records" },
   { title: "Become a KariGO Vendor", description: "Apply to sell through KariGO.", icon: "shopping-bag", href: "/vendor/apply" }
 ];
 
 const futureItems: PlaceholderItem[] = [
-  { title: "KariGO Plus", description: "Subscription perks are a future placeholder, not a live plan.", icon: "star", badge: "Coming soon" },
-  { title: "Privacy & security", description: "More account controls and notification preferences will be added later.", icon: "shield", badge: "Planned" }
+  { title: "KariGO Plus", description: "Subscription perks require separate approval before any plan is offered.", icon: "star", badge: "Requires approval" }
 ];
 
 const maxProfilePhotoDataLength = 1900000;
@@ -271,8 +272,8 @@ export default function Profile() {
         </Card>
 
         <Card>
-          <Text style={ui.cardTitle}>Coming next</Text>
-          <Text style={ui.muted}>These areas are profile placeholders only. Subscription actions are not active, and wallet/referral rewards remain tracking-only.</Text>
+          <Text style={ui.cardTitle}>Additional account options</Text>
+          <Text style={ui.muted}>Subscription actions are not active, and wallet/referral rewards remain approval-controlled.</Text>
           <View style={styles.placeholderGrid}>
             {futureItems.map((item) => <PlaceholderCard key={item.title} item={item} />)}
           </View>
@@ -280,7 +281,7 @@ export default function Profile() {
 
         <Card>
           <Text style={ui.cardTitle}>Need help?</Text>
-          <Text style={ui.muted}>Support remains the safest place for account, refund and delivery questions during launch testing.</Text>
+          <Text style={ui.muted}>Support remains the safest place for account, refund and delivery questions during launch.</Text>
           <View style={styles.actionRow}>
             <Button title="Open support centre" tone="muted" onPress={() => router.push("/support")} />
             <Button title="Log out" tone="muted" onPress={async () => { await logout(); router.replace("/auth/login"); }} />

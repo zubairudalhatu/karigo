@@ -31,6 +31,10 @@ const initial = {
   preferredZone: "",
   vehicleType: "MOTORCYCLE" as VehicleType,
   vehiclePlateNumber: "",
+  profilePhotoUrl: "",
+  driverLicenceDocumentUrl: "",
+  vehicleParticularsDocumentUrl: "",
+  insuranceDocumentUrl: "",
   riderExperience: "",
   guarantorName: "",
   guarantorPhone: "",
@@ -65,10 +69,28 @@ export function DeliveryCaptainApplicationForm() {
           preferredZone: form.preferredZone || undefined,
           vehicleType: form.vehicleType,
           vehiclePlateNumber: form.vehiclePlateNumber || undefined,
+          profilePhotoUrl: form.profilePhotoUrl || undefined,
           riderExperience: form.riderExperience || undefined,
           guarantorName: form.guarantorName,
           guarantorPhone: form.guarantorPhone,
           notes: form.notes || undefined,
+          documents: [
+            form.driverLicenceDocumentUrl ? {
+              documentType: "DRIVER_LICENCE_IMAGE",
+              documentName: "Driver licence image",
+              documentUrl: form.driverLicenceDocumentUrl
+            } : null,
+            form.vehicleParticularsDocumentUrl ? {
+              documentType: "VEHICLE_PARTICULARS",
+              documentName: "Vehicle particulars",
+              documentUrl: form.vehicleParticularsDocumentUrl
+            } : null,
+            form.insuranceDocumentUrl ? {
+              documentType: "INSURANCE_DOCUMENT",
+              documentName: "Insurance document",
+              documentUrl: form.insuranceDocumentUrl
+            } : null
+          ].filter(Boolean),
           declarationAccepted: form.declarationAccepted,
           privacyAccepted: form.privacyAccepted,
           contactConsentAccepted: form.contactConsentAccepted
@@ -94,7 +116,7 @@ export function DeliveryCaptainApplicationForm() {
     <form id="delivery-captain-application" className="form-card" onSubmit={submit}>
       <p className="eyebrow">Delivery Captain Application</p>
       <h2>Apply to deliver with KariGO in Kano or Abuja.</h2>
-      <p className="muted">This application is for Delivery Captain review only. It does not create rider login, activate live dispatch, payouts or ride access.</p>
+      <p className="muted">Start with the phone and email for your Captain account. KariGO verifies applicants before sending account activation. This form does not activate dispatch, payouts or ride access.</p>
       <div className="form-grid">
         <label>Full name<input required value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></label>
         <label>Phone number<input required value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} /></label>
@@ -110,6 +132,13 @@ export function DeliveryCaptainApplicationForm() {
       </div>
       <label>Residential address<textarea required value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} /></label>
       <label>Delivery experience optional<textarea value={form.riderExperience} onChange={(event) => setForm({ ...form, riderExperience: event.target.value })} /></label>
+      <div className="form-grid">
+        <label>Profile photo HTTPS link optional<input value={form.profilePhotoUrl} onChange={(event) => setForm({ ...form, profilePhotoUrl: event.target.value })} /></label>
+        <label>Driver licence image HTTPS link optional<input value={form.driverLicenceDocumentUrl} onChange={(event) => setForm({ ...form, driverLicenceDocumentUrl: event.target.value })} /></label>
+        <label>Vehicle particulars HTTPS link optional<input value={form.vehicleParticularsDocumentUrl} onChange={(event) => setForm({ ...form, vehicleParticularsDocumentUrl: event.target.value })} /></label>
+        <label>Insurance document HTTPS link optional<input value={form.insuranceDocumentUrl} onChange={(event) => setForm({ ...form, insuranceDocumentUrl: event.target.value })} /></label>
+      </div>
+      <p className="muted">KariGO can collect documents during review if secure links are not ready. Do not submit passwords, OTPs or payment secrets.</p>
       <div className="form-grid">
         <label>Guarantor name<input required value={form.guarantorName} onChange={(event) => setForm({ ...form, guarantorName: event.target.value })} /></label>
         <label>Guarantor phone<input required value={form.guarantorPhone} onChange={(event) => setForm({ ...form, guarantorPhone: event.target.value })} /></label>

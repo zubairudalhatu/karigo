@@ -67,7 +67,7 @@ export class AdminOperationsController {
   }
   @Post("vendors/:vendorId/activation-link")
   async createVendorActivationLink(@CurrentUser() user: AuthenticatedUser, @Param("vendorId", ParseUUIDPipe) vendorId: string) {
-    return { message: "Vendor activation link created", data: await this.operations.createVendorActivationLink(user.id, vendorId) };
+    return { message: "Vendor activation link sent", data: await this.operations.createVendorActivationLink(user.id, vendorId) };
   }
   @Get("vendors/:vendorId/onboarding-documents")
   async vendorOnboardingDocuments(@Param("vendorId", ParseUUIDPipe) vendorId: string) {

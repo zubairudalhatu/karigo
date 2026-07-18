@@ -16,13 +16,25 @@ export default function CustomerLogin() {
   async function submit() {
     setBusy(true); setError("");
     try {
-      await login({ phoneNumber, password });
+      const result = await login({ phoneNumber, password });
+      if (result && "verificationRequired" in result) {
+        router.push({
+          pathname: "/auth/otp",
+          params: {
+            phoneNumber: result.phoneNumber,
+            mockOtp: result.mockOtp ?? "",
+            recovery: "true",
+            message: result.message
+          }
+        });
+        return;
+      }
       router.replace("/tabs/home");
     } catch (e) { setError(friendlyError(e, "login")); } finally { setBusy(false); }
   }
 
   return <Screen title="Customer login">
-    <Text style={ui.muted}>Sign in to order, track deliveries and get support.</Text>
+    <Text style={ui.muted}>Sign in to order, track deliveries and get support. If your phone is registered but not verified, KariGO will send a new OTP.</Text>
     <Field placeholder="+234..." value={phoneNumber} onChangeText={setPhone} keyboardType="phone-pad" autoCapitalize="none" />
     <PasswordField placeholder="Password" value={password} onChangeText={setPassword} visible={passwordVisible} onToggleVisible={() => setPasswordVisible((current) => !current)} />
     <Message>{sessionMessage}</Message>

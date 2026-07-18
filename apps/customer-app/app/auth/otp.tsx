@@ -7,7 +7,7 @@ import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 
 export default function OtpVerification() {
-  const params = useLocalSearchParams<{ phoneNumber: string; mockOtp?: string }>();
+  const params = useLocalSearchParams<{ phoneNumber: string; mockOtp?: string; recovery?: string; message?: string }>();
   const { verifyOtp } = useAuth();
   const [otp, setOtp] = useState(params.mockOtp ?? "");
   const [busy, setBusy] = useState(false);
@@ -42,6 +42,7 @@ export default function OtpVerification() {
 
   return <Screen title="Verify your phone">
     <Text style={ui.muted}>Enter the verification code sent to {params.phoneNumber}. It expires shortly.</Text>
+    {params.recovery === "true" ? <Message>{params.message || "We sent a new verification code so you can finish account setup. SMS delivery may be delayed by network conditions; use resend after the cooldown if needed."}</Message> : null}
     <Field placeholder="OTP" value={otp} onChangeText={setOtp} keyboardType="number-pad" />
     <Message error>{error}</Message>
     <Message>{message}</Message>

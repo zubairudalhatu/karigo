@@ -99,7 +99,7 @@ export default function Profile() {
           <input value={profile.coverImageUrl ?? ""} placeholder="Cover image URL" onChange={(event) => setProfile({ ...profile, coverImageUrl: event.target.value })} />
         </div>
       </section>
-      <p className="muted">Images are stored by KariGO for staging/pilot use. Do not upload documents containing passwords, OTPs, payment secrets or private identity numbers.</p>
+      <p className="muted">Images are stored by KariGO for your vendor profile. Do not upload documents containing passwords, OTPs, payment secrets or private identity numbers.</p>
       <label className="check-row"><input type="checkbox" checked={profile.isOpen} onChange={(event) => setProfile({ ...profile, isOpen: event.target.checked })} /> Store open</label>
       {uploading ? <p className="muted">Uploading {uploading === "logo" ? "logo" : "cover image"}...</p> : null}
       <button disabled={saving || Boolean(uploading)}>{saving ? "Saving..." : "Save profile"}</button>

@@ -19,6 +19,16 @@ export interface LoginResult {
   user: AuthenticatedUser;
 }
 
+export interface LoginVerificationRequiredResult {
+  verificationRequired: true;
+  phoneNumber: string;
+  otpExpiresAt?: string;
+  mockOtp?: string;
+  message: string;
+}
+
+export type LoginResponse = LoginResult | LoginVerificationRequiredResult;
+
 export interface RefreshSessionRequest {
   refreshToken: string;
 }

@@ -161,7 +161,7 @@ export function paymentProviderSensitiveDataNoteForConfig(config: PublicPaymentC
 export const paymentProviderSensitiveDataNote = paymentProviderSensitiveDataNoteForConfig();
 
 export const walletRefundFutureNote =
-  "KariGO Wallet refunds and wallet-to-utility payments are future workflows. Refunds remain admin-reviewed until separately approved.";
+  "KariGO Wallet refunds and wallet-to-utility payments remain approval-controlled. Refunds stay admin-reviewed until separately approved.";
 
 export function paymentStatusView(status?: string): PaymentStatusView {
   switch (status) {

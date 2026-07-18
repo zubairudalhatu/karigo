@@ -89,13 +89,12 @@ export default function VendorsPage() {
     }
   }
 
-  async function createActivationLink(vendor: AdminVendor) {
+  async function sendActivationLink(vendor: AdminVendor) {
     try {
       setError("");
       setMessage("");
       const result = await managementApi.createVendorActivationLink(vendor.id);
-      window.prompt("Copy this one-time vendor activation link. It will not be stored in plaintext.", result.activationUrl);
-      setMessage(`Activation link created for ${vendor.businessName}. Expires ${new Date(result.expiresAt).toLocaleString()}.`);
+      setMessage(`Activation link sent for ${vendor.businessName}. Expires ${new Date(result.expiresAt).toLocaleString()}. ${result.deliveryWarning}`);
     } catch (e) {
       setError(friendlyError(e, "form"));
     }
@@ -153,7 +152,7 @@ export default function VendorsPage() {
           </div>)}
         </div> : null}
         <div className="actions">
-          <button className="secondary" onClick={() => void createActivationLink(vendor)}>Create activation link</button>
+          <button className="secondary" onClick={() => void sendActivationLink(vendor)}>Send activation link</button>
           <button className="secondary" onClick={() => void updateVendorStatus(vendor, "PENDING_APPROVAL")}>Mark pending</button>
           <button className="secondary" onClick={() => void updateVendorStatus(vendor, "ACTIVE")}>Mark operational</button>
           <button className="secondary" onClick={() => void updateVendorStatus(vendor, "SUSPENDED")}>Suspend</button>

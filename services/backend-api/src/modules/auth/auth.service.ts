@@ -1,7 +1,7 @@
-import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { AccountStatus, LoginActivityOutcome, UserRole, VendorActivationInvitationStatus } from "@prisma/client";
+import { AccountStatus, LoginActivityOutcome, Prisma, UserRole, VendorActivationInvitationStatus } from "@prisma/client";
 import { compare, hash } from "bcrypt";
 import { createHash, randomBytes } from "crypto";
 import { LoginDto } from "./dto/login.dto";
@@ -11,10 +11,13 @@ import { RefreshSessionDto } from "./dto/refresh-session.dto";
 import { ResendOtpDto } from "./dto/resend-otp.dto";
 import { VerifyOtpDto } from "./dto/verify-otp.dto";
 import { OtpService } from "./otp.service";
+import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
+import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
 import { PrismaService } from "../../prisma/prisma.service";
 import { UsersService } from "../users/users.service";
 import { AccountActivationEmailService } from "./account-activation-email.service";
 import { ActivateVendorAccountDto } from "./dto/activate-vendor-account.dto";
+import { RequestVendorActivationLinkDto } from "./dto/request-vendor-activation-link.dto";
 
 @Injectable()
 export class AuthService {
@@ -26,7 +29,8 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
-    private readonly accountActivationEmail: AccountActivationEmailService
+    private readonly accountActivationEmail: AccountActivationEmailService,
+    private readonly applicationNotifications: ApplicationNotificationsService
   ) {}
 
   async registerCustomer(dto: RegisterCustomerDto) {
@@ -39,14 +43,10 @@ export class AuthService {
       referralCode: dto.referralCode
     });
     const verification = await this.otpService.issue(user.id, user.phoneNumber);
-    const includeMockOtp =
-      this.config.get("OTP_PROVIDER", "mock") === "mock" &&
-      this.config.get("APP_ENV", "development") !== "production";
-
     return {
       user,
       otpExpiresAt: verification.expiresAt,
-      ...(includeMockOtp ? { mockOtp: verification.otp } : {})
+      ...(this.shouldExposeMockOtp() ? { mockOtp: verification.otp } : {})
     };
   }
 
@@ -57,14 +57,10 @@ export class AuthService {
     }
 
     const verification = await this.otpService.issue(user.id, user.phoneNumber, { enforceCooldown: true });
-    const includeMockOtp =
-      this.config.get("OTP_PROVIDER", "mock") === "mock" &&
-      this.config.get("APP_ENV", "development") !== "production";
-
     return {
       resendAccepted: true,
       otpExpiresAt: verification.expiresAt,
-      ...(includeMockOtp ? { mockOtp: verification.otp } : {})
+      ...(this.shouldExposeMockOtp() ? { mockOtp: verification.otp } : {})
     };
   }
 
@@ -87,6 +83,24 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.usersService.findByPhoneForAuth(dto.phoneNumber);
     const passwordMatches = user ? await compare(dto.password, user.passwordHash) : false;
+
+    if (user && passwordMatches && !user.phoneVerified && !user.deletedAt) {
+      const verification = await this.otpService.issue(user.id, user.phoneNumber, { enforceCooldown: true });
+      await this.recordLoginActivity({
+        userId: user.id,
+        phoneNumber: user.phoneNumber,
+        role: user.role,
+        outcome: LoginActivityOutcome.BLOCKED,
+        reason: "Phone verification required; OTP resent"
+      });
+      return {
+        verificationRequired: true as const,
+        phoneNumber: user.phoneNumber,
+        otpExpiresAt: verification.expiresAt,
+        message: "Verify your phone number to finish account setup.",
+        ...(this.shouldExposeMockOtp() ? { mockOtp: verification.otp } : {})
+      };
+    }
 
     if (
       !user ||
@@ -179,6 +193,102 @@ export class AuthService {
     };
   }
 
+  async requestVendorActivationLink(dto: RequestVendorActivationLinkDto) {
+    const email = dto.email?.trim().toLowerCase();
+    const phoneNumber = dto.phoneNumber?.trim() ? this.normalizePhone(dto.phoneNumber) : undefined;
+    if (!email && !phoneNumber) {
+      throw new BadRequestException("Enter the approved vendor phone number or email.");
+    }
+
+    const vendor = await this.prisma.vendor.findFirst({
+      where: {
+        deletedAt: null,
+        user: {
+          is: {
+            role: UserRole.VENDOR,
+            accountStatus: { not: AccountStatus.ACTIVE },
+            OR: [
+              ...(phoneNumber ? [{ phoneNumber }] : []),
+              ...(email ? [{ email: { equals: email, mode: "insensitive" as const } }] : [])
+            ]
+          }
+        }
+      },
+      select: {
+        id: true,
+        userId: true,
+        businessName: true,
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            phoneNumber: true,
+            email: true,
+            accountStatus: true
+          }
+        },
+        sourceApplication: {
+          select: {
+            reference: true,
+            contactFullName: true,
+            contactPhoneNumber: true,
+            contactEmail: true,
+            status: true
+          }
+        }
+      }
+    });
+
+    if (!vendor) {
+      await this.recordVendorActivationRequest(null, phoneNumber ?? email ?? "unknown", "not_eligible");
+      return this.vendorActivationRequestAccepted();
+    }
+
+    const activationToken = randomBytes(40).toString("base64url");
+    const expiresAt = new Date(Date.now() + this.vendorActivationTtlHours() * 60 * 60 * 1000);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.vendorAccountActivation.updateMany({
+        where: { vendorId: vendor.id, status: VendorActivationInvitationStatus.PENDING },
+        data: { status: VendorActivationInvitationStatus.REVOKED, revokedAt: new Date() }
+      });
+      await tx.vendorAccountActivation.create({
+        data: {
+          vendorId: vendor.id,
+          userId: vendor.userId,
+          tokenHash: this.hashRefreshToken(activationToken),
+          expiresAt
+        }
+      });
+      await tx.vendorAuditLog.create({
+        data: {
+          vendorId: vendor.id,
+          actorUserId: vendor.userId,
+          action: "vendor.account.activation_link_requested",
+          entityType: "Vendor",
+          entityId: vendor.id,
+          newValue: {
+            requestedWith: phoneNumber ? "phone" : "email",
+            activationExpiresAt: expiresAt.toISOString()
+          } as Prisma.InputJsonValue
+        }
+      });
+    });
+
+    const activationUrl = `${this.vendorDashboardUrl()}/activate?token=${encodeURIComponent(activationToken)}`;
+    await this.applicationNotifications.vendorApplicationReviewed({
+      reference: vendor.sourceApplication?.reference ?? vendor.id,
+      recipientName: vendor.sourceApplication?.contactFullName ?? vendor.user.fullName ?? vendor.businessName,
+      phoneNumber: vendor.sourceApplication?.contactPhoneNumber ?? vendor.user.phoneNumber,
+      email: vendor.sourceApplication?.contactEmail ?? vendor.user.email,
+      status: vendor.sourceApplication?.status ?? "APPROVED",
+      activationUrl,
+      activationExpiresAt: expiresAt.toISOString()
+    });
+    await this.recordVendorActivationRequest(vendor.id, phoneNumber ?? email ?? "unknown", "sent");
+
+    return this.vendorActivationRequestAccepted();
+  }
+
   me(userId: string) {
     return this.usersService.findPublicById(userId);
   }
@@ -259,6 +369,30 @@ export class AuthService {
     return Number.isFinite(configured) && configured > 0 ? configured : 30;
   }
 
+  private shouldExposeMockOtp(): boolean {
+    return this.config.get("OTP_PROVIDER", "mock") === "mock" &&
+      this.config.get("APP_ENV", "development") !== "production";
+  }
+
+  private vendorActivationTtlHours(): number {
+    const configured = Number(this.config.get<string>("VENDOR_ACTIVATION_TOKEN_TTL_HOURS", "72"));
+    return Number.isFinite(configured) && configured >= 24 ? configured : 72;
+  }
+
+  private vendorDashboardUrl() {
+    return (this.config.get<string>("VENDOR_DASHBOARD_URL")
+      ?? this.config.get<string>("VENDOR_PORTAL_URL")
+      ?? "https://vendor.karigo.com.ng").replace(/\/+$/, "");
+  }
+
+  private normalizePhone(phoneNumber: string): string {
+    const normalized = normalizePhoneNumber(phoneNumber);
+    if (!NIGERIAN_PHONE_PATTERN.test(normalized)) {
+      throw new BadRequestException("Enter a valid Nigerian phone number.");
+    }
+    return normalized;
+  }
+
   private hashRefreshToken(token: string): string {
     return createHash("sha256").update(token).digest("hex");
   }
@@ -297,7 +431,26 @@ export class AuthService {
     }
   }
 
+  private async recordVendorActivationRequest(vendorId: string | null, requestedWith: string, outcome: string) {
+    try {
+      this.logger.log(`Vendor activation link request vendorId=${vendorId ?? "unmatched"} requestedWith=${this.maskIdentifier(requestedWith)} outcome=${outcome}`);
+    } catch {
+      this.logger.warn("Vendor activation request logging failed");
+    }
+  }
+
+  private vendorActivationRequestAccepted() {
+    return {
+      requestAccepted: true,
+      message: "If this approved vendor account is awaiting activation, KariGO has sent a new password setup link to the registered contact."
+    };
+  }
+
   private maskPhone(phoneNumber: string) {
     return phoneNumber.length <= 4 ? "****" : `${phoneNumber.slice(0, 4)}***${phoneNumber.slice(-4)}`;
+  }
+
+  private maskIdentifier(value: string) {
+    return value.includes("@") ? value.replace(/^(.{2}).*(@.*)$/u, "$1***$2") : this.maskPhone(value);
   }
 }

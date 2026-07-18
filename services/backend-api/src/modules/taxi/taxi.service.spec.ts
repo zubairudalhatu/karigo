@@ -176,10 +176,10 @@ describe("TaxiService", () => {
       const values: Record<string, unknown> = {
         TAXI_SERVICE_ENABLED: true,
         TAXI_STAGING_DISPATCH_ENABLED: true,
-        TAXI_BASE_FARE_KOBO: 70000,
-        TAXI_PER_KM_KOBO: 25000,
-        TAXI_PER_MINUTE_KOBO: 4000,
-        TAXI_MINIMUM_FARE_KOBO: 120000
+        RIDE_PER_KM_KOBO: 40000,
+        RIDE_CAPTAIN_COMMISSION_PERCENT: 10,
+        RIDE_WAITING_CHARGE_KOBO_PER_MINUTE: 500,
+        RIDE_WAITING_GRACE_MINUTES: 5
       };
       return values[key] ?? fallback;
     });
@@ -251,7 +251,7 @@ describe("TaxiService", () => {
       email: waitlistEntry.email
     });
     expect(result).toMatchObject({ status: TaxiWaitlistStatus.SUBMITTED });
-    expect(result.message).toContain("Taxi waitlist");
+    expect(result.message).toContain("KariGO Rides waitlist");
   });
 
   it("rejects invalid phone numbers before creating taxi readiness records", async () => {
@@ -317,7 +317,7 @@ describe("TaxiService", () => {
     prisma.taxiDriverApplication.findUnique.mockResolvedValue(application);
     const result = await service.reviewDriverApplication(application.id, "admin-user", {
       status: TaxiApplicationStatus.UNDER_REVIEW,
-      applicantVisibleNote: "We are reviewing your taxi readiness application.",
+      applicantVisibleNote: "We are reviewing your Ride Captain application.",
       adminNote: "Licence check pending."
     });
 
@@ -331,7 +331,7 @@ describe("TaxiService", () => {
     expect(audit.record).toHaveBeenCalledWith("admin-user", "admin.taxi.driver_application_review", "TaxiDriverApplication", application.id, expect.objectContaining({
       readinessOnly: true
     }));
-    expect(result.launchWarning).toContain("does not activate live taxi dispatch");
+    expect(result.launchWarning).toContain("Ride dispatch remains controlled");
   });
 
   it("updates waitlist status with audit trail only", async () => {
@@ -366,22 +366,37 @@ describe("TaxiService", () => {
     expect(prisma.taxiTrip.create).not.toHaveBeenCalled();
   });
 
-  it("calculates staging fare estimates when Taxi staging is enabled", () => {
+  it("calculates Ride fare estimates with distance, waiting charge and commission defaults", () => {
     enableTaxiStaging();
     const result = service.fareEstimate({
       pickupAddress: "Tarauni, Kano",
       destinationAddress: "Zoo Road, Kano",
       estimatedDistanceKm: 6.5,
-      estimatedDurationMin: 18
+      estimatedDurationMin: 18,
+      waitingMinutes: 8
     });
 
     expect(result).toMatchObject({
       estimatedDistanceKm: 6.5,
       estimatedDurationMin: 18,
-      estimatedFareKobo: 304500,
-      currency: "NGN"
+      waitingMinutes: 8,
+      billableWaitingMinutes: 3,
+      distanceFareKobo: 260000,
+      waitingChargeKobo: 1500,
+      estimatedFareKobo: 261500,
+      karigoCommissionKobo: 26150,
+      captainNetEstimateKobo: 235350,
+      currency: "NGN",
+      formula: {
+        perKmKobo: 40000,
+        waitingChargeKoboPerMinute: 500,
+        waitingGraceMinutes: 5,
+        karigoCommissionPercent: 10,
+        vatTaxKobo: 0,
+        vatTaxConfigured: false
+      }
     });
-    expect(result.testModeNotice).toContain("staging test mode");
+    expect(result.testModeNotice).toContain("operations flags");
   });
 
   it("creates staging Taxi trips with a unique reference and hashed trip PIN", async () => {

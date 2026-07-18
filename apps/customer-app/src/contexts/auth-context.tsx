@@ -1,4 +1,4 @@
-import type { AuthenticatedUser, LoginRequest, RegisterCustomerRequest, VerifyOtpRequest } from "@karigo/shared-types";
+import type { AuthenticatedUser, LoginRequest, LoginVerificationRequiredResult, RegisterCustomerRequest, VerifyOtpRequest } from "@karigo/shared-types";
 import { KariGoApiError } from "@karigo/shared-types";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { authApi } from "../api/auth.api";
@@ -11,7 +11,7 @@ interface AuthContextValue {
   sessionMessage: string;
   register(body: RegisterCustomerRequest): ReturnType<typeof authApi.register>;
   verifyOtp(body: VerifyOtpRequest): Promise<void>;
-  login(body: LoginRequest): Promise<void>;
+  login(body: LoginRequest): Promise<void | LoginVerificationRequiredResult>;
   logout(): Promise<void>;
 }
 
@@ -85,6 +85,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ...body,
           phoneNumber: normalizeNigerianPhoneNumber(body.phoneNumber)
         });
+        if ("verificationRequired" in result) {
+          return result;
+        }
         await saveSession(result.accessToken, result.refreshToken, result.user);
       },
       logout: async () => {

@@ -4,7 +4,7 @@ import type { AuthenticatedUser, LoginRequest } from "@karigo/shared-types";
 import { KariGoApiError } from "@karigo/shared-types";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { authApi } from "../api/auth.api";
-import { onUnauthorized, tokenStore } from "../api/client";
+import { onUnauthorized, refreshTokenStore, tokenStore } from "../api/client";
 import { normalizeNigerianPhoneNumber } from "../lib/phone";
 
 interface AuthContextValue {
@@ -30,7 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function bootstrap() {
       const token = await tokenStore.getToken();
-      if (!token) {
+      const refreshToken = refreshTokenStore.getToken();
+      if (!token && !refreshToken) {
         if (active) setLoading(false);
         return;
       }
@@ -83,9 +84,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
 
           await tokenStore.setToken?.(result.accessToken);
+          if (result.refreshToken) refreshTokenStore.setToken(result.refreshToken);
           setUser(result.user);
         },
         logout: async () => {
+          const refreshToken = refreshTokenStore.getToken();
+          if (refreshToken) {
+            await authApi.logout({ refreshToken }).catch(() => undefined);
+          }
           await tokenStore.clearToken?.();
           setUser(null);
         }

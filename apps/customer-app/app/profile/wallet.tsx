@@ -71,7 +71,7 @@ export default function CustomerWalletScreen() {
 
   async function initiateTopUp() {
     if (!paymentConfig.walletTopUpEnabled) {
-      setTopUpError("Wallet top-up is not available yet.");
+      setTopUpError("Wallet top-up is not available from backend config right now.");
       return;
     }
     const amount = Number(topUpAmount);
@@ -149,10 +149,10 @@ export default function CustomerWalletScreen() {
       </Card>
 
       <Card>
-        <Text style={ui.cardTitle}>Top up with Squad</Text>
+        <Text style={ui.cardTitle}>Top up wallet</Text>
         <Text style={ui.muted}>Provider: {paymentConfig.walletTopUpProviderLabel ?? "Squad by GTBank"}</Text>
         <Text style={ui.muted}>Minimum amount: {money(paymentConfig.walletMinimumTopUpAmount ?? 100)}</Text>
-        <Text style={ui.muted}>{paymentConfig.walletTopUpEnabled ? "Enter an amount, complete Squad checkout, return to KariGO, then verify. KariGO will not credit the wallet from the app alone." : "Wallet top-up is not active yet. KariGO will enable it after Squad verification is approved."}</Text>
+        <Text style={ui.muted}>{paymentConfig.walletTopUpEnabled ? "Enter an amount, complete Squad checkout, return to KariGO, then verify. KariGO will not credit the wallet from the app alone." : "Wallet top-up is disabled by backend configuration. KariGO will show the action only when operations enables it."}</Text>
         <Message>{topUpMessage}</Message>
         <Message error>{topUpError}</Message>
         <Field keyboardType="decimal-pad" value={topUpAmount} onChangeText={setTopUpAmount} placeholder="Amount e.g. 5000" />
@@ -164,10 +164,10 @@ export default function CustomerWalletScreen() {
       </Card>
 
       <Card>
-        <Text style={ui.cardTitle}>Available later</Text>
+        <Text style={ui.cardTitle}>Controlled wallet features</Text>
         <View style={styles.guardrailGrid}>
           {["Withdraw", "Automatic refunds", "Referral rewards", "Subscriptions"].map((label) => <View style={styles.guardrailChip} key={label}>
-            <Text style={styles.guardrailText}>{label} - Coming soon</Text>
+            <Text style={styles.guardrailText}>{label} - Approval required</Text>
           </View>)}
         </View>
       </Card>

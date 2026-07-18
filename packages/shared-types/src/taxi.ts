@@ -106,6 +106,7 @@ export interface TaxiFareEstimateInput {
   destinationLongitude?: number;
   estimatedDistanceKm?: number;
   estimatedDurationMin?: number;
+  waitingMinutes?: number;
 }
 
 export interface TaxiFareEstimate {
@@ -113,9 +114,35 @@ export interface TaxiFareEstimate {
   destinationAddress: string;
   estimatedDistanceKm: number;
   estimatedDurationMin: number;
+  waitingMinutes?: number;
+  billableWaitingMinutes?: number;
+  distanceFareKobo?: number;
+  waitingChargeKobo?: number;
   estimatedFareKobo: number;
+  karigoCommissionKobo?: number;
+  captainNetEstimateKobo?: number;
   currency: "NGN";
+  formula?: {
+    perKmKobo: number;
+    waitingChargeKoboPerMinute: number;
+    waitingGraceMinutes: number;
+    karigoCommissionPercent: number;
+    vatTaxKobo: number;
+    vatTaxConfigured: boolean;
+  };
+  pricing?: TaxiRidePricingDefaults;
   testModeNotice: string;
+}
+
+export interface TaxiRidePricingDefaults {
+  launchCities: string[];
+  perKmKobo: number;
+  karigoCommissionPercent: number;
+  waitingChargeKoboPerMinute: number;
+  waitingGraceMinutes: number;
+  vatTaxKobo: number;
+  vatTaxConfigured: boolean;
+  dispatchEnabled: boolean;
 }
 
 export interface TaxiTripInput extends TaxiFareEstimateInput {

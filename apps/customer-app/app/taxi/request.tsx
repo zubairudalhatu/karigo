@@ -7,7 +7,7 @@ import { KariGoAppTopBar } from "../../src/components/kari-go-app-top-bar";
 import { Button, Card, Field, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError } from "../../src/lib/errors";
 
-const stagingNotice = "KariGO Rides is running in staging test mode. No real ride or payment is guaranteed.";
+const rideReviewNotice = "KariGO Rides remains controlled by operations flags. No ride dispatch or ride payment is active unless approved.";
 const initialForm = {
   pickupAddress: "",
   destinationAddress: "",
@@ -78,32 +78,32 @@ export default function TaxiRequest() {
   }
 
   return <Protected>
-    <KariGoAppTopBar showBack title="Ride Test Mode" />
-    <Screen title={taxiEnabled ? "Request Test Ride" : "KariGO Rides is coming soon"} topPadding={false}>
-      <Card><Text style={ui.cardTitle}>{taxiEnabled ? "Ride Test Mode" : "Join the Ride Waitlist"}</Text><Text style={ui.pageIntro}>{taxiEnabled ? stagingNotice : "KariGO Rides is not active for public booking yet. Please use the waitlist while KariGO prepares verified Ride Captains, fare controls and safety operations."}</Text></Card>
+    <KariGoAppTopBar showBack title="Ride Review" />
+    <Screen title={taxiEnabled ? "Request Review Ride" : "KariGO Rides interest"} topPadding={false}>
+      <Card><Text style={ui.cardTitle}>{taxiEnabled ? "Ride operations review" : "Join the Ride Waitlist"}</Text><Text style={ui.pageIntro}>{taxiEnabled ? rideReviewNotice : "KariGO Rides requires operations approval before public booking. Please use the waitlist while KariGO reviews verified Ride Captains, fare controls and safety operations."}</Text></Card>
       {!taxiEnabled ? <Button title="Join Ride Waitlist" onPress={() => router.push("/taxi/waitlist")} /> : <>
         <Message error>{error}</Message>
         <Field placeholder="Pickup address" value={form.pickupAddress} onChangeText={(pickupAddress) => setForm({ ...form, pickupAddress })} />
         <Field placeholder="Destination address" value={form.destinationAddress} onChangeText={(destinationAddress) => setForm({ ...form, destinationAddress })} />
-        <Field placeholder="Mock distance km" keyboardType="decimal-pad" value={form.estimatedDistanceKm} onChangeText={(estimatedDistanceKm) => setForm({ ...form, estimatedDistanceKm })} />
-        <Field placeholder="Mock duration minutes" keyboardType="number-pad" value={form.estimatedDurationMin} onChangeText={(estimatedDurationMin) => setForm({ ...form, estimatedDurationMin })} />
+        <Field placeholder="Estimated distance km" keyboardType="decimal-pad" value={form.estimatedDistanceKm} onChangeText={(estimatedDistanceKm) => setForm({ ...form, estimatedDistanceKm })} />
+        <Field placeholder="Estimated duration minutes" keyboardType="number-pad" value={form.estimatedDurationMin} onChangeText={(estimatedDurationMin) => setForm({ ...form, estimatedDurationMin })} />
         <Field placeholder="Note optional" value={form.customerNote} onChangeText={(customerNote) => setForm({ ...form, customerNote })} />
-        <Button title={loading ? "Estimating..." : "Estimate Test Fare"} disabled={loading || !form.pickupAddress || !form.destinationAddress} onPress={estimateFare} />
+        <Button title={loading ? "Estimating..." : "Estimate Fare"} disabled={loading || !form.pickupAddress || !form.destinationAddress} onPress={estimateFare} />
         {estimate ? <Card>
           <Text style={ui.cardTitle}>Fare estimate</Text>
           <Text style={ui.priceValue}>{money(estimate.estimatedFareKobo)}</Text>
           <Text style={ui.muted}>{estimate.estimatedDistanceKm} km - {estimate.estimatedDurationMin} min</Text>
-          <Text style={ui.muted}>{stagingNotice}</Text>
-          <Button title={loading ? "Creating..." : "Confirm Test Trip"} disabled={loading} onPress={createTrip} />
+          <Text style={ui.muted}>{rideReviewNotice}</Text>
+          <Button title={loading ? "Creating..." : "Confirm Review Ride"} disabled={loading} onPress={createTrip} />
         </Card> : null}
         {created ? <Card>
-          <Text style={ui.cardTitle}>Test ride request created</Text>
+          <Text style={ui.cardTitle}>Review ride request created</Text>
           <Text>Reference: {created.tripReference}</Text>
           <StatusBadge status={created.status} />
           {created.tripPin ? <Text style={ui.otpCode}>{created.tripPin.slice(0, 3)} {created.tripPin.slice(3)}</Text> : null}
-          <Text style={ui.muted}>Only share this test ride PIN with the approved Ride Captain after pickup.</Text>
+          <Text style={ui.muted}>Only share this ride PIN with the approved Ride Captain after pickup.</Text>
         </Card> : null}
-        <Text style={ui.sectionTitle}>Recent test ride requests</Text>
+        <Text style={ui.sectionTitle}>Recent ride requests</Text>
         {trips.map((trip) => <Card key={trip.id}>
           <Text style={ui.cardTitle}>{trip.tripReference}</Text>
           <Text>{trip.pickupAddress} to {trip.destinationAddress}</Text>

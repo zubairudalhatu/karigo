@@ -112,6 +112,34 @@ describe("DispatchService", () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it("updates rider location only while online or on delivery", async () => {
+    prisma.rider.findUnique.mockResolvedValueOnce({
+      id: "rider-1",
+      availabilityStatus: RiderStatus.ONLINE,
+      user: { accountStatus: AccountStatus.ACTIVE }
+    });
+    prisma.rider.update.mockResolvedValue({ id: "rider-1" });
+
+    await service.updateLocation("rider-user-1", { latitude: 12.0022, longitude: 8.592 });
+
+    expect(prisma.rider.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        currentLatitude: new Prisma.Decimal(12.0022),
+        currentLongitude: new Prisma.Decimal(8.592),
+        currentLocationUpdatedAt: expect.any(Date)
+      })
+    }));
+
+    prisma.rider.findUnique.mockResolvedValueOnce({
+      id: "rider-1",
+      availabilityStatus: RiderStatus.OFFLINE,
+      user: { accountStatus: AccountStatus.ACTIVE }
+    });
+
+    await expect(service.updateLocation("rider-user-1", { latitude: 12.0022, longitude: 8.592 }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it("completes delivery and creates earning and vendor settlement records", async () => {
     prisma.rider.findUnique.mockResolvedValue({
       id: "rider-1",

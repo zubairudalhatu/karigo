@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { managementApi } from "../../src/api/management.api";
 import { vendorApplicationsApi, VendorApplication } from "../../src/api/vendor-applications.api";
 import { Badge, Empty, ErrorMessage, PortalShell } from "../../src/components/portal";
 import { friendlyError } from "../../src/lib/errors";
@@ -37,6 +38,19 @@ export default function VendorApplicationsPage() {
     }
   }
 
+  async function resendActivationLink(application: VendorApplication) {
+    if (!application.vendor) return;
+    try {
+      setError("");
+      setMessage("");
+      const result = await managementApi.createVendorActivationLink(application.vendor.id);
+      setMessage(`Vendor activation link sent. It expires ${new Date(result.expiresAt).toLocaleString()}. ${result.deliveryWarning}`);
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    }
+  }
+
   return <PortalShell>
     <h1>Vendor Applications</h1>
     <p className="muted">Review public vendor applications. Approval does not automatically publish a storefront, activate payouts, approve promotions or enable pharmacy scope.</p>
@@ -51,7 +65,8 @@ export default function VendorApplicationsPage() {
         {application.vendor ? <div className="notice">
           <strong>Linked vendor account</strong>
           <p>{application.vendor.businessName} <Badge>{application.vendor.status}</Badge> <Badge>{application.vendor.user.accountStatus}</Badge></p>
-          {application.vendor.activationInvitations?.[0] ? <p className="muted">Latest activation link: {application.vendor.activationInvitations[0].status} - expires {new Date(application.vendor.activationInvitations[0].expiresAt).toLocaleString()}</p> : <p className="muted">No activation link has been issued yet.</p>}
+          {application.vendor.activationInvitations?.[0] ? <p className="muted">Latest activation invitation: {application.vendor.activationInvitations[0].status} - expires {new Date(application.vendor.activationInvitations[0].expiresAt).toLocaleString()}</p> : <p className="muted">No activation invitation has been issued yet.</p>}
+          {application.vendor.user.accountStatus !== "ACTIVE" ? <button className="secondary" onClick={() => void resendActivationLink(application)}>Send new activation link</button> : null}
         </div> : <p className="muted">No linked vendor account yet. Approving the application creates or links the Vendor account.</p>}
         {application.documents?.length ? <div className="notice"><strong>Documents</strong>{application.documents.map((document) => <p key={document.id}><a href={document.documentUrl} target="_blank" rel="noreferrer">{document.documentName || document.documentType}</a> <Badge>{document.verificationStatus}</Badge></p>)}</div> : <p className="muted">No application documents supplied yet.</p>}
         <div className="filters">{reviewStatuses.map((status) => <button key={status} className="secondary" onClick={() => void review(application.id, status)}>{status.replaceAll("_", " ")}</button>)}</div>

@@ -57,6 +57,10 @@ export class DispatchService {
 
   async updateLocation(userId: string, dto: UpdateRiderLocationDto) {
     const rider = await this.requireRider(userId);
+    const locationUpdateStatuses: RiderStatus[] = [RiderStatus.ONLINE, RiderStatus.BUSY];
+    if (!locationUpdateStatuses.includes(rider.availabilityStatus)) {
+      throw new BadRequestException("Captains can update live location only while online or on delivery");
+    }
     return this.prisma.rider.update({
       where: { id: rider.id },
       data: {

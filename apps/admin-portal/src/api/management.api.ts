@@ -83,6 +83,15 @@ export interface IntegrationSettings {
   biometricReadiness: { credentialStorageModelReady: boolean; passwordlessLoginEnabled: boolean; note: string };
 }
 
+export interface VendorActivationLinkResult {
+  vendorId: string;
+  businessName: string;
+  expiresAt: string;
+  tokenVisibleOnce: boolean;
+  notificationQueued: boolean;
+  deliveryWarning: string;
+}
+
 export const managementApi = {
   users: () => api.get<any[]>("admin/users"),
   vendors: () => api.get<AdminVendor[]>("admin/vendors"),
@@ -90,7 +99,7 @@ export const managementApi = {
   trashVendor: (vendorId: string, reason?: string) => api.patch<AdminVendor>(`admin/vendors/${vendorId}/trash`, { reason }),
   restoreVendor: (vendorId: string, reason?: string) => api.patch<AdminVendor>(`admin/vendors/${vendorId}/restore`, { reason }),
   permanentlyDeleteVendor: (vendorId: string) => api.delete<{ vendorId: string; permanentlyDeleted: boolean }>(`admin/vendors/${vendorId}`),
-  createVendorActivationLink: (vendorId: string) => api.post<{ activationUrl: string; expiresAt: string; tokenVisibleOnce: boolean; deliveryWarning: string }>(`admin/vendors/${vendorId}/activation-link`),
+  createVendorActivationLink: (vendorId: string) => api.post<VendorActivationLinkResult>(`admin/vendors/${vendorId}/activation-link`),
   updateVendorStatus: (vendorId: string, status: string, note?: string) => api.patch<AdminVendor>(`admin/vendors/${vendorId}/status`, { status, note }),
   vendorOnboardingDocuments: (vendorId: string) => api.get<VendorOnboardingDocument[]>(`admin/vendors/${vendorId}/onboarding-documents`),
   reviewVendorOnboardingDocument: (vendorId: string, documentId: string, status: string, adminNote?: string) =>

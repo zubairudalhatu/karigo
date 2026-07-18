@@ -25,7 +25,7 @@ export default function SmeServiceProviderApplicationPage() {
             <li>Your availability, tools and contact details</li>
             <li>Whether the service can be safely prepared for customer requests</li>
           </ul>
-          <p className="muted">Health professional applications remain readiness-only until legal, compliance and operational approval is complete.</p>
+          <p className="muted">Health professional applications remain compliance-review only until legal, compliance and operational approval is complete.</p>
           <Link className="button secondary" href="/services">View KariGO Services</Link>
         </article>
         <ServiceProviderApplicationForm />

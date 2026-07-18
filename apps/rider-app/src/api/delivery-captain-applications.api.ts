@@ -14,6 +14,11 @@ export interface DeliveryCaptainApplicationInput {
   vehiclePlateNumber?: string;
   riderExperience?: string;
   profilePhotoUrl?: string;
+  documents?: Array<{
+    documentType: string;
+    documentName?: string;
+    documentUrl: string;
+  }>;
   guarantorName: string;
   guarantorPhone: string;
   notes?: string;

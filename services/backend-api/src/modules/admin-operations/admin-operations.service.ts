@@ -17,6 +17,7 @@ import {
 } from "@prisma/client";
 import { createHash, randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
+import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ListAdminOrdersQueryDto } from "./dto/list-admin-orders-query.dto";
 import { ReportDateRangeDto } from "./dto/report-date-range.dto";
@@ -59,6 +60,7 @@ export class AdminOperationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AdminAuditService,
+    private readonly applicationNotifications: ApplicationNotificationsService,
     private readonly config?: ConfigService
   ) {}
 
@@ -498,7 +500,13 @@ export class AdminOperationsService {
   async createVendorActivationLink(adminUserId: string, vendorId: string) {
     const vendor = await this.prisma.vendor.findUnique({
       where: { id: vendorId },
-      select: { id: true, userId: true, businessName: true, deletedAt: true, user: { select: { role: true } } }
+      select: {
+        id: true,
+        userId: true,
+        businessName: true,
+        deletedAt: true,
+        user: { select: { role: true, fullName: true, phoneNumber: true, email: true } }
+      }
     });
     if (!vendor) throw new NotFoundException("Vendor not found");
     if (vendor.deletedAt) throw new BadRequestException("Trashed vendors cannot receive activation links.");
@@ -527,13 +535,24 @@ export class AdminOperationsService {
       expiresAt: expiresAt.toISOString()
     });
 
+    const activationUrl = `${this.vendorDashboardUrl()}/activate?token=${encodeURIComponent(token)}`;
+    await this.applicationNotifications.vendorApplicationReviewed({
+      reference: `VENDOR-${vendor.id.slice(0, 8).toUpperCase()}`,
+      recipientName: vendor.user.fullName || vendor.businessName,
+      phoneNumber: vendor.user.phoneNumber,
+      email: vendor.user.email,
+      status: "APPROVED",
+      activationUrl,
+      activationExpiresAt: expiresAt.toISOString()
+    });
+
     return {
       vendorId: vendor.id,
       businessName: vendor.businessName,
       expiresAt: expiresAt.toISOString(),
-      activationUrl: `${this.vendorDashboardUrl()}/activate?token=${encodeURIComponent(token)}`,
-      tokenVisibleOnce: true,
-      deliveryWarning: "Share this activation link only through an approved secure channel. KariGO does not store the plaintext token."
+      tokenVisibleOnce: false,
+      notificationQueued: true,
+      deliveryWarning: "A secure password setup link was sent through approved application notification channels. KariGO does not expose the plaintext token in Admin Portal."
     };
   }
 

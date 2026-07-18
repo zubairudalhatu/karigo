@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { PassportModule } from "@nestjs/passport";
 import { RolesGuard } from "../../common/guards/roles.guard";
+import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { UsersModule } from "../users/users.module";
 import { AccountActivationEmailService } from "./account-activation-email.service";
 import { AuthController } from "./auth.controller";
@@ -18,6 +19,7 @@ import { TermiiOtpProvider } from "./providers/termii-otp.provider";
   providers: [
     AuthService,
     AccountActivationEmailService,
+    ApplicationNotificationsService,
     OtpService,
     OtpProviderRegistry,
     MockOtpProvider,

@@ -8,7 +8,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
-["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "profile/wallet", "profile/referrals", "profile/returns-refunds", "parcel", "sme-services", "sme-services/requests/index", "sme-services/requests/[id]", "vendor/apply", "vendor/application-status"]
+["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "profile/wallet", "profile/referrals", "profile/privacy-security", "profile/returns-refunds", "parcel", "sme-services", "sme-services/requests/index", "sme-services/requests/[id]", "vendor/apply", "vendor/application-status"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
 assert(layout.includes('<Stack.Screen name="utilities/index" options={headerless}'), "Utilities hub must hide native header.");
 ["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
@@ -60,6 +60,7 @@ assert(home.includes("Groceries"), "Home must keep Groceries service category.")
 assert(home.includes("KariGO Rides"), "Home must include the KariGO Rides readiness tile.");
 assert(home.includes("EXPO_PUBLIC_TAXI_SERVICE_ENABLED"), "Ride readiness must remain feature-flagged.");
 assert(home.includes("EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED"), "Ride staging dispatch must remain feature-flagged.");
+assert(home.includes("Operations review") && home.includes("Join waitlist"), "Ride tile must use launch-safe review/waitlist copy.");
 assert(home.includes("Market Items"), "Home must keep Market Items service category.");
 assert(home.includes("Pharmacy"), "Home must include the compliance-gated Pharmacy category.");
 assert(home.includes("Parcel Delivery"), "Home must keep Parcel Delivery service category.");
@@ -106,10 +107,11 @@ assert(readiness.includes("Back to home"), "Readiness screen must include a safe
 assert(readiness.includes("secondaryCta"), "Readiness screen must support a secondary CTA for safe waitlists.");
 assert(!readiness.includes("<Protected>"), "Readiness screens must be browseable by guests.");
 const readinessRoute = read("app", "readiness", "[service].tsx");
-assert(readinessRoute.includes("KariGO Rides is coming soon. KariGO is preparing verified Ride Captain onboarding"), "Ride readiness message must be explicit.");
+assert(readinessRoute.includes("KariGO Rides is preparing"), "Ride review message must use live-ready preparation copy.");
+assert(readinessRoute.includes("operations approval"), "Ride review message must state operations approval.");
 assert(readinessRoute.includes("Join Ride Waitlist"), "Ride readiness route must expose the waitlist CTA.");
 assert(readinessRoute.includes("/taxi/waitlist"), "Ride readiness route must navigate to the customer waitlist form.");
-assert(readinessRoute.includes("Bills & Utilities is coming soon. KariGO is preparing secure provider integrations"), "Bills readiness message must be explicit.");
+assert(readinessRoute.includes("KariGO is preparing secure provider integrations"), "Bills review message must be explicit.");
 assert(readinessRoute.includes("Pharmacy is preparing launch"), "Pharmacy disabled state must have safe readiness copy.");
 const taxiApi = read("src", "api", "taxi.api.ts");
 assert(taxiApi.includes("taxi/waitlist"), "Customer ride API must submit customer waitlist entries through the compatible route.");
@@ -120,8 +122,8 @@ assert(taxiWaitlist.includes("Join Ride Waitlist"), "Customer ride waitlist form
 assert(taxiWaitlist.includes("verified Ride Captains, vehicle checks, fare controls"), "Ride waitlist form must explain readiness-only controls.");
 assert(taxiWaitlist.includes("taxiApi.joinWaitlist"), "Customer ride waitlist must use the backend readiness endpoint.");
 const taxiRequest = read("app", "taxi", "request.tsx");
-assert(taxiRequest.includes("Request Test Ride"), "Customer app must include the staging-only Request Test Ride screen.");
-assert(taxiRequest.includes("KariGO Rides is running in staging test mode. No real ride or payment is guaranteed."), "Ride request flow must show test-mode safety copy.");
+assert(taxiRequest.includes("Request Review Ride"), "Customer app must include the controlled Request Review Ride screen.");
+assert(taxiRequest.includes("KariGO Rides remains controlled by operations flags"), "Ride request flow must show operations-control safety copy.");
 assert(taxiRequest.includes("EXPO_PUBLIC_TAXI_SERVICE_ENABLED") && taxiRequest.includes("EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED"), "Ride request flow must be gated by both staging flags.");
 assert(taxiRequest.includes("taxiApi.fareEstimate"), "Ride request flow must quote through the backend.");
 assert(taxiRequest.includes("taxiApi.createTrip"), "Ride request flow must create requests through the backend.");
@@ -143,7 +145,7 @@ assert(smeServices.includes("requestForegroundPermissionsAsync"), "SME Services 
 assert(smeServices.includes("getCurrentPositionAsync"), "SME Services location detection must capture the current device position.");
 assert(smeServices.includes("View my SME Services requests"), "SME Services screen must link to request history.");
 assert(smeServices.includes("View submitted request status"), "SME Services screen must link to the submitted request detail.");
-assert(smeServices.includes("Doctor / health professional booking is readiness-only"), "Health professional category must remain readiness-only.");
+assert(smeServices.includes("Doctor / health professional booking requires compliance approval"), "Health professional category must remain compliance-gated.");
 assert(smeServices.includes("Parcel Delivery remains for sending packages only."), "SME Services copy must differentiate from Parcel Delivery.");
 ["APPLIANCE_REPAIR", "FUMIGATION", "WELDER", "TILER", "CCTV_TECHNICIAN", "MOVING_HELP"].forEach((type) => assert(smeServices.includes(type), `SME Services must include expanded category ${type}.`));
 const serviceProviderApi = read("src", "api", "service-provider-requests.api.ts");
@@ -246,7 +248,7 @@ assert(profile.includes("Support centre"), "Support must be accessible from Prof
 assert(profile.includes("Notifications"), "Notifications must be accessible from Profile.");
 assert(profile.includes("Orders"), "Order history must be accessible from Profile.");
 assert(profile.includes("SME Services requests"), "SME Services request history must be accessible from Profile.");
-assert(profile.includes("Utility test history"), "Utility history must be accessible from Profile.");
+assert(profile.includes("Utility records"), "Utility records must be accessible from Profile.");
 assert(profile.includes("Become a KariGO Vendor"), "Profile must link to public vendor application flow.");
 assert(profile.includes("KariGO Wallet"), "Profile must link to the customer wallet surface.");
 assert(profile.includes("/profile/wallet"), "Profile wallet hub item must navigate to the wallet screen.");
@@ -259,9 +261,17 @@ assert(profile.includes("Tracking only"), "Profile referral hub item must mark r
 assert(profile.includes("Returns and Refunds"), "Profile must link to the returns and refunds support surface.");
 assert(profile.includes("/profile/returns-refunds"), "Profile returns/refunds item must navigate to the safe policy screen.");
 assert(profile.includes("KariGO Plus"), "Profile must reserve a future subscription surface.");
-assert(profile.includes("Coming soon"), "Future profile areas must remain clearly marked as inactive placeholders.");
-assert(profile.includes("Subscription actions are not active, and wallet/referral rewards remain tracking-only."), "Profile placeholders must state that live value features are not active.");
+assert(profile.includes("Privacy & security"), "Profile must link to the Privacy and Security section.");
+assert(profile.includes("/profile/privacy-security"), "Profile Privacy and Security hub item must navigate to the privacy screen.");
+assert(profile.includes("Requires approval"), "Future profile areas must remain clearly marked as approval-controlled placeholders.");
+assert(profile.includes("Subscription actions are not active, and wallet/referral rewards remain approval-controlled."), "Profile placeholders must state that value features remain approval-controlled.");
 assert(!profile.includes("wallet top-up"), "Profile must not activate wallet top-up language.");
+
+const privacySecurityScreen = read("app", "profile", "privacy-security.tsx");
+assert(privacySecurityScreen.includes("Privacy and security"), "Customer Privacy and Security screen must exist.");
+assert(privacySecurityScreen.includes("Change password") && privacySecurityScreen.includes("Use Support Centre if you need help changing your password"), "Privacy screen must keep password change support-managed unless backend support exists.");
+assert(privacySecurityScreen.includes("Biometric and passwordless sign-in are not enabled"), "Privacy screen must not falsely claim biometric login is active.");
+assert(privacySecurityScreen.includes("Linking.openURL"), "Privacy screen must link to public Privacy and Terms pages.");
 
 const walletScreen = read("app", "profile", "wallet.tsx");
 assert(walletScreen.includes("KariGO Wallet"), "Customer wallet screen must exist.");
@@ -274,7 +284,7 @@ assert(walletScreen.includes("walletMinimumTopUpAmount"), "Customer wallet scree
 assert(walletScreen.includes("Pending verification"), "Customer wallet screen must show pending verification after Squad checkout opens.");
 assert(walletScreen.includes("backend payment verification"), "Customer wallet screen must state that top-up credits require backend verification.");
 assert(walletScreen.includes("KariGO will not credit the wallet from the app alone"), "Customer wallet screen must prevent client-side wallet credit language.");
-assert(walletScreen.includes("Available later"), "Customer wallet screen must keep disabled future actions separate.");
+assert(walletScreen.includes("Controlled wallet features"), "Customer wallet screen must keep disabled future actions separate.");
 assert(walletScreen.includes("Wallet activity"), "Customer wallet screen must show ledger activity.");
 assert(walletScreen.includes("Wallet transactions will appear here after KariGO records approved wallet activity."), "Customer wallet screen must provide a safe empty state.");
 assert(!walletScreen.includes("Withdraw now") && !walletScreen.includes("Automatic refund now"), "Customer wallet screen must not activate withdrawals or automatic refunds.");
@@ -311,6 +321,21 @@ assert(!signupScreen.includes("walletApi") && !signupScreen.includes("paymentsAp
 assert(signupScreen.includes("PasswordField") && signupScreen.includes("passwordVisible"), "Signup password field must support visibility toggling.");
 const loginScreen = read("app", "auth", "login.tsx");
 assert(loginScreen.includes("PasswordField") && loginScreen.includes("passwordVisible"), "Login password field must support visibility toggling.");
+assert(loginScreen.includes("verificationRequired"), "Login must handle registered but unverified accounts by continuing OTP verification.");
+assert(loginScreen.includes("If your phone is registered but not verified"), "Login copy must explain OTP recovery.");
+const otpScreen = read("app", "auth", "otp.tsx");
+assert(otpScreen.includes("recovery") && otpScreen.includes("params.message"), "OTP screen must support recovery copy from login.");
+const authApi = read("src", "api", "auth.api.ts");
+assert(authApi.includes("LoginResponse"), "Customer auth API must type login as success or verification-required response.");
+
+const addressesScreen = read("app", "addresses.tsx");
+assert(addressesScreen.includes("expo-location"), "Saved address screen must use Expo Location for optional device location capture.");
+assert(addressesScreen.includes("Use current location"), "Saved address screen must expose a customer-controlled location action.");
+assert(addressesScreen.includes("manual"), "Saved address location failure copy must preserve manual address entry.");
+assert(addressesScreen.includes("latitude") && addressesScreen.includes("longitude"), "Saved address creation must preserve captured coordinates.");
+const editAddressScreen = read("app", "addresses", "[id].tsx");
+assert(editAddressScreen.includes("Use current location"), "Edit address screen must expose location refresh.");
+assert(editAddressScreen.includes("requestForegroundPermissionsAsync"), "Edit address location refresh must request foreground permission.");
 
 const appConfig = read("app.config.ts");
 const easConfig = read("eas.json");
@@ -325,18 +350,19 @@ assert(utilitiesApi.includes("utilities/providers"), "Customer utilities API mus
 assert(utilitiesApi.includes("customer/utilities/quote"), "Customer utilities API must quote test transactions.");
 assert(utilitiesApi.includes("customer/utilities/transactions"), "Customer utilities API must create and list utility transactions.");
 const utilitiesHome = read("app", "utilities", "index.tsx");
-assert(utilitiesHome.includes("Bills & Utilities is currently in test mode"), "Utilities hub must show safety copy.");
+assert(utilitiesHome.includes("Bills & Utilities is under provider review"), "Utilities hub must show provider-review safety copy.");
 assert(utilitiesHome.includes("Airtime") && utilitiesHome.includes("Data") && utilitiesHome.includes("Electricity") && utilitiesHome.includes("Cable TV"), "Utilities hub must show all four services.");
 assert(utilitiesHome.includes("/utilities/history"), "Utilities hub must link to history.");
 const utilityFlow = read("app", "utilities", "[service].tsx");
-assert(utilityFlow.includes("Run Test Transaction"), "Utility confirm button must say Run Test Transaction.");
+assert(utilityFlow.includes("Review Utility Request"), "Utility quote button must use provider-review copy.");
+assert(utilityFlow.includes("Submit Review Record"), "Utility confirm button must use provider-review copy.");
 assert(!utilityFlow.includes("Pay Now"), "Utility flow must not use Pay Now wording.");
-assert(utilityFlow.includes("No real airtime, data, electricity token or cable subscription will be delivered."), "Utility flow must include test-mode safety copy.");
+assert(utilityFlow.includes("No real airtime, data, electricity token or cable subscription will be delivered from this build."), "Utility flow must include provider-review safety copy.");
 assert(utilityFlow.includes("utilitiesApi.quote"), "Utility flow must quote through backend.");
 assert(utilityFlow.includes("utilitiesApi.create"), "Utility flow must create through backend mock transaction endpoint.");
 const utilityReceipt = read("app", "utilities", "transactions", "[id].tsx");
-assert(utilityReceipt.includes("Test transaction receipt"), "Utility receipt detail must be explicit.");
-assert(utilityReceipt.includes("No real airtime, data, electricity token or cable subscription was delivered."), "Utility receipt must keep test-mode safety copy.");
+assert(utilityReceipt.includes("Utility review receipt"), "Utility receipt detail must be explicit.");
+assert(utilityReceipt.includes("No real airtime, data, electricity token or cable subscription was delivered from this build."), "Utility receipt must keep provider-review safety copy.");
 
 const checkout = read("app", "checkout.tsx");
 const paymentStatus = read("src", "lib", "payment-status.ts");

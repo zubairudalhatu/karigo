@@ -35,11 +35,11 @@ export function driverCaptainMode(taxiStagingEnabled = isTaxiStagingEnabled()): 
     key: "DRIVER_CAPTAIN",
     label: "Ride Captain",
     status: taxiStagingEnabled ? "READINESS_ONLY" : "DISABLED",
-    badge: taxiStagingEnabled ? "Staging test only" : "Readiness only",
+    badge: taxiStagingEnabled ? "Operations review" : "Review only",
     description: taxiStagingEnabled
-      ? "KariGO Rides test mode is limited to approved staging checks. Live ride dispatch remains disabled."
-      : "Submit ride and vehicle readiness details while KariGO Rides remains gated.",
-    ctaLabel: "Ride readiness",
+      ? "KariGO Rides is limited to approved operations checks. Ride dispatch remains controlled."
+      : "Submit ride and vehicle details while KariGO Rides remains gated.",
+    ctaLabel: "Ride review",
     href: "/taxi-readiness"
   };
 }

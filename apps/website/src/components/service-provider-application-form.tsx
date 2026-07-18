@@ -24,7 +24,7 @@ const serviceTypeOptions: Array<{ label: string; value: ServiceProviderType; not
   { label: "Carpenter", value: "CARPENTER" },
   { label: "AC technician", value: "AC_TECHNICIAN" },
   { label: "Generator repair technician", value: "GENERATOR_REPAIR" },
-  { label: "Doctor / health professional readiness only", value: "HEALTH_PROFESSIONAL", note: "Future approval required before live booking." },
+  { label: "Doctor / health professional review only", value: "HEALTH_PROFESSIONAL", note: "Compliance approval required before booking." },
   { label: "Other approved service provider", value: "OTHER" }
 ];
 
@@ -119,7 +119,7 @@ export function ServiceProviderApplicationForm() {
         <label>State<select required value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })}>{launchStateOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         <label>Service areas<input value={form.serviceAreas} onChange={(event) => setForm({ ...form, serviceAreas: event.target.value })} placeholder="Nasarawa GRA, Wuse, Bompai, Tarauni" /></label>
       </div>
-      {form.serviceType === "HEALTH_PROFESSIONAL" ? <p className="notice">Health professional applications are collected for readiness review only. KariGO is not activating live medical booking through this form.</p> : null}
+      {form.serviceType === "HEALTH_PROFESSIONAL" ? <p className="notice">Health professional applications are collected for compliance review only. KariGO is not activating medical booking through this form.</p> : null}
       <label>Address optional<textarea value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} /></label>
       <label>Experience summary<textarea required value={form.experienceSummary} onChange={(event) => setForm({ ...form, experienceSummary: event.target.value })} placeholder="Tell KariGO about your work experience, service quality and typical jobs." /></label>
       <label>Tools or equipment optional<textarea value={form.toolsOrEquipment} onChange={(event) => setForm({ ...form, toolsOrEquipment: event.target.value })} /></label>

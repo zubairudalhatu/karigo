@@ -35,7 +35,7 @@ export default function TaxiWaitlist() {
         pickupArea: form.pickupArea || undefined,
         note: form.note || undefined
       });
-      setMessage(`You have joined the KariGO Rides waitlist for ${entry.city}. We will contact you when ride service is ready in your area.`);
+      setMessage(`You have joined the KariGO Rides waitlist for ${entry.city}. We will contact you when Ride service is available in your area.`);
       setForm(initialForm);
     } catch (e) {
       setError(friendlyError(e));
@@ -48,8 +48,8 @@ export default function TaxiWaitlist() {
     <KariGoAppTopBar showBack title="Ride Waitlist" />
     <Screen title="Join Ride Waitlist" topPadding={false}>
       <Card>
-        <Text style={ui.cardTitle}>KariGO Rides is coming soon</Text>
-        <Text style={ui.pageIntro}>KariGO is preparing verified Ride Captains, vehicle checks, fare controls and safe ride operations before launch.</Text>
+        <Text style={ui.cardTitle}>KariGO Rides interest</Text>
+        <Text style={ui.pageIntro}>KariGO is reviewing Ride interest, verified Ride Captains, vehicle checks, fare controls and safe ride operations before dispatch activation.</Text>
       </Card>
       <Message>{message}</Message>
       <Message error>{error}</Message>

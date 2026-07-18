@@ -51,4 +51,11 @@ export class TaxiFareEstimateDto {
   @Min(1)
   @Max(600)
   estimatedDurationMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(240)
+  waitingMinutes?: number;
 }

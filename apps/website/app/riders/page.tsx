@@ -13,7 +13,7 @@ export default function RidersPage() {
       <section className="section">
         <p className="eyebrow">Captains</p>
         <h1>Earn with KariGO.</h1>
-        <p className="lead">KariGO supports Delivery Captains now and is preparing Ride Captain onboarding for a later KariGO Rides launch.</p>
+        <p className="lead">KariGO supports Delivery Captains now and accepts Ride Captain applications for controlled review before Ride dispatch activation.</p>
       </section>
       <section className="section soft split">
         <article className="info-card">
@@ -26,14 +26,14 @@ export default function RidersPage() {
           <a className="button" href="#delivery-captain-application">Apply as Delivery Captain</a>
         </article>
         <article className="info-card">
-          <h2>Ride Captains - Coming Soon</h2>
+          <h2>Ride Captains</h2>
           <ul className="list">
-            <li>KariGO Rides is coming later and is not live for ride requests yet</li>
+            <li>KariGO Rides is open for interest and application review; public ride requests require separate activation</li>
             <li>Verified Ride Captain onboarding will be required</li>
             <li>Vehicle and licence checks will be required</li>
             <li>Fare controls, safety review and dispatch rules must be approved before launch</li>
           </ul>
-          <a className="button secondary" href="#ride-captain-application">Apply for Ride readiness</a>
+          <a className="button secondary" href="#ride-captain-application">Apply for Ride review</a>
         </article>
       </section>
       <section className="section">

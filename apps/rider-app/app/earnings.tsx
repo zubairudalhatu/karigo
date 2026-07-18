@@ -28,7 +28,7 @@ export default function Earnings() {
     <Card tone="soft">
       <Text style={ui.sectionTitle}>Total earnings</Text>
       <Text style={styles.total}>{money(data?.totalEarnings)}</Text>
-      <Text style={ui.pageIntro}>Live wallet withdrawals and payout requests are not enabled in staging.</Text>
+      <Text style={ui.pageIntro}>Wallet withdrawals and payout requests require KariGO operations approval before activation.</Text>
     </Card>
     <View style={styles.summaryGrid}>
       <Card><Text style={ui.muted}>Pending payout</Text><Text style={styles.metric}>{money(data?.pendingEarnings)}</Text></Card>

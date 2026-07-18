@@ -68,7 +68,7 @@ export function TaxiWaitlistForm() {
         pickupArea: form.pickupArea || undefined,
         note: form.note || undefined
       });
-      setSuccess("You have joined the KariGO Rides waitlist. We will contact you when ride service is ready in your area.");
+      setSuccess("You have joined the KariGO Rides waitlist. We will contact you when Ride service is available in your area.");
       setForm(waitlistInitial);
     } catch {
       setError("We could not submit your ride waitlist request right now. Please check your details and try again.");
@@ -79,7 +79,7 @@ export function TaxiWaitlistForm() {
 
   return <form className="form-card" id="ride-waitlist" onSubmit={submit}>
     <h3>Join Ride Waitlist</h3>
-    <p>KariGO Rides is coming soon. Waitlist registration does not book a ride or activate live ride dispatch.</p>
+    <p>Join the KariGO Rides interest list. Waitlist registration does not book a ride or activate live ride dispatch.</p>
     <div className="form-grid">
       <label>Full name<input required value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></label>
       <label>Phone number<input required value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} /></label>
@@ -123,7 +123,7 @@ export function TaxiDriverApplicationForm() {
         vehiclePlateNumber: form.vehiclePlateNumber,
         notes: form.notes || undefined
       });
-      setSuccess(response?.data?.message ?? "Ride Captain application submitted. KariGO will review your details before KariGO Rides launch.");
+      setSuccess(response?.data?.message ?? "Ride Captain application submitted. KariGO will review your details before Ride dispatch activation.");
       setForm(driverInitial);
     } catch {
       setError("We could not submit your Ride Captain application right now. Please check your details and try again.");
@@ -134,7 +134,7 @@ export function TaxiDriverApplicationForm() {
 
   return <form className="form-card" id="ride-captain-application" onSubmit={submit}>
     <h3>Ride Captain Application</h3>
-    <p>Register interest while KariGO prepares verified ride operations. Approval is required and this form does not activate live ride dispatch.</p>
+    <p>Register for Ride Captain review while KariGO verifies ride operations. Approval is required and this form does not activate live ride dispatch.</p>
     <div className="form-grid">
       <label>Full name<input required value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></label>
       <label>Phone number<input required value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} /></label>

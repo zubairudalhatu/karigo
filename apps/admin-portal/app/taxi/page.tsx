@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { taxiApi, AdminTaxiDriverApplication } from "../../src/api/taxi.api";
 import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
 import { friendlyError } from "../../src/lib/errors";
-import { TaxiApplicationStatus, TaxiDriverProfile, TaxiDriverProfileStatus, TaxiTrip, TaxiWaitlistEntry, TaxiWaitlistStatus } from "@karigo/shared-types";
+import { TaxiApplicationStatus, TaxiDriverProfile, TaxiDriverProfileStatus, TaxiRidePricingDefaults, TaxiTrip, TaxiWaitlistEntry, TaxiWaitlistStatus } from "@karigo/shared-types";
 
 const applicationStatuses: Array<TaxiApplicationStatus | "ALL"> = ["ALL", "SUBMITTED", "UNDER_REVIEW", "CHANGES_REQUESTED", "PROVISIONALLY_APPROVED", "APPROVED", "REJECTED"];
 const reviewStatuses: TaxiApplicationStatus[] = ["UNDER_REVIEW", "CHANGES_REQUESTED", "PROVISIONALLY_APPROVED", "APPROVED", "REJECTED"];
@@ -20,6 +20,19 @@ const tabLabels: Record<Tab, string> = {
   summary: "Ride Summary"
 };
 
+type RideSummary = {
+  driverProfiles: number;
+  availableDrivers: number;
+  requestedTrips: number;
+  activeTrips: number;
+  completedTrips: number;
+  cancelledTrips: number;
+  pricingDefaults: TaxiRidePricingDefaults;
+  testModeNotice: string;
+};
+
+const money = (kobo: number) => `NGN ${Math.round(kobo / 100).toLocaleString()}`;
+
 export default function AdminTaxiPage() {
   const [activeTab, setActiveTab] = useState<Tab>("applications");
   const [applicationStatus, setApplicationStatus] = useState<TaxiApplicationStatus | "ALL">("ALL");
@@ -28,7 +41,7 @@ export default function AdminTaxiPage() {
   const [waitlist, setWaitlist] = useState<TaxiWaitlistEntry[]>([]);
   const [profiles, setProfiles] = useState<TaxiDriverProfile[]>([]);
   const [trips, setTrips] = useState<TaxiTrip[]>([]);
-  const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
+  const [summary, setSummary] = useState<RideSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -157,8 +170,32 @@ export default function AdminTaxiPage() {
           <details><summary>Timeline/events</summary>{trip.events?.map((event) => <p key={event.id}>{event.createdAt} - {event.eventType} - {event.note}</p>)}</details>
         </article>) : <Empty>No staging ride requests yet.</Empty>}
       </section> : null}
-      {activeTab === "summary" ? <section className="grid">
-        {summary ? Object.entries(summary).map(([key, value]) => <article className="card" key={key}><span className="muted">{key.replace(/([A-Z])/g, " $1").replace("Drivers", "Ride Captains")}</span><p className="metric">{String(value)}</p></article>) : <Empty>Ride summary unavailable while staging dispatch is disabled.</Empty>}
+      {activeTab === "summary" ? <section className="section">
+        {summary ? <>
+          <div className="grid">
+            {[
+              ["Ride Captain profiles", summary.driverProfiles],
+              ["Available Ride Captains", summary.availableDrivers],
+              ["Requested rides", summary.requestedTrips],
+              ["Active rides", summary.activeTrips],
+              ["Completed rides", summary.completedTrips],
+              ["Cancelled rides", summary.cancelledTrips]
+            ].map(([label, value]) => <article className="card" key={String(label)}><span className="muted">{label}</span><p className="metric">{String(value)}</p></article>)}
+          </div>
+          <article className="card">
+            <h2>Ride pricing defaults</h2>
+            <p className="muted">Read-only launch defaults for Kano and Abuja. This visibility does not activate live Ride dispatch or ride payment collection.</p>
+            <div className="grid">
+              <div className="item"><span>Launch cities</span><strong>{summary.pricingDefaults.launchCities.join(", ")}</strong></div>
+              <div className="item"><span>Passenger charge</span><strong>{money(summary.pricingDefaults.perKmKobo)} / km</strong></div>
+              <div className="item"><span>Captain commission</span><strong>{summary.pricingDefaults.karigoCommissionPercent}% KariGO commission</strong></div>
+              <div className="item"><span>Waiting charge</span><strong>{money(summary.pricingDefaults.waitingChargeKoboPerMinute)} / minute after {summary.pricingDefaults.waitingGraceMinutes} minutes</strong></div>
+              <div className="item"><span>Tax/VAT line</span><strong>{summary.pricingDefaults.vatTaxConfigured ? money(summary.pricingDefaults.vatTaxKobo) : "Not configured"}</strong></div>
+              <div className="item"><span>Ride dispatch flag</span><strong>{summary.pricingDefaults.dispatchEnabled ? "Enabled" : "Disabled"}</strong></div>
+            </div>
+            <p className="muted">{summary.testModeNotice}</p>
+          </article>
+        </> : <Empty>Ride summary unavailable while ride dispatch is disabled.</Empty>}
       </section> : null}
     </>}
   </PortalShell>;

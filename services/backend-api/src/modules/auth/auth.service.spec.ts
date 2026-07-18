@@ -5,6 +5,7 @@ import { hash } from "bcrypt";
 import { AuthService } from "./auth.service";
 import { AccountActivationEmailService } from "./account-activation-email.service";
 import { OtpService } from "./otp.service";
+import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { UsersService } from "../users/users.service";
 
@@ -18,9 +19,14 @@ describe("AuthService", () => {
   };
   const otpService = { issue: jest.fn(), verify: jest.fn() };
   const accountActivationEmail = { sendAccountActivatedEmail: jest.fn().mockResolvedValue({ accepted: true }) };
+  const applicationNotifications = { vendorApplicationReviewed: jest.fn().mockResolvedValue(undefined) };
   const tx = {
     user: { update: jest.fn() },
-    vendorAccountActivation: { update: jest.fn() },
+    vendorAccountActivation: {
+      update: jest.fn(),
+      updateMany: jest.fn(),
+      create: jest.fn()
+    },
     vendorAuditLog: { create: jest.fn() }
   };
   const prisma = {
@@ -31,7 +37,8 @@ describe("AuthService", () => {
       updateMany: jest.fn()
     },
     userLoginActivity: { create: jest.fn() },
-    vendorAccountActivation: { findUnique: jest.fn(), update: jest.fn() },
+    vendor: { findFirst: jest.fn() },
+    vendorAccountActivation: { findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn(), create: jest.fn() },
     user: { update: jest.fn() },
     vendorAuditLog: { create: jest.fn() },
     $transaction: jest.fn((callback) => callback(tx))
@@ -48,7 +55,8 @@ describe("AuthService", () => {
     prisma as unknown as PrismaService,
     jwtService as unknown as JwtService,
     config as unknown as ConfigService,
-    accountActivationEmail as unknown as AccountActivationEmailService
+    accountActivationEmail as unknown as AccountActivationEmailService,
+    applicationNotifications as unknown as ApplicationNotificationsService
   );
 
   beforeEach(() => {
@@ -205,12 +213,61 @@ describe("AuthService", () => {
       password: "Password1"
     });
 
+    if ("verificationRequired" in result) {
+      throw new Error("Expected verified login to return a session");
+    }
     expect(result.accessToken).toBe("signed-token");
     expect(result.refreshToken).toEqual(expect.any(String));
     expect(usersService.markLogin).toHaveBeenCalledWith(user.id);
     expect(prisma.userLoginActivity.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ userId: user.id, outcome: "SUCCESS" })
     }));
+  });
+
+  it("resends OTP and returns verification instructions for registered unverified login with a valid password", async () => {
+    const passwordHash = await hash("Password1", 4);
+    usersService.findByPhoneForAuth.mockResolvedValue({
+      id: "user-1",
+      role: UserRole.CUSTOMER,
+      phoneNumber: "+2348012345678",
+      passwordHash,
+      phoneVerified: false,
+      accountStatus: AccountStatus.PENDING,
+      deletedAt: null
+    });
+    otpService.issue.mockResolvedValue({ otp: "123456", expiresAt: new Date("2030-01-01") });
+
+    const result = await service.login({
+      phoneNumber: "+2348012345678",
+      password: "Password1"
+    });
+
+    expect(result).toMatchObject({
+      verificationRequired: true,
+      phoneNumber: "+2348012345678",
+      mockOtp: "123456"
+    });
+    expect(otpService.issue).toHaveBeenCalledWith("user-1", "+2348012345678", { enforceCooldown: true });
+    expect(usersService.markLogin).not.toHaveBeenCalled();
+  });
+
+  it("does not resend OTP for an unverified account when the password is wrong", async () => {
+    const passwordHash = await hash("Password1", 4);
+    usersService.findByPhoneForAuth.mockResolvedValue({
+      id: "user-1",
+      role: UserRole.CUSTOMER,
+      phoneNumber: "+2348012345678",
+      passwordHash,
+      phoneVerified: false,
+      accountStatus: AccountStatus.PENDING,
+      deletedAt: null
+    });
+
+    await expect(service.login({
+      phoneNumber: "+2348012345678",
+      password: "WrongPassword"
+    })).rejects.toThrow("Invalid phone number or password");
+    expect(otpService.issue).not.toHaveBeenCalled();
   });
 
   it("activates a vendor account with a valid setup token", async () => {
@@ -238,6 +295,47 @@ describe("AuthService", () => {
       data: expect.objectContaining({ status: VendorActivationInvitationStatus.USED })
     }));
     expect(result.accessToken).toBe("signed-token");
+  });
+
+  it("requests a new vendor activation link without exposing the plaintext token", async () => {
+    prisma.vendor.findFirst.mockResolvedValue({
+      id: "vendor-1",
+      userId: "vendor-user-1",
+      businessName: "Kari Vendor",
+      user: {
+        id: "vendor-user-1",
+        fullName: "Kari Vendor Owner",
+        phoneNumber: "+2348012345678",
+        email: "vendor@example.test",
+        accountStatus: AccountStatus.PENDING
+      },
+      sourceApplication: {
+        reference: "KGO-APP-2026-ABCDEF",
+        contactFullName: "Kari Vendor Owner",
+        contactPhoneNumber: "+2348012345678",
+        contactEmail: "vendor@example.test",
+        status: "APPROVED"
+      }
+    });
+
+    const result = await service.requestVendorActivationLink({ phoneNumber: "08012345678" });
+
+    expect(result).toMatchObject({ requestAccepted: true });
+    expect(JSON.stringify(result)).not.toContain("token=");
+    expect(tx.vendorAccountActivation.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { vendorId: "vendor-1", status: VendorActivationInvitationStatus.PENDING }
+    }));
+    expect(tx.vendorAccountActivation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        vendorId: "vendor-1",
+        userId: "vendor-user-1",
+        expiresAt: expect.any(Date)
+      })
+    }));
+    expect(applicationNotifications.vendorApplicationReviewed).toHaveBeenCalledWith(expect.objectContaining({
+      reference: "KGO-APP-2026-ABCDEF",
+      activationUrl: expect.stringContaining("/activate?token=")
+    }));
   });
 
   it("refreshes a valid refresh token with rotation", async () => {

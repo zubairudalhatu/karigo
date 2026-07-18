@@ -17,22 +17,22 @@ import { friendlyError } from "../src/lib/errors";
 const NEW_ADDRESS_ID = "NEW_SERVICE_ADDRESS";
 
 const fallbackCatalogue: ServiceProviderCategory[] = [
-  { type: "PAINTER", label: "Painter", description: "Painting and finishing support for homes, shops and offices.", readinessOnly: false, statusLabel: "Staging request" },
-  { type: "PLUMBER", label: "Plumber", description: "Plumbing repairs, fittings and inspection requests.", readinessOnly: false, statusLabel: "Staging request" },
-  { type: "MECHANIC", label: "Mechanic", description: "Vehicle inspection and mechanic visit requests.", readinessOnly: false, statusLabel: "Staging request" },
-  { type: "ELECTRICIAN", label: "Electrician", description: "Electrical repairs, fittings and safety checks.", readinessOnly: false, statusLabel: "Staging request" },
-  { type: "CLEANER", label: "Cleaner", description: "Cleaning service requests for homes, shops and offices.", readinessOnly: false, statusLabel: "Staging request" },
-  { type: "CARPENTER", label: "Carpenter", description: "Furniture repair, fittings and light woodwork requests.", readinessOnly: false, statusLabel: "Staging request" },
-  { type: "AC_TECHNICIAN", label: "AC technician", description: "AC inspection, servicing and repair requests.", readinessOnly: false, statusLabel: "Staging request" },
-  { type: "GENERATOR_REPAIR", label: "Generator repair technician", description: "Generator inspection, servicing and repair requests.", readinessOnly: false, statusLabel: "Staging request" },
-  { type: "APPLIANCE_REPAIR", label: "Appliance repair technician", description: "Home and shop appliance inspection and repair requests.", readinessOnly: false, statusLabel: "Staging request" },
-  { type: "FUMIGATION", label: "Fumigation / pest control", description: "Pest-control and fumigation requests for homes, shops and offices.", readinessOnly: false, statusLabel: "Staging request" },
-  { type: "WELDER", label: "Welder", description: "Metalwork, gate, burglary-proof and light fabrication requests.", readinessOnly: false, statusLabel: "Staging request" },
-  { type: "TILER", label: "Tiler", description: "Tile fitting, repair and finishing requests.", readinessOnly: false, statusLabel: "Staging request" },
-  { type: "CCTV_TECHNICIAN", label: "CCTV / security technician", description: "CCTV, access-control and light security-device support requests.", readinessOnly: false, statusLabel: "Staging request" },
-  { type: "MOVING_HELP", label: "Moving / loading help", description: "Manual moving, loading and small relocation support requests.", readinessOnly: false, statusLabel: "Staging request" },
-  { type: "HEALTH_PROFESSIONAL", label: "Doctor / health professional", description: "Readiness-only until future health-service approval.", readinessOnly: true, statusLabel: "Future approval required" },
-  { type: "OTHER", label: "Other approved service provider", description: "Describe another service need for KariGO review.", readinessOnly: false, statusLabel: "Staging request" }
+  { type: "PAINTER", label: "Painter", description: "Painting and finishing support for homes, shops and offices.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "PLUMBER", label: "Plumber", description: "Plumbing repairs, fittings and inspection requests.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "MECHANIC", label: "Mechanic", description: "Vehicle inspection and mechanic visit requests.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "ELECTRICIAN", label: "Electrician", description: "Electrical repairs, fittings and safety checks.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "CLEANER", label: "Cleaner", description: "Cleaning service requests for homes, shops and offices.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "CARPENTER", label: "Carpenter", description: "Furniture repair, fittings and light woodwork requests.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "AC_TECHNICIAN", label: "AC technician", description: "AC inspection, servicing and repair requests.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "GENERATOR_REPAIR", label: "Generator repair technician", description: "Generator inspection, servicing and repair requests.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "APPLIANCE_REPAIR", label: "Appliance repair technician", description: "Home and shop appliance inspection and repair requests.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "FUMIGATION", label: "Fumigation / pest control", description: "Pest-control and fumigation requests for homes, shops and offices.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "WELDER", label: "Welder", description: "Metalwork, gate, burglary-proof and light fabrication requests.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "TILER", label: "Tiler", description: "Tile fitting, repair and finishing requests.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "CCTV_TECHNICIAN", label: "CCTV / security technician", description: "CCTV, access-control and light security-device support requests.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "MOVING_HELP", label: "Moving / loading help", description: "Manual moving, loading and small relocation support requests.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "HEALTH_PROFESSIONAL", label: "Doctor / health professional", description: "Compliance approval required before health-service booking.", readinessOnly: true, statusLabel: "Approval required" },
+  { type: "OTHER", label: "Other approved service provider", description: "Describe another service need for KariGO review.", readinessOnly: false, statusLabel: "Request review" }
 ];
 
 const icons: Record<ServiceProviderType, keyof typeof Feather.glyphMap> = {
@@ -226,7 +226,7 @@ export default function SmeServices() {
     </Card>
     <Card>
       <Text style={ui.cardTitle}>Choose a service category</Text>
-      <Text style={ui.muted}>Select the type of provider you need. Health professional booking remains readiness-only until future approvals.</Text>
+      <Text style={ui.muted}>Select the type of provider you need. Health professional booking remains disabled until compliance approval.</Text>
       {loading ? <Loading label="Loading service categories..." /> : <View style={styles.categoryGrid}>
         {catalogue.map((item) => {
           const selected = item.type === selectedType;
@@ -245,7 +245,7 @@ export default function SmeServices() {
       </View>}
     </Card>
 
-    {selectedCategory?.readinessOnly ? <Message error>Doctor / health professional booking is readiness-only. KariGO will only enable this after future compliance and approval checks.</Message> : null}
+    {selectedCategory?.readinessOnly ? <Message error>Doctor / health professional booking requires compliance approval before KariGO can enable it.</Message> : null}
 
     {!selectedCategory?.readinessOnly ? <Card>
       <Text style={ui.cardTitle}>Available providers</Text>
