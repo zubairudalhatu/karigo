@@ -317,7 +317,10 @@ export class AdminOperationsService {
       where: { deletedAt: null },
       select: VENDOR_CLEANUP_SELECT,
       orderBy: { createdAt: "desc" }
-    }).then((vendors) => vendors.map((vendor) => this.vendorCleanupView(vendor)));
+    }).then(async (vendors) => Promise.all(vendors.map(async (vendor) => ({
+      ...this.vendorCleanupView(vendor),
+      trashSafety: await this.vendorTrashSafety(vendor.id)
+    }))));
   }
 
   trashedVendors() {
@@ -336,6 +339,13 @@ export class AdminOperationsService {
     if (vendor.deletedAt) {
       return { ...this.vendorCleanupView(vendor), cleanupSafety: await this.vendorCleanupSafety(vendor.id) };
     }
+    const trashSafety = await this.vendorTrashSafety(vendor.id);
+    if (!trashSafety.canMoveToTrash) {
+      throw new BadRequestException({
+        message: "Vendor cannot be moved to Trash while it has catalog products or live orders. Use suspend/archive controls first and complete or cancel live orders.",
+        details: trashSafety
+      });
+    }
 
     const trashedAt = new Date();
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -352,7 +362,8 @@ export class AdminOperationsService {
 
     await this.audit.record(adminUserId, "admin.vendor.trash", "Vendor", vendor.id, {
       reason: reason ?? null,
-      businessName: vendor.businessName
+      businessName: vendor.businessName,
+      trashSafety
     });
 
     return { ...this.vendorCleanupView(updated), cleanupSafety: await this.vendorCleanupSafety(updated.id) };
@@ -680,6 +691,22 @@ export class AdminOperationsService {
       blockedBy,
       protectedRecordCounts,
       removableCatalogRecords: { products }
+    };
+  }
+
+  private async vendorTrashSafety(vendorId: string) {
+    const [activeOrders, products] = await Promise.all([
+      this.prisma.order.count({ where: { vendorId, orderStatus: { notIn: CLOSED_ORDERS } } }),
+      this.prisma.product.count({ where: { vendorId } })
+    ]);
+    const blockedBy = [
+      ...(products ? ["Vendor has catalog products. Suspend/archive instead of Trash until catalog cleanup is approved."] : []),
+      ...(activeOrders ? ["Vendor has live orders. Complete, cancel or reconcile those orders before Trash."] : [])
+    ];
+    return {
+      canMoveToTrash: blockedBy.length === 0,
+      blockedBy,
+      recordCounts: { activeOrders, products }
     };
   }
 

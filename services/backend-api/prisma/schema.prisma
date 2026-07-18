@@ -1664,6 +1664,7 @@ model Rider {
   verificationStatus       RiderStatus     @default(PENDING_APPROVAL)
   rating                   Decimal?        @db.Decimal(3, 2)
   totalDeliveries          Int             @default(0)
+  preferredServiceAreas    Json?
   deletedAt                DateTime?
   createdAt                DateTime        @default(now())
   updatedAt                DateTime        @updatedAt

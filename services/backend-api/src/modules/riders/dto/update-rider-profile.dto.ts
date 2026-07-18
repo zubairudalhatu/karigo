@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength } from "class-validator";
+import { ArrayMaxSize, IsArray, IsOptional, IsString, MaxLength } from "class-validator";
 
 export class UpdateRiderProfileDto {
   @IsOptional()
@@ -29,5 +29,11 @@ export class UpdateRiderProfileDto {
   @IsString()
   @MaxLength(30)
   guarantorPhone?: string;
-}
 
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(8)
+  @IsString({ each: true })
+  @MaxLength(80, { each: true })
+  preferredServiceAreas?: string[];
+}

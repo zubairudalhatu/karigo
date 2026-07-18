@@ -20,6 +20,7 @@ export default function Profile() {
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
+  const [preferredAreas, setPreferredAreas] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [biometricBusy, setBiometricBusy] = useState(false);
@@ -31,6 +32,7 @@ export default function Profile() {
         setLat(String(p.currentLatitude ?? ""));
         setLng(String(p.currentLongitude ?? ""));
         setPhotoUrl(p.photoUrl ?? "");
+        setPreferredAreas((p.preferredServiceAreas ?? []).join(", "));
       })
       .catch((e) => setError(friendlyError(e)));
   }, []);
@@ -47,7 +49,8 @@ export default function Profile() {
         photoUrl: photoUrl.trim() || null,
         vehicleType: profile.vehicleType,
         plateNumber: profile.plateNumber,
-        licenseNumber: profile.licenseNumber
+        licenseNumber: profile.licenseNumber,
+        preferredServiceAreas: preferredAreas.split(",").map((area) => area.trim()).filter(Boolean).slice(0, 8)
       }));
       setMessage("Profile updated.");
       setError("");
@@ -141,6 +144,11 @@ export default function Profile() {
       </View>)}
     </Card>
 
+    <Card>
+      <Text style={ui.sectionTitle}>Ride service areas</Text>
+      <Text style={ui.muted}>Optional preferred areas are stored for future KariGO Rides review only. They do not activate ride dispatch or automatic matching.</Text>
+      <Field value={preferredAreas} placeholder="Preferred areas, comma-separated" onChangeText={setPreferredAreas} />
+    </Card>
     <Card>
       <Text style={ui.sectionTitle}>Vehicle details</Text>
       <Field value={photoUrl} placeholder="Profile photo URL optional" autoCapitalize="none" onChangeText={setPhotoUrl} />

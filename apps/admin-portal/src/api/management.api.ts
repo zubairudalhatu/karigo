@@ -13,6 +13,15 @@ export interface VendorCleanupSafety {
   removableCatalogRecords: { products: number };
 }
 
+export interface VendorTrashSafety {
+  canMoveToTrash: boolean;
+  blockedBy: string[];
+  recordCounts: {
+    activeOrders: number;
+    products: number;
+  };
+}
+
 export interface AdminVendor {
   id: string;
   businessName: string;
@@ -26,6 +35,7 @@ export interface AdminVendor {
   inTrash: boolean;
   user: { accountStatus: string; deletedAt?: string | null };
   cleanupSafety?: VendorCleanupSafety;
+  trashSafety?: VendorTrashSafety;
   onboardingDocuments?: VendorOnboardingDocument[];
 }
 

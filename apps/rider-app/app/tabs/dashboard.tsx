@@ -6,7 +6,6 @@ import { jobsApi, RiderJob } from "../../src/api/jobs.api";
 import { notificationsApi } from "../../src/api/notifications.api";
 import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError } from "../../src/lib/errors";
-import { captainModes } from "../../src/lib/captain-modes";
 import { requestCaptainForegroundLocation } from "../../src/lib/location";
 
 const ACTIVE_DELIVERY_STATUSES = new Set([
@@ -37,8 +36,14 @@ function availabilityCopy(profile?: RiderProfile | null) {
   if (!profile) return "Loading Captain status...";
   if (profile.verificationStatus !== "ACTIVE") return "Only active approved Delivery Captains can go online for delivery assignments.";
   if (profile.availabilityStatus === "BUSY") return "You are currently assigned to an active delivery. Finish it before changing availability.";
-  if (profile.availabilityStatus === "ONLINE") return "You are online and ready for KariGO delivery assignments.";
+  if (profile.availabilityStatus === "ONLINE") return "You are ready for KariGO delivery assignments.";
   return "Go online when dispatch is ready to assign you a delivery.";
+}
+
+function statusChipStyle(profile?: RiderProfile | null) {
+  if (profile?.availabilityStatus === "ONLINE") return [styles.statusChip, styles.statusChipOnline];
+  if (profile?.availabilityStatus === "BUSY") return [styles.statusChip, styles.statusChipBusy];
+  return [styles.statusChip, styles.statusChipOffline];
 }
 
 export default function RiderDashboard() {
@@ -71,7 +76,6 @@ export default function RiderDashboard() {
     return jobs.filter((job) => new Date(job.updatedAt ?? job.createdAt).toDateString() === today);
   }, [jobs]);
   const activeJob = useMemo(() => jobs.find((job) => ACTIVE_DELIVERY_STATUSES.has(job.orderStatus)), [jobs]);
-  const modes = useMemo(() => captainModes(profile), [profile]);
 
   async function toggle() {
     if (!profile) return;
@@ -104,40 +108,25 @@ export default function RiderDashboard() {
       <View style={styles.heroCard}>
         <View style={styles.heroTopRow}>
           <Image source={require("../../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
-          <View style={styles.statusChip}><Text style={styles.statusChipText}>{availabilityLabel(profile)}</Text></View>
+          <View style={statusChipStyle(profile)}><Text style={styles.statusChipText}>{availabilityLabel(profile)}</Text></View>
         </View>
         <Text style={styles.kicker}>KariGO Captain</Text>
         <Text style={styles.title}>Hi, {firstName(profile?.user?.fullName)}</Text>
         <Text style={styles.heroCopy}>Manage your delivery assignments and availability.</Text>
-        <Text style={styles.heroSubcopy}>Delivery Captain operations are active for approved Captains. Ride Captain review stays gated until KariGO Rides is approved.</Text>
       </View>
       <Message>{message}</Message>
       <Message error>{error}</Message>
 
       <Card>
-        <View style={ui.spaceBetween}>
-          <Text style={ui.title}>Delivery Captain availability</Text>
-        </View>
+        <Text style={ui.title}>Availability</Text>
         <Text style={ui.muted}>{availabilityCopy(profile)}</Text>
         <Text style={ui.muted}>Location is requested only when you go online or while you are on an active delivery.</Text>
         <Button title={profile?.availabilityStatus === "ONLINE" ? "Go offline" : "Go online"} disabled={!canToggle} onPress={toggle} />
       </Card>
 
-      <Card>
-        <Text style={ui.title}>Captain modes</Text>
-        {modes.map((mode) => <View key={mode.key} style={styles.modeCard}>
-          <View style={ui.spaceBetween}>
-            <Text style={ui.sectionTitle}>{mode.label}</Text>
-            <StatusBadge status={mode.badge} />
-          </View>
-          <Text style={ui.muted}>{mode.description}</Text>
-          {mode.href && mode.ctaLabel ? <NavLink href={mode.href} label={mode.ctaLabel} /> : null}
-        </View>)}
-      </Card>
-
       <View style={styles.summaryGrid}>
-        <Card><Text style={ui.muted}>Today's assigned deliveries</Text><Text style={styles.metric}>{todayJobs.length}</Text></Card>
-        <Card><Text style={ui.muted}>Completed deliveries</Text><Text style={styles.metric}>{profile?.totalDeliveries ?? 0}</Text></Card>
+        <Card><Text style={ui.muted}>Today</Text><Text style={styles.metric}>{todayJobs.length}</Text><Text style={ui.muted}>assigned deliveries</Text></Card>
+        <Card><Text style={ui.muted}>Completed</Text><Text style={styles.metric}>{profile?.totalDeliveries ?? 0}</Text><Text style={ui.muted}>deliveries</Text></Card>
       </View>
 
       <Card>
@@ -145,24 +134,20 @@ export default function RiderDashboard() {
         {activeJob ? <>
           <Text style={styles.jobRef}>{activeJob.orderNumber}</Text>
           <StatusBadge status={activeJob.orderStatus} />
-          <NavLink href={`/jobs/${activeJob.id}`} label="Open active job" />
+          <NavLink href={`/jobs/${activeJob.id}`} label="Open active delivery" />
         </> : <Text style={ui.muted}>No active delivery right now. Stay available when dispatch is ready.</Text>}
       </Card>
 
-      <Card><Text style={ui.title}>Assigned jobs</Text><Text style={styles.metric}>{jobs.length}</Text><NavLink href="/jobs" label="View assigned jobs" /></Card>
-      <Card><Text style={ui.title}>Ride review</Text><Text style={ui.muted}>KariGO Rides is not active yet. Apply for Ride Captain review if you want operations to assess your ride documents and vehicle readiness.</Text><NavLink href="/taxi-readiness" label="Apply for Ride review" /></Card>
-      <Card><Text style={ui.title}>Support and help</Text><Text style={ui.muted}>For urgent delivery issues, contact the KariGO operations or dispatch lead through the approved support channel.</Text></Card>
-      <Card><Text style={ui.title}>Operational guardrails</Text><Text style={ui.muted}>Payout automation, withdrawals and ride dispatch stay disabled until KariGO approves each control separately.</Text></Card>
       <Card>
-        <Text style={ui.title}>Captain tools</Text>
-        <View style={styles.toolGrid}>
-          <View style={styles.toolCard}><Text style={styles.toolTitle}>Delivery availability</Text><Text style={ui.muted}>Switch online or offline when dispatch is ready.</Text></View>
-          <View style={styles.toolCard}><Text style={styles.toolTitle}>Assigned deliveries</Text><NavLink href="/jobs" label="Open deliveries" /></View>
-          <View style={styles.toolCard}><Text style={styles.toolTitle}>Earnings</Text><NavLink href="/earnings" label="View earnings" /></View>
-          <View style={styles.toolCard}><Text style={styles.toolTitle}>Profile and vehicle</Text><NavLink href="/profile" label="Update profile" /></View>
-          <View style={styles.toolCard}><Text style={styles.toolTitle}>Support</Text><Text style={ui.muted}>Use approved support channels for urgent dispatch issues.</Text></View>
-        </View>
-        <NavLink href="/notifications" label={`Notifications (${unread} unread)`} />
+        <Text style={ui.title}>Assigned deliveries</Text>
+        <Text style={styles.metric}>{jobs.length}</Text>
+        <NavLink href="/jobs" label="View assigned deliveries" />
+      </Card>
+
+      <Card>
+        <Text style={ui.title}>Notifications</Text>
+        <Text style={ui.muted}>{unread ? `${unread} unread update${unread === 1 ? "" : "s"}.` : "No unread updates."}</Text>
+        <NavLink href="/notifications" label="Open notifications" />
       </Card>
     </Screen></Protected>
   );
@@ -170,19 +155,17 @@ export default function RiderDashboard() {
 
 const styles = StyleSheet.create({
   heroCard: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 24, borderWidth: 1, gap: 10, overflow: "hidden", padding: 18 },
-  heroTopRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  heroTopRow: { alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" },
   kicker: { color: brand.colors.primary, fontSize: 12, fontWeight: "900", letterSpacing: 1.4, textTransform: "uppercase" },
   title: { color: brand.colors.charcoal, fontSize: 28, fontWeight: "900", letterSpacing: -0.4 },
   heroCopy: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "800", lineHeight: 22 },
-  heroSubcopy: { color: brand.colors.muted, lineHeight: 20 },
-  logo: { height: 38, width: 128 },
-  statusChip: { backgroundColor: "#FEF2F2", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
-  statusChipText: { color: brand.colors.primaryDark, fontSize: 12, fontWeight: "900" },
+  logo: { flexShrink: 1, height: 38, maxWidth: 150, width: 128 },
+  statusChip: { borderRadius: 999, flexShrink: 1, paddingHorizontal: 12, paddingVertical: 7 },
+  statusChipBusy: { backgroundColor: "#FFF7ED" },
+  statusChipOffline: { backgroundColor: "#F3F4F6" },
+  statusChipOnline: { backgroundColor: "#DCFCE7" },
+  statusChipText: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "900" },
   metric: { color: brand.colors.charcoal, fontSize: 28, fontWeight: "800" },
-  summaryGrid: { gap: 12 },
-  jobRef: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "800" },
-  modeCard: { borderTopColor: brand.colors.border, borderTopWidth: 1, gap: 8, paddingTop: 12 },
-  toolGrid: { gap: 10 },
-  toolCard: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 4, padding: 12 },
-  toolTitle: { color: brand.colors.charcoal, fontWeight: "900" }
+  summaryGrid: { flexDirection: "row", gap: 12 },
+  jobRef: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "800" }
 });

@@ -9,7 +9,7 @@ const packageJson = JSON.parse(read("package.json"));
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
-["auth/signup", "auth/otp", "auth/forgot-password", "auth/reset-password", "vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "profile/wallet", "profile/referrals", "profile/privacy-security", "profile/change-password", "profile/privacy-policy", "profile/terms", "profile/delete-account", "profile/returns-refunds", "parcel", "sme-services", "sme-services/requests/index", "sme-services/requests/[id]", "vendor/apply", "vendor/application-status"]
+["auth/signup", "auth/otp", "auth/forgot-password", "auth/reset-password", "vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "profile/wallet", "profile/referrals", "profile/privacy-security", "profile/change-password", "profile/privacy-policy", "profile/terms", "profile/delete-account", "profile/returns-refunds", "parcel", "sme-services", "sme-services/requests/index", "sme-services/requests/[id]", "vendor/apply", "vendor/application-status", "captain/apply"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
 assert(layout.includes('<Stack.Screen name="utilities/index" options={headerless}'), "Utilities hub must hide native header.");
 ["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
@@ -53,6 +53,12 @@ assert(home.includes("KariGoAppTopBar"), "Home must use the branded KariGO top b
 assert(!home.includes("return <Protected>"), "Home must be available to unauthenticated guests.");
 assert(home.includes("Hi, welcome to KariGO"), "Home must show a guest welcome header.");
 assert(home.includes("Login") && home.includes("Sign up"), "Guest homepage must show login and sign-up CTAs.");
+assert(!home.includes("Kano + Abuja launch cities"), "Home top block must not expose the old hardcoded launch-city pill.");
+assert(home.includes("expo-location"), "Home must use Expo Location for optional city detection.");
+assert(home.includes("requestForegroundPermissionsAsync"), "Home city detection must request foreground permission.");
+assert(home.includes("reverseGeocodeAsync"), "Home city detection must use reverse geocoding.");
+assert(home.includes("Serving your area:"), "Home must show the city line only after a valid launch city is detected.");
+assert(home.includes("Use current location"), "Home must keep a manual location fallback action.");
 assert(home.includes("guestPrompt"), "Guest homepage must show a prompt for protected actions.");
 assert(home.includes("requiresAuth: true"), "Protected homepage actions must be explicitly flagged.");
 assert(home.includes("needs a KariGO account. Login or sign up to continue."), "Protected guest actions must explain the sign-in requirement.");
@@ -252,6 +258,8 @@ assert(profile.includes("Orders"), "Order history must be accessible from Profil
 assert(profile.includes("SME Services requests"), "SME Services request history must be accessible from Profile.");
 assert(profile.includes("Utility records"), "Utility records must be accessible from Profile.");
 assert(profile.includes("Become a KariGO Vendor"), "Profile must link to public vendor application flow.");
+assert(profile.includes("Become a KariGO Captain"), "Profile must link to the Captain application path.");
+assert(profile.includes("/captain/apply"), "Profile Captain application link must route to the in-app information screen.");
 assert(profile.includes("KariGO Wallet"), "Profile must link to the customer wallet surface.");
 assert(profile.includes("/profile/wallet"), "Profile wallet hub item must navigate to the wallet screen.");
 assert(profile.includes("View your wallet balance and safe ledger."), "Profile wallet hub item must describe view-only ledger access.");
@@ -294,7 +302,7 @@ assert(walletScreen.includes("walletTopUpEnabled"), "Customer wallet screen must
 assert(walletScreen.includes("walletTopUpProviderLabel"), "Customer wallet screen must show the backend wallet top-up provider label.");
 assert(walletScreen.includes("walletMinimumTopUpAmount"), "Customer wallet screen must use the backend wallet minimum top-up amount.");
 assert(walletScreen.includes("walletApi.verifyTopUp"), "Customer wallet screen must verify top-up through the dedicated wallet endpoint.");
-assert(walletScreen.includes("Payment not confirmed yet. Please try again after a moment."), "Wallet top-up verification failure must be retry-oriented.");
+assert(walletScreen.includes("Payment is still pending verification."), "Wallet top-up verification failure must use pending-verification copy.");
 assert(walletScreen.includes("Pending verification"), "Customer wallet screen must show pending verification after Squad checkout opens.");
 assert(walletScreen.includes("backend payment verification"), "Customer wallet screen must state that top-up credits require backend verification.");
 assert(walletScreen.includes("KariGO will not credit the wallet from the app alone"), "Customer wallet screen must prevent client-side wallet credit language.");
@@ -422,7 +430,9 @@ assert(checkout.includes("Please pay only the amount shown in the app."), "Check
 assert(checkout.includes("Wallet top-up via Squad"), "Checkout must explain wallet top-up readiness.");
 assert(checkout.includes("walletPaymentsEnabled"), "Checkout must reflect backend wallet payment readiness flags.");
 const paymentFlow = read("src", "lib", "payment-flow.ts");
-assert(paymentFlow.includes("Linking.openURL"), "Customer payment flow must open external authorization with React Native Linking.");
+assert(paymentFlow.includes("expo-web-browser"), "Customer payment flow must use Expo WebBrowser for hosted checkout links.");
+assert(paymentFlow.includes("WebBrowser.openBrowserAsync"), "Customer payment flow must open native hosted checkout externally.");
+assert(paymentFlow.includes("paymentAuthorizationUrlFrom"), "Customer payment flow must accept backend checkout URL aliases.");
 assert(paymentFlow.includes("Platform.OS === \"web\""), "Customer payment flow must open hosted checkout externally on web builds.");
 assert(paymentFlow.includes("window.open(normalizedUrl"), "Customer payment flow must not route hosted checkout URLs through Expo Router on web.");
 assert(!paymentFlow.includes("Linking.canOpenURL(normalizedUrl)"), "Customer payment flow must not block valid HTTPS hosted checkout URLs with canOpenURL.");

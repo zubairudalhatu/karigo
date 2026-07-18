@@ -43,6 +43,9 @@ export interface WalletTopUpInitiation {
   authorization: {
     transactionReference: string;
     authorizationUrl?: string | null;
+    checkoutUrl?: string | null;
+    paymentUrl?: string | null;
+    url?: string | null;
     accessCode?: string | null;
     providerResponse?: unknown;
   };

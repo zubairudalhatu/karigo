@@ -50,6 +50,7 @@ export default function RootLayout() {
     <Stack.Screen name="profile/delete-account" options={backOnly} />
     <Stack.Screen name="vendor/apply" options={backOnly} />
     <Stack.Screen name="vendor/application-status" options={backOnly} />
+    <Stack.Screen name="captain/apply" options={backOnly} />
     <Stack.Screen name="parcel" options={backOnly} />
     <Stack.Screen name="sme-services" options={backOnly} />
     <Stack.Screen name="sme-services/requests/index" options={backOnly} />

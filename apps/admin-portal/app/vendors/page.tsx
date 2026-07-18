@@ -25,6 +25,13 @@ function documentSummary(vendor: AdminVendor) {
   return `${approved}/${documents.length} onboarding document(s) approved.`;
 }
 
+function trashSafetySummary(vendor: AdminVendor) {
+  const safety = vendor.trashSafety;
+  if (!safety) return "Trash safety check not loaded.";
+  if (safety.canMoveToTrash) return "Trash allowed: no catalog products or live orders detected.";
+  return `Trash locked: ${safety.blockedBy.join(" ")}`;
+}
+
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<AdminVendor[]>([]);
   const [trashedVendors, setTrashedVendors] = useState<AdminVendor[]>([]);
@@ -140,6 +147,7 @@ export default function VendorsPage() {
         <p className="muted">{vendor.businessCategory} - {vendorLocation(vendor)}</p>
         <p><Badge>{vendor.status}</Badge> <Badge>{vendor.user.accountStatus}</Badge></p>
         <p className="muted">Orders recorded: {vendor.totalOrders} - Open now: {vendor.isOpen ? "Yes" : "No"}</p>
+        <p className="muted">{trashSafetySummary(vendor)}</p>
         <p className="muted">{documentSummary(vendor)}</p>
         {vendor.onboardingDocuments?.length ? <div className="notice">
           <strong>Onboarding documents</strong>
@@ -156,7 +164,7 @@ export default function VendorsPage() {
           <button className="secondary" onClick={() => void updateVendorStatus(vendor, "PENDING_APPROVAL")}>Mark pending</button>
           <button className="secondary" onClick={() => void updateVendorStatus(vendor, "ACTIVE")}>Mark operational</button>
           <button className="secondary" onClick={() => void updateVendorStatus(vendor, "SUSPENDED")}>Suspend</button>
-          <button className="secondary" onClick={() => void trashVendor(vendor)}>Move to Trash</button>
+          <button className="secondary" disabled={vendor.trashSafety ? !vendor.trashSafety.canMoveToTrash : true} onClick={() => void trashVendor(vendor)}>Move to Trash</button>
         </div>
       </article>) : <Empty>No active vendors found.</Empty>}
     </section>

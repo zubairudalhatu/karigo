@@ -56,6 +56,51 @@ describe("SquadProvider", () => {
     expect(result.authorizationUrl).toBe("https://sandbox-pay.squadco.com/KGO-SQUAD-123");
   });
 
+  it("accepts alternate secure checkout URL fields from Squad responses", async () => {
+    jest.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      status: 200,
+      success: true,
+      message: "success",
+      data: {
+        checkoutUrl: "https://pay.squadco.com/KGO-SQUAD-ALT-123",
+        accessToken: "squad-access",
+        transactionRef: "KGO-SQUAD-ALT-123"
+      }
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    const result = await provider.initialize({
+      transactionReference: "KGO-SQUAD-ALT-123",
+      amount: "5000.00",
+      currency: "NGN",
+      customerEmail: "customer@example.com",
+      customerPhone: "+2348012345678",
+      metadata: { orderId: "order-alt" }
+    });
+
+    expect(result.authorizationUrl).toBe("https://pay.squadco.com/KGO-SQUAD-ALT-123");
+    expect(result.transactionReference).toBe("KGO-SQUAD-ALT-123");
+  });
+
+  it("rejects Squad initialization responses without a secure checkout URL", async () => {
+    jest.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      status: 200,
+      success: true,
+      message: "success",
+      data: {
+        checkout_url: "http://pay.squadco.com/not-secure",
+        transaction_ref: "KGO-SQUAD-BAD-123"
+      }
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await expect(provider.initialize({
+      transactionReference: "KGO-SQUAD-BAD-123",
+      amount: "5000.00",
+      currency: "NGN",
+      customerEmail: "customer@example.com",
+      customerPhone: "+2348012345678",
+      metadata: { orderId: "order-bad" }
+    })).rejects.toThrow("Squad did not return a secure checkout URL");
+  });
   it("returns amount and currency evidence from verification", async () => {
     jest.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({
       status: 200,

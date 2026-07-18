@@ -64,7 +64,7 @@ describe("AdminOperationsService vendor cleanup", () => {
     prisma.promoCode.count.mockResolvedValue(0);
     prisma.vendorPayoutAccount.count.mockResolvedValue(0);
     prisma.orderItem.count.mockResolvedValue(0);
-    prisma.product.count.mockResolvedValue(1);
+    prisma.product.count.mockResolvedValue(0);
     applicationNotifications.vendorApplicationReviewed.mockResolvedValue(undefined);
     tx.vendor.update.mockResolvedValue({ ...vendor, deletedAt: new Date("2026-07-15T01:00:00.000Z") });
     tx.product.findMany.mockResolvedValue([{ id: "product-1" }]);
@@ -90,8 +90,24 @@ describe("AdminOperationsService vendor cleanup", () => {
       data: { isActive: false }
     });
     expect(audit.record).toHaveBeenCalledWith("admin-1", "admin.vendor.trash", "Vendor", vendor.id, expect.objectContaining({
-      reason: "staging cleanup"
+      reason: "staging cleanup",
+      trashSafety: expect.objectContaining({ canMoveToTrash: true })
     }));
+  });
+
+  it("blocks moving a vendor to Trash when live orders exist", async () => {
+    prisma.order.count.mockResolvedValueOnce(1);
+
+    await expect(service.trashVendor("admin-1", vendor.id, "live order")).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.vendor.update).not.toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalledWith("admin-1", "admin.vendor.trash", "Vendor", vendor.id, expect.anything());
+  });
+
+  it("blocks moving a vendor to Trash when catalog products exist", async () => {
+    prisma.product.count.mockResolvedValueOnce(2);
+
+    await expect(service.trashVendor("admin-1", vendor.id, "catalog cleanup")).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.vendor.update).not.toHaveBeenCalled();
   });
 
   it("blocks permanent deletion when protected operational records exist", async () => {

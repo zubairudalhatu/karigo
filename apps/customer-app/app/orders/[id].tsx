@@ -10,7 +10,8 @@ import { friendlyError, money } from "../../src/lib/errors";
 import {
   isExternalPaymentAuthorizationUrl,
   isMockAuthorizationUrl,
-  openExternalPaymentAuthorization
+  openExternalPaymentAuthorization,
+  paymentAuthorizationUrlFrom
 } from "../../src/lib/payment-flow";
 import {
   customerPaymentProviderOptions,
@@ -96,7 +97,7 @@ export default function OrderTracking() {
         paymentMethod: selectedPaymentProvider === "mock" ? "mock" : "card",
         paymentProvider: selectedPaymentProvider
       });
-      const authorizationUrl = started.authorization.authorizationUrl;
+      const authorizationUrl = paymentAuthorizationUrlFrom(started.authorization);
       const startedProvider = started.payment.gateway ?? selectedPaymentProvider;
       const startedProviderLabel = paymentProviderLabel(startedProvider, effectivePaymentConfig);
       if (isExternalPaymentAuthorizationUrl(authorizationUrl)) {
@@ -107,10 +108,14 @@ export default function OrderTracking() {
         setMessage(paymentAuthorizationOpenedMessage(startedProviderLabel, effectivePaymentConfig));
         return;
       }
-      if (authorizationUrl && !isMockAuthorizationUrl(authorizationUrl)) {
-        throw new Error("Payment authorization link was not accepted.");
+      if (isMockAuthorizationUrl(authorizationUrl)) {
+        await verifyPayment(started.payment.transactionReference);
+        return;
       }
-      await verifyPayment(started.payment.transactionReference);
+      if (!authorizationUrl) {
+        throw new Error("Payment provider did not return a checkout link.");
+      }
+      throw new Error("Payment provider returned an invalid checkout link.");
     } catch (e) { setError(paymentInitializationFailureMessage(selectedProviderLabel, friendlyError(e), effectivePaymentConfig)); } finally { setBusy(false); }
   }
 

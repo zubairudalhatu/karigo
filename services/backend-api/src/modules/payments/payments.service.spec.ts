@@ -107,6 +107,8 @@ describe("PaymentsService", () => {
       })
     });
     expect(result.authorization.authorizationUrl).toBe("mock://payment/reference");
+    expect(result.authorization.checkoutUrl).toBe("mock://payment/reference");
+    expect(result.authorization.paymentUrl).toBe("mock://payment/reference");
   });
 
   it("initiates payment with a customer-selected sandbox provider", async () => {
@@ -527,6 +529,8 @@ describe("PaymentsService", () => {
     });
     expect(tx.customerWallet.update).not.toHaveBeenCalled();
     expect(result.authorization.authorizationUrl).toBe("https://pay.squadco.com/wallet-top-up");
+    expect(result.authorization.checkoutUrl).toBe("https://pay.squadco.com/wallet-top-up");
+    expect(result.authorization.paymentUrl).toBe("https://pay.squadco.com/wallet-top-up");
   });
 
   it("credits wallet only after backend verification and avoids duplicate crediting", async () => {

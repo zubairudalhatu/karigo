@@ -28,7 +28,7 @@ import { InitiatePaymentDto } from "./dto/initiate-payment.dto";
 import { InitiateWalletTopUpDto } from "./dto/initiate-wallet-top-up.dto";
 import { SandboxInitializationTestProvider } from "./dto/test-payment-provider.dto";
 import { CustomerTestPaymentProviderName, PaymentProviderRegistry } from "./providers/payment-provider.registry";
-import { PaymentProvider, PaymentProviderName, PaymentWebhookContext } from "./providers/payment-provider.interface";
+import { InitializePaymentResult, PaymentProvider, PaymentProviderName, PaymentWebhookContext } from "./providers/payment-provider.interface";
 import { paymentInitializationDiagnostic } from "./providers/payment-provider-diagnostics";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { NotificationsService } from "../notifications/notifications.service";
@@ -120,7 +120,7 @@ export class PaymentsService {
       data: { gatewayResponse: authorization.providerResponse as Prisma.InputJsonValue }
     });
 
-    return { payment: initializedPayment, authorization };
+    return { payment: initializedPayment, authorization: this.publicAuthorization(authorization) };
   }
 
   async initiateWalletTopUp(userId: string, dto: InitiateWalletTopUpDto) {
@@ -209,7 +209,7 @@ export class PaymentsService {
       data: { gatewayResponse: authorization.providerResponse as Prisma.InputJsonValue }
     });
 
-    return { payment: initializedPayment, walletLedgerEntry: ledger, authorization };
+    return { payment: initializedPayment, walletLedgerEntry: ledger, authorization: this.publicAuthorization(authorization) };
   }
 
   async verify(userId: string, transactionReference: string) {
@@ -780,6 +780,13 @@ export class PaymentsService {
     return customer;
   }
 
+  private publicAuthorization(authorization: InitializePaymentResult) {
+    return {
+      ...authorization,
+      checkoutUrl: authorization.authorizationUrl,
+      paymentUrl: authorization.authorizationUrl
+    };
+  }
   private transactionReference(gateway: string): string {
     return `KGO-${gateway.toUpperCase()}-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
   }

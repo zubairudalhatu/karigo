@@ -75,7 +75,12 @@ export class RidersService {
     await this.me(userId);
     return this.prisma.rider.update({
       where: { userId },
-      data: dto,
+      data: {
+        ...dto,
+        preferredServiceAreas: dto.preferredServiceAreas
+          ? this.preferredServiceAreasJson(dto.preferredServiceAreas)
+          : undefined
+      },
       include: {
         user: { select: publicUserSelect },
         documents: true
@@ -203,6 +208,12 @@ export class RidersService {
     return this.toAdminDeliveryCaptainApplication(application);
   }
 
+  private preferredServiceAreasJson(areas: string[]): Prisma.InputJsonValue {
+    return areas
+      .map((area) => area.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+  }
   private async nextDeliveryCaptainApplicationReference(): Promise<string> {
     const reference = `KGO-CAPTAIN-${new Date().getFullYear()}-${randomBytes(3).toString("hex").toUpperCase()}`;
     const exists = await this.prisma.deliveryCaptainApplication.findUnique({ where: { applicationReference: reference }, select: { id: true } });

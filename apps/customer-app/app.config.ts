@@ -13,6 +13,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
   scheme: isStaging ? "karigo-customer-staging" : "karigo-customer",
   plugins: [
     "expo-router",
+    "expo-web-browser",
     [
       "expo-image-picker",
       {

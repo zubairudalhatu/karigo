@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
+import * as Location from "expo-location";
 import type { ServiceCategory, VendorSummary } from "@karigo/shared-types";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
@@ -49,6 +50,21 @@ function firstName(fullName?: string | null) {
   return name.split(/\s+/)[0] || "to KariGO";
 }
 
+function launchCityName(value?: string | null) {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized.includes("kano")) return "Kano";
+  if (normalized.includes("abuja") || normalized === "fct" || normalized.includes("federal capital")) return "Abuja";
+  return null;
+}
+
+function cityFromGeocode(place?: Location.LocationGeocodedAddress | null) {
+  if (!place) return null;
+  return [place.city, place.district, place.subregion, place.region]
+    .map(launchCityName)
+    .find(Boolean) ?? null;
+}
+
 function VendorSpotlight({ vendor }: { vendor: VendorSummary }) {
   return <Card>
     <View style={styles.vendorHeader}>
@@ -76,6 +92,9 @@ export default function CustomerHome() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [guestPrompt, setGuestPrompt] = useState("");
+  const [detectedCity, setDetectedCity] = useState<string | null>(null);
+  const [locationMessage, setLocationMessage] = useState("");
+  const [detectingLocation, setDetectingLocation] = useState(false);
 
   useEffect(() => {
     vendorsApi.list()
@@ -89,6 +108,36 @@ export default function CustomerHome() {
       .then((response) => setAds(response.items))
       .catch(() => setAds([]));
   }, []);
+
+  useEffect(() => {
+    void detectLaunchCity(false);
+  }, []);
+
+  async function detectLaunchCity(showFeedback = true) {
+    setDetectingLocation(true);
+    if (showFeedback) setLocationMessage("");
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (!permission.granted) {
+        if (showFeedback) setLocationMessage("Location permission was not granted. You can still enter your address manually.");
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const [place] = await Location.reverseGeocodeAsync({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude
+      });
+      const city = cityFromGeocode(place);
+      setDetectedCity(city);
+      if (showFeedback) {
+        setLocationMessage(city ? `Detected city: ${city}.` : "We could not match your location to a launch city. You can still enter your address manually.");
+      }
+    } catch {
+      if (showFeedback) setLocationMessage("Location is unavailable right now. You can still enter your address manually.");
+    } finally {
+      setDetectingLocation(false);
+    }
+  }
 
   const featured = useMemo(() => vendors.filter((vendor) => vendor.isOpen).slice(0, 3), [vendors]);
   const homeAd = ads[0];
@@ -122,20 +171,28 @@ export default function CustomerHome() {
     <Screen topPadding={false}>
       {!user ? <Card>
         <View style={styles.greeting}>
-          <Text style={styles.launchPill}>Kano + Abuja launch cities</Text>
+          {detectedCity ? <Text style={styles.detectedCityLine}>Serving your area: {detectedCity}</Text> : null}
           <Text style={ui.heroTitle}>Hi, welcome to KariGO</Text>
         </View>
-        <Text style={ui.pageIntro}>Explore vendors, services and delivery options across Kano and Abuja. Login or sign up when you are ready to order, track deliveries or use account features.</Text>
+        <Text style={ui.pageIntro}>Explore vendors, services and delivery options. Login or sign up when you are ready to order, track deliveries or use account features.</Text>
         <View style={styles.authActions}>
           <Button title="Login" onPress={() => router.push("/auth/login")} />
           <Button title="Sign up" tone="muted" onPress={() => router.push("/auth/signup")} />
         </View>
+        <View style={styles.locationActions}>
+          {!detectedCity ? <Button title={detectingLocation ? "Checking location..." : "Use current location"} tone="muted" onPress={() => void detectLaunchCity(true)} disabled={detectingLocation} /> : null}
+          {locationMessage ? <Text style={ui.muted}>{locationMessage}</Text> : null}
+        </View>
         {guestPrompt ? <Message>{guestPrompt}</Message> : null}
       </Card> : <Card>
         <View style={styles.greeting}>
-          <Text style={styles.launchPill}>Kano + Abuja launch cities</Text>
+          {detectedCity ? <Text style={styles.detectedCityLine}>Serving your area: {detectedCity}</Text> : null}
           <Text style={ui.heroTitle}>Welcome, {firstName(user?.fullName)}</Text>
-          <Text style={ui.pageIntro}>Here are trusted picks in your launch city.</Text>
+          <Text style={ui.pageIntro}>Here are trusted picks near your area.</Text>
+        </View>
+        <View style={styles.locationActions}>
+          {!detectedCity ? <Button title={detectingLocation ? "Checking location..." : "Use current location"} tone="muted" onPress={() => void detectLaunchCity(true)} disabled={detectingLocation} /> : null}
+          {locationMessage ? <Text style={ui.muted}>{locationMessage}</Text> : null}
         </View>
       </Card>}
 
@@ -183,7 +240,8 @@ export default function CustomerHome() {
 
 const styles = StyleSheet.create({
   greeting: { gap: 6 },
-  launchPill: { alignSelf: "flex-start", backgroundColor: "#FEF2F2", borderRadius: 999, color: brand.colors.primaryDark, fontSize: 11, fontWeight: "900", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 5, textTransform: "uppercase" },
+  detectedCityLine: { alignSelf: "flex-start", backgroundColor: "#FEF2F2", borderRadius: 999, color: brand.colors.primaryDark, fontSize: 11, fontWeight: "900", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 5 },
+  locationActions: { gap: 8 },
   authActions: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
   categoryCard: { alignItems: "center", backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, flexGrow: 1, gap: 6, minHeight: 104, padding: 10 },

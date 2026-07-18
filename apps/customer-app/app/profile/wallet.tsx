@@ -7,7 +7,7 @@ import { CustomerWalletLedgerResult, walletApi, WalletLedgerDirection, WalletLed
 import { paymentsApi } from "../../src/api/payments.api";
 import { Button, Card, Empty, Field, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError, money } from "../../src/lib/errors";
-import { isExternalPaymentAuthorizationUrl, isMockAuthorizationUrl, openExternalPaymentAuthorization } from "../../src/lib/payment-flow";
+import { isExternalPaymentAuthorizationUrl, isMockAuthorizationUrl, openExternalPaymentAuthorization, paymentAuthorizationUrlFrom } from "../../src/lib/payment-flow";
 import { fallbackCustomerPaymentConfig } from "../../src/lib/payment-status";
 
 const titleForType: Record<WalletLedgerEntryType, string> = {
@@ -85,20 +85,22 @@ export default function CustomerWalletScreen() {
     setTopUpMessage("");
     try {
       const result = await walletApi.initiateTopUp(amount);
-      const url = result.authorization.authorizationUrl;
+      const url = paymentAuthorizationUrlFrom(result.authorization);
       if (isExternalPaymentAuthorizationUrl(url)) {
         await openExternalPaymentAuthorization(url);
         setPendingTopUpReference(result.payment.transactionReference);
         setPendingTopUpUrl(url);
         setTopUpMessage("Squad wallet top-up checkout opened. Return here and verify after completing payment. Pending verification.");
-      } else if (!url || isMockAuthorizationUrl(url)) {
+      } else if (isMockAuthorizationUrl(url)) {
         await walletApi.verifyTopUp(result.payment.transactionReference);
         setTopUpMessage("Wallet top-up verified.");
         setPendingTopUpReference("");
         setPendingTopUpUrl("");
         await load();
+      } else if (!url) {
+        throw new Error("Wallet top-up provider did not return a checkout link.");
       } else {
-        throw new Error("Wallet top-up authorization link was not accepted.");
+        throw new Error("Wallet top-up provider returned an invalid checkout link.");
       }
     } catch (e) {
       setTopUpError(friendlyError(e));
@@ -119,7 +121,7 @@ export default function CustomerWalletScreen() {
       setTopUpAmount("");
       await load();
     } catch (e) {
-      setTopUpError(`Payment not confirmed yet. Please try again after a moment. ${friendlyError(e)}`);
+      setTopUpError(`Payment is still pending verification. ${friendlyError(e)}`);
     } finally {
       setTopUpBusy(false);
     }

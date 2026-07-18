@@ -33,5 +33,7 @@ export interface PaymentAuthorization {
   paymentId: string;
   transactionReference: string;
   authorizationUrl?: string;
+  checkoutUrl?: string;
+  paymentUrl?: string;
   provider: string;
 }

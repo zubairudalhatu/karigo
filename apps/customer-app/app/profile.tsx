@@ -21,7 +21,8 @@ type ProfileRoute =
   | "/notifications"
   | "/sme-services/requests"
   | "/utilities/history"
-  | "/vendor/apply";
+  | "/vendor/apply"
+  | "/captain/apply";
 
 type HubItem = {
   title: string;
@@ -52,7 +53,8 @@ const primaryItems: HubItem[] = [
 const serviceItems: HubItem[] = [
   { title: "SME Services requests", description: "View service request status and updates.", icon: "briefcase", href: "/sme-services/requests" },
   { title: "Utility records", description: "Review Bills & Utilities request records.", icon: "zap", href: "/utilities/history", badge: "Records" },
-  { title: "Become a KariGO Vendor", description: "Apply to sell through KariGO.", icon: "shopping-bag", href: "/vendor/apply" }
+  { title: "Become a KariGO Vendor", description: "Apply to sell through KariGO.", icon: "shopping-bag", href: "/vendor/apply" },
+  { title: "Become a KariGO Captain", description: "Apply for Delivery Captain review through the approved application path.", icon: "navigation", href: "/captain/apply" }
 ];
 
 const futureItems: PlaceholderItem[] = [

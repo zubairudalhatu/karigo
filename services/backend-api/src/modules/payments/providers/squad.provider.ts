@@ -51,10 +51,14 @@ export class SquadProvider implements PaymentProvider {
       })
     }, "initialize-transaction");
     const data = this.record(response.data) ?? {};
+    const authorizationUrl = this.checkoutUrl(response, data);
+    if (!authorizationUrl) {
+      throw this.initializationException("initialize-transaction", "Squad did not return a secure checkout URL");
+    }
     return {
-      transactionReference: this.string(data.transaction_ref) ?? input.transactionReference,
-      authorizationUrl: this.string(data.checkout_url) ?? null,
-      accessCode: this.string(data.access_token) ?? null,
+      transactionReference: this.string(data.transaction_ref) ?? this.string(data.transactionRef) ?? input.transactionReference,
+      authorizationUrl,
+      accessCode: this.string(data.access_token) ?? this.string(data.accessToken) ?? null,
       providerResponse: response as unknown as Record<string, unknown>
     };
   }
@@ -211,6 +215,41 @@ export class SquadProvider implements PaymentProvider {
     const minor = Number(whole) * 100 + Number(`${fraction}00`.slice(0, 2));
     if (!Number.isSafeInteger(minor) || minor <= 0) throw new BadRequestException("Invalid payment amount");
     return minor;
+  }
+
+  private checkoutUrl(envelope: SquadEnvelope, data: Record<string, unknown>): string | null {
+    const candidates = [
+      data.checkout_url,
+      data.checkoutUrl,
+      data.checkout_link,
+      data.checkoutLink,
+      data.payment_url,
+      data.paymentUrl,
+      data.payment_link,
+      data.paymentLink,
+      data.authorization_url,
+      data.authorizationUrl,
+      data.redirect_url,
+      data.redirectUrl,
+      data.url,
+      data.link,
+      envelope.data,
+      (envelope as Record<string, unknown>).checkout_url,
+      (envelope as Record<string, unknown>).checkoutUrl,
+      (envelope as Record<string, unknown>).payment_url,
+      (envelope as Record<string, unknown>).paymentUrl,
+      (envelope as Record<string, unknown>).authorization_url,
+      (envelope as Record<string, unknown>).authorizationUrl,
+      (envelope as Record<string, unknown>).url
+    ];
+    const candidate = candidates.map((value) => this.string(value)).find(Boolean);
+    if (!candidate) return null;
+    try {
+      const parsed = new URL(candidate);
+      return parsed.protocol === "https:" && parsed.hostname ? candidate : null;
+    } catch {
+      return null;
+    }
   }
 
   private record(value: unknown): Record<string, unknown> | undefined {

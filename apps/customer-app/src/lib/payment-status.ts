@@ -258,6 +258,6 @@ export function paymentInitializationFailureMessage(
     ? "Please try again or contact KariGO support."
     : "You can select Mock payment to continue staging checkout while provider configuration is reviewed.";
   return isLiveSquad
-    ? `Squad payment could not be started. ${fallback}`
+    ? `Squad payment could not be started. ${safeMessage} ${fallback}`
     : `${providerLabel} could not be started. ${safeMessage} ${fallback}`;
 }
