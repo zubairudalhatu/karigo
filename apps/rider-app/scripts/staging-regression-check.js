@@ -86,6 +86,7 @@ expect(captainModes.includes("DELIVERY_CAPTAIN") && captainModes.includes("DRIVE
 expect(captainModes.includes("Ride Captain"), "Captain mode helper must use Ride Captain display copy.");
 expect(captainModes.includes("READINESS_ONLY"), "Ride Captain mode must support readiness-only state.");
 expect(captainModes.includes("isTaxiStagingEnabled"), "Ride Captain mode must stay gated by ride staging flags.");
+expect(appConfig.includes("karigo-icon.png") && appConfig.includes("karigo-adaptive-icon.png"), "Captain App config must use square icon and adaptive icon assets.");
 expect(dashboard.includes("karigo-logo.png"), "Dashboard must use compact KariGO branding.");
 expect(dashboard.includes("Delivery Captain availability"), "Dashboard must show a clear Delivery Captain availability section.");
 expect(dashboard.includes("Loading Captain status"), "Dashboard fallback copy must use Captain branding.");

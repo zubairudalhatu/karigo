@@ -46,7 +46,7 @@ export default function CustomerReferralsScreen() {
     setMessage("");
     try {
       await Share.share({
-        message: `Join KariGO with my referral code: ${profile.code}. Referral rewards are subject to KariGO approval and are not automatic.`
+        message: `Join KariGO in Kano and Abuja with my referral code: ${profile.code}. Referral rewards are subject to KariGO approval and are not automatic.`
       });
       setMessage("Referral code opened in your share sheet.");
     } catch {
@@ -65,7 +65,7 @@ export default function CustomerReferralsScreen() {
         <View style={styles.heroIcon}><Feather name="gift" size={24} color={brand.colors.white} /></View>
         <Text style={styles.heroLabel}>Your KariGO referral code</Text>
         <Text selectable style={styles.referralCode}>{profile?.code ?? "Not available"}</Text>
-        <Text style={styles.heroText}>Share this code manually with friends. KariGO tracks referral progress, but rewards are not issued automatically.</Text>
+        <Text style={styles.heroText}>Share this code manually with friends in supported launch cities. KariGO tracks referral progress, but rewards are not issued automatically.</Text>
         <Button title="Share referral code" disabled={!profile?.shareEnabled || !profile?.code} onPress={shareCode} />
       </View>
 

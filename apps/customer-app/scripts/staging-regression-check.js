@@ -39,7 +39,7 @@ assert(ui.includes("visible ? \"Hide\" : \"Show\""), "Password field must expose
 
 const index = read("app", "index.tsx");
 assert(index.includes("Everything you need, delivered."), "Logged-out Customer App launch must show the KariGO welcome intro.");
-assert(index.includes("Order food, shop groceries, send parcels and request SME Services across Kano."), "Welcome intro must use current SME Services copy.");
+assert(index.includes("Order food, shop groceries, send parcels and request SME Services across Kano and Abuja."), "Welcome intro must use current SME Services copy.");
 assert(index.includes("Get started"), "Welcome intro must expose a Get started action.");
 assert(index.includes('router.replace("/tabs/home")'), "Welcome Get started action must enter the guest homepage without forcing login.");
 assert(index.includes("You can browse first. Login or sign up when you are ready to order."), "Welcome intro must explain guest browsing.");
@@ -250,7 +250,7 @@ assert(profile.includes("Utility test history"), "Utility history must be access
 assert(profile.includes("Become a KariGO Vendor"), "Profile must link to public vendor application flow.");
 assert(profile.includes("KariGO Wallet"), "Profile must link to the customer wallet surface.");
 assert(profile.includes("/profile/wallet"), "Profile wallet hub item must navigate to the wallet screen.");
-assert(profile.includes("View your staging wallet balance and ledger."), "Profile wallet hub item must describe view-only ledger access.");
+assert(profile.includes("View your wallet balance and safe ledger."), "Profile wallet hub item must describe view-only ledger access.");
 assert(profile.includes("View only"), "Profile wallet hub item must mark the wallet as view-only.");
 assert(profile.includes("Referral rewards"), "Profile must link to the customer referral surface.");
 assert(profile.includes("/profile/referrals"), "Profile referral hub item must navigate to the referral screen.");
@@ -264,7 +264,7 @@ assert(!profile.includes("wallet top-up"), "Profile must not activate wallet top
 const walletScreen = read("app", "profile", "wallet.tsx");
 assert(walletScreen.includes("KariGO Wallet"), "Customer wallet screen must exist.");
 assert(walletScreen.includes("walletApi.transactions"), "Customer wallet screen must load wallet balance and ledger through the wallet API.");
-assert(walletScreen.includes("Wallet is currently view-only for staging"), "Customer wallet screen must show view-only staging guardrail copy.");
+assert(walletScreen.includes("KariGO Wallet is currently view-only"), "Customer wallet screen must show view-only launch guardrail copy.");
 assert(walletScreen.includes("has not enabled live top-up, withdrawals, automatic refunds, wallet checkout, referral rewards or subscription billing"), "Customer wallet screen must state inactive wallet capabilities.");
 assert(walletScreen.includes("Available later"), "Customer wallet screen must keep disabled future actions separate.");
 assert(walletScreen.includes("Wallet activity"), "Customer wallet screen must show ledger activity.");
@@ -297,6 +297,10 @@ const loginScreen = read("app", "auth", "login.tsx");
 assert(loginScreen.includes("PasswordField") && loginScreen.includes("passwordVisible"), "Login password field must support visibility toggling.");
 
 const appConfig = read("app.config.ts");
+const easConfig = read("eas.json");
+assert(appConfig.includes('name: isStaging ? "KariGO Customer Staging" : "KariGO"'), "Customer production app name must remain KariGO.");
+assert(appConfig.includes("karigo-icon.png") && appConfig.includes("karigo-adaptive-icon.png"), "Customer App config must use launch-ready icon and adaptive icon assets.");
+assert(easConfig.includes("EXPO_PUBLIC_PAYMENT_LAUNCH_MODE") && easConfig.includes("squad_live"), "Customer production EAS profile must default to live Squad checkout mode.");
 assert(appConfig.includes("expo-location"), "Customer App config must include Expo Location.");
 assert(appConfig.includes("locationWhenInUsePermission"), "Customer App config must include safe location permission copy.");
 
@@ -347,6 +351,7 @@ assert(paymentStatus.includes("customerSelectableProviders"), "Customer payment 
 assert(paymentStatus.includes("fallbackCustomerPaymentConfig"), "Customer payment config must keep an environment fallback for local builds.");
 assert(paymentStatus.includes("EXPO_PUBLIC_SQUAD_SANDBOX_CHECKOUT_ENABLED"), "Customer payment config must gate Squad sandbox visibility with an explicit environment flag.");
 assert(paymentStatus.includes("EXPO_PUBLIC_PAYMENT_LAUNCH_MODE"), "Customer payment config must keep Squad live launch fallback support.");
+assert(paymentStatus.includes("APP_VARIANT") && paymentStatus.includes("customer-production"), "Customer production builds must fall back to live Squad payment mode.");
 assert(paymentStatus.includes("Squad payment could not be started.") && paymentStatus.includes("Please try again or contact KariGO support."), "Live Squad startup failures must not mention sandbox or mock fallback.");
 assert(paymentStatus.includes("Complete the ${providerLabel} checkout page"), "Checkout must show provider-specific authorization guidance.");
 assert(paymentStatus.includes("KariGO will only mark the order paid after backend verification."), "Payment copy must state backend verification is required.");

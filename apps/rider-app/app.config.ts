@@ -34,7 +34,7 @@ export default ({ config }: ExpoConfigInput) => {
     slug: "karigo-rider",
     scheme: isStaging ? "karigo-rider-staging" : "karigo-rider",
     plugins: ["expo-router"],
-    icon: "./assets/karigo-logo.png",
+    icon: "./assets/karigo-icon.png",
     splash: {
       image: "./assets/karigo-logo.png",
       resizeMode: "contain",
@@ -46,6 +46,11 @@ export default ({ config }: ExpoConfigInput) => {
     },
     android: {
       ...config.android,
+      adaptiveIcon: {
+        ...(objectValue(config.android?.adaptiveIcon)),
+        foregroundImage: "./assets/karigo-adaptive-icon.png",
+        backgroundColor: "#FFFFFF"
+      },
       package: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider",
       versionCode: 2
     },

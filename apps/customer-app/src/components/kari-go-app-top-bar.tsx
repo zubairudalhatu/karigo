@@ -30,7 +30,7 @@ export function KariGoAppTopBar({
         onPress={() => router.back()}
         style={styles.iconButton}
       >
-        <Feather name="chevron-left" size={24} color={brand.colors.white} />
+        <Feather name="chevron-left" size={24} color={brand.colors.charcoal} />
       </Pressable> : null}
     </View>
     <View style={styles.logoWrap}>
@@ -45,7 +45,7 @@ export function KariGoAppTopBar({
         onPress={rightAction.onPress}
         style={styles.iconButton}
       >
-        <Feather name={rightAction.icon} size={21} color={brand.colors.white} />
+        <Feather name={rightAction.icon} size={21} color={brand.colors.charcoal} />
       </Pressable> : null}
     </View>
   </View>;
@@ -54,7 +54,9 @@ export function KariGoAppTopBar({
 const styles = StyleSheet.create({
   bar: {
     alignItems: "center",
-    backgroundColor: brand.colors.primary,
+    backgroundColor: brand.colors.white,
+    borderBottomColor: brand.colors.border,
+    borderBottomWidth: 1,
     flexDirection: "row",
     gap: 12,
     justifyContent: "space-between",
@@ -63,8 +65,8 @@ const styles = StyleSheet.create({
   },
   side: { alignItems: "flex-start", minWidth: 44 },
   right: { alignItems: "flex-end" },
-  iconButton: { alignItems: "center", borderRadius: 999, height: 42, justifyContent: "center", width: 42 },
+  iconButton: { alignItems: "center", backgroundColor: "#F9FAFB", borderRadius: 999, height: 42, justifyContent: "center", width: 42 },
   logoWrap: { alignItems: "center", flex: 1, gap: 2 },
-  logo: { backgroundColor: brand.colors.white, borderRadius: 999, height: 36, padding: 4, width: 118 },
-  title: { color: brand.colors.white, fontSize: 12, fontWeight: "800" }
+  logo: { height: 34, width: 148 },
+  title: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "800" }
 });

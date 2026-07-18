@@ -8,7 +8,7 @@ const isStaging =
 
 export default ({ config }: { config: Record<string, any> }) => ({
   ...config,
-  name: isStaging ? "KariGO Customer Staging" : "KariGO Customer",
+  name: isStaging ? "KariGO Customer Staging" : "KariGO",
   slug: "karigo-customer",
   scheme: isStaging ? "karigo-customer-staging" : "karigo-customer",
   plugins: [
@@ -26,7 +26,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
       }
     ]
   ],
-  icon: "./assets/karigo-logo.png",
+  icon: "./assets/karigo-icon.png",
   splash: {
     image: "./assets/karigo-logo.png",
     resizeMode: "contain",
@@ -41,6 +41,11 @@ export default ({ config }: { config: Record<string, any> }) => ({
   },
   android: {
     ...config.android,
+    adaptiveIcon: {
+      ...(config.android?.adaptiveIcon ?? {}),
+      foregroundImage: "./assets/karigo-adaptive-icon.png",
+      backgroundColor: "#FFFFFF"
+    },
     package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer"
   },
   ios: {

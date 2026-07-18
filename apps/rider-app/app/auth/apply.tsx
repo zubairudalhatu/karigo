@@ -104,7 +104,7 @@ export default function CaptainApplication() {
 
   const canSubmit = Boolean(form.fullName.trim() && form.phoneNumber.trim() && form.guarantorName.trim() && form.guarantorPhone.trim() && form.confirmed);
 
-  return <Screen title="Apply to become a Captain" subtitle="Submit your Delivery Captain application for Kano pilot review. Approval is not automatic.">
+  return <Screen title="Apply to become a Captain" subtitle="Submit your Delivery Captain application for Kano or Abuja launch review. Approval is not automatic.">
     <Card tone="soft">
       <Image source={require("../../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
       <Text style={ui.sectionTitle}>Captain application</Text>
@@ -119,7 +119,7 @@ export default function CaptainApplication() {
       <Field placeholder="City" value={form.city} onChangeText={(city) => setForm({ ...form, city })} />
       <Field placeholder="State" value={form.state} onChangeText={(state) => setForm({ ...form, state })} />
       <Field placeholder="Address optional" multiline value={form.address} onChangeText={(address) => setForm({ ...form, address })} />
-      <Field placeholder="Preferred Kano zone optional" value={form.preferredZone} onChangeText={(preferredZone) => setForm({ ...form, preferredZone })} />
+      <Field placeholder="Preferred launch zone optional" value={form.preferredZone} onChangeText={(preferredZone) => setForm({ ...form, preferredZone })} />
     </Card>
 
     <Card>

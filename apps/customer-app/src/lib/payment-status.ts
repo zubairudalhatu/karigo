@@ -6,14 +6,17 @@ export type PaymentStatusView = {
   actionHint: string;
 };
 
+const productionPaymentLaunchMode =
+  process.env.APP_VARIANT === "production" ||
+  process.env.EAS_BUILD_PROFILE === "customer-production";
+const squadLiveLaunchMode = process.env.EXPO_PUBLIC_PAYMENT_LAUNCH_MODE === "squad_live" || productionPaymentLaunchMode;
+
 const paymentProviderLabels: Record<CustomerTestPaymentProvider, string> = {
   mock: "Mock Payment",
   paystack: "Paystack Test Mode",
   monnify: "Monnify Sandbox",
-  squad: process.env.EXPO_PUBLIC_PAYMENT_LAUNCH_MODE === "squad_live" ? "Squad by GTBank" : "Squad Sandbox"
+  squad: squadLiveLaunchMode ? "Squad by GTBank" : "Squad Sandbox"
 };
-
-const squadLiveLaunchMode = process.env.EXPO_PUBLIC_PAYMENT_LAUNCH_MODE === "squad_live";
 const squadSandboxCheckoutEnabled = process.env.EXPO_PUBLIC_SQUAD_SANDBOX_CHECKOUT_ENABLED === "true";
 
 export type CustomerPaymentProviderOption = {
@@ -26,7 +29,7 @@ const stagingPaymentProviderOptions: CustomerPaymentProviderOption[] = [
   {
     value: "mock",
     title: "Mock Payment",
-    description: "Instant staging fallback for the Kano pilot."
+    description: "Instant staging fallback for internal testing only."
   },
   ...(squadSandboxCheckoutEnabled ? [{
     value: "squad" as CustomerTestPaymentProvider,

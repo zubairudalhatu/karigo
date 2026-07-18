@@ -55,10 +55,10 @@ function VendorSpotlight({ vendor }: { vendor: VendorSummary }) {
       <View style={styles.vendorLogo}><Text style={styles.vendorLogoText}>{vendor.businessName.slice(0, 1).toUpperCase()}</Text></View>
       <View style={{ flex: 1 }}>
         <Text style={ui.cardTitle}>{vendor.businessName}</Text>
-        <Text style={ui.muted}>{vendor.businessCategory} · {vendor.city ?? "Kano"}</Text>
+        <Text style={ui.muted}>{vendor.businessCategory} · {vendor.city ?? "Launch city"}</Text>
       </View>
     </View>
-    <Text style={ui.pageIntro} numberOfLines={2}>{vendor.description ?? "Trusted KariGO vendor serving selected Kano areas."}</Text>
+    <Text style={ui.pageIntro} numberOfLines={2}>{vendor.description ?? "Trusted KariGO vendor serving selected launch areas."}</Text>
     <View style={ui.priceRow}>
       <Text style={ui.priceLabel}>{vendor.isOpen ? "Available now" : "Currently closed"}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel={`View ${vendor.businessName} store`} onPress={() => router.push(`/vendors/${vendor.id}`)}>
@@ -121,17 +121,23 @@ export default function CustomerHome() {
       : { icon: "log-in", label: "Sign in", onPress: () => router.push("/auth/login") }} />
     <Screen topPadding={false}>
       {!user ? <Card>
-        <Text style={ui.heroTitle}>Hi, welcome to KariGO</Text>
-        <Text style={ui.pageIntro}>Explore vendors, services and delivery options across Kano. Login or sign up when you are ready to order, track deliveries or use account features.</Text>
+        <View style={styles.greeting}>
+          <Text style={styles.launchPill}>Kano + Abuja launch cities</Text>
+          <Text style={ui.heroTitle}>Hi, welcome to KariGO</Text>
+        </View>
+        <Text style={ui.pageIntro}>Explore vendors, services and delivery options across Kano and Abuja. Login or sign up when you are ready to order, track deliveries or use account features.</Text>
         <View style={styles.authActions}>
           <Button title="Login" onPress={() => router.push("/auth/login")} />
           <Button title="Sign up" tone="muted" onPress={() => router.push("/auth/signup")} />
         </View>
         {guestPrompt ? <Message>{guestPrompt}</Message> : null}
-      </Card> : <View style={styles.greeting}>
-        <Text style={ui.heroTitle}>Welcome, {firstName(user?.fullName)}</Text>
-        <Text style={ui.pageIntro}>Here are top picks for you.</Text>
-      </View>}
+      </Card> : <Card>
+        <View style={styles.greeting}>
+          <Text style={styles.launchPill}>Kano + Abuja launch cities</Text>
+          <Text style={ui.heroTitle}>Welcome, {firstName(user?.fullName)}</Text>
+          <Text style={ui.pageIntro}>Here are trusted picks in your launch city.</Text>
+        </View>
+      </Card>}
 
       <View style={ui.spaceBetween}>
         <Text style={ui.sectionTitle}>What do you need today?</Text>
@@ -176,7 +182,8 @@ export default function CustomerHome() {
 }
 
 const styles = StyleSheet.create({
-  greeting: { gap: 4 },
+  greeting: { gap: 6 },
+  launchPill: { alignSelf: "flex-start", backgroundColor: "#FEF2F2", borderRadius: 999, color: brand.colors.primaryDark, fontSize: 11, fontWeight: "900", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 5, textTransform: "uppercase" },
   authActions: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
   categoryCard: { alignItems: "center", backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, flexGrow: 1, gap: 6, minHeight: 104, padding: 10 },

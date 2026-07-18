@@ -38,7 +38,7 @@ type PlaceholderItem = {
 
 const primaryItems: HubItem[] = [
   { title: "Orders", description: "Track active and completed deliveries.", icon: "clipboard", href: "/orders" },
-  { title: "KariGO Wallet", description: "View your staging wallet balance and ledger.", icon: "credit-card", href: "/profile/wallet", badge: "View only" },
+  { title: "KariGO Wallet", description: "View your wallet balance and safe ledger.", icon: "credit-card", href: "/profile/wallet", badge: "View only" },
   { title: "Referral rewards", description: "View and share your KariGO referral code.", icon: "gift", href: "/profile/referrals", badge: "Tracking only" },
   { title: "Saved addresses", description: "Manage home, office and delivery locations.", icon: "map-pin", href: "/addresses" },
   { title: "Notifications", description: "Review order, support and account updates.", icon: "bell", href: "/notifications" },
@@ -264,7 +264,7 @@ export default function Profile() {
 
         <Card>
           <Text style={ui.cardTitle}>Services and applications</Text>
-          <Text style={ui.muted}>Track pilot services, utility tests and vendor onboarding.</Text>
+          <Text style={ui.muted}>Track services, utility tests and vendor onboarding.</Text>
           {serviceItems.map((item) => <HubLink key={item.title} item={item} />)}
         </Card>
 
@@ -278,7 +278,7 @@ export default function Profile() {
 
         <Card>
           <Text style={ui.cardTitle}>Need help?</Text>
-          <Text style={ui.muted}>Support remains the safest place for account, refund and delivery questions during staging.</Text>
+          <Text style={ui.muted}>Support remains the safest place for account, refund and delivery questions during launch testing.</Text>
           <View style={styles.actionRow}>
             <Button title="Open support centre" tone="muted" onPress={() => router.push("/support")} />
             <Button title="Log out" tone="muted" onPress={async () => { await logout(); router.replace("/auth/login"); }} />

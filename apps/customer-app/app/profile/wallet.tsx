@@ -65,7 +65,7 @@ export default function CustomerWalletScreen() {
 
       <Card>
         <Text style={ui.cardTitle}>Wallet safety status</Text>
-        <Text style={ui.muted}>Wallet is currently view-only for staging. KariGO has not enabled live top-up, withdrawals, automatic refunds, wallet checkout, referral rewards or subscription billing.</Text>
+        <Text style={ui.muted}>KariGO Wallet is currently view-only. KariGO has not enabled live top-up, withdrawals, automatic refunds, wallet checkout, referral rewards or subscription billing.</Text>
       </Card>
 
       <Card>

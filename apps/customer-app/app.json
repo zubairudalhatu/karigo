@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "KariGO Customer",
+    "name": "KariGO",
     "slug": "karigo-customer",
     "scheme": "karigo-customer",
     "plugins": [
@@ -12,7 +12,7 @@
         }
       ]
     ],
-    "icon": "./assets/karigo-logo.png",
+    "icon": "./assets/karigo-icon.png",
     "splash": {
       "image": "./assets/karigo-logo.png",
       "resizeMode": "contain",
@@ -20,6 +20,12 @@
     },
     "extra": {
       "router": {}
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/karigo-adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
     }
   }
 }
