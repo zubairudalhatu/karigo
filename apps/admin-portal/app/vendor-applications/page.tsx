@@ -62,6 +62,11 @@ export default function VendorApplicationsPage() {
         <p className="muted">{application.reference} - {application.businessCategory} - {application.city}, {application.state}</p>
         <p>{application.contactFullName} - {application.contactEmail}</p>
         <p><Badge>{application.status}</Badge></p>
+        {application.applicant ? <div className="notice">
+          <strong>Applicant account</strong>
+          <p>{application.applicant.fullName} - {application.applicant.phoneNumber}</p>
+          <p><Badge>{application.applicant.accountStatus}</Badge> <Badge>{application.applicant.phoneVerified ? "PHONE VERIFIED" : "OTP PENDING"}</Badge> <Badge>{application.applicant.onboardingPasswordSetAt ? "PASSWORD CREATED" : "PASSWORD PENDING"}</Badge></p>
+        </div> : <p className="muted">No account-first applicant is linked to this application.</p>}
         {application.vendor ? <div className="notice">
           <strong>Linked vendor account</strong>
           <p>{application.vendor.businessName} <Badge>{application.vendor.status}</Badge> <Badge>{application.vendor.user.accountStatus}</Badge></p>

@@ -18,6 +18,14 @@ export interface AdminTaxiDriverApplication extends TaxiDriverApplicationStatus 
   vehiclePlateNumber?: string | null;
   vehicleType?: string | null;
   vehicleOwnership?: string | null;
+  applicantAccount?: {
+    id: string;
+    accountStatus: string;
+    phoneVerified: boolean;
+    passwordCreated: boolean;
+    riderProfile?: { id: string; riderCode: string; verificationStatus: string } | null;
+  } | null;
+  documentEvidence?: Array<{ label: string; url: string }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -26,11 +34,14 @@ export interface AdminTaxiDriverApplicationDetail extends AdminTaxiDriverApplica
   email?: string | null;
   address?: string | null;
   driverLicenceNumber?: string | null;
+  driverLicenceDocumentUrl?: string | null;
   driverLicenceExpiry?: string | null;
   vehicleMake?: string | null;
   vehicleModel?: string | null;
   vehicleYear?: number | null;
   vehicleColour?: string | null;
+  vehicleParticularsDocumentUrl?: string | null;
+  insuranceDocumentUrl?: string | null;
   notes?: string | null;
   adminNote?: string | null;
   launchWarning: string;

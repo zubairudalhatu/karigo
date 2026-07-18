@@ -585,6 +585,7 @@ model User {
   phoneVerified                       Boolean                              @default(false)
   emailVerified                       Boolean                              @default(false)
   profilePhotoUrl                     String?
+  onboardingPasswordSetAt             DateTime?
   lastLoginAt                         DateTime?
   deletedAt                           DateTime?
   createdAt                           DateTime                             @default(now())
@@ -598,6 +599,8 @@ model User {
   refreshTokens                       RefreshToken[]
   statusChanges                       OrderStatusHistory[]                 @relation("StatusChangedBy")
   verifiedDocuments                   RiderDocument[]                      @relation("DocumentVerifiedBy")
+  vendorApplications                  VendorApplication[]                  @relation("VendorApplicant")
+  deliveryCaptainApplications         DeliveryCaptainApplication[]         @relation("DeliveryCaptainApplicant")
   assignedTickets                     SupportTicket[]                      @relation("TicketAssignedAdmin")
   ticketMessages                      SupportTicketMessage[]
   adminAuditLogs                      AdminAuditLog[]
@@ -686,6 +689,7 @@ model TaxiDriverApplication {
   state                String
   address              String?
   driverLicenceNumber  String?
+  driverLicenceDocumentUrl String?
   driverLicenceExpiry  DateTime?
   vehicleMake          String?
   vehicleModel         String?
@@ -694,6 +698,8 @@ model TaxiDriverApplication {
   vehiclePlateNumber   String?
   vehicleType          TaxiVehicleType?
   vehicleOwnership     TaxiVehicleOwnership?
+  vehicleParticularsDocumentUrl String?
+  insuranceDocumentUrl String?
   notes                String?
   status               TaxiApplicationStatus @default(SUBMITTED)
   adminNote            String?
@@ -715,6 +721,7 @@ model TaxiDriverApplication {
 model DeliveryCaptainApplication {
   id                   String                               @id @default(uuid()) @db.Uuid
   applicationReference String                               @unique
+  applicantUserId      String?                              @db.Uuid
   fullName             String
   phoneNumber          String
   email                String?
@@ -724,6 +731,7 @@ model DeliveryCaptainApplication {
   preferredZone        String?
   vehicleType          DeliveryCaptainVehicleType
   vehiclePlateNumber   String?
+  driverLicenceNumber  String?
   riderExperience      String?
   profilePhotoUrl      String?
   guarantorName        String
@@ -735,9 +743,11 @@ model DeliveryCaptainApplication {
   reviewedAt           DateTime?
   createdAt            DateTime                             @default(now())
   updatedAt            DateTime                             @updatedAt
+  applicant            User?                                @relation("DeliveryCaptainApplicant", fields: [applicantUserId], references: [id])
   documents            DeliveryCaptainApplicationDocument[]
 
   @@index([status, createdAt])
+  @@index([applicantUserId])
   @@index([phoneNumber])
   @@index([city, state])
   @@map("delivery_captain_applications")
@@ -1225,6 +1235,7 @@ model VendorCategory {
 model VendorApplication {
   id                     String                           @id @default(uuid()) @db.Uuid
   reference              String                           @unique
+  applicantUserId        String?                          @db.Uuid
   businessCategory       VendorApplicationCategory
   businessName           String
   tradingName            String?
@@ -1265,9 +1276,11 @@ model VendorApplication {
   reviews                VendorApplicationReview[]
   statusHistory          VendorApplicationStatusHistory[]
   documents              VendorApplicationDocument[]
+  applicant              User?                            @relation("VendorApplicant", fields: [applicantUserId], references: [id])
   vendor                 Vendor?                          @relation("VendorApplicationApprovedVendor", fields: [vendorId], references: [id])
 
   @@index([status])
+  @@index([applicantUserId])
   @@index([businessCategory])
   @@index([submittedAt])
   @@map("vendor_applications")

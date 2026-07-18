@@ -56,6 +56,7 @@ export interface TaxiDriverApplicationInput {
   state: string;
   address: string;
   driverLicenceNumber: string;
+  driverLicenceDocumentUrl: string;
   driverLicenceExpiry: string;
   vehicleMake: string;
   vehicleModel: string;
@@ -64,6 +65,8 @@ export interface TaxiDriverApplicationInput {
   vehiclePlateNumber: string;
   vehicleType: TaxiVehicleType;
   vehicleOwnership: TaxiVehicleOwnership;
+  vehicleParticularsDocumentUrl: string;
+  insuranceDocumentUrl?: string;
   notes?: string;
 }
 

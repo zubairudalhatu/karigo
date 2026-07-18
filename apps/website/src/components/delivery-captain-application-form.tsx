@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { ApplicantAccount, ApplicantOnboardingCard } from "./applicant-onboarding-card";
 import { site } from "../lib/site";
 
 type VehicleType = "MOTORCYCLE" | "BICYCLE" | "TRICYCLE" | "CAR" | "VAN" | "OTHER";
@@ -31,6 +32,7 @@ const initial = {
   preferredZone: "",
   vehicleType: "MOTORCYCLE" as VehicleType,
   vehiclePlateNumber: "",
+  driverLicenceNumber: "",
   profilePhotoUrl: "",
   driverLicenceDocumentUrl: "",
   vehicleParticularsDocumentUrl: "",
@@ -46,9 +48,20 @@ const initial = {
 
 export function DeliveryCaptainApplicationForm() {
   const [form, setForm] = useState(initial);
+  const [accountReady, setAccountReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+
+  function applyApplicantAccount(account: ApplicantAccount) {
+    setAccountReady(true);
+    setForm((current) => ({
+      ...current,
+      fullName: current.fullName || account.fullName,
+      phoneNumber: account.phoneNumber,
+      email: account.email || current.email
+    }));
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,6 +82,7 @@ export function DeliveryCaptainApplicationForm() {
           preferredZone: form.preferredZone || undefined,
           vehicleType: form.vehicleType,
           vehiclePlateNumber: form.vehiclePlateNumber || undefined,
+          driverLicenceNumber: form.driverLicenceNumber || undefined,
           profilePhotoUrl: form.profilePhotoUrl || undefined,
           riderExperience: form.riderExperience || undefined,
           guarantorName: form.guarantorName,
@@ -113,10 +127,17 @@ export function DeliveryCaptainApplicationForm() {
   }
 
   return (
-    <form id="delivery-captain-application" className="form-card" onSubmit={submit}>
+    <>
+    <ApplicantOnboardingCard
+      kind="captain"
+      title="Create your Captain account"
+      helper="Delivery Captain applicants create an account first, verify their phone with OTP, then create a password before submitting application and document details."
+      onReady={applyApplicantAccount}
+    />
+    {accountReady ? <form id="delivery-captain-application" className="form-card" onSubmit={submit}>
       <p className="eyebrow">Delivery Captain Application</p>
       <h2>Apply to deliver with KariGO in Kano or Abuja.</h2>
-      <p className="muted">Start with the phone and email for your Captain account. KariGO verifies applicants before sending account activation. This form does not activate dispatch, payouts or ride access.</p>
+      <p className="muted">Application details are linked to your verified Captain account. Approval can activate the same account for delivery login, but dispatch, payouts and ride access remain separately controlled.</p>
       <div className="form-grid">
         <label>Full name<input required value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></label>
         <label>Phone number<input required value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} /></label>
@@ -129,6 +150,7 @@ export function DeliveryCaptainApplicationForm() {
         <label>Preferred launch zone optional<input value={form.preferredZone} onChange={(event) => setForm({ ...form, preferredZone: event.target.value })} /></label>
         <label>Vehicle type<select required value={form.vehicleType} onChange={(event) => setForm({ ...form, vehicleType: event.target.value as VehicleType })}>{vehicleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         <label>Plate number optional<input value={form.vehiclePlateNumber} onChange={(event) => setForm({ ...form, vehiclePlateNumber: event.target.value })} /></label>
+        <label>Driver licence number optional<input value={form.driverLicenceNumber} onChange={(event) => setForm({ ...form, driverLicenceNumber: event.target.value })} /></label>
       </div>
       <label>Residential address<textarea required value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} /></label>
       <label>Delivery experience optional<textarea value={form.riderExperience} onChange={(event) => setForm({ ...form, riderExperience: event.target.value })} /></label>
@@ -150,6 +172,7 @@ export function DeliveryCaptainApplicationForm() {
       {success ? <p className="success">{success}</p> : null}
       {error ? <p className="error" role="alert">{error}</p> : null}
       <button disabled={loading || !form.declarationAccepted || !form.privacyAccepted || !form.contactConsentAccepted}>{loading ? "Submitting..." : "Submit Delivery Captain Application"}</button>
-    </form>
+    </form> : null}
+    </>
   );
 }

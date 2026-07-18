@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { ApplicantAccount, ApplicantOnboardingCard } from "./applicant-onboarding-card";
 import { site } from "../lib/site";
 
 const waitlistInitial = {
@@ -21,6 +22,7 @@ const driverInitial = {
   state: "Kano",
   address: "",
   driverLicenceNumber: "",
+  driverLicenceDocumentUrl: "",
   driverLicenceExpiry: "",
   vehicleMake: "",
   vehicleModel: "",
@@ -29,6 +31,8 @@ const driverInitial = {
   vehiclePlateNumber: "",
   vehicleType: "SEDAN",
   vehicleOwnership: "OWNER",
+  vehicleParticularsDocumentUrl: "",
+  insuranceDocumentUrl: "",
   notes: ""
 };
 
@@ -100,9 +104,20 @@ export function TaxiWaitlistForm() {
 
 export function TaxiDriverApplicationForm() {
   const [form, setForm] = useState(driverInitial);
+  const [accountReady, setAccountReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+
+  function applyApplicantAccount(account: ApplicantAccount) {
+    setAccountReady(true);
+    setForm((current) => ({
+      ...current,
+      fullName: current.fullName || account.fullName,
+      phoneNumber: account.phoneNumber,
+      email: account.email || current.email
+    }));
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -115,12 +130,15 @@ export function TaxiDriverApplicationForm() {
         email: form.email || undefined,
         address: form.address,
         driverLicenceNumber: form.driverLicenceNumber,
+        driverLicenceDocumentUrl: form.driverLicenceDocumentUrl,
         driverLicenceExpiry: form.driverLicenceExpiry,
         vehicleMake: form.vehicleMake,
         vehicleModel: form.vehicleModel,
         vehicleYear: Number(form.vehicleYear),
         vehicleColour: form.vehicleColour,
         vehiclePlateNumber: form.vehiclePlateNumber,
+        vehicleParticularsDocumentUrl: form.vehicleParticularsDocumentUrl,
+        insuranceDocumentUrl: form.insuranceDocumentUrl || undefined,
         notes: form.notes || undefined
       });
       setSuccess(response?.data?.message ?? "Ride Captain application submitted. KariGO will review your details before Ride dispatch activation.");
@@ -132,9 +150,16 @@ export function TaxiDriverApplicationForm() {
     }
   }
 
-  return <form className="form-card" id="ride-captain-application" onSubmit={submit}>
+  return <>
+  <ApplicantOnboardingCard
+    kind="captain"
+    title="Create your Ride Captain account"
+    helper="Ride Captain applicants verify their phone and create a password first. KariGO Rides remains readiness-only until operations approval."
+    onReady={applyApplicantAccount}
+  />
+  {accountReady ? <form className="form-card" id="ride-captain-application" onSubmit={submit}>
     <h3>Ride Captain Application</h3>
-    <p>Register for Ride Captain review while KariGO verifies ride operations. Approval is required and this form does not activate live ride dispatch.</p>
+    <p>Register for Ride Captain review while KariGO verifies ride operations. Approval can link the same Captain account for future review, but this form does not activate live ride dispatch.</p>
     <div className="form-grid">
       <label>Full name<input required value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></label>
       <label>Phone number<input required value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} /></label>
@@ -146,6 +171,7 @@ export function TaxiDriverApplicationForm() {
       }}>{launchCityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
       <label>State<select required value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })}>{launchStateOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
       <label>Driving licence number<input required value={form.driverLicenceNumber} onChange={(event) => setForm({ ...form, driverLicenceNumber: event.target.value })} /></label>
+      <label>Driving licence document HTTPS link<input required value={form.driverLicenceDocumentUrl} onChange={(event) => setForm({ ...form, driverLicenceDocumentUrl: event.target.value })} /></label>
       <label>Licence expiry date<input required placeholder="YYYY-MM-DD" value={form.driverLicenceExpiry} onChange={(event) => setForm({ ...form, driverLicenceExpiry: event.target.value })} /></label>
       <label>Vehicle plate number<input required value={form.vehiclePlateNumber} onChange={(event) => setForm({ ...form, vehiclePlateNumber: event.target.value })} /></label>
       <label>Vehicle make<input required value={form.vehicleMake} onChange={(event) => setForm({ ...form, vehicleMake: event.target.value })} /></label>
@@ -154,10 +180,14 @@ export function TaxiDriverApplicationForm() {
       <label>Vehicle colour<input required value={form.vehicleColour} onChange={(event) => setForm({ ...form, vehicleColour: event.target.value })} /></label>
       <label>Vehicle type<select value={form.vehicleType} onChange={(event) => setForm({ ...form, vehicleType: event.target.value })}><option value="SEDAN">Sedan</option><option value="SUV">SUV</option><option value="MINI_BUS">Mini bus</option><option value="TRICYCLE">Tricycle</option><option value="OTHER">Other</option></select></label>
       <label>Vehicle ownership<select value={form.vehicleOwnership} onChange={(event) => setForm({ ...form, vehicleOwnership: event.target.value })}><option value="OWNER">Owner</option><option value="LEASED">Leased</option><option value="COMPANY_ASSIGNED">Company assigned</option><option value="OTHER">Other</option></select></label>
+      <label>Vehicle particulars document HTTPS link<input required value={form.vehicleParticularsDocumentUrl} onChange={(event) => setForm({ ...form, vehicleParticularsDocumentUrl: event.target.value })} /></label>
+      <label>Insurance document HTTPS link optional<input value={form.insuranceDocumentUrl} onChange={(event) => setForm({ ...form, insuranceDocumentUrl: event.target.value })} /></label>
     </div>
+    <p className="muted">Submit secure document links only. Do not submit passwords, OTPs or payment secrets.</p>
     <label>Notes optional<textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
     {success ? <p className="success">{success}</p> : null}
     {error ? <p className="error" role="alert">{error}</p> : null}
     <button disabled={loading}>{loading ? "Submitting..." : "Submit Ride Captain Application"}</button>
-  </form>;
+  </form> : null}
+  </>;
 }

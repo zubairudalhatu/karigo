@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException } from "@nestjs/common";
-import { DeliveryCaptainApplicationStatus, DeliveryCaptainVehicleType } from "@prisma/client";
+import { AccountStatus, DeliveryCaptainApplicationStatus, DeliveryCaptainVehicleType, UserRole } from "@prisma/client";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { RidersService } from "./riders.service";
@@ -18,21 +18,44 @@ const deliveryCaptainApplication = {
   preferredZone: "Tarauni",
   vehicleType: DeliveryCaptainVehicleType.MOTORCYCLE,
   vehiclePlateNumber: "KGO-123AA",
+  driverLicenceNumber: "DRV-123456",
   riderExperience: "Two years delivery experience",
+  profilePhotoUrl: null,
   guarantorName: "Demo Guarantor",
   guarantorPhone: "+2348030000001",
   notes: null,
   status: DeliveryCaptainApplicationStatus.SUBMITTED,
+  adminNote: null,
   applicantVisibleNote: null,
   reviewedAt: null,
+  applicantUserId: "00000000-0000-0000-0000-00000000caaa",
+  applicant: {
+    id: "00000000-0000-0000-0000-00000000caaa",
+    fullName: "Demo Captain",
+    phoneNumber: "+2348030000000",
+    email: "captain@example.test",
+    role: UserRole.RIDER,
+    accountStatus: AccountStatus.PENDING,
+    phoneVerified: true,
+    onboardingPasswordSetAt: now,
+    deletedAt: null,
+    rider: null
+  },
+  documents: [],
   createdAt: now,
   updatedAt: now
 };
 
 describe("RidersService delivery captain applications", () => {
   const prisma: any = {
+    $transaction: jest.fn(),
+    user: {
+      findUnique: jest.fn(),
+      update: jest.fn()
+    },
     rider: {
       findUnique: jest.fn(),
+      create: jest.fn(),
       update: jest.fn()
     },
     deliveryCaptainApplication: {
@@ -52,11 +75,20 @@ describe("RidersService delivery captain applications", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.$transaction.mockImplementation(async (callback: any) => callback({
+      deliveryCaptainApplication: { update: prisma.deliveryCaptainApplication.update },
+      user: prisma.user,
+      rider: prisma.rider,
+      riderDocument: { createMany: jest.fn() }
+    }));
+    prisma.user.findUnique.mockResolvedValue(deliveryCaptainApplication.applicant);
     prisma.deliveryCaptainApplication.findUnique.mockImplementation(async ({ where }: any) =>
       where.applicationReference ? null : deliveryCaptainApplication
     );
     prisma.deliveryCaptainApplication.create.mockResolvedValue(deliveryCaptainApplication);
-    prisma.deliveryCaptainApplication.findFirst.mockResolvedValue(deliveryCaptainApplication);
+    prisma.deliveryCaptainApplication.findFirst.mockImplementation(async ({ where }: any) =>
+      where?.OR ? null : deliveryCaptainApplication
+    );
     prisma.deliveryCaptainApplication.findMany.mockResolvedValue([deliveryCaptainApplication]);
     prisma.deliveryCaptainApplication.update.mockResolvedValue({ ...deliveryCaptainApplication, status: DeliveryCaptainApplicationStatus.UNDER_REVIEW, reviewedAt: now });
     applicationNotifications.deliveryCaptainApplicationSubmitted.mockResolvedValue(undefined);
@@ -64,7 +96,7 @@ describe("RidersService delivery captain applications", () => {
     applicationNotifications.deliveryCaptainApplicationReviewed.mockResolvedValue(undefined);
   });
 
-  it("creates a Kano or Abuja Delivery Captain application without activating login, dispatch or payouts", async () => {
+  it("creates a Kano or Abuja account-linked Delivery Captain application without activating dispatch or payouts", async () => {
     const result = await service.createDeliveryCaptainApplication({
       fullName: "Demo Captain",
       phoneNumber: "08030000000",
@@ -86,6 +118,7 @@ describe("RidersService delivery captain applications", () => {
     expect(prisma.deliveryCaptainApplication.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         applicationReference: expect.stringMatching(/^KGO-CAPTAIN-\d{4}-/),
+        applicant: { connect: { id: deliveryCaptainApplication.applicantUserId } },
         phoneNumber: "+2348030000000",
         guarantorPhone: "+2348030000001",
         email: "captain@example.test",
@@ -97,7 +130,7 @@ describe("RidersService delivery captain applications", () => {
       deliveryOnly: true,
       pilotCity: "Kano",
       launchCities: ["Kano", "Abuja"],
-      createsLogin: false,
+      createsLogin: true,
       activatesDispatch: false,
       payoutActivation: false
     });
@@ -194,12 +227,16 @@ describe("RidersService delivery captain applications", () => {
     await expect(service.deliveryCaptainApplicationStatus({ phoneNumber: "08030000000" })).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it("lists and reviews Delivery Captain applications for Admin without activating dispatch", async () => {
+  it("lists and reviews Delivery Captain applications for Admin with linked account readiness", async () => {
     await expect(service.listDeliveryCaptainApplications({ status: DeliveryCaptainApplicationStatus.SUBMITTED })).resolves.toEqual([
       expect.objectContaining({
         id: deliveryCaptainApplication.id,
         deliveryOnly: true,
-        launchWarning: expect.stringContaining("does not create a Captain login")
+        applicantAccount: expect.objectContaining({
+          phoneVerified: true,
+          passwordCreated: true
+        }),
+        launchWarning: expect.stringContaining("Approval activates the linked Captain account")
       })
     ]);
     expect(prisma.deliveryCaptainApplication.findMany).toHaveBeenCalledWith(expect.objectContaining({

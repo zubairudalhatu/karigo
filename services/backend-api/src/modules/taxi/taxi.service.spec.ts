@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
-import { TaxiApplicationStatus, TaxiDriverProfileStatus, TaxiTripStatus, TaxiVehicleOwnership, TaxiVehicleType, TaxiWaitlistStatus } from "@prisma/client";
+import { TaxiApplicationStatus, TaxiDriverProfileStatus, TaxiTripStatus, TaxiVehicleOwnership, TaxiVehicleType, TaxiWaitlistStatus, UserRole } from "@prisma/client";
 import * as bcrypt from "bcrypt";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
@@ -19,6 +19,7 @@ const application = {
   state: "Kano",
   address: "Nasarawa GRA",
   driverLicenceNumber: "DL-123",
+  driverLicenceDocumentUrl: "https://docs.example.test/licence.jpg",
   driverLicenceExpiry: null,
   vehicleMake: "Toyota",
   vehicleModel: "Corolla",
@@ -27,6 +28,8 @@ const application = {
   vehiclePlateNumber: "KGO-123AA",
   vehicleType: TaxiVehicleType.SEDAN,
   vehicleOwnership: TaxiVehicleOwnership.OWNER,
+  vehicleParticularsDocumentUrl: "https://docs.example.test/particulars.pdf",
+  insuranceDocumentUrl: null,
   notes: "Ready for review",
   status: TaxiApplicationStatus.SUBMITTED,
   adminNote: null,
@@ -35,6 +38,7 @@ const application = {
   reviewedAt: null,
   createdAt: now,
   updatedAt: now,
+  applicant: null,
   reviewedByAdmin: null
 };
 
@@ -156,6 +160,10 @@ describe("TaxiService", () => {
     taxiTripEvent: {
       create: jest.fn()
     },
+    user: {
+      findUnique: jest.fn(),
+      update: jest.fn()
+    },
     $transaction: jest.fn(async (callback: (tx: any) => Promise<unknown>) => callback(prisma))
   };
   const audit = { record: jest.fn() };
@@ -187,9 +195,19 @@ describe("TaxiService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.user.findUnique.mockResolvedValue({
+      id: "rider-user",
+      role: UserRole.RIDER,
+      phoneVerified: true,
+      onboardingPasswordSetAt: now,
+      deletedAt: null
+    });
+    prisma.user.update.mockResolvedValue({});
     prisma.taxiDriverApplication.findUnique.mockResolvedValue(null);
     prisma.taxiDriverApplication.create.mockResolvedValue(application);
-    prisma.taxiDriverApplication.findFirst.mockResolvedValue(application);
+    prisma.taxiDriverApplication.findFirst.mockImplementation(async ({ where }: any) =>
+      where?.OR ? null : application
+    );
     prisma.taxiDriverApplication.findMany.mockResolvedValue([application]);
     prisma.taxiDriverApplication.update.mockResolvedValue({ ...application, status: TaxiApplicationStatus.UNDER_REVIEW, reviewedAt: now });
     prisma.taxiWaitlistEntry.create.mockResolvedValue(waitlistEntry);
@@ -272,6 +290,7 @@ describe("TaxiService", () => {
       state: "Kano",
       address: "Nasarawa GRA",
       driverLicenceNumber: "DL-123",
+      driverLicenceDocumentUrl: "https://docs.example.test/licence.jpg",
       driverLicenceExpiry: "2028-12-31",
       vehicleMake: "Toyota",
       vehicleModel: "Corolla",
@@ -279,7 +298,8 @@ describe("TaxiService", () => {
       vehicleColour: "Black",
       vehiclePlateNumber: "KGO-123AA",
       vehicleType: TaxiVehicleType.SEDAN,
-      vehicleOwnership: TaxiVehicleOwnership.OWNER
+      vehicleOwnership: TaxiVehicleOwnership.OWNER,
+      vehicleParticularsDocumentUrl: "https://docs.example.test/particulars.pdf"
     });
 
     expect(prisma.taxiDriverApplication.create).toHaveBeenCalledWith(expect.objectContaining({

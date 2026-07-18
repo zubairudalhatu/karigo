@@ -28,6 +28,7 @@ export interface DeliveryCaptainApplication {
   preferredZone?: string | null;
   vehicleType: string;
   vehiclePlateNumber?: string | null;
+  driverLicenceNumber?: string | null;
   riderExperience?: string | null;
   profilePhotoUrl?: string | null;
   guarantorName: string;
@@ -40,6 +41,13 @@ export interface DeliveryCaptainApplication {
   createdAt: string;
   updatedAt: string;
   documents?: DeliveryCaptainApplicationDocument[];
+  applicantAccount?: {
+    id: string;
+    accountStatus: string;
+    phoneVerified: boolean;
+    passwordCreated: boolean;
+    riderProfile?: { id: string; riderCode: string; verificationStatus: string } | null;
+  } | null;
   deliveryOnly: boolean;
   launchWarning: string;
 }

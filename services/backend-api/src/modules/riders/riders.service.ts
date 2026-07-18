@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { DeliveryCaptainApplicationStatus, Prisma } from "@prisma/client";
+import { AccountStatus, DeliveryCaptainApplicationStatus, Prisma, RiderStatus, UserRole } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
@@ -14,6 +14,7 @@ import { UpdateRiderProfileDto } from "./dto/update-rider-profile.dto";
 const DELIVERY_CAPTAIN_APPLICATION_SELECT = {
   id: true,
   applicationReference: true,
+  applicantUserId: true,
   fullName: true,
   phoneNumber: true,
   email: true,
@@ -23,7 +24,9 @@ const DELIVERY_CAPTAIN_APPLICATION_SELECT = {
   preferredZone: true,
   vehicleType: true,
   vehiclePlateNumber: true,
+  driverLicenceNumber: true,
   riderExperience: true,
+  profilePhotoUrl: true,
   guarantorName: true,
   guarantorPhone: true,
   notes: true,
@@ -33,6 +36,18 @@ const DELIVERY_CAPTAIN_APPLICATION_SELECT = {
   reviewedAt: true,
   createdAt: true,
   updatedAt: true,
+  applicant: {
+    select: {
+      id: true,
+      fullName: true,
+      phoneNumber: true,
+      email: true,
+      accountStatus: true,
+      phoneVerified: true,
+      onboardingPasswordSetAt: true,
+      rider: { select: { id: true, riderCode: true, verificationStatus: true } }
+    }
+  },
   documents: { orderBy: { uploadedAt: "desc" } }
 } satisfies Prisma.DeliveryCaptainApplicationSelect;
 
@@ -73,12 +88,16 @@ export class RidersService {
       throw new BadRequestException("Application declaration, privacy acknowledgement and contact consent are required");
     }
     this.assertLaunchLocation(dto);
+    const phoneNumber = this.normalizePhone(dto.phoneNumber);
+    const applicant = await this.requireApplicantAccount(phoneNumber);
+    await this.assertNoActiveDuplicateApplication(applicant.id, phoneNumber);
 
     const application = await this.prisma.deliveryCaptainApplication.create({
       data: {
         applicationReference: await this.nextDeliveryCaptainApplicationReference(),
+        applicant: { connect: { id: applicant.id } },
         fullName: dto.fullName.trim(),
-        phoneNumber: this.normalizePhone(dto.phoneNumber),
+        phoneNumber,
         email: this.optionalText(dto.email)?.toLowerCase(),
         city: dto.city.trim(),
         state: dto.state.trim(),
@@ -86,6 +105,7 @@ export class RidersService {
         preferredZone: this.optionalText(dto.preferredZone),
         vehicleType: dto.vehicleType,
         vehiclePlateNumber: this.optionalText(dto.vehiclePlateNumber),
+        driverLicenceNumber: this.optionalText(dto.driverLicenceNumber),
         riderExperience: this.optionalText(dto.riderExperience),
         profilePhotoUrl: this.optionalText(dto.profilePhotoUrl),
         guarantorName: dto.guarantorName.trim(),
@@ -152,16 +172,25 @@ export class RidersService {
   }
 
   async reviewDeliveryCaptainApplication(applicationId: string, dto: ReviewDeliveryCaptainApplicationDto) {
-    await this.deliveryCaptainApplicationDetail(applicationId);
-    const application = await this.prisma.deliveryCaptainApplication.update({
+    const current = await this.prisma.deliveryCaptainApplication.findUnique({
       where: { id: applicationId },
-      data: {
-        status: dto.status,
-        applicantVisibleNote: dto.applicantVisibleNote,
-        adminNote: dto.adminNote,
-        reviewedAt: new Date()
-      },
       select: DELIVERY_CAPTAIN_APPLICATION_SELECT
+    });
+    if (!current) throw new NotFoundException("Delivery Captain application not found");
+    const application = await this.prisma.$transaction(async (tx) => {
+      if (dto.status === DeliveryCaptainApplicationStatus.APPROVED && current.applicant?.phoneVerified && current.applicant.onboardingPasswordSetAt) {
+        await this.ensureRiderAccountForApplication(tx, current);
+      }
+      return tx.deliveryCaptainApplication.update({
+        where: { id: applicationId },
+        data: {
+          status: dto.status,
+          applicantVisibleNote: dto.applicantVisibleNote,
+          adminNote: dto.adminNote,
+          reviewedAt: new Date()
+        },
+        select: DELIVERY_CAPTAIN_APPLICATION_SELECT
+      });
     });
     await this.applicationNotifications.deliveryCaptainApplicationReviewed({
       reference: application.applicationReference,
@@ -231,7 +260,7 @@ export class RidersService {
       deliveryOnly: true,
       pilotCity: application.city,
       launchCities: ["Kano", "Abuja"],
-      createsLogin: false,
+      createsLogin: Boolean(application.applicantUserId),
       activatesDispatch: false,
       payoutActivation: false
     };
@@ -251,7 +280,14 @@ export class RidersService {
         updatedAt: document.updatedAt.toISOString()
       })),
       deliveryOnly: true,
-      launchWarning: "Review approval does not create a Captain login, activate live dispatch, payouts or KariGO Rides access."
+      applicantAccount: application.applicant ? {
+        id: application.applicant.id,
+        accountStatus: application.applicant.accountStatus,
+        phoneVerified: application.applicant.phoneVerified,
+        passwordCreated: Boolean(application.applicant.onboardingPasswordSetAt),
+        riderProfile: application.applicant.rider
+      } : null,
+      launchWarning: "Approval activates the linked Captain account for approved login, but dispatch, payouts and KariGO Rides remain controlled separately."
     };
   }
 
@@ -261,10 +297,90 @@ export class RidersService {
       SUBMITTED: "Your Delivery Captain application has been submitted for KariGO review.",
       UNDER_REVIEW: "Your Delivery Captain application is under review.",
       CHANGES_REQUESTED: "KariGO needs more information before continuing your Delivery Captain review.",
-      PROVISIONALLY_APPROVED: "Your application is provisionally approved. Final verification is still required before pilot onboarding.",
-      APPROVED: "Your application has been approved for Delivery Captain onboarding review. Dispatch access is not activated by this form.",
+      PROVISIONALLY_APPROVED: "Your application is provisionally approved. Final verification is still required before onboarding.",
+      APPROVED: "Your application has been approved. Your linked Captain account can be activated for approved login; dispatch and payouts remain controlled by KariGO.",
       REJECTED: "Your Delivery Captain application was not approved at this time."
     };
     return messages[status];
+  }
+
+  private async requireApplicantAccount(phoneNumber: string) {
+    const applicant = await this.prisma.user.findUnique({
+      where: { phoneNumber },
+      select: {
+        id: true,
+        role: true,
+        phoneVerified: true,
+        onboardingPasswordSetAt: true,
+        deletedAt: true
+      }
+    });
+    if (!applicant || applicant.role !== UserRole.RIDER || applicant.deletedAt) {
+      throw new BadRequestException("Create a Captain applicant account before submitting the application.");
+    }
+    if (!applicant.phoneVerified) {
+      throw new BadRequestException("Verify the Captain applicant phone number before submitting the application.");
+    }
+    if (!applicant.onboardingPasswordSetAt) {
+      throw new BadRequestException("Create the Captain applicant password before submitting the application.");
+    }
+    return applicant;
+  }
+
+  private async assertNoActiveDuplicateApplication(applicantUserId: string, phoneNumber: string) {
+    const duplicate = await this.prisma.deliveryCaptainApplication.findFirst({
+      where: {
+        status: { not: DeliveryCaptainApplicationStatus.REJECTED },
+        OR: [
+          { applicantUserId },
+          { phoneNumber }
+        ]
+      },
+      select: { applicationReference: true, status: true }
+    });
+    if (duplicate) {
+      throw new BadRequestException(`A Delivery Captain application is already active for this account (${duplicate.applicationReference}, ${duplicate.status}).`);
+    }
+  }
+
+  private async ensureRiderAccountForApplication(
+    tx: Prisma.TransactionClient,
+    application: Prisma.DeliveryCaptainApplicationGetPayload<{ select: typeof DELIVERY_CAPTAIN_APPLICATION_SELECT }>
+  ) {
+    if (!application.applicantUserId) return;
+    await tx.user.update({
+      where: { id: application.applicantUserId },
+      data: { accountStatus: AccountStatus.ACTIVE, phoneVerified: true }
+    });
+    const existing = await tx.rider.findUnique({ where: { userId: application.applicantUserId }, select: { id: true } });
+    if (existing) return;
+    await tx.rider.create({
+      data: {
+        userId: application.applicantUserId,
+        riderCode: await this.nextRiderCode(tx),
+        phoneNumber: application.phoneNumber,
+        photoUrl: application.profilePhotoUrl,
+        vehicleType: application.vehicleType,
+        plateNumber: application.vehiclePlateNumber,
+        licenseNumber: application.driverLicenceNumber,
+        guarantorName: application.guarantorName,
+        guarantorPhone: application.guarantorPhone,
+        availabilityStatus: RiderStatus.OFFLINE,
+        verificationStatus: RiderStatus.ACTIVE,
+        documents: application.documents?.length ? {
+          create: application.documents.map((document) => ({
+            documentType: document.documentType,
+            documentUrl: document.documentUrl,
+            verificationStatus: document.verificationStatus
+          }))
+        } : undefined
+      }
+    });
+  }
+
+  private async nextRiderCode(tx: Prisma.TransactionClient): Promise<string> {
+    const code = `KGO-CAP-${randomBytes(3).toString("hex").toUpperCase()}`;
+    const exists = await tx.rider.findUnique({ where: { riderCode: code }, select: { id: true } });
+    return exists ? this.nextRiderCode(tx) : code;
   }
 }

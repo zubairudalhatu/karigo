@@ -37,13 +37,15 @@ export default function DeliveryCaptainApplicationsPage() {
     const applicantVisibleNote = window.prompt("Applicant-visible note optional") ?? undefined;
     const adminNote = window.prompt("Internal admin note optional") ?? undefined;
     await deliveryCaptainApplicationsApi.review(application.id, { status: nextStatus, applicantVisibleNote, adminNote });
-    setMessage("Delivery Captain application review saved. This does not activate login, dispatch or payouts.");
+    setMessage(nextStatus === "APPROVED"
+      ? "Delivery Captain review saved. If the account-first applicant is verified, the linked Captain account can be activated for approved login. Dispatch and payouts remain controlled separately."
+      : "Delivery Captain application review saved.");
     await load();
   }
 
   return <PortalShell>
     <h1>Delivery Captain Applications</h1>
-    <p className="muted">Review Kano Delivery Captain applications. Approval here is review-only and does not create a Captain account, activate dispatch, payouts or KariGO Rides access.</p>
+    <p className="muted">Review Kano and Abuja Delivery Captain applications. Account-first applications show OTP and password readiness before approval. Approval does not activate payouts or KariGO Rides access.</p>
     {message ? <p className="success">{message}</p> : null}
     <ErrorMessage>{error}</ErrorMessage>
     <div className="filters">
@@ -56,6 +58,12 @@ export default function DeliveryCaptainApplicationsPage() {
         <p className="muted">{application.city}, {application.state}{application.preferredZone ? ` - ${application.preferredZone}` : ""} - submitted {new Date(application.createdAt).toLocaleString()}</p>
         <p>{application.phoneNumber}{application.email ? ` - ${application.email}` : ""}</p>
         <p>{application.vehicleType.replaceAll("_", " ")}{application.vehiclePlateNumber ? ` - ${application.vehiclePlateNumber}` : ""}</p>
+        {application.driverLicenceNumber ? <p className="muted">Licence: {application.driverLicenceNumber}</p> : null}
+        {application.applicantAccount ? <div className="notice">
+          <strong>Applicant account</strong>
+          <p><Badge>{application.applicantAccount.accountStatus}</Badge> <Badge>{application.applicantAccount.phoneVerified ? "PHONE VERIFIED" : "OTP PENDING"}</Badge> <Badge>{application.applicantAccount.passwordCreated ? "PASSWORD CREATED" : "PASSWORD PENDING"}</Badge></p>
+          {application.applicantAccount.riderProfile ? <p className="muted">Captain profile: {application.applicantAccount.riderProfile.riderCode} - {application.applicantAccount.riderProfile.verificationStatus}</p> : <p className="muted">Captain profile will be created on approved account activation.</p>}
+        </div> : <p className="muted">No account-first applicant is linked to this application.</p>}
         <p>Guarantor: {application.guarantorName} - {application.guarantorPhone}</p>
         {application.riderExperience ? <p className="muted">Experience: {application.riderExperience}</p> : null}
         {application.profilePhotoUrl ? <p><a href={application.profilePhotoUrl} target="_blank" rel="noreferrer">View profile photo</a></p> : null}

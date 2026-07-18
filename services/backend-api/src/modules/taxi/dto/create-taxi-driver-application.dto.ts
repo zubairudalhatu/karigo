@@ -38,6 +38,11 @@ export class CreateTaxiDriverApplicationDto {
   @MaxLength(80)
   driverLicenceNumber!: string;
 
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(1000)
+  driverLicenceDocumentUrl!: string;
+
   @IsDateString()
   driverLicenceExpiry!: string;
 
@@ -72,6 +77,16 @@ export class CreateTaxiDriverApplicationDto {
 
   @IsEnum(TaxiVehicleOwnership)
   vehicleOwnership!: TaxiVehicleOwnership;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(1000)
+  vehicleParticularsDocumentUrl!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  insuranceDocumentUrl?: string;
 
   @IsOptional()
   @IsString()

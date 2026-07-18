@@ -13,6 +13,7 @@ import { VendorApplicationStatusQueryDto } from "./dto/vendor-application-status
 const APPLICATION_SELECT = {
   id: true,
   reference: true,
+  applicantUserId: true,
   businessCategory: true,
   businessName: true,
   tradingName: true,
@@ -50,6 +51,17 @@ const APPLICATION_SELECT = {
   vendorId: true,
   createdAt: true,
   updatedAt: true,
+  applicant: {
+    select: {
+      id: true,
+      fullName: true,
+      phoneNumber: true,
+      email: true,
+      accountStatus: true,
+      phoneVerified: true,
+      onboardingPasswordSetAt: true
+    }
+  },
   reviews: { orderBy: { createdAt: "desc" }, take: 5 },
   statusHistory: { orderBy: { createdAt: "desc" }, take: 10 },
   documents: { orderBy: { uploadedAt: "desc" } },
@@ -83,8 +95,11 @@ export class VendorApplicationsService {
     this.assertLaunchLocation(dto);
     const businessPhoneNumber = this.normalizePhone(dto.businessPhoneNumber);
     const contactPhoneNumber = this.normalizePhone(dto.contactPhoneNumber);
+    const applicant = await this.requireApplicantAccount(contactPhoneNumber);
+    await this.assertNoActiveDuplicateApplication(applicant.id, contactPhoneNumber);
 
     const data: Prisma.VendorApplicationCreateInput = {
+        applicant: { connect: { id: applicant.id } },
         businessCategory: dto.businessCategory,
         businessName: dto.businessName,
         tradingName: dto.tradingName,
@@ -221,7 +236,7 @@ export class VendorApplicationsService {
       const linkedVendor = shouldApprove
         ? await this.ensureVendorAccountForApplication(tx, current, reviewerId, placeholderPasswordHash ?? "")
         : null;
-      if (linkedVendor && activationToken && activationExpiresAt && linkedVendor.userAccountStatus !== AccountStatus.ACTIVE) {
+      if (linkedVendor && activationToken && activationExpiresAt && linkedVendor.userAccountStatus !== AccountStatus.ACTIVE && !linkedVendor.passwordCreated) {
         await tx.vendorAccountActivation.updateMany({
           where: { vendorId: linkedVendor.vendorId, status: VendorActivationInvitationStatus.PENDING },
           data: { status: VendorActivationInvitationStatus.REVOKED, revokedAt: new Date() }
@@ -340,12 +355,14 @@ export class VendorApplicationsService {
     }
 
     const existingUser = await tx.user.findFirst({
-      where: {
-        OR: [
-          { phoneNumber: application.contactPhoneNumber },
-          { email: { equals: application.contactEmail, mode: "insensitive" } }
-        ]
-      },
+      where: application.applicantUserId
+        ? { id: application.applicantUserId }
+        : {
+          OR: [
+            { phoneNumber: application.contactPhoneNumber },
+            { email: { equals: application.contactEmail, mode: "insensitive" } }
+          ]
+        },
       select: { id: true, role: true, accountStatus: true, email: true, phoneNumber: true, vendor: { select: { id: true } } }
     });
 
@@ -368,11 +385,19 @@ export class VendorApplicationsService {
     });
 
     if (user.vendor) {
+      if (user.accountStatus !== AccountStatus.ACTIVE && application.applicant?.phoneVerified && application.applicant.onboardingPasswordSetAt) {
+        await tx.user.update({ where: { id: user.id }, data: { accountStatus: AccountStatus.ACTIVE, phoneVerified: true } });
+      }
       await tx.vendorApplication.update({
         where: { id: application.id },
         data: { vendorId: user.vendor.id }
       });
-      return { vendorId: user.vendor.id, userId: user.id, userAccountStatus: user.accountStatus };
+      return {
+        vendorId: user.vendor.id,
+        userId: user.id,
+        userAccountStatus: application.applicant?.onboardingPasswordSetAt && application.applicant.phoneVerified ? AccountStatus.ACTIVE : user.accountStatus,
+        passwordCreated: Boolean(application.applicant?.onboardingPasswordSetAt)
+      };
     }
 
     const vendor = await tx.vendor.create({
@@ -429,7 +454,56 @@ export class VendorApplicationsService {
       }
     });
 
-    return { vendorId: vendor.id, userId: vendor.userId, userAccountStatus: user.accountStatus };
+    if (user.accountStatus !== AccountStatus.ACTIVE && application.applicant?.phoneVerified && application.applicant.onboardingPasswordSetAt) {
+      await tx.user.update({ where: { id: user.id }, data: { accountStatus: AccountStatus.ACTIVE, phoneVerified: true } });
+    }
+
+    return {
+      vendorId: vendor.id,
+      userId: vendor.userId,
+      userAccountStatus: application.applicant?.onboardingPasswordSetAt && application.applicant.phoneVerified ? AccountStatus.ACTIVE : user.accountStatus,
+      passwordCreated: Boolean(application.applicant?.onboardingPasswordSetAt)
+    };
+  }
+
+  private async requireApplicantAccount(phoneNumber: string) {
+    const applicant = await this.prisma.user.findUnique({
+      where: { phoneNumber },
+      select: {
+        id: true,
+        role: true,
+        accountStatus: true,
+        phoneVerified: true,
+        onboardingPasswordSetAt: true,
+        deletedAt: true
+      }
+    });
+    if (!applicant || applicant.role !== UserRole.VENDOR || applicant.deletedAt) {
+      throw new BadRequestException("Create a Vendor applicant account before submitting the application.");
+    }
+    if (!applicant.phoneVerified) {
+      throw new BadRequestException("Verify the Vendor applicant phone number before submitting the application.");
+    }
+    if (!applicant.onboardingPasswordSetAt) {
+      throw new BadRequestException("Create the Vendor applicant password before submitting the application.");
+    }
+    return applicant;
+  }
+
+  private async assertNoActiveDuplicateApplication(applicantUserId: string, contactPhoneNumber: string) {
+    const duplicate = await this.prisma.vendorApplication.findFirst({
+      where: {
+        status: { notIn: [VendorApplicationStatus.REJECTED, VendorApplicationStatus.WITHDRAWN] },
+        OR: [
+          { applicantUserId },
+          { contactPhoneNumber }
+        ]
+      },
+      select: { reference: true, status: true }
+    });
+    if (duplicate) {
+      throw new BadRequestException(`A vendor application is already active for this account (${duplicate.reference}, ${duplicate.status}).`);
+    }
   }
 
   private vendorDashboardUrl() {

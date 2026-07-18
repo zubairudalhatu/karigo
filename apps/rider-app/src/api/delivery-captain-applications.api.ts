@@ -12,6 +12,7 @@ export interface DeliveryCaptainApplicationInput {
   preferredZone?: string;
   vehicleType: DeliveryCaptainVehicleType;
   vehiclePlateNumber?: string;
+  driverLicenceNumber?: string;
   riderExperience?: string;
   profilePhotoUrl?: string;
   documents?: Array<{

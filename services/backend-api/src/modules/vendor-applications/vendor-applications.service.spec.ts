@@ -1,5 +1,5 @@
 import { BadRequestException } from "@nestjs/common";
-import { PreferredContactMethod, VendorApplicationCategory, VendorApplicationStatus } from "@prisma/client";
+import { AccountStatus, PreferredContactMethod, UserRole, VendorApplicationCategory, VendorApplicationStatus } from "@prisma/client";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { VendorApplicationsService } from "./vendor-applications.service";
@@ -43,6 +43,18 @@ const vendorApplication = {
   status: VendorApplicationStatus.SUBMITTED,
   submittedAt: now,
   reviewedAt: null,
+  applicantUserId: "00000000-0000-0000-0000-00000000vusr",
+  applicant: {
+    id: "00000000-0000-0000-0000-00000000vusr",
+    fullName: "Demo Owner",
+    phoneNumber: "+2348030000000",
+    email: "vendor@example.test",
+    role: UserRole.VENDOR,
+    accountStatus: AccountStatus.PENDING,
+    phoneVerified: true,
+    onboardingPasswordSetAt: now,
+    deletedAt: null
+  },
   vendorId: null,
   createdAt: now,
   updatedAt: now,
@@ -55,9 +67,13 @@ const vendorApplication = {
 describe("VendorApplicationsService", () => {
   const prisma: any = {
     $transaction: jest.fn(),
+    user: {
+      findUnique: jest.fn()
+    },
     vendorApplication: {
       create: jest.fn(),
-      findUnique: jest.fn()
+      findUnique: jest.fn(),
+      findFirst: jest.fn()
     }
   };
   const applicationNotifications = {
@@ -68,7 +84,9 @@ describe("VendorApplicationsService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.user.findUnique.mockResolvedValue(vendorApplication.applicant);
     prisma.vendorApplication.findUnique.mockResolvedValue(null);
+    prisma.vendorApplication.findFirst.mockResolvedValue(null);
     prisma.vendorApplication.create.mockResolvedValue(vendorApplication);
     applicationNotifications.vendorApplicationSubmitted.mockResolvedValue(undefined);
     applicationNotifications.vendorApplicationReviewed.mockResolvedValue(undefined);
@@ -187,6 +205,8 @@ describe("VendorApplicationsService", () => {
     prisma.vendorApplication.findUnique.mockResolvedValueOnce({
       ...vendorApplication,
       id: vendorApplication.id,
+      applicantUserId: null,
+      applicant: null,
       status: VendorApplicationStatus.SUBMITTED
     });
     prisma.$transaction.mockImplementationOnce(async (callback: any) => callback(tx));

@@ -18,6 +18,7 @@ const initialForm = {
   state: "Kano",
   address: "",
   driverLicenceNumber: "",
+  driverLicenceDocumentUrl: "",
   driverLicenceExpiry: "",
   vehicleMake: "",
   vehicleModel: "",
@@ -26,6 +27,8 @@ const initialForm = {
   vehiclePlateNumber: "",
   vehicleType: "SEDAN" as TaxiVehicleType,
   vehicleOwnership: "OWNER" as TaxiVehicleOwnership,
+  vehicleParticularsDocumentUrl: "",
+  insuranceDocumentUrl: "",
   notes: ""
 };
 
@@ -36,12 +39,14 @@ const requiredFields: Array<{ key: keyof typeof initialForm; label: string }> = 
   { key: "state", label: "State" },
   { key: "address", label: "Residential address" },
   { key: "driverLicenceNumber", label: "Driving licence number" },
+  { key: "driverLicenceDocumentUrl", label: "Driving licence document link" },
   { key: "driverLicenceExpiry", label: "Licence expiry date" },
   { key: "vehicleMake", label: "Vehicle make" },
   { key: "vehicleModel", label: "Vehicle model" },
   { key: "vehicleYear", label: "Vehicle year" },
   { key: "vehicleColour", label: "Vehicle colour" },
-  { key: "vehiclePlateNumber", label: "Plate number" }
+  { key: "vehiclePlateNumber", label: "Plate number" },
+  { key: "vehicleParticularsDocumentUrl", label: "Vehicle particulars document link" }
 ];
 
 const money = (kobo?: number | null) => `NGN ${Math.round(Number(kobo ?? 0) / 100).toLocaleString()}`;
@@ -116,6 +121,7 @@ export default function TaxiReadiness() {
         state: form.state.trim(),
         address: form.address.trim(),
         driverLicenceNumber: form.driverLicenceNumber.trim(),
+        driverLicenceDocumentUrl: form.driverLicenceDocumentUrl.trim(),
         driverLicenceExpiry: form.driverLicenceExpiry.trim(),
         vehicleMake: form.vehicleMake.trim(),
         vehicleModel: form.vehicleModel.trim(),
@@ -124,6 +130,8 @@ export default function TaxiReadiness() {
         vehiclePlateNumber: form.vehiclePlateNumber.trim(),
         vehicleType: form.vehicleType,
         vehicleOwnership: form.vehicleOwnership,
+        vehicleParticularsDocumentUrl: form.vehicleParticularsDocumentUrl.trim(),
+        insuranceDocumentUrl: form.insuranceDocumentUrl.trim() || undefined,
         notes: form.notes.trim() || undefined
       });
       setStatus(submitted);
@@ -221,6 +229,7 @@ export default function TaxiReadiness() {
     <Card>
       <Text style={ui.sectionTitle}>Licence verification</Text>
       <Field placeholder="Driving licence number required" value={form.driverLicenceNumber} onChangeText={(driverLicenceNumber) => setForm({ ...form, driverLicenceNumber })} />
+      <Field placeholder="Driving licence document HTTPS link required" autoCapitalize="none" value={form.driverLicenceDocumentUrl} onChangeText={(driverLicenceDocumentUrl) => setForm({ ...form, driverLicenceDocumentUrl })} />
       <Field placeholder="Licence expiry YYYY-MM-DD required" value={form.driverLicenceExpiry} onChangeText={(driverLicenceExpiry) => setForm({ ...form, driverLicenceExpiry })} />
     </Card>
 
@@ -237,6 +246,8 @@ export default function TaxiReadiness() {
       <View style={styles.chipGrid}>{vehicleTypes.map((vehicleType) => <Button key={vehicleType} title={chipLabel(vehicleType)} tone={form.vehicleType === vehicleType ? "primary" : "muted"} onPress={() => setForm({ ...form, vehicleType })} />)}</View>
       <Text style={ui.muted}>Vehicle ownership required</Text>
       <View style={styles.chipGrid}>{ownershipTypes.map((vehicleOwnership) => <Button key={vehicleOwnership} title={chipLabel(vehicleOwnership)} tone={form.vehicleOwnership === vehicleOwnership ? "primary" : "muted"} onPress={() => setForm({ ...form, vehicleOwnership })} />)}</View>
+      <Field placeholder="Vehicle particulars HTTPS link required" autoCapitalize="none" value={form.vehicleParticularsDocumentUrl} onChangeText={(vehicleParticularsDocumentUrl) => setForm({ ...form, vehicleParticularsDocumentUrl })} />
+      <Field placeholder="Insurance document HTTPS link optional" autoCapitalize="none" value={form.insuranceDocumentUrl} onChangeText={(insuranceDocumentUrl) => setForm({ ...form, insuranceDocumentUrl })} />
     </Card>
 
     <Card>

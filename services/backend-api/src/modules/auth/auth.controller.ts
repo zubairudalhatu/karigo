@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -8,6 +8,7 @@ import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { AuthService } from "./auth.service";
 import { ActivateVendorAccountDto } from "./dto/activate-vendor-account.dto";
+import { ApplicantPhoneDto, CreateApplicantAccountDto, CreateApplicantPasswordDto, VerifyApplicantOtpDto } from "./dto/applicant-onboarding.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { ConfirmPasswordResetDto } from "./dto/confirm-password-reset.dto";
 import { LoginDto } from "./dto/login.dto";
@@ -49,6 +50,66 @@ export class AuthController {
       message: "If the phone number is eligible, a new OTP has been sent.",
       data: await this.authService.resendOtp(dto)
     };
+  }
+
+  @Post("vendor-onboarding/account")
+  @ApiOperation({ summary: "Create a vendor applicant account and issue OTP" })
+  async createVendorApplicantAccount(@Body() dto: CreateApplicantAccountDto) {
+    return { message: "Vendor applicant account accepted", data: await this.authService.createApplicantAccount(UserRole.VENDOR, dto) };
+  }
+
+  @Post("captain-onboarding/account")
+  @ApiOperation({ summary: "Create a Captain applicant account and issue OTP" })
+  async createCaptainApplicantAccount(@Body() dto: CreateApplicantAccountDto) {
+    return { message: "Captain applicant account accepted", data: await this.authService.createApplicantAccount(UserRole.RIDER, dto) };
+  }
+
+  @Post("vendor-onboarding/resend-otp")
+  @ApiOperation({ summary: "Resend vendor applicant OTP" })
+  async resendVendorApplicantOtp(@Body() dto: ApplicantPhoneDto) {
+    return { message: "Vendor applicant OTP resend accepted", data: await this.authService.resendApplicantOtp(UserRole.VENDOR, dto) };
+  }
+
+  @Post("captain-onboarding/resend-otp")
+  @ApiOperation({ summary: "Resend Captain applicant OTP" })
+  async resendCaptainApplicantOtp(@Body() dto: ApplicantPhoneDto) {
+    return { message: "Captain applicant OTP resend accepted", data: await this.authService.resendApplicantOtp(UserRole.RIDER, dto) };
+  }
+
+  @Post("vendor-onboarding/verify-otp")
+  @ApiOperation({ summary: "Verify vendor applicant OTP" })
+  async verifyVendorApplicantOtp(@Body() dto: VerifyApplicantOtpDto) {
+    return { message: "Vendor applicant phone verified", data: await this.authService.verifyApplicantOtp(UserRole.VENDOR, dto) };
+  }
+
+  @Post("captain-onboarding/verify-otp")
+  @ApiOperation({ summary: "Verify Captain applicant OTP" })
+  async verifyCaptainApplicantOtp(@Body() dto: VerifyApplicantOtpDto) {
+    return { message: "Captain applicant phone verified", data: await this.authService.verifyApplicantOtp(UserRole.RIDER, dto) };
+  }
+
+  @Post("vendor-onboarding/password")
+  @ApiOperation({ summary: "Create vendor applicant password after OTP verification" })
+  async createVendorApplicantPassword(@Body() dto: CreateApplicantPasswordDto) {
+    return { message: "Vendor applicant password created", data: await this.authService.createApplicantPassword(UserRole.VENDOR, dto) };
+  }
+
+  @Post("captain-onboarding/password")
+  @ApiOperation({ summary: "Create Captain applicant password after OTP verification" })
+  async createCaptainApplicantPassword(@Body() dto: CreateApplicantPasswordDto) {
+    return { message: "Captain applicant password created", data: await this.authService.createApplicantPassword(UserRole.RIDER, dto) };
+  }
+
+  @Get("vendor-onboarding/status")
+  @ApiOperation({ summary: "Check vendor applicant onboarding status" })
+  async vendorApplicantStatus(@Query() dto: ApplicantPhoneDto) {
+    return { message: "Vendor applicant onboarding status retrieved", data: await this.authService.applicantOnboardingStatus(UserRole.VENDOR, dto) };
+  }
+
+  @Get("captain-onboarding/status")
+  @ApiOperation({ summary: "Check Captain applicant onboarding status" })
+  async captainApplicantStatus(@Query() dto: ApplicantPhoneDto) {
+    return { message: "Captain applicant onboarding status retrieved", data: await this.authService.applicantOnboardingStatus(UserRole.RIDER, dto) };
   }
 
   @Post("password-reset/request")

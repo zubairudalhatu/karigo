@@ -14,6 +14,7 @@ export const publicUserSelect = {
   phoneVerified: true,
   emailVerified: true,
   profilePhotoUrl: true,
+  onboardingPasswordSetAt: true,
   lastLoginAt: true,
   createdAt: true,
   updatedAt: true

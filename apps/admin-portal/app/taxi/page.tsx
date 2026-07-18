@@ -75,7 +75,9 @@ export default function AdminTaxiPage() {
     const applicantVisibleNote = window.prompt("Applicant-visible note optional") ?? undefined;
     const adminNote = window.prompt("Internal admin note optional") ?? undefined;
     await taxiApi.reviewDriverApplication(id, { status, applicantVisibleNote, adminNote });
-    setMessage("Ride readiness review saved. This does not activate public KariGO Rides.");
+    setMessage(status === "APPROVED"
+      ? "Ride readiness review saved. A linked verified account can be prepared for future Ride Captain review, but public KariGO Rides remains disabled."
+      : "Ride readiness review saved. This does not activate public KariGO Rides.");
     await load();
   }
 
@@ -134,8 +136,17 @@ export default function AdminTaxiPage() {
           <strong>{application.fullName} - {application.applicationReference}</strong>
           <p className="muted">{application.city}, {application.state} - {application.phoneNumber}</p>
           <p>{application.vehicle ?? "Vehicle details pending"} {application.vehiclePlateNumber ? `- ${application.vehiclePlateNumber}` : ""}</p>
+          {application.applicantAccount ? <div className="notice">
+            <strong>Applicant account</strong>
+            <p><Badge>{application.applicantAccount.accountStatus}</Badge> <Badge>{application.applicantAccount.phoneVerified ? "PHONE VERIFIED" : "OTP PENDING"}</Badge> <Badge>{application.applicantAccount.passwordCreated ? "PASSWORD CREATED" : "PASSWORD PENDING"}</Badge></p>
+            {application.applicantAccount.riderProfile ? <p className="muted">Captain profile: {application.applicantAccount.riderProfile.riderCode} - {application.applicantAccount.riderProfile.verificationStatus}</p> : <p className="muted">Ride profile will be prepared only after approved account review.</p>}
+          </div> : <p className="muted">No account-first applicant is linked to this ride application.</p>}
+          {application.documentEvidence?.length ? <div className="notice">
+            <strong>Document evidence</strong>
+            {application.documentEvidence.map((document) => <p key={document.label}><a href={document.url} target="_blank" rel="noreferrer">{document.label}</a></p>)}
+          </div> : <p className="muted">No ride document evidence supplied yet.</p>}
           <p><Badge>{application.status}</Badge></p>
-          <div className="filters">{reviewStatuses.map((status) => <button className="secondary" key={status} onClick={() => void reviewApplication(application.id, status)}>{status.replaceAll("_", " ")}</button>)}<button onClick={() => void createProfile(application.id)}>Create Test Ride Captain Profile</button></div>
+          <div className="filters">{reviewStatuses.map((status) => <button className="secondary" key={status} onClick={() => void reviewApplication(application.id, status)}>{status.replaceAll("_", " ")}</button>)}{application.applicantAccount ? null : <button onClick={() => void createProfile(application.id)}>Create legacy Ride Captain profile</button>}</div>
         </article>) : <Empty>No ride applications found.</Empty>}
       </section> : null}
       {activeTab === "waitlist" ? <section className="section">

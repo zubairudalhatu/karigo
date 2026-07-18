@@ -21,6 +21,15 @@ export interface VendorApplication {
   status: string;
   submittedAt: string;
   documents?: VendorApplicationDocument[];
+  applicant?: {
+    id: string;
+    fullName: string;
+    phoneNumber: string;
+    email?: string | null;
+    accountStatus: string;
+    phoneVerified: boolean;
+    onboardingPasswordSetAt?: string | null;
+  } | null;
   vendor?: {
     id: string;
     businessName: string;

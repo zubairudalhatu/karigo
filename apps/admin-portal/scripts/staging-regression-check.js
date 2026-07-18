@@ -42,13 +42,17 @@ const deliveryCaptainApplicationsPage = read("app", "delivery-captain-applicatio
 assert(deliveryCaptainApplicationsPage.includes("Delivery Captain Applications"), "Admin Delivery Captain applications page must exist.");
 assert(deliveryCaptainApplicationsPage.includes("deliveryCaptainApplicationsApi.list"), "Admin Delivery Captain applications page must list applications.");
 assert(deliveryCaptainApplicationsPage.includes("deliveryCaptainApplicationsApi.review"), "Admin Delivery Captain applications page must review applications.");
-assert(deliveryCaptainApplicationsPage.includes("does not create a Captain account, activate dispatch, payouts or KariGO Rides access"), "Admin Delivery Captain applications page must state safe limits.");
+assert(deliveryCaptainApplicationsPage.includes("Account-first applications show OTP and password readiness"), "Admin Delivery Captain applications page must show account-first readiness context.");
+assert(deliveryCaptainApplicationsPage.includes("Approval does not activate payouts or KariGO Rides access"), "Admin Delivery Captain applications page must state safe limits.");
+assert(deliveryCaptainApplicationsPage.includes("Applicant account"), "Admin Delivery Captain applications page must show linked applicant account status.");
+assert(deliveryCaptainApplicationsPage.includes("PASSWORD CREATED"), "Admin Delivery Captain applications page must show password readiness.");
 assert(deliveryCaptainApplicationsPage.includes("Guarantor:"), "Admin Delivery Captain applications page must show guarantor verification information.");
 assert(deliveryCaptainApplicationsPage.includes("Applicant-visible note optional"), "Admin Delivery Captain review must support applicant-visible notes.");
 assert(deliveryCaptainApplicationsPage.includes("Internal admin note optional"), "Admin Delivery Captain review must support internal notes.");
 assert(!deliveryCaptainApplicationsPage.includes("Create Test Ride Captain Profile") && !deliveryCaptainApplicationsPage.includes("Activate dispatch") && !deliveryCaptainApplicationsPage.includes("Pay Now"), "Admin Delivery Captain applications page must not expose activation, ride or payment actions.");
 const deliveryCaptainApplicationsApi = read("src", "api", "delivery-captain-applications.api.ts");
 assert(deliveryCaptainApplicationsApi.includes("admin/delivery-captain-applications"), "Admin Delivery Captain API must call admin application endpoints.");
+assert(deliveryCaptainApplicationsApi.includes("applicantAccount"), "Admin Delivery Captain API must type applicant account status.");
 assert(deliveryCaptainApplicationsApi.includes("applicantVisibleNote"), "Admin Delivery Captain API must support applicant-visible review notes.");
 assert(deliveryCaptainApplicationsApi.includes("adminNote"), "Admin Delivery Captain API must support internal review notes.");
 
@@ -286,12 +290,16 @@ assert(taxiPage.includes("Test Ride Requests"), "Admin ride operations page must
 assert(taxiPage.includes("Ride Summary"), "Admin ride operations page must show Ride summary.");
 assert(taxiPage.includes("does not perform live dispatch, maps billing or payment capture"), "Admin ride operations page must state staging-only limits.");
 assert(taxiPage.includes("Ride readiness review saved"), "Admin ride operations page must support ride readiness review.");
-assert(taxiPage.includes("Create Test Ride Captain Profile"), "Admin ride operations page must create staging Ride Captain profiles from applications.");
+assert(taxiPage.includes("Applicant account"), "Admin ride operations page must show linked applicant account status.");
+assert(taxiPage.includes("Document evidence"), "Admin ride operations page must show ride application document evidence.");
+assert(taxiPage.includes("Create legacy Ride Captain profile"), "Admin ride operations page must keep legacy profile creation only for unlinked applications.");
 assert(taxiPage.includes("Assign Ride Captain"), "Admin ride operations page must support manual staging Ride Captain assignment.");
 assert(taxiPage.includes("Cancel Test Ride"), "Admin ride operations page must support staging ride cancellation.");
 assert(!taxiPage.includes("Assign ride") && !taxiPage.includes("Dispatch taxi") && !taxiPage.includes("Pay Now"), "Admin ride operations page must not expose live ride dispatch or payment actions.");
 const taxiApi = read("src", "api", "taxi.api.ts");
 assert(taxiApi.includes("admin/taxi/driver-applications"), "Admin ride API client must call the existing application endpoints.");
+assert(taxiApi.includes("applicantAccount"), "Admin ride API client must type linked applicant account status.");
+assert(taxiApi.includes("documentEvidence"), "Admin ride API client must type document evidence.");
 assert(taxiApi.includes("admin/taxi/waitlist"), "Admin ride API client must call the existing waitlist endpoints.");
 assert(taxiApi.includes("admin/taxi/driver-profiles"), "Admin ride API client must call existing staging profile endpoints.");
 assert(taxiApi.includes("admin/taxi/trips"), "Admin ride API client must call existing staging trip endpoints.");

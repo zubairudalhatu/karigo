@@ -64,6 +64,12 @@ export class CreateDeliveryCaptainApplicationDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(80)
+  @Transform(trim)
+  driverLicenceNumber?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(700)
   @Transform(trim)
   riderExperience?: string;

@@ -22,7 +22,7 @@ describe("AuthService", () => {
   const accountActivationEmail = { sendAccountActivatedEmail: jest.fn().mockResolvedValue({ accepted: true }) };
   const applicationNotifications = { vendorApplicationReviewed: jest.fn().mockResolvedValue(undefined) };
   const tx = {
-    user: { update: jest.fn() },
+    user: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     vendorAccountActivation: {
       update: jest.fn(),
       updateMany: jest.fn(),
@@ -40,7 +40,7 @@ describe("AuthService", () => {
     userLoginActivity: { create: jest.fn() },
     vendor: { findFirst: jest.fn() },
     vendorAccountActivation: { findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn(), create: jest.fn() },
-    user: { update: jest.fn() },
+    user: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     vendorAuditLog: { create: jest.fn() },
     $transaction: jest.fn((callback) => callback(tx))
   };
@@ -65,6 +65,7 @@ describe("AuthService", () => {
     config.get.mockImplementation((key: string, fallback: unknown) =>
       key === "OTP_PROVIDER" ? "mock" : key === "APP_ENV" ? "development" : fallback
     );
+    prisma.user.findUnique.mockResolvedValue(null);
   });
 
   it("registers a customer and exposes the OTP only for the mock provider", async () => {
@@ -193,6 +194,117 @@ describe("AuthService", () => {
 
     expect(result).not.toHaveProperty("mockOtp");
     expect(result.resendAccepted).toBe(true);
+  });
+
+  it("creates a vendor applicant account and issues OTP before application details", async () => {
+    usersService.findByPhoneForAuth.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue({
+      id: "vendor-applicant-1",
+      fullName: "Vendor Owner",
+      phoneNumber: "+2348012345678",
+      email: "owner@example.test",
+      role: UserRole.VENDOR,
+      accountStatus: AccountStatus.PENDING,
+      phoneVerified: false,
+      onboardingPasswordSetAt: null
+    });
+    otpService.issue.mockResolvedValue({ otp: "123456", expiresAt: new Date("2030-01-01") });
+
+    const result = await service.createApplicantAccount(UserRole.VENDOR, {
+      fullName: "Vendor Owner",
+      phoneNumber: "08012345678",
+      email: "owner@example.test"
+    });
+
+    expect(prisma.user.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        role: UserRole.VENDOR,
+        accountStatus: AccountStatus.PENDING,
+        phoneVerified: false,
+        phoneNumber: "+2348012345678"
+      })
+    }));
+    expect(otpService.issue).toHaveBeenCalledWith("vendor-applicant-1", "+2348012345678");
+    expect(result).toMatchObject({
+      nextStep: "OTP_REQUIRED",
+      account: {
+        role: UserRole.VENDOR,
+        phoneVerified: false,
+        passwordCreated: false
+      },
+      mockOtp: "123456"
+    });
+  });
+
+  it("verifies a Captain applicant OTP and then creates the onboarding password", async () => {
+    usersService.findByPhoneForAuth.mockResolvedValueOnce({
+      id: "captain-applicant-1",
+      fullName: "Captain User",
+      phoneNumber: "+2348012345678",
+      email: "captain@example.test",
+      role: UserRole.RIDER,
+      accountStatus: AccountStatus.PENDING,
+      phoneVerified: false,
+      onboardingPasswordSetAt: null,
+      deletedAt: null
+    });
+    prisma.user.update.mockResolvedValueOnce({
+      id: "captain-applicant-1",
+      fullName: "Captain User",
+      phoneNumber: "+2348012345678",
+      email: "captain@example.test",
+      role: UserRole.RIDER,
+      accountStatus: AccountStatus.PENDING,
+      phoneVerified: true,
+      onboardingPasswordSetAt: null
+    });
+
+    const verified = await service.verifyApplicantOtp(UserRole.RIDER, {
+      phoneNumber: "08012345678",
+      otp: "123456"
+    });
+
+    expect(otpService.verify).toHaveBeenCalledWith("captain-applicant-1", "123456");
+    expect(verified.nextStep).toBe("PASSWORD_REQUIRED");
+
+    usersService.findByPhoneForAuth.mockResolvedValueOnce({
+      id: "captain-applicant-1",
+      fullName: "Captain User",
+      phoneNumber: "+2348012345678",
+      email: "captain@example.test",
+      role: UserRole.RIDER,
+      accountStatus: AccountStatus.PENDING,
+      phoneVerified: true,
+      onboardingPasswordSetAt: null,
+      deletedAt: null
+    });
+    prisma.user.update.mockResolvedValueOnce({
+      id: "captain-applicant-1",
+      fullName: "Captain User",
+      phoneNumber: "+2348012345678",
+      email: "captain@example.test",
+      role: UserRole.RIDER,
+      accountStatus: AccountStatus.PENDING,
+      phoneVerified: true,
+      onboardingPasswordSetAt: new Date("2030-01-01")
+    });
+
+    const password = await service.createApplicantPassword(UserRole.RIDER, {
+      phoneNumber: "08012345678",
+      password: "StrongPass123"
+    });
+
+    expect(prisma.user.update).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { id: "captain-applicant-1" },
+      data: expect.objectContaining({
+        onboardingPasswordSetAt: expect.any(Date),
+        accountStatus: AccountStatus.PENDING
+      })
+    }));
+    expect(password).toMatchObject({
+      nextStep: "READY_FOR_APPLICATION",
+      account: { phoneVerified: true, passwordCreated: true }
+    });
   });
 
   it("logs in an active verified customer and returns a JWT", async () => {

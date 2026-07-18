@@ -17,6 +17,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { UsersService } from "../users/users.service";
 import { AccountActivationEmailService } from "./account-activation-email.service";
 import { ActivateVendorAccountDto } from "./dto/activate-vendor-account.dto";
+import { ApplicantPhoneDto, CreateApplicantAccountDto, CreateApplicantPasswordDto, VerifyApplicantOtpDto } from "./dto/applicant-onboarding.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { ConfirmPasswordResetDto } from "./dto/confirm-password-reset.dto";
 import { RequestPasswordResetDto } from "./dto/request-password-reset.dto";
@@ -80,6 +81,110 @@ export class AuthService {
     return {
       user: verifiedUser,
       ...(await this.issueSession(verifiedUser.id, verifiedUser.role))
+    };
+  }
+
+  async createApplicantAccount(role: UserRole, dto: CreateApplicantAccountDto) {
+    const phoneNumber = normalizePhoneNumber(dto.phoneNumber);
+    const email = dto.email?.trim().toLowerCase();
+    const existingByPhone = await this.usersService.findByPhoneForAuth(phoneNumber);
+    const existingByEmail = email ? await this.prisma.user.findUnique({ where: { email } }) : null;
+
+    if (existingByEmail && existingByEmail.phoneNumber !== phoneNumber) {
+      throw new BadRequestException("Email address is already linked to another account.");
+    }
+
+    if (existingByPhone) {
+      if (existingByPhone.role !== role || existingByPhone.deletedAt) {
+        throw new BadRequestException("Phone number is already linked to another KariGO account.");
+      }
+      if (!existingByPhone.phoneVerified) {
+        const verification = await this.otpService.issue(existingByPhone.id, existingByPhone.phoneNumber, { enforceCooldown: true });
+        return this.applicantAccountResponse(existingByPhone, "OTP_REQUIRED", verification);
+      }
+      return this.applicantAccountResponse(
+        existingByPhone,
+        existingByPhone.onboardingPasswordSetAt ? "READY_FOR_APPLICATION" : "PASSWORD_REQUIRED"
+      );
+    }
+
+    const user = await this.prisma.user.create({
+      data: {
+        fullName: dto.fullName.trim(),
+        phoneNumber,
+        email,
+        passwordHash: await hash(randomBytes(32).toString("hex"), 12),
+        role,
+        accountStatus: AccountStatus.PENDING,
+        phoneVerified: false,
+        emailVerified: false
+      }
+    });
+    const verification = await this.otpService.issue(user.id, user.phoneNumber);
+    return this.applicantAccountResponse(user, "OTP_REQUIRED", verification);
+  }
+
+  async resendApplicantOtp(role: UserRole, dto: ApplicantPhoneDto) {
+    const user = await this.usersService.findByPhoneForAuth(dto.phoneNumber);
+    if (!user || user.role !== role || user.deletedAt || user.phoneVerified) {
+      return { resendAccepted: true };
+    }
+    const verification = await this.otpService.issue(user.id, user.phoneNumber, { enforceCooldown: true });
+    return {
+      resendAccepted: true,
+      otpExpiresAt: verification.expiresAt,
+      ...(this.shouldExposeMockOtp() ? { mockOtp: verification.otp } : {})
+    };
+  }
+
+  async verifyApplicantOtp(role: UserRole, dto: VerifyApplicantOtpDto) {
+    const user = await this.usersService.findByPhoneForAuth(dto.phoneNumber);
+    if (!user || user.role !== role || user.deletedAt) {
+      throw new UnauthorizedException("OTP is invalid or expired");
+    }
+
+    await this.otpService.verify(user.id, dto.otp);
+    const verifiedUser = await this.prisma.user.update({
+      where: { id: user.id },
+      data: { phoneVerified: true, accountStatus: AccountStatus.PENDING }
+    });
+
+    return this.applicantAccountResponse(
+      verifiedUser,
+      verifiedUser.onboardingPasswordSetAt ? "READY_FOR_APPLICATION" : "PASSWORD_REQUIRED"
+    );
+  }
+
+  async createApplicantPassword(role: UserRole, dto: CreateApplicantPasswordDto) {
+    const user = await this.usersService.findByPhoneForAuth(dto.phoneNumber);
+    if (!user || user.role !== role || user.deletedAt) {
+      throw new BadRequestException("Applicant account could not be found.");
+    }
+    if (!user.phoneVerified) {
+      throw new BadRequestException("Verify your phone number before creating a password.");
+    }
+    const updated = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await hash(dto.password, 12),
+        onboardingPasswordSetAt: new Date(),
+        accountStatus: user.accountStatus === AccountStatus.ACTIVE ? AccountStatus.ACTIVE : AccountStatus.PENDING
+      }
+    });
+    return this.applicantAccountResponse(updated, "READY_FOR_APPLICATION");
+  }
+
+  async applicantOnboardingStatus(role: UserRole, dto: ApplicantPhoneDto) {
+    const user = await this.usersService.findByPhoneForAuth(dto.phoneNumber);
+    if (!user || user.role !== role || user.deletedAt) {
+      return { exists: false, nextStep: "CREATE_ACCOUNT" };
+    }
+    return {
+      exists: true,
+      ...this.applicantAccountResponse(
+        user,
+        !user.phoneVerified ? "OTP_REQUIRED" : user.onboardingPasswordSetAt ? "READY_FOR_APPLICATION" : "PASSWORD_REQUIRED"
+      )
     };
   }
 
@@ -431,6 +536,37 @@ export class AuthService {
   private shouldExposeMockOtp(): boolean {
     return this.config.get("OTP_PROVIDER", "mock") === "mock" &&
       this.config.get("APP_ENV", "development") !== "production";
+  }
+
+  private applicantAccountResponse(
+    user: {
+      id: string;
+      fullName: string;
+      phoneNumber: string;
+      email?: string | null;
+      role: UserRole;
+      accountStatus: AccountStatus;
+      phoneVerified: boolean;
+      onboardingPasswordSetAt?: Date | null;
+    },
+    nextStep: "OTP_REQUIRED" | "PASSWORD_REQUIRED" | "READY_FOR_APPLICATION",
+    verification?: { expiresAt: Date; otp?: string }
+  ) {
+    return {
+      account: {
+        id: user.id,
+        fullName: user.fullName,
+        phoneNumber: user.phoneNumber,
+        email: user.email,
+        role: user.role,
+        accountStatus: user.accountStatus,
+        phoneVerified: user.phoneVerified,
+        passwordCreated: Boolean(user.onboardingPasswordSetAt)
+      },
+      nextStep,
+      otpExpiresAt: verification?.expiresAt,
+      ...(verification && this.shouldExposeMockOtp() ? { mockOtp: verification.otp } : {})
+    };
   }
 
   private vendorActivationTtlHours(): number {

@@ -36,7 +36,8 @@ assert(vendorForm.includes("/vendor-applications"), "Vendor application form mus
 assert(vendorForm.includes("NEXT_PUBLIC_API_BASE_URL") || read("src", "lib", "site.ts").includes("NEXT_PUBLIC_API_BASE_URL"), "Website must use configured API base URL.");
 assert(vendorForm.includes("Your vendor application has been submitted. KariGO will review your details and contact you with the next steps."), "Success message must match approved copy.");
 assert(vendorForm.includes("Vendor applications are open for Kano and Abuja launch onboarding."), "Vendor application form must state the Kano and Abuja launch limit.");
-assert(vendorForm.includes("Start with the phone and email for the business account"), "Vendor application form must explain account-first onboarding.");
+assert(vendorForm.includes("ApplicantOnboardingCard"), "Vendor application form must use account-first onboarding.");
+assert(vendorForm.includes("Create the account first, verify your phone with OTP"), "Vendor application form must explain account-first OTP onboarding.");
 assert(vendorForm.includes("launchCityOptions"), "Vendor application city inputs must use controlled Kano/Abuja options.");
 assert(vendorForm.includes('value: "Abuja"'), "Vendor application form must support Abuja city selection.");
 assert(vendorForm.includes('value: "FCT"'), "Vendor application form must support FCT state selection for Abuja.");
@@ -73,13 +74,15 @@ assert(riders.includes("public ride requests require separate activation"), "Cap
 const deliveryCaptainForm = read("src", "components", "delivery-captain-application-form.tsx");
 assert(deliveryCaptainForm.includes("/delivery-captain-applications"), "Delivery Captain application form must submit to the public backend endpoint.");
 assert(deliveryCaptainForm.includes("Delivery Captain application has been submitted"), "Delivery Captain form success message must match approved copy.");
-assert(deliveryCaptainForm.includes("does not activate dispatch, payouts or ride access"), "Delivery Captain form must state safety limits.");
+assert(deliveryCaptainForm.includes("dispatch, payouts and ride access remain separately controlled"), "Delivery Captain form must state safety limits.");
 assert(deliveryCaptainForm.includes("Apply to deliver with KariGO in Kano or Abuja."), "Delivery Captain form must show Kano and Abuja launch copy.");
-assert(deliveryCaptainForm.includes("Start with the phone and email for your Captain account"), "Delivery Captain form must explain account-first onboarding.");
+assert(deliveryCaptainForm.includes("ApplicantOnboardingCard"), "Delivery Captain form must use account-first onboarding.");
+assert(deliveryCaptainForm.includes("verify their phone with OTP"), "Delivery Captain form must explain account-first OTP onboarding.");
 assert(deliveryCaptainForm.includes('value: "Kano"'), "Delivery Captain city controls must include Kano.");
 assert(deliveryCaptainForm.includes('value: "Abuja"'), "Delivery Captain city controls must include Abuja.");
 assert(deliveryCaptainForm.includes('value: "FCT"'), "Delivery Captain state controls must include FCT.");
 assert(deliveryCaptainForm.includes("profilePhotoUrl"), "Delivery Captain form must capture profile photo URL metadata.");
+assert(deliveryCaptainForm.includes("driverLicenceNumber"), "Delivery Captain form must capture licence number metadata.");
 assert(deliveryCaptainForm.includes("driverLicenceDocumentUrl"), "Delivery Captain form must capture licence document evidence.");
 assert(deliveryCaptainForm.includes("vehicleParticularsDocumentUrl"), "Delivery Captain form must capture vehicle particulars evidence.");
 assert(deliveryCaptainForm.includes("insuranceDocumentUrl"), "Delivery Captain form must capture insurance document evidence.");
@@ -93,8 +96,11 @@ assert(taxiForms.includes("id=\"ride-waitlist\""), "Website ride waitlist form m
 assert(taxiForms.includes("id=\"ride-captain-application\""), "Website Ride Captain form must use the public Ride Captain anchor.");
 assert(!taxiForms.includes("id=\"taxi-driver-application\""), "Website Ride Captain form must not use the old Taxi driver anchor.");
 assert(taxiForms.includes("does not book a ride or activate live ride dispatch"), "Website ride waitlist must state rides are not live.");
-assert(taxiForms.includes("Approval is required and this form does not activate live ride dispatch"), "Website Ride Captain form must not imply live ride activation.");
+assert(taxiForms.includes("ApplicantOnboardingCard"), "Website Ride Captain form must use account-first onboarding.");
+assert(taxiForms.includes("this form does not activate live ride dispatch"), "Website Ride Captain form must not imply live ride activation.");
 assert(taxiForms.includes("driverLicenceExpiry"), "Website Ride Captain form must capture required licence expiry.");
+assert(taxiForms.includes("driverLicenceDocumentUrl"), "Website Ride Captain form must capture required licence document evidence.");
+assert(taxiForms.includes("vehicleParticularsDocumentUrl"), "Website Ride Captain form must capture required vehicle particulars evidence.");
 
 const services = read("app", "services", "page.tsx");
 assert(services.includes("Live / Active"), "Services page must separate live services.");

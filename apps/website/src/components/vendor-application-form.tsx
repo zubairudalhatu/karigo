@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { ApplicantAccount, ApplicantOnboardingCard } from "./applicant-onboarding-card";
 import { site } from "../lib/site";
 
 type Category = "RESTAURANT" | "GROCERIES" | "MARKET_ITEMS" | "PHARMACY" | "SME_SERVICES" | "OTHER_MARKETPLACE_VENDOR";
@@ -43,9 +44,20 @@ const initial = {
 
 export function VendorApplicationForm() {
   const [form, setForm] = useState(initial);
+  const [accountReady, setAccountReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+
+  function applyApplicantAccount(account: ApplicantAccount) {
+    setAccountReady(true);
+    setForm((current) => ({
+      ...current,
+      contactFullName: current.contactFullName || account.fullName,
+      businessPhoneNumber: account.phoneNumber,
+      businessEmail: account.email || current.businessEmail
+    }));
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -112,8 +124,15 @@ export function VendorApplicationForm() {
   }
 
   return (
-    <form className="form-card" onSubmit={submit}>
-      <p className="muted">Vendor applications are open for Kano and Abuja launch onboarding. Start with the phone and email for the business account; KariGO verifies the account and sends password setup after approval.</p>
+    <>
+    <ApplicantOnboardingCard
+      kind="vendor"
+      title="Create your vendor account"
+      helper="Vendor applications are open for Kano and Abuja launch onboarding. Create the account first, verify your phone with OTP, then create the password you will use after approval."
+      onReady={applyApplicantAccount}
+    />
+    {accountReady ? <form className="form-card" onSubmit={submit}>
+      <p className="muted">Vendor application details are linked to your verified vendor account. Approval does not automatically publish a storefront, activate payouts or enable pharmacy scope.</p>
       <div className="form-grid">
         <label>Business name<input required value={form.businessName} onChange={(event) => setForm({ ...form, businessName: event.target.value })} /></label>
         <label>Contact person name<input required value={form.contactFullName} onChange={(event) => setForm({ ...form, contactFullName: event.target.value })} /></label>
@@ -142,6 +161,7 @@ export function VendorApplicationForm() {
       {success ? <p className="success">{success}</p> : null}
       {error ? <p className="error" role="alert">{error}</p> : null}
       <button disabled={loading || !form.declarationAccepted || !form.privacyAccepted || !form.contactConsentAccepted}>{loading ? "Submitting..." : "Submit Vendor Application"}</button>
-    </form>
+    </form> : null}
+    </>
   );
 }
