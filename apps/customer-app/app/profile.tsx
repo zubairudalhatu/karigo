@@ -14,6 +14,7 @@ type ProfileRoute =
   | "/orders"
   | "/profile/wallet"
   | "/profile/referrals"
+  | "/profile/returns-refunds"
   | "/addresses"
   | "/support"
   | "/notifications"
@@ -40,6 +41,7 @@ const primaryItems: HubItem[] = [
   { title: "Orders", description: "Track active and completed deliveries.", icon: "clipboard", href: "/orders" },
   { title: "KariGO Wallet", description: "View your wallet balance and safe ledger.", icon: "credit-card", href: "/profile/wallet", badge: "View only" },
   { title: "Referral rewards", description: "View and share your KariGO referral code.", icon: "gift", href: "/profile/referrals", badge: "Tracking only" },
+  { title: "Returns and Refunds", description: "Review how to report issues and request refund review.", icon: "rotate-ccw", href: "/profile/returns-refunds" },
   { title: "Saved addresses", description: "Manage home, office and delivery locations.", icon: "map-pin", href: "/addresses" },
   { title: "Notifications", description: "Review order, support and account updates.", icon: "bell", href: "/notifications" },
   { title: "Support centre", description: "Open tickets and get help from KariGO.", icon: "headphones", href: "/support" }

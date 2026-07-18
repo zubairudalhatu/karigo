@@ -11,10 +11,10 @@ export const metadata: Metadata = {
     default: "KariGO - Everything You Need, Delivered",
     template: "%s | KariGO"
   },
-  description: "Food, groceries, market items, parcel delivery and everyday services across Kano.",
+  description: "Food, groceries, market items, parcel delivery and everyday services across Kano and Abuja.",
   openGraph: {
     title: "KariGO - Everything You Need, Delivered",
-    description: "Food, groceries, market items, parcel delivery and everyday services across Kano.",
+    description: "Food, groceries, market items, parcel delivery and everyday services across Kano and Abuja.",
     url: site.preferredUrl,
     siteName: "KariGO",
     type: "website"
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "KariGO - Everything You Need, Delivered",
-    description: "Food, groceries, market items, parcel delivery and everyday services across Kano."
+    description: "Food, groceries, market items, parcel delivery and everyday services across Kano and Abuja."
   },
   icons: {
     icon: "/karigo-logo.png"

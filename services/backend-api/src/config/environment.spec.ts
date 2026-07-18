@@ -41,7 +41,7 @@ describe("environment configuration", () => {
     expect(result.ACCOUNT_ACTIVATION_EMAIL_PROVIDER).toBe("mock");
     expect(result.RESEND_BASE_URL).toBe("https://api.resend.com");
     expect(result.KARIGO_EMAIL_LOGO_URL).toBe("");
-    expect(result.KARIGO_PILOT_EMAIL_LABEL).toBe("Kano controlled early access");
+    expect(result.KARIGO_PILOT_EMAIL_LABEL).toBe("Kano and Abuja launch onboarding");
     expect(result.PAYMENTS_LIVE_ENABLED).toBe(false);
     expect(result.PAYMENT_PROVIDER).toBe("mock");
     expect(result.PAYMENTS_PROVIDER).toBe("mock");

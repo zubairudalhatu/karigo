@@ -83,6 +83,11 @@ function isSandboxTestProvider(provider: string): provider is SandboxInitializat
   return sandboxTestProviders.includes(provider);
 }
 
+function requirementConfigured(provider: PaymentProviderReadinessItem, name: string) {
+  const requirement = provider.requirements.find((item) => item.name === name);
+  return Boolean(requirement?.configured && !requirement.issue);
+}
+
 export default function PaymentReadinessPage() {
   const [readiness, setReadiness] = useState<PaymentProviderReadiness | null>(null);
   const [loading, setLoading] = useState(true);
@@ -163,6 +168,8 @@ export default function PaymentReadinessPage() {
                 const missing = missingRequired(provider);
                 const testResult = testResults[provider.provider];
                 const sandboxProvider = isSandboxTestProvider(provider.provider) ? provider.provider : null;
+                const liveSquad = readiness.paymentsLiveEnabled && provider.provider === "squad";
+                const showSandboxTest = Boolean(sandboxProvider && !readiness.paymentsLiveEnabled);
                 return (
                   <article className="card" key={provider.provider}>
                     <h3>{providerLabel(provider.provider)}</h3>
@@ -180,7 +187,15 @@ export default function PaymentReadinessPage() {
                     ) : <p className="success">No required configuration gaps reported.</p>}
                     {provider.recommendations?.length ? <p className="muted">{provider.recommendations[0]}</p> : null}
                     {provider.recommendedActions?.length ? <p className="muted">{provider.recommendedActions[0]}</p> : null}
-                    {sandboxProvider ? (
+                    {liveSquad ? (
+                      <div className="item">
+                        <span>Live launch check</span>
+                        <strong>Verify live readiness</strong>
+                        <p className="muted">Primary launch provider. Live mode configured: {modeStatus(provider) === "Configured" ? "Yes" : "No"}.</p>
+                        <p className="muted">Webhook/callback configured: {requirementConfigured(provider, "SQUAD_WEBHOOK_SECRET") && requirementConfigured(provider, "SQUAD_CALLBACK_URL") ? "Yes" : "No"}.</p>
+                        <p className="muted">Low-value live test required. This page is read-only in live mode and does not initiate payment.</p>
+                      </div>
+                    ) : showSandboxTest && sandboxProvider ? (
                       <>
                         <button
                           className="secondary"
@@ -200,6 +215,8 @@ export default function PaymentReadinessPage() {
                           </div>
                         ) : null}
                       </>
+                    ) : readiness.paymentsLiveEnabled ? (
+                      <p className="muted">Read-only in live mode. This provider remains pending approval or deferred and cannot be initialized from this page.</p>
                     ) : null}
                   </article>
                 );

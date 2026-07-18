@@ -28,6 +28,13 @@ const serviceTypeOptions: Array<{ label: string; value: ServiceProviderType; not
   { label: "Other approved service provider", value: "OTHER" }
 ];
 
+const launchCityOptions = [{ label: "Kano", value: "Kano" }, { label: "Abuja", value: "Abuja" }];
+const launchStateOptions = [{ label: "Kano", value: "Kano" }, { label: "FCT", value: "FCT" }];
+
+function stateForCity(city: string) {
+  return city === "Abuja" ? "FCT" : "Kano";
+}
+
 const initial = {
   fullName: "",
   businessName: "",
@@ -105,9 +112,12 @@ export function ServiceProviderApplicationForm() {
         </select></label>
         <label>Phone number<input required value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} /></label>
         <label>Email optional<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
-        <label>City<input required value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} /></label>
-        <label>State<input required value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })} /></label>
-        <label>Service areas<input value={form.serviceAreas} onChange={(event) => setForm({ ...form, serviceAreas: event.target.value })} placeholder="Nasarawa GRA, Bompai, Tarauni" /></label>
+        <label>City<select required value={form.city} onChange={(event) => {
+          const city = event.target.value;
+          setForm({ ...form, city, state: stateForCity(city) });
+        }}>{launchCityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label>State<select required value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })}>{launchStateOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label>Service areas<input value={form.serviceAreas} onChange={(event) => setForm({ ...form, serviceAreas: event.target.value })} placeholder="Nasarawa GRA, Wuse, Bompai, Tarauni" /></label>
       </div>
       {form.serviceType === "HEALTH_PROFESSIONAL" ? <p className="notice">Health professional applications are collected for readiness review only. KariGO is not activating live medical booking through this form.</p> : null}
       <label>Address optional<textarea value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} /></label>

@@ -21,7 +21,7 @@ export default function RidersPage() {
           <ul className="list">
             <li>Deliver customer orders</li>
             <li>Earn from completed deliveries</li>
-            <li>Support KariGO operations across Kano</li>
+            <li>Support KariGO operations across Kano and Abuja</li>
           </ul>
           <a className="button" href="#delivery-captain-application">Apply as Delivery Captain</a>
         </article>

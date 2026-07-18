@@ -14,7 +14,7 @@ export default function ServicesPage() {
       <section className="section">
         <p className="eyebrow">Services</p>
         <h1>KariGO services and launch status.</h1>
-        <p className="lead">KariGO is live for core delivery and local-commerce services while preparing additional everyday services carefully.</p>
+        <p className="lead">KariGO is live for core delivery and local-commerce services in Kano and Abuja while preparing additional everyday services carefully.</p>
       </section>
       <section className="section soft split">
         <article className="info-card">

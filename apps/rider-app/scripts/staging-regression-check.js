@@ -62,6 +62,7 @@ expect(ui.includes("visible ? \"Hide\" : \"Show\""), "Rider password field must 
 expect(loginScreen.includes("PasswordField") && loginScreen.includes("passwordVisible"), "Rider login password field must support visibility toggling.");
 expect(loginScreen.includes("Apply to become a Captain"), "Captain login must link to in-app applicant signup.");
 expect(applicationScreen.includes("Submit Captain application"), "Captain app must include an in-app application submission flow.");
+expect(applicationScreen.includes("City (Kano or Abuja)") && applicationScreen.includes("State (Kano or FCT)"), "Captain application must guide applicants to Kano/Abuja launch locations.");
 expect(applicationScreen.includes("Ride Captain readiness interest"), "Captain application must keep Ride Captain readiness gated.");
 expect(applicationScreen.includes("does not activate dispatch, payouts, live rides or a Captain login account"), "Captain application must state safe review-only limits.");
 expect(deliveryCaptainApplicationsApi.includes("delivery-captain-applications"), "Captain application must call the existing public Delivery Captain endpoint.");
@@ -124,6 +125,7 @@ expect(jobDetail.includes("value.replace(/\\D/g, \"\").slice(0, 6)"), "Delivery 
 expect(jobDetail.includes("Complete delivery") && jobDetail.includes("Delivery completed successfully."), "Job detail must support OTP completion.");
 expect(!jobsIndex.includes("deliveryOtp") && !jobDetail.includes("ordersApi.deliveryOtp"), "Rider app must not retrieve or display the customer delivery OTP.");
 expect(taxiReadiness.includes("KariGO Rides is not live yet"), "Ride readiness screen must not present rides as live.");
+expect(taxiReadiness.includes("City required (Kano or Abuja)") && taxiReadiness.includes("State required (Kano or FCT)"), "Ride readiness must guide applicants to Kano/Abuja launch locations.");
 expect(taxiReadiness.includes("Apply for Ride readiness"), "Ride readiness screen must include the application CTA.");
 expect(taxiReadiness.includes("Ride Captain Test Mode"), "Ride Captain test mode copy must be used.");
 expect(taxiReadiness.includes("Full name required"), "Ride readiness must require full name.");

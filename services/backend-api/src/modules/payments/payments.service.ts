@@ -206,7 +206,14 @@ export class PaymentsService {
       mockPaymentVisible: customerSelectableProviders.includes("mock") && !livePaymentsEnabled,
       squadReady: squadVisible && (!livePaymentsEnabled || liveActivation.status === "READY"),
       monnifyVisible: customerSelectableProviders.includes("monnify") && !livePaymentsEnabled,
-      paystackVisible: customerSelectableProviders.includes("paystack") && !livePaymentsEnabled
+      paystackVisible: customerSelectableProviders.includes("paystack") && !livePaymentsEnabled,
+      cashPaymentEnabled: this.flagValue("CASH_ON_DELIVERY_ENABLED", false),
+      cashPaymentLabel: "Pay on Delivery",
+      cashPaymentNote: "Cash/POD remains a manually reconciled launch option and must not be marked electronically paid.",
+      walletTopUpEnabled: this.flagValue("WALLET_TOP_UP_ENABLED", false),
+      walletPaymentsEnabled: this.flagValue("WALLET_PAYMENTS_ENABLED", false),
+      walletPaymentNote: "Wallet top-up and wallet order payment require backend verification before balance or order status changes.",
+      launchCities: ["Kano", "Abuja"]
     };
   }
 
@@ -754,6 +761,12 @@ export class PaymentsService {
       return String(value);
     }
     return undefined;
+  }
+
+  private flagValue(name: string, fallback: boolean): boolean {
+    const value = this.optionalValue(name);
+    if (!value) return fallback;
+    return ["true", "1", "yes", "on"].includes(value.toLowerCase());
   }
 
   private providerLaunchProfile(provider: PaymentProviderName, customerSelectable: boolean) {

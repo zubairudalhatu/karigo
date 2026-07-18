@@ -28,7 +28,7 @@ export class DeliveryCaptainApplicationsController {
   constructor(private readonly ridersService: RidersService) {}
 
   @Post()
-  @ApiOperation({ summary: "Submit a public Delivery Captain application for Kano pilot review" })
+  @ApiOperation({ summary: "Submit a public Delivery Captain application for Kano or Abuja launch review" })
   async create(@Body() dto: CreateDeliveryCaptainApplicationDto) {
     return { message: "Delivery Captain application submitted", data: await this.ridersService.createDeliveryCaptainApplication(dto) };
   }

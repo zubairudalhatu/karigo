@@ -32,6 +32,13 @@ const driverInitial = {
   notes: ""
 };
 
+const launchCityOptions = [{ label: "Kano", value: "Kano" }, { label: "Abuja", value: "Abuja" }];
+const launchStateOptions = [{ label: "Kano", value: "Kano" }, { label: "FCT", value: "FCT" }];
+
+function stateForCity(city: string) {
+  return city === "Abuja" ? "FCT" : "Kano";
+}
+
 async function postReadiness(path: string, body: unknown) {
   const response = await fetch(`${site.apiBaseUrl}/${path}`, {
     method: "POST",
@@ -78,8 +85,11 @@ export function TaxiWaitlistForm() {
       <label>Phone number<input required value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} /></label>
       <label>Email optional<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
       <label>Pickup area optional<input value={form.pickupArea} onChange={(event) => setForm({ ...form, pickupArea: event.target.value })} /></label>
-      <label>City<input required value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} /></label>
-      <label>State<input required value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })} /></label>
+      <label>City<select required value={form.city} onChange={(event) => {
+        const city = event.target.value;
+        setForm({ ...form, city, state: stateForCity(city) });
+      }}>{launchCityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+      <label>State<select required value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })}>{launchStateOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
     </div>
     <label>Ride needs optional<textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} /></label>
     {success ? <p className="success">{success}</p> : null}
@@ -130,8 +140,11 @@ export function TaxiDriverApplicationForm() {
       <label>Phone number<input required value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} /></label>
       <label>Email optional<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
       <label>Address<input required value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} /></label>
-      <label>City<input required value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} /></label>
-      <label>State<input required value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })} /></label>
+      <label>City<select required value={form.city} onChange={(event) => {
+        const city = event.target.value;
+        setForm({ ...form, city, state: stateForCity(city) });
+      }}>{launchCityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+      <label>State<select required value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })}>{launchStateOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
       <label>Driving licence number<input required value={form.driverLicenceNumber} onChange={(event) => setForm({ ...form, driverLicenceNumber: event.target.value })} /></label>
       <label>Licence expiry date<input required placeholder="YYYY-MM-DD" value={form.driverLicenceExpiry} onChange={(event) => setForm({ ...form, driverLicenceExpiry: event.target.value })} /></label>
       <label>Vehicle plate number<input required value={form.vehiclePlateNumber} onChange={(event) => setForm({ ...form, vehiclePlateNumber: event.target.value })} /></label>

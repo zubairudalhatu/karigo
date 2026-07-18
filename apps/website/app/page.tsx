@@ -10,7 +10,7 @@ export default function HomePage() {
           <p className="eyebrow">Delivering Nigeria. Connecting You.</p>
           <h1>Everything you need, delivered.</h1>
           <p className="lead">Order food, shop groceries and market items, send parcels, request SME Services and prepare for more everyday services with KariGO.</p>
-          <p className="tagline">Food, groceries, market items, parcels, SME Services and everyday support across Kano.</p>
+          <p className="tagline">Food, groceries, market items, parcels, SME Services and everyday support across Kano and Abuja.</p>
           <div className="actions">
             <a className="button" href="#download">Download the App</a>
             <Link className="button secondary" href="/vendors/apply">Become a Vendor</Link>
@@ -20,7 +20,7 @@ export default function HomePage() {
         <div className="app-visual" aria-label="KariGO app-style visual mockup">
           <div className="phone-card">
             <div className="screen-mock">
-              <div className="mock-bar"><strong>KariGO</strong><span className="mock-pill">Kano</span></div>
+              <div className="mock-bar"><strong>KariGO</strong><span className="mock-pill">Kano + Abuja</span></div>
               <div className="mock-grid">
                 <div className="mock-tile">Food</div>
                 <div className="mock-tile">Groceries</div>
@@ -69,7 +69,7 @@ export default function HomePage() {
         <article className="info-card" id="vendors">
           <p className="eyebrow">For Vendors</p>
           <h2>Grow your business with KariGO.</h2>
-          <p>Restaurants, groceries, market sellers and approved service providers can apply to reach customers across Kano. KariGO reviews every application before onboarding.</p>
+          <p>Restaurants, groceries, market sellers and approved service providers can apply to reach customers across Kano and Abuja. KariGO reviews every application before onboarding.</p>
           <div className="actions">
             <Link className="button" href="/vendors/apply">Apply as a Vendor</Link>
             <Link className="button secondary" href="/sme-services/apply">Become a Service Provider</Link>
@@ -107,7 +107,7 @@ export default function HomePage() {
                 <span><small>Planned for</small><strong>App Store</strong></span>
               </div>
             </div>
-            <p><strong>Android:</strong> Coming soon on Google Play. Limited early access is shared separately.</p>
+            <p><strong>Android:</strong> Coming soon on Google Play. Controlled onboarding access is shared separately.</p>
             <p><strong>iOS:</strong> Coming later.</p>
           </article>
         </div>

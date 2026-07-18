@@ -8,7 +8,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
-["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "profile/wallet", "profile/referrals", "parcel", "sme-services", "sme-services/requests/index", "sme-services/requests/[id]", "vendor/apply", "vendor/application-status"]
+["vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "profile/wallet", "profile/referrals", "profile/returns-refunds", "parcel", "sme-services", "sme-services/requests/index", "sme-services/requests/[id]", "vendor/apply", "vendor/application-status"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
 assert(layout.includes('<Stack.Screen name="utilities/index" options={headerless}'), "Utilities hub must hide native header.");
 ["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
@@ -256,6 +256,8 @@ assert(profile.includes("Referral rewards"), "Profile must link to the customer 
 assert(profile.includes("/profile/referrals"), "Profile referral hub item must navigate to the referral screen.");
 assert(profile.includes("View and share your KariGO referral code."), "Profile referral hub item must describe referral code sharing.");
 assert(profile.includes("Tracking only"), "Profile referral hub item must mark referral rewards as tracking-only.");
+assert(profile.includes("Returns and Refunds"), "Profile must link to the returns and refunds support surface.");
+assert(profile.includes("/profile/returns-refunds"), "Profile returns/refunds item must navigate to the safe policy screen.");
 assert(profile.includes("KariGO Plus"), "Profile must reserve a future subscription surface.");
 assert(profile.includes("Coming soon"), "Future profile areas must remain clearly marked as inactive placeholders.");
 assert(profile.includes("Subscription actions are not active, and wallet/referral rewards remain tracking-only."), "Profile placeholders must state that live value features are not active.");
@@ -273,6 +275,13 @@ assert(!walletScreen.includes("Pay now") && !walletScreen.includes("Withdraw now
 const walletApi = read("src", "api", "wallet.api.ts");
 assert(walletApi.includes('api.get<CustomerWallet>("wallet")'), "Customer wallet API must call the wallet summary endpoint.");
 assert(walletApi.includes('api.get<CustomerWalletLedgerResult>("wallet/transactions")'), "Customer wallet API must call the wallet ledger endpoint.");
+
+const returnsRefundsScreen = read("app", "profile", "returns-refunds.tsx");
+assert(returnsRefundsScreen.includes("Returns and Refunds"), "Customer returns/refunds screen must exist.");
+assert(returnsRefundsScreen.includes("Refunds are reviewed by KariGO Support and processed after order/payment verification."), "Returns/refunds screen must state backend/operations verification.");
+assert(returnsRefundsScreen.includes("Cash / Pay on Delivery"), "Returns/refunds screen must explain cash/POD handling.");
+assert(returnsRefundsScreen.includes("Automatic wallet refunds are not active yet"), "Returns/refunds screen must keep wallet refund automation disabled.");
+assert(returnsRefundsScreen.includes('router.push("/support")'), "Returns/refunds screen must route customers to Support Centre.");
 
 const referralsScreen = read("app", "profile", "referrals.tsx");
 assert(referralsScreen.includes("Referral rewards"), "Customer referral screen must exist.");
@@ -361,9 +370,16 @@ assert(paymentStatus.includes("You can select Mock payment"), "Sandbox provider 
 assert(paymentStatus.includes("wallet funding, automatic refunds and payout automation remain disabled."), "Payment copy must keep wallet/refund automation disabled.");
 assert(checkout.includes("Verify payment status"), "Checkout must let customers verify payment status through the backend after provider checkout.");
 assert(checkout.includes("paymentInitializationFailureMessage"), "Checkout must show safe provider-specific initialization errors.");
+assert(checkout.includes("Pay on Delivery / Cash"), "Checkout must expose Cash/POD readiness copy.");
+assert(checkout.includes("Please pay only the amount shown in the app."), "Checkout Cash/POD copy must warn customers not to pay outside the app total.");
+assert(checkout.includes("Wallet top-up via Squad"), "Checkout must explain wallet top-up readiness.");
+assert(checkout.includes("walletPaymentsEnabled"), "Checkout must reflect backend wallet payment readiness flags.");
 const paymentFlow = read("src", "lib", "payment-flow.ts");
 assert(paymentFlow.includes("Linking.openURL"), "Customer payment flow must open external authorization with React Native Linking.");
-assert(paymentFlow.includes("^https:\\/\\/"), "Customer payment flow must only accept HTTPS external authorization URLs.");
+assert(paymentFlow.includes("Platform.OS === \"web\""), "Customer payment flow must open hosted checkout externally on web builds.");
+assert(paymentFlow.includes("window.open(normalizedUrl"), "Customer payment flow must not route hosted checkout URLs through Expo Router on web.");
+assert(paymentFlow.includes("Linking.canOpenURL(normalizedUrl)"), "Customer payment flow must validate native external URL handling before opening.");
+assert(paymentFlow.includes("parsed.protocol === \"https:\""), "Customer payment flow must only accept HTTPS external authorization URLs.");
 assert(paymentFlow.includes("mock://"), "Customer payment flow must preserve mock authorization handling.");
 
 const orderDetail = read("app", "orders", "[id].tsx");
@@ -383,6 +399,10 @@ assert(orderDetail.includes("paymentProvider: selectedPaymentProvider"), "Order 
 assert(orderDetail.includes("pendingAuthorizationCopy"), "Order detail must show sandbox authorization guidance for retry payments.");
 assert(orderDetail.includes("Verify payment status"), "Order detail must let customers verify provider checkout through the backend.");
 assert(orderDetail.includes("paymentInitializationFailureMessage"), "Order detail retry payment must show safe provider-specific initialization errors.");
+assert(orderDetail.includes("Pay on Delivery / Cash"), "Order detail must expose Cash/POD readiness copy for pending payment flows.");
+assert(orderDetail.includes("Please pay only the amount shown in the app."), "Order detail Cash/POD copy must warn customers not to pay outside the app total.");
+assert(orderDetail.includes("Wallet top-up via Squad"), "Order detail must explain wallet top-up readiness.");
+assert(orderDetail.includes("walletPaymentsEnabled"), "Order detail must reflect backend wallet payment readiness flags.");
 
 const ordersApi = read("src", "api", "orders.api.ts");
 assert(ordersApi.includes("orders/${id}/delivery-otp"), "Customer app must use the delivery OTP endpoint.");

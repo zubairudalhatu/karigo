@@ -387,19 +387,26 @@ export class AdminOperationsService {
   }
 
   integrationSettings() {
-    const paymentsProvider = this.configValue("PAYMENTS_PROVIDER", this.configValue("PAYMENT_PROVIDER", "mock"));
-    const paymentsLiveEnabled = this.configValue("PAYMENTS_LIVE_ENABLED", "false") === "true";
+    const paymentsProvider = this.configValue("PAYMENTS_PROVIDER", this.configValue("PAYMENT_PROVIDER", "mock")).toLowerCase();
+    const paymentsLiveEnabled = this.configFlag("PAYMENTS_LIVE_ENABLED", false);
+    const squadLiveConfigured = Boolean(this.configValue("SQUAD_SECRET_KEY"))
+      && this.configValue("SQUAD_MODE").toLowerCase() === "live"
+      && this.configValue("SQUAD_BASE_URL").startsWith("https://")
+      && !this.configValue("SQUAD_BASE_URL").toLowerCase().includes("sandbox")
+      && this.configValue("SQUAD_CALLBACK_URL").startsWith("https://")
+      && Boolean(this.configValue("SQUAD_WEBHOOK_SECRET"))
+      && this.configFlag("SQUAD_LIVE_ACTIVATION_APPROVED", false);
     return {
       environment: this.configValue("APP_ENV", "development"),
       payments: {
         provider: paymentsProvider,
         liveEnabled: paymentsLiveEnabled,
-        mockFallbackAvailable: true,
+        mockFallbackAvailable: !paymentsLiveEnabled,
         livePaymentCollectionDisabled: !paymentsLiveEnabled,
         sandboxProviders: {
           paystackConfigured: Boolean(this.configValue("PAYSTACK_SECRET_KEY")),
           monnifyConfigured: Boolean(this.configValue("MONNIFY_API_KEY")),
-          squadConfigured: Boolean(this.configValue("SQUAD_SECRET_KEY"))
+          squadConfigured: squadLiveConfigured || Boolean(this.configValue("SQUAD_SECRET_KEY"))
         }
       },
       utilities: {
@@ -409,13 +416,13 @@ export class AdminOperationsService {
       notifications: {
         termiiConfigured: Boolean(this.configValue("TERMII_API_KEY")),
         resendConfigured: Boolean(this.configValue("RESEND_API_KEY")),
-        marketingEnabled: false,
-        bulkMessagingEnabled: false
+        marketingEnabled: this.configFlag("MARKETING_ENABLED", false),
+        bulkMessagingEnabled: this.configFlag("BULK_MESSAGING_ENABLED", false)
       },
       biometricReadiness: {
         credentialStorageModelReady: true,
         passwordlessLoginEnabled: false,
-        note: "Biometric/fingerprint support is data-model ready only and is not active for login."
+        note: "Credential storage ready; biometric login pending app activation."
       }
     };
   }
@@ -593,7 +600,15 @@ export class AdminOperationsService {
     return (range.dateFrom || range.dateTo) ? { createdAt: { ...(range.dateFrom ? { gte: new Date(range.dateFrom) } : {}), ...(range.dateTo ? { lte: new Date(range.dateTo) } : {}) } } : {};
   }
   private configValue(key: string, fallback = "") {
-    return this.config?.get<string>(key) ?? fallback;
+    const value = this.config?.get<unknown>(key);
+    if (typeof value === "string") return value.trim() || fallback;
+    if (typeof value === "boolean" || typeof value === "number") return String(value);
+    return fallback;
+  }
+  private configFlag(key: string, fallback: boolean) {
+    const value = this.configValue(key);
+    if (!value) return fallback;
+    return ["true", "1", "yes", "on"].includes(value.toLowerCase());
   }
   private vendorDashboardUrl() {
     return this.configValue("VENDOR_DASHBOARD_URL", "https://vendor.karigo.com.ng").replace(/\/+$/, "");

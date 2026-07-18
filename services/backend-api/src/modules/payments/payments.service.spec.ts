@@ -263,7 +263,14 @@ describe("PaymentsService", () => {
       mockPaymentVisible: true,
       squadReady: false,
       monnifyVisible: true,
-      paystackVisible: true
+      paystackVisible: true,
+      cashPaymentEnabled: false,
+      cashPaymentLabel: "Pay on Delivery",
+      cashPaymentNote: "Cash/POD remains a manually reconciled launch option and must not be marked electronically paid.",
+      walletTopUpEnabled: false,
+      walletPaymentsEnabled: false,
+      walletPaymentNote: "Wallet top-up and wallet order payment require backend verification before balance or order status changes.",
+      launchCities: ["Kano", "Abuja"]
     });
   });
 
@@ -294,7 +301,14 @@ describe("PaymentsService", () => {
       mockPaymentVisible: false,
       squadReady: true,
       monnifyVisible: false,
-      paystackVisible: false
+      paystackVisible: false,
+      cashPaymentEnabled: false,
+      cashPaymentLabel: "Pay on Delivery",
+      cashPaymentNote: "Cash/POD remains a manually reconciled launch option and must not be marked electronically paid.",
+      walletTopUpEnabled: false,
+      walletPaymentsEnabled: false,
+      walletPaymentNote: "Wallet top-up and wallet order payment require backend verification before balance or order status changes.",
+      launchCities: ["Kano", "Abuja"]
     });
     expect(serialized).not.toContain("live-squad-secret-placeholder");
     expect(serialized).not.toContain("live-webhook-secret-placeholder");

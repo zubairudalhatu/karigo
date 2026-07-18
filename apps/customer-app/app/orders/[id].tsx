@@ -218,6 +218,13 @@ export default function OrderTracking() {
           {paymentProviderOptions.length === 0 ? <Text style={ui.muted}>No customer payment provider is currently available. Please contact KariGO support.</Text> : null}
           <Text style={ui.muted}>{paymentProviderSensitiveDataNoteForConfig(effectivePaymentConfig)}</Text>
         </Card> : null}
+        <Card>
+          <Text style={ui.cardTitle}>Pay on Delivery / Cash</Text>
+          <Text style={ui.cardText}>{effectivePaymentConfig.cashPaymentEnabled ? "Available where KariGO Operations has enabled manual cash collection." : "Cash payment is being prepared for Kano and Abuja launch operations."}</Text>
+          <Text style={ui.muted}>{effectivePaymentConfig.cashPaymentNote ?? "Cash/POD orders must remain unpaid until collection is verified by KariGO Operations."}</Text>
+          <Text style={ui.muted}>Please pay only the amount shown in the app.</Text>
+          <Button title={effectivePaymentConfig.cashPaymentEnabled ? "Cash/POD confirmation pending" : "Cash/POD not available yet"} tone="muted" disabled />
+        </Card>
         <Button title={busy ? "Preparing payment..." : paymentButtonTitle} onPress={pay} disabled={busy || !!pendingPaymentReference || !paymentProviderAvailable} />
         {pendingPaymentReference ? <Card>
           <Text style={ui.cardTitle}>{pendingView.title}</Text>
@@ -230,7 +237,9 @@ export default function OrderTracking() {
       </> : null}
       <Card>
         <Text style={ui.cardTitle}>Wallet and refunds</Text>
-        <Text style={ui.muted}>{walletRefundFutureNote}</Text>
+        <Text style={ui.muted}>{effectivePaymentConfig.walletPaymentNote ?? walletRefundFutureNote}</Text>
+        <Text style={ui.muted}>Wallet top-up via Squad: {effectivePaymentConfig.walletTopUpEnabled ? "Configured, pending backend verification flow." : "Not active yet."}</Text>
+        <Text style={ui.muted}>Pay from wallet: {effectivePaymentConfig.walletPaymentsEnabled ? "Configured, requires sufficient balance and server-side debit." : "Not active yet."}</Text>
       </Card>
       {order.items?.map((item) => <Card key={item.id}><Text>{item.productName} x {item.quantity}</Text><Text>{money(item.totalPrice)}</Text></Card>)}
       <Text style={ui.sectionTitle}>Order timeline</Text>{order.statusHistory.map((event) => <Card key={event.id}><StatusBadge status={event.newStatus} /><Text style={ui.muted}>{event.note || "Order updated"}</Text></Card>)}

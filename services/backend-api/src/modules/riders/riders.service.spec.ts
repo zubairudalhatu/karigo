@@ -64,7 +64,7 @@ describe("RidersService delivery captain applications", () => {
     applicationNotifications.deliveryCaptainApplicationReviewed.mockResolvedValue(undefined);
   });
 
-  it("creates a Kano Delivery Captain application without activating login, dispatch or payouts", async () => {
+  it("creates a Kano or Abuja Delivery Captain application without activating login, dispatch or payouts", async () => {
     const result = await service.createDeliveryCaptainApplication({
       fullName: "Demo Captain",
       phoneNumber: "08030000000",
@@ -96,6 +96,7 @@ describe("RidersService delivery captain applications", () => {
     expect(result).toMatchObject({
       deliveryOnly: true,
       pilotCity: "Kano",
+      launchCities: ["Kano", "Abuja"],
       createsLogin: false,
       activatesDispatch: false,
       payoutActivation: false
@@ -108,15 +109,48 @@ describe("RidersService delivery captain applications", () => {
       reference: deliveryCaptainApplication.applicationReference,
       guarantorPhone: deliveryCaptainApplication.guarantorPhone
     }));
+
+    prisma.deliveryCaptainApplication.create.mockResolvedValueOnce({
+      ...deliveryCaptainApplication,
+      city: "Abuja",
+      state: "FCT"
+    });
+
+    await expect(service.createDeliveryCaptainApplication({
+      fullName: "Demo Abuja Captain",
+      phoneNumber: "08030000000",
+      city: "Abuja",
+      state: "FCT",
+      address: "Wuse, Abuja",
+      vehicleType: DeliveryCaptainVehicleType.MOTORCYCLE,
+      guarantorName: "Demo Guarantor",
+      guarantorPhone: "08030000001",
+      declarationAccepted: true,
+      privacyAccepted: true,
+      contactConsentAccepted: true
+    })).resolves.toMatchObject({ pilotCity: "Abuja", launchCities: ["Kano", "Abuja"] });
   });
 
-  it("rejects Delivery Captain applications outside the Kano pilot location", async () => {
+  it("rejects Delivery Captain applications outside approved launch city pairs", async () => {
     await expect(service.createDeliveryCaptainApplication({
       fullName: "Out of scope Captain",
       phoneNumber: "08030000000",
       city: "Kaduna",
       state: "Kaduna",
       address: "Outside Kano",
+      vehicleType: DeliveryCaptainVehicleType.MOTORCYCLE,
+      guarantorName: "Demo Guarantor",
+      guarantorPhone: "08030000001",
+      declarationAccepted: true,
+      privacyAccepted: true,
+      contactConsentAccepted: true
+    })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.createDeliveryCaptainApplication({
+      fullName: "Mismatched Captain",
+      phoneNumber: "08030000000",
+      city: "Abuja",
+      state: "Kano",
+      address: "Outside FCT",
       vehicleType: DeliveryCaptainVehicleType.MOTORCYCLE,
       guarantorName: "Demo Guarantor",
       guarantorPhone: "08030000001",

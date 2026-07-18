@@ -17,6 +17,13 @@ export interface PublicPaymentConfig {
   squadReady: boolean;
   monnifyVisible: boolean;
   paystackVisible: boolean;
+  cashPaymentEnabled?: boolean;
+  cashPaymentLabel?: string;
+  cashPaymentNote?: string;
+  walletTopUpEnabled?: boolean;
+  walletPaymentsEnabled?: boolean;
+  walletPaymentNote?: string;
+  launchCities?: string[];
 }
 
 export interface PaymentAuthorization {

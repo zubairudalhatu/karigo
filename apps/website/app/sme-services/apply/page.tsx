@@ -21,7 +21,7 @@ export default function SmeServiceProviderApplicationPage() {
           <h2>What KariGO reviews</h2>
           <ul className="list">
             <li>Your service category and experience</li>
-            <li>Your operating areas in Kano</li>
+            <li>Your operating areas in Kano and Abuja</li>
             <li>Your availability, tools and contact details</li>
             <li>Whether the service can be safely prepared for customer requests</li>
           </ul>

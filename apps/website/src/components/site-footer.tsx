@@ -92,6 +92,8 @@ export function SiteFooter() {
 
         <nav className="footer-links" aria-label="Legal links">
           <h2>Legal</h2>
+          <Link href="/returns">Returns</Link>
+          <Link href="/refunds">Refunds</Link>
           <Link href="/privacy">Privacy Policy</Link>
           <Link href="/terms">Terms</Link>
         </nav>

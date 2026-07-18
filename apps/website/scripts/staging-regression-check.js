@@ -35,8 +35,10 @@ const vendorForm = read("src", "components", "vendor-application-form.tsx");
 assert(vendorForm.includes("/vendor-applications"), "Vendor application form must submit to public backend endpoint.");
 assert(vendorForm.includes("NEXT_PUBLIC_API_BASE_URL") || read("src", "lib", "site.ts").includes("NEXT_PUBLIC_API_BASE_URL"), "Website must use configured API base URL.");
 assert(vendorForm.includes("Your vendor application has been submitted. KariGO will review your details and contact you with the next steps."), "Success message must match approved copy.");
-assert(vendorForm.includes("Vendor applications are currently open for Kano only"), "Vendor application form must state the Kano-only pilot limit.");
-assert(vendorForm.includes("kanoPilotLocation"), "Vendor application state/city inputs must use controlled Kano options.");
+assert(vendorForm.includes("Vendor applications are currently open for Kano and Abuja launch onboarding."), "Vendor application form must state the Kano and Abuja launch limit.");
+assert(vendorForm.includes("launchCityOptions"), "Vendor application city inputs must use controlled Kano/Abuja options.");
+assert(vendorForm.includes('value: "Abuja"'), "Vendor application form must support Abuja city selection.");
+assert(vendorForm.includes('value: "FCT"'), "Vendor application form must support FCT state selection for Abuja.");
 assert(!vendorForm.includes("Authorization"), "Public vendor application form must not require auth headers.");
 
 const serviceProviderApply = read("app", "sme-services", "apply", "page.tsx");
@@ -67,7 +69,10 @@ const deliveryCaptainForm = read("src", "components", "delivery-captain-applicat
 assert(deliveryCaptainForm.includes("/delivery-captain-applications"), "Delivery Captain application form must submit to the public backend endpoint.");
 assert(deliveryCaptainForm.includes("Delivery Captain application has been submitted"), "Delivery Captain form success message must match approved copy.");
 assert(deliveryCaptainForm.includes("does not create rider login, activate live dispatch, payouts or ride access"), "Delivery Captain form must state safety limits.");
-assert(deliveryCaptainForm.includes("<option value=\"Kano\">Kano</option>"), "Delivery Captain city/state controls must be limited to Kano.");
+assert(deliveryCaptainForm.includes("Apply to deliver with KariGO in Kano or Abuja."), "Delivery Captain form must show Kano and Abuja launch copy.");
+assert(deliveryCaptainForm.includes('value: "Kano"'), "Delivery Captain city controls must include Kano.");
+assert(deliveryCaptainForm.includes('value: "Abuja"'), "Delivery Captain city controls must include Abuja.");
+assert(deliveryCaptainForm.includes('value: "FCT"'), "Delivery Captain state controls must include FCT.");
 assert(!deliveryCaptainForm.includes("Authorization"), "Public Delivery Captain application form must not require auth headers.");
 
 const taxiForms = read("src", "components", "taxi-readiness-forms.tsx");
@@ -104,7 +109,7 @@ assert(header.includes("https://vendor.karigo.com.ng"), "Vendor login must point
 
 const footer = read("src", "components", "site-footer.tsx");
 assert(footer.includes("&copy; 2026 KariGO Express Limited"), "Footer must include legal copyright text.");
-["Services", "Vendors", "Vendor Application", "Service Provider Application", "Vendor Login", "Captains", "Ride Waitlist", "Ride readiness", "Download App", "Contact", "Privacy Policy", "Terms"]
+["Services", "Vendors", "Vendor Application", "Service Provider Application", "Vendor Login", "Captains", "Ride Waitlist", "Ride readiness", "Download App", "Contact", "Returns", "Refunds", "Privacy Policy", "Terms"]
   .forEach((link) => assert(footer.includes(link), `Footer must include ${link}.`));
 assert(footer.includes("/karigo-logo.png"), "Footer must display the KariGO logo.");
 assert(footer.includes("@karigoapp"), "Footer must show the official KariGO social handle.");
@@ -132,6 +137,19 @@ const terms = read("app", "terms", "page.tsx");
 assert(terms.includes("Using KariGO"), "Terms page must include platform usage content.");
 assert(terms.includes("Services coming soon"), "Terms page must explain gated services.");
 assert(terms.includes("Prohibited use"), "Terms page must include prohibited use content.");
+
+const returnsPage = read("app", "returns", "page.tsx");
+assert(returnsPage.includes("Delivery issue and return support."), "Returns page must exist.");
+assert(returnsPage.includes("Wrong or missing items"), "Returns page must explain item issue support.");
+assert(returnsPage.includes("Damaged or unsafe delivery"), "Returns page must explain damaged delivery support.");
+assert(returnsPage.includes("meetup@karigo.com.ng"), "Returns page must provide approved support email.");
+assert(returnsPage.includes("+234 805 709 2686"), "Returns page must provide approved support phone.");
+
+const refundsPage = read("app", "refunds", "page.tsx");
+assert(refundsPage.includes("Refunds are reviewed before processing."), "Refunds page must exist.");
+assert(refundsPage.includes("Refunds are reviewed by KariGO Support and processed after order/payment verification."), "Refunds page must explain verification requirements.");
+assert(refundsPage.includes("automatic wallet refund credit remains disabled until separately approved"), "Refunds page must keep wallet refund automation disabled.");
+assert(refundsPage.includes("Cash / Pay on Delivery refunds"), "Refunds page must explain cash/POD refund handling.");
 
 const layout = read("app", "layout.tsx");
 assert(layout.includes("KariGO - Everything You Need, Delivered"), "Metadata title must be configured.");

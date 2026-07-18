@@ -446,7 +446,7 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     KARIGO_EMAIL_LOGO_URL: karigoEmailLogoUrl,
     KARIGO_PILOT_EMAIL_LABEL: typeof config.KARIGO_PILOT_EMAIL_LABEL === "string" && config.KARIGO_PILOT_EMAIL_LABEL.trim()
       ? config.KARIGO_PILOT_EMAIL_LABEL.trim()
-      : "Kano controlled early access",
+      : "Kano and Abuja launch onboarding",
     APPLICATION_NOTIFICATIONS_ENABLED: applicationNotificationsEnabled,
     TRANSACTIONAL_EMAIL_NOTIFICATION_PROVIDER: transactionalEmailProvider,
     TRANSACTIONAL_SMS_NOTIFICATION_PROVIDER: transactionalSmsProvider,

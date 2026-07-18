@@ -37,14 +37,14 @@ describe("EmailService and templates", () => {
       message: "Your KariGO account is now active.",
       logoUrl: "https://www.karigo.com.ng/karigo-logo.png",
       supportContact: "support@karigo.com.ng",
-      pilotLabel: "Kano controlled early access"
+      pilotLabel: "Kano and Abuja launch onboarding"
     });
 
     expect(rendered.subject).toBe("Your KariGO account is active");
     expect(rendered.htmlBody).toContain("https://www.karigo.com.ng/karigo-logo.png");
-    expect(rendered.htmlBody).toContain("Kano controlled early access");
+    expect(rendered.htmlBody).toContain("Kano and Abuja launch onboarding");
     expect(rendered.htmlBody).toContain("This is an account activation notification, not a marketing email.");
-    expect(rendered.textBody).toContain("Mock payment remains the selected pilot payment mode");
+    expect(rendered.textBody).toContain("Use only approved KariGO payment instructions shown in the app");
   });
 
   it("falls back to text branding when the activation logo URL is not HTTPS", () => {

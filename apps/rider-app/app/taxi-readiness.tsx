@@ -213,8 +213,8 @@ export default function TaxiReadiness() {
       <Field placeholder="Full name required" value={form.fullName} onChangeText={(fullName) => setForm({ ...form, fullName })} />
       <Field placeholder="Phone number required" keyboardType="phone-pad" value={form.phoneNumber} onChangeText={(phoneNumber) => setForm({ ...form, phoneNumber })} />
       <Field placeholder="Email optional" keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={(email) => setForm({ ...form, email })} />
-      <Field placeholder="City required" value={form.city} onChangeText={(city) => setForm({ ...form, city })} />
-      <Field placeholder="State required" value={form.state} onChangeText={(state) => setForm({ ...form, state })} />
+      <Field placeholder="City required (Kano or Abuja)" value={form.city} onChangeText={(city) => setForm({ ...form, city })} />
+      <Field placeholder="State required (Kano or FCT)" value={form.state} onChangeText={(state) => setForm({ ...form, state })} />
       <Field placeholder="Residential address required" value={form.address} onChangeText={(address) => setForm({ ...form, address })} />
     </Card>
 

@@ -72,7 +72,7 @@ export class RidersService {
     if (!dto.declarationAccepted || !dto.privacyAccepted || !dto.contactConsentAccepted) {
       throw new BadRequestException("Application declaration, privacy acknowledgement and contact consent are required");
     }
-    this.assertKanoPilotLocation(dto);
+    this.assertLaunchLocation(dto);
 
     const application = await this.prisma.deliveryCaptainApplication.create({
       data: {
@@ -193,9 +193,12 @@ export class RidersService {
     return trimmed ? trimmed : undefined;
   }
 
-  private assertKanoPilotLocation(dto: Pick<CreateDeliveryCaptainApplicationDto, "city" | "state">) {
-    if (dto.city !== "Kano" || dto.state !== "Kano") {
-      throw new BadRequestException("KariGO Delivery Captain applications are currently limited to Kano for the controlled pilot.");
+  private assertLaunchLocation(dto: Pick<CreateDeliveryCaptainApplicationDto, "city" | "state">) {
+    const city = dto.city.trim().toLowerCase();
+    const state = dto.state.trim().toLowerCase();
+    const supported = (city === "kano" && state === "kano") || (city === "abuja" && state === "fct");
+    if (!supported) {
+      throw new BadRequestException("KariGO Delivery Captain applications are currently open for Kano and Abuja launch onboarding.");
     }
   }
 
@@ -226,7 +229,8 @@ export class RidersService {
       submittedAt: application.createdAt.toISOString(),
       reviewedAt: application.reviewedAt?.toISOString() ?? null,
       deliveryOnly: true,
-      pilotCity: "Kano",
+      pilotCity: application.city,
+      launchCities: ["Kano", "Abuja"],
       createsLogin: false,
       activatesDispatch: false,
       payoutActivation: false

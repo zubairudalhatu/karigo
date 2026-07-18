@@ -9,6 +9,13 @@ function flag(value: boolean) {
   return <Badge>{value ? "Yes" : "No"}</Badge>;
 }
 
+function paymentModeNote(settings: IntegrationSettings) {
+  if (settings.payments.liveEnabled && settings.payments.provider === "squad") {
+    return "Squad by GTBank is the primary launch provider. Mock payment is hidden in public live mode; Monnify and Paystack remain pending approval/future secondary providers.";
+  }
+  return "Mock payment remains available only for staging/testing fallback. Live provider collection is not active from this page.";
+}
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<IntegrationSettings | null>(null);
   const [error, setError] = useState("");
@@ -26,6 +33,7 @@ export default function SettingsPage() {
         <h2>Payments</h2>
         <p>Provider: <strong>{settings.payments.provider}</strong></p>
         <p>Live enabled: {flag(settings.payments.liveEnabled)} Mock fallback: {flag(settings.payments.mockFallbackAvailable)}</p>
+        <p className="muted">{paymentModeNote(settings)}</p>
         <p className="muted">Paystack configured: {String(settings.payments.sandboxProviders.paystackConfigured)} - Monnify configured: {String(settings.payments.sandboxProviders.monnifyConfigured)} - Squad configured: {String(settings.payments.sandboxProviders.squadConfigured)}</p>
       </article>
       <article className="card">

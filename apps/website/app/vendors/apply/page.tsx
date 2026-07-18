@@ -12,7 +12,7 @@ export default function VendorApplyPage() {
       <section className="section">
         <p className="eyebrow">Vendor Application</p>
         <h1>Apply to sell or serve through KariGO.</h1>
-        <p className="lead">Restaurants, grocery stores, market sellers, pharmacies pending approval and service providers in Kano can apply. KariGO reviews all applications before onboarding.</p>
+        <p className="lead">Restaurants, grocery stores, market sellers, pharmacies pending approval and service providers in Kano and Abuja can apply. KariGO reviews all applications before onboarding.</p>
       </section>
       <section className="section soft split">
         <div>
@@ -24,7 +24,7 @@ export default function VendorApplyPage() {
             <li>Future campaign placement opportunities</li>
             <li>Future payout account verification support</li>
           </ul>
-          <p>Approval is not automatic. Current vendor applications are limited to Kano and do not activate live payouts, pharmacy scope or paid campaign placement.</p>
+          <p>Approval is not automatic. Current vendor applications are open for Kano and Abuja launch onboarding and do not activate live payouts, pharmacy scope or paid campaign placement.</p>
         </div>
         <VendorApplicationForm />
       </section>

@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Vendors",
-  description: "Apply to become a KariGO vendor in Kano."
+  description: "Apply to become a KariGO vendor in Kano or Abuja."
 };
 
 export default function VendorsPage() {
@@ -11,7 +11,7 @@ export default function VendorsPage() {
     <main>
       <section className="section">
         <p className="eyebrow">Vendors</p>
-        <h1>Reach more customers across Kano.</h1>
+        <h1>Reach more customers across Kano and Abuja.</h1>
         <p className="lead">KariGO helps restaurants, grocery stores, market sellers and approved service providers receive digital orders, improve operations visibility and reach more customers.</p>
         <div className="actions">
           <Link className="button" href="/vendors/apply">Apply as a Vendor</Link>

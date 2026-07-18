@@ -14,7 +14,12 @@ const categoryOptions: Array<{ label: string; value: Category }> = [
   { label: "Other marketplace vendor", value: "OTHER_MARKETPLACE_VENDOR" }
 ];
 
-const kanoPilotLocation = [{ label: "Kano", value: "Kano" }];
+const launchCityOptions = [{ label: "Kano", value: "Kano" }, { label: "Abuja", value: "Abuja" }];
+const launchStateOptions = [{ label: "Kano", value: "Kano" }, { label: "FCT", value: "FCT" }];
+
+function stateForCity(city: string) {
+  return city === "Abuja" ? "FCT" : "Kano";
+}
 
 const initial = {
   businessName: "",
@@ -88,15 +93,18 @@ export function VendorApplicationForm() {
 
   return (
     <form className="form-card" onSubmit={submit}>
-      <p className="muted">Vendor applications are currently open for Kano only during the controlled pilot.</p>
+      <p className="muted">Vendor applications are currently open for Kano and Abuja launch onboarding.</p>
       <div className="form-grid">
         <label>Business name<input required value={form.businessName} onChange={(event) => setForm({ ...form, businessName: event.target.value })} /></label>
         <label>Contact person name<input required value={form.contactFullName} onChange={(event) => setForm({ ...form, contactFullName: event.target.value })} /></label>
         <label>Phone number<input required value={form.businessPhoneNumber} onChange={(event) => setForm({ ...form, businessPhoneNumber: event.target.value })} /></label>
         <label>Email<input required type="email" value={form.businessEmail} onChange={(event) => setForm({ ...form, businessEmail: event.target.value })} /></label>
         <label>Business category<select value={form.businessCategory} onChange={(event) => setForm({ ...form, businessCategory: event.target.value as Category })}>{categoryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-        <label>City<select required value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })}>{kanoPilotLocation.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-        <label>State<select required value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })}>{kanoPilotLocation.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label>City<select required value={form.city} onChange={(event) => {
+          const city = event.target.value;
+          setForm({ ...form, city, state: stateForCity(city) });
+        }}>{launchCityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label>State<select required value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })}>{launchStateOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         <label>Website or social link optional<input value={form.websiteOrSocialLink} onChange={(event) => setForm({ ...form, websiteOrSocialLink: event.target.value })} /></label>
       </div>
       <label>Business address<textarea required value={form.businessAddress} onChange={(event) => setForm({ ...form, businessAddress: event.target.value })} /></label>

@@ -80,7 +80,7 @@ export class VendorApplicationsService {
     if (!dto.declarationAccepted || !dto.privacyAccepted || !dto.contactConsentAccepted) {
       throw new BadRequestException("Application declaration, privacy acknowledgement and contact consent are required");
     }
-    this.assertKanoPilotLocation(dto);
+    this.assertLaunchLocation(dto);
     const businessPhoneNumber = this.normalizePhone(dto.businessPhoneNumber);
     const contactPhoneNumber = this.normalizePhone(dto.contactPhoneNumber);
 
@@ -442,9 +442,12 @@ export class VendorApplicationsService {
     return createHash("sha256").update(value).digest("hex");
   }
 
-  private assertKanoPilotLocation(dto: Pick<CreateVendorApplicationDto, "city" | "state">) {
-    if (dto.state !== "Kano" || dto.city !== "Kano") {
-      throw new BadRequestException("KariGO vendor applications are currently limited to Kano for the controlled pilot.");
+  private assertLaunchLocation(dto: Pick<CreateVendorApplicationDto, "city" | "state">) {
+    const city = dto.city.trim().toLowerCase();
+    const state = dto.state.trim().toLowerCase();
+    const supported = (city === "kano" && state === "kano") || (city === "abuja" && state === "fct");
+    if (!supported) {
+      throw new BadRequestException("KariGO vendor applications are currently open for Kano and Abuja launch onboarding.");
     }
   }
 

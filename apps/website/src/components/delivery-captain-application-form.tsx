@@ -14,6 +14,13 @@ const vehicleOptions: Array<{ label: string; value: VehicleType }> = [
   { label: "Other", value: "OTHER" }
 ];
 
+const launchCityOptions = [{ label: "Kano", value: "Kano" }, { label: "Abuja", value: "Abuja" }];
+const launchStateOptions = [{ label: "Kano", value: "Kano" }, { label: "FCT", value: "FCT" }];
+
+function stateForCity(city: string) {
+  return city === "Abuja" ? "FCT" : "Kano";
+}
+
 const initial = {
   fullName: "",
   phoneNumber: "",
@@ -86,15 +93,18 @@ export function DeliveryCaptainApplicationForm() {
   return (
     <form id="delivery-captain-application" className="form-card" onSubmit={submit}>
       <p className="eyebrow">Delivery Captain Application</p>
-      <h2>Apply to deliver with KariGO in Kano.</h2>
+      <h2>Apply to deliver with KariGO in Kano or Abuja.</h2>
       <p className="muted">This application is for Delivery Captain review only. It does not create rider login, activate live dispatch, payouts or ride access.</p>
       <div className="form-grid">
         <label>Full name<input required value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></label>
         <label>Phone number<input required value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} /></label>
         <label>Email optional<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
-        <label>City<select required value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })}><option value="Kano">Kano</option></select></label>
-        <label>State<select required value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })}><option value="Kano">Kano</option></select></label>
-        <label>Preferred Kano zone optional<input value={form.preferredZone} onChange={(event) => setForm({ ...form, preferredZone: event.target.value })} /></label>
+        <label>City<select required value={form.city} onChange={(event) => {
+          const city = event.target.value;
+          setForm({ ...form, city, state: stateForCity(city) });
+        }}>{launchCityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label>State<select required value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })}>{launchStateOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label>Preferred launch zone optional<input value={form.preferredZone} onChange={(event) => setForm({ ...form, preferredZone: event.target.value })} /></label>
         <label>Vehicle type<select required value={form.vehicleType} onChange={(event) => setForm({ ...form, vehicleType: event.target.value as VehicleType })}>{vehicleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         <label>Plate number optional<input value={form.vehiclePlateNumber} onChange={(event) => setForm({ ...form, vehiclePlateNumber: event.target.value })} /></label>
       </div>

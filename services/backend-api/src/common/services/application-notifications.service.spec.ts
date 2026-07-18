@@ -62,7 +62,7 @@ describe("ApplicationNotificationsService", () => {
         TERMII_SENDER_ID: "KariGO",
         TERMII_BASE_URL: "https://api.ng.termii.com",
         EMAIL_REPLY_TO: "support@example.test",
-        KARIGO_PILOT_EMAIL_LABEL: "Kano controlled early access"
+        KARIGO_PILOT_EMAIL_LABEL: "Kano and Abuja launch onboarding"
       }[key] ?? fallback))
     } as unknown as ConfigService);
 
@@ -264,7 +264,7 @@ describe("ApplicationNotificationsService", () => {
 
     expect(fetch).toHaveBeenCalledTimes(2);
     const smsBody = JSON.parse((fetch as jest.Mock).mock.calls[1][1].body);
-    expect(smsBody.sms).toContain("Mock payment remains selected");
+    expect(smsBody.sms).toContain("backend payment verification");
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Application notification decision type=order_created"));
   });
 

@@ -94,7 +94,7 @@ describe("VendorApplicationsService", () => {
     contactConsentAccepted: true
   };
 
-  it("accepts Kano-only public vendor applications", async () => {
+  it("accepts Kano and Abuja public vendor applications", async () => {
     const result = await service.create(baseDto);
 
     expect(prisma.vendorApplication.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -106,6 +106,15 @@ describe("VendorApplicationsService", () => {
       email: vendorApplication.contactEmail
     }));
     expect(result).toMatchObject({ status: VendorApplicationStatus.SUBMITTED });
+
+    prisma.vendorApplication.create.mockResolvedValueOnce({
+      ...vendorApplication,
+      city: "Abuja",
+      state: "FCT"
+    });
+
+    await expect(service.create({ ...baseDto, city: "Abuja", state: "FCT" }))
+      .resolves.toMatchObject({ status: VendorApplicationStatus.SUBMITTED });
   });
 
   it("normalizes vendor application phone numbers before persistence and notification", async () => {
@@ -143,8 +152,9 @@ describe("VendorApplicationsService", () => {
     expect(applicationNotifications.vendorApplicationSubmitted).not.toHaveBeenCalled();
   });
 
-  it("rejects public vendor applications outside Kano", async () => {
+  it("rejects public vendor applications outside approved launch city pairs", async () => {
     await expect(service.create({ ...baseDto, city: "Kaduna", state: "Kaduna" })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create({ ...baseDto, city: "Abuja", state: "Kano" })).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.vendorApplication.create).not.toHaveBeenCalled();
   });
 

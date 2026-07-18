@@ -59,6 +59,9 @@ assert(paymentReadinessPage.includes("Payment readiness could not be loaded. Ple
 assert(paymentReadinessPage.includes("Mock payment remains a staging rollback path only"), "Payment Readiness page must state mock staging rollback guardrail.");
 assert(paymentReadinessPage.includes("Do not paste keys"), "Payment Readiness page must warn against exposing secrets.");
 assert(paymentReadinessPage.includes("Test sandbox initialization"), "Payment Readiness page must expose a safe admin-only sandbox initialization test action.");
+assert(paymentReadinessPage.includes("Verify live readiness"), "Payment Readiness page must use live readiness wording for Squad live mode.");
+assert(paymentReadinessPage.includes("Low-value live test required"), "Payment Readiness page must tell operators that Squad live mode still needs a low-value test.");
+assert(paymentReadinessPage.includes("Read-only in live mode"), "Payment Readiness page must not show sandbox initialization as the primary action in live mode.");
 assert(paymentReadinessPage.includes("Stage: {testResult.stage}"), "Payment Readiness page must show the provider initialization failure stage.");
 assert(paymentReadinessPage.includes("Authorization URL present"), "Payment Readiness page must show only authorization URL presence, not URL values.");
 assert(paymentReadinessPage.includes("provider.launchStatus"), "Payment Readiness page must show launch status such as Deferred for launch.");
@@ -75,6 +78,10 @@ assert(paymentsApiSource.includes("admin/payments/provider-readiness"), "Admin p
 assert(paymentsApiSource.includes("admin/payments/provider-readiness/test"), "Admin payments API must call provider readiness initialization test endpoint.");
 assert(paymentsApiSource.includes("PaymentProviderReadiness"), "Admin payments API must type provider readiness response.");
 assert(paymentsApiSource.includes("PaymentProviderInitializationTestResult"), "Admin payments API must type initialization test response.");
+
+const settingsPage = read("app", "settings", "page.tsx");
+assert(settingsPage.includes("Squad by GTBank is the primary launch provider"), "Admin Developer Settings must show Squad as the launch provider in live mode.");
+assert(settingsPage.includes("Mock payment is hidden in public live mode"), "Admin Developer Settings must explain mock is hidden from public live checkout.");
 
 const smeServicesSummaryPage = read("app", "sme-services", "summary", "page.tsx");
 assert(smeServicesSummaryPage.includes("SME Services operations summary"), "Admin SME Services summary page must exist.");

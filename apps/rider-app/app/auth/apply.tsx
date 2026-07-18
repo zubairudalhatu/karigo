@@ -116,8 +116,8 @@ export default function CaptainApplication() {
       <Field placeholder="Full name" value={form.fullName} onChangeText={(fullName) => setForm({ ...form, fullName })} />
       <Field placeholder="Phone number e.g. 080..." keyboardType="phone-pad" value={form.phoneNumber} onChangeText={(phoneNumber) => setForm({ ...form, phoneNumber })} />
       <Field placeholder="Email optional" keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={(email) => setForm({ ...form, email })} />
-      <Field placeholder="City" value={form.city} onChangeText={(city) => setForm({ ...form, city })} />
-      <Field placeholder="State" value={form.state} onChangeText={(state) => setForm({ ...form, state })} />
+      <Field placeholder="City (Kano or Abuja)" value={form.city} onChangeText={(city) => setForm({ ...form, city })} />
+      <Field placeholder="State (Kano or FCT)" value={form.state} onChangeText={(state) => setForm({ ...form, state })} />
       <Field placeholder="Address optional" multiline value={form.address} onChangeText={(address) => setForm({ ...form, address })} />
       <Field placeholder="Preferred launch zone optional" value={form.preferredZone} onChangeText={(preferredZone) => setForm({ ...form, preferredZone })} />
     </Card>

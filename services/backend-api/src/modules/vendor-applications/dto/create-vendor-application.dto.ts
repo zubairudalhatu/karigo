@@ -39,13 +39,13 @@ export class CreateVendorApplicationDto {
   businessAddress!: string;
 
   @IsString()
-  @IsIn(["Kano"], { message: "Vendor applications are currently limited to Kano State." })
+  @IsIn(["Kano", "FCT"], { message: "Vendor applications are currently limited to Kano State or FCT for Abuja." })
   @MaxLength(80)
   @Transform(trim)
   state!: string;
 
   @IsString()
-  @IsIn(["Kano"], { message: "Vendor applications are currently limited to Kano city." })
+  @IsIn(["Kano", "Abuja"], { message: "Vendor applications are currently limited to Kano or Abuja." })
   @MaxLength(80)
   @Transform(trim)
   city!: string;
