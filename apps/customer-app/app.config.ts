@@ -46,7 +46,8 @@ export default ({ config }: { config: Record<string, any> }) => ({
       foregroundImage: "./assets/karigo-adaptive-icon.png",
       backgroundColor: "#FFFFFF"
     },
-    package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer"
+    package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer",
+    versionCode: isStaging ? 1 : 2
   },
   ios: {
     ...config.ios,
