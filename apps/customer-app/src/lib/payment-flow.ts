@@ -8,6 +8,10 @@ export type PaymentAuthorizationLike = {
   url?: string | null;
 };
 
+export type ExternalPaymentOpenResult =
+  | { opened: true; method: "linking" | "web-browser" | "web-window" }
+  | { opened: false; message: string };
+
 export function paymentAuthorizationUrlFrom(authorization?: PaymentAuthorizationLike | null): string | null {
   const candidates = [
     authorization?.authorizationUrl,
@@ -36,31 +40,51 @@ export function isExternalPaymentUrl(url?: string | null): url is string {
 
 export const isExternalPaymentAuthorizationUrl = isExternalPaymentUrl;
 
-export async function openExternalPaymentUrl(url: string): Promise<void> {
+function paymentHost(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "invalid-host";
+  }
+}
+
+function logPaymentOpenDiagnostic(message: string, url: string): void {
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    console.warn(`[payment-checkout] ${message} host=${paymentHost(url)}`);
+  }
+}
+
+export async function openExternalPaymentUrl(url: string): Promise<ExternalPaymentOpenResult> {
   if (!isExternalPaymentUrl(url)) {
-    throw new Error("Payment provider returned an invalid checkout link.");
+    return { opened: false, message: "Payment provider returned an invalid checkout link." };
   }
   const normalizedUrl = url.trim();
   if (Platform.OS === "web" && typeof window !== "undefined") {
     const opened = window.open(normalizedUrl, "_blank", "noopener,noreferrer");
     if (!opened) {
-      throw new Error("Payment checkout could not be opened. Please allow browser pop-ups and try again.");
+      return { opened: false, message: "Payment checkout could not be opened. Please allow browser pop-ups and try again." };
     }
-    return;
+    return { opened: true, method: "web-window" };
   }
   try {
-    await Linking.openURL(normalizedUrl);
-    return;
-  } catch {
+    const canOpen = await Linking.canOpenURL(normalizedUrl);
+    if (canOpen) {
+      await Linking.openURL(normalizedUrl);
+      return { opened: true, method: "linking" };
+    }
+    logPaymentOpenDiagnostic("Linking cannot open payment URL; falling back to WebBrowser", normalizedUrl);
+  } catch (error) {
     // Some Android environments do not resolve a browser directly. Fall back to Expo's external browser helper.
+    logPaymentOpenDiagnostic(error instanceof Error ? error.message : "Linking failed; falling back to WebBrowser", normalizedUrl);
   }
   try {
     await WebBrowser.openBrowserAsync(normalizedUrl);
+    return { opened: true, method: "web-browser" };
   } catch {
-    throw new Error("Payment checkout could not be opened. Please try again.");
+    return { opened: false, message: "Payment checkout could not be opened. Please try again." };
   }
 }
 
-export async function openExternalPaymentAuthorization(url: string): Promise<void> {
+export async function openExternalPaymentAuthorization(url: string): Promise<ExternalPaymentOpenResult> {
   return openExternalPaymentUrl(url);
 }

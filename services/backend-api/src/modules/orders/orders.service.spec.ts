@@ -170,6 +170,47 @@ describe("OrdersService", () => {
     }));
   });
 
+  it("allows Pay on Delivery when address city is blank but vendor city is supported", async () => {
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
+    prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-1", city: "Abuja" });
+    prisma.address.findFirst.mockResolvedValue({ id: "address-1", city: "" });
+    prisma.product.findMany.mockResolvedValue([
+      { id: "product-1", name: "Jollof Rice", price: new Prisma.Decimal(2500) }
+    ]);
+    config.get.mockImplementation((key: string, fallback: unknown) => key === "CASH_ON_DELIVERY_ENABLED" ? "true" : fallback);
+    prisma.order.create.mockImplementation(({ data }: { data: Record<string, any> }) => data);
+
+    const result = await service.createVendorOrder("user-1", {
+      vendorId: "vendor-1",
+      deliveryAddressId: "address-1",
+      serviceCategory: ServiceCategory.FOOD,
+      paymentMethod: "CASH_ON_DELIVERY",
+      items: [{ productId: "product-1", quantity: 1 }]
+    });
+
+    expect(result.paymentStatus).toBe(PaymentStatus.CASH_PENDING);
+    expect(result.paymentMethod).toBe(OrderPaymentMethod.CASH_ON_DELIVERY);
+  });
+
+  it("rejects Pay on Delivery only when the known order city is unsupported", async () => {
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
+    prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-1", city: "Abuja" });
+    prisma.address.findFirst.mockResolvedValue({ id: "address-1", city: "Lagos" });
+    prisma.product.findMany.mockResolvedValue([
+      { id: "product-1", name: "Jollof Rice", price: new Prisma.Decimal(2500) }
+    ]);
+    config.get.mockImplementation((key: string, fallback: unknown) => key === "CASH_ON_DELIVERY_ENABLED" ? "true" : fallback);
+
+    await expect(service.createVendorOrder("user-1", {
+      vendorId: "vendor-1",
+      deliveryAddressId: "address-1",
+      serviceCategory: ServiceCategory.FOOD,
+      paymentMethod: "CASH_ON_DELIVERY",
+      items: [{ productId: "product-1", quantity: 1 }]
+    })).rejects.toThrow("Pay on Delivery is available in supported KariGO cities.");
+    expect(prisma.order.create).not.toHaveBeenCalled();
+  });
+
   it("returns delivery OTP only for an owned arrived or delivered order", async () => {
     prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
     prisma.order.findFirst.mockResolvedValue({

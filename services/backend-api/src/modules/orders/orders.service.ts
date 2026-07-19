@@ -54,7 +54,7 @@ export class OrdersService {
       this.requireCustomer(userId),
       this.prisma.vendor.findFirst({
         where: { id: dto.vendorId, status: VendorStatus.ACTIVE, deletedAt: null },
-        select: { id: true, userId: true }
+        select: { id: true, userId: true, city: true }
       }),
       this.prisma.address.findFirst({
         where: { id: dto.deliveryAddressId, userId },
@@ -122,7 +122,7 @@ export class OrdersService {
       this.requireCustomer(userId),
       this.prisma.vendor.findFirst({
         where: { id: dto.vendorId, status: VendorStatus.ACTIVE, deletedAt: null },
-        select: { id: true, userId: true }
+        select: { id: true, userId: true, city: true }
       }),
       this.prisma.address.findFirst({
         where: { id: dto.deliveryAddressId, userId },
@@ -179,7 +179,7 @@ export class OrdersService {
     const discountAmount = promo?.discountAmount ?? new Prisma.Decimal(0);
     const totalAmount = subtotal.add(deliveryFee).sub(discountAmount);
     const paymentMethod = this.normalizePaymentMethod(dto.paymentMethod);
-    this.assertPaymentMethodAvailable(paymentMethod, deliveryAddress.city);
+    this.assertPaymentMethodAvailable(paymentMethod, deliveryAddress.city, vendor.city);
 
     const order = await this.prisma.$transaction(async (tx) => {
       const isCashOrder = paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY;
@@ -380,9 +380,10 @@ export class OrdersService {
     throw new BadRequestException("Unsupported checkout payment method");
   }
 
-  private assertPaymentMethodAvailable(paymentMethod: OrderPaymentMethod, city?: string | null) {
+  private assertPaymentMethodAvailable(paymentMethod: OrderPaymentMethod, deliveryCity?: string | null, vendorCity?: string | null) {
     if (paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY || paymentMethod === OrderPaymentMethod.WALLET) {
-      if (!city || !LAUNCH_PAYMENT_CITIES.has(city.trim().toLowerCase())) {
+      const city = deliveryCity?.trim() || vendorCity?.trim() || "";
+      if (city && !LAUNCH_PAYMENT_CITIES.has(city.toLowerCase())) {
         throw new BadRequestException("Pay on Delivery is available in supported KariGO cities.");
       }
     }

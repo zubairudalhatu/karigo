@@ -781,11 +781,23 @@ export class PaymentsService {
   }
 
   private publicAuthorization(authorization: InitializePaymentResult) {
+    const authorizationAliases = authorization as InitializePaymentResult & {
+      checkoutUrl?: string | null;
+      paymentUrl?: string | null;
+      url?: string | null;
+    };
+    const authorizationUrl = [
+      authorization.authorizationUrl,
+      authorizationAliases.checkoutUrl,
+      authorizationAliases.paymentUrl,
+      authorizationAliases.url
+    ].find((value): value is string => typeof value === "string" && value.trim().length > 0)?.trim() ?? null;
     return {
       ...authorization,
-      checkoutUrl: authorization.authorizationUrl,
-      paymentUrl: authorization.authorizationUrl,
-      url: authorization.authorizationUrl
+      authorizationUrl,
+      checkoutUrl: authorizationUrl,
+      paymentUrl: authorizationUrl,
+      url: authorizationUrl
     };
   }
   private transactionReference(gateway: string): string {

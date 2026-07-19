@@ -87,7 +87,8 @@ export default function CustomerWalletScreen() {
       const result = await walletApi.initiateTopUp(amount);
       const url = paymentAuthorizationUrlFrom(result.authorization);
       if (isExternalPaymentAuthorizationUrl(url)) {
-        await openExternalPaymentUrl(url);
+        const openResult = await openExternalPaymentUrl(url);
+        if (!openResult.opened) throw new Error(openResult.message);
         setPendingTopUpReference(result.payment.transactionReference);
         setPendingTopUpUrl(url);
         setTopUpMessage("Squad wallet top-up checkout opened. Return here and verify after completing payment. Pending verification.");
@@ -132,7 +133,8 @@ export default function CustomerWalletScreen() {
     setTopUpBusy(true);
     setTopUpError("");
     try {
-      await openExternalPaymentUrl(pendingTopUpUrl);
+      const openResult = await openExternalPaymentUrl(pendingTopUpUrl);
+      if (!openResult.opened) throw new Error(openResult.message);
       setTopUpMessage("Squad wallet top-up checkout reopened. Return here and verify after completing payment.");
     } catch (e) {
       setTopUpError(friendlyError(e));

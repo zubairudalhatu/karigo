@@ -38,6 +38,15 @@ import { promoErrorMessage } from "../src/lib/promo-state";
 
 type CheckoutPaymentMethod = "squad" | "cash_on_delivery" | "wallet";
 
+function normalizeCity(value?: string | null): string {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function supportedCitySet(config: PublicPaymentConfig): Set<string> {
+  const cities = config.launchCities?.length ? config.launchCities : ["Kano", "Abuja"];
+  return new Set(cities.map(normalizeCity).filter(Boolean));
+}
+
 export default function Checkout() {
   const cart = useCart();
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -241,7 +250,8 @@ export default function Checkout() {
       const startedProvider = started.payment.gateway ?? selectedPaymentProvider;
       const startedProviderLabel = paymentProviderLabel(startedProvider, effectivePaymentConfig);
       if (isExternalPaymentAuthorizationUrl(authorizationUrl)) {
-        await openExternalPaymentUrl(authorizationUrl);
+        const openResult = await openExternalPaymentUrl(authorizationUrl);
+        if (!openResult.opened) throw new Error(openResult.message);
         setPendingPaymentReference(started.payment.transactionReference);
         setPendingAuthorizationUrl(authorizationUrl);
         setPendingPaymentProvider(startedProvider);
@@ -292,7 +302,8 @@ export default function Checkout() {
     setBusy(true);
     setError("");
     try {
-      await openExternalPaymentUrl(pendingAuthorizationUrl);
+      const openResult = await openExternalPaymentUrl(pendingAuthorizationUrl);
+      if (!openResult.opened) throw new Error(openResult.message);
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -316,8 +327,11 @@ export default function Checkout() {
   const walletSufficient = !!pricing && walletBalance >= pricing.payableAmount;
   const cashEnabled = Boolean(effectivePaymentConfig.cashPaymentEnabled);
   const walletEnabled = Boolean(effectivePaymentConfig.walletPaymentsEnabled);
+  const selectedAddress = addresses.find((address) => address.id === addressId);
+  const checkoutCity = normalizeCity(selectedAddress?.city) || normalizeCity(cart.vendor?.city);
+  const knownUnsupportedCashCity = Boolean(checkoutCity) && !supportedCitySet(effectivePaymentConfig).has(checkoutCity);
   const checkoutMethodBlocked =
-    selectedCheckoutMethod === "cash_on_delivery" ? !cashEnabled :
+    selectedCheckoutMethod === "cash_on_delivery" ? !cashEnabled || knownUnsupportedCashCity :
       selectedCheckoutMethod === "wallet" ? !walletEnabled || !walletSufficient :
         false;
 
@@ -339,7 +353,7 @@ export default function Checkout() {
     {!order ? <>
       <Card>
         <Text style={ui.cardTitle}>Choose payment method</Text>
-        <Text style={ui.cardText}>KariGO checkout supports Squad, Pay on Delivery and wallet payment where enabled. Pay on Delivery is available in supported KariGO cities.</Text>
+        <Text style={ui.cardText}>KariGO checkout supports Squad, Pay on Delivery and wallet payment where enabled.</Text>
         <Button
           title={`${selectedCheckoutMethod === "squad" ? "Selected - " : ""}Pay with Squad`}
           tone={selectedCheckoutMethod === "squad" ? "primary" : "muted"}
@@ -355,6 +369,7 @@ export default function Checkout() {
         />
         <Text style={ui.muted}>Pay cash to the assigned KariGO Captain/vendor at delivery.</Text>
         <Text style={ui.muted}>Please pay only the amount shown in the app.</Text>
+        {selectedCheckoutMethod === "cash_on_delivery" && knownUnsupportedCashCity ? <Message error>Pay on Delivery is available in supported KariGO cities.</Message> : null}
         <Button
           title={`${selectedCheckoutMethod === "wallet" ? "Selected - " : ""}Pay from Wallet`}
           tone={selectedCheckoutMethod === "wallet" ? "primary" : "muted"}

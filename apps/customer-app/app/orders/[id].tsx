@@ -101,7 +101,8 @@ export default function OrderTracking() {
       const startedProvider = started.payment.gateway ?? selectedPaymentProvider;
       const startedProviderLabel = paymentProviderLabel(startedProvider, effectivePaymentConfig);
       if (isExternalPaymentAuthorizationUrl(authorizationUrl)) {
-        await openExternalPaymentUrl(authorizationUrl);
+        const openResult = await openExternalPaymentUrl(authorizationUrl);
+        if (!openResult.opened) throw new Error(openResult.message);
         setPendingPaymentReference(started.payment.transactionReference);
         setPendingAuthorizationUrl(authorizationUrl);
         setPendingPaymentProvider(startedProvider);
@@ -146,7 +147,8 @@ export default function OrderTracking() {
     setBusy(true);
     setError("");
     try {
-      await openExternalPaymentUrl(pendingAuthorizationUrl);
+      const openResult = await openExternalPaymentUrl(pendingAuthorizationUrl);
+      if (!openResult.opened) throw new Error(openResult.message);
     } catch (e) {
       setError(friendlyError(e));
     } finally {

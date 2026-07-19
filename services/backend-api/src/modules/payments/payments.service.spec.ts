@@ -112,6 +112,34 @@ describe("PaymentsService", () => {
     expect(result.authorization.url).toBe("mock://payment/reference");
   });
 
+  it("normalizes provider checkout URL aliases into a canonical customer authorizationUrl", async () => {
+    prisma.order.findFirst.mockResolvedValue({
+      id: "order-1",
+      orderNumber: "KGO-001",
+      customerId: "customer-1",
+      totalAmount: new Prisma.Decimal(6000),
+      paymentStatus: PaymentStatus.PENDING,
+      orderStatus: OrderStatus.AWAITING_PAYMENT,
+      customer: { user: { email: "customer@example.com", phoneNumber: "+2348012345678" } }
+    });
+    prisma.payment.create.mockResolvedValue({
+      id: "payment-1",
+      currency: "NGN"
+    });
+    mockProvider.initialize.mockResolvedValue({
+      authorizationUrl: "   ",
+      checkoutUrl: "https://pay.squadco.com/KGO-SQUAD-ALIAS",
+      providerResponse: {}
+    });
+
+    const result = await service.initiate("user-1", { orderId: "order-1", amount: 6000 });
+
+    expect(result.authorization.authorizationUrl).toBe("https://pay.squadco.com/KGO-SQUAD-ALIAS");
+    expect(result.authorization.checkoutUrl).toBe("https://pay.squadco.com/KGO-SQUAD-ALIAS");
+    expect(result.authorization.paymentUrl).toBe("https://pay.squadco.com/KGO-SQUAD-ALIAS");
+    expect(result.authorization.url).toBe("https://pay.squadco.com/KGO-SQUAD-ALIAS");
+  });
+
   it("initiates payment with a customer-selected sandbox provider", async () => {
     const monnifyProvider = {
       name: "monnify",
