@@ -153,6 +153,7 @@ describe("Backend foundation (HTTP)", () => {
       activeProvider: "mock",
       customerSelectableProviders: ["mock", "monnify", "paystack"],
       mockPaymentVisible: true,
+      squadCustomerCheckoutEnabled: false,
       cashPaymentEnabled: false,
       cashPaymentLabel: "Pay on Delivery",
       walletTopUpEnabled: false,

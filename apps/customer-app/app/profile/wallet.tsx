@@ -70,8 +70,9 @@ export default function CustomerWalletScreen() {
   }, []);
 
   async function initiateTopUp() {
-    if (!paymentConfig.walletTopUpEnabled) {
-      setTopUpError("Wallet top-up is not available from backend config right now.");
+    const walletTopUpAllowed = Boolean(paymentConfig.walletTopUpEnabled && paymentConfig.squadCustomerCheckoutEnabled);
+    if (!walletTopUpAllowed) {
+      setTopUpError("Wallet top-up is temporarily unavailable.");
       return;
     }
     const amount = Number(topUpAmount);
@@ -129,7 +130,7 @@ export default function CustomerWalletScreen() {
   }
 
   async function reopenTopUpAuthorization() {
-      if (!pendingTopUpUrl) return;
+    if (!pendingTopUpUrl) return;
     setTopUpBusy(true);
     setTopUpError("");
     try {
@@ -146,6 +147,7 @@ export default function CustomerWalletScreen() {
   if (loading && !data) return <Protected><Loading label="Loading wallet..." /></Protected>;
 
   const wallet = data?.wallet;
+  const walletTopUpAllowed = Boolean(paymentConfig.walletTopUpEnabled && paymentConfig.squadCustomerCheckoutEnabled);
 
   return <Protected>
     <Screen title="KariGO Wallet" refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); void loadPaymentConfig(); }}>
@@ -165,20 +167,22 @@ export default function CustomerWalletScreen() {
 
       <Card>
         <Text style={ui.cardTitle}>Wallet safety status</Text>
-        <Text style={ui.muted}>KariGO Wallet top-up and wallet checkout are controlled launch features. Top-up credits only after backend payment verification. Withdrawals, automatic refunds, referral rewards and subscription billing remain disabled.</Text>
+        <Text style={ui.muted}>KariGO Wallet balances and activity remain visible. Top-up, wallet checkout, withdrawals, automatic refunds, referral rewards and subscription billing remain disabled until KariGO enables them safely.</Text>
       </Card>
 
       <Card>
         <Text style={ui.cardTitle}>Top up wallet</Text>
-        <Text style={ui.muted}>Provider: {paymentConfig.walletTopUpProviderLabel ?? "Squad by GTBank"}</Text>
-        <Text style={ui.muted}>Minimum amount: {money(paymentConfig.walletMinimumTopUpAmount ?? 100)}</Text>
-        <Text style={ui.muted}>{paymentConfig.walletTopUpEnabled ? "Enter an amount, complete Squad checkout, return to KariGO, then verify. KariGO will not credit the wallet from the app alone." : "Wallet top-up is disabled by backend configuration. KariGO will show the action only when operations enables it."}</Text>
+        <Text style={ui.muted}>{walletTopUpAllowed ? "Enter an amount, complete checkout, return to KariGO, then verify. KariGO will not credit the wallet from the app alone." : "Wallet top-up is temporarily unavailable."}</Text>
         <Message>{topUpMessage}</Message>
         <Message error>{topUpError}</Message>
-        <Field keyboardType="decimal-pad" value={topUpAmount} onChangeText={setTopUpAmount} placeholder="Amount e.g. 5000" />
-        <Button title={topUpBusy ? "Starting top-up..." : "Start wallet top-up"} onPress={initiateTopUp} disabled={topUpBusy || !!pendingTopUpReference || !paymentConfig.walletTopUpEnabled} />
-        {pendingTopUpUrl ? <Button title="Open Squad checkout again" tone="muted" onPress={reopenTopUpAuthorization} disabled={topUpBusy} /> : null}
-        {pendingTopUpReference ? <Button title={topUpBusy ? "Verifying..." : "Verify wallet top-up"} onPress={verifyTopUp} disabled={topUpBusy} /> : null}
+        {walletTopUpAllowed ? <>
+          <Text style={ui.muted}>Minimum amount: {money(paymentConfig.walletMinimumTopUpAmount ?? 100)}</Text>
+          <Text style={ui.muted}>Wallet credit requires backend payment verification; KariGO will not credit the wallet from the app alone.</Text>
+          <Field keyboardType="decimal-pad" value={topUpAmount} onChangeText={setTopUpAmount} placeholder="Amount e.g. 5000" />
+          <Button title={topUpBusy ? "Starting top-up..." : "Start wallet top-up"} onPress={initiateTopUp} disabled={topUpBusy || !!pendingTopUpReference} />
+        </> : null}
+        {walletTopUpAllowed && pendingTopUpUrl ? <Button title="Open payment checkout again" tone="muted" onPress={reopenTopUpAuthorization} disabled={topUpBusy} /> : null}
+        {walletTopUpAllowed && pendingTopUpReference ? <Button title={topUpBusy ? "Verifying..." : "Verify wallet top-up"} onPress={verifyTopUp} disabled={topUpBusy} /> : null}
         {pendingTopUpReference ? <Text style={ui.muted}>Pending verification. Your balance updates only after backend verification or webhook confirmation.</Text> : null}
         <Text style={ui.muted}>Wallet order payment: {paymentConfig.walletPaymentsEnabled ? "Available when your balance covers an order." : "Disabled by backend config until wallet payments are enabled."}</Text>
       </Card>

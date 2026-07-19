@@ -140,6 +140,31 @@ describe("PaymentsService", () => {
     expect(result.authorization.url).toBe("https://pay.squadco.com/KGO-SQUAD-ALIAS");
   });
 
+  it("blocks customer electronic checkout when no customer provider is enabled", async () => {
+    const squadProvider = {
+      name: "squad",
+      initialize: jest.fn(),
+      verify: jest.fn(),
+      parseWebhook: jest.fn()
+    };
+    prisma.order.findFirst.mockResolvedValue({
+      id: "order-1",
+      orderNumber: "KGO-001",
+      customerId: "customer-1",
+      totalAmount: new Prisma.Decimal(6000),
+      paymentStatus: PaymentStatus.PENDING,
+      orderStatus: OrderStatus.AWAITING_PAYMENT,
+      customer: { user: { email: "customer@example.com", phoneNumber: "+2348012345678" } }
+    });
+    registry.active.mockReturnValue(squadProvider);
+    registry.customerCheckoutProviders.mockReturnValue([]);
+
+    await expect(service.initiate("user-1", { orderId: "order-1", amount: 6000 }))
+      .rejects.toThrow("Customer electronic checkout is temporarily unavailable");
+    expect(prisma.payment.create).not.toHaveBeenCalled();
+    expect(squadProvider.initialize).not.toHaveBeenCalled();
+  });
+
   it("initiates payment with a customer-selected sandbox provider", async () => {
     const monnifyProvider = {
       name: "monnify",
@@ -260,8 +285,15 @@ describe("PaymentsService", () => {
       captainCashCollectionConfirmationAvailable: true,
       vendorVisibilityAvailable: true
     });
+    expect(readiness.launchPaymentOptions.squadCustomerCheckout).toMatchObject({
+      enabled: false,
+      customerSelectable: false,
+      envFlag: "SQUAD_CUSTOMER_CHECKOUT_ENABLED",
+      recommendedValue: "false"
+    });
     expect(readiness.launchPaymentOptions.wallet).toMatchObject({
       walletTopUpEnabled: false,
+      walletTopUpConfiguredByEnv: false,
       walletPaymentsEnabled: false,
       providerForTopUp: "Squad by GTBank",
       backendVerificationRequired: true,
@@ -290,7 +322,8 @@ describe("PaymentsService", () => {
         SQUAD_BASE_URL: "https://api-d.squadco.com",
         SQUAD_CALLBACK_URL: "https://api.karigo.com.ng/api/v1/payments/callback/squad",
         SQUAD_WEBHOOK_SECRET: "live-webhook-secret-placeholder",
-        SQUAD_LIVE_ACTIVATION_APPROVED: "true"
+        SQUAD_LIVE_ACTIVATION_APPROVED: "true",
+        SQUAD_CUSTOMER_CHECKOUT_ENABLED: "true"
       };
       return values[key] ?? fallback;
     });
@@ -322,7 +355,8 @@ describe("PaymentsService", () => {
       const values: Record<string, string | boolean> = {
         CASH_ON_DELIVERY_ENABLED: "true",
         WALLET_TOP_UP_ENABLED: "true",
-        WALLET_PAYMENTS_ENABLED: "false"
+        WALLET_PAYMENTS_ENABLED: "false",
+        SQUAD_CUSTOMER_CHECKOUT_ENABLED: "false"
       };
       return values[key] ?? fallback;
     });
@@ -334,11 +368,14 @@ describe("PaymentsService", () => {
     expect(readiness.providerEnabledFlags.WALLET_TOP_UP_ENABLED).toBe("true");
     expect(readiness.providerEnabledFlags.WALLET_PAYMENTS_ENABLED).toBe("false_or_unset");
     expect(readiness.launchPaymentOptions.cashOnDelivery.customerSelectable).toBe(true);
-    expect(readiness.launchPaymentOptions.wallet.walletTopUpEnabled).toBe(true);
+    expect(readiness.launchPaymentOptions.squadCustomerCheckout.enabled).toBe(false);
+    expect(readiness.launchPaymentOptions.wallet.walletTopUpConfiguredByEnv).toBe(true);
+    expect(readiness.launchPaymentOptions.wallet.walletTopUpEnabled).toBe(false);
     expect(readiness.launchPaymentOptions.wallet.walletPaymentsEnabled).toBe(false);
     expect(configResult).toEqual(expect.objectContaining({
       cashPaymentEnabled: true,
-      walletTopUpEnabled: true,
+      squadCustomerCheckoutEnabled: false,
+      walletTopUpEnabled: false,
       walletTopUpProvider: "squad",
       walletTopUpProviderLabel: "Squad by GTBank",
       walletMinimumTopUpAmount: 100,
@@ -356,12 +393,13 @@ describe("PaymentsService", () => {
       customerSelectableProviders: ["mock", "monnify", "paystack"],
       launchProviderLabel: "Staging payment providers",
       mockPaymentVisible: true,
+      squadCustomerCheckoutEnabled: false,
       squadReady: false,
       monnifyVisible: true,
       paystackVisible: true,
       cashPaymentEnabled: false,
       cashPaymentLabel: "Pay on Delivery",
-      cashPaymentNote: "Cash/POD remains a manually reconciled launch option and must not be marked electronically paid.",
+      cashPaymentNote: "Pay on Delivery is available for supported KariGO orders.",
       walletTopUpEnabled: false,
       walletPaymentsEnabled: false,
       walletTopUpProvider: "squad",
@@ -383,7 +421,8 @@ describe("PaymentsService", () => {
         SQUAD_BASE_URL: "https://api-d.squadco.com",
         SQUAD_CALLBACK_URL: "https://api.karigo.com.ng/api/v1/payments/callback/squad",
         SQUAD_WEBHOOK_SECRET: "live-webhook-secret-placeholder",
-        SQUAD_LIVE_ACTIVATION_APPROVED: "true"
+        SQUAD_LIVE_ACTIVATION_APPROVED: "true",
+        SQUAD_CUSTOMER_CHECKOUT_ENABLED: "true"
       };
       return values[key] ?? fallback;
     });
@@ -397,12 +436,13 @@ describe("PaymentsService", () => {
       customerSelectableProviders: ["squad"],
       launchProviderLabel: "Squad by GTBank",
       mockPaymentVisible: false,
+      squadCustomerCheckoutEnabled: true,
       squadReady: true,
       monnifyVisible: false,
       paystackVisible: false,
       cashPaymentEnabled: false,
       cashPaymentLabel: "Pay on Delivery",
-      cashPaymentNote: "Cash/POD remains a manually reconciled launch option and must not be marked electronically paid.",
+      cashPaymentNote: "Pay on Delivery is available for supported KariGO orders.",
       walletTopUpEnabled: false,
       walletPaymentsEnabled: false,
       walletTopUpProvider: "squad",
@@ -494,7 +534,7 @@ describe("PaymentsService", () => {
 
   it("blocks wallet top-up when the launch flag is disabled", async () => {
     await expect(service.initiateWalletTopUp("user-1", { amount: 5000 }))
-      .rejects.toThrow("Wallet top-up is not enabled for this launch stage");
+      .rejects.toThrow("Wallet top-up is temporarily unavailable");
   });
 
   it("initiates Squad wallet top-up without crediting the wallet client-side", async () => {
@@ -507,6 +547,7 @@ describe("PaymentsService", () => {
     registry.active.mockReturnValue(squadProvider);
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       if (key === "WALLET_TOP_UP_ENABLED") return "true";
+      if (key === "SQUAD_CUSTOMER_CHECKOUT_ENABLED") return "true";
       return fallback;
     });
     prisma.customerProfile.findUnique.mockResolvedValue({

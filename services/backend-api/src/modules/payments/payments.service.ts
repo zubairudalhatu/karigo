@@ -81,6 +81,9 @@ export class PaymentsService {
     const provider = dto.paymentProvider
       ? this.providerRegistry.customerTestProvider(dto.paymentProvider)
       : this.providerRegistry.active();
+    if (!this.providerRegistry.customerCheckoutProviders().includes(provider.name as CustomerTestPaymentProviderName)) {
+      throw new BadRequestException("Customer electronic checkout is temporarily unavailable");
+    }
     const transactionReference = this.transactionReference(provider.name);
     const payment = await this.prisma.payment.create({
       data: {
@@ -124,8 +127,8 @@ export class PaymentsService {
   }
 
   async initiateWalletTopUp(userId: string, dto: InitiateWalletTopUpDto) {
-    if (!this.flagValue("WALLET_TOP_UP_ENABLED", false)) {
-      throw new BadRequestException("Wallet top-up is not enabled for this launch stage");
+    if (!this.walletTopUpCustomerEnabled()) {
+      throw new BadRequestException("Wallet top-up is temporarily unavailable");
     }
     const customer = await this.requireCustomer(userId);
     const amount = new Prisma.Decimal(dto.amount).toDecimalPlaces(2);
@@ -325,6 +328,7 @@ export class PaymentsService {
     const livePaymentsEnabled = this.livePaymentsEnabled();
     const customerSelectableProviders = this.providerRegistry.customerCheckoutProviders();
     const liveActivation = this.squadLiveActivationReadiness(activeProvider);
+    const squadCustomerCheckoutEnabled = this.squadCustomerCheckoutEnabled();
     const squadVisible = customerSelectableProviders.includes("squad");
 
     return {
@@ -333,13 +337,14 @@ export class PaymentsService {
       customerSelectableProviders,
       launchProviderLabel: livePaymentsEnabled ? "Squad by GTBank" : "Staging payment providers",
       mockPaymentVisible: customerSelectableProviders.includes("mock") && !livePaymentsEnabled,
+      squadCustomerCheckoutEnabled,
       squadReady: squadVisible && (!livePaymentsEnabled || liveActivation.status === "READY"),
       monnifyVisible: customerSelectableProviders.includes("monnify") && !livePaymentsEnabled,
       paystackVisible: customerSelectableProviders.includes("paystack") && !livePaymentsEnabled,
       cashPaymentEnabled: this.flagValue("CASH_ON_DELIVERY_ENABLED", false),
       cashPaymentLabel: "Pay on Delivery",
-      cashPaymentNote: "Cash/POD remains a manually reconciled launch option and must not be marked electronically paid.",
-      walletTopUpEnabled: this.flagValue("WALLET_TOP_UP_ENABLED", false),
+      cashPaymentNote: "Pay on Delivery is available for supported KariGO orders.",
+      walletTopUpEnabled: this.walletTopUpCustomerEnabled(),
       walletPaymentsEnabled: this.flagValue("WALLET_PAYMENTS_ENABLED", false),
       walletTopUpProvider: "squad",
       walletTopUpProviderLabel: "Squad by GTBank",
@@ -812,6 +817,14 @@ export class PaymentsService {
     return this.optionalValue("PAYMENTS_LIVE_ENABLED")?.toLowerCase() === "true";
   }
 
+  private squadCustomerCheckoutEnabled(): boolean {
+    return this.flagValue("SQUAD_CUSTOMER_CHECKOUT_ENABLED", false);
+  }
+
+  private walletTopUpCustomerEnabled(): boolean {
+    return this.flagValue("WALLET_TOP_UP_ENABLED", false) && this.squadCustomerCheckoutEnabled();
+  }
+
   private mockReadiness(activeProvider: string, livePaymentsEnabled: boolean) {
     return {
       provider: "mock",
@@ -843,8 +856,17 @@ export class PaymentsService {
         recommendedValue: "true",
         note: "Cash/POD orders stay CASH_PENDING until KariGO Operations manually reconciles collection."
       },
+      squadCustomerCheckout: {
+        enabled: this.squadCustomerCheckoutEnabled(),
+        label: "Squad customer checkout",
+        customerSelectable: this.squadCustomerCheckoutEnabled(),
+        envFlag: "SQUAD_CUSTOMER_CHECKOUT_ENABLED",
+        recommendedValue: "false",
+        note: "Customer checkout is currently running Pay on Delivery only while Squad checkout is under live review."
+      },
       wallet: {
-        walletTopUpEnabled: this.flagValue("WALLET_TOP_UP_ENABLED", false),
+        walletTopUpEnabled: this.walletTopUpCustomerEnabled(),
+        walletTopUpConfiguredByEnv: this.flagValue("WALLET_TOP_UP_ENABLED", false),
         walletPaymentsEnabled: this.flagValue("WALLET_PAYMENTS_ENABLED", false),
         providerForTopUp: "Squad by GTBank",
         backendVerificationRequired: true,

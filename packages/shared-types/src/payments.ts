@@ -14,6 +14,7 @@ export interface PublicPaymentConfig {
   customerSelectableProviders: CustomerTestPaymentProvider[];
   launchProviderLabel: string;
   mockPaymentVisible: boolean;
+  squadCustomerCheckoutEnabled?: boolean;
   squadReady: boolean;
   monnifyVisible: boolean;
   paystackVisible: boolean;

@@ -161,7 +161,7 @@ export default function PaymentReadinessPage() {
           <section className="section">
             <article className="card internal">
               <h2>Safety guardrail</h2>
-              <p>Squad by GTBank is the primary launch provider, but live checkout remains blocked until Render environment verification, webhook secret setup and finance/management approval are complete. Mock payment remains a staging rollback path only and must be hidden from public live checkout. Do not paste keys, webhook secrets, test cards or provider dashboard secrets into this page, docs, tickets or screenshots.</p>
+              <p>Squad by GTBank is the primary launch provider, but customer checkout is currently running Pay on Delivery only while Squad checkout is under live review. Mock payment remains a staging rollback path only and must be hidden from public live checkout. Do not paste keys, webhook secrets, test cards or provider dashboard secrets into this page, docs, tickets or screenshots.</p>
             </article>
           </section>
 
@@ -182,14 +182,22 @@ export default function PaymentReadinessPage() {
                   <p className="muted">{readiness.launchPaymentOptions.cashOnDelivery.note}</p>
                 </article>
                 <article className="card">
+                  <h3>{readiness.launchPaymentOptions.squadCustomerCheckout.label}</h3>
+                  <p><Badge>{readiness.launchPaymentOptions.squadCustomerCheckout.enabled ? "Enabled" : "Disabled / Internal review"}</Badge></p>
+                  <div className="item"><span>Customer selectable</span><strong>{yesNo(readiness.launchPaymentOptions.squadCustomerCheckout.customerSelectable)}</strong></div>
+                  <p className="muted">Flag: {readiness.launchPaymentOptions.squadCustomerCheckout.envFlag}={readiness.launchPaymentOptions.squadCustomerCheckout.recommendedValue}</p>
+                  <p className="muted">{readiness.launchPaymentOptions.squadCustomerCheckout.note}</p>
+                </article>
+                <article className="card">
                   <h3>Wallet readiness</h3>
                   <p><Badge>{readiness.launchPaymentOptions.wallet.walletTopUpEnabled ? "Top-up enabled" : "Top-up disabled"}</Badge> <Badge>{readiness.launchPaymentOptions.wallet.walletPaymentsEnabled ? "Payments enabled" : "Payments disabled"}</Badge></p>
+                  <div className="item"><span>Top-up configured by env</span><strong>{yesNo(readiness.launchPaymentOptions.wallet.walletTopUpConfiguredByEnv)}</strong></div>
                   <div className="item"><span>Provider for top-up</span><strong>{readiness.launchPaymentOptions.wallet.providerForTopUp}</strong></div>
                   <div className="item"><span>Minimum top-up amount</span><strong>NGN {readiness.launchPaymentOptions.wallet.minimumTopUpAmount}</strong></div>
                   <div className="item"><span>Backend verification required</span><strong>{yesNo(readiness.launchPaymentOptions.wallet.backendVerificationRequired)}</strong></div>
                   <div className="item"><span>Client-side credit disabled</span><strong>{yesNo(readiness.launchPaymentOptions.wallet.clientSideCreditDisabled)}</strong></div>
                   <div className="item"><span>Admin wallet visibility available</span><strong>{yesNo(readiness.launchPaymentOptions.wallet.adminWalletVisibilityAvailable)}</strong></div>
-                  <p className="muted">Recommended values after Task 167: WALLET_TOP_UP_ENABLED={readiness.launchPaymentOptions.wallet.recommendedValues.WALLET_TOP_UP_ENABLED}, WALLET_PAYMENTS_ENABLED={readiness.launchPaymentOptions.wallet.recommendedValues.WALLET_PAYMENTS_ENABLED}</p>
+                  <p className="muted">Recommended fallback values: WALLET_TOP_UP_ENABLED=false, WALLET_PAYMENTS_ENABLED={readiness.launchPaymentOptions.wallet.recommendedValues.WALLET_PAYMENTS_ENABLED}</p>
                   <p className="muted">{readiness.launchPaymentOptions.wallet.note}</p>
                 </article>
               </div>

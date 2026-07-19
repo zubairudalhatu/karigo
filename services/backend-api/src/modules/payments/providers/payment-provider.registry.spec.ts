@@ -61,6 +61,7 @@ describe("PaymentProviderRegistry", () => {
   it("blocks all live checkout when Squad live configuration is incomplete", () => {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       if (key === "PAYMENTS_LIVE_ENABLED") return true;
+      if (key === "SQUAD_CUSTOMER_CHECKOUT_ENABLED") return "true";
       return fallback;
     });
 
@@ -73,7 +74,7 @@ describe("PaymentProviderRegistry", () => {
       .toThrow("Only Squad by GTBank is allowed for live customer checkout");
   });
 
-  it("allows only Squad when live payment checkout is fully approved", () => {
+  it("keeps live Squad hidden from customer checkout until explicitly enabled", () => {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       const values: Record<string, string | boolean> = {
         PAYMENTS_PROVIDER: "squad",
@@ -84,6 +85,30 @@ describe("PaymentProviderRegistry", () => {
         SQUAD_CALLBACK_URL: "https://api.karigo.com.ng/api/v1/payments/callback/squad",
         SQUAD_WEBHOOK_SECRET: "live-webhook-secret-placeholder",
         SQUAD_LIVE_ACTIVATION_APPROVED: "true"
+      };
+      return values[key] ?? fallback;
+    });
+
+    const paymentRegistry = registry();
+
+    expect(paymentRegistry.customerCheckoutProviders()).toEqual([]);
+    expect(() => paymentRegistry.customerTestProvider("squad"))
+      .toThrow("Squad customer checkout is temporarily disabled");
+    expect(paymentRegistry.active()).toBe(squad);
+  });
+
+  it("allows only Squad when live payment checkout is fully approved and customer enabled", () => {
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      const values: Record<string, string | boolean> = {
+        PAYMENTS_PROVIDER: "squad",
+        PAYMENTS_LIVE_ENABLED: true,
+        SQUAD_MODE: "live",
+        SQUAD_SECRET_KEY: "live-squad-key-placeholder",
+        SQUAD_BASE_URL: "https://api-d.squadco.com",
+        SQUAD_CALLBACK_URL: "https://api.karigo.com.ng/api/v1/payments/callback/squad",
+        SQUAD_WEBHOOK_SECRET: "live-webhook-secret-placeholder",
+        SQUAD_LIVE_ACTIVATION_APPROVED: "true",
+        SQUAD_CUSTOMER_CHECKOUT_ENABLED: "true"
       };
       return values[key] ?? fallback;
     });

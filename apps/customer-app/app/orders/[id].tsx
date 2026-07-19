@@ -18,7 +18,6 @@ import {
   defaultCustomerPaymentProvider,
   defaultCustomerPaymentProviderForConfig,
   fallbackCustomerPaymentConfig,
-  isSquadLivePaymentConfig,
   paymentSafetyNoteForConfig,
   paymentProviderLabel,
   paymentInitializationFailureMessage,
@@ -180,10 +179,7 @@ export default function OrderTracking() {
   const selectedProviderLabel = paymentProviderLabel(selectedPaymentProvider, effectivePaymentConfig);
   const pendingProviderLabel = paymentProviderLabel(pendingPaymentProvider || selectedPaymentProvider, effectivePaymentConfig);
   const pendingView = pendingAuthorizationCopy(pendingProviderLabel);
-  const liveSquadMode = isSquadLivePaymentConfig(effectivePaymentConfig);
-  const paymentButtonTitle = liveSquadMode
-    ? `Pay with Squad - ${money(order?.totalAmount ?? 0)}`
-    : `Continue with ${selectedProviderLabel} - ${money(order?.totalAmount ?? 0)}`;
+  const paymentButtonTitle = `Continue payment - ${money(order?.totalAmount ?? 0)}`;
 
   return <Protected><Screen title={order?.orderNumber ?? "Order details"}><Message>{message}</Message><Message error>{error}</Message>
     {order && pricing ? <>
@@ -197,7 +193,7 @@ export default function OrderTracking() {
       </Card>
       {order.paymentMethod ? <Card>
         <Text style={ui.cardTitle}>Payment method</Text>
-        <Text style={ui.cardText}>{order.paymentMethod === "CASH_ON_DELIVERY" ? "Pay on Delivery" : order.paymentMethod === "WALLET" ? "KariGO Wallet" : "Squad by GTBank"}</Text>
+        <Text style={ui.cardText}>{order.paymentMethod === "CASH_ON_DELIVERY" ? "Pay on Delivery" : order.paymentMethod === "WALLET" ? "KariGO Wallet" : "Electronic payment"}</Text>
         {order.paymentMethod === "CASH_ON_DELIVERY" ? <>
           <Text style={ui.muted}>Cash status: {order.cashCollectionStatus?.replaceAll("_", " ").toLowerCase() ?? "pending collection"}</Text>
           <Text style={ui.muted}>Please pay only the amount shown in the app. Amount due: {money(order.totalAmount)}.</Text>
@@ -232,10 +228,10 @@ export default function OrderTracking() {
               <Text style={ui.muted}>{option.description}</Text>
             </View>
           ))}
-          {paymentProviderOptions.length === 0 ? <Text style={ui.muted}>No customer payment provider is currently available. Please contact KariGO support.</Text> : null}
+          {paymentProviderOptions.length === 0 ? <Text style={ui.muted}>Electronic payment is temporarily unavailable. Pay on Delivery is active for new supported KariGO orders.</Text> : null}
           <Text style={ui.muted}>{paymentProviderSensitiveDataNoteForConfig(effectivePaymentConfig)}</Text>
         </Card> : null}
-        <Button title={busy ? "Preparing payment..." : paymentButtonTitle} onPress={pay} disabled={busy || !!pendingPaymentReference || !paymentProviderAvailable} />
+        {paymentProviderAvailable ? <Button title={busy ? "Preparing payment..." : paymentButtonTitle} onPress={pay} disabled={busy || !!pendingPaymentReference} /> : null}
         {pendingPaymentReference ? <Card>
           <Text style={ui.cardTitle}>{pendingView.title}</Text>
           <Text style={ui.cardText}>{pendingView.body}</Text>
@@ -248,7 +244,7 @@ export default function OrderTracking() {
       <Card>
         <Text style={ui.cardTitle}>Wallet and refunds</Text>
         <Text style={ui.muted}>{effectivePaymentConfig.walletPaymentNote ?? walletRefundFutureNote}</Text>
-        <Text style={ui.muted}>Wallet top-up via Squad: {effectivePaymentConfig.walletTopUpEnabled ? "Available through the wallet screen; balance is credited only after backend verification." : "Not active yet."}</Text>
+        <Text style={ui.muted}>Wallet top-up: {effectivePaymentConfig.walletTopUpEnabled ? "Available through the wallet screen; balance is credited only after backend verification." : "Temporarily unavailable."}</Text>
         <Text style={ui.muted}>Pay from wallet: {effectivePaymentConfig.walletPaymentsEnabled ? "Available when your balance covers the full order total." : "Not active yet."}</Text>
       </Card>
       {order.items?.map((item) => <Card key={item.id}><Text>{item.productName} x {item.quantity}</Text><Text>{money(item.totalPrice)}</Text></Card>)}

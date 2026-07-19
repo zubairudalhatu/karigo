@@ -61,6 +61,7 @@ assert(paymentReadinessPage.includes("Payment Readiness"), "Admin Payment Readin
 assert(paymentReadinessPage.includes("paymentsApi.providerReadiness"), "Admin Payment Readiness page must call provider readiness endpoint.");
 assert(paymentReadinessPage.includes("Payment readiness could not be loaded. Please confirm backend access and admin session."), "Payment Readiness page must use a page-specific safe error message.");
 assert(paymentReadinessPage.includes("Mock payment remains a staging rollback path only"), "Payment Readiness page must state mock staging rollback guardrail.");
+assert(paymentReadinessPage.includes("customer checkout is currently running Pay on Delivery only"), "Payment Readiness page must state the emergency POD-only checkout posture.");
 assert(paymentReadinessPage.includes("Do not paste keys"), "Payment Readiness page must warn against exposing secrets.");
 assert(paymentReadinessPage.includes("Test sandbox initialization"), "Payment Readiness page must expose a safe admin-only sandbox initialization test action.");
 assert(paymentReadinessPage.includes("Verify live readiness"), "Payment Readiness page must use live readiness wording for Squad live mode.");
@@ -79,6 +80,9 @@ assert(paymentReadinessPage.includes("2 Monnify pending approval, 3 Paystack pen
 assert(paymentReadinessPage.includes("Mock payment remains a staging rollback path only"), "Payment Readiness page must state mock is staging fallback only.");
 assert(paymentReadinessPage.includes("Launch payment options"), "Payment Readiness page must show Cash/POD and wallet launch options.");
 assert(paymentReadinessPage.includes("Cash / Pay on Delivery"), "Payment Readiness page must show Cash/POD readiness.");
+assert(paymentReadinessPage.includes("squadCustomerCheckout.label"), "Payment Readiness page must show Squad customer checkout readiness from backend config.");
+assert(paymentReadinessPage.includes("Disabled / Internal review"), "Payment Readiness page must label Squad customer checkout as disabled/internal review when off.");
+assert(paymentReadinessPage.includes("squadCustomerCheckout.envFlag"), "Payment Readiness page must show the Squad customer checkout env flag name only.");
 assert(paymentReadinessPage.includes("Captain cash collection confirmation available"), "Payment Readiness page must show Captain Cash/POD confirmation readiness.");
 assert(paymentReadinessPage.includes("Vendor visibility available"), "Payment Readiness page must show vendor Cash/POD visibility readiness.");
 assert(paymentReadinessPage.includes("Wallet readiness"), "Payment Readiness page must show wallet readiness.");
@@ -92,6 +96,7 @@ assert(paymentsApiSource.includes("admin/payments/provider-readiness/test"), "Ad
 assert(paymentsApiSource.includes("PaymentProviderReadiness"), "Admin payments API must type provider readiness response.");
 assert(paymentsApiSource.includes("PaymentProviderInitializationTestResult"), "Admin payments API must type initialization test response.");
 assert(paymentsApiSource.includes("launchPaymentOptions"), "Admin payment readiness API type must include launch payment option visibility.");
+assert(paymentsApiSource.includes("squadCustomerCheckout"), "Admin payment readiness API type must include Squad customer checkout readiness.");
 
 const settingsPage = read("app", "settings", "page.tsx");
 assert(settingsPage.includes("Squad by GTBank is the primary launch provider"), "Admin Developer Settings must show Squad as the launch provider in live mode.");

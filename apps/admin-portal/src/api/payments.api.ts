@@ -45,8 +45,17 @@ export interface PaymentProviderReadiness {
       recommendedValue: string;
       note: string;
     };
+    squadCustomerCheckout: {
+      enabled: boolean;
+      label: string;
+      customerSelectable: boolean;
+      envFlag: string;
+      recommendedValue: string;
+      note: string;
+    };
     wallet: {
       walletTopUpEnabled: boolean;
+      walletTopUpConfiguredByEnv?: boolean;
       walletPaymentsEnabled: boolean;
       providerForTopUp: string;
       backendVerificationRequired: boolean;

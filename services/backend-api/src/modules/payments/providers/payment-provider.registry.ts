@@ -55,6 +55,9 @@ export class PaymentProviderRegistry {
       if (name !== "squad") {
         throw new BadRequestException("Only Squad by GTBank is allowed for live customer checkout");
       }
+      if (!this.squadCustomerCheckoutEnabled()) {
+        throw new BadRequestException("Squad customer checkout is temporarily disabled");
+      }
       this.assertSquadLiveCheckoutReady(name);
       return this.get(name);
     }
@@ -66,7 +69,7 @@ export class PaymentProviderRegistry {
 
   customerCheckoutProviders(): CustomerTestPaymentProviderName[] {
     if (this.livePaymentsEnabled()) {
-      return this.squadLiveCheckoutReady() ? ["squad"] : [];
+      return this.squadCustomerCheckoutEnabled() && this.squadLiveCheckoutReady() ? ["squad"] : [];
     }
     const providers: CustomerTestPaymentProviderName[] = [...DEFAULT_CUSTOMER_CHECKOUT_PAYMENT_PROVIDERS];
     if (this.squadCustomerCheckoutEnabled()) {
