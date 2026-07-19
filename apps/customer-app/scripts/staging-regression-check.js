@@ -391,6 +391,7 @@ assert(utilityReceipt.includes("No real airtime, data, electricity token or cabl
 
 const checkout = read("app", "checkout.tsx");
 const paymentStatus = read("src", "lib", "payment-status.ts");
+const errors = read("src", "lib", "errors.ts");
 assert(checkout.includes("Delivery fee:"), "Checkout must show delivery fee.");
 assert(checkout.includes("Waiting for server quote"), "Checkout must not show zero fee when quote is absent.");
 assert(checkout.includes("Updating delivery total..."), "Checkout must show quote refresh loading state.");
@@ -422,7 +423,8 @@ assert(paymentStatus.includes("EXPO_PUBLIC_PAYMENT_LAUNCH_MODE"), "Customer paym
 assert(paymentStatus.includes("APP_VARIANT") && paymentStatus.includes("customer-production"), "Customer production builds must use the production payment fallback path.");
 assert(paymentStatus.includes("customerSelectableProviders: []"), "Customer production fallback must not expose electronic providers until backend config is loaded.");
 assert(paymentStatus.includes("cashPaymentEnabled: true"), "Customer production fallback must keep Pay on Delivery available.");
-assert(paymentStatus.includes("Flutterwave payment could not be started.") && paymentStatus.includes("Please try again or contact KariGO support."), "Live Flutterwave startup failures must not mention sandbox or mock fallback.");
+assert(paymentStatus.includes("Flutterwave payment could not be started.") && paymentStatus.includes("Please use Pay on Delivery."), "Live Flutterwave startup failures must guide customers to Pay on Delivery.");
+assert(errors.includes("FLUTTERWAVE_CHECKOUT_LINK_MISSING") && errors.includes("Flutterwave checkout is temporarily unavailable. Please use Pay on Delivery."), "Customer errors must map missing Flutterwave checkout links to Pay on Delivery fallback copy.");
 assert(paymentStatus.includes("Complete the ${providerLabel} checkout page"), "Checkout must show provider-specific authorization guidance.");
 assert(paymentStatus.includes("KariGO will only mark the order paid after backend verification."), "Payment copy must state backend verification is required.");
 assert(paymentStatus.includes("Payment could not be verified yet."), "Payment failures must have a clear retry-oriented message.");
@@ -445,7 +447,7 @@ assert(checkout.includes("supportedCitySet(effectivePaymentConfig)"), "Pay on De
 assert(checkout.includes("knownUnsupportedCashCity"), "Pay on Delivery must only show city blocking copy when the known city is unsupported.");
 assert(checkout.includes("!cashEnabled || knownUnsupportedCashCity"), "Pay on Delivery must not be blocked just because GPS/current city is missing.");
 assert(checkout.includes("Pay on Delivery is available in supported KariGO cities."), "Customer checkout must show supported-city copy only for known unsupported Cash/POD cities.");
-assert(checkout.includes("Flutterwave checkout link was not returned. Please retry or use Pay on Delivery."), "Customer checkout must surface a clear Flutterwave no-link fallback message.");
+assert(checkout.includes("Flutterwave checkout is temporarily unavailable. Please use Pay on Delivery."), "Customer checkout must surface a clear Flutterwave no-link fallback message.");
 assert(!checkout.includes("Cash/POD and wallet payment are available only in Kano and Abuja during launch readiness"), "Customer checkout must not expose launch-readiness Cash/POD copy.");
 assert(checkout.includes("Please pay only the amount shown in the app."), "Checkout Cash/POD copy must warn customers not to pay outside the app total.");
 assert(checkout.includes("Pay on Delivery is available for supported KariGO orders."), "Checkout must use simple live Pay on Delivery copy.");

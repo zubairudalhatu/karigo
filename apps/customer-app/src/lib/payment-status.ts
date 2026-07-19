@@ -287,7 +287,7 @@ export function paymentInitializationFailureMessage(
     ? defaultFailure
     : normalizedMessage || defaultFailure;
   const fallback = isLiveFlutterwave
-    ? "Please try again or contact KariGO support."
+    ? "Please use Pay on Delivery."
     : "You can select Mock payment to continue staging checkout while provider configuration is reviewed.";
   return isLiveFlutterwave
     ? `Flutterwave payment could not be started. ${safeMessage} ${fallback}`

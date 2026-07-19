@@ -31,6 +31,12 @@ import {
   walletRefundFutureNote
 } from "../../src/lib/payment-status";
 
+function paymentRetryErrorMessage(error: unknown): string {
+  const safeMessage = friendlyError(error);
+  if (safeMessage.startsWith("We could not complete") && error instanceof Error) return error.message;
+  return safeMessage;
+}
+
 export default function OrderTracking() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [order, setOrder] = useState<Order | null>(null);
@@ -113,10 +119,10 @@ export default function OrderTracking() {
         return;
       }
       if (!authorizationUrl) {
-        throw new Error("Flutterwave checkout link was not returned. Please retry or use Pay on Delivery.");
+        throw new Error("Flutterwave checkout is temporarily unavailable. Please use Pay on Delivery.");
       }
       throw new Error("Payment provider returned an invalid checkout link.");
-    } catch (e) { setError(paymentInitializationFailureMessage(selectedProviderLabel, friendlyError(e), effectivePaymentConfig)); } finally { setBusy(false); }
+    } catch (e) { setError(paymentInitializationFailureMessage(selectedProviderLabel, paymentRetryErrorMessage(e), effectivePaymentConfig)); } finally { setBusy(false); }
   }
 
   async function verifyPayment(reference: string) {

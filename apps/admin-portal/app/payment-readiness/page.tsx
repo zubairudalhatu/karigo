@@ -38,10 +38,16 @@ function launchStatusLabel(value?: string) {
 }
 
 function modeStatus(provider: PaymentProviderReadinessItem) {
-  const modeRequirement = provider.requirements.find((requirement) => requirement.name.endsWith("_MODE"));
+  const modeRequirement = provider.requirements.find((requirement) =>
+    requirement.name.endsWith("_MODE") || requirement.name === "FLUTTERWAVE_ENVIRONMENT"
+  );
   if (!modeRequirement) return "Not required";
   if (modeRequirement.issue) return "Missing or invalid";
   return modeRequirement.configured ? "Configured" : "Missing";
+}
+
+function configuredRequirement(provider: PaymentProviderReadinessItem, name: string) {
+  return provider.requirements.find((item) => item.name === name);
 }
 
 function missingRequired(provider: PaymentProviderReadinessItem) {
@@ -223,6 +229,10 @@ export default function PaymentReadinessPage() {
                 const sandboxProvider = isSandboxTestProvider(provider.provider) ? provider.provider : null;
                 const liveFlutterwave = readiness.paymentsLiveEnabled && provider.provider === "flutterwave";
                 const showSandboxTest = Boolean(sandboxProvider && !readiness.paymentsLiveEnabled);
+                const configured = missing.length === 0;
+                const customerCheckoutRequirement = configuredRequirement(provider, "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED");
+                const liveModeConfigured = modeStatus(provider) === "Configured";
+                const webhookCallbackConfigured = requirementConfigured(provider, "FLUTTERWAVE_SECRET_HASH or FLUTTERWAVE_WEBHOOK_SECRET") && requirementConfigured(provider, "FLUTTERWAVE_REDIRECT_URL or FLUTTERWAVE_CALLBACK_URL");
                 return (
                   <article className="card" key={provider.provider}>
                     <h3>{providerLabel(provider.provider)}</h3>
@@ -244,8 +254,11 @@ export default function PaymentReadinessPage() {
                       <div className="item">
                         <span>Live launch check</span>
                         <strong>Verify live readiness</strong>
-                        <p className="muted">Primary launch provider. Live mode configured: {modeStatus(provider) === "Configured" ? "Yes" : "No"}.</p>
-                        <p className="muted">Webhook/callback configured: {requirementConfigured(provider, "FLUTTERWAVE_SECRET_HASH or FLUTTERWAVE_WEBHOOK_SECRET") && requirementConfigured(provider, "FLUTTERWAVE_REDIRECT_URL or FLUTTERWAVE_CALLBACK_URL") ? "Yes" : "No"}.</p>
+                        <p className="muted">Configured: {configured ? "Yes" : "No"}.</p>
+                        <p className="muted">Customer checkout enabled: {customerCheckoutRequirement?.configured && !customerCheckoutRequirement.issue ? "Yes" : "No"}.</p>
+                        <p className="muted">Primary launch provider. Live mode configured: {liveModeConfigured ? "Yes" : "No"}.</p>
+                        <p className="muted">Webhook/callback configured: {webhookCallbackConfigured ? "Yes" : "No"}.</p>
+                        <p className="muted">Low-value live test required: Yes, but this is not a configuration blocker.</p>
                         <p className="muted">Low-value live test required for operations verification only. This page is read-only in live mode and does not initiate customer payment.</p>
                       </div>
                     ) : showSandboxTest && sandboxProvider ? (

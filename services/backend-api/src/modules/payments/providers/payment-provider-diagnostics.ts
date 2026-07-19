@@ -12,6 +12,8 @@ export interface PaymentInitializationDiagnostic {
   message: string;
   httpStatusCode?: number;
   providerMessage?: string;
+  code?: string;
+  safeDiagnostics?: Record<string, unknown>;
 }
 
 export class PaymentProviderInitializationException extends BadGatewayException {

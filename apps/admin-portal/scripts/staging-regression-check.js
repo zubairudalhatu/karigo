@@ -66,6 +66,10 @@ assert(paymentReadinessPage.includes("Do not paste keys"), "Payment Readiness pa
 assert(paymentReadinessPage.includes("Test sandbox initialization"), "Payment Readiness page must expose a safe admin-only sandbox initialization test action.");
 assert(paymentReadinessPage.includes("Verify live readiness"), "Payment Readiness page must use live readiness wording for Flutterwave live mode.");
 assert(paymentReadinessPage.includes("Low-value live test required"), "Payment Readiness page must tell operators that Flutterwave live mode still needs a low-value test.");
+assert(paymentReadinessPage.includes("FLUTTERWAVE_ENVIRONMENT"), "Payment Readiness page must treat Flutterwave environment as the live mode requirement.");
+assert(paymentReadinessPage.includes("Configured: {configured ? \"Yes\" : \"No\"}"), "Payment Readiness page must distinguish configured state from low-value live test status.");
+assert(paymentReadinessPage.includes("Customer checkout enabled"), "Payment Readiness page must distinguish Flutterwave customer checkout visibility.");
+assert(paymentReadinessPage.includes("not a configuration blocker"), "Payment Readiness page must not treat low-value live test requirement as a config blocker.");
 assert(paymentReadinessPage.includes("Admin does not initiate customer payments"), "Payment Readiness page must state Admin does not initiate customer payments.");
 assert(paymentReadinessPage.includes("Customer App initiates checkout"), "Payment Readiness page must state customer checkout starts from the Customer App.");
 assert(paymentReadinessPage.includes("operations verification only"), "Payment Readiness page must describe low-value live tests as operations verification only.");

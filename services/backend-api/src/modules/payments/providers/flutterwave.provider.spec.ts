@@ -1,4 +1,5 @@
 import { ConfigService } from "@nestjs/config";
+import { Logger } from "@nestjs/common";
 import { createHmac } from "crypto";
 import { FlutterwaveProvider } from "./flutterwave.provider";
 
@@ -19,10 +20,12 @@ describe("FlutterwaveProvider", () => {
   };
   const provider = new FlutterwaveProvider(config as unknown as ConfigService);
   const fetchMock = jest.fn();
+  let loggerSpy: jest.SpyInstance;
 
   beforeEach(() => {
     jest.clearAllMocks();
     global.fetch = fetchMock as never;
+    loggerSpy = jest.spyOn(Logger.prototype, "log").mockImplementation(() => undefined);
   });
 
   afterAll(() => {
@@ -88,6 +91,7 @@ describe("FlutterwaveProvider", () => {
 
     expect(result.authorizationUrl).toBe("https://checkout.flutterwave.com/v3/hosted/pay/test-link");
     expect(result.transactionReference).toBe("KGO-FLUTTERWAVE-LINK");
+    expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining("checkoutLinkAlias=data.link"));
   });
 
   it("accepts safe hosted checkout URL aliases without exposing provider payloads", async () => {
@@ -130,6 +134,48 @@ describe("FlutterwaveProvider", () => {
       customerPhone: "+2348000000000",
       metadata: {}
     })).rejects.toThrow("Flutterwave checkout link was not returned");
+  });
+
+  it("returns safe missing-link diagnostics without logging secrets, hosted URLs or raw payload values", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "success",
+        message: "Hosted Link",
+        data: {
+          tx_ref: "KGO-FLUTTERWAVE-NO-LINK",
+          link: "http://checkout.flutterwave.com/not-secure"
+        }
+      })
+    });
+
+    await expect(provider.initialize({
+      transactionReference: "KGO-FLUTTERWAVE-NO-LINK",
+      amount: "3500.00",
+      currency: "NGN",
+      customerEmail: "customer@example.test",
+      customerPhone: "+2348000000000",
+      metadata: {}
+    })).rejects.toMatchObject({
+      diagnostic: {
+        code: "FLUTTERWAVE_CHECKOUT_LINK_MISSING",
+        httpStatusCode: 200,
+        safeDiagnostics: {
+          responseKeys: ["data", "message", "status"],
+          dataKeys: ["link", "tx_ref"],
+          statusCode: 200
+        }
+      }
+    });
+
+    const logs = loggerSpy.mock.calls.flat().join("\n");
+    expect(logs).toContain("checkoutLinkFound=false");
+    expect(logs).toContain("checkoutLinkAlias=none");
+    expect(logs).toContain("baseHost=api.flutterwave.com");
+    expect(logs).not.toContain("live-flutterwave-secret-placeholder");
+    expect(logs).not.toContain("checkout.flutterwave.com/not-secure");
+    expect(logs).not.toContain("Hosted Link");
   });
 
   it("verifies payment evidence by reference without marking success client-side", async () => {

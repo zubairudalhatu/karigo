@@ -7,6 +7,7 @@ export function friendlyError(error: unknown, context: ErrorContext = "default")
     if (context === "login" && error.status === 401) return "Invalid phone number or password.";
     if (error.status === 401) return "Your session has expired. Please sign in again.";
     if (error.status === 403) return "You do not have access to this app.";
+    if (error.errorCode === "FLUTTERWAVE_CHECKOUT_LINK_MISSING") return "Flutterwave checkout is temporarily unavailable. Please use Pay on Delivery.";
     if (error.errorCode === "VALIDATION_ERROR") return error.message;
     return error.message || "We could not complete that request. Please try again.";
   }

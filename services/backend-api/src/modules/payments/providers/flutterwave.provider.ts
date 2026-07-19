@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   Injectable,
+  Logger,
   UnauthorizedException
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -30,6 +31,7 @@ interface FlutterwaveEnvelope {
 @Injectable()
 export class FlutterwaveProvider implements PaymentProvider {
   readonly name = "flutterwave" as const;
+  private readonly logger = new Logger(FlutterwaveProvider.name);
 
   constructor(private readonly config: ConfigService) {}
 
@@ -56,11 +58,17 @@ export class FlutterwaveProvider implements PaymentProvider {
     }, "initialize-transaction");
 
     const data = this.record(response.data) ?? {};
-    const authorizationUrl = this.checkoutUrlFromResponse(response);
+    const checkoutLink = this.checkoutUrlFromResponse(response);
+    this.logCheckoutDiagnostic(input, response, checkoutLink.alias);
+    const authorizationUrl = checkoutLink.url;
     if (!authorizationUrl) {
+      const safeDiagnostics = this.safeResponseDiagnostics(response);
       throw this.initializationException(
         "initialize-transaction",
-        `Flutterwave checkout link was not returned. ${this.responseShape(response)}`
+        "Flutterwave checkout link was not returned.",
+        safeDiagnostics.statusCode,
+        "FLUTTERWAVE_CHECKOUT_LINK_MISSING",
+        safeDiagnostics
       );
     }
 
@@ -116,7 +124,8 @@ export class FlutterwaveProvider implements PaymentProvider {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
     try {
-      const response = await fetch(`${this.baseUrl()}${path}`, {
+      const baseUrl = this.baseUrl();
+      const response = await fetch(`${baseUrl}${path}`, {
         ...init,
         signal: controller.signal,
         headers: {
@@ -125,7 +134,12 @@ export class FlutterwaveProvider implements PaymentProvider {
           ...(init.headers ?? {})
         }
       });
-      const body = await response.json().catch(() => ({})) as FlutterwaveEnvelope;
+      const parsedBody = await response.json().catch(() => ({}));
+      const body = (this.record(parsedBody) ?? {}) as FlutterwaveEnvelope;
+      Object.defineProperty(body, "__httpStatusCode", { value: response.status, enumerable: false });
+      this.logger.log(
+        `Flutterwave provider response provider=flutterwave environment=${this.environmentLabel()} baseHost=${this.hostFromUrl(baseUrl)} path=${path} stage=${stage} statusCode=${response.status} responseKeys=${this.safeKeys(body).join("|") || "none"} dataKeys=${this.safeKeys(this.record(body.data)).join("|") || "none"}`
+      );
       if (!response.ok || body.status?.toLowerCase() !== "success") {
         throw this.initializationException(stage, body.message || "Flutterwave request failed", response.status);
       }
@@ -228,37 +242,70 @@ export class FlutterwaveProvider implements PaymentProvider {
     }
   }
 
-  private checkoutUrlFromResponse(response: FlutterwaveEnvelope): string | null {
+  private checkoutUrlFromResponse(response: FlutterwaveEnvelope): { url: string | null; alias: string | null } {
     const data = this.record(response.data) ?? {};
     const candidates = [
-      data.link,
-      response.link,
-      data.authorization_url,
-      data.authorizationUrl,
-      data.checkout_url,
-      data.checkoutUrl,
-      data.paymentUrl,
-      data.payment_url,
-      data.url,
-      response.authorizationUrl,
-      response.authorization_url,
-      response.checkoutUrl,
-      response.checkout_url,
-      response.paymentUrl,
-      response.payment_url,
-      response.url
+      ["data.link", data.link],
+      ["link", response.link],
+      ["data.authorization_url", data.authorization_url],
+      ["data.authorizationUrl", data.authorizationUrl],
+      ["data.checkout_url", data.checkout_url],
+      ["data.checkoutUrl", data.checkoutUrl],
+      ["data.paymentUrl", data.paymentUrl],
+      ["data.payment_url", data.payment_url],
+      ["data.url", data.url],
+      ["authorizationUrl", response.authorizationUrl],
+      ["authorization_url", response.authorization_url],
+      ["checkoutUrl", response.checkoutUrl],
+      ["checkout_url", response.checkout_url],
+      ["paymentUrl", response.paymentUrl],
+      ["payment_url", response.payment_url],
+      ["url", response.url]
     ];
-    for (const candidate of candidates) {
+    for (const [alias, candidate] of candidates) {
       const checkoutUrl = this.checkoutUrl(candidate);
-      if (checkoutUrl) return checkoutUrl;
+      if (checkoutUrl) return { url: checkoutUrl, alias: String(alias) };
     }
-    return null;
+    return { url: null, alias: null };
   }
 
-  private responseShape(response: FlutterwaveEnvelope): string {
-    const topLevelKeys = Object.keys(response).sort();
-    const dataKeys = this.record(response.data) ? Object.keys(this.record(response.data)!).sort() : [];
-    return `topLevelKeys=${topLevelKeys.join(",") || "none"} dataKeys=${dataKeys.join(",") || "none"}`;
+  private safeResponseDiagnostics(response: FlutterwaveEnvelope) {
+    return {
+      responseKeys: this.safeKeys(response),
+      dataKeys: this.safeKeys(this.record(response.data)),
+      statusCode: this.statusCode(response)
+    };
+  }
+
+  private logCheckoutDiagnostic(
+    input: InitializePaymentInput,
+    response: FlutterwaveEnvelope,
+    linkAlias: string | null
+  ): void {
+    this.logger.log(
+      `Flutterwave checkout initialization provider=flutterwave environment=${this.environmentLabel()} baseHost=${this.hostFromUrl(this.baseUrl())} amount=${input.amount} currency=${input.currency || "NGN"} txRef=${input.transactionReference} statusCode=${this.statusCode(response) ?? "n/a"} responseKeys=${this.safeKeys(response).join("|") || "none"} dataKeys=${this.safeKeys(this.record(response.data)).join("|") || "none"} checkoutLinkFound=${linkAlias ? "true" : "false"} checkoutLinkAlias=${linkAlias ?? "none"}`
+    );
+  }
+
+  private safeKeys(value?: Record<string, unknown>): string[] {
+    return value ? Object.keys(value).sort() : [];
+  }
+
+  private statusCode(response: FlutterwaveEnvelope): number | undefined {
+    const value = response.__httpStatusCode;
+    return typeof value === "number" ? value : undefined;
+  }
+
+  private environmentLabel(): string {
+    return configText(this.config.get<unknown>("FLUTTERWAVE_ENVIRONMENT"))?.toLowerCase() ?? "unset";
+  }
+
+  private hostFromUrl(url: string): string {
+    try {
+      return new URL(url).host;
+    } catch {
+      return "invalid-host";
+    }
   }
 
   private toMinorAmount(value: unknown): number | undefined {
@@ -297,14 +344,18 @@ export class FlutterwaveProvider implements PaymentProvider {
   private initializationException(
     stage: PaymentInitializationStage,
     message: string,
-    httpStatusCode?: number
+    httpStatusCode?: number,
+    code?: string,
+    safeDiagnostics?: Record<string, unknown>
   ): PaymentProviderInitializationException {
     return new PaymentProviderInitializationException({
       provider: this.name,
       stage,
       message,
       httpStatusCode,
-      providerMessage: message
+      providerMessage: message,
+      code,
+      safeDiagnostics
     });
   }
 }

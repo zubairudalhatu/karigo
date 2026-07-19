@@ -23,6 +23,12 @@ import { promoErrorMessage } from "../src/lib/promo-state";
 
 type CheckoutPaymentMethod = "flutterwave" | "cash_on_delivery";
 
+function paymentStartErrorMessage(error: unknown): string {
+  const safeMessage = friendlyError(error);
+  if (safeMessage.startsWith("We could not complete") && error instanceof Error) return error.message;
+  return safeMessage;
+}
+
 function normalizeCity(value?: string | null): string {
   return value
     ?.trim()
@@ -212,7 +218,7 @@ export default function Checkout() {
           });
           const authorizationUrl = paymentAuthorizationUrlFrom(started.authorization);
           if (!authorizationUrl) {
-            throw new Error("Flutterwave checkout link was not returned. Please retry or use Pay on Delivery.");
+            throw new Error("Flutterwave checkout is temporarily unavailable. Please use Pay on Delivery.");
           }
           if (!isExternalPaymentAuthorizationUrl(authorizationUrl)) {
             throw new Error("Flutterwave did not return a secure checkout link.");
@@ -221,7 +227,7 @@ export default function Checkout() {
           if (!openResult.opened) throw new Error(openResult.message);
           setMessage(paymentAuthorizationOpenedMessage("Flutterwave", effectivePaymentConfig));
         } catch (paymentError) {
-          setError(friendlyError(paymentError));
+          setError(paymentStartErrorMessage(paymentError));
           setMessage("Order created. Open the order details to retry Flutterwave payment.");
         }
       } else {

@@ -1268,9 +1268,15 @@ export class PaymentsService {
     if (
       providerName === "flutterwave"
       && _error instanceof PaymentProviderInitializationException
-      && _error.diagnostic.providerMessage?.includes("checkout link was not returned")
+      && _error.diagnostic.code === "FLUTTERWAVE_CHECKOUT_LINK_MISSING"
     ) {
-      return new BadGatewayException("Flutterwave checkout link was not returned. Please retry or use Pay on Delivery.");
+      return new BadGatewayException({
+        message: "Flutterwave checkout link was not returned.",
+        error_code: "FLUTTERWAVE_CHECKOUT_LINK_MISSING",
+        details: {
+          safeDiagnostics: _error.diagnostic.safeDiagnostics ?? {}
+        }
+      });
     }
     if (this.livePaymentsEnabled()) {
       return new BadGatewayException(

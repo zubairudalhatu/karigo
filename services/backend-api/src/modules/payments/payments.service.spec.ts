@@ -266,6 +266,30 @@ describe("PaymentsService", () => {
     });
   });
 
+  it("reports live Flutterwave readiness low-value testing as a non-blocking operations check", () => {
+    registry.customerCheckoutProviders.mockReturnValue(["flutterwave"]);
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      const values: Record<string, string | boolean> = {
+        PAYMENTS_PROVIDER: "flutterwave",
+        PAYMENTS_LIVE_ENABLED: true,
+        FLUTTERWAVE_ENVIRONMENT: "live",
+        FLUTTERWAVE_SECRET_KEY: "live-flutterwave-secret-placeholder",
+        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
+        FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
+        FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder",
+        FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true"
+      };
+      return values[key] ?? fallback;
+    });
+
+    const readiness = service.providerReadiness();
+    const flutterwave = readiness.providers.find((provider) => provider.provider === "flutterwave");
+
+    expect(flutterwave?.status).toBe("READY");
+    expect(flutterwave?.issues).not.toContain(expect.stringContaining("Low-value live test"));
+    expect(readiness.liveActivation.status).toBe("READY");
+  });
+
   it("returns a clear safe error when Flutterwave does not return a hosted checkout link", async () => {
     const flutterwaveProvider = {
       name: "flutterwave",
@@ -293,15 +317,27 @@ describe("PaymentsService", () => {
     flutterwaveProvider.initialize.mockRejectedValue(new PaymentProviderInitializationException({
       provider: "flutterwave",
       stage: "initialize-transaction",
-      message: "Flutterwave checkout link was not returned. topLevelKeys=data,message,status dataKeys=none",
-      providerMessage: "Flutterwave checkout link was not returned. topLevelKeys=data,message,status dataKeys=none"
+      message: "Flutterwave checkout link was not returned.",
+      providerMessage: "Flutterwave checkout link was not returned.",
+      code: "FLUTTERWAVE_CHECKOUT_LINK_MISSING",
+      httpStatusCode: 200,
+      safeDiagnostics: {
+        responseKeys: ["data", "message", "status"],
+        dataKeys: [],
+        statusCode: 200
+      }
     }));
 
     await expect(service.initiate("user-1", {
       orderId: "order-flutterwave",
       amount: 8500,
       paymentProvider: "flutterwave"
-    })).rejects.toThrow("Flutterwave checkout link was not returned. Please retry or use Pay on Delivery.");
+    })).rejects.toMatchObject({
+      response: expect.objectContaining({
+        error_code: "FLUTTERWAVE_CHECKOUT_LINK_MISSING",
+        message: "Flutterwave checkout link was not returned."
+      })
+    });
 
     expect(prisma.payment.update).toHaveBeenCalledWith({
       where: { id: "payment-flutterwave" },
