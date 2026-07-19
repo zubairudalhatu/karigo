@@ -153,13 +153,16 @@ describe("Backend foundation (HTTP)", () => {
       activeProvider: "mock",
       customerSelectableProviders: ["mock", "monnify", "paystack"],
       mockPaymentVisible: true,
+      flutterwaveCustomerCheckoutEnabled: false,
+      flutterwaveReady: false,
       squadCustomerCheckoutEnabled: false,
+      squadReady: false,
       cashPaymentEnabled: false,
       cashPaymentLabel: "Pay on Delivery",
       walletTopUpEnabled: false,
       walletPaymentsEnabled: false,
-      walletTopUpProvider: "squad",
-      walletTopUpProviderLabel: "Squad by GTBank",
+      walletTopUpProvider: "flutterwave",
+      walletTopUpProviderLabel: "Flutterwave",
       walletMinimumTopUpAmount: 100,
       launchCities: ["Kano", "Abuja"]
     }));

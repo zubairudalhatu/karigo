@@ -35,7 +35,7 @@
       "env": {
         "APP_VARIANT": "production",
         "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1",
-        "EXPO_PUBLIC_PAYMENT_LAUNCH_MODE": "squad_live"
+        "EXPO_PUBLIC_PAYMENT_LAUNCH_MODE": "flutterwave_live"
       }
     }
   },

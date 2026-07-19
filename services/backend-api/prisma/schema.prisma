@@ -289,6 +289,7 @@ enum PaymentStatus {
 }
 
 enum OrderPaymentMethod {
+  FLUTTERWAVE
   SQUAD
   WALLET
   CASH_ON_DELIVERY

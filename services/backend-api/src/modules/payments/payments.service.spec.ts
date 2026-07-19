@@ -110,6 +110,8 @@ describe("PaymentsService", () => {
     expect(result.authorization.checkoutUrl).toBe("mock://payment/reference");
     expect(result.authorization.paymentUrl).toBe("mock://payment/reference");
     expect(result.authorization.url).toBe("mock://payment/reference");
+    expect(result.authorization.provider).toBe("mock");
+    expect(result.authorization).not.toHaveProperty("providerResponse");
   });
 
   it("normalizes provider checkout URL aliases into a canonical customer authorizationUrl", async () => {
@@ -254,6 +256,7 @@ describe("PaymentsService", () => {
       const values: Record<string, string | boolean> = {
         PAYMENTS_PROVIDER: "paystack",
         PAYMENTS_LIVE_ENABLED: false,
+        FLUTTERWAVE_ENVIRONMENT: "live",
         PAYSTACK_MODE: "test",
         MONNIFY_MODE: "sandbox",
         MONNIFY_API_KEY: "configured-monnify-api-key",
@@ -274,6 +277,7 @@ describe("PaymentsService", () => {
     expect(paystack?.issues).toContain("missing PAYSTACK_SECRET_KEY");
     expect(monnify?.issues).toContain("missing MONNIFY_CONTRACT_CODE");
     expect(readiness.customerSelectableSandboxProviders).toEqual(["mock", "monnify", "paystack"]);
+    expect(readiness.providerEnabledFlags.FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED).toBe("false_or_unset");
     expect(readiness.providerEnabledFlags.SQUAD_CUSTOMER_CHECKOUT_ENABLED).toBe("false_or_unset");
     expect(readiness.providerEnabledFlags.CASH_ON_DELIVERY_ENABLED).toBe("false_or_unset");
     expect(readiness.launchPaymentOptions.cashOnDelivery).toMatchObject({
@@ -291,11 +295,17 @@ describe("PaymentsService", () => {
       envFlag: "SQUAD_CUSTOMER_CHECKOUT_ENABLED",
       recommendedValue: "false"
     });
+    expect(readiness.launchPaymentOptions.flutterwaveCustomerCheckout).toMatchObject({
+      enabled: false,
+      customerSelectable: false,
+      envFlag: "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED",
+      recommendedValue: "true"
+    });
     expect(readiness.launchPaymentOptions.wallet).toMatchObject({
       walletTopUpEnabled: false,
       walletTopUpConfiguredByEnv: false,
       walletPaymentsEnabled: false,
-      providerForTopUp: "Squad by GTBank",
+      providerForTopUp: "Flutterwave",
       backendVerificationRequired: true,
       clientSideCreditDisabled: true,
       adminWalletVisibilityAvailable: true,
@@ -303,39 +313,38 @@ describe("PaymentsService", () => {
     });
     const squad = readiness.providers.find((provider) => provider.provider === "squad");
     expect(squad?.customerSelectableInStaging).toBe(false);
-    expect(squad).toMatchObject({ launchStatus: "PRIMARY_LAUNCH_PROVIDER" });
+    expect(squad).toMatchObject({ launchStatus: "DEFERRED_FOR_LAUNCH" });
     expect(serialized).not.toContain("configured-monnify-secret");
     expect(serialized).not.toContain("sandbox_sk_configured_squad_secret");
     expect(readiness.liveActivation.supportedByCurrentCode).toBe(true);
-    expect(readiness.liveActivation.blockers).toContain("PAYMENTS_PROVIDER must be squad");
+    expect(readiness.liveActivation.blockers).toContain("PAYMENTS_PROVIDER must be flutterwave");
   });
 
-  it("reports live Squad readiness only when all live activation gates are configured", () => {
-    registry.customerCheckoutProviders.mockReturnValue(["squad"]);
+  it("reports live Flutterwave readiness only when all live activation gates are configured", () => {
+    registry.customerCheckoutProviders.mockReturnValue(["flutterwave"]);
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       const values: Record<string, string | boolean> = {
-        PAYMENTS_PROVIDER: "squad",
+        PAYMENTS_PROVIDER: "flutterwave",
         PAYMENTS_LIVE_ENABLED: true,
-        SQUAD_MODE: "live",
-        SQUAD_SECRET_KEY: "live-squad-secret-placeholder",
-        SQUAD_PUBLIC_KEY: "live-squad-public-placeholder",
-        SQUAD_BASE_URL: "https://api-d.squadco.com",
-        SQUAD_CALLBACK_URL: "https://api.karigo.com.ng/api/v1/payments/callback/squad",
-        SQUAD_WEBHOOK_SECRET: "live-webhook-secret-placeholder",
-        SQUAD_LIVE_ACTIVATION_APPROVED: "true",
-        SQUAD_CUSTOMER_CHECKOUT_ENABLED: "true"
+        FLUTTERWAVE_ENVIRONMENT: "live",
+        FLUTTERWAVE_SECRET_KEY: "live-flutterwave-secret-placeholder",
+        FLUTTERWAVE_PUBLIC_KEY: "live-flutterwave-public-placeholder",
+        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
+        FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
+        FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder",
+        FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true"
       };
       return values[key] ?? fallback;
     });
 
     const readiness = service.providerReadiness();
-    const squad = readiness.providers.find((provider) => provider.provider === "squad");
+    const flutterwave = readiness.providers.find((provider) => provider.provider === "flutterwave");
     const serialized = JSON.stringify(readiness);
 
-    expect(readiness.activeProvider).toBe("squad");
+    expect(readiness.activeProvider).toBe("flutterwave");
     expect(readiness.paymentsLiveEnabled).toBe(true);
-    expect(readiness.customerSelectableSandboxProviders).toEqual(["squad"]);
-    expect(squad).toMatchObject({
+    expect(readiness.customerSelectableSandboxProviders).toEqual(["flutterwave"]);
+    expect(flutterwave).toMatchObject({
       launchStatus: "PRIMARY_LAUNCH_PROVIDER",
       readyForLiveCheckout: true,
       readyForSandboxCheckout: false,
@@ -346,7 +355,7 @@ describe("PaymentsService", () => {
       status: "READY",
       blockers: []
     });
-    expect(serialized).not.toContain("live-squad-secret-placeholder");
+    expect(serialized).not.toContain("live-flutterwave-secret-placeholder");
     expect(serialized).not.toContain("live-webhook-secret-placeholder");
   });
 
@@ -368,16 +377,18 @@ describe("PaymentsService", () => {
     expect(readiness.providerEnabledFlags.WALLET_TOP_UP_ENABLED).toBe("true");
     expect(readiness.providerEnabledFlags.WALLET_PAYMENTS_ENABLED).toBe("false_or_unset");
     expect(readiness.launchPaymentOptions.cashOnDelivery.customerSelectable).toBe(true);
+    expect(readiness.launchPaymentOptions.flutterwaveCustomerCheckout.enabled).toBe(false);
     expect(readiness.launchPaymentOptions.squadCustomerCheckout.enabled).toBe(false);
     expect(readiness.launchPaymentOptions.wallet.walletTopUpConfiguredByEnv).toBe(true);
     expect(readiness.launchPaymentOptions.wallet.walletTopUpEnabled).toBe(false);
     expect(readiness.launchPaymentOptions.wallet.walletPaymentsEnabled).toBe(false);
     expect(configResult).toEqual(expect.objectContaining({
       cashPaymentEnabled: true,
+      flutterwaveCustomerCheckoutEnabled: false,
       squadCustomerCheckoutEnabled: false,
       walletTopUpEnabled: false,
-      walletTopUpProvider: "squad",
-      walletTopUpProviderLabel: "Squad by GTBank",
+      walletTopUpProvider: "flutterwave",
+      walletTopUpProviderLabel: "Flutterwave",
       walletMinimumTopUpAmount: 100,
       walletPaymentsEnabled: false,
       launchCities: ["Kano", "Abuja"]
@@ -393,6 +404,8 @@ describe("PaymentsService", () => {
       customerSelectableProviders: ["mock", "monnify", "paystack"],
       launchProviderLabel: "Staging payment providers",
       mockPaymentVisible: true,
+      flutterwaveCustomerCheckoutEnabled: false,
+      flutterwaveReady: false,
       squadCustomerCheckoutEnabled: false,
       squadReady: false,
       monnifyVisible: true,
@@ -402,27 +415,26 @@ describe("PaymentsService", () => {
       cashPaymentNote: "Pay on Delivery is available for supported KariGO orders.",
       walletTopUpEnabled: false,
       walletPaymentsEnabled: false,
-      walletTopUpProvider: "squad",
-      walletTopUpProviderLabel: "Squad by GTBank",
+      walletTopUpProvider: "flutterwave",
+      walletTopUpProviderLabel: "Flutterwave",
       walletMinimumTopUpAmount: 100,
-      walletPaymentNote: "Wallet top-up and wallet order payment require backend verification before balance or order status changes.",
+      walletPaymentNote: "Wallet top-up is temporarily unavailable while KariGO verifies the new payment provider.",
       launchCities: ["Kano", "Abuja"]
     });
   });
 
-  it("returns public-safe live Squad payment config without secrets", () => {
-    registry.customerCheckoutProviders.mockReturnValue(["squad"]);
+  it("returns public-safe live Flutterwave payment config without secrets", () => {
+    registry.customerCheckoutProviders.mockReturnValue(["flutterwave"]);
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       const values: Record<string, string | boolean> = {
-        PAYMENTS_PROVIDER: "squad",
+        PAYMENTS_PROVIDER: "flutterwave",
         PAYMENTS_LIVE_ENABLED: true,
-        SQUAD_MODE: "live",
-        SQUAD_SECRET_KEY: "live-squad-secret-placeholder",
-        SQUAD_BASE_URL: "https://api-d.squadco.com",
-        SQUAD_CALLBACK_URL: "https://api.karigo.com.ng/api/v1/payments/callback/squad",
-        SQUAD_WEBHOOK_SECRET: "live-webhook-secret-placeholder",
-        SQUAD_LIVE_ACTIVATION_APPROVED: "true",
-        SQUAD_CUSTOMER_CHECKOUT_ENABLED: "true"
+        FLUTTERWAVE_ENVIRONMENT: "live",
+        FLUTTERWAVE_SECRET_KEY: "live-flutterwave-secret-placeholder",
+        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
+        FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
+        FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder",
+        FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true"
       };
       return values[key] ?? fallback;
     });
@@ -432,12 +444,14 @@ describe("PaymentsService", () => {
 
     expect(configResult).toEqual({
       livePaymentsEnabled: true,
-      activeProvider: "squad",
-      customerSelectableProviders: ["squad"],
-      launchProviderLabel: "Squad by GTBank",
+      activeProvider: "flutterwave",
+      customerSelectableProviders: ["flutterwave"],
+      launchProviderLabel: "Flutterwave",
       mockPaymentVisible: false,
-      squadCustomerCheckoutEnabled: true,
-      squadReady: true,
+      flutterwaveCustomerCheckoutEnabled: true,
+      flutterwaveReady: true,
+      squadCustomerCheckoutEnabled: false,
+      squadReady: false,
       monnifyVisible: false,
       paystackVisible: false,
       cashPaymentEnabled: false,
@@ -445,13 +459,13 @@ describe("PaymentsService", () => {
       cashPaymentNote: "Pay on Delivery is available for supported KariGO orders.",
       walletTopUpEnabled: false,
       walletPaymentsEnabled: false,
-      walletTopUpProvider: "squad",
-      walletTopUpProviderLabel: "Squad by GTBank",
+      walletTopUpProvider: "flutterwave",
+      walletTopUpProviderLabel: "Flutterwave",
       walletMinimumTopUpAmount: 100,
-      walletPaymentNote: "Wallet top-up and wallet order payment require backend verification before balance or order status changes.",
+      walletPaymentNote: "Wallet top-up is temporarily unavailable while KariGO verifies the new payment provider.",
       launchCities: ["Kano", "Abuja"]
     });
-    expect(serialized).not.toContain("live-squad-secret-placeholder");
+    expect(serialized).not.toContain("live-flutterwave-secret-placeholder");
     expect(serialized).not.toContain("live-webhook-secret-placeholder");
   });
 
@@ -537,71 +551,19 @@ describe("PaymentsService", () => {
       .rejects.toThrow("Wallet top-up is temporarily unavailable");
   });
 
-  it("initiates Squad wallet top-up without crediting the wallet client-side", async () => {
-    const squadProvider = {
-      name: "squad",
-      initialize: jest.fn(),
-      verify: jest.fn(),
-      parseWebhook: jest.fn()
-    };
-    registry.active.mockReturnValue(squadProvider);
+  it("keeps wallet top-up blocked even if launch flags are accidentally enabled", async () => {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       if (key === "WALLET_TOP_UP_ENABLED") return "true";
-      if (key === "SQUAD_CUSTOMER_CHECKOUT_ENABLED") return "true";
+      if (key === "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED") return "true";
       return fallback;
     });
-    prisma.customerProfile.findUnique.mockResolvedValue({
-      id: "customer-1",
-      user: { email: "customer@example.com", phoneNumber: "+2348012345678" }
-    });
-    tx.customerWallet.upsert.mockResolvedValue({
-      id: "wallet-1",
-      customerId: "customer-1",
-      status: WalletStatus.ACTIVE,
-      currency: "NGN",
-      availableBalance: new Prisma.Decimal(0)
-    });
-    tx.customerWalletLedgerEntry.create.mockResolvedValue({
-      id: "ledger-1",
-      reference: "KGO-WALLET-TOPUP",
-      status: WalletLedgerEntryStatus.PENDING
-    });
-    tx.payment.create.mockResolvedValue({
-      id: "payment-wallet-topup",
-      currency: "NGN",
-      transactionReference: "KGO-WALLET-TOPUP"
-    });
-    prisma.payment.update.mockResolvedValue({
-      id: "payment-wallet-topup",
-      transactionReference: "KGO-WALLET-TOPUP"
-    });
-    squadProvider.initialize.mockResolvedValue({
-      authorizationUrl: "https://pay.squadco.com/wallet-top-up",
-      providerResponse: { status: "success" }
-    });
 
-    const result = await service.initiateWalletTopUp("user-1", { amount: 5000 });
+    await expect(service.initiateWalletTopUp("user-1", { amount: 5000 }))
+      .rejects.toThrow("Wallet top-up is temporarily unavailable");
 
-    expect(tx.customerWalletLedgerEntry.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        entryType: WalletLedgerEntryType.TOP_UP,
-        direction: WalletLedgerDirection.CREDIT,
-        status: WalletLedgerEntryStatus.PENDING,
-        amount: new Prisma.Decimal(5000)
-      })
-    });
-    expect(tx.payment.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        gateway: "squad",
-        paymentPurpose: PaymentPurpose.WALLET_TOP_UP,
-        paymentStatus: PaymentStatus.PENDING
-      })
-    });
-    expect(tx.customerWallet.update).not.toHaveBeenCalled();
-    expect(result.authorization.authorizationUrl).toBe("https://pay.squadco.com/wallet-top-up");
-    expect(result.authorization.checkoutUrl).toBe("https://pay.squadco.com/wallet-top-up");
-    expect(result.authorization.paymentUrl).toBe("https://pay.squadco.com/wallet-top-up");
-    expect(result.authorization.url).toBe("https://pay.squadco.com/wallet-top-up");
+    expect(tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+    expect(tx.payment.create).not.toHaveBeenCalled();
+    expect(registry.active).not.toHaveBeenCalled();
   });
 
   it("credits wallet only after backend verification and avoids duplicate crediting", async () => {

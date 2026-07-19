@@ -61,11 +61,11 @@ assert(paymentReadinessPage.includes("Payment Readiness"), "Admin Payment Readin
 assert(paymentReadinessPage.includes("paymentsApi.providerReadiness"), "Admin Payment Readiness page must call provider readiness endpoint.");
 assert(paymentReadinessPage.includes("Payment readiness could not be loaded. Please confirm backend access and admin session."), "Payment Readiness page must use a page-specific safe error message.");
 assert(paymentReadinessPage.includes("Mock payment remains a staging rollback path only"), "Payment Readiness page must state mock staging rollback guardrail.");
-assert(paymentReadinessPage.includes("customer checkout is currently running Pay on Delivery only"), "Payment Readiness page must state the emergency POD-only checkout posture.");
+assert(paymentReadinessPage.includes("Flutterwave is KariGO's primary online customer checkout provider"), "Payment Readiness page must state Flutterwave is the primary online checkout provider.");
 assert(paymentReadinessPage.includes("Do not paste keys"), "Payment Readiness page must warn against exposing secrets.");
 assert(paymentReadinessPage.includes("Test sandbox initialization"), "Payment Readiness page must expose a safe admin-only sandbox initialization test action.");
-assert(paymentReadinessPage.includes("Verify live readiness"), "Payment Readiness page must use live readiness wording for Squad live mode.");
-assert(paymentReadinessPage.includes("Low-value live test required"), "Payment Readiness page must tell operators that Squad live mode still needs a low-value test.");
+assert(paymentReadinessPage.includes("Verify live readiness"), "Payment Readiness page must use live readiness wording for Flutterwave live mode.");
+assert(paymentReadinessPage.includes("Low-value live test required"), "Payment Readiness page must tell operators that Flutterwave live mode still needs a low-value test.");
 assert(paymentReadinessPage.includes("Admin does not initiate customer payments"), "Payment Readiness page must state Admin does not initiate customer payments.");
 assert(paymentReadinessPage.includes("Customer App initiates checkout"), "Payment Readiness page must state customer checkout starts from the Customer App.");
 assert(paymentReadinessPage.includes("operations verification only"), "Payment Readiness page must describe low-value live tests as operations verification only.");
@@ -75,11 +75,13 @@ assert(paymentReadinessPage.includes("Authorization URL present"), "Payment Read
 assert(paymentReadinessPage.includes("provider.launchStatus"), "Payment Readiness page must show launch status such as Deferred for launch.");
 assert(paymentReadinessPage.includes("provider.launchNote"), "Payment Readiness page must show provider launch notes.");
 assert(paymentReadinessPage.includes("Pending approval / future secondary"), "Payment Readiness page must label pending secondary providers in user-friendly copy.");
-assert(paymentReadinessPage.includes("1 Squad by GTBank"), "Payment Readiness page must show Squad as launch priority one.");
-assert(paymentReadinessPage.includes("2 Monnify pending approval, 3 Paystack pending approval"), "Payment Readiness page must show Monnify and Paystack as pending secondary providers.");
+assert(paymentReadinessPage.includes("1 Flutterwave"), "Payment Readiness page must show Flutterwave as launch priority one.");
+assert(paymentReadinessPage.includes("Squad disabled/internal review"), "Payment Readiness page must show Squad as disabled/internal review.");
 assert(paymentReadinessPage.includes("Mock payment remains a staging rollback path only"), "Payment Readiness page must state mock is staging fallback only.");
 assert(paymentReadinessPage.includes("Launch payment options"), "Payment Readiness page must show Cash/POD and wallet launch options.");
 assert(paymentReadinessPage.includes("Cash / Pay on Delivery"), "Payment Readiness page must show Cash/POD readiness.");
+assert(paymentReadinessPage.includes("flutterwaveCustomerCheckout.label"), "Payment Readiness page must show Flutterwave customer checkout readiness from backend config.");
+assert(paymentReadinessPage.includes("flutterwaveCustomerCheckout.envFlag"), "Payment Readiness page must show the Flutterwave customer checkout env flag name only.");
 assert(paymentReadinessPage.includes("squadCustomerCheckout.label"), "Payment Readiness page must show Squad customer checkout readiness from backend config.");
 assert(paymentReadinessPage.includes("Disabled / Internal review"), "Payment Readiness page must label Squad customer checkout as disabled/internal review when off.");
 assert(paymentReadinessPage.includes("squadCustomerCheckout.envFlag"), "Payment Readiness page must show the Squad customer checkout env flag name only.");
@@ -96,11 +98,13 @@ assert(paymentsApiSource.includes("admin/payments/provider-readiness/test"), "Ad
 assert(paymentsApiSource.includes("PaymentProviderReadiness"), "Admin payments API must type provider readiness response.");
 assert(paymentsApiSource.includes("PaymentProviderInitializationTestResult"), "Admin payments API must type initialization test response.");
 assert(paymentsApiSource.includes("launchPaymentOptions"), "Admin payment readiness API type must include launch payment option visibility.");
+assert(paymentsApiSource.includes("flutterwaveCustomerCheckout"), "Admin payment readiness API type must include Flutterwave customer checkout readiness.");
 assert(paymentsApiSource.includes("squadCustomerCheckout"), "Admin payment readiness API type must include Squad customer checkout readiness.");
 
 const settingsPage = read("app", "settings", "page.tsx");
-assert(settingsPage.includes("Squad by GTBank is the primary launch provider"), "Admin Developer Settings must show Squad as the launch provider in live mode.");
+assert(settingsPage.includes("Flutterwave is the primary online launch provider"), "Admin Developer Settings must show Flutterwave as the launch provider in live mode.");
 assert(settingsPage.includes("Mock payment is hidden in public live mode"), "Admin Developer Settings must explain mock is hidden from public live checkout.");
+assert(settingsPage.includes("Flutterwave configured"), "Admin Developer Settings must show Flutterwave configured status without exposing values.");
 assert(settingsPage.includes("Wallet Launch Controls"), "Admin Developer Settings must show wallet launch controls.");
 assert(settingsPage.includes("Wallet top-up enabled"), "Admin Developer Settings must show wallet top-up flag state.");
 assert(settingsPage.includes("Wallet payments enabled"), "Admin Developer Settings must show wallet payment flag state.");
@@ -236,7 +240,7 @@ assert(walletsPage.includes("walletsApi.detail"), "Admin wallets page must inspe
 assert(walletsPage.includes("walletsApi.adjustment"), "Admin wallets page must call the controlled manual adjustment endpoint.");
 assert(walletsPage.includes("controlled admin ledger entries only"), "Admin wallets page must state manual adjustment limits.");
 assert(walletsPage.includes("Wallet top-up records"), "Admin wallets page must show wallet top-up records.");
-assert(walletsPage.includes("Credits must come only from backend Squad verification"), "Admin wallets page must state backend-only crediting.");
+assert(walletsPage.includes("Credits must come only from backend provider verification"), "Admin wallets page must state backend-only crediting.");
 assert(walletsPage.includes("Raw provider payloads and secrets are never shown"), "Admin wallets page must hide sensitive provider payloads.");
 assert(walletsPage.includes("does not activate live top-up, withdrawals, automatic refunds, wallet checkout, referral rewards or subscription billing"), "Admin wallets page must not imply live wallet features are active.");
 assert(walletsPage.includes("Record manual adjustment"), "Admin wallets page must expose a controlled adjustment action.");

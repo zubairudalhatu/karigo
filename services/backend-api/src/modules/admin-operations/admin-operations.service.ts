@@ -457,6 +457,13 @@ export class AdminOperationsService {
   integrationSettings() {
     const paymentsProvider = this.configValue("PAYMENTS_PROVIDER", this.configValue("PAYMENT_PROVIDER", "mock")).toLowerCase();
     const paymentsLiveEnabled = this.configFlag("PAYMENTS_LIVE_ENABLED", false);
+    const flutterwaveLiveConfigured = Boolean(this.configValue("FLUTTERWAVE_SECRET_KEY"))
+      && this.configValue("FLUTTERWAVE_ENVIRONMENT").toLowerCase() === "live"
+      && this.configValue("FLUTTERWAVE_BASE_URL", "https://api.flutterwave.com/v3").startsWith("https://")
+      && !this.configValue("FLUTTERWAVE_BASE_URL", "https://api.flutterwave.com/v3").toLowerCase().includes("sandbox")
+      && (this.configValue("FLUTTERWAVE_REDIRECT_URL").startsWith("https://") || this.configValue("FLUTTERWAVE_CALLBACK_URL").startsWith("https://"))
+      && (Boolean(this.configValue("FLUTTERWAVE_SECRET_HASH")) || Boolean(this.configValue("FLUTTERWAVE_WEBHOOK_SECRET")))
+      && this.configFlag("FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED", false);
     const squadLiveConfigured = Boolean(this.configValue("SQUAD_SECRET_KEY"))
       && this.configValue("SQUAD_MODE").toLowerCase() === "live"
       && this.configValue("SQUAD_BASE_URL").startsWith("https://")
@@ -472,6 +479,7 @@ export class AdminOperationsService {
         mockFallbackAvailable: !paymentsLiveEnabled,
         livePaymentCollectionDisabled: !paymentsLiveEnabled,
         sandboxProviders: {
+          flutterwaveConfigured: flutterwaveLiveConfigured || Boolean(this.configValue("FLUTTERWAVE_SECRET_KEY")),
           paystackConfigured: Boolean(this.configValue("PAYSTACK_SECRET_KEY")),
           monnifyConfigured: Boolean(this.configValue("MONNIFY_API_KEY")),
           squadConfigured: squadLiveConfigured || Boolean(this.configValue("SQUAD_SECRET_KEY"))
@@ -479,12 +487,12 @@ export class AdminOperationsService {
         wallet: {
           walletTopUpEnabled: this.configFlag("WALLET_TOP_UP_ENABLED", false),
           walletPaymentsEnabled: this.configFlag("WALLET_PAYMENTS_ENABLED", false),
-          providerForTopUp: "Squad by GTBank",
+          providerForTopUp: "Flutterwave",
           backendVerificationRequired: true,
           clientSideCreditDisabled: true,
           minimumTopUpAmount: this.configNumber("WALLET_MIN_TOP_UP_AMOUNT", 100),
           note: this.configFlag("WALLET_TOP_UP_ENABLED", false)
-            ? "Wallet top-up is enabled through Squad by GTBank. Wallet order payment remains controlled by WALLET_PAYMENTS_ENABLED."
+            ? "Wallet top-up is configured by env, but customer top-up remains disabled until Flutterwave wallet verification is separately approved."
             : "Wallet top-up remains disabled until WALLET_TOP_UP_ENABLED is set after verification approval."
         }
       },

@@ -10,7 +10,7 @@ export interface PaymentInitiation {
     paymentUrl?: string | null;
     url?: string | null;
     accessCode?: string | null;
-    providerResponse?: unknown;
+    provider?: string;
   };
 }
 

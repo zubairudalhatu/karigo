@@ -45,6 +45,14 @@ export interface PaymentProviderReadiness {
       recommendedValue: string;
       note: string;
     };
+    flutterwaveCustomerCheckout?: {
+      enabled: boolean;
+      label: string;
+      customerSelectable: boolean;
+      envFlag: string;
+      recommendedValue: string;
+      note: string;
+    };
     squadCustomerCheckout: {
       enabled: boolean;
       label: string;

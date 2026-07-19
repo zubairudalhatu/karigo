@@ -58,33 +58,32 @@ describe("PaymentProviderRegistry", () => {
     expect(paymentRegistry.customerTestProvider("squad")).toBe(squad);
   });
 
-  it("blocks all live checkout when Squad live configuration is incomplete", () => {
+  it("blocks all live checkout when Flutterwave live configuration is incomplete", () => {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       if (key === "PAYMENTS_LIVE_ENABLED") return true;
-      if (key === "SQUAD_CUSTOMER_CHECKOUT_ENABLED") return "true";
+      if (key === "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED") return "true";
       return fallback;
     });
 
     const paymentRegistry = registry();
 
     expect(paymentRegistry.customerCheckoutProviders()).toEqual([]);
-    expect(() => paymentRegistry.customerTestProvider("squad"))
-      .toThrow("PAYMENTS_PROVIDER must be squad before live payment checkout is enabled");
+    expect(() => paymentRegistry.customerTestProvider("flutterwave"))
+      .toThrow("PAYMENTS_PROVIDER must be flutterwave before live payment checkout is enabled");
     expect(() => paymentRegistry.customerTestProvider("monnify"))
-      .toThrow("Only Squad by GTBank is allowed for live customer checkout");
+      .toThrow("Only Flutterwave is allowed for live customer checkout");
   });
 
-  it("keeps live Squad hidden from customer checkout until explicitly enabled", () => {
+  it("keeps live Flutterwave hidden from customer checkout until explicitly enabled", () => {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       const values: Record<string, string | boolean> = {
-        PAYMENTS_PROVIDER: "squad",
+        PAYMENTS_PROVIDER: "flutterwave",
         PAYMENTS_LIVE_ENABLED: true,
-        SQUAD_MODE: "live",
-        SQUAD_SECRET_KEY: "live-squad-key-placeholder",
-        SQUAD_BASE_URL: "https://api-d.squadco.com",
-        SQUAD_CALLBACK_URL: "https://api.karigo.com.ng/api/v1/payments/callback/squad",
-        SQUAD_WEBHOOK_SECRET: "live-webhook-secret-placeholder",
-        SQUAD_LIVE_ACTIVATION_APPROVED: "true"
+        FLUTTERWAVE_ENVIRONMENT: "live",
+        FLUTTERWAVE_SECRET_KEY: "live-flutterwave-key-placeholder",
+        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
+        FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
+        FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder"
       };
       return values[key] ?? fallback;
     });
@@ -92,33 +91,32 @@ describe("PaymentProviderRegistry", () => {
     const paymentRegistry = registry();
 
     expect(paymentRegistry.customerCheckoutProviders()).toEqual([]);
-    expect(() => paymentRegistry.customerTestProvider("squad"))
-      .toThrow("Squad customer checkout is temporarily disabled");
-    expect(paymentRegistry.active()).toBe(squad);
+    expect(() => paymentRegistry.customerTestProvider("flutterwave"))
+      .toThrow("Flutterwave customer checkout is temporarily disabled");
+    expect(paymentRegistry.active()).toBe(flutterwave);
   });
 
-  it("allows only Squad when live payment checkout is fully approved and customer enabled", () => {
+  it("allows only Flutterwave when live payment checkout is fully approved and customer enabled", () => {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       const values: Record<string, string | boolean> = {
-        PAYMENTS_PROVIDER: "squad",
+        PAYMENTS_PROVIDER: "flutterwave",
         PAYMENTS_LIVE_ENABLED: true,
-        SQUAD_MODE: "live",
-        SQUAD_SECRET_KEY: "live-squad-key-placeholder",
-        SQUAD_BASE_URL: "https://api-d.squadco.com",
-        SQUAD_CALLBACK_URL: "https://api.karigo.com.ng/api/v1/payments/callback/squad",
-        SQUAD_WEBHOOK_SECRET: "live-webhook-secret-placeholder",
-        SQUAD_LIVE_ACTIVATION_APPROVED: "true",
-        SQUAD_CUSTOMER_CHECKOUT_ENABLED: "true"
+        FLUTTERWAVE_ENVIRONMENT: "live",
+        FLUTTERWAVE_SECRET_KEY: "live-flutterwave-key-placeholder",
+        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
+        FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
+        FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder",
+        FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true"
       };
       return values[key] ?? fallback;
     });
 
     const paymentRegistry = registry();
 
-    expect(paymentRegistry.customerCheckoutProviders()).toEqual(["squad"]);
-    expect(paymentRegistry.customerTestProvider("squad")).toBe(squad);
-    expect(paymentRegistry.active()).toBe(squad);
+    expect(paymentRegistry.customerCheckoutProviders()).toEqual(["flutterwave"]);
+    expect(paymentRegistry.customerTestProvider("flutterwave")).toBe(flutterwave);
+    expect(paymentRegistry.active()).toBe(flutterwave);
     expect(() => paymentRegistry.customerTestProvider("mock"))
-      .toThrow("Only Squad by GTBank is allowed for live customer checkout");
+      .toThrow("Only Flutterwave is allowed for live customer checkout");
   });
 });

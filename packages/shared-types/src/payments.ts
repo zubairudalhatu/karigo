@@ -1,4 +1,4 @@
-export const customerTestPaymentProviders = ["mock", "paystack", "monnify", "squad"] as const;
+export const customerTestPaymentProviders = ["mock", "paystack", "monnify", "squad", "flutterwave"] as const;
 export type CustomerTestPaymentProvider = (typeof customerTestPaymentProviders)[number];
 
 export interface InitiatePaymentRequest {
@@ -14,6 +14,8 @@ export interface PublicPaymentConfig {
   customerSelectableProviders: CustomerTestPaymentProvider[];
   launchProviderLabel: string;
   mockPaymentVisible: boolean;
+  flutterwaveCustomerCheckoutEnabled?: boolean;
+  flutterwaveReady?: boolean;
   squadCustomerCheckoutEnabled?: boolean;
   squadReady: boolean;
   monnifyVisible: boolean;

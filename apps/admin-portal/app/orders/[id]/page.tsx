@@ -67,7 +67,7 @@ export default function Detail() {
         <article className="card">
           <h2>Financial</h2>
           <p>Total: {money(order.totalAmount)}</p>
-          <p>Payment method: {order.paymentMethod === "CASH_ON_DELIVERY" ? "Cash / Pay on Delivery" : order.paymentMethod === "WALLET" ? "KariGO Wallet" : order.paymentMethod === "SQUAD" ? "Squad by GTBank" : order.paymentStatus}</p>
+          <p>Payment method: {order.paymentMethod === "CASH_ON_DELIVERY" ? "Cash / Pay on Delivery" : order.paymentMethod === "WALLET" ? "KariGO Wallet" : order.paymentMethod === "FLUTTERWAVE" ? "Flutterwave" : order.paymentMethod === "SQUAD" ? "Squad by GTBank" : order.paymentStatus}</p>
           {order.paymentMethod === "CASH_ON_DELIVERY" ? <div>
             <p>Cash status: {order.cashCollectionStatus?.replaceAll("_", " ") ?? "PENDING COLLECTION"}</p>
             <p>Expected cash: {money(order.totalAmount)}</p>

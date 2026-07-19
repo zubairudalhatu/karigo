@@ -38,11 +38,11 @@ export class CreateOrderDto {
   promoCode?: string;
 
   @ApiPropertyOptional({
-    enum: ["SQUAD", "WALLET", "CASH_ON_DELIVERY", "squad", "wallet", "cash_on_delivery"],
-    description: "Optional checkout payment method. Defaults to Squad/electronic payment when omitted."
+    enum: ["FLUTTERWAVE", "SQUAD", "WALLET", "CASH_ON_DELIVERY", "flutterwave", "squad", "wallet", "cash_on_delivery"],
+    description: "Optional checkout payment method. Defaults to Flutterwave/electronic payment when omitted."
   })
   @IsOptional()
   @IsString()
-  @IsIn(["SQUAD", "WALLET", "CASH_ON_DELIVERY", "squad", "wallet", "cash_on_delivery"])
+  @IsIn(["FLUTTERWAVE", "SQUAD", "WALLET", "CASH_ON_DELIVERY", "flutterwave", "squad", "wallet", "cash_on_delivery"])
   paymentMethod?: string;
 }

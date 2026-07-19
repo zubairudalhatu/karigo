@@ -47,7 +47,7 @@ export interface WalletTopUpInitiation {
     paymentUrl?: string | null;
     url?: string | null;
     accessCode?: string | null;
-    providerResponse?: unknown;
+    provider?: string;
   };
 }
 

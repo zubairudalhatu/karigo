@@ -13,7 +13,7 @@ export interface CreateOrderRequest {
   items: OrderItemInput[];
   customerNote?: string;
   promoCode?: string;
-  paymentMethod?: "SQUAD" | "WALLET" | "CASH_ON_DELIVERY" | "squad" | "wallet" | "cash_on_delivery";
+  paymentMethod?: "FLUTTERWAVE" | "SQUAD" | "WALLET" | "CASH_ON_DELIVERY" | "flutterwave" | "squad" | "wallet" | "cash_on_delivery";
 }
 
 export type QuoteOrderRequest = CreateOrderRequest;

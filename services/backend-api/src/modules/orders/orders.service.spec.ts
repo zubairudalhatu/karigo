@@ -37,8 +37,21 @@ describe("OrdersService", () => {
     applicationNotifications.orderCreated.mockResolvedValue(undefined);
   });
 
+  function enableFlutterwaveCheckout() {
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      const values: Record<string, string | boolean> = {
+        PAYMENTS_LIVE_ENABLED: true,
+        PAYMENT_PROVIDER: "flutterwave",
+        PAYMENTS_PROVIDER: "flutterwave",
+        FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true"
+      };
+      return values[key] ?? fallback;
+    });
+  }
+
   it("calculates vendor-order totals from stored product prices", async () => {
     let createData: Record<string, any> = {};
+    enableFlutterwaveCheckout();
     prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
     prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-1" });
     prisma.address.findFirst.mockResolvedValue({ id: "address-1" });
@@ -59,6 +72,7 @@ describe("OrdersService", () => {
 
     expect(result.orderStatus).toBe(OrderStatus.AWAITING_PAYMENT);
     expect(result.paymentStatus).toBe(PaymentStatus.PENDING);
+    expect(result.paymentMethod).toBe(OrderPaymentMethod.FLUTTERWAVE);
     expect(result.subtotal.toNumber()).toBe(5000);
     expect(result.deliveryFee.toNumber()).toBe(1000);
     expect(result.totalAmount.toNumber()).toBe(6000);
@@ -111,6 +125,7 @@ describe("OrdersService", () => {
   });
 
   it("applies a server-validated promo discount to a vendor order", async () => {
+    enableFlutterwaveCheckout();
     prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
     prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-1" });
     prisma.address.findFirst.mockResolvedValue({ id: "address-1" });
@@ -133,8 +148,45 @@ describe("OrdersService", () => {
     });
 
     expect(result.promoCodeId).toBe("promo-1");
+    expect(result.paymentMethod).toBe(OrderPaymentMethod.FLUTTERWAVE);
     expect(result.discountAmount.toNumber()).toBe(500);
     expect(result.totalAmount.toNumber()).toBe(5500);
+  });
+
+  it("blocks Flutterwave vendor orders when customer checkout is not enabled", async () => {
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
+    prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-1" });
+    prisma.address.findFirst.mockResolvedValue({ id: "address-1", city: "Kano" });
+    prisma.product.findMany.mockResolvedValue([
+      { id: "product-1", name: "Jollof Rice", price: new Prisma.Decimal(2500) }
+    ]);
+
+    await expect(service.createVendorOrder("user-1", {
+      vendorId: "vendor-1",
+      deliveryAddressId: "address-1",
+      serviceCategory: ServiceCategory.FOOD,
+      paymentMethod: "FLUTTERWAVE",
+      items: [{ productId: "product-1", quantity: 1 }]
+    })).rejects.toThrow("Flutterwave checkout is not enabled right now");
+    expect(prisma.order.create).not.toHaveBeenCalled();
+  });
+
+  it("blocks Squad vendor orders while Squad customer checkout is disabled", async () => {
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
+    prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-1" });
+    prisma.address.findFirst.mockResolvedValue({ id: "address-1", city: "Kano" });
+    prisma.product.findMany.mockResolvedValue([
+      { id: "product-1", name: "Jollof Rice", price: new Prisma.Decimal(2500) }
+    ]);
+
+    await expect(service.createVendorOrder("user-1", {
+      vendorId: "vendor-1",
+      deliveryAddressId: "address-1",
+      serviceCategory: ServiceCategory.FOOD,
+      paymentMethod: "SQUAD",
+      items: [{ productId: "product-1", quantity: 1 }]
+    })).rejects.toThrow("Squad checkout is disabled for customer orders.");
+    expect(prisma.order.create).not.toHaveBeenCalled();
   });
 
   it("creates a Pay on Delivery order without starting electronic payment", async () => {

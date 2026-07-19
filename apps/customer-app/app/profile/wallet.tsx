@@ -70,9 +70,9 @@ export default function CustomerWalletScreen() {
   }, []);
 
   async function initiateTopUp() {
-    const walletTopUpAllowed = Boolean(paymentConfig.walletTopUpEnabled && paymentConfig.squadCustomerCheckoutEnabled);
+    const walletTopUpAllowed = false;
     if (!walletTopUpAllowed) {
-      setTopUpError("Wallet top-up is temporarily unavailable.");
+      setTopUpError("Wallet top-up is temporarily unavailable while KariGO verifies the new payment provider.");
       return;
     }
     const amount = Number(topUpAmount);
@@ -92,7 +92,7 @@ export default function CustomerWalletScreen() {
         if (!openResult.opened) throw new Error(openResult.message);
         setPendingTopUpReference(result.payment.transactionReference);
         setPendingTopUpUrl(url);
-        setTopUpMessage("Squad wallet top-up checkout opened. Return here and verify after completing payment. Pending verification.");
+        setTopUpMessage("Wallet top-up checkout opened. Return here and verify after completing payment. Pending verification.");
       } else if (isMockAuthorizationUrl(url)) {
         await walletApi.verifyTopUp(result.payment.transactionReference);
         setTopUpMessage("Wallet top-up verified.");
@@ -136,7 +136,7 @@ export default function CustomerWalletScreen() {
     try {
       const openResult = await openExternalPaymentUrl(pendingTopUpUrl);
       if (!openResult.opened) throw new Error(openResult.message);
-      setTopUpMessage("Squad wallet top-up checkout reopened. Return here and verify after completing payment.");
+      setTopUpMessage("Wallet top-up checkout reopened. Return here and verify after completing payment.");
     } catch (e) {
       setTopUpError(friendlyError(e));
     } finally {
@@ -147,7 +147,7 @@ export default function CustomerWalletScreen() {
   if (loading && !data) return <Protected><Loading label="Loading wallet..." /></Protected>;
 
   const wallet = data?.wallet;
-  const walletTopUpAllowed = Boolean(paymentConfig.walletTopUpEnabled && paymentConfig.squadCustomerCheckoutEnabled);
+  const walletTopUpAllowed = false;
 
   return <Protected>
     <Screen title="KariGO Wallet" refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); void loadPaymentConfig(); }}>
@@ -172,7 +172,7 @@ export default function CustomerWalletScreen() {
 
       <Card>
         <Text style={ui.cardTitle}>Top up wallet</Text>
-        <Text style={ui.muted}>{walletTopUpAllowed ? "Enter an amount, complete checkout, return to KariGO, then verify. KariGO will not credit the wallet from the app alone." : "Wallet top-up is temporarily unavailable."}</Text>
+        <Text style={ui.muted}>{walletTopUpAllowed ? "Enter an amount, complete checkout, return to KariGO, then verify. KariGO will not credit the wallet from the app alone." : "Wallet top-up is temporarily unavailable while KariGO verifies the new payment provider."}</Text>
         <Message>{topUpMessage}</Message>
         <Message error>{topUpError}</Message>
         {walletTopUpAllowed ? <>

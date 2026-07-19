@@ -87,39 +87,76 @@ function requireLiveValue(config: Record<string, unknown>, key: string, message:
   return value.trim();
 }
 
-function requireLiveHttpsUrl(config: Record<string, unknown>, key: string, message: string): string {
-  const value = requireLiveValue(config, key, `Live Squad payments require ${key}`);
+function requireLiveHttpsUrl(config: Record<string, unknown>, key: string, missingMessage: string, message: string): string {
+  const value = requireLiveValue(config, key, missingMessage);
   if (!value.startsWith("https://")) {
     throw new Error(message);
   }
   return value;
 }
 
-function validateSquadLivePaymentGate(config: Record<string, unknown>, paymentProvider: string): void {
-  if (paymentProvider !== "squad") {
-    throw new Error("Live payments require PAYMENT_PROVIDER=squad");
+function liveString(config: Record<string, unknown>, key: string): string | undefined {
+  const value = config[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function requireOneLiveValue(config: Record<string, unknown>, keys: string[], message: string): string {
+  for (const key of keys) {
+    const value = liveString(config, key);
+    if (value) return value;
+  }
+  throw new Error(message);
+}
+
+function requireOneLiveHttpsUrl(config: Record<string, unknown>, keys: string[], missingMessage: string, httpsMessage: string): string {
+  const value = requireOneLiveValue(config, keys, missingMessage);
+  if (!value.startsWith("https://")) {
+    throw new Error(httpsMessage);
+  }
+  return value;
+}
+
+function validateFlutterwaveLivePaymentGate(config: Record<string, unknown>, paymentProvider: string): void {
+  if (paymentProvider !== "flutterwave") {
+    throw new Error("Live payments require PAYMENT_PROVIDER=flutterwave");
   }
 
-  const squadMode = typeof config.SQUAD_MODE === "string" ? config.SQUAD_MODE.trim().toLowerCase() : "";
-  if (squadMode !== "live") {
-    throw new Error("Live Squad payments require SQUAD_MODE=live");
+  const flutterwaveEnvironment = typeof config.FLUTTERWAVE_ENVIRONMENT === "string"
+    ? config.FLUTTERWAVE_ENVIRONMENT.trim().toLowerCase()
+    : "";
+  if (flutterwaveEnvironment !== "live") {
+    throw new Error("Live Flutterwave payments require FLUTTERWAVE_ENVIRONMENT=live");
   }
 
-  const secretKey = requireLiveValue(config, "SQUAD_SECRET_KEY", "Live Squad payments require SQUAD_SECRET_KEY");
-  if (secretKey.startsWith("sandbox_sk_")) {
-    throw new Error("Live Squad payments require a live SQUAD_SECRET_KEY");
+  const secretKey = requireLiveValue(config, "FLUTTERWAVE_SECRET_KEY", "Live Flutterwave payments require FLUTTERWAVE_SECRET_KEY");
+  if (secretKey.toUpperCase().includes("TEST")) {
+    throw new Error("Live Flutterwave payments require a live FLUTTERWAVE_SECRET_KEY");
   }
 
-  const baseUrl = requireLiveHttpsUrl(config, "SQUAD_BASE_URL", "Live Squad payments require HTTPS SQUAD_BASE_URL");
+  const baseUrl = requireLiveHttpsUrl(
+    config,
+    "FLUTTERWAVE_BASE_URL",
+    "Live Flutterwave payments require FLUTTERWAVE_BASE_URL",
+    "Live Flutterwave payments require HTTPS FLUTTERWAVE_BASE_URL"
+  );
   if (baseUrl.toLowerCase().includes("sandbox")) {
-    throw new Error("Live Squad payments require live SQUAD_BASE_URL");
+    throw new Error("Live Flutterwave payments require live FLUTTERWAVE_BASE_URL");
   }
 
-  requireLiveHttpsUrl(config, "SQUAD_CALLBACK_URL", "Live Squad payments require HTTPS SQUAD_CALLBACK_URL");
-  requireLiveValue(config, "SQUAD_WEBHOOK_SECRET", "Live Squad payments require SQUAD_WEBHOOK_SECRET");
+  requireOneLiveHttpsUrl(
+    config,
+    ["FLUTTERWAVE_REDIRECT_URL", "FLUTTERWAVE_CALLBACK_URL"],
+    "Live Flutterwave payments require FLUTTERWAVE_REDIRECT_URL or FLUTTERWAVE_CALLBACK_URL",
+    "Live Flutterwave payments require HTTPS FLUTTERWAVE_REDIRECT_URL or FLUTTERWAVE_CALLBACK_URL"
+  );
+  requireOneLiveValue(
+    config,
+    ["FLUTTERWAVE_SECRET_HASH", "FLUTTERWAVE_WEBHOOK_SECRET"],
+    "Live Flutterwave payments require FLUTTERWAVE_SECRET_HASH or FLUTTERWAVE_WEBHOOK_SECRET"
+  );
 
-  if (!booleanFlag(config.SQUAD_LIVE_ACTIVATION_APPROVED, "SQUAD_LIVE_ACTIVATION_APPROVED", false)) {
-    throw new Error("Live Squad payments require SQUAD_LIVE_ACTIVATION_APPROVED=true");
+  if (!booleanFlag(config.FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED, "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED", false)) {
+    throw new Error("Live Flutterwave payments require FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED=true");
   }
 }
 
@@ -153,7 +190,7 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     throw new Error("PAYMENT_PROVIDER must be mock, paystack, flutterwave, monnify or squad");
   }
   if (paymentsLiveEnabled) {
-    validateSquadLivePaymentGate(config, paymentProvider);
+    validateFlutterwaveLivePaymentGate(config, paymentProvider);
   }
   if (paymentProvider === "paystack") {
     const secret = requireValue(config, "PAYSTACK_SECRET_KEY");
@@ -427,6 +464,13 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     MONNIFY_BASE_URL: typeof config.MONNIFY_BASE_URL === "string" && config.MONNIFY_BASE_URL.trim()
       ? config.MONNIFY_BASE_URL.trim()
       : "https://sandbox.monnify.com",
+    FLUTTERWAVE_ENVIRONMENT: typeof config.FLUTTERWAVE_ENVIRONMENT === "string" && config.FLUTTERWAVE_ENVIRONMENT.trim()
+      ? config.FLUTTERWAVE_ENVIRONMENT.trim().toLowerCase()
+      : "",
+    FLUTTERWAVE_BASE_URL: typeof config.FLUTTERWAVE_BASE_URL === "string" && config.FLUTTERWAVE_BASE_URL.trim()
+      ? config.FLUTTERWAVE_BASE_URL.trim()
+      : "https://api.flutterwave.com/v3",
+    FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: booleanFlag(config.FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED, "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED", false),
     SQUAD_BASE_URL: typeof config.SQUAD_BASE_URL === "string" && config.SQUAD_BASE_URL.trim()
       ? config.SQUAD_BASE_URL.trim()
       : "https://sandbox-api-d.squadco.com",

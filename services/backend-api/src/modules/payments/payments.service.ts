@@ -123,7 +123,7 @@ export class PaymentsService {
       data: { gatewayResponse: authorization.providerResponse as Prisma.InputJsonValue }
     });
 
-    return { payment: initializedPayment, authorization: this.publicAuthorization(authorization) };
+    return { payment: initializedPayment, authorization: this.publicAuthorization(authorization, provider.name) };
   }
 
   async initiateWalletTopUp(userId: string, dto: InitiateWalletTopUpDto) {
@@ -138,8 +138,8 @@ export class PaymentsService {
     }
 
     const provider = this.providerRegistry.active();
-    if (provider.name !== "squad") {
-      throw new BadRequestException("Wallet top-up currently requires Squad by GTBank as the active provider");
+    if (provider.name !== "flutterwave") {
+      throw new BadRequestException("Wallet top-up currently requires Flutterwave as the active provider");
     }
     const transactionReference = this.transactionReference("wallet-topup");
 
@@ -165,7 +165,7 @@ export class PaymentsService {
           balanceAfter: wallet.availableBalance,
           reference: transactionReference,
           sourceType: "PAYMENT",
-          description: "Pending Squad wallet top-up"
+          description: "Pending wallet top-up"
         }
       });
       const paymentRecord = await tx.payment.create({
@@ -178,7 +178,7 @@ export class PaymentsService {
           currency: wallet.currency,
           paymentPurpose: PaymentPurpose.WALLET_TOP_UP,
           walletLedgerEntryId: ledgerEntry.id,
-          paymentMethod: "squad_wallet_top_up",
+          paymentMethod: "flutterwave_wallet_top_up",
           paymentStatus: PaymentStatus.PENDING
         }
       });
@@ -212,7 +212,7 @@ export class PaymentsService {
       data: { gatewayResponse: authorization.providerResponse as Prisma.InputJsonValue }
     });
 
-    return { payment: initializedPayment, walletLedgerEntry: ledger, authorization: this.publicAuthorization(authorization) };
+    return { payment: initializedPayment, walletLedgerEntry: ledger, authorization: this.publicAuthorization(authorization, provider.name) };
   }
 
   async verify(userId: string, transactionReference: string) {
@@ -265,10 +265,19 @@ export class PaymentsService {
   providerReadiness() {
     const activeProvider = this.configuredProvider();
     const livePaymentsEnabled = this.livePaymentsEnabled();
-    const squadLiveRequested = this.squadLiveRequested(livePaymentsEnabled, activeProvider);
+    const flutterwaveLiveRequested = this.flutterwaveLiveRequested(livePaymentsEnabled, activeProvider);
+    const squadLiveRequested = this.squadLiveRequested(activeProvider);
     const customerSelectableSandboxProviders = this.providerRegistry.customerCheckoutProviders();
     const providers = [
       this.mockReadiness(activeProvider, livePaymentsEnabled),
+      this.providerReadinessRecord(
+        "flutterwave",
+        this.flutterwaveReadinessRequirements(flutterwaveLiveRequested),
+        activeProvider,
+        livePaymentsEnabled,
+        customerSelectableSandboxProviders,
+        flutterwaveLiveRequested
+      ),
       this.providerReadinessRecord("paystack", [
         this.modeRequirement("PAYSTACK_MODE", ["test"], "Must be test until Paystack provider approval is recorded"),
         this.secretRequirement("PAYSTACK_SECRET_KEY", "Paystack server-side test secret key", "sk_test_"),
@@ -305,6 +314,9 @@ export class PaymentsService {
         PAYMENTS_PROVIDER: this.optionalValue("PAYMENTS_PROVIDER") ? "configured" : "default_or_unset",
         PAYMENT_PROVIDER: this.optionalValue("PAYMENT_PROVIDER") ? "configured" : "default_or_unset",
         PAYMENTS_LIVE_ENABLED: livePaymentsEnabled ? "true" : "false_or_unset",
+        FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: this.optionalValue("FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED")?.toLowerCase() === "true"
+          ? "true"
+          : "false_or_unset",
         SQUAD_CUSTOMER_CHECKOUT_ENABLED: this.optionalValue("SQUAD_CUSTOMER_CHECKOUT_ENABLED")?.toLowerCase() === "true"
           ? "true"
           : "false_or_unset",
@@ -315,11 +327,12 @@ export class PaymentsService {
       launchPaymentOptions: this.launchPaymentOptions(),
       webhookRoutes: {
         paystack: "/api/v1/payments/webhook/paystack",
+        flutterwave: "/api/v1/payments/webhook/flutterwave",
         monnify: "/api/v1/payments/webhook/monnify",
         squad: "/api/v1/payments/webhook/squad"
       },
       providers,
-      liveActivation: this.squadLiveActivationReadiness(activeProvider)
+      liveActivation: this.flutterwaveLiveActivationReadiness(activeProvider)
     };
   }
 
@@ -327,18 +340,22 @@ export class PaymentsService {
     const activeProvider = this.configuredProvider();
     const livePaymentsEnabled = this.livePaymentsEnabled();
     const customerSelectableProviders = this.providerRegistry.customerCheckoutProviders();
-    const liveActivation = this.squadLiveActivationReadiness(activeProvider);
+    const liveActivation = this.flutterwaveLiveActivationReadiness(activeProvider);
+    const flutterwaveCustomerCheckoutEnabled = this.flutterwaveCustomerCheckoutEnabled();
     const squadCustomerCheckoutEnabled = this.squadCustomerCheckoutEnabled();
+    const flutterwaveVisible = customerSelectableProviders.includes("flutterwave");
     const squadVisible = customerSelectableProviders.includes("squad");
 
     return {
       livePaymentsEnabled,
       activeProvider,
       customerSelectableProviders,
-      launchProviderLabel: livePaymentsEnabled ? "Squad by GTBank" : "Staging payment providers",
+      launchProviderLabel: livePaymentsEnabled ? "Flutterwave" : "Staging payment providers",
       mockPaymentVisible: customerSelectableProviders.includes("mock") && !livePaymentsEnabled,
+      flutterwaveCustomerCheckoutEnabled,
+      flutterwaveReady: flutterwaveVisible && (!livePaymentsEnabled || liveActivation.status === "READY"),
       squadCustomerCheckoutEnabled,
-      squadReady: squadVisible && (!livePaymentsEnabled || liveActivation.status === "READY"),
+      squadReady: squadVisible && !livePaymentsEnabled,
       monnifyVisible: customerSelectableProviders.includes("monnify") && !livePaymentsEnabled,
       paystackVisible: customerSelectableProviders.includes("paystack") && !livePaymentsEnabled,
       cashPaymentEnabled: this.flagValue("CASH_ON_DELIVERY_ENABLED", false),
@@ -346,10 +363,10 @@ export class PaymentsService {
       cashPaymentNote: "Pay on Delivery is available for supported KariGO orders.",
       walletTopUpEnabled: this.walletTopUpCustomerEnabled(),
       walletPaymentsEnabled: this.flagValue("WALLET_PAYMENTS_ENABLED", false),
-      walletTopUpProvider: "squad",
-      walletTopUpProviderLabel: "Squad by GTBank",
+      walletTopUpProvider: "flutterwave",
+      walletTopUpProviderLabel: "Flutterwave",
       walletMinimumTopUpAmount: this.walletMinimumTopUpAmount(),
-      walletPaymentNote: "Wallet top-up and wallet order payment require backend verification before balance or order status changes.",
+      walletPaymentNote: "Wallet top-up is temporarily unavailable while KariGO verifies the new payment provider.",
       launchCities: ["Kano", "Abuja"]
     };
   }
@@ -730,7 +747,7 @@ export class PaymentsService {
         balanceBefore,
         balanceAfter,
         sourceId: payment.id,
-        description: "Squad wallet top-up verified",
+        description: `${this.providerLabel(payment.gateway)} wallet top-up verified`,
         metadata: {
           paymentId: payment.id,
           provider: payment.gateway,
@@ -785,7 +802,7 @@ export class PaymentsService {
     return customer;
   }
 
-  private publicAuthorization(authorization: InitializePaymentResult) {
+  private publicAuthorization(authorization: InitializePaymentResult, provider: PaymentProviderName) {
     const authorizationAliases = authorization as InitializePaymentResult & {
       checkoutUrl?: string | null;
       paymentUrl?: string | null;
@@ -798,7 +815,9 @@ export class PaymentsService {
       authorizationAliases.url
     ].find((value): value is string => typeof value === "string" && value.trim().length > 0)?.trim() ?? null;
     return {
-      ...authorization,
+      transactionReference: authorization.transactionReference,
+      accessCode: authorization.accessCode,
+      provider,
       authorizationUrl,
       checkoutUrl: authorizationUrl,
       paymentUrl: authorizationUrl,
@@ -821,8 +840,12 @@ export class PaymentsService {
     return this.flagValue("SQUAD_CUSTOMER_CHECKOUT_ENABLED", false);
   }
 
+  private flutterwaveCustomerCheckoutEnabled(): boolean {
+    return this.flagValue("FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED", false);
+  }
+
   private walletTopUpCustomerEnabled(): boolean {
-    return this.flagValue("WALLET_TOP_UP_ENABLED", false) && this.squadCustomerCheckoutEnabled();
+    return false;
   }
 
   private mockReadiness(activeProvider: string, livePaymentsEnabled: boolean) {
@@ -856,29 +879,37 @@ export class PaymentsService {
         recommendedValue: "true",
         note: "Cash/POD orders stay CASH_PENDING until KariGO Operations manually reconciles collection."
       },
+      flutterwaveCustomerCheckout: {
+        enabled: this.flutterwaveCustomerCheckoutEnabled(),
+        label: "Flutterwave customer checkout",
+        customerSelectable: this.providerRegistry.customerCheckoutProviders().includes("flutterwave"),
+        envFlag: "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED",
+        recommendedValue: "true",
+        note: "Flutterwave is KariGO's primary online customer checkout provider. Backend verification/webhook processing must confirm payment before an order is marked paid."
+      },
       squadCustomerCheckout: {
         enabled: this.squadCustomerCheckoutEnabled(),
         label: "Squad customer checkout",
         customerSelectable: this.squadCustomerCheckoutEnabled(),
         envFlag: "SQUAD_CUSTOMER_CHECKOUT_ENABLED",
         recommendedValue: "false",
-        note: "Customer checkout is currently running Pay on Delivery only while Squad checkout is under live review."
+        note: "Squad remains disabled/internal review for customer checkout after the Flutterwave switch."
       },
       wallet: {
         walletTopUpEnabled: this.walletTopUpCustomerEnabled(),
         walletTopUpConfiguredByEnv: this.flagValue("WALLET_TOP_UP_ENABLED", false),
         walletPaymentsEnabled: this.flagValue("WALLET_PAYMENTS_ENABLED", false),
-        providerForTopUp: "Squad by GTBank",
+        providerForTopUp: "Flutterwave",
         backendVerificationRequired: true,
         clientSideCreditDisabled: true,
         adminWalletVisibilityAvailable: true,
         minimumTopUpAmount: this.walletMinimumTopUpAmount(),
         envFlags: ["WALLET_TOP_UP_ENABLED", "WALLET_PAYMENTS_ENABLED"],
         recommendedValues: {
-          WALLET_TOP_UP_ENABLED: "true",
+          WALLET_TOP_UP_ENABLED: "false",
           WALLET_PAYMENTS_ENABLED: "false"
         },
-        note: "Wallet top-up may be enabled after Squad checkout verification is configured. Wallet order payment remains disabled until top-up crediting is verified end to end."
+        note: "Wallet top-up remains disabled while KariGO verifies Flutterwave checkout. Wallet order payment remains disabled until top-up crediting is verified end to end."
       }
     };
   }
@@ -919,7 +950,7 @@ export class PaymentsService {
         launchProfile.recommendation,
         ...recommendedIssues,
         liveMode
-          ? "Verify Squad callback and webhook URLs in the Squad dashboard before live launch approval."
+          ? `Verify ${this.providerLabel(provider)} callback and webhook URLs in the provider dashboard before live launch approval.`
           : "Verify callback and webhook URLs in the provider dashboard before sandbox certification.",
         "Do not add provider credentials to source code, screenshots or Git-tracked documentation."
       ].filter(Boolean)
@@ -1020,6 +1051,56 @@ export class PaymentsService {
     };
   }
 
+  private eitherSecretRequirement(names: string[], purpose: string): ProviderRequirement {
+    const configuredName = names.find((name) => Boolean(this.optionalValue(name)));
+    return {
+      name: names.join(" or "),
+      required: true,
+      configured: Boolean(configuredName),
+      purpose,
+      issue: configuredName ? undefined : `missing ${names.join(" or ")}`
+    };
+  }
+
+  private eitherRequiredUrlRequirement(names: string[], purpose: string): ProviderRequirement {
+    const configuredName = names.find((name) => Boolean(this.optionalValue(name)));
+    const value = configuredName ? this.optionalValue(configuredName) : undefined;
+    return {
+      name: names.join(" or "),
+      required: true,
+      configured: Boolean(configuredName),
+      purpose,
+      issue: !configuredName || !value
+        ? `missing ${names.join(" or ")}`
+        : !value.startsWith("https://")
+          ? `${configuredName} must use HTTPS`
+          : undefined
+    };
+  }
+
+  private flutterwaveReadinessRequirements(liveMode: boolean): ProviderRequirement[] {
+    if (liveMode) {
+      return [
+        this.modeRequirement("FLUTTERWAVE_ENVIRONMENT", ["live"], "Must be live for approved Flutterwave launch checkout"),
+        this.secretRequirement("FLUTTERWAVE_SECRET_KEY", "Flutterwave live server-side secret key"),
+        this.optionalRequirement("FLUTTERWAVE_PUBLIC_KEY", "Client-safe public key if a future client-side flow requires it"),
+        this.requiredUrlRequirement("FLUTTERWAVE_BASE_URL", "Flutterwave live API base URL", { rejectSandbox: true }),
+        this.eitherRequiredUrlRequirement(["FLUTTERWAVE_REDIRECT_URL", "FLUTTERWAVE_CALLBACK_URL"], "Public HTTPS redirect/callback URL configured in Flutterwave"),
+        this.eitherSecretRequirement(["FLUTTERWAVE_SECRET_HASH", "FLUTTERWAVE_WEBHOOK_SECRET"], "Flutterwave webhook secret hash"),
+        this.requiredFlagRequirement("FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED", "Enable Flutterwave as customer-selectable checkout")
+      ];
+    }
+    return [
+      this.modeRequirement("FLUTTERWAVE_ENVIRONMENT", ["live"], "Flutterwave is live-only for launch; keep unset until live credentials are approved"),
+      this.optionalRequirement("FLUTTERWAVE_PUBLIC_KEY", "Client-safe public key if a future client-side flow requires it"),
+      this.urlRequirement("FLUTTERWAVE_BASE_URL", "Flutterwave API base URL; defaults to the live API host when omitted"),
+      this.optionalRequirement("FLUTTERWAVE_REDIRECT_URL", "Flutterwave checkout redirect URL configured in the provider dashboard"),
+      this.optionalRequirement("FLUTTERWAVE_CALLBACK_URL", "Legacy alias for Flutterwave checkout redirect URL"),
+      this.optionalRequirement("FLUTTERWAVE_SECRET_HASH", "Webhook secret hash; do not store in source control"),
+      this.optionalRequirement("FLUTTERWAVE_WEBHOOK_SECRET", "Webhook secret alias; do not store in source control")
+    ];
+  }
+
   private squadReadinessRequirements(liveMode: boolean): ProviderRequirement[] {
     if (liveMode) {
       return [
@@ -1042,16 +1123,20 @@ export class PaymentsService {
     ];
   }
 
-  private squadLiveRequested(livePaymentsEnabled: boolean, activeProvider: string): boolean {
-    return livePaymentsEnabled || activeProvider === "squad" || this.optionalValue("SQUAD_MODE")?.toLowerCase() === "live";
+  private flutterwaveLiveRequested(livePaymentsEnabled: boolean, activeProvider: string): boolean {
+    return livePaymentsEnabled || activeProvider === "flutterwave" || this.optionalValue("FLUTTERWAVE_ENVIRONMENT")?.toLowerCase() === "live";
   }
 
-  private squadLiveActivationReadiness(activeProvider: string) {
+  private squadLiveRequested(activeProvider: string): boolean {
+    return activeProvider === "squad" || this.optionalValue("SQUAD_MODE")?.toLowerCase() === "live";
+  }
+
+  private flutterwaveLiveActivationReadiness(activeProvider: string) {
     const livePaymentsEnabled = this.livePaymentsEnabled();
     const blockers = [
       livePaymentsEnabled ? undefined : "PAYMENTS_LIVE_ENABLED must be true",
-      activeProvider === "squad" ? undefined : "PAYMENTS_PROVIDER must be squad",
-      ...this.squadReadinessRequirements(true)
+      activeProvider === "flutterwave" ? undefined : "PAYMENTS_PROVIDER must be flutterwave",
+      ...this.flutterwaveReadinessRequirements(true)
         .filter((requirement) => requirement.required && (!requirement.configured || requirement.issue))
         .map((requirement) => requirement.issue ?? `missing ${requirement.name}`),
       livePaymentsEnabled && this.providerRegistry.customerCheckoutProviders().includes("mock")
@@ -1090,6 +1175,18 @@ export class PaymentsService {
 
   private providerLaunchProfile(provider: PaymentProviderName, customerSelectable: boolean) {
     switch (provider) {
+      case "flutterwave":
+        return customerSelectable
+          ? {
+              status: "PRIMARY_LAUNCH_PROVIDER",
+              note: "Flutterwave is the primary online launch checkout provider and is customer-selectable when configured.",
+              recommendation: "Complete low-value live checkout, redirect and webhook verification before wider public rollout."
+            }
+          : {
+              status: "PRIMARY_LAUNCH_PROVIDER",
+              note: "Flutterwave is the primary online launch checkout provider. Customer visibility is gated by FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED and readiness checks.",
+              recommendation: "Set Flutterwave credentials only in Render/secret manager and keep Pay on Delivery available as the launch fallback."
+            };
       case "monnify":
         return {
           status: "PENDING_APPROVAL_SECONDARY_PROVIDER",
@@ -1103,17 +1200,11 @@ export class PaymentsService {
           recommendation: "Do not expose Paystack for public live checkout until provider approval and live credentials are recorded."
         };
       case "squad":
-        return customerSelectable
-          ? {
-              status: "PRIMARY_LAUNCH_PROVIDER",
-              note: "Squad by GTBank is the primary launch provider and is explicitly enabled for checkout.",
-              recommendation: "Complete live credential, webhook and finance approval verification before public rollout."
-            }
-          : {
-              status: "PRIMARY_LAUNCH_PROVIDER",
-              note: "Squad by GTBank is the primary launch provider. Customer visibility remains gated until environment verification is complete.",
-              recommendation: "Set live Squad environment variables only in Render/secret manager after approval; do not commit credentials."
-            };
+        return {
+          status: "DEFERRED_FOR_LAUNCH",
+          note: "Squad by GTBank is disabled/internal review for customer checkout after live routing issues.",
+          recommendation: "Keep SQUAD_CUSTOMER_CHECKOUT_ENABLED=false until a separate Squad reopening task verifies the external checkout flow."
+        };
       default:
         return {
           status: "INTERNAL_OR_FALLBACK",
@@ -1175,6 +1266,7 @@ export class PaymentsService {
 
   private providerLabel(providerName: string): string {
     switch (providerName) {
+      case "flutterwave": return "Flutterwave";
       case "paystack": return "Paystack Test Mode";
       case "monnify": return "Monnify Sandbox";
       case "squad": return this.livePaymentsEnabled() ? "Squad by GTBank" : "Squad Sandbox";
@@ -1194,6 +1286,7 @@ export class PaymentsService {
 
   private providerMode(providerName: PaymentProvider["name"]): string {
     switch (providerName) {
+      case "flutterwave": return this.optionalValue("FLUTTERWAVE_ENVIRONMENT") ?? "not_configured";
       case "paystack": return this.optionalValue("PAYSTACK_MODE") ?? "not_configured";
       case "monnify": return this.optionalValue("MONNIFY_MODE") ?? "not_configured";
       case "squad": return this.optionalValue("SQUAD_MODE") ?? "not_configured";

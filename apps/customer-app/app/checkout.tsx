@@ -9,8 +9,19 @@ import { Button, Card, Empty, Field, Message, Protected, Screen, ui } from "../s
 import { useCart } from "../src/contexts/cart-context";
 import { pricingFromServer } from "../src/lib/checkout-pricing";
 import { friendlyError, money } from "../src/lib/errors";
-import { fallbackCustomerPaymentConfig } from "../src/lib/payment-status";
+import { isExternalPaymentAuthorizationUrl, openExternalPaymentUrl, paymentAuthorizationUrlFrom } from "../src/lib/payment-flow";
+import {
+  customerPaymentProviderOptions,
+  fallbackCustomerPaymentConfig,
+  paymentAuthorizationOpenedMessage,
+  paymentProviderSensitiveDataNoteForConfig,
+  paymentProviderSelectionBodyForConfig,
+  paymentProviderSelectionTitleForConfig,
+  paymentSafetyNoteForConfig
+} from "../src/lib/payment-status";
 import { promoErrorMessage } from "../src/lib/promo-state";
+
+type CheckoutPaymentMethod = "flutterwave" | "cash_on_delivery";
 
 function normalizeCity(value?: string | null): string {
   return value?.trim().toLowerCase() ?? "";
@@ -36,9 +47,12 @@ export default function Checkout() {
   const [paymentConfig, setPaymentConfig] = useState<PublicPaymentConfig | null>(null);
   const [paymentConfigLoading, setPaymentConfigLoading] = useState(false);
   const [paymentConfigError, setPaymentConfigError] = useState("");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<CheckoutPaymentMethod>("cash_on_delivery");
 
   const items = useMemo(() => cart.items.map((i) => ({ productId: i.product.id, quantity: i.quantity })), [cart.items]);
   const effectivePaymentConfig = paymentConfig ?? fallbackCustomerPaymentConfig;
+  const paymentProviderOptions = useMemo(() => customerPaymentProviderOptions(effectivePaymentConfig), [effectivePaymentConfig]);
+  const flutterwaveEnabled = paymentProviderOptions.some((option) => option.value === "flutterwave");
   const quoteKey = useMemo(() => JSON.stringify({
     vendorId: cart.vendor?.id,
     addressId,
@@ -71,6 +85,11 @@ export default function Checkout() {
   }, []);
 
   useEffect(() => { void loadPaymentConfig(); }, [loadPaymentConfig]);
+  useEffect(() => {
+    if (!flutterwaveEnabled && selectedPaymentMethod === "flutterwave") {
+      setSelectedPaymentMethod("cash_on_delivery");
+    }
+  }, [flutterwaveEnabled, selectedPaymentMethod]);
 
   const loadQuote = useCallback(async (promo: string, options?: { promoAttempt?: boolean; keepUiError?: boolean }) => {
     if (!cart.vendor || !addressId || !cart.items.length) {
@@ -130,7 +149,13 @@ export default function Checkout() {
 
   async function createOrder() {
     if (!cart.vendor || !addressId) return;
-    if (!cashEnabled || knownUnsupportedCashCity) {
+    const isPayOnDelivery = selectedPaymentMethod === "cash_on_delivery";
+    const isFlutterwave = selectedPaymentMethod === "flutterwave";
+    if (isFlutterwave && !flutterwaveEnabled) {
+      setError("Flutterwave checkout is temporarily unavailable. Please use Pay on Delivery where available.");
+      return;
+    }
+    if (isPayOnDelivery && (!cashEnabled || knownUnsupportedCashCity)) {
       setError("Pay on Delivery is available in supported KariGO cities.");
       return;
     }
@@ -147,7 +172,7 @@ export default function Checkout() {
         serviceCategory: cart.serviceCategory,
         items,
         promoCode: validPromoCode || undefined,
-        paymentMethod: "CASH_ON_DELIVERY"
+        paymentMethod: isFlutterwave ? "FLUTTERWAVE" : "CASH_ON_DELIVERY"
       });
       setQuote({
         quoteReference: created.orderNumber,
@@ -158,7 +183,27 @@ export default function Checkout() {
         promoCode: validPromoCode || undefined,
         createdAt: new Date().toISOString()
       });
-      setMessage("Pay on Delivery order created. Please pay only the amount shown in KariGO at delivery.");
+      if (isFlutterwave) {
+        try {
+          const started = await paymentsApi.initiate({
+            orderId: created.id,
+            amount: Number(created.totalAmount),
+            paymentMethod: "card",
+            paymentProvider: "flutterwave"
+          });
+          const authorizationUrl = paymentAuthorizationUrlFrom(started.authorization);
+          if (!isExternalPaymentAuthorizationUrl(authorizationUrl)) {
+            throw new Error("Flutterwave did not return a secure checkout link.");
+          }
+          const openResult = await openExternalPaymentUrl(authorizationUrl);
+          if (!openResult.opened) throw new Error(openResult.message);
+          setMessage(paymentAuthorizationOpenedMessage("Flutterwave", effectivePaymentConfig));
+        } catch {
+          setMessage("Order created. Open the order details to retry Flutterwave payment.");
+        }
+      } else {
+        setMessage("Pay on Delivery order created. Please pay only the amount shown in KariGO at delivery.");
+      }
       cart.clear();
       router.replace(`/orders/${created.id}`);
     } catch (e) {
@@ -178,7 +223,12 @@ export default function Checkout() {
   const selectedAddress = addresses.find((address) => address.id === addressId);
   const checkoutCity = normalizeCity(selectedAddress?.city) || normalizeCity(cart.vendor?.city);
   const knownUnsupportedCashCity = Boolean(checkoutCity) && !supportedCitySet(effectivePaymentConfig).has(checkoutCity);
-  const checkoutMethodBlocked = !cashEnabled || knownUnsupportedCashCity;
+  const checkoutMethodBlocked = selectedPaymentMethod === "flutterwave"
+    ? !flutterwaveEnabled
+    : !cashEnabled || knownUnsupportedCashCity;
+  const createButtonTitle = selectedPaymentMethod === "flutterwave"
+    ? busy ? "Opening Flutterwave..." : "Create order and pay with Flutterwave"
+    : busy ? "Creating Pay on Delivery order..." : "Create Pay on Delivery order";
 
   return <Protected><Screen title="Checkout">
     {addresses.length === 0 ? <><Empty message="Add a delivery address before checkout." /><Button title="Add address" onPress={() => router.push("/addresses")} /></> :
@@ -199,13 +249,29 @@ export default function Checkout() {
     <Message>{message}</Message><Message error>{error}</Message>
     <Card>
       <Text style={ui.cardTitle}>Payment method</Text>
-      <Text style={ui.cardText}>Pay on Delivery is available for supported KariGO orders.</Text>
-      <Button title="Selected - Pay on Delivery" tone="primary" onPress={() => undefined} disabled={busy || !cashEnabled} />
+      <Text style={ui.cardText}>{paymentProviderSelectionTitleForConfig(effectivePaymentConfig)}</Text>
+      <Text style={ui.muted}>{paymentProviderSelectionBodyForConfig(effectivePaymentConfig)}</Text>
+      <Text style={ui.muted}>{paymentSafetyNoteForConfig(effectivePaymentConfig)}</Text>
+      {flutterwaveEnabled ? <Button
+        title={`${selectedPaymentMethod === "flutterwave" ? "Selected - " : ""}Pay with Flutterwave`}
+        tone={selectedPaymentMethod === "flutterwave" ? "primary" : "muted"}
+        onPress={() => setSelectedPaymentMethod("flutterwave")}
+        disabled={busy}
+      /> : null}
+      <Button
+        title={`${selectedPaymentMethod === "cash_on_delivery" ? "Selected - " : ""}Pay on Delivery`}
+        tone={selectedPaymentMethod === "cash_on_delivery" ? "primary" : "muted"}
+        onPress={() => setSelectedPaymentMethod("cash_on_delivery")}
+        disabled={busy || !cashEnabled}
+      />
+      <Text style={ui.muted}>Pay on Delivery is available for supported KariGO orders.</Text>
       <Text style={ui.muted}>Pay cash to the assigned KariGO Captain/vendor at delivery.</Text>
       <Text style={ui.muted}>Please pay only the amount shown in the app.</Text>
+      <Text style={ui.muted}>{paymentProviderSensitiveDataNoteForConfig(effectivePaymentConfig)}</Text>
+      {!flutterwaveEnabled && effectivePaymentConfig.livePaymentsEnabled ? <Text style={ui.muted}>Online payment is temporarily unavailable.</Text> : null}
       {knownUnsupportedCashCity ? <Message error>Pay on Delivery is available in supported KariGO cities.</Message> : null}
       {!cashEnabled ? <Message error>Pay on Delivery is not enabled right now. Please contact KariGO support.</Message> : null}
     </Card>
-    <Button title={busy ? "Creating Pay on Delivery order..." : "Create Pay on Delivery order"} onPress={createOrder} disabled={busy || !addressId || !quoteReady || checkoutMethodBlocked} />
+    <Button title={createButtonTitle} onPress={createOrder} disabled={busy || !addressId || !quoteReady || checkoutMethodBlocked} />
   </Screen></Protected>;
 }

@@ -22,7 +22,7 @@ export class InitiatePaymentDto {
 
   @ApiPropertyOptional({
     enum: CUSTOMER_TEST_PAYMENT_PROVIDERS,
-    description: "Optional customer-selected sandbox provider. Live payment providers remain disabled by environment guardrails."
+    description: "Optional customer-selected provider. Live checkout is restricted by backend environment guardrails."
   })
   @IsOptional()
   @IsIn(CUSTOMER_TEST_PAYMENT_PROVIDERS)

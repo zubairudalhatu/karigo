@@ -10,8 +10,11 @@ function flag(value: boolean) {
 }
 
 function paymentModeNote(settings: IntegrationSettings) {
+  if (settings.payments.liveEnabled && settings.payments.provider === "flutterwave") {
+    return "Flutterwave is the primary online launch provider. Mock payment is hidden in public live mode; Squad is disabled/internal review and Monnify/Paystack remain pending approval/future secondary providers.";
+  }
   if (settings.payments.liveEnabled && settings.payments.provider === "squad") {
-    return "Squad by GTBank is the primary launch provider. Mock payment is hidden in public live mode; Monnify and Paystack remain pending approval/future secondary providers.";
+    return "Squad by GTBank is disabled/internal review for customer checkout. Mock payment is hidden in public live mode; Flutterwave is the preferred online launch provider.";
   }
   return "Mock payment remains available only for staging/testing fallback. Live provider collection is not active from this page.";
 }
@@ -34,12 +37,12 @@ export default function SettingsPage() {
         <p>Provider: <strong>{settings.payments.provider}</strong></p>
         <p>Live enabled: {flag(settings.payments.liveEnabled)} Mock fallback: {flag(settings.payments.mockFallbackAvailable)}</p>
         <p className="muted">{paymentModeNote(settings)}</p>
-        <p className="muted">Paystack configured: {String(settings.payments.sandboxProviders.paystackConfigured)} - Monnify configured: {String(settings.payments.sandboxProviders.monnifyConfigured)} - Squad configured: {String(settings.payments.sandboxProviders.squadConfigured)}</p>
+        <p className="muted">Flutterwave configured: {String(settings.payments.sandboxProviders.flutterwaveConfigured)} - Paystack configured: {String(settings.payments.sandboxProviders.paystackConfigured)} - Monnify configured: {String(settings.payments.sandboxProviders.monnifyConfigured)} - Squad configured: {String(settings.payments.sandboxProviders.squadConfigured)}</p>
       </article>
       <article className="card">
         <h2>Wallet Launch Controls</h2>
         <p>Wallet top-up enabled: {flag(Boolean(settings.payments.wallet?.walletTopUpEnabled))} Wallet payments enabled: {flag(Boolean(settings.payments.wallet?.walletPaymentsEnabled))}</p>
-        <p>Provider for top-up: <strong>{settings.payments.wallet?.providerForTopUp ?? "Squad by GTBank"}</strong></p>
+        <p>Provider for top-up: <strong>{settings.payments.wallet?.providerForTopUp ?? "Flutterwave"}</strong></p>
         <p>Minimum top-up amount: <strong>NGN {settings.payments.wallet?.minimumTopUpAmount ?? 100}</strong></p>
         <p>Backend verification required: {flag(Boolean(settings.payments.wallet?.backendVerificationRequired))} Client-side credit disabled: {flag(Boolean(settings.payments.wallet?.clientSideCreditDisabled))}</p>
         <p className="muted">{settings.payments.wallet?.note ?? "Wallet top-up and wallet order payment remain controlled by backend launch flags."}</p>

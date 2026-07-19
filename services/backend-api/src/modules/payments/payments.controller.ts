@@ -35,7 +35,7 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CUSTOMER)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Initiate a Squad-backed customer wallet top-up" })
+  @ApiOperation({ summary: "Initiate a customer wallet top-up when explicitly enabled" })
   async walletTopUp(@CurrentUser() user: AuthenticatedUser, @Body() dto: InitiateWalletTopUpDto) {
     return { message: "Wallet top-up initiated", data: await this.paymentsService.initiateWalletTopUp(user.id, dto) };
   }
@@ -76,6 +76,8 @@ export class PaymentsController {
     @Param("gateway") gateway: string,
     @Body() payload: Record<string, unknown>,
     @Headers("x-paystack-signature") paystackSignature: string | undefined,
+    @Headers("flutterwave-signature") flutterwaveSignature: string | undefined,
+    @Headers("verif-hash") flutterwaveVerifHash: string | undefined,
     @Headers("monnify-signature") monnifySignature: string | undefined,
     @Headers("x-squad-encrypted-body") squadSignature: string | undefined,
     @Req() request: RawBodyRequest<Request>
@@ -84,7 +86,7 @@ export class PaymentsController {
       message: "Webhook received",
       data: await this.paymentsService.webhook(gateway, payload, {
         rawBody: request.rawBody,
-        signature: paystackSignature ?? monnifySignature ?? squadSignature
+        signature: paystackSignature ?? flutterwaveSignature ?? flutterwaveVerifHash ?? monnifySignature ?? squadSignature
       })
     };
   }

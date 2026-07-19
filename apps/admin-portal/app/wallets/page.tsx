@@ -116,7 +116,7 @@ export default function WalletsPage() {
         <button className="secondary" onClick={load} disabled={loading}>Refresh</button>
       </header>
       <p className="muted">View customer wallet balances and ledger activity. Manual adjustments are controlled admin ledger entries only; this page does not activate live top-up, withdrawals, automatic refunds, wallet checkout, referral rewards or subscription billing.</p>
-      <p className="muted">Wallet top-up records are read-only here. Credits must come only from backend Squad verification or a verified webhook; this page does not manually mark provider payments successful.</p>
+      <p className="muted">Wallet top-up records are read-only here. Credits must come only from backend provider verification or a verified webhook; this page does not manually mark provider payments successful.</p>
       <p className="success">{message}</p>
       <ErrorMessage>{error}</ErrorMessage>
 
@@ -139,7 +139,7 @@ export default function WalletsPage() {
 
       <section className="section">
         <h2>Wallet top-up records</h2>
-        <p className="muted">Recent Squad wallet top-up payments. Raw provider payloads and secrets are never shown.</p>
+        <p className="muted">Recent wallet top-up payments. Raw provider payloads and secrets are never shown.</p>
         {topUps.length ? (
           <table className="table">
             <thead><tr><th>Customer</th><th>Amount</th><th>Reference</th><th>Status</th><th>Provider</th><th>Created</th><th>Verified</th><th>Safe note</th></tr></thead>

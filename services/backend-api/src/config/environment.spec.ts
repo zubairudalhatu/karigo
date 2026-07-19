@@ -6,16 +6,16 @@ describe("environment configuration", () => {
     DATABASE_URL: testDatabaseUrl,
     JWT_SECRET: "test-secret"
   });
-  const squadLiveConfig = (overrides: Record<string, unknown> = {}) => ({
+  const flutterwaveLiveConfig = (overrides: Record<string, unknown> = {}) => ({
     ...baseConfig(),
     PAYMENTS_LIVE_ENABLED: "true",
-    PAYMENT_PROVIDER: "squad",
-    SQUAD_MODE: "live",
-    SQUAD_SECRET_KEY: "live-squad-secret-placeholder",
-    SQUAD_BASE_URL: "https://api-d.squadco.com",
-    SQUAD_CALLBACK_URL: "https://api.karigo.com.ng/api/v1/payments/callback/squad",
-    SQUAD_WEBHOOK_SECRET: "live-webhook-secret-placeholder",
-    SQUAD_LIVE_ACTIVATION_APPROVED: "true",
+    PAYMENT_PROVIDER: "flutterwave",
+    FLUTTERWAVE_ENVIRONMENT: "live",
+    FLUTTERWAVE_SECRET_KEY: "live-flutterwave-secret-placeholder",
+    FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
+    FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
+    FLUTTERWAVE_SECRET_HASH: "live-flutterwave-webhook-secret-placeholder",
+    FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true",
     ...overrides
   });
 
@@ -184,7 +184,7 @@ describe("environment configuration", () => {
   });
 
   it("allows startup when live payments are disabled", () => {
-    const result = validateEnvironment(squadLiveConfig({
+    const result = validateEnvironment(flutterwaveLiveConfig({
       PAYMENTS_LIVE_ENABLED: "false",
       PAYMENT_PROVIDER: "mock"
     }));
@@ -194,61 +194,63 @@ describe("environment configuration", () => {
     expect(result.PAYMENTS_PROVIDER).toBe("mock");
   });
 
-  it("rejects live payments unless Squad is the selected provider", () => {
+  it("rejects live payments unless Flutterwave is the selected provider", () => {
     expect(() => validateEnvironment({
       DATABASE_URL: testDatabaseUrl,
       JWT_SECRET: "test-secret",
       PAYMENTS_LIVE_ENABLED: "true",
       PAYMENT_PROVIDER: "paystack"
-    })).toThrow("Live payments require PAYMENT_PROVIDER=squad");
+    })).toThrow("Live payments require PAYMENT_PROVIDER=flutterwave");
   });
 
-  it("rejects live Squad payments unless Squad mode is live", () => {
-    expect(() => validateEnvironment(squadLiveConfig({
-      SQUAD_MODE: "sandbox"
-    }))).toThrow("Live Squad payments require SQUAD_MODE=live");
+  it("rejects live Flutterwave payments unless Flutterwave environment is live", () => {
+    expect(() => validateEnvironment(flutterwaveLiveConfig({
+      FLUTTERWAVE_ENVIRONMENT: "test"
+    }))).toThrow("Live Flutterwave payments require FLUTTERWAVE_ENVIRONMENT=live");
   });
 
-  it("rejects live Squad payments without a secret key", () => {
-    expect(() => validateEnvironment(squadLiveConfig({
-      SQUAD_SECRET_KEY: ""
-    }))).toThrow("Live Squad payments require SQUAD_SECRET_KEY");
+  it("rejects live Flutterwave payments without a secret key", () => {
+    expect(() => validateEnvironment(flutterwaveLiveConfig({
+      FLUTTERWAVE_SECRET_KEY: ""
+    }))).toThrow("Live Flutterwave payments require FLUTTERWAVE_SECRET_KEY");
   });
 
-  it("rejects live Squad payments without a webhook secret", () => {
-    expect(() => validateEnvironment(squadLiveConfig({
-      SQUAD_WEBHOOK_SECRET: ""
-    }))).toThrow("Live Squad payments require SQUAD_WEBHOOK_SECRET");
+  it("rejects live Flutterwave payments without a webhook secret", () => {
+    expect(() => validateEnvironment(flutterwaveLiveConfig({
+      FLUTTERWAVE_SECRET_HASH: "",
+      FLUTTERWAVE_WEBHOOK_SECRET: ""
+    }))).toThrow("Live Flutterwave payments require FLUTTERWAVE_SECRET_HASH or FLUTTERWAVE_WEBHOOK_SECRET");
   });
 
-  it("rejects live Squad payments when the base URL is not HTTPS", () => {
-    expect(() => validateEnvironment(squadLiveConfig({
-      SQUAD_BASE_URL: "http://api-d.squadco.com"
-    }))).toThrow("Live Squad payments require HTTPS SQUAD_BASE_URL");
+  it("rejects live Flutterwave payments when the base URL is not HTTPS", () => {
+    expect(() => validateEnvironment(flutterwaveLiveConfig({
+      FLUTTERWAVE_BASE_URL: "http://api.flutterwave.com/v3"
+    }))).toThrow("Live Flutterwave payments require HTTPS FLUTTERWAVE_BASE_URL");
   });
 
-  it("rejects live Squad payments when the callback URL is not HTTPS", () => {
-    expect(() => validateEnvironment(squadLiveConfig({
-      SQUAD_CALLBACK_URL: "http://api.karigo.com.ng/api/v1/payments/callback/squad"
-    }))).toThrow("Live Squad payments require HTTPS SQUAD_CALLBACK_URL");
+  it("rejects live Flutterwave payments when the redirect URL is not HTTPS", () => {
+    expect(() => validateEnvironment(flutterwaveLiveConfig({
+      FLUTTERWAVE_REDIRECT_URL: "http://api.karigo.com.ng/api/v1/payments/callback/flutterwave"
+    }))).toThrow("Live Flutterwave payments require HTTPS FLUTTERWAVE_REDIRECT_URL or FLUTTERWAVE_CALLBACK_URL");
   });
 
-  it("rejects live Squad payments without explicit activation approval", () => {
-    expect(() => validateEnvironment(squadLiveConfig({
-      SQUAD_LIVE_ACTIVATION_APPROVED: "false"
-    }))).toThrow("Live Squad payments require SQUAD_LIVE_ACTIVATION_APPROVED=true");
+  it("rejects live Flutterwave payments unless customer checkout is enabled", () => {
+    expect(() => validateEnvironment(flutterwaveLiveConfig({
+      FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "false"
+    }))).toThrow("Live Flutterwave payments require FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED=true");
   });
 
-  it("allows approved live Squad payment configuration", () => {
-    const result = validateEnvironment(squadLiveConfig({
-      PAYMENTS_PROVIDER: "squad",
+  it("allows approved live Flutterwave payment configuration", () => {
+    const result = validateEnvironment(flutterwaveLiveConfig({
+      PAYMENTS_PROVIDER: "flutterwave",
       PAYMENT_PROVIDER: undefined
     }));
 
     expect(result.PAYMENTS_LIVE_ENABLED).toBe(true);
-    expect(result.PAYMENT_PROVIDER).toBe("squad");
-    expect(result.PAYMENTS_PROVIDER).toBe("squad");
-    expect(result.SQUAD_BASE_URL).toBe("https://api-d.squadco.com");
+    expect(result.PAYMENT_PROVIDER).toBe("flutterwave");
+    expect(result.PAYMENTS_PROVIDER).toBe("flutterwave");
+    expect(result.FLUTTERWAVE_BASE_URL).toBe("https://api.flutterwave.com/v3");
+    expect(result.FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED).toBe(true);
   });
 
   it("allows Termii preparation only with configured non-production credentials", () => {

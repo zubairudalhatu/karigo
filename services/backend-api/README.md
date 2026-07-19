@@ -138,7 +138,7 @@ test script, and rollback record are under `docs/providers/` and `docs/qa/`. Exp
 Termii selection without its required secret and approved sender fails startup; an unset
 provider continues to default to mock.
 
-Set `PAYMENT_PROVIDER=mock` for the complete development payment flow. Paystack, Flutterwave, Monnify and Squad providers are placeholders only. See `docs/api/PAYMENT-FOUNDATION.md` for the payment, webhook and refund workflows.
+Set `PAYMENT_PROVIDER=mock` for the complete development payment flow. Flutterwave live checkout is gated by explicit Render environment variables and backend verification; Paystack, Monnify and Squad remain sandbox/deferred unless separately approved. See `docs/api/PAYMENT-FOUNDATION.md` for the payment, webhook and refund workflows.
 
 Production provider readiness, required variables, security controls, and phased
 implementation plans are documented under `docs/providers/`. Paystack sandbox is the

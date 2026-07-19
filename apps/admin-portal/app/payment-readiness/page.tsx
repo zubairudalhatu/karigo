@@ -11,11 +11,12 @@ import {
 } from "../../src/api/payments.api";
 import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
 
-const providerPriority = ["squad", "monnify", "paystack"];
+const providerPriority = ["flutterwave", "squad", "monnify", "paystack"];
 const sandboxTestProviders = ["paystack", "monnify", "squad"];
 
 function providerLabel(value: string) {
   switch (value) {
+    case "flutterwave": return "Flutterwave";
     case "paystack": return "Paystack";
     case "monnify": return "Monnify";
     case "squad": return "Squad by GTBank";
@@ -131,7 +132,7 @@ export default function PaymentReadinessPage() {
         </div>
         <button className="secondary" onClick={load} disabled={loading}>Refresh</button>
       </header>
-      <p className="muted">Admin-only configuration readiness for Squad by GTBank, Cash / Pay on Delivery, Wallet, Monnify, Paystack and mock payment. This page shows key names and safe status only; it does not expose secret values and does not activate live checkout, wallet funding, refunds, payouts or settlements. Admin does not initiate customer payments from this page; the Customer App initiates checkout and backend verification confirms the final payment state.</p>
+      <p className="muted">Admin-only configuration readiness for Flutterwave, Cash / Pay on Delivery, Wallet, Squad, Monnify, Paystack and mock payment. This page shows key names and safe status only; it does not expose secret values and does not activate live checkout, wallet funding, refunds, payouts or settlements. Admin does not initiate customer payments from this page; the Customer App initiates checkout and backend verification confirms the final payment state.</p>
       <ErrorMessage>{error}</ErrorMessage>
       <ErrorMessage>{testError}</ErrorMessage>
 
@@ -148,8 +149,8 @@ export default function PaymentReadinessPage() {
             </article>
             <article className="card">
               <span className="muted">Launch priority</span>
-              <p className="metric">1 Squad by GTBank</p>
-              <p className="muted">2 Monnify pending approval, 3 Paystack pending approval</p>
+              <p className="metric">1 Flutterwave</p>
+              <p className="muted">2 Pay on Delivery fallback, 3 Squad disabled/internal review, 4 Monnify/Paystack pending approval</p>
             </article>
             <article className="card">
               <span className="muted">Live activation</span>
@@ -161,7 +162,7 @@ export default function PaymentReadinessPage() {
           <section className="section">
             <article className="card internal">
               <h2>Safety guardrail</h2>
-              <p>Squad by GTBank is the primary launch provider, but customer checkout is currently running Pay on Delivery only while Squad checkout is under live review. Mock payment remains a staging rollback path only and must be hidden from public live checkout. Do not paste keys, webhook secrets, test cards or provider dashboard secrets into this page, docs, tickets or screenshots.</p>
+              <p>Flutterwave is KariGO's primary online customer checkout provider. Pay on Delivery remains enabled for supported KariGO cities. Squad is disabled/internal review after live routing issues. Mock payment remains a staging rollback path only and must be hidden from public live checkout. Do not paste keys, webhook secrets, test cards or provider dashboard secrets into this page, docs, tickets or screenshots.</p>
             </article>
           </section>
 
@@ -181,6 +182,15 @@ export default function PaymentReadinessPage() {
                   <p className="muted">Flag: {readiness.launchPaymentOptions.cashOnDelivery.envFlag}={readiness.launchPaymentOptions.cashOnDelivery.recommendedValue}</p>
                   <p className="muted">{readiness.launchPaymentOptions.cashOnDelivery.note}</p>
                 </article>
+                {readiness.launchPaymentOptions.flutterwaveCustomerCheckout ? (
+                  <article className="card">
+                    <h3>{readiness.launchPaymentOptions.flutterwaveCustomerCheckout.label}</h3>
+                    <p><Badge>{readiness.launchPaymentOptions.flutterwaveCustomerCheckout.enabled ? "Enabled" : "Disabled"}</Badge></p>
+                    <div className="item"><span>Customer selectable</span><strong>{yesNo(readiness.launchPaymentOptions.flutterwaveCustomerCheckout.customerSelectable)}</strong></div>
+                    <p className="muted">Flag: {readiness.launchPaymentOptions.flutterwaveCustomerCheckout.envFlag}={readiness.launchPaymentOptions.flutterwaveCustomerCheckout.recommendedValue}</p>
+                    <p className="muted">{readiness.launchPaymentOptions.flutterwaveCustomerCheckout.note}</p>
+                  </article>
+                ) : null}
                 <article className="card">
                   <h3>{readiness.launchPaymentOptions.squadCustomerCheckout.label}</h3>
                   <p><Badge>{readiness.launchPaymentOptions.squadCustomerCheckout.enabled ? "Enabled" : "Disabled / Internal review"}</Badge></p>
@@ -211,7 +221,7 @@ export default function PaymentReadinessPage() {
                 const missing = missingRequired(provider);
                 const testResult = testResults[provider.provider];
                 const sandboxProvider = isSandboxTestProvider(provider.provider) ? provider.provider : null;
-                const liveSquad = readiness.paymentsLiveEnabled && provider.provider === "squad";
+                const liveFlutterwave = readiness.paymentsLiveEnabled && provider.provider === "flutterwave";
                 const showSandboxTest = Boolean(sandboxProvider && !readiness.paymentsLiveEnabled);
                 return (
                   <article className="card" key={provider.provider}>
@@ -230,12 +240,12 @@ export default function PaymentReadinessPage() {
                     ) : <p className="success">No required configuration gaps reported.</p>}
                     {provider.recommendations?.length ? <p className="muted">{provider.recommendations[0]}</p> : null}
                     {provider.recommendedActions?.length ? <p className="muted">{provider.recommendedActions[0]}</p> : null}
-                    {liveSquad ? (
+                    {liveFlutterwave ? (
                       <div className="item">
                         <span>Live launch check</span>
                         <strong>Verify live readiness</strong>
                         <p className="muted">Primary launch provider. Live mode configured: {modeStatus(provider) === "Configured" ? "Yes" : "No"}.</p>
-                        <p className="muted">Webhook/callback configured: {requirementConfigured(provider, "SQUAD_WEBHOOK_SECRET") && requirementConfigured(provider, "SQUAD_CALLBACK_URL") ? "Yes" : "No"}.</p>
+                        <p className="muted">Webhook/callback configured: {requirementConfigured(provider, "FLUTTERWAVE_SECRET_HASH or FLUTTERWAVE_WEBHOOK_SECRET") && requirementConfigured(provider, "FLUTTERWAVE_REDIRECT_URL or FLUTTERWAVE_CALLBACK_URL") ? "Yes" : "No"}.</p>
                         <p className="muted">Low-value live test required for operations verification only. This page is read-only in live mode and does not initiate customer payment.</p>
                       </div>
                     ) : showSandboxTest && sandboxProvider ? (

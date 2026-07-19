@@ -371,7 +371,8 @@ export class OrdersService {
 
   private normalizePaymentMethod(value?: string): OrderPaymentMethod {
     const normalized = value?.trim().toUpperCase();
-    if (!normalized || normalized === "SQUAD") return OrderPaymentMethod.SQUAD;
+    if (!normalized || normalized === "FLUTTERWAVE") return OrderPaymentMethod.FLUTTERWAVE;
+    if (normalized === "SQUAD") return OrderPaymentMethod.SQUAD;
     if (normalized === "WALLET") return OrderPaymentMethod.WALLET;
     if (normalized === "CASH_ON_DELIVERY" || normalized === "CASHONDELIVERY" || normalized === "CASH") {
       return OrderPaymentMethod.CASH_ON_DELIVERY;
@@ -381,6 +382,16 @@ export class OrdersService {
   }
 
   private assertPaymentMethodAvailable(paymentMethod: OrderPaymentMethod, deliveryCity?: string | null, vendorCity?: string | null) {
+    if (paymentMethod === OrderPaymentMethod.FLUTTERWAVE) {
+      const provider = this.configuredPaymentProvider();
+      const livePaymentsEnabled = this.flagValue("PAYMENTS_LIVE_ENABLED", false);
+      if (!livePaymentsEnabled || provider !== "flutterwave" || !this.flagValue("FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED", false)) {
+        throw new BadRequestException("Flutterwave checkout is not enabled right now. Please use Pay on Delivery where available.");
+      }
+    }
+    if (paymentMethod === OrderPaymentMethod.SQUAD && !this.flagValue("SQUAD_CUSTOMER_CHECKOUT_ENABLED", false)) {
+      throw new BadRequestException("Squad checkout is disabled for customer orders.");
+    }
     if (paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY || paymentMethod === OrderPaymentMethod.WALLET) {
       const city = deliveryCity?.trim() || vendorCity?.trim() || "";
       if (city && !LAUNCH_PAYMENT_CITIES.has(city.toLowerCase())) {
@@ -401,6 +412,11 @@ export class OrdersService {
     if (typeof value === "number") return value === 1;
     if (typeof value !== "string" || !value.trim()) return fallback;
     return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
+  }
+
+  private configuredPaymentProvider(): string {
+    const provider = this.config.get<unknown>("PAYMENTS_PROVIDER") ?? this.config.get<unknown>("PAYMENT_PROVIDER");
+    return typeof provider === "string" && provider.trim() ? provider.trim().toLowerCase() : "mock";
   }
 
   async createParcelOrder(userId: string, dto: CreateParcelOrderDto) {
