@@ -784,7 +784,8 @@ export class PaymentsService {
     return {
       ...authorization,
       checkoutUrl: authorization.authorizationUrl,
-      paymentUrl: authorization.authorizationUrl
+      paymentUrl: authorization.authorizationUrl,
+      url: authorization.authorizationUrl
     };
   }
   private transactionReference(gateway: string): string {

@@ -383,7 +383,7 @@ export class OrdersService {
   private assertPaymentMethodAvailable(paymentMethod: OrderPaymentMethod, city?: string | null) {
     if (paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY || paymentMethod === OrderPaymentMethod.WALLET) {
       if (!city || !LAUNCH_PAYMENT_CITIES.has(city.trim().toLowerCase())) {
-        throw new BadRequestException("Cash/POD and wallet payment are available only in Kano and Abuja during launch readiness");
+        throw new BadRequestException("Pay on Delivery is available in supported KariGO cities.");
       }
     }
     if (paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY && !this.flagValue("CASH_ON_DELIVERY_ENABLED", false)) {

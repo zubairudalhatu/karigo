@@ -301,6 +301,9 @@ assert(walletScreen.includes("paymentsApi.publicConfig"), "Customer wallet scree
 assert(walletScreen.includes("walletTopUpEnabled"), "Customer wallet screen must gate top-up by backend walletTopUpEnabled.");
 assert(walletScreen.includes("walletTopUpProviderLabel"), "Customer wallet screen must show the backend wallet top-up provider label.");
 assert(walletScreen.includes("walletMinimumTopUpAmount"), "Customer wallet screen must use the backend wallet minimum top-up amount.");
+assert(walletScreen.includes("openExternalPaymentUrl"), "Customer wallet top-up must open Squad checkout externally.");
+assert(walletScreen.includes("pendingTopUpUrl"), "Customer wallet top-up must store a pending checkout URL for reopening.");
+assert(walletScreen.includes("Open Squad checkout again"), "Customer wallet top-up must allow reopening the external checkout page.");
 assert(walletScreen.includes("walletApi.verifyTopUp"), "Customer wallet screen must verify top-up through the dedicated wallet endpoint.");
 assert(walletScreen.includes("Payment is still pending verification."), "Wallet top-up verification failure must use pending-verification copy.");
 assert(walletScreen.includes("Pending verification"), "Customer wallet screen must show pending verification after Squad checkout opens.");
@@ -401,7 +404,7 @@ assert(!checkout.includes("deliveryFee: 1000"), "Checkout must not hardcode stag
 assert(checkout.includes("loadQuote(code, { promoAttempt: true })"), "Promo success must refresh the server quote.");
 assert(checkout.includes("await loadQuote(\"\", { keepUiError: true })"), "Promo failure must refresh a non-promo quote.");
 assert(checkout.includes("isExternalPaymentAuthorizationUrl"), "Checkout must detect external payment authorization URLs.");
-assert(checkout.includes("openExternalPaymentAuthorization"), "Checkout must open external payment authorization through the safe helper.");
+assert(checkout.includes("openExternalPaymentUrl"), "Checkout must open external payment authorization through the safe helper.");
 assert(checkout.includes("paymentsApi.publicConfig"), "Checkout must load public-safe backend payment configuration.");
 assert(checkout.includes("customerPaymentProviderOptions"), "Checkout must derive customer payment provider options from runtime config.");
 assert(checkout.includes("paymentProviderAvailable"), "Checkout must block payment until a runtime payment provider is available.");
@@ -426,17 +429,26 @@ assert(checkout.includes("Verify payment status"), "Checkout must let customers 
 assert(checkout.includes("paymentInitializationFailureMessage"), "Checkout must show safe provider-specific initialization errors.");
 assert(checkout.includes("Pay on Delivery"), "Checkout must expose Cash/POD readiness copy.");
 assert(checkout.includes("cashPaymentEnabled"), "Checkout must reflect backend Cash/POD readiness flags.");
+assert(checkout.includes("paymentMethod: selectedCheckoutMethod === \"cash_on_delivery\""), "Pay on Delivery order creation must send CASH_ON_DELIVERY instead of initiating Squad.");
+assert(checkout.includes("router.replace(`/orders/${created.id}`)"), "Pay on Delivery order creation must go to order detail without opening Squad checkout.");
+assert(checkout.includes("Pay on Delivery is available in supported KariGO cities."), "Customer checkout must not show old launch-readiness Cash/POD city copy.");
+assert(!checkout.includes("Cash/POD and wallet payment are available only in Kano and Abuja during launch readiness"), "Customer checkout must not expose launch-readiness Cash/POD copy.");
 assert(checkout.includes("Please pay only the amount shown in the app."), "Checkout Cash/POD copy must warn customers not to pay outside the app total.");
 assert(checkout.includes("Wallet top-up via Squad"), "Checkout must explain wallet top-up readiness.");
 assert(checkout.includes("walletPaymentsEnabled"), "Checkout must reflect backend wallet payment readiness flags.");
 const paymentFlow = read("src", "lib", "payment-flow.ts");
+assert(paymentFlow.includes("openExternalPaymentUrl"), "Customer payment flow must expose the external payment URL helper.");
+assert(paymentFlow.includes("Linking.openURL(normalizedUrl)"), "Customer payment flow must open native hosted checkout with React Native Linking.");
 assert(paymentFlow.includes("expo-web-browser"), "Customer payment flow must use Expo WebBrowser for hosted checkout links.");
-assert(paymentFlow.includes("WebBrowser.openBrowserAsync"), "Customer payment flow must open native hosted checkout externally.");
+assert(paymentFlow.includes("WebBrowser.openBrowserAsync"), "Customer payment flow must retain Expo WebBrowser fallback for hosted checkout links.");
 assert(paymentFlow.includes("paymentAuthorizationUrlFrom"), "Customer payment flow must accept backend checkout URL aliases.");
 assert(paymentFlow.includes("Platform.OS === \"web\""), "Customer payment flow must open hosted checkout externally on web builds.");
 assert(paymentFlow.includes("window.open(normalizedUrl"), "Customer payment flow must not route hosted checkout URLs through Expo Router on web.");
 assert(!paymentFlow.includes("Linking.canOpenURL(normalizedUrl)"), "Customer payment flow must not block valid HTTPS hosted checkout URLs with canOpenURL.");
-assert(paymentFlow.includes("parsed.protocol === \"https:\""), "Customer payment flow must only accept HTTPS external authorization URLs.");
+assert(!paymentFlow.includes("expo-router"), "Customer payment flow must never import Expo Router for provider checkout URLs.");
+assert(!paymentFlow.includes("router.push") && !paymentFlow.includes("router.replace"), "Customer payment flow must never route provider checkout URLs internally.");
+assert(paymentFlow.includes("[\"http:\", \"https:\"].includes(parsed.protocol)"), "Customer payment flow must only accept HTTP/HTTPS external authorization URLs.");
+assert(paymentFlow.includes("normalizedUrl.startsWith(\"/\")"), "Customer payment flow must reject internal app routes.");
 assert(paymentFlow.includes("mock://"), "Customer payment flow must preserve mock authorization handling.");
 
 const orderDetail = read("app", "orders", "[id].tsx");
@@ -449,6 +461,7 @@ assert(orderDetail.includes("Only share this code after you have received your o
 assert(orderDetail.includes("Retry delivery code"), "Delivery OTP fetch failures must have a retry action.");
 assert(orderDetail.includes("setDeliveryOtp(\"\")"), "Delivery OTP must reset when status/order changes or fetch fails.");
 assert(orderDetail.includes("isExternalPaymentAuthorizationUrl"), "Order detail retry payment must detect external payment authorization URLs.");
+assert(orderDetail.includes("openExternalPaymentUrl"), "Order detail retry payment must open provider checkout externally.");
 assert(orderDetail.includes("paymentsApi.publicConfig"), "Order detail retry payment must load public-safe backend payment configuration.");
 assert(orderDetail.includes("customerPaymentProviderOptions"), "Order detail retry payment must derive provider options from runtime config.");
 assert(orderDetail.includes("paymentProviderAvailable"), "Order detail retry payment must block payment until a runtime provider is available.");

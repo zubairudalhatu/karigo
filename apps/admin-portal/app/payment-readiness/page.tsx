@@ -131,7 +131,7 @@ export default function PaymentReadinessPage() {
         </div>
         <button className="secondary" onClick={load} disabled={loading}>Refresh</button>
       </header>
-      <p className="muted">Admin-only configuration readiness for Squad by GTBank, Cash / Pay on Delivery, Wallet, Monnify, Paystack and mock payment. This page shows key names and safe status only; it does not expose secret values and does not activate live checkout, wallet funding, refunds, payouts or settlements.</p>
+      <p className="muted">Admin-only configuration readiness for Squad by GTBank, Cash / Pay on Delivery, Wallet, Monnify, Paystack and mock payment. This page shows key names and safe status only; it does not expose secret values and does not activate live checkout, wallet funding, refunds, payouts or settlements. Admin does not initiate customer payments from this page; the Customer App initiates checkout and backend verification confirms the final payment state.</p>
       <ErrorMessage>{error}</ErrorMessage>
       <ErrorMessage>{testError}</ErrorMessage>
 
@@ -228,7 +228,7 @@ export default function PaymentReadinessPage() {
                         <strong>Verify live readiness</strong>
                         <p className="muted">Primary launch provider. Live mode configured: {modeStatus(provider) === "Configured" ? "Yes" : "No"}.</p>
                         <p className="muted">Webhook/callback configured: {requirementConfigured(provider, "SQUAD_WEBHOOK_SECRET") && requirementConfigured(provider, "SQUAD_CALLBACK_URL") ? "Yes" : "No"}.</p>
-                        <p className="muted">Low-value live test required. This page is read-only in live mode and does not initiate payment.</p>
+                        <p className="muted">Low-value live test required for operations verification only. This page is read-only in live mode and does not initiate customer payment.</p>
                       </div>
                     ) : showSandboxTest && sandboxProvider ? (
                       <>

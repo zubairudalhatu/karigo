@@ -13,7 +13,7 @@ import { friendlyError, money } from "../src/lib/errors";
 import {
   isExternalPaymentAuthorizationUrl,
   isMockAuthorizationUrl,
-  openExternalPaymentAuthorization,
+  openExternalPaymentUrl,
   paymentAuthorizationUrlFrom
 } from "../src/lib/payment-flow";
 import {
@@ -241,7 +241,7 @@ export default function Checkout() {
       const startedProvider = started.payment.gateway ?? selectedPaymentProvider;
       const startedProviderLabel = paymentProviderLabel(startedProvider, effectivePaymentConfig);
       if (isExternalPaymentAuthorizationUrl(authorizationUrl)) {
-        await openExternalPaymentAuthorization(authorizationUrl);
+        await openExternalPaymentUrl(authorizationUrl);
         setPendingPaymentReference(started.payment.transactionReference);
         setPendingAuthorizationUrl(authorizationUrl);
         setPendingPaymentProvider(startedProvider);
@@ -288,11 +288,11 @@ export default function Checkout() {
   }
 
   async function reopenPaymentAuthorization() {
-    if (!pendingAuthorizationUrl) return;
+      if (!pendingAuthorizationUrl) return;
     setBusy(true);
     setError("");
     try {
-      await openExternalPaymentAuthorization(pendingAuthorizationUrl);
+      await openExternalPaymentUrl(pendingAuthorizationUrl);
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -339,7 +339,7 @@ export default function Checkout() {
     {!order ? <>
       <Card>
         <Text style={ui.cardTitle}>Choose payment method</Text>
-        <Text style={ui.cardText}>KariGO launch checkout supports Squad, Pay on Delivery and wallet payment where enabled in Kano and Abuja.</Text>
+        <Text style={ui.cardText}>KariGO checkout supports Squad, Pay on Delivery and wallet payment where enabled. Pay on Delivery is available in supported KariGO cities.</Text>
         <Button
           title={`${selectedCheckoutMethod === "squad" ? "Selected - " : ""}Pay with Squad`}
           tone={selectedCheckoutMethod === "squad" ? "primary" : "muted"}

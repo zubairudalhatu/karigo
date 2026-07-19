@@ -10,7 +10,7 @@ import { friendlyError, money } from "../../src/lib/errors";
 import {
   isExternalPaymentAuthorizationUrl,
   isMockAuthorizationUrl,
-  openExternalPaymentAuthorization,
+  openExternalPaymentUrl,
   paymentAuthorizationUrlFrom
 } from "../../src/lib/payment-flow";
 import {
@@ -101,7 +101,7 @@ export default function OrderTracking() {
       const startedProvider = started.payment.gateway ?? selectedPaymentProvider;
       const startedProviderLabel = paymentProviderLabel(startedProvider, effectivePaymentConfig);
       if (isExternalPaymentAuthorizationUrl(authorizationUrl)) {
-        await openExternalPaymentAuthorization(authorizationUrl);
+        await openExternalPaymentUrl(authorizationUrl);
         setPendingPaymentReference(started.payment.transactionReference);
         setPendingAuthorizationUrl(authorizationUrl);
         setPendingPaymentProvider(startedProvider);
@@ -142,11 +142,11 @@ export default function OrderTracking() {
   }
 
   async function reopenPaymentAuthorization() {
-    if (!pendingAuthorizationUrl) return;
+      if (!pendingAuthorizationUrl) return;
     setBusy(true);
     setError("");
     try {
-      await openExternalPaymentAuthorization(pendingAuthorizationUrl);
+      await openExternalPaymentUrl(pendingAuthorizationUrl);
     } catch (e) {
       setError(friendlyError(e));
     } finally {

@@ -1,6 +1,6 @@
 import { ConfigService } from "@nestjs/config";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
-import { OrderStatus, PaymentStatus, Prisma, ServiceCategory } from "@prisma/client";
+import { CashCollectionStatus, OrderPaymentMethod, OrderStatus, PaymentStatus, Prisma, ServiceCategory } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { OrdersService } from "./orders.service";
 import { PromoService } from "../promos/promo.service";
@@ -18,7 +18,7 @@ describe("OrdersService", () => {
   };
   prisma.$transaction = jest.fn((callback: (tx: typeof prisma) => unknown) => callback(prisma));
   const config = {
-    get: jest.fn((key: string, fallback: number) => fallback)
+    get: jest.fn((key: string, fallback?: unknown) => fallback)
   };
   const promos = { validateForCustomer: jest.fn() };
   const notifications = { createNotification: jest.fn() };
@@ -33,6 +33,7 @@ describe("OrdersService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    config.get.mockImplementation((_: string, fallback?: unknown) => fallback);
     applicationNotifications.orderCreated.mockResolvedValue(undefined);
   });
 
@@ -134,6 +135,39 @@ describe("OrdersService", () => {
     expect(result.promoCodeId).toBe("promo-1");
     expect(result.discountAmount.toNumber()).toBe(500);
     expect(result.totalAmount.toNumber()).toBe(5500);
+  });
+
+  it("creates a Pay on Delivery order without starting electronic payment", async () => {
+    let createData: Record<string, any> = {};
+    prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
+    prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-1" });
+    prisma.address.findFirst.mockResolvedValue({ id: "address-1", city: "Kano" });
+    prisma.product.findMany.mockResolvedValue([
+      { id: "product-1", name: "Jollof Rice", price: new Prisma.Decimal(2500) }
+    ]);
+    config.get.mockImplementation((key: string, fallback: unknown) => key === "CASH_ON_DELIVERY_ENABLED" ? "true" : fallback);
+    prisma.order.create.mockImplementation(({ data }: { data: Record<string, any> }) => {
+      createData = data;
+      return data;
+    });
+
+    const result = await service.createVendorOrder("user-1", {
+      vendorId: "vendor-1",
+      deliveryAddressId: "address-1",
+      serviceCategory: ServiceCategory.FOOD,
+      paymentMethod: "CASH_ON_DELIVERY",
+      items: [{ productId: "product-1", quantity: 1 }]
+    });
+
+    expect(result.paymentMethod).toBe(OrderPaymentMethod.CASH_ON_DELIVERY);
+    expect(result.paymentStatus).toBe(PaymentStatus.CASH_PENDING);
+    expect(result.orderStatus).toBe(OrderStatus.PAID);
+    expect(result.cashCollectionStatus).toBe(CashCollectionStatus.PENDING_COLLECTION);
+    expect(createData.statusHistory.create.note).toContain("cash collection is pending");
+    expect(notifications.createNotification).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Order created",
+      message: expect.stringContaining("Pay on Delivery")
+    }));
   });
 
   it("returns delivery OTP only for an owned arrived or delivered order", async () => {

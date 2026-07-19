@@ -65,6 +65,9 @@ assert(paymentReadinessPage.includes("Do not paste keys"), "Payment Readiness pa
 assert(paymentReadinessPage.includes("Test sandbox initialization"), "Payment Readiness page must expose a safe admin-only sandbox initialization test action.");
 assert(paymentReadinessPage.includes("Verify live readiness"), "Payment Readiness page must use live readiness wording for Squad live mode.");
 assert(paymentReadinessPage.includes("Low-value live test required"), "Payment Readiness page must tell operators that Squad live mode still needs a low-value test.");
+assert(paymentReadinessPage.includes("Admin does not initiate customer payments"), "Payment Readiness page must state Admin does not initiate customer payments.");
+assert(paymentReadinessPage.includes("Customer App initiates checkout"), "Payment Readiness page must state customer checkout starts from the Customer App.");
+assert(paymentReadinessPage.includes("operations verification only"), "Payment Readiness page must describe low-value live tests as operations verification only.");
 assert(paymentReadinessPage.includes("Read-only in live mode"), "Payment Readiness page must not show sandbox initialization as the primary action in live mode.");
 assert(paymentReadinessPage.includes("Stage: {testResult.stage}"), "Payment Readiness page must show the provider initialization failure stage.");
 assert(paymentReadinessPage.includes("Authorization URL present"), "Payment Readiness page must show only authorization URL presence, not URL values.");

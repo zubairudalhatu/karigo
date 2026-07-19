@@ -7,7 +7,7 @@ import { CustomerWalletLedgerResult, walletApi, WalletLedgerDirection, WalletLed
 import { paymentsApi } from "../../src/api/payments.api";
 import { Button, Card, Empty, Field, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError, money } from "../../src/lib/errors";
-import { isExternalPaymentAuthorizationUrl, isMockAuthorizationUrl, openExternalPaymentAuthorization, paymentAuthorizationUrlFrom } from "../../src/lib/payment-flow";
+import { isExternalPaymentAuthorizationUrl, isMockAuthorizationUrl, openExternalPaymentUrl, paymentAuthorizationUrlFrom } from "../../src/lib/payment-flow";
 import { fallbackCustomerPaymentConfig } from "../../src/lib/payment-status";
 
 const titleForType: Record<WalletLedgerEntryType, string> = {
@@ -87,7 +87,7 @@ export default function CustomerWalletScreen() {
       const result = await walletApi.initiateTopUp(amount);
       const url = paymentAuthorizationUrlFrom(result.authorization);
       if (isExternalPaymentAuthorizationUrl(url)) {
-        await openExternalPaymentAuthorization(url);
+        await openExternalPaymentUrl(url);
         setPendingTopUpReference(result.payment.transactionReference);
         setPendingTopUpUrl(url);
         setTopUpMessage("Squad wallet top-up checkout opened. Return here and verify after completing payment. Pending verification.");
@@ -128,11 +128,11 @@ export default function CustomerWalletScreen() {
   }
 
   async function reopenTopUpAuthorization() {
-    if (!pendingTopUpUrl) return;
+      if (!pendingTopUpUrl) return;
     setTopUpBusy(true);
     setTopUpError("");
     try {
-      await openExternalPaymentAuthorization(pendingTopUpUrl);
+      await openExternalPaymentUrl(pendingTopUpUrl);
       setTopUpMessage("Squad wallet top-up checkout reopened. Return here and verify after completing payment.");
     } catch (e) {
       setTopUpError(friendlyError(e));
