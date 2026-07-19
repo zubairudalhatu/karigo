@@ -93,6 +93,8 @@ describe("PaymentsService", () => {
     });
     prisma.payment.create.mockResolvedValue({
       id: "payment-1",
+      transactionReference: "KGO-MOCK-TEST",
+      amount: new Prisma.Decimal(6000),
       currency: "NGN"
     });
     mockProvider.initialize.mockResolvedValue({ authorizationUrl: "mock://payment/reference" });
@@ -111,6 +113,9 @@ describe("PaymentsService", () => {
     expect(result.authorization.paymentUrl).toBe("mock://payment/reference");
     expect(result.authorization.url).toBe("mock://payment/reference");
     expect(result.authorization.provider).toBe("mock");
+    expect(result.authorization.reference).toBe("KGO-MOCK-TEST");
+    expect(result.authorization.amount).toBe(6000);
+    expect(result.authorization.currency).toBe("NGN");
     expect(result.authorization).not.toHaveProperty("providerResponse");
   });
 
@@ -126,20 +131,28 @@ describe("PaymentsService", () => {
     });
     prisma.payment.create.mockResolvedValue({
       id: "payment-1",
+      transactionReference: "KGO-FLUTTERWAVE-ALIAS",
+      amount: new Prisma.Decimal(6000),
       currency: "NGN"
     });
     mockProvider.initialize.mockResolvedValue({
       authorizationUrl: "   ",
-      checkoutUrl: "https://pay.squadco.com/KGO-SQUAD-ALIAS",
+      checkoutUrl: "https://checkout.flutterwave.com/v3/hosted/pay/KGO-FLUTTERWAVE-ALIAS",
       providerResponse: {}
     });
 
     const result = await service.initiate("user-1", { orderId: "order-1", amount: 6000 });
 
-    expect(result.authorization.authorizationUrl).toBe("https://pay.squadco.com/KGO-SQUAD-ALIAS");
-    expect(result.authorization.checkoutUrl).toBe("https://pay.squadco.com/KGO-SQUAD-ALIAS");
-    expect(result.authorization.paymentUrl).toBe("https://pay.squadco.com/KGO-SQUAD-ALIAS");
-    expect(result.authorization.url).toBe("https://pay.squadco.com/KGO-SQUAD-ALIAS");
+    expect(result.authorization.authorizationUrl).toBe("https://checkout.flutterwave.com/v3/hosted/pay/KGO-FLUTTERWAVE-ALIAS");
+    expect(result.authorization.checkoutUrl).toBe("https://checkout.flutterwave.com/v3/hosted/pay/KGO-FLUTTERWAVE-ALIAS");
+    expect(result.authorization.paymentUrl).toBe("https://checkout.flutterwave.com/v3/hosted/pay/KGO-FLUTTERWAVE-ALIAS");
+    expect(result.authorization.url).toBe("https://checkout.flutterwave.com/v3/hosted/pay/KGO-FLUTTERWAVE-ALIAS");
+    expect(result.authorization).toEqual(expect.objectContaining({
+      provider: "mock",
+      reference: "KGO-FLUTTERWAVE-ALIAS",
+      amount: 6000,
+      currency: "NGN"
+    }));
   });
 
   it("blocks customer electronic checkout when no customer provider is enabled", async () => {
@@ -185,6 +198,8 @@ describe("PaymentsService", () => {
     });
     prisma.payment.create.mockResolvedValue({
       id: "payment-monnify",
+      transactionReference: "KGO-MONNIFY-TEST",
+      amount: new Prisma.Decimal(7500),
       currency: "NGN"
     });
     registry.customerTestProvider.mockReturnValue(monnifyProvider);
@@ -247,6 +262,49 @@ describe("PaymentsService", () => {
 
     expect(prisma.payment.update).toHaveBeenCalledWith({
       where: { id: "payment-paystack" },
+      data: { paymentStatus: PaymentStatus.FAILED }
+    });
+  });
+
+  it("returns a clear safe error when Flutterwave does not return a hosted checkout link", async () => {
+    const flutterwaveProvider = {
+      name: "flutterwave",
+      initialize: jest.fn(),
+      verify: jest.fn(),
+      parseWebhook: jest.fn()
+    };
+    prisma.order.findFirst.mockResolvedValue({
+      id: "order-flutterwave",
+      orderNumber: "KGO-004",
+      customerId: "customer-1",
+      totalAmount: new Prisma.Decimal(8500),
+      paymentStatus: PaymentStatus.PENDING,
+      orderStatus: OrderStatus.AWAITING_PAYMENT,
+      customer: { user: { email: "customer@example.com", phoneNumber: "+2348012345678" } }
+    });
+    prisma.payment.create.mockResolvedValue({
+      id: "payment-flutterwave",
+      transactionReference: "KGO-FLUTTERWAVE-NO-LINK",
+      amount: new Prisma.Decimal(8500),
+      currency: "NGN"
+    });
+    registry.customerTestProvider.mockReturnValue(flutterwaveProvider);
+    registry.customerCheckoutProviders.mockReturnValue(["flutterwave"]);
+    flutterwaveProvider.initialize.mockRejectedValue(new PaymentProviderInitializationException({
+      provider: "flutterwave",
+      stage: "initialize-transaction",
+      message: "Flutterwave checkout link was not returned. topLevelKeys=data,message,status dataKeys=none",
+      providerMessage: "Flutterwave checkout link was not returned. topLevelKeys=data,message,status dataKeys=none"
+    }));
+
+    await expect(service.initiate("user-1", {
+      orderId: "order-flutterwave",
+      amount: 8500,
+      paymentProvider: "flutterwave"
+    })).rejects.toThrow("Flutterwave checkout link was not returned. Please retry or use Pay on Delivery.");
+
+    expect(prisma.payment.update).toHaveBeenCalledWith({
+      where: { id: "payment-flutterwave" },
       data: { paymentStatus: PaymentStatus.FAILED }
     });
   });

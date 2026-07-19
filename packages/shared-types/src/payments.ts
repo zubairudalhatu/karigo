@@ -35,6 +35,9 @@ export interface PublicPaymentConfig {
 export interface PaymentAuthorization {
   paymentId: string;
   transactionReference: string;
+  reference?: string;
+  amount?: number;
+  currency?: string;
   authorizationUrl?: string;
   checkoutUrl?: string;
   paymentUrl?: string;

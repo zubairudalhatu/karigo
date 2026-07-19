@@ -29,7 +29,10 @@ import { InitiateWalletTopUpDto } from "./dto/initiate-wallet-top-up.dto";
 import { SandboxInitializationTestProvider } from "./dto/test-payment-provider.dto";
 import { CustomerTestPaymentProviderName, PaymentProviderRegistry } from "./providers/payment-provider.registry";
 import { InitializePaymentResult, PaymentProvider, PaymentProviderName, PaymentWebhookContext } from "./providers/payment-provider.interface";
-import { paymentInitializationDiagnostic } from "./providers/payment-provider-diagnostics";
+import {
+  PaymentProviderInitializationException,
+  paymentInitializationDiagnostic
+} from "./providers/payment-provider-diagnostics";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { NotificationsService } from "../notifications/notifications.service";
 
@@ -121,9 +124,9 @@ export class PaymentsService {
     const initializedPayment = await this.prisma.payment.update({
       where: { id: payment.id },
       data: { gatewayResponse: authorization.providerResponse as Prisma.InputJsonValue }
-    });
+    }) ?? payment;
 
-    return { payment: initializedPayment, authorization: this.publicAuthorization(authorization, provider.name) };
+    return { payment: initializedPayment, authorization: this.publicAuthorization(authorization, provider.name, initializedPayment) };
   }
 
   async initiateWalletTopUp(userId: string, dto: InitiateWalletTopUpDto) {
@@ -210,9 +213,9 @@ export class PaymentsService {
     const initializedPayment = await this.prisma.payment.update({
       where: { id: payment.id },
       data: { gatewayResponse: authorization.providerResponse as Prisma.InputJsonValue }
-    });
+    }) ?? payment;
 
-    return { payment: initializedPayment, walletLedgerEntry: ledger, authorization: this.publicAuthorization(authorization, provider.name) };
+    return { payment: initializedPayment, walletLedgerEntry: ledger, authorization: this.publicAuthorization(authorization, provider.name, initializedPayment) };
   }
 
   async verify(userId: string, transactionReference: string) {
@@ -802,7 +805,11 @@ export class PaymentsService {
     return customer;
   }
 
-  private publicAuthorization(authorization: InitializePaymentResult, provider: PaymentProviderName) {
+  private publicAuthorization(
+    authorization: InitializePaymentResult,
+    provider: PaymentProviderName,
+    payment: { transactionReference: string; amount: Prisma.Decimal; currency: string }
+  ) {
     const authorizationAliases = authorization as InitializePaymentResult & {
       checkoutUrl?: string | null;
       paymentUrl?: string | null;
@@ -814,8 +821,12 @@ export class PaymentsService {
       authorizationAliases.paymentUrl,
       authorizationAliases.url
     ].find((value): value is string => typeof value === "string" && value.trim().length > 0)?.trim() ?? null;
+    const transactionReference = authorization.transactionReference || payment.transactionReference;
     return {
-      transactionReference: authorization.transactionReference,
+      transactionReference,
+      reference: transactionReference,
+      amount: Number(payment.amount),
+      currency: payment.currency,
       accessCode: authorization.accessCode,
       provider,
       authorizationUrl,
@@ -1254,6 +1265,13 @@ export class PaymentsService {
   }
 
   private safeInitializationException(providerName: string, _error: unknown): HttpException {
+    if (
+      providerName === "flutterwave"
+      && _error instanceof PaymentProviderInitializationException
+      && _error.diagnostic.providerMessage?.includes("checkout link was not returned")
+    ) {
+      return new BadGatewayException("Flutterwave checkout link was not returned. Please retry or use Pay on Delivery.");
+    }
     if (this.livePaymentsEnabled()) {
       return new BadGatewayException(
         `${this.providerLabel(providerName)} could not be started safely. Please retry payment or contact KariGO support.`

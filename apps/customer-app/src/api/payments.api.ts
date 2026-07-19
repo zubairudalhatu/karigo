@@ -5,6 +5,9 @@ export interface PaymentInitiation {
   payment: { id: string; transactionReference: string; paymentStatus: string; gateway?: string };
   authorization: {
     transactionReference: string;
+    reference?: string;
+    amount?: number;
+    currency?: string;
     authorizationUrl?: string | null;
     checkoutUrl?: string | null;
     paymentUrl?: string | null;

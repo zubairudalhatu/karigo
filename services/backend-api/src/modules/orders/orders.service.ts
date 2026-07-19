@@ -54,11 +54,11 @@ export class OrdersService {
       this.requireCustomer(userId),
       this.prisma.vendor.findFirst({
         where: { id: dto.vendorId, status: VendorStatus.ACTIVE, deletedAt: null },
-        select: { id: true, userId: true, city: true }
+        select: { id: true, userId: true, city: true, state: true, address: true }
       }),
       this.prisma.address.findFirst({
         where: { id: dto.deliveryAddressId, userId },
-        select: { id: true, city: true }
+        select: { id: true, city: true, state: true }
       })
     ]);
 
@@ -122,11 +122,11 @@ export class OrdersService {
       this.requireCustomer(userId),
       this.prisma.vendor.findFirst({
         where: { id: dto.vendorId, status: VendorStatus.ACTIVE, deletedAt: null },
-        select: { id: true, userId: true, city: true }
+        select: { id: true, userId: true, city: true, state: true, address: true }
       }),
       this.prisma.address.findFirst({
         where: { id: dto.deliveryAddressId, userId },
-        select: { id: true, city: true }
+        select: { id: true, city: true, state: true }
       })
     ]);
 
@@ -179,7 +179,13 @@ export class OrdersService {
     const discountAmount = promo?.discountAmount ?? new Prisma.Decimal(0);
     const totalAmount = subtotal.add(deliveryFee).sub(discountAmount);
     const paymentMethod = this.normalizePaymentMethod(dto.paymentMethod);
-    this.assertPaymentMethodAvailable(paymentMethod, deliveryAddress.city, vendor.city);
+    this.assertPaymentMethodAvailable(paymentMethod, [
+      deliveryAddress.city,
+      deliveryAddress.state,
+      vendor.city,
+      vendor.state,
+      vendor.address
+    ]);
 
     const order = await this.prisma.$transaction(async (tx) => {
       const isCashOrder = paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY;
@@ -381,7 +387,7 @@ export class OrdersService {
     throw new BadRequestException("Unsupported checkout payment method");
   }
 
-  private assertPaymentMethodAvailable(paymentMethod: OrderPaymentMethod, deliveryCity?: string | null, vendorCity?: string | null) {
+  private assertPaymentMethodAvailable(paymentMethod: OrderPaymentMethod, cityValues: Array<string | null | undefined>) {
     if (paymentMethod === OrderPaymentMethod.FLUTTERWAVE) {
       const provider = this.configuredPaymentProvider();
       const livePaymentsEnabled = this.flagValue("PAYMENTS_LIVE_ENABLED", false);
@@ -393,8 +399,10 @@ export class OrdersService {
       throw new BadRequestException("Squad checkout is disabled for customer orders.");
     }
     if (paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY || paymentMethod === OrderPaymentMethod.WALLET) {
-      const city = deliveryCity?.trim() || vendorCity?.trim() || "";
-      if (city && !LAUNCH_PAYMENT_CITIES.has(city.toLowerCase())) {
+      const cityCandidates = cityValues
+        .map((city) => this.canonicalLaunchCity(city))
+        .filter((city): city is string => Boolean(city));
+      if (cityCandidates.length && !cityCandidates.some((city) => LAUNCH_PAYMENT_CITIES.has(city))) {
         throw new BadRequestException("Pay on Delivery is available in supported KariGO cities.");
       }
     }
@@ -417,6 +425,25 @@ export class OrdersService {
   private configuredPaymentProvider(): string {
     const provider = this.config.get<unknown>("PAYMENTS_PROVIDER") ?? this.config.get<unknown>("PAYMENT_PROVIDER");
     return typeof provider === "string" && provider.trim() ? provider.trim().toLowerCase() : "mock";
+  }
+
+  private canonicalLaunchCity(value?: string | null): string {
+    const normalized = value
+      ?.trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim() ?? "";
+    if (!normalized) return "";
+    if (normalized.includes("kano")) return "kano";
+    if (
+      normalized === "fct"
+      || normalized.includes("abuja")
+      || normalized.includes("federal capital territory")
+    ) {
+      return "abuja";
+    }
+    return normalized;
   }
 
   async createParcelOrder(userId: string, dto: CreateParcelOrderDto) {

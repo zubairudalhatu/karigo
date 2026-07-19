@@ -64,6 +64,54 @@ describe("FlutterwaveProvider", () => {
     expect(JSON.stringify(result)).not.toContain("FLUTTERWAVE_SECRET_KEY");
   });
 
+  it("extracts Flutterwave Standard data.link hosted checkout URLs", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "success",
+        message: "Hosted Link",
+        data: {
+          link: "https://checkout.flutterwave.com/v3/hosted/pay/test-link"
+        }
+      })
+    });
+
+    const result = await provider.initialize({
+      transactionReference: "KGO-FLUTTERWAVE-LINK",
+      amount: "3500.00",
+      currency: "NGN",
+      customerEmail: "customer@example.test",
+      customerPhone: "+2348000000000",
+      metadata: { orderId: "order-1" }
+    });
+
+    expect(result.authorizationUrl).toBe("https://checkout.flutterwave.com/v3/hosted/pay/test-link");
+    expect(result.transactionReference).toBe("KGO-FLUTTERWAVE-LINK");
+  });
+
+  it("accepts safe hosted checkout URL aliases without exposing provider payloads", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "success",
+        checkoutUrl: "https://checkout.flutterwave.com/v3/hosted/pay/top-level-link"
+      })
+    });
+
+    const result = await provider.initialize({
+      transactionReference: "KGO-FLUTTERWAVE-ALIAS",
+      amount: "3500.00",
+      currency: "NGN",
+      customerEmail: "customer@example.test",
+      customerPhone: "+2348000000000",
+      metadata: {}
+    });
+
+    expect(result.authorizationUrl).toBe("https://checkout.flutterwave.com/v3/hosted/pay/top-level-link");
+  });
+
   it("rejects initialization responses without a secure checkout URL", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -81,7 +129,7 @@ describe("FlutterwaveProvider", () => {
       customerEmail: "customer@example.test",
       customerPhone: "+2348000000000",
       metadata: {}
-    })).rejects.toThrow("Flutterwave did not return a secure checkout URL");
+    })).rejects.toThrow("Flutterwave checkout link was not returned");
   });
 
   it("verifies payment evidence by reference without marking success client-side", async () => {

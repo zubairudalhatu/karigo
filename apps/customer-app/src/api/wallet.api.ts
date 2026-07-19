@@ -42,6 +42,9 @@ export interface WalletTopUpInitiation {
   walletLedgerEntry: CustomerWalletLedgerEntry;
   authorization: {
     transactionReference: string;
+    reference?: string;
+    amount?: number;
+    currency?: string;
     authorizationUrl?: string | null;
     checkoutUrl?: string | null;
     paymentUrl?: string | null;

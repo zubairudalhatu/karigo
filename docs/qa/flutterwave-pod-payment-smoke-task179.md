@@ -71,6 +71,40 @@ Expected result: Pay on Delivery works even if Flutterwave is disabled or tempor
    - Wallet top-up/payment: disabled
    - no secret values are displayed
 
+## Task 181 - Hosted Link and City Eligibility Checks
+
+Use these checks after the Task 181 backend redeploy and Customer EAS Update.
+
+### Flutterwave hosted checkout link
+
+1. Start a low-value Customer App order with `Pay with Flutterwave`.
+2. Confirm the backend accepts the Flutterwave Standard response field `data.link`.
+3. Confirm the Customer App receives the hosted checkout URL normalized as both `authorizationUrl` and `checkoutUrl`.
+4. Confirm the URL starts with `https://checkout.flutterwave.com/` and opens externally in a browser/custom tab.
+5. Confirm no Expo Router `Unknown Page 404` appears.
+6. If Flutterwave does not return a valid HTTPS hosted link, confirm the Customer App shows: `Flutterwave checkout link was not returned. Please retry or use Pay on Delivery.`
+
+### Pay on Delivery Kano/Abuja eligibility
+
+1. Create a cart from Kano Kitchen or another supported Kano vendor.
+2. Use a delivery address whose city may be a local area, but whose city/state/vendor fields resolve to Kano or Abuja.
+3. Confirm `Pay on Delivery` is selectable and `Create Pay on Delivery order` is enabled.
+4. Repeat with supported aliases where practical:
+   - `Kano`
+   - `Kano State`
+   - `Abuja`
+   - `FCT`
+   - `Federal Capital Territory`
+   - `Abuja FCT`
+5. Confirm unsupported known cities still show: `Pay on Delivery is available in supported KariGO cities.`
+
+### Admin Orders verification for POD
+
+1. Open Admin Portal > Orders after creating the POD order.
+2. Confirm the order payment method is Cash/POD or Pay on Delivery.
+3. Confirm payment status is cash pending/manual reconciliation, not online paid.
+4. Confirm no Flutterwave transaction is required for the POD order.
+
 ## Result Record
 
 ```text

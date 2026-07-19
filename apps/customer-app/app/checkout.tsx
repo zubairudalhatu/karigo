@@ -24,12 +24,31 @@ import { promoErrorMessage } from "../src/lib/promo-state";
 type CheckoutPaymentMethod = "flutterwave" | "cash_on_delivery";
 
 function normalizeCity(value?: string | null): string {
-  return value?.trim().toLowerCase() ?? "";
+  return value
+    ?.trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim() ?? "";
+}
+
+function canonicalLaunchCity(value?: string | null): string {
+  const normalized = normalizeCity(value);
+  if (!normalized) return "";
+  if (normalized.includes("kano")) return "kano";
+  if (
+    normalized === "fct" ||
+    normalized.includes("abuja") ||
+    normalized.includes("federal capital territory")
+  ) {
+    return "abuja";
+  }
+  return normalized;
 }
 
 function supportedCitySet(config: PublicPaymentConfig): Set<string> {
   const cities = config.launchCities?.length ? config.launchCities : ["Kano", "Abuja"];
-  return new Set(cities.map(normalizeCity).filter(Boolean));
+  return new Set(cities.map(canonicalLaunchCity).filter(Boolean));
 }
 
 export default function Checkout() {
@@ -192,13 +211,17 @@ export default function Checkout() {
             paymentProvider: "flutterwave"
           });
           const authorizationUrl = paymentAuthorizationUrlFrom(started.authorization);
+          if (!authorizationUrl) {
+            throw new Error("Flutterwave checkout link was not returned. Please retry or use Pay on Delivery.");
+          }
           if (!isExternalPaymentAuthorizationUrl(authorizationUrl)) {
             throw new Error("Flutterwave did not return a secure checkout link.");
           }
           const openResult = await openExternalPaymentUrl(authorizationUrl);
           if (!openResult.opened) throw new Error(openResult.message);
           setMessage(paymentAuthorizationOpenedMessage("Flutterwave", effectivePaymentConfig));
-        } catch {
+        } catch (paymentError) {
+          setError(friendlyError(paymentError));
           setMessage("Order created. Open the order details to retry Flutterwave payment.");
         }
       } else {
@@ -221,8 +244,16 @@ export default function Checkout() {
   const quoteReady = !!quote && !quoteLoading && !quoteError;
   const cashEnabled = Boolean(effectivePaymentConfig.cashPaymentEnabled);
   const selectedAddress = addresses.find((address) => address.id === addressId);
-  const checkoutCity = normalizeCity(selectedAddress?.city) || normalizeCity(cart.vendor?.city);
-  const knownUnsupportedCashCity = Boolean(checkoutCity) && !supportedCitySet(effectivePaymentConfig).has(checkoutCity);
+  const supportedCashCities = supportedCitySet(effectivePaymentConfig);
+  const checkoutCityCandidates = [
+    selectedAddress?.city,
+    selectedAddress?.state,
+    cart.vendor?.city,
+    cart.vendor?.state,
+    cart.vendor?.address
+  ].map(canonicalLaunchCity).filter(Boolean);
+  const hasSupportedCashCity = checkoutCityCandidates.some((city) => supportedCashCities.has(city));
+  const knownUnsupportedCashCity = checkoutCityCandidates.length > 0 && !hasSupportedCashCity;
   const checkoutMethodBlocked = selectedPaymentMethod === "flutterwave"
     ? !flutterwaveEnabled
     : !cashEnabled || knownUnsupportedCashCity;

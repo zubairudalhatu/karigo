@@ -113,7 +113,7 @@ export default function OrderTracking() {
         return;
       }
       if (!authorizationUrl) {
-        throw new Error("Payment provider did not return a checkout link.");
+        throw new Error("Flutterwave checkout link was not returned. Please retry or use Pay on Delivery.");
       }
       throw new Error("Payment provider returned an invalid checkout link.");
     } catch (e) { setError(paymentInitializationFailureMessage(selectedProviderLabel, friendlyError(e), effectivePaymentConfig)); } finally { setBusy(false); }

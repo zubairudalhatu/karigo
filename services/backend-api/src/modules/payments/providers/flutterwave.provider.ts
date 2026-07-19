@@ -24,6 +24,7 @@ interface FlutterwaveEnvelope {
   status?: string;
   message?: string;
   data?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 @Injectable()
@@ -55,15 +56,18 @@ export class FlutterwaveProvider implements PaymentProvider {
     }, "initialize-transaction");
 
     const data = this.record(response.data) ?? {};
-    const authorizationUrl = this.checkoutUrl(data.link ?? data.authorization_url ?? data.authorizationUrl);
+    const authorizationUrl = this.checkoutUrlFromResponse(response);
     if (!authorizationUrl) {
-      throw this.initializationException("initialize-transaction", "Flutterwave did not return a secure checkout URL");
+      throw this.initializationException(
+        "initialize-transaction",
+        `Flutterwave checkout link was not returned. ${this.responseShape(response)}`
+      );
     }
 
     return {
-      transactionReference: this.string(data.tx_ref) ?? input.transactionReference,
+      transactionReference: this.string(data.tx_ref) ?? this.string(response.tx_ref) ?? input.transactionReference,
       authorizationUrl,
-      accessCode: this.string(data.flw_ref) ?? null,
+      accessCode: this.string(data.flw_ref) ?? this.string(response.flw_ref) ?? null,
       providerResponse: response as unknown as Record<string, unknown>
     };
   }
@@ -222,6 +226,39 @@ export class FlutterwaveProvider implements PaymentProvider {
     } catch {
       return null;
     }
+  }
+
+  private checkoutUrlFromResponse(response: FlutterwaveEnvelope): string | null {
+    const data = this.record(response.data) ?? {};
+    const candidates = [
+      data.link,
+      response.link,
+      data.authorization_url,
+      data.authorizationUrl,
+      data.checkout_url,
+      data.checkoutUrl,
+      data.paymentUrl,
+      data.payment_url,
+      data.url,
+      response.authorizationUrl,
+      response.authorization_url,
+      response.checkoutUrl,
+      response.checkout_url,
+      response.paymentUrl,
+      response.payment_url,
+      response.url
+    ];
+    for (const candidate of candidates) {
+      const checkoutUrl = this.checkoutUrl(candidate);
+      if (checkoutUrl) return checkoutUrl;
+    }
+    return null;
+  }
+
+  private responseShape(response: FlutterwaveEnvelope): string {
+    const topLevelKeys = Object.keys(response).sort();
+    const dataKeys = this.record(response.data) ? Object.keys(this.record(response.data)!).sort() : [];
+    return `topLevelKeys=${topLevelKeys.join(",") || "none"} dataKeys=${dataKeys.join(",") || "none"}`;
   }
 
   private toMinorAmount(value: unknown): number | undefined {

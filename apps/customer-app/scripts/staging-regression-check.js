@@ -436,11 +436,16 @@ assert(checkout.includes("cashPaymentEnabled"), "Checkout must reflect backend C
 assert(checkout.includes('paymentMethod: isFlutterwave ? "FLUTTERWAVE" : "CASH_ON_DELIVERY"'), "Checkout order creation must distinguish Flutterwave from Pay on Delivery.");
 assert(checkout.includes("router.replace(`/orders/${created.id}`)"), "Order creation must go to order detail after Flutterwave/POD flow starts.");
 assert(checkout.includes("selectedAddress?.city"), "Pay on Delivery city eligibility must use the selected delivery address city first.");
+assert(checkout.includes("selectedAddress?.state"), "Pay on Delivery city eligibility must include the selected delivery address state.");
 assert(checkout.includes("cart.vendor?.city"), "Pay on Delivery city eligibility must fall back to the selected vendor city.");
+assert(checkout.includes("cart.vendor?.state"), "Pay on Delivery city eligibility must include the selected vendor state.");
+assert(checkout.includes("cart.vendor?.address"), "Pay on Delivery city eligibility must include vendor address text for Kano/Abuja aliases.");
+assert(checkout.includes("canonicalLaunchCity"), "Pay on Delivery city eligibility must normalize city aliases such as Kano State, FCT and Abuja FCT.");
 assert(checkout.includes("supportedCitySet(effectivePaymentConfig)"), "Pay on Delivery city eligibility must use backend public-config launch cities.");
 assert(checkout.includes("knownUnsupportedCashCity"), "Pay on Delivery must only show city blocking copy when the known city is unsupported.");
 assert(checkout.includes("!cashEnabled || knownUnsupportedCashCity"), "Pay on Delivery must not be blocked just because GPS/current city is missing.");
 assert(checkout.includes("Pay on Delivery is available in supported KariGO cities."), "Customer checkout must show supported-city copy only for known unsupported Cash/POD cities.");
+assert(checkout.includes("Flutterwave checkout link was not returned. Please retry or use Pay on Delivery."), "Customer checkout must surface a clear Flutterwave no-link fallback message.");
 assert(!checkout.includes("Cash/POD and wallet payment are available only in Kano and Abuja during launch readiness"), "Customer checkout must not expose launch-readiness Cash/POD copy.");
 assert(checkout.includes("Please pay only the amount shown in the app."), "Checkout Cash/POD copy must warn customers not to pay outside the app total.");
 assert(checkout.includes("Pay on Delivery is available for supported KariGO orders."), "Checkout must use simple live Pay on Delivery copy.");
