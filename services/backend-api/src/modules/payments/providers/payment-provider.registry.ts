@@ -12,7 +12,8 @@ export const CUSTOMER_TEST_PAYMENT_PROVIDERS = ["mock", "paystack", "monnify", "
 export type CustomerTestPaymentProviderName = (typeof CUSTOMER_TEST_PAYMENT_PROVIDERS)[number];
 export const DEFAULT_CUSTOMER_CHECKOUT_PAYMENT_PROVIDERS = ["mock", "monnify", "paystack"] as const satisfies readonly CustomerTestPaymentProviderName[];
 const FLUTTERWAVE_LIVE_REQUIRED_KEYS = [
-  "FLUTTERWAVE_SECRET_KEY",
+  "FLUTTERWAVE_CLIENT_ID",
+  "FLUTTERWAVE_CLIENT_SECRET",
   "FLUTTERWAVE_BASE_URL"
 ] as const;
 

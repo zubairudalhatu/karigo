@@ -49,6 +49,11 @@ export interface PaymentProviderReadiness {
       enabled: boolean;
       label: string;
       customerSelectable: boolean;
+      v4CredentialsConfigured?: boolean;
+      accessTokenAuthReady?: boolean;
+      liveModeConfigured?: boolean;
+      webhookConfigured?: boolean;
+      callbackConfigured?: boolean;
       envFlag: string;
       recommendedValue: string;
       note: string;

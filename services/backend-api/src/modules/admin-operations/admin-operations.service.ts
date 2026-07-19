@@ -457,10 +457,12 @@ export class AdminOperationsService {
   integrationSettings() {
     const paymentsProvider = this.configValue("PAYMENTS_PROVIDER", this.configValue("PAYMENT_PROVIDER", "mock")).toLowerCase();
     const paymentsLiveEnabled = this.configFlag("PAYMENTS_LIVE_ENABLED", false);
-    const flutterwaveLiveConfigured = Boolean(this.configValue("FLUTTERWAVE_SECRET_KEY"))
+    const flutterwaveV4CredentialsConfigured = Boolean(this.configValue("FLUTTERWAVE_CLIENT_ID"))
+      && Boolean(this.configValue("FLUTTERWAVE_CLIENT_SECRET"));
+    const flutterwaveLiveConfigured = flutterwaveV4CredentialsConfigured
       && this.configValue("FLUTTERWAVE_ENVIRONMENT").toLowerCase() === "live"
-      && this.configValue("FLUTTERWAVE_BASE_URL", "https://api.flutterwave.com/v3").startsWith("https://")
-      && !this.configValue("FLUTTERWAVE_BASE_URL", "https://api.flutterwave.com/v3").toLowerCase().includes("sandbox")
+      && this.configValue("FLUTTERWAVE_BASE_URL", "https://f4bexperience.flutterwave.com").startsWith("https://")
+      && !this.configValue("FLUTTERWAVE_BASE_URL", "https://f4bexperience.flutterwave.com").toLowerCase().includes("sandbox")
       && (this.configValue("FLUTTERWAVE_REDIRECT_URL").startsWith("https://") || this.configValue("FLUTTERWAVE_CALLBACK_URL").startsWith("https://"))
       && (Boolean(this.configValue("FLUTTERWAVE_SECRET_HASH")) || Boolean(this.configValue("FLUTTERWAVE_WEBHOOK_SECRET")))
       && this.configFlag("FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED", false);
@@ -479,7 +481,7 @@ export class AdminOperationsService {
         mockFallbackAvailable: !paymentsLiveEnabled,
         livePaymentCollectionDisabled: !paymentsLiveEnabled,
         sandboxProviders: {
-          flutterwaveConfigured: flutterwaveLiveConfigured || Boolean(this.configValue("FLUTTERWAVE_SECRET_KEY")),
+          flutterwaveConfigured: flutterwaveLiveConfigured || flutterwaveV4CredentialsConfigured,
           paystackConfigured: Boolean(this.configValue("PAYSTACK_SECRET_KEY")),
           monnifyConfigured: Boolean(this.configValue("MONNIFY_API_KEY")),
           squadConfigured: squadLiveConfigured || Boolean(this.configValue("SQUAD_SECRET_KEY"))

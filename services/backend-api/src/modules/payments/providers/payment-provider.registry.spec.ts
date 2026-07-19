@@ -80,8 +80,9 @@ describe("PaymentProviderRegistry", () => {
         PAYMENTS_PROVIDER: "flutterwave",
         PAYMENTS_LIVE_ENABLED: true,
         FLUTTERWAVE_ENVIRONMENT: "live",
-        FLUTTERWAVE_SECRET_KEY: "live-flutterwave-key-placeholder",
-        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
+        FLUTTERWAVE_CLIENT_ID: "flutterwave-client-id-placeholder",
+        FLUTTERWAVE_CLIENT_SECRET: "flutterwave-client-secret-placeholder",
+        FLUTTERWAVE_BASE_URL: "https://f4bexperience.flutterwave.com",
         FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
         FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder"
       };
@@ -102,8 +103,9 @@ describe("PaymentProviderRegistry", () => {
         PAYMENTS_PROVIDER: "flutterwave",
         PAYMENTS_LIVE_ENABLED: true,
         FLUTTERWAVE_ENVIRONMENT: "live",
-        FLUTTERWAVE_SECRET_KEY: "live-flutterwave-key-placeholder",
-        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
+        FLUTTERWAVE_CLIENT_ID: "flutterwave-client-id-placeholder",
+        FLUTTERWAVE_CLIENT_SECRET: "flutterwave-client-secret-placeholder",
+        FLUTTERWAVE_BASE_URL: "https://f4bexperience.flutterwave.com",
         FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
         FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder",
         FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true"

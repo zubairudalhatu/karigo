@@ -273,8 +273,9 @@ describe("PaymentsService", () => {
         PAYMENTS_PROVIDER: "flutterwave",
         PAYMENTS_LIVE_ENABLED: true,
         FLUTTERWAVE_ENVIRONMENT: "live",
-        FLUTTERWAVE_SECRET_KEY: "live-flutterwave-secret-placeholder",
-        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
+        FLUTTERWAVE_CLIENT_ID: "flutterwave-client-id-placeholder",
+        FLUTTERWAVE_CLIENT_SECRET: "flutterwave-client-secret-placeholder",
+        FLUTTERWAVE_BASE_URL: "https://f4bexperience.flutterwave.com",
         FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
         FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder",
         FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true"
@@ -341,6 +342,61 @@ describe("PaymentsService", () => {
 
     expect(prisma.payment.update).toHaveBeenCalledWith({
       where: { id: "payment-flutterwave" },
+      data: { paymentStatus: PaymentStatus.FAILED }
+    });
+  });
+
+  it("returns a clear safe error when Flutterwave v4 authentication fails", async () => {
+    const flutterwaveProvider = {
+      name: "flutterwave",
+      initialize: jest.fn(),
+      verify: jest.fn(),
+      parseWebhook: jest.fn()
+    };
+    prisma.order.findFirst.mockResolvedValue({
+      id: "order-flutterwave-auth",
+      orderNumber: "KGO-005",
+      customerId: "customer-1",
+      totalAmount: new Prisma.Decimal(8500),
+      paymentStatus: PaymentStatus.PENDING,
+      orderStatus: OrderStatus.AWAITING_PAYMENT,
+      customer: { user: { email: "customer@example.com", phoneNumber: "+2348012345678" } }
+    });
+    prisma.payment.create.mockResolvedValue({
+      id: "payment-flutterwave-auth",
+      transactionReference: "KGO-FLUTTERWAVE-AUTH",
+      amount: new Prisma.Decimal(8500),
+      currency: "NGN"
+    });
+    registry.customerTestProvider.mockReturnValue(flutterwaveProvider);
+    registry.customerCheckoutProviders.mockReturnValue(["flutterwave"]);
+    flutterwaveProvider.initialize.mockRejectedValue(new PaymentProviderInitializationException({
+      provider: "flutterwave",
+      stage: "auth-token",
+      message: "Flutterwave authentication failed.",
+      providerMessage: "Flutterwave authentication failed.",
+      code: "FLUTTERWAVE_AUTH_FAILED",
+      httpStatusCode: 401,
+      safeDiagnostics: {
+        responseKeys: ["error", "status"],
+        statusCode: 401,
+        tokenFetched: false
+      }
+    }));
+
+    await expect(service.initiate("user-1", {
+      orderId: "order-flutterwave-auth",
+      amount: 8500,
+      paymentProvider: "flutterwave"
+    })).rejects.toMatchObject({
+      response: expect.objectContaining({
+        error_code: "FLUTTERWAVE_AUTH_FAILED",
+        message: "Flutterwave authentication failed."
+      })
+    });
+
+    expect(prisma.payment.update).toHaveBeenCalledWith({
+      where: { id: "payment-flutterwave-auth" },
       data: { paymentStatus: PaymentStatus.FAILED }
     });
   });
@@ -421,9 +477,10 @@ describe("PaymentsService", () => {
         PAYMENTS_PROVIDER: "flutterwave",
         PAYMENTS_LIVE_ENABLED: true,
         FLUTTERWAVE_ENVIRONMENT: "live",
-        FLUTTERWAVE_SECRET_KEY: "live-flutterwave-secret-placeholder",
+        FLUTTERWAVE_CLIENT_ID: "flutterwave-client-id-placeholder",
+        FLUTTERWAVE_CLIENT_SECRET: "flutterwave-client-secret-placeholder",
         FLUTTERWAVE_PUBLIC_KEY: "live-flutterwave-public-placeholder",
-        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
+        FLUTTERWAVE_BASE_URL: "https://f4bexperience.flutterwave.com",
         FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
         FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder",
         FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true"
@@ -450,6 +507,7 @@ describe("PaymentsService", () => {
       blockers: []
     });
     expect(serialized).not.toContain("live-flutterwave-secret-placeholder");
+    expect(serialized).not.toContain("flutterwave-client-secret-placeholder");
     expect(serialized).not.toContain("live-webhook-secret-placeholder");
   });
 
@@ -524,8 +582,9 @@ describe("PaymentsService", () => {
         PAYMENTS_PROVIDER: "flutterwave",
         PAYMENTS_LIVE_ENABLED: true,
         FLUTTERWAVE_ENVIRONMENT: "live",
-        FLUTTERWAVE_SECRET_KEY: "live-flutterwave-secret-placeholder",
-        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
+        FLUTTERWAVE_CLIENT_ID: "flutterwave-client-id-placeholder",
+        FLUTTERWAVE_CLIENT_SECRET: "flutterwave-client-secret-placeholder",
+        FLUTTERWAVE_BASE_URL: "https://f4bexperience.flutterwave.com",
         FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
         FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder",
         FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true"
@@ -560,6 +619,7 @@ describe("PaymentsService", () => {
       launchCities: ["Kano", "Abuja"]
     });
     expect(serialized).not.toContain("live-flutterwave-secret-placeholder");
+    expect(serialized).not.toContain("flutterwave-client-secret-placeholder");
     expect(serialized).not.toContain("live-webhook-secret-placeholder");
   });
 

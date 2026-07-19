@@ -128,10 +128,8 @@ function validateFlutterwaveLivePaymentGate(config: Record<string, unknown>, pay
     throw new Error("Live Flutterwave payments require FLUTTERWAVE_ENVIRONMENT=live");
   }
 
-  const secretKey = requireLiveValue(config, "FLUTTERWAVE_SECRET_KEY", "Live Flutterwave payments require FLUTTERWAVE_SECRET_KEY");
-  if (secretKey.toUpperCase().includes("TEST")) {
-    throw new Error("Live Flutterwave payments require a live FLUTTERWAVE_SECRET_KEY");
-  }
+  requireLiveValue(config, "FLUTTERWAVE_CLIENT_ID", "Live Flutterwave payments require FLUTTERWAVE_CLIENT_ID");
+  requireLiveValue(config, "FLUTTERWAVE_CLIENT_SECRET", "Live Flutterwave payments require FLUTTERWAVE_CLIENT_SECRET");
 
   const baseUrl = requireLiveHttpsUrl(
     config,
@@ -141,6 +139,12 @@ function validateFlutterwaveLivePaymentGate(config: Record<string, unknown>, pay
   );
   if (baseUrl.toLowerCase().includes("sandbox")) {
     throw new Error("Live Flutterwave payments require live FLUTTERWAVE_BASE_URL");
+  }
+  const tokenUrl = typeof config.FLUTTERWAVE_TOKEN_URL === "string" && config.FLUTTERWAVE_TOKEN_URL.trim()
+    ? config.FLUTTERWAVE_TOKEN_URL.trim()
+    : "https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token";
+  if (!tokenUrl.startsWith("https://")) {
+    throw new Error("Live Flutterwave payments require HTTPS FLUTTERWAVE_TOKEN_URL");
   }
 
   requireOneLiveHttpsUrl(
@@ -469,7 +473,10 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       : "",
     FLUTTERWAVE_BASE_URL: typeof config.FLUTTERWAVE_BASE_URL === "string" && config.FLUTTERWAVE_BASE_URL.trim()
       ? config.FLUTTERWAVE_BASE_URL.trim()
-      : "https://api.flutterwave.com/v3",
+      : "https://f4bexperience.flutterwave.com",
+    FLUTTERWAVE_TOKEN_URL: typeof config.FLUTTERWAVE_TOKEN_URL === "string" && config.FLUTTERWAVE_TOKEN_URL.trim()
+      ? config.FLUTTERWAVE_TOKEN_URL.trim()
+      : "https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token",
     FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: booleanFlag(config.FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED, "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED", false),
     SQUAD_BASE_URL: typeof config.SQUAD_BASE_URL === "string" && config.SQUAD_BASE_URL.trim()
       ? config.SQUAD_BASE_URL.trim()

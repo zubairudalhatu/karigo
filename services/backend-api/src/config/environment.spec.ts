@@ -11,8 +11,9 @@ describe("environment configuration", () => {
     PAYMENTS_LIVE_ENABLED: "true",
     PAYMENT_PROVIDER: "flutterwave",
     FLUTTERWAVE_ENVIRONMENT: "live",
-    FLUTTERWAVE_SECRET_KEY: "live-flutterwave-secret-placeholder",
-    FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
+    FLUTTERWAVE_CLIENT_ID: "flutterwave-client-id-placeholder",
+    FLUTTERWAVE_CLIENT_SECRET: "flutterwave-client-secret-placeholder",
+    FLUTTERWAVE_BASE_URL: "https://f4bexperience.flutterwave.com",
     FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
     FLUTTERWAVE_SECRET_HASH: "live-flutterwave-webhook-secret-placeholder",
     FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true",
@@ -209,10 +210,13 @@ describe("environment configuration", () => {
     }))).toThrow("Live Flutterwave payments require FLUTTERWAVE_ENVIRONMENT=live");
   });
 
-  it("rejects live Flutterwave payments without a secret key", () => {
+  it("rejects live Flutterwave payments without v4 client credentials", () => {
     expect(() => validateEnvironment(flutterwaveLiveConfig({
-      FLUTTERWAVE_SECRET_KEY: ""
-    }))).toThrow("Live Flutterwave payments require FLUTTERWAVE_SECRET_KEY");
+      FLUTTERWAVE_CLIENT_ID: ""
+    }))).toThrow("Live Flutterwave payments require FLUTTERWAVE_CLIENT_ID");
+    expect(() => validateEnvironment(flutterwaveLiveConfig({
+      FLUTTERWAVE_CLIENT_SECRET: ""
+    }))).toThrow("Live Flutterwave payments require FLUTTERWAVE_CLIENT_SECRET");
   });
 
   it("rejects live Flutterwave payments without a webhook secret", () => {
@@ -226,6 +230,12 @@ describe("environment configuration", () => {
     expect(() => validateEnvironment(flutterwaveLiveConfig({
       FLUTTERWAVE_BASE_URL: "http://api.flutterwave.com/v3"
     }))).toThrow("Live Flutterwave payments require HTTPS FLUTTERWAVE_BASE_URL");
+  });
+
+  it("rejects live Flutterwave payments when the token URL is not HTTPS", () => {
+    expect(() => validateEnvironment(flutterwaveLiveConfig({
+      FLUTTERWAVE_TOKEN_URL: "http://idp.flutterwave.com/token"
+    }))).toThrow("Live Flutterwave payments require HTTPS FLUTTERWAVE_TOKEN_URL");
   });
 
   it("rejects live Flutterwave payments when the redirect URL is not HTTPS", () => {
@@ -249,7 +259,8 @@ describe("environment configuration", () => {
     expect(result.PAYMENTS_LIVE_ENABLED).toBe(true);
     expect(result.PAYMENT_PROVIDER).toBe("flutterwave");
     expect(result.PAYMENTS_PROVIDER).toBe("flutterwave");
-    expect(result.FLUTTERWAVE_BASE_URL).toBe("https://api.flutterwave.com/v3");
+    expect(result.FLUTTERWAVE_BASE_URL).toBe("https://f4bexperience.flutterwave.com");
+    expect(result.FLUTTERWAVE_TOKEN_URL).toBe("https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token");
     expect(result.FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED).toBe(true);
   });
 

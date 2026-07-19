@@ -27,10 +27,11 @@ Expected result:
 
 ## Backend diagnostic expectations
 
-Flutterwave initialization should call:
+Flutterwave initialization should first request a v4 OAuth token, then call the configured hosted-checkout path:
 
 ```text
-POST /v3/payments
+POST https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token
+POST /payments
 ```
 
 The backend should log safe metadata only:
@@ -41,13 +42,15 @@ The backend should log safe metadata only:
 - amount;
 - currency;
 - transaction reference;
+- token fetched yes/no;
+- token expiry seconds;
 - HTTP status code;
 - top-level response key names;
 - `data` object key names;
 - whether an HTTPS checkout link was found;
 - the alias that produced the link, for example `data.link`.
 
-The backend must not log provider secret keys, authorization headers, webhook secret/hash, full provider payloads, hosted checkout URLs, card data or customer tokens.
+The backend must not log provider client secrets, OAuth access token values, authorization headers, webhook secret/hash, full provider payloads, hosted checkout URLs, card data or customer tokens.
 
 ## Missing checkout link behavior
 

@@ -894,9 +894,14 @@ export class PaymentsService {
         enabled: this.flutterwaveCustomerCheckoutEnabled(),
         label: "Flutterwave customer checkout",
         customerSelectable: this.providerRegistry.customerCheckoutProviders().includes("flutterwave"),
+        v4CredentialsConfigured: this.flutterwaveV4CredentialsConfigured(),
+        accessTokenAuthReady: this.flutterwaveV4CredentialsConfigured() && this.flutterwaveTokenUrlReady(),
+        liveModeConfigured: this.optionalValue("FLUTTERWAVE_ENVIRONMENT")?.toLowerCase() === "live",
+        webhookConfigured: this.flutterwaveWebhookConfigured(),
+        callbackConfigured: this.flutterwaveCallbackConfigured(),
         envFlag: "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED",
         recommendedValue: "true",
-        note: "Flutterwave is KariGO's primary online customer checkout provider. Backend verification/webhook processing must confirm payment before an order is marked paid."
+        note: "Flutterwave is KariGO's primary online customer checkout provider. V4 OAuth credentials must be configured server-side; backend verification/webhook processing must confirm payment before an order is marked paid."
       },
       squadCustomerCheckout: {
         enabled: this.squadCustomerCheckoutEnabled(),
@@ -1093,9 +1098,12 @@ export class PaymentsService {
     if (liveMode) {
       return [
         this.modeRequirement("FLUTTERWAVE_ENVIRONMENT", ["live"], "Must be live for approved Flutterwave launch checkout"),
-        this.secretRequirement("FLUTTERWAVE_SECRET_KEY", "Flutterwave live server-side secret key"),
+        this.secretRequirement("FLUTTERWAVE_CLIENT_ID", "Flutterwave v4 OAuth client ID from the Flutterwave dashboard"),
+        this.secretRequirement("FLUTTERWAVE_CLIENT_SECRET", "Flutterwave v4 OAuth client secret from the Flutterwave dashboard"),
+        this.optionalRequirement("FLUTTERWAVE_SECRET_KEY", "Legacy Flutterwave v3 secret key only; not used for v4 live checkout authentication"),
         this.optionalRequirement("FLUTTERWAVE_PUBLIC_KEY", "Client-safe public key if a future client-side flow requires it"),
         this.requiredUrlRequirement("FLUTTERWAVE_BASE_URL", "Flutterwave live API base URL", { rejectSandbox: true }),
+        this.urlRequirement("FLUTTERWAVE_TOKEN_URL", "Flutterwave v4 OAuth token endpoint; defaults to the official Flutterwave token endpoint when omitted"),
         this.eitherRequiredUrlRequirement(["FLUTTERWAVE_REDIRECT_URL", "FLUTTERWAVE_CALLBACK_URL"], "Public HTTPS redirect/callback URL configured in Flutterwave"),
         this.eitherSecretRequirement(["FLUTTERWAVE_SECRET_HASH", "FLUTTERWAVE_WEBHOOK_SECRET"], "Flutterwave webhook secret hash"),
         this.requiredFlagRequirement("FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED", "Enable Flutterwave as customer-selectable checkout")
@@ -1103,8 +1111,12 @@ export class PaymentsService {
     }
     return [
       this.modeRequirement("FLUTTERWAVE_ENVIRONMENT", ["live"], "Flutterwave is live-only for launch; keep unset until live credentials are approved"),
+      this.optionalRequirement("FLUTTERWAVE_CLIENT_ID", "Flutterwave v4 OAuth client ID; configure only in Render/secret manager"),
+      this.optionalRequirement("FLUTTERWAVE_CLIENT_SECRET", "Flutterwave v4 OAuth client secret; configure only in Render/secret manager"),
+      this.optionalRequirement("FLUTTERWAVE_SECRET_KEY", "Legacy Flutterwave v3 secret key only; not used for v4 launch checkout"),
       this.optionalRequirement("FLUTTERWAVE_PUBLIC_KEY", "Client-safe public key if a future client-side flow requires it"),
       this.urlRequirement("FLUTTERWAVE_BASE_URL", "Flutterwave API base URL; defaults to the live API host when omitted"),
+      this.urlRequirement("FLUTTERWAVE_TOKEN_URL", "Flutterwave v4 OAuth token endpoint; defaults to the official Flutterwave token endpoint when omitted"),
       this.optionalRequirement("FLUTTERWAVE_REDIRECT_URL", "Flutterwave checkout redirect URL configured in the provider dashboard"),
       this.optionalRequirement("FLUTTERWAVE_CALLBACK_URL", "Legacy alias for Flutterwave checkout redirect URL"),
       this.optionalRequirement("FLUTTERWAVE_SECRET_HASH", "Webhook secret hash; do not store in source control"),
@@ -1160,6 +1172,25 @@ export class PaymentsService {
       status: blockers.length ? "WAITING_FOR_CONFIGURATION" : "READY",
       blockers
     };
+  }
+
+  private flutterwaveV4CredentialsConfigured(): boolean {
+    return Boolean(this.optionalValue("FLUTTERWAVE_CLIENT_ID") && this.optionalValue("FLUTTERWAVE_CLIENT_SECRET"));
+  }
+
+  private flutterwaveTokenUrlReady(): boolean {
+    const tokenUrl = this.optionalValue("FLUTTERWAVE_TOKEN_URL");
+    return !tokenUrl || tokenUrl.startsWith("https://");
+  }
+
+  private flutterwaveCallbackConfigured(): boolean {
+    const redirectUrl = this.optionalValue("FLUTTERWAVE_REDIRECT_URL")
+      ?? this.optionalValue("FLUTTERWAVE_CALLBACK_URL");
+    return Boolean(redirectUrl?.startsWith("https://"));
+  }
+
+  private flutterwaveWebhookConfigured(): boolean {
+    return Boolean(this.optionalValue("FLUTTERWAVE_SECRET_HASH") ?? this.optionalValue("FLUTTERWAVE_WEBHOOK_SECRET"));
   }
 
   private optionalValue(name: string): string | undefined {
@@ -1268,11 +1299,14 @@ export class PaymentsService {
     if (
       providerName === "flutterwave"
       && _error instanceof PaymentProviderInitializationException
-      && _error.diagnostic.code === "FLUTTERWAVE_CHECKOUT_LINK_MISSING"
+      && ["FLUTTERWAVE_CHECKOUT_LINK_MISSING", "FLUTTERWAVE_AUTH_FAILED"].includes(_error.diagnostic.code ?? "")
     ) {
+      const message = _error.diagnostic.code === "FLUTTERWAVE_AUTH_FAILED"
+        ? "Flutterwave authentication failed."
+        : "Flutterwave checkout link was not returned.";
       return new BadGatewayException({
-        message: "Flutterwave checkout link was not returned.",
-        error_code: "FLUTTERWAVE_CHECKOUT_LINK_MISSING",
+        message,
+        error_code: _error.diagnostic.code,
         details: {
           safeDiagnostics: _error.diagnostic.safeDiagnostics ?? {}
         }

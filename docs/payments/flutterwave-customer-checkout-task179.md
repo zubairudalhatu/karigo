@@ -22,16 +22,17 @@ Do not commit or paste Flutterwave live keys, public keys, webhook secrets, encr
 
 1. Customer creates an order with `paymentMethod=FLUTTERWAVE`.
 2. Backend creates a pending `Payment` record linked to the order.
-3. Backend calls Flutterwave hosted checkout using server-side credentials only.
-4. Backend returns safe fields to the Customer App:
+3. Backend requests a Flutterwave v4 OAuth access token using server-side client credentials.
+4. Backend calls Flutterwave hosted checkout using the server-side bearer token only.
+5. Backend returns safe fields to the Customer App:
    - `provider`
    - `transactionReference`
    - `authorizationUrl`
    - `checkoutUrl`
    - `paymentUrl`
    - `url`
-5. Customer App opens the HTTPS Flutterwave checkout URL externally.
-6. Order remains pending until backend verification/webhook confirms:
+6. Customer App opens the HTTPS Flutterwave checkout URL externally.
+7. Order remains pending until backend verification/webhook confirms:
    - provider reference matches
    - amount matches
    - currency matches
@@ -47,9 +48,11 @@ PAYMENTS_PROVIDER=flutterwave
 PAYMENT_PROVIDER=flutterwave
 FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED=true
 FLUTTERWAVE_ENVIRONMENT=live
-FLUTTERWAVE_SECRET_KEY=<set in Render only>
+FLUTTERWAVE_CLIENT_ID=<set in Render only>
+FLUTTERWAVE_CLIENT_SECRET=<set in Render only>
 FLUTTERWAVE_PUBLIC_KEY=<set in Render only if needed>
-FLUTTERWAVE_BASE_URL=https://api.flutterwave.com/v3
+FLUTTERWAVE_BASE_URL=https://f4bexperience.flutterwave.com/
+FLUTTERWAVE_TOKEN_URL=https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token
 FLUTTERWAVE_REDIRECT_URL=<public HTTPS redirect/callback URL>
 FLUTTERWAVE_CALLBACK_URL=<optional legacy alias if used>
 FLUTTERWAVE_SECRET_HASH=<set in Render only>
@@ -61,6 +64,8 @@ WALLET_PAYMENTS_ENABLED=false
 ```
 
 Use either `FLUTTERWAVE_SECRET_HASH` or `FLUTTERWAVE_WEBHOOK_SECRET` according to the provider dashboard setup. Do not store either value in source control.
+
+`FLUTTERWAVE_SECRET_KEY` is a legacy/v3 credential name and is not used for the v4 live hosted-checkout authentication path.
 
 ## Public Config Expectations
 
@@ -90,7 +95,7 @@ If Flutterwave is not fully configured or customer checkout is disabled, Custome
 
 ## Guardrails
 
-- Customer App never receives `FLUTTERWAVE_SECRET_KEY`, `FLUTTERWAVE_SECRET_HASH` or webhook payload secrets.
+- Customer App never receives Flutterwave client secrets, access tokens, webhook hashes or webhook payload secrets.
 - Customer App never marks an order paid by itself.
 - Flutterwave checkout URLs must be HTTPS and opened externally, not routed through Expo Router.
 - Squad must not appear in live customer checkout while `SQUAD_CUSTOMER_CHECKOUT_ENABLED=false`.
