@@ -2,7 +2,7 @@ import { brand } from "@karigo/config";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import type { UtilityProductSummary, UtilityProviderSummary, UtilityQuoteResult, UtilityServiceType, UtilityTransactionSummary } from "@karigo/shared-types";
+import type { UtilityMeterType, UtilityProductSummary, UtilityProviderSummary, UtilityQuoteResult, UtilityServiceType, UtilityTransactionSummary } from "@karigo/shared-types";
 import { paymentsApi } from "../../src/api/payments.api";
 import { utilitiesApi } from "../../src/api/utilities.api";
 import { CustomerWallet, walletApi } from "../../src/api/wallet.api";
@@ -18,6 +18,7 @@ const configs: Record<string, {
   description: string;
   needsProduct: boolean;
   showRecipientName?: boolean;
+  supportsMeterType?: boolean;
 }> = {
   airtime: {
     type: "AIRTIME",
@@ -42,7 +43,8 @@ const configs: Record<string, {
     amountLabel: "Amount in NGN",
     description: "Enter a meter number for electricity token processing.",
     needsProduct: false,
-    showRecipientName: true
+    showRecipientName: true,
+    supportsMeterType: true
   },
   "cable-tv": {
     type: "CABLE_TV",
@@ -95,6 +97,7 @@ export default function UtilityServiceFlow() {
   const [productId, setProductId] = useState("");
   const [recipient, setRecipient] = useState("");
   const [recipientName, setRecipientName] = useState("");
+  const [meterType, setMeterType] = useState<UtilityMeterType>("PREPAID");
   const [amount, setAmount] = useState("");
   const [quote, setQuote] = useState<UtilityQuoteResult | null>(null);
   const [transaction, setTransaction] = useState<UtilityTransactionSummary | null>(null);
@@ -168,7 +171,8 @@ export default function UtilityServiceFlow() {
         productId: productId || undefined,
         amountKobo,
         recipient,
-        recipientName: recipientName || undefined
+        recipientName: recipientName || undefined,
+        meterType: config.supportsMeterType ? meterType : undefined
       }));
     } catch (e) {
       setError(friendlyError(e));
@@ -189,6 +193,7 @@ export default function UtilityServiceFlow() {
         amountKobo,
         recipient,
         recipientName: recipientName || undefined,
+        meterType: config.supportsMeterType ? meterType : undefined,
         idempotencyKey: quote.quoteReference
       }));
       if (walletPaymentEnabled) setWallet(await walletApi.summary());
@@ -224,6 +229,14 @@ export default function UtilityServiceFlow() {
       </> : null}
       <Field placeholder={config.recipientLabel} value={recipient} onChangeText={(value) => { setRecipient(value); setQuote(null); setTransaction(null); }} keyboardType={config.type === "AIRTIME" || config.type === "DATA" ? "phone-pad" : "number-pad"} />
       {config.showRecipientName ? <Field placeholder="Customer name (optional)" value={recipientName} onChangeText={setRecipientName} /> : null}
+      {config.supportsMeterType ? <>
+        <Text style={ui.sectionTitle}>Meter type</Text>
+        <View style={styles.meterTypeRow}>
+          {(["PREPAID", "POSTPAID"] as UtilityMeterType[]).map((type) => <Pressable key={type} accessibilityRole="button" accessibilityLabel={`Select ${type.toLowerCase()} meter`} onPress={() => { setMeterType(type); setQuote(null); setTransaction(null); }} style={[styles.meterTypeOption, meterType === type && styles.optionActive]}>
+            <Text style={[ui.cardText, meterType === type && styles.meterTypeTextActive]}>{type === "PREPAID" ? "Prepaid" : "Postpaid"}</Text>
+          </Pressable>)}
+        </View>
+      </> : null}
       <Field placeholder={config.amountLabel} value={amount} onChangeText={(value) => { setAmount(value); setQuote(null); setTransaction(null); }} keyboardType="numeric" editable={!selectedProduct?.amountKobo} />
       <Button title={busy ? "Checking..." : "Review Utility Request"} disabled={busy || !canQuote} onPress={quoteTransaction} />
       {quote ? <Card>
@@ -254,5 +267,8 @@ export default function UtilityServiceFlow() {
 const styles = StyleSheet.create({
   option: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, padding: 14 },
   optionActive: { borderColor: brand.colors.primary, backgroundColor: "#FEF2F2" },
+  meterTypeRow: { flexDirection: "row", gap: 10 },
+  meterTypeOption: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, flex: 1, padding: 14 },
+  meterTypeTextActive: { color: brand.colors.primary },
   warning: { color: brand.colors.primary, fontSize: 13, fontWeight: "900" }
 });

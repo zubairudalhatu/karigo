@@ -1,5 +1,6 @@
 export const utilityServiceTypes = ["AIRTIME", "DATA", "ELECTRICITY", "CABLE_TV"] as const;
 export type UtilityServiceType = (typeof utilityServiceTypes)[number];
+export type UtilityMeterType = "PREPAID" | "POSTPAID";
 
 export const utilityTransactionStatuses = ["DRAFT", "PENDING", "PROCESSING", "SUCCESSFUL", "FAILED", "CANCELLED"] as const;
 export type UtilityTransactionStatus = (typeof utilityTransactionStatuses)[number];
@@ -30,6 +31,7 @@ export interface UtilityQuoteRequest {
   amountKobo?: number;
   recipient: string;
   recipientName?: string;
+  meterType?: UtilityMeterType;
 }
 
 export interface CreateUtilityTransactionRequest extends UtilityQuoteRequest {

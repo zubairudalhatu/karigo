@@ -80,13 +80,17 @@ export class UtilitiesService {
     const customer = await this.requireCustomer(userId);
     const utilityProvider = this.activeUtilityProvider();
     const resolved = await this.resolveRequest(dto, utilityProvider.client);
+    this.assertAccelerateLiveRequestAllowed(resolved, utilityProvider);
     const providerQuote = await utilityProvider.client.quote({
       serviceType: resolved.provider.type,
       providerCode: resolved.provider.code,
       productCode: resolved.product?.code,
       amountKobo: resolved.amountKobo,
       recipient: resolved.recipient,
-      recipientName: resolved.recipientName
+      recipientName: resolved.recipientName,
+      meterType: resolved.meterType,
+      customerPhoneNumber: customer.user?.phoneNumber,
+      customerEmail: customer.user?.email
     });
     return {
       quoteReference: this.reference("KGO-UTIL-QUOTE"),
@@ -115,9 +119,10 @@ export class UtilitiesService {
       if (existing) return this.customerTransaction(existing);
     }
     const resolved = await this.resolveRequest(dto, utilityProvider.client);
+    this.assertAccelerateLiveRequestAllowed(resolved, utilityProvider);
     const reference = await this.uniqueReference();
     if (this.walletUtilityPaymentEnabled(utilityProvider)) {
-      return this.createWalletFundedTransaction(customer.id, dto, resolved, reference, utilityProvider);
+      return this.createWalletFundedTransaction(customer, dto, resolved, reference, utilityProvider);
     }
     if (utilityProvider.mode === "accelerate" && !utilityProvider.testMode) {
       throw new BadRequestException("Live Utilities require wallet payment and live fulfilment flags.");
@@ -137,7 +142,7 @@ export class UtilitiesService {
         status: UtilityTransactionStatus.PENDING,
         providerStatus: `${utilityProvider.providerStatusPrefix}_PENDING`,
         customerNote: dto.customerNote,
-        metadata: this.utilityMetadata(utilityProvider.mode, utilityProvider.testMode)
+        metadata: this.utilityMetadata(utilityProvider.mode, utilityProvider.testMode, undefined, resolved.meterType)
       },
       include: this.customerInclude()
     });
@@ -148,6 +153,9 @@ export class UtilitiesService {
       amountKobo: resolved.amountKobo,
       recipient: resolved.recipient,
       recipientName: resolved.recipientName,
+      meterType: resolved.meterType,
+      customerPhoneNumber: customer.user?.phoneNumber,
+      customerEmail: customer.user?.email,
       reference,
       totalKobo: resolved.totalKobo
     });
@@ -156,12 +164,13 @@ export class UtilitiesService {
   }
 
   private async createWalletFundedTransaction(
-    customerId: string,
+    customer: Awaited<ReturnType<UtilitiesService["requireCustomer"]>>,
     dto: CreateUtilityTransactionDto,
     resolved: Awaited<ReturnType<UtilitiesService["resolveRequest"]>>,
     reference: string,
     utilityProvider: ReturnType<UtilitiesService["activeUtilityProvider"]>
   ) {
+    const customerId = customer.id;
     const amount = this.walletAmountFromKobo(resolved.totalKobo);
     const idempotencyKey = this.walletDebitIdempotencyKey(customerId, dto.idempotencyKey ?? reference);
     const created = await this.prisma.$transaction(async (tx) => {
@@ -209,7 +218,7 @@ export class UtilitiesService {
           status: UtilityTransactionStatus.PENDING,
           providerStatus: `${utilityProvider.providerStatusPrefix}_PENDING`,
           customerNote: "Your KariGO Wallet has been debited. Utility fulfilment is being processed.",
-          metadata: this.utilityMetadata(utilityProvider.mode, utilityProvider.testMode, "WALLET")
+          metadata: this.utilityMetadata(utilityProvider.mode, utilityProvider.testMode, "WALLET", resolved.meterType)
         }
       });
       await tx.customerWallet.update({
@@ -273,6 +282,9 @@ export class UtilitiesService {
         amountKobo: resolved.amountKobo,
         recipient: resolved.recipient,
         recipientName: resolved.recipientName,
+        meterType: resolved.meterType,
+        customerPhoneNumber: customer.user?.phoneNumber,
+        customerEmail: customer.user?.email,
         reference,
         totalKobo: resolved.totalKobo
       });
@@ -297,7 +309,7 @@ export class UtilitiesService {
     if (TERMINAL_STATUSES.includes(transaction.status)) return this.adminTransaction(transaction);
 
     const utilityProvider = this.providerForMode(this.transactionProviderMode(transaction.metadata));
-    const purchase = await utilityProvider.client.checkStatus(transaction.providerReference ?? transaction.reference);
+    const purchase = await utilityProvider.client.checkStatus(transaction.providerReference ?? transaction.reference, transaction.serviceType);
     const updated = await this.applyProviderResult(transaction.id, purchase, this.adminInclude(true), transaction.metadata);
     if (purchase.status === UtilityTransactionStatus.FAILED) {
       const reversed = await this.reverseWalletDebitIfNeeded(transaction.id, purchase.failureReason ?? "Utilities provider reported a failed transaction.", true);
@@ -589,7 +601,8 @@ export class UtilitiesService {
       convenienceFeeKobo,
       totalKobo: amountKobo + convenienceFeeKobo,
       recipient: validation.normalizedRecipient,
-      recipientName: dto.recipientName ?? validation.recipientName
+      recipientName: dto.recipientName ?? validation.recipientName,
+      meterType: provider.type === UtilityServiceType.ELECTRICITY ? dto.meterType ?? "PREPAID" : undefined
     };
   }
 
@@ -609,7 +622,10 @@ export class UtilitiesService {
   }
 
   private async requireCustomer(userId: string) {
-    const customer = await this.prisma.customerProfile.findUnique({ where: { userId }, select: { id: true } });
+    const customer = await this.prisma.customerProfile.findUnique({
+      where: { userId },
+      select: { id: true, user: { select: { phoneNumber: true, email: true } } }
+    });
     if (!customer) throw new NotFoundException("Customer profile not found");
     return customer;
   }
@@ -701,8 +717,21 @@ export class UtilitiesService {
       this.flagValue("UTILITIES_CUSTOMER_PURCHASES_ENABLED", false);
   }
 
-  private utilityMetadata(mode: string, testMode: boolean, paymentMethod?: string): Prisma.InputJsonObject {
-    return { mode, testMode, ...(paymentMethod ? { paymentMethod } : {}) };
+  private assertAccelerateLiveRequestAllowed(
+    resolved: Awaited<ReturnType<UtilitiesService["resolveRequest"]>>,
+    utilityProvider: ReturnType<UtilitiesService["activeUtilityProvider"]>
+  ) {
+    if (utilityProvider.mode !== "accelerate" || utilityProvider.testMode) return;
+    if (
+      (resolved.provider.type === UtilityServiceType.DATA || resolved.provider.type === UtilityServiceType.CABLE_TV) &&
+      (!resolved.product?.code || resolved.product.code.startsWith("DEMO_"))
+    ) {
+      throw new BadRequestException("This utility product is currently unavailable.");
+    }
+  }
+
+  private utilityMetadata(mode: string, testMode: boolean, paymentMethod?: string, meterType?: string): Prisma.InputJsonObject {
+    return { mode, testMode, ...(paymentMethod ? { paymentMethod } : {}), ...(meterType ? { meterType } : {}) };
   }
 
   private mergeMetadata(currentMetadata: Prisma.JsonValue | null | undefined, metadata: Record<string, unknown> | undefined): Prisma.InputJsonObject {

@@ -10,6 +10,8 @@ Use this checklist before wider public rollout of wallet-funded Utilities.
 - Customer wallet has sufficient verified balance.
 - Utilities provider env variables are configured in Render only.
 - `UTILITIES_TEST_MODE=false` only when wallet payment and live fulfilment gates are both approved.
+- Accelerate public/private API keys are configured in Render only.
+- Real Accelerate package codes are configured for Data and Cable TV before live package testing. Seeded `DEMO_*` products must show a safe unavailable message and must not debit wallet.
 
 ## Customer App Tests
 
@@ -20,11 +22,13 @@ Use this checklist before wider public rollout of wallet-funded Utilities.
 - Tap `Review Utility Request`.
 - Confirm amount, fee, total and quote reference are displayed.
 - Confirm `Pay with Wallet` is shown only when backend config enables wallet-funded Utilities.
+- For electricity, select Prepaid and Postpaid in separate tests and confirm the selected meter type is submitted.
 - With insufficient balance, confirm the button is disabled and the app shows: `Insufficient wallet balance. Please top up your wallet and try again.`
 - With sufficient balance, submit once and confirm no duplicate transaction is created on repeated taps with the same quote/reference.
 - Confirm successful receipt shows utility reference, provider, total, wallet debit reference and status.
 - Confirm pending receipt shows processing copy and wallet debit reference.
 - Confirm failed receipt shows wallet reversal copy and wallet reversal reference.
+- Confirm customers never see `Internal server error`; provider errors must be shown as safe retry/unavailable/validation messages.
 - For electricity, confirm any provider token/code is shown only if returned safely by the backend.
 - Confirm no raw provider payload is visible.
 
@@ -36,12 +40,19 @@ Use this checklist before wider public rollout of wallet-funded Utilities.
 - Open Admin Utilities and confirm list loads.
 - Open a transaction detail.
 - Confirm payment method, provider reference, provider status, wallet debit reference and reversal status are visible where applicable.
+- Confirm provider notes/statuses are safe summaries and do not expose raw provider response bodies.
 - Use `Verify provider status` on a non-terminal transaction.
 - Confirm repeated verification does not duplicate a wallet reversal.
 - Confirm production does not allow manual successful override.
 
 ## Backend Tests
 
+- Accelerate auth uses Basic public/private key exchange before Bearer API calls.
+- Airtime uses `/merchant/airtime/validate` then `/merchant/airtime/vend`.
+- Data uses `/merchant/data/validate` then `/merchant/data/vend`.
+- Electricity uses `/merchant/power/validate` then `/merchant/power/vend`, with `meter_type`.
+- Cable TV uses `/merchant/tv/validate` then `/merchant/tv/vend`, with `package` and `phone_number`.
+- Admin provider verification uses the service-specific requery path.
 - Provider disabled blocks wallet-funded live purchase.
 - Missing provider config blocks purchase safely.
 - Customer purchase disabled keeps the app in readiness-only mode.

@@ -397,6 +397,7 @@ assert(utilityFlow.includes("walletApi.summary"), "Utility flow must load the se
 assert(utilityFlow.includes("walletUtilitiesEnabled"), "Utility flow must use backend utility wallet/live fulfilment flags.");
 assert(utilityFlow.includes("Insufficient wallet balance. Please top up your wallet and try again."), "Utility flow must show insufficient wallet balance state.");
 assert(utilityFlow.includes("idempotencyKey: quote.quoteReference"), "Utility flow must submit quote reference as idempotency guard.");
+assert(utilityFlow.includes("meterType") && utilityFlow.includes("PREPAID") && utilityFlow.includes("POSTPAID"), "Electricity utility flow must submit customer-selected meter type.");
 assert(utilityFlow.includes("Your KariGO Wallet will be debited after you submit this request."), "Utility flow must explain backend wallet debit timing.");
 assert(utilityFlow.includes("Utility payment failed. Your wallet has been reversed."), "Utility flow must show reversal copy for failed provider fulfilment.");
 assert(utilityFlow.includes("walletDebitReference") && utilityFlow.includes("walletReversalReference"), "Utility receipt must show wallet debit and reversal references.");

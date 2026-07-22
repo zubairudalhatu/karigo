@@ -684,12 +684,61 @@ describe("UtilitiesService", () => {
 
     const result = await service.adminVerifyProviderStatus("admin-id", "transaction-id");
 
-    expect(accelerateProvider.checkStatus).toHaveBeenCalledWith("ACC-123");
+    expect(accelerateProvider.checkStatus).toHaveBeenCalledWith("ACC-123", provider.type);
     expect(prisma.utilityTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: UtilityTransactionStatus.SUCCESSFUL })
     }));
     expect(audit.record).toHaveBeenCalledWith("admin-id", "admin.utilities.provider_verify", "UtilityTransaction", "transaction-id", expect.any(Object));
     expect(result).toMatchObject({ status: UtilityTransactionStatus.SUCCESSFUL, providerMode: "accelerate" });
+  });
+
+  it("blocks live data purchases with unmapped demo product codes before wallet debit", async () => {
+    const dataProvider = {
+      ...provider,
+      type: UtilityServiceType.DATA,
+      name: "MTN Data",
+      code: "DEMO_MTN_DATA_PROVIDER"
+    };
+    const dataProduct = {
+      ...product,
+      type: UtilityServiceType.DATA,
+      name: "MTN 1GB Data Demo Plan",
+      code: "DEMO_MTN_1GB",
+      amountKobo: 50000,
+      minAmountKobo: 50000,
+      maxAmountKobo: 50000
+    };
+    const accelerateProvider = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      validateRecipient: jest.fn().mockResolvedValue({ isValid: true, normalizedRecipient: "+2348030000000" }),
+      purchase: jest.fn()
+    };
+    const { tx, service } = serviceWith({
+      configValues: liveWalletUtilityConfig,
+      prismaOverrides: {
+        utilityProvider: {
+          findMany: jest.fn().mockResolvedValue([dataProvider]),
+          findFirst: jest.fn().mockResolvedValue(dataProvider)
+        },
+        utilityProduct: {
+          findMany: jest.fn().mockResolvedValue([dataProduct]),
+          findFirst: jest.fn().mockResolvedValue(dataProduct)
+        }
+      },
+      accelerateProvider
+    });
+
+    await expect(service.createTransaction("user-id", {
+      serviceType: UtilityServiceType.DATA,
+      providerId: dataProvider.id,
+      productId: dataProduct.id,
+      amountKobo: 50000,
+      recipient: "08030000000"
+    })).rejects.toThrow("This utility product is currently unavailable.");
+
+    expect(tx.customerWallet.upsert).not.toHaveBeenCalled();
+    expect(tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+    expect(accelerateProvider.purchase).not.toHaveBeenCalled();
   });
 
   it("does not duplicate wallet reversal on repeated provider failure verification", async () => {

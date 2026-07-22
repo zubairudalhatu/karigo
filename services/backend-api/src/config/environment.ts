@@ -396,8 +396,21 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     ["ACCELERATE_BASE_URL", "ACCELERATE_API_BASE_URL", "UTILITIES_PROVIDER_BASE_URL"],
     ""
   );
-  const accelerateApiKey = liveString(config, "ACCELERATE_API_KEY") ?? liveString(config, "UTILITIES_PROVIDER_API_KEY");
-  const accelerateApiSecret = liveString(config, "ACCELERATE_API_SECRET") ?? liveString(config, "UTILITIES_PROVIDER_SECRET");
+  const accelerateAuthUrl = stringAlias(config, ["ACCELERATE_AUTH_URL", "ACCELERATE_TOKEN_URL"], "");
+  const accelerateAirtimeDataBaseUrl = stringAlias(
+    config,
+    ["ACCELERATE_AIRTIME_DATA_BASE_URL", "ACCELERATE_AIRTIME_BASE_URL", "ACCELERATE_DATA_BASE_URL", "ACCELERATE_TV_BASE_URL"],
+    ""
+  );
+  const acceleratePowerBaseUrl = stringAlias(config, ["ACCELERATE_POWER_BASE_URL"], "");
+  const accelerateApiKey = liveString(config, "ACCELERATE_API_PUBLIC_KEY") ??
+    liveString(config, "ACCELERATE_PUBLIC_KEY") ??
+    liveString(config, "ACCELERATE_API_KEY") ??
+    liveString(config, "UTILITIES_PROVIDER_API_KEY");
+  const accelerateApiSecret = liveString(config, "ACCELERATE_API_PRIVATE_KEY") ??
+    liveString(config, "ACCELERATE_PRIVATE_KEY") ??
+    liveString(config, "ACCELERATE_API_SECRET") ??
+    liveString(config, "UTILITIES_PROVIDER_SECRET");
   const accelerateWebhookSecret = liveString(config, "ACCELERATE_WEBHOOK_SECRET") ?? liveString(config, "UTILITIES_PROVIDER_WEBHOOK_SECRET");
   const accelerateEnv = stringAlias(
     config,
@@ -410,6 +423,15 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   if (accelerateBaseUrl && !accelerateBaseUrl.startsWith("https://")) {
     throw new Error("ACCELERATE_BASE_URL must use HTTPS");
   }
+  if (accelerateAuthUrl && !accelerateAuthUrl.startsWith("https://")) {
+    throw new Error("ACCELERATE_AUTH_URL must use HTTPS");
+  }
+  if (accelerateAirtimeDataBaseUrl && !accelerateAirtimeDataBaseUrl.startsWith("https://")) {
+    throw new Error("ACCELERATE_AIRTIME_DATA_BASE_URL must use HTTPS");
+  }
+  if (acceleratePowerBaseUrl && !acceleratePowerBaseUrl.startsWith("https://")) {
+    throw new Error("ACCELERATE_POWER_BASE_URL must use HTTPS");
+  }
   if (utilitiesCustomerPurchaseEnabled) {
     if (!utilitiesEnabled) {
       throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires UTILITIES_ENABLED=true");
@@ -420,11 +442,11 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     if (!accelerateEnabled) {
       throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_ENABLED=true");
     }
-    if (!accelerateBaseUrl) {
-      throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_BASE_URL");
-    }
     if (!accelerateApiKey) {
-      throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_API_KEY");
+      throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_API_PUBLIC_KEY");
+    }
+    if (!accelerateApiSecret) {
+      throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_API_PRIVATE_KEY");
     }
     if (!utilitiesTestMode && !utilitiesWalletPaymentEnabled) {
       throw new Error("UTILITIES_TEST_MODE=false requires UTILITIES_WALLET_PAYMENT_ENABLED=true");
@@ -716,8 +738,14 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     ACCELERATE_UTILITIES_ENABLED: accelerateEnabled,
     ACCELERATE_BASE_URL: accelerateBaseUrl,
     ACCELERATE_API_BASE_URL: accelerateBaseUrl,
+    ACCELERATE_AUTH_URL: accelerateAuthUrl,
+    ACCELERATE_TOKEN_URL: accelerateAuthUrl,
+    ACCELERATE_AIRTIME_DATA_BASE_URL: accelerateAirtimeDataBaseUrl,
+    ACCELERATE_POWER_BASE_URL: acceleratePowerBaseUrl,
     ACCELERATE_ENV: accelerateEnv,
     UTILITIES_PROVIDER_ENV: accelerateEnv,
+    ACCELERATE_API_PUBLIC_KEY: accelerateApiKey,
+    ACCELERATE_API_PRIVATE_KEY: accelerateApiSecret,
     ACCELERATE_API_KEY: accelerateApiKey,
     ACCELERATE_API_SECRET: accelerateApiSecret,
     ACCELERATE_WEBHOOK_SECRET: accelerateWebhookSecret,

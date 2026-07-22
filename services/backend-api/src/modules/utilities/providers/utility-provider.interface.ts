@@ -1,5 +1,7 @@
 import { UtilityServiceType, UtilityTransactionStatus } from "@prisma/client";
 
+export type UtilityMeterType = "PREPAID" | "POSTPAID";
+
 export interface UtilityRecipientValidationResult {
   isValid: boolean;
   normalizedRecipient?: string;
@@ -14,6 +16,9 @@ export interface UtilityQuoteInput {
   amountKobo: number;
   recipient: string;
   recipientName?: string;
+  meterType?: UtilityMeterType;
+  customerPhoneNumber?: string | null;
+  customerEmail?: string | null;
 }
 
 export interface UtilityQuoteResult {
@@ -41,5 +46,5 @@ export interface UtilityProviderClient {
   validateRecipient(serviceType: UtilityServiceType, recipient: string): Promise<UtilityRecipientValidationResult>;
   quote(input: UtilityQuoteInput): Promise<UtilityQuoteResult>;
   purchase(input: UtilityPurchaseInput): Promise<UtilityPurchaseResult>;
-  checkStatus(reference: string): Promise<UtilityPurchaseResult>;
+  checkStatus(reference: string, serviceType?: UtilityServiceType): Promise<UtilityPurchaseResult>;
 }

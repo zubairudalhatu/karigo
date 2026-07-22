@@ -473,6 +473,8 @@ export class AdminOperationsService {
       && this.configValue("SQUAD_CALLBACK_URL").startsWith("https://")
       && Boolean(this.configValue("SQUAD_WEBHOOK_SECRET"))
       && this.configFlag("SQUAD_LIVE_ACTIVATION_APPROVED", false);
+    const acceleratePublicKeyConfigured = Boolean(this.configValue("ACCELERATE_API_PUBLIC_KEY") || this.configValue("ACCELERATE_API_KEY"));
+    const acceleratePrivateKeyConfigured = Boolean(this.configValue("ACCELERATE_API_PRIVATE_KEY") || this.configValue("ACCELERATE_API_SECRET"));
     return {
       environment: this.configValue("APP_ENV", "development"),
       payments: {
@@ -499,8 +501,9 @@ export class AdminOperationsService {
         }
       },
       utilities: {
-        accelerateConfigured: Boolean(this.configValue("ACCELERATE_API_KEY")),
-        liveUtilityFulfilmentEnabled: false
+        accelerateConfigured: acceleratePublicKeyConfigured && acceleratePrivateKeyConfigured,
+        liveUtilityFulfilmentEnabled: this.configFlag("UTILITIES_LIVE_FULFILLMENT_ENABLED", false),
+        walletPaymentEnabled: this.configFlag("UTILITIES_WALLET_PAYMENT_ENABLED", false)
       },
       notifications: {
         termiiConfigured: Boolean(this.configValue("TERMII_API_KEY")),

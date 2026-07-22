@@ -10,6 +10,24 @@ This runbook covers wallet-funded Utilities fulfilment through the approved prov
 - Provider fulfilment must be called by the backend.
 - Customer App must not debit, credit, reverse or mark fulfilment complete by itself.
 - No provider keys, tokens, raw payloads or webhook secrets should be copied into tickets, docs or screenshots.
+- Accelerate requests must follow the official API contract documented at https://istrategytech.gitbook.io/accelerate and https://istrategytech.gitbook.io/accelerate-payment.
+- Seeded `DEMO_*` Data and Cable TV products are not live Accelerate package codes and must remain blocked until real provider package codes are configured.
+
+## Accelerate Request Flow
+
+1. Backend obtains an Accelerate JWT using Basic auth with the Render-only public/private API keys.
+2. Backend validates the utility request with the service-specific validation endpoint.
+3. Backend submits the vend request only when validation returns a `validation_reference`.
+4. Backend maps provider success/pending/failure to KariGO utility statuses.
+5. Backend records only safe provider reference/status metadata.
+
+Service-specific routing:
+
+- Airtime: Airtime/Data host, `/merchant/airtime/validate`, `/merchant/airtime/vend`.
+- Data: Airtime/Data host, `/merchant/data/validate`, `/merchant/data/vend`.
+- Cable TV: Airtime/Data host, `/merchant/tv/validate`, `/merchant/tv/vend`.
+- Electricity: Power host, `/merchant/power/validate`, `/merchant/power/vend`.
+- Electricity requires the customer-selected meter type: `PREPAID` or `POSTPAID`.
 
 ## Normal Success Flow
 
@@ -56,8 +74,17 @@ Never request provider credentials, OTPs, card details, webhook secrets or raw p
 Check:
 
 - Admin Payment Readiness: Utilities flags, provider status and missing key names.
-- Admin Utilities: transaction status, provider status, provider reference, wallet debit reference and reversal status.
+- Admin Utilities: transaction status, provider status, provider safe note, provider reference, wallet debit reference and reversal status.
 - Admin Wallets: wallet ledger entries for service payment debit and reversal.
+
+## Safe Customer Error Copy
+
+Customers should see clear safe copy only:
+
+- Provider configuration issue: `Utilities are being activated. Please try again later.`
+- Data/Cable package missing a live provider code: `This utility product is currently unavailable.`
+- Provider validation failed: `Meter/customer validation failed. Please check the number and try again.`
+- Provider failure after debit: `Utility payment failed. Your wallet has been reversed.`
 
 ## Rollback Plan
 

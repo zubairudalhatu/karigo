@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from "class-validator";
+import { IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from "class-validator";
 import { UtilityServiceType } from "@prisma/client";
 
 export class UtilityQuoteDto {
@@ -28,6 +28,10 @@ export class UtilityQuoteDto {
   @IsString()
   @MaxLength(120)
   recipientName?: string;
+
+  @IsOptional()
+  @IsIn(["PREPAID", "POSTPAID"])
+  meterType?: "PREPAID" | "POSTPAID";
 }
 
 export class CreateUtilityTransactionDto extends UtilityQuoteDto {

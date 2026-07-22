@@ -385,7 +385,8 @@ describe("environment configuration", () => {
       UTILITIES_CUSTOMER_PURCHASE_ENABLED: "false",
       ACCELERATE_ENABLED: "true",
       ACCELERATE_BASE_URL: "https://api.accelerate.example",
-      ACCELERATE_API_KEY: "accelerate-api-key-placeholder"
+      ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+      ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder"
     });
 
     expect(result.UTILITIES_PROVIDER).toBe("accelerate");
@@ -394,7 +395,9 @@ describe("environment configuration", () => {
     expect(result.UTILITIES_CUSTOMER_PURCHASE_ENABLED).toBe(false);
     expect(result.ACCELERATE_ENABLED).toBe(true);
     expect(result.ACCELERATE_BASE_URL).toBe("https://api.accelerate.example");
-    expect(result.ACCELERATE_API_KEY).toBe("accelerate-api-key-placeholder");
+    expect(result.ACCELERATE_API_KEY).toBe("accelerate-public-key-placeholder");
+    expect(result.ACCELERATE_API_PUBLIC_KEY).toBe("accelerate-public-key-placeholder");
+    expect(result.ACCELERATE_API_PRIVATE_KEY).toBe("accelerate-private-key-placeholder");
   });
 
   it("allows provider-backed utility purchases only with guarded Accelerate test-mode configuration", () => {
@@ -405,8 +408,8 @@ describe("environment configuration", () => {
       UTILITIES_TEST_MODE: "true",
       UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
       ACCELERATE_ENABLED: "true",
-      ACCELERATE_BASE_URL: "https://api.accelerate.example",
-      ACCELERATE_API_KEY: "accelerate-api-key-placeholder",
+      ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+      ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder",
       ACCELERATE_ENV: "sandbox"
     });
 
@@ -424,7 +427,8 @@ describe("environment configuration", () => {
       UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
       ACCELERATE_ENABLED: "true",
       ACCELERATE_BASE_URL: "https://api.accelerate.example",
-      ACCELERATE_API_KEY: "accelerate-api-key-placeholder"
+      ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+      ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder"
     })).toThrow("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires UTILITIES_ENABLED=true");
 
     expect(() => validateEnvironment({
@@ -433,8 +437,8 @@ describe("environment configuration", () => {
       UTILITIES_ENABLED: "true",
       UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
       ACCELERATE_ENABLED: "true",
-      ACCELERATE_API_KEY: "accelerate-api-key-placeholder"
-    })).toThrow("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_BASE_URL");
+      ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder"
+    })).toThrow("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_API_PUBLIC_KEY");
 
     expect(() => validateEnvironment({
       ...baseConfig(),
@@ -442,8 +446,8 @@ describe("environment configuration", () => {
       UTILITIES_ENABLED: "true",
       UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
       ACCELERATE_ENABLED: "true",
-      ACCELERATE_BASE_URL: "https://api.accelerate.example"
-    })).toThrow("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_API_KEY");
+      ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder"
+    })).toThrow("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_API_PRIVATE_KEY");
 
     expect(() => validateEnvironment({
       ...baseConfig(),
@@ -452,8 +456,8 @@ describe("environment configuration", () => {
       UTILITIES_TEST_MODE: "false",
       UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
       ACCELERATE_ENABLED: "true",
-      ACCELERATE_BASE_URL: "https://api.accelerate.example",
-      ACCELERATE_API_KEY: "accelerate-api-key-placeholder"
+      ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+      ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder"
     })).toThrow("UTILITIES_TEST_MODE=false requires UTILITIES_WALLET_PAYMENT_ENABLED=true");
   });
 
@@ -467,8 +471,8 @@ describe("environment configuration", () => {
       UTILITIES_WALLET_PAYMENT_ENABLED: "true",
       UTILITIES_LIVE_FULFILLMENT_ENABLED: "true",
       ACCELERATE_ENABLED: "true",
-      ACCELERATE_BASE_URL: "https://api.accelerate.example",
-      ACCELERATE_API_KEY: "accelerate-api-key-placeholder",
+      ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+      ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder",
       ACCELERATE_ENV: "live"
     });
 
@@ -487,8 +491,8 @@ describe("environment configuration", () => {
       UTILITIES_ENABLED: "true",
       UTILITIES_WALLET_PAYMENT_ENABLED: "true",
       ACCELERATE_ENABLED: "true",
-      ACCELERATE_BASE_URL: "https://api.accelerate.example",
-      ACCELERATE_API_KEY: "accelerate-api-key-placeholder"
+      ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+      ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder"
     })).toThrow("UTILITIES_WALLET_PAYMENT_ENABLED=true requires UTILITIES_CUSTOMER_PURCHASE_ENABLED=true");
 
     expect(() => validateEnvironment({
@@ -498,8 +502,8 @@ describe("environment configuration", () => {
       UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
       UTILITIES_LIVE_FULFILLMENT_ENABLED: "true",
       ACCELERATE_ENABLED: "true",
-      ACCELERATE_BASE_URL: "https://api.accelerate.example",
-      ACCELERATE_API_KEY: "accelerate-api-key-placeholder"
+      ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+      ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder"
     })).toThrow("UTILITIES_LIVE_FULFILLMENT_ENABLED=true requires wallet-funded utility purchases to be enabled");
   });
 
