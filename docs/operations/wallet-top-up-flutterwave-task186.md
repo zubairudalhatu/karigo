@@ -31,7 +31,17 @@ WALLET_TOP_UP_ENABLED=true
 WALLET_PAYMENTS_ENABLED=false
 WALLET_MIN_TOP_UP_AMOUNT=100
 SQUAD_CUSTOMER_CHECKOUT_ENABLED=false
+CUSTOMER_WEB_PAYMENT_FALLBACK_URL=https://www.karigo.com.ng/payment/flutterwave/return
+CUSTOMER_APP_DEEP_LINK_BASE=karigo-customer://
 ```
+
+Optional direct app return override:
+
+```text
+CUSTOMER_APP_WALLET_TOP_UP_RETURN_URL=karigo-customer:///profile/wallet
+```
+
+Use the direct app return override only if Flutterwave accepts app-scheme redirects for the account. Otherwise keep the HTTPS fallback bridge and let the website return page open the app.
 
 Flutterwave secret key, webhook secret/hash, callback/redirect URL and any provider secrets must be stored only in Render or an approved secret manager. Do not commit or paste secret values into source control, screenshots, tickets or docs.
 
@@ -46,9 +56,10 @@ Flutterwave secret key, webhook secret/hash, callback/redirect URL and any provi
    - pending payment record;
    - Flutterwave hosted checkout authorization.
 6. Customer completes hosted checkout externally.
-7. Customer taps verify, or Flutterwave webhook is processed.
-8. Backend verifies reference, amount and currency.
-9. Wallet balance is credited once only.
+7. Flutterwave returns to the website fallback bridge or app deep link with the top-up reference.
+8. Customer App opens the wallet screen and verifies the reference, customer taps verify, or Flutterwave webhook is processed.
+9. Backend verifies reference, amount and currency.
+10. Wallet balance is credited once only.
 
 Expected status labels:
 
@@ -73,6 +84,7 @@ Cancelled/expired
 - [ ] Admin Payment Readiness shows Wallet order payment disabled.
 - [ ] Customer Wallet shows `Top up with Flutterwave`.
 - [ ] Top-up opens Flutterwave externally.
+- [ ] Flutterwave return opens the Customer App wallet route or shows the safe website fallback.
 - [ ] Wallet ledger shows pending before verification.
 - [ ] Verification credits wallet once.
 - [ ] Re-verification or duplicate webhook does not credit again.

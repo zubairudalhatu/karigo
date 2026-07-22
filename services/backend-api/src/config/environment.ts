@@ -207,6 +207,34 @@ function validateFlutterwaveLivePaymentGate(config: Record<string, unknown>, pay
   }
 }
 
+function validCustomerAppReturnUrl(value: string): boolean {
+  return [
+    "karigo://",
+    "karigo-customer://",
+    "karigo-customer-staging://"
+  ].some((prefix) => value.startsWith(prefix));
+}
+
+function optionalHttpsUrl(config: Record<string, unknown>, key: string, fallback: string): string {
+  const value = typeof config[key] === "string" && config[key].trim()
+    ? config[key].trim()
+    : fallback;
+  if (!value.startsWith("https://")) {
+    throw new Error(`${key} must use HTTPS`);
+  }
+  return value;
+}
+
+function optionalCustomerAppReturnUrl(config: Record<string, unknown>, key: string, fallback: string): string {
+  const value = typeof config[key] === "string" && config[key].trim()
+    ? config[key].trim()
+    : fallback;
+  if (!validCustomerAppReturnUrl(value) && !value.startsWith("https://")) {
+    throw new Error(`${key} must use HTTPS or an approved KariGO app deep link`);
+  }
+  return value;
+}
+
 export function validateEnvironment(config: Record<string, unknown>): Record<string, unknown> {
   const appEnvironment = typeof config.APP_ENV === "string" ? config.APP_ENV : "development";
   const otpProvider =
@@ -352,6 +380,21 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   if (karigoEmailLogoUrl && !karigoEmailLogoUrl.startsWith("https://")) {
     throw new Error("KARIGO_EMAIL_LOGO_URL must use HTTPS");
   }
+  const customerAppDeepLinkBase = optionalCustomerAppReturnUrl(
+    config,
+    "CUSTOMER_APP_DEEP_LINK_BASE",
+    "karigo-customer:///profile/wallet"
+  );
+  const customerAppWalletTopUpReturnUrl = optionalCustomerAppReturnUrl(
+    config,
+    "CUSTOMER_APP_WALLET_TOP_UP_RETURN_URL",
+    customerAppDeepLinkBase
+  );
+  const customerWebPaymentFallbackUrl = optionalHttpsUrl(
+    config,
+    "CUSTOMER_WEB_PAYMENT_FALLBACK_URL",
+    "https://www.karigo.com.ng/payment/flutterwave/return"
+  );
   const applicationEmailNotificationsEnabled = booleanAlias(
     config,
     ["APPLICATION_EMAIL_NOTIFICATIONS_ENABLED", "APPLICATION_NOTIFICATION_EMAIL_ENABLED"],
@@ -580,6 +623,9 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     KARIGO_PILOT_EMAIL_LABEL: typeof config.KARIGO_PILOT_EMAIL_LABEL === "string" && config.KARIGO_PILOT_EMAIL_LABEL.trim()
       ? config.KARIGO_PILOT_EMAIL_LABEL.trim()
       : "Kano and Abuja launch onboarding",
+    CUSTOMER_APP_DEEP_LINK_BASE: customerAppDeepLinkBase,
+    CUSTOMER_APP_WALLET_TOP_UP_RETURN_URL: customerAppWalletTopUpReturnUrl,
+    CUSTOMER_WEB_PAYMENT_FALLBACK_URL: customerWebPaymentFallbackUrl,
     APPLICATION_NOTIFICATIONS_ENABLED: applicationNotificationsEnabled,
     TRANSACTIONAL_EMAIL_NOTIFICATION_PROVIDER: transactionalEmailProvider,
     TRANSACTIONAL_SMS_NOTIFICATION_PROVIDER: transactionalSmsProvider,

@@ -43,6 +43,9 @@ describe("environment configuration", () => {
     expect(result.RESEND_BASE_URL).toBe("https://api.resend.com");
     expect(result.KARIGO_EMAIL_LOGO_URL).toBe("");
     expect(result.KARIGO_PILOT_EMAIL_LABEL).toBe("Kano and Abuja launch onboarding");
+    expect(result.CUSTOMER_APP_DEEP_LINK_BASE).toBe("karigo-customer:///profile/wallet");
+    expect(result.CUSTOMER_APP_WALLET_TOP_UP_RETURN_URL).toBe("karigo-customer:///profile/wallet");
+    expect(result.CUSTOMER_WEB_PAYMENT_FALLBACK_URL).toBe("https://www.karigo.com.ng/payment/flutterwave/return");
     expect(result.PAYMENTS_LIVE_ENABLED).toBe(false);
     expect(result.PAYMENT_PROVIDER).toBe("mock");
     expect(result.PAYMENTS_PROVIDER).toBe("mock");
@@ -408,6 +411,30 @@ describe("environment configuration", () => {
       JWT_SECRET: "test-secret",
       KARIGO_EMAIL_LOGO_URL: "http://example.test/logo.png"
     })).toThrow("KARIGO_EMAIL_LOGO_URL must use HTTPS");
+  });
+
+  it("allows approved Customer App wallet return deep links", () => {
+    const result = validateEnvironment({
+      ...baseConfig(),
+      CUSTOMER_APP_DEEP_LINK_BASE: "karigo://",
+      CUSTOMER_APP_WALLET_TOP_UP_RETURN_URL: "karigo-customer:///profile/wallet",
+      CUSTOMER_WEB_PAYMENT_FALLBACK_URL: "https://www.karigo.com.ng/payment/flutterwave/return"
+    });
+
+    expect(result.CUSTOMER_APP_DEEP_LINK_BASE).toBe("karigo://");
+    expect(result.CUSTOMER_APP_WALLET_TOP_UP_RETURN_URL).toBe("karigo-customer:///profile/wallet");
+    expect(result.CUSTOMER_WEB_PAYMENT_FALLBACK_URL).toBe("https://www.karigo.com.ng/payment/flutterwave/return");
+  });
+
+  it("rejects unsafe Customer App wallet return URLs", () => {
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      CUSTOMER_APP_WALLET_TOP_UP_RETURN_URL: "javascript:alert(1)"
+    })).toThrow("CUSTOMER_APP_WALLET_TOP_UP_RETURN_URL must use HTTPS or an approved KariGO app deep link");
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      CUSTOMER_WEB_PAYMENT_FALLBACK_URL: "http://www.karigo.com.ng/payment/flutterwave/return"
+    })).toThrow("CUSTOMER_WEB_PAYMENT_FALLBACK_URL must use HTTPS");
   });
 
   it("keeps Resend account activation email blocked without credentials when enabled", () => {

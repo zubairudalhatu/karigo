@@ -362,16 +362,27 @@ export class FlutterwaveProvider implements PaymentProvider {
     return value.startsWith("/") ? value : `/${value}`;
   }
 
-  private redirectUrl(): string {
-    const value = configText(this.config.get<unknown>("FLUTTERWAVE_REDIRECT_URL"))
+  private redirectUrl(overrideUrl?: string | null): string {
+    const value = configText(overrideUrl)
+      ?? configText(this.config.get<unknown>("FLUTTERWAVE_REDIRECT_URL"))
       ?? configText(this.config.get<unknown>("FLUTTERWAVE_CALLBACK_URL"));
     if (!value) {
       throw new BadRequestException("missing FLUTTERWAVE_REDIRECT_URL");
     }
-    if (!value.startsWith("https://")) {
-      throw new BadRequestException("FLUTTERWAVE_REDIRECT_URL must use HTTPS");
+    if (!this.approvedRedirectUrl(value, Boolean(overrideUrl))) {
+      throw new BadRequestException("FLUTTERWAVE_REDIRECT_URL must use HTTPS or an approved KariGO app deep link");
     }
     return value;
+  }
+
+  private approvedRedirectUrl(value: string, allowAppDeepLink: boolean): boolean {
+    if (value.startsWith("https://")) return true;
+    if (!allowAppDeepLink) return false;
+    return [
+      "karigo://",
+      "karigo-customer://",
+      "karigo-customer-staging://"
+    ].some((prefix) => value.startsWith(prefix));
   }
 
   private webhookSecret(): string {
@@ -532,7 +543,7 @@ export class FlutterwaveProvider implements PaymentProvider {
         tx_ref: input.transactionReference,
         amount: input.amount,
         currency: input.currency || "NGN",
-        redirect_url: this.redirectUrl(),
+        redirect_url: this.redirectUrl(input.redirectUrl),
         customer: {
           email: this.customerEmail(input),
           phonenumber: input.customerPhone,
@@ -550,7 +561,7 @@ export class FlutterwaveProvider implements PaymentProvider {
       reference: input.transactionReference,
       amount: input.amount,
       currency: input.currency || "NGN",
-      redirect_url: this.redirectUrl(),
+      redirect_url: this.redirectUrl(input.redirectUrl),
       description: "KariGO order payment",
       meta: input.metadata
     };

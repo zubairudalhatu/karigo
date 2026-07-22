@@ -908,6 +908,17 @@ describe("PaymentsService", () => {
     expect(tx.customerWallet.update).not.toHaveBeenCalled();
     expect(result.authorization.authorizationUrl).toBe("https://checkout.flutterwave.com/v3/hosted/pay/test-wallet-top-up");
     expect(result.walletLedgerEntry.status).toBe(WalletLedgerEntryStatus.PENDING);
+    const initializeInput = flutterwaveProvider.initialize.mock.calls[0][0];
+    expect(initializeInput.redirectUrl).toContain("https://www.karigo.com.ng/payment/flutterwave/return");
+    const redirectUrl = new URL(initializeInput.redirectUrl);
+    expect(redirectUrl.searchParams.get("topUpReference")).toBe(initializeInput.transactionReference);
+    expect(redirectUrl.searchParams.get("reference")).toBe(initializeInput.transactionReference);
+    expect(redirectUrl.searchParams.get("purpose")).toBe("wallet_top_up");
+    expect(redirectUrl.searchParams.get("appReturnUrl")).toContain("karigo-customer:///profile/wallet");
+    expect(initializeInput.metadata).toEqual(expect.objectContaining({
+      purpose: "wallet_top_up",
+      returnTarget: "customer_wallet"
+    }));
   });
 
   it("credits wallet only after backend verification and avoids duplicate crediting", async () => {
@@ -1000,6 +1011,15 @@ describe("PaymentsService", () => {
     await expect(service.verifyWalletTopUp("user-1", "KGO-ORDER-PAYMENT"))
       .rejects.toThrow("Payment reference is not a wallet top-up");
     expect(registry.get).not.toHaveBeenCalled();
+  });
+
+  it("rejects wallet top-up verification when the authenticated customer does not own the payment", async () => {
+    prisma.payment.findFirst.mockResolvedValue(null);
+
+    await expect(service.verifyWalletTopUp("other-user", "KGO-WALLET-TOPUP-OTHER"))
+      .rejects.toThrow("Payment not found");
+    expect(registry.get).not.toHaveBeenCalled();
+    expect(tx.customerWallet.update).not.toHaveBeenCalled();
   });
 
   it("does not run admin sandbox initialization tests while live payments are configured", async () => {

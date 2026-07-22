@@ -118,6 +118,16 @@ assert(contactForm.includes("Submit Inquiry"), "Contact inquiry form must includ
 assert(contactForm.includes("Your inquiry has been received. KariGO will contact you with the next steps."), "Contact inquiry form must use public-facing success copy.");
 assert(!contactForm.includes("KariGO will open public inquiry submission soon"), "Contact inquiry form must not show internal readiness copy.");
 
+const paymentReturn = read("app", "payment", "flutterwave", "return", "page.tsx");
+const paymentReturnBridge = read("src", "components", "payment-return-to-app.tsx");
+assert(paymentReturn.includes("PaymentReturnToApp"), "Website must expose the Flutterwave payment return bridge page.");
+assert(paymentReturnBridge.includes("karigo-customer:///profile/wallet"), "Flutterwave return bridge must target the Customer App wallet route.");
+assert(paymentReturnBridge.includes("topUpReference"), "Flutterwave return bridge must pass the wallet top-up reference to the app.");
+assert(paymentReturnBridge.includes("Payment received. Please return to the KariGO app and tap Verify Wallet Top-Up."), "Flutterwave return bridge must show safe wallet verification copy.");
+assert(paymentReturnBridge.includes("Your wallet is credited only after KariGO verifies the payment securely with Flutterwave."), "Flutterwave return bridge must state server-side verification is required.");
+assert(!paymentReturnBridge.includes("providerResponse"), "Flutterwave return bridge must not expose raw provider payloads.");
+assert(!paymentReturnBridge.includes("secret"), "Flutterwave return bridge must not expose payment secrets.");
+
 const header = read("src", "components", "site-header.tsx");
 assert(header.includes("menu-toggle"), "Website header must include mobile menu control.");
 assert(header.includes("Become a Vendor"), "Mobile navigation must include vendor application access.");

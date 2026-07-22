@@ -196,10 +196,12 @@ export class PaymentsService {
         currency: payment.currency,
         customerEmail: customer.user.email,
         customerPhone: customer.user.phoneNumber,
+        redirectUrl: this.walletTopUpReturnUrl(transactionReference),
         metadata: {
           paymentId: payment.id,
           walletLedgerEntryId: ledger.id,
-          purpose: "wallet_top_up"
+          purpose: "wallet_top_up",
+          returnTarget: "customer_wallet"
         }
       });
     } catch (error) {
@@ -1400,6 +1402,62 @@ export class PaymentsService {
   private walletMinimumTopUpAmount(): number {
     const value = Number(this.optionalValue("WALLET_MIN_TOP_UP_AMOUNT") ?? 100);
     return Number.isFinite(value) && value > 0 ? value : 100;
+  }
+
+  private walletTopUpReturnUrl(transactionReference: string): string {
+    const configuredDirectReturn = this.optionalValue("CUSTOMER_APP_WALLET_TOP_UP_RETURN_URL");
+    const appReturnBase = configuredDirectReturn
+      ?? this.customerWalletDeepLinkBase(this.optionalValue("CUSTOMER_APP_DEEP_LINK_BASE"));
+    const appReturnUrl = this.withWalletTopUpReference(
+      appReturnBase,
+      transactionReference
+    );
+    if (configuredDirectReturn && (this.approvedCustomerAppReturnUrl(appReturnUrl) || appReturnUrl.startsWith("https://"))) {
+      return appReturnUrl;
+    }
+
+    const webFallbackUrl = this.withWalletTopUpReference(
+      this.optionalValue("CUSTOMER_WEB_PAYMENT_FALLBACK_URL")
+        ?? "https://www.karigo.com.ng/payment/flutterwave/return",
+      transactionReference
+    );
+    try {
+      const parsed = new URL(webFallbackUrl);
+      parsed.searchParams.set("appReturnUrl", appReturnUrl);
+      parsed.searchParams.set("purpose", "wallet_top_up");
+      return parsed.toString();
+    } catch {
+      return "https://www.karigo.com.ng/payment/flutterwave/return";
+    }
+  }
+
+  private customerWalletDeepLinkBase(configuredBase?: string): string {
+    const base = configuredBase?.trim() || "karigo-customer://";
+    if (base.includes("/profile/wallet")) return base;
+    const schemeOnly = /^([a-z][a-z0-9+.-]*):\/{0,3}$/i.exec(base);
+    if (schemeOnly) return `${schemeOnly[1]}:///profile/wallet`;
+    return `${base.replace(/\/+$/, "")}/profile/wallet`;
+  }
+
+  private withWalletTopUpReference(baseUrl: string, transactionReference: string): string {
+    try {
+      const parsed = new URL(baseUrl);
+      parsed.searchParams.set("topUpReference", transactionReference);
+      parsed.searchParams.set("reference", transactionReference);
+      parsed.searchParams.set("verifyWalletTopUp", "1");
+      return parsed.toString();
+    } catch {
+      const separator = baseUrl.includes("?") ? "&" : "?";
+      return `${baseUrl}${separator}topUpReference=${encodeURIComponent(transactionReference)}&reference=${encodeURIComponent(transactionReference)}&verifyWalletTopUp=1`;
+    }
+  }
+
+  private approvedCustomerAppReturnUrl(value: string): boolean {
+    return [
+      "karigo://",
+      "karigo-customer://",
+      "karigo-customer-staging://"
+    ].some((prefix) => value.startsWith(prefix));
   }
 
   private providerLaunchProfile(provider: PaymentProviderName, customerSelectable: boolean) {

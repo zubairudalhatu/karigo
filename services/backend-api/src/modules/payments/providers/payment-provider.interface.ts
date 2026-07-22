@@ -7,6 +7,7 @@ export interface InitializePaymentInput {
   currency: string;
   customerEmail?: string | null;
   customerPhone: string;
+  redirectUrl?: string | null;
   metadata: Record<string, unknown>;
 }
 

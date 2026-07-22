@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import type { PublicPaymentConfig } from "@karigo/shared-types";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { CustomerWalletLedgerResult, walletApi, WalletLedgerDirection, WalletLedgerEntryStatus, WalletLedgerEntryType } from "../../src/api/wallet.api";
@@ -43,7 +44,24 @@ function walletEntryStatusLabel(status: WalletLedgerEntryStatus) {
   }
 }
 
+function firstParam(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function safeTopUpReference(value?: string | string[]) {
+  const reference = firstParam(value)?.trim();
+  return reference && /^[A-Za-z0-9_-]{8,140}$/.test(reference) ? reference : "";
+}
+
+function walletTopUpReferenceFromParams(params: Record<string, string | string[] | undefined>) {
+  return safeTopUpReference(params.topUpReference)
+    || safeTopUpReference(params.reference)
+    || safeTopUpReference(params.tx_ref)
+    || safeTopUpReference(params.transactionReference);
+}
+
 export default function CustomerWalletScreen() {
+  const params = useLocalSearchParams();
   const [data, setData] = useState<CustomerWalletLedgerResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -54,8 +72,10 @@ export default function CustomerWalletScreen() {
   const [topUpError, setTopUpError] = useState("");
   const [pendingTopUpReference, setPendingTopUpReference] = useState("");
   const [pendingTopUpUrl, setPendingTopUpUrl] = useState("");
+  const [handledReturnReference, setHandledReturnReference] = useState("");
   const [paymentConfig, setPaymentConfig] = useState<PublicPaymentConfig>(fallbackCustomerPaymentConfig);
   const [paymentConfigError, setPaymentConfigError] = useState("");
+  const returnTopUpReference = walletTopUpReferenceFromParams(params as Record<string, string | string[] | undefined>);
 
   const load = async () => {
     setError("");
@@ -83,6 +103,15 @@ export default function CustomerWalletScreen() {
     void load();
     void loadPaymentConfig();
   }, []);
+
+  useEffect(() => {
+    if (!returnTopUpReference || handledReturnReference === returnTopUpReference) return;
+    setHandledReturnReference(returnTopUpReference);
+    setPendingTopUpReference(returnTopUpReference);
+    setPendingTopUpUrl("");
+    setTopUpMessage("Payment received. Verifying your wallet top-up...");
+    void verifyTopUpReference(returnTopUpReference);
+  }, [returnTopUpReference, handledReturnReference]);
 
   async function initiateTopUp() {
     if (!walletTopUpAllowed) {
@@ -125,22 +154,31 @@ export default function CustomerWalletScreen() {
     }
   }
 
-  async function verifyTopUp() {
-    if (!pendingTopUpReference) return;
+  async function verifyTopUpReference(reference: string) {
+    if (!reference) return;
     setTopUpBusy(true);
     setTopUpError("");
     try {
-      await walletApi.verifyTopUp(pendingTopUpReference);
-      setTopUpMessage("Wallet top-up verified and balance updated.");
+      const result = await walletApi.verifyTopUp(reference);
+      setTopUpMessage(result.alreadyProcessed
+        ? "Your wallet top-up has already been verified and your balance is up to date."
+        : "Your wallet top-up has been verified and your balance has been updated.");
       setPendingTopUpReference("");
       setPendingTopUpUrl("");
       setTopUpAmount("");
       await load();
     } catch (e) {
-      setTopUpError(`Payment is still pending verification. ${friendlyError(e)}`);
+      setPendingTopUpReference(reference);
+      setTopUpMessage("Payment received. Verification is still pending. Tap Verify again shortly.");
+      setTopUpError(`We could not verify this wallet top-up yet. Please try again or contact support. ${friendlyError(e)}`);
     } finally {
       setTopUpBusy(false);
     }
+  }
+
+  async function verifyTopUp() {
+    if (!pendingTopUpReference) return;
+    await verifyTopUpReference(pendingTopUpReference);
   }
 
   async function reopenTopUpAuthorization() {

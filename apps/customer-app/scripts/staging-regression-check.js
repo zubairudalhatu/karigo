@@ -300,6 +300,9 @@ assert(walletScreen.includes("walletApi.initiateTopUp"), "Customer wallet screen
 assert(walletScreen.includes("paymentsApi.publicConfig"), "Customer wallet screen must load public payment config before enabling top-up.");
 assert(walletScreen.includes("walletTopUpEnabledForConfig"), "Customer wallet top-up must be derived from backend public config.");
 assert(walletScreen.includes('config.walletTopUpEnabled === true && config.walletTopUpProvider === "flutterwave"'), "Customer wallet top-up must only enable for backend-approved Flutterwave top-up.");
+assert(walletScreen.includes("useLocalSearchParams"), "Customer wallet screen must read wallet top-up return deep-link params.");
+assert(walletScreen.includes("walletTopUpReferenceFromParams"), "Customer wallet screen must safely extract wallet top-up references from return links.");
+assert(walletScreen.includes("verifyTopUpReference(returnTopUpReference)"), "Customer wallet screen must verify returned wallet top-up references through the backend.");
 assert(walletScreen.includes("walletMinimumTopUpAmount"), "Customer wallet screen must use the backend wallet minimum top-up amount.");
 assert(walletScreen.includes("Wallet top-up is temporarily unavailable."), "Customer wallet screen must show top-up unavailable copy when disabled.");
 assert(walletScreen.includes("Wallet top-up credits only after Flutterwave verification. Wallet order payment is not active yet."), "Customer wallet screen must state Flutterwave verification and wallet order payment guardrails.");
@@ -309,7 +312,9 @@ assert(walletScreen.includes("if (!openResult.opened) throw new Error(openResult
 assert(walletScreen.includes("pendingTopUpUrl"), "Customer wallet top-up must store a pending checkout URL for reopening.");
 assert(walletScreen.includes("Open payment checkout again"), "Customer wallet top-up must use generic external checkout reopen copy.");
 assert(walletScreen.includes("walletApi.verifyTopUp"), "Customer wallet screen must verify top-up through the dedicated wallet endpoint.");
-assert(walletScreen.includes("Payment is still pending verification."), "Wallet top-up verification failure must use pending-verification copy.");
+assert(walletScreen.includes("Payment received. Verification is still pending. Tap Verify again shortly."), "Wallet top-up return failure must use pending-verification copy.");
+assert(walletScreen.includes("Your wallet top-up has been verified and your balance has been updated."), "Wallet top-up return success must show balance-updated copy.");
+assert(walletScreen.includes("We could not verify this wallet top-up yet. Please try again or contact support."), "Wallet top-up return failure must show safe retry/support copy.");
 assert(walletScreen.includes("Pending verification"), "Customer wallet screen must show pending verification if wallet checkout is later re-enabled.");
 assert(walletScreen.includes("Verified and credited"), "Customer wallet screen must show verified wallet top-up status.");
 assert(walletScreen.includes("backend payment verification"), "Customer wallet screen must state that top-up credits require backend verification.");

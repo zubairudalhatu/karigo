@@ -103,6 +103,28 @@ describe("FlutterwaveProvider", () => {
     expect(result.authorizationUrl).toBe("https://checkout.flutterwave.com/v3/hosted/pay/KGO-FLUTTERWAVE-123");
   });
 
+  it("allows a per-payment KariGO app return URL for wallet top-up checkout", async () => {
+    fetchMock.mockResolvedValueOnce(hostedCheckoutResponse());
+
+    await provider.initialize({
+      ...initializationInput("KGO-WALLET-TOPUP-RETURN"),
+      redirectUrl: "karigo-customer:///profile/wallet?topUpReference=KGO-WALLET-TOPUP-RETURN&verifyWalletTopUp=1",
+      metadata: { purpose: "wallet_top_up" }
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.redirect_url).toBe("karigo-customer:///profile/wallet?topUpReference=KGO-WALLET-TOPUP-RETURN&verifyWalletTopUp=1");
+  });
+
+  it("rejects unsafe per-payment return URLs", async () => {
+    await expect(provider.initialize({
+      ...initializationInput("KGO-WALLET-TOPUP-BAD-RETURN"),
+      redirectUrl: "javascript:alert(1)",
+      metadata: { purpose: "wallet_top_up" }
+    })).rejects.toThrow("FLUTTERWAVE_REDIRECT_URL must use HTTPS or an approved KariGO app deep link");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("uses v4 OAuth and a non-payments endpoint only when FLUTTERWAVE_API_MODE=v4", async () => {
     configValues.FLUTTERWAVE_API_MODE = "v4";
     configValues.FLUTTERWAVE_CLIENT_ID = "flutterwave-client-id-placeholder";
