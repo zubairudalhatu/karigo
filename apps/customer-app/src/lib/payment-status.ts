@@ -148,7 +148,10 @@ export function paymentProviderLabel(provider?: string | null, config: PublicPay
 
 export function paymentSafetyNoteForConfig(config: PublicPaymentConfig = fallbackCustomerPaymentConfig): string {
   if (isFlutterwaveLivePaymentConfig(config)) {
-    return "Flutterwave is KariGO's approved online payment provider. KariGO verifies payment server-side before marking an order paid. Wallet top-up, wallet order payment, automatic refunds and payout automation remain disabled until separately approved.";
+    const walletTopUpCopy = config.walletTopUpEnabled
+      ? "Wallet top-up is available through Flutterwave and credits only after backend verification."
+      : "Wallet top-up remains disabled until separately approved.";
+    return `Flutterwave is KariGO's approved online payment provider. KariGO verifies payment server-side before marking an order paid. ${walletTopUpCopy} Wallet order payment, automatic refunds and payout automation remain disabled until separately approved.`;
   }
   if (config.livePaymentsEnabled) {
     return "Pay on Delivery is available for supported KariGO orders while online payment is temporarily unavailable.";

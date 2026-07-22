@@ -262,8 +262,8 @@ assert(profile.includes("Become a KariGO Captain"), "Profile must link to the Ca
 assert(profile.includes("/captain/apply"), "Profile Captain application link must route to the in-app information screen.");
 assert(profile.includes("KariGO Wallet"), "Profile must link to the customer wallet surface.");
 assert(profile.includes("/profile/wallet"), "Profile wallet hub item must navigate to the wallet screen.");
-assert(profile.includes("View your wallet balance and safe ledger."), "Profile wallet hub item must describe view-only ledger access.");
-assert(profile.includes("View only"), "Profile wallet hub item must mark the wallet as view-only.");
+assert(profile.includes("View your balance and top up safely."), "Profile wallet hub item must describe wallet balance and safe top-up access.");
+assert(profile.includes("Flutterwave top-up"), "Profile wallet hub item must mark Flutterwave top-up readiness.");
 assert(profile.includes("Referral rewards"), "Profile must link to the customer referral surface.");
 assert(profile.includes("/profile/referrals"), "Profile referral hub item must navigate to the referral screen.");
 assert(profile.includes("View and share your KariGO referral code."), "Profile referral hub item must describe referral code sharing.");
@@ -298,9 +298,12 @@ assert(walletScreen.includes("KariGO Wallet"), "Customer wallet screen must exis
 assert(walletScreen.includes("walletApi.transactions"), "Customer wallet screen must load wallet balance and ledger through the wallet API.");
 assert(walletScreen.includes("walletApi.initiateTopUp"), "Customer wallet screen must initiate top-up through the backend wallet top-up endpoint.");
 assert(walletScreen.includes("paymentsApi.publicConfig"), "Customer wallet screen must load public payment config before enabling top-up.");
-assert(walletScreen.includes("const walletTopUpAllowed = false"), "Customer wallet top-up must remain disabled in the Flutterwave launch switch.");
+assert(walletScreen.includes("walletTopUpEnabledForConfig"), "Customer wallet top-up must be derived from backend public config.");
+assert(walletScreen.includes('config.walletTopUpEnabled === true && config.walletTopUpProvider === "flutterwave"'), "Customer wallet top-up must only enable for backend-approved Flutterwave top-up.");
 assert(walletScreen.includes("walletMinimumTopUpAmount"), "Customer wallet screen must use the backend wallet minimum top-up amount.");
-assert(walletScreen.includes("Wallet top-up is temporarily unavailable while KariGO verifies the new payment provider."), "Customer wallet screen must show the temporary top-up unavailable copy.");
+assert(walletScreen.includes("Wallet top-up is temporarily unavailable."), "Customer wallet screen must show top-up unavailable copy when disabled.");
+assert(walletScreen.includes("Wallet top-up credits only after Flutterwave verification. Wallet order payment is not active yet."), "Customer wallet screen must state Flutterwave verification and wallet order payment guardrails.");
+assert(walletScreen.includes("Top up with Flutterwave"), "Customer wallet screen must use Flutterwave top-up button copy.");
 assert(walletScreen.includes("openExternalPaymentUrl"), "Customer wallet top-up must retain external checkout helper for future provider-safe reactivation.");
 assert(walletScreen.includes("if (!openResult.opened) throw new Error(openResult.message);"), "Customer wallet top-up must surface external checkout open failures safely.");
 assert(walletScreen.includes("pendingTopUpUrl"), "Customer wallet top-up must store a pending checkout URL for reopening.");
@@ -308,6 +311,7 @@ assert(walletScreen.includes("Open payment checkout again"), "Customer wallet to
 assert(walletScreen.includes("walletApi.verifyTopUp"), "Customer wallet screen must verify top-up through the dedicated wallet endpoint.");
 assert(walletScreen.includes("Payment is still pending verification."), "Wallet top-up verification failure must use pending-verification copy.");
 assert(walletScreen.includes("Pending verification"), "Customer wallet screen must show pending verification if wallet checkout is later re-enabled.");
+assert(walletScreen.includes("Verified and credited"), "Customer wallet screen must show verified wallet top-up status.");
 assert(walletScreen.includes("backend payment verification"), "Customer wallet screen must state that top-up credits require backend verification.");
 assert(walletScreen.includes("KariGO will not credit the wallet from the app alone"), "Customer wallet screen must prevent client-side wallet credit language.");
 assert(walletScreen.includes("Controlled wallet features"), "Customer wallet screen must keep disabled future actions separate.");
@@ -424,6 +428,8 @@ assert(paymentStatus.includes("APP_VARIANT") && paymentStatus.includes("customer
 assert(paymentStatus.includes("customerSelectableProviders: []"), "Customer production fallback must not expose electronic providers until backend config is loaded.");
 assert(paymentStatus.includes("cashPaymentEnabled: true"), "Customer production fallback must keep Pay on Delivery available.");
 assert(paymentStatus.includes("Flutterwave payment could not be started.") && paymentStatus.includes("Please use Pay on Delivery."), "Live Flutterwave startup failures must guide customers to Pay on Delivery.");
+assert(paymentStatus.includes("Wallet top-up is available through Flutterwave and credits only after backend verification."), "Live payment copy must describe Flutterwave wallet top-up when backend enables it.");
+assert(paymentStatus.includes("Wallet order payment, automatic refunds and payout automation remain disabled"), "Live payment copy must keep wallet order payment and automation disabled.");
 assert(errors.includes("FLUTTERWAVE_CHECKOUT_LINK_MISSING") && errors.includes("FLUTTERWAVE_AUTH_FAILED") && errors.includes("FLUTTERWAVE_ENDPOINT_NOT_FOUND") && errors.includes("Flutterwave checkout is temporarily unavailable. Please use Pay on Delivery."), "Customer errors must map missing Flutterwave checkout links, auth failures and endpoint/config errors to Pay on Delivery fallback copy.");
 assert(paymentStatus.includes("Complete the ${providerLabel} checkout page"), "Checkout must show provider-specific authorization guidance.");
 assert(paymentStatus.includes("KariGO will only mark the order paid after backend verification."), "Payment copy must state backend verification is required.");

@@ -31,6 +31,21 @@ export interface PaymentProviderReadiness {
   paymentsLiveEnabled: boolean;
   customerSelectableSandboxProviders: string[];
   providerEnabledFlags: Record<string, string>;
+  utilityReadiness?: {
+    provider: string;
+    providerLabel: string;
+    accountStatus: string;
+    integrationStatus: string;
+    enabled: boolean;
+    testMode: boolean;
+    customerPurchaseEnabled: boolean;
+    customerPurchaseBlocked: boolean;
+    liveCustomerPurchaseStatus: string;
+    backendConnectivityTestAvailable: boolean;
+    requiredEnv: PaymentProviderRequirement[];
+    missingRequiredKeys: string[];
+    notes: string[];
+  };
   launchPaymentOptions?: {
     cashOnDelivery: {
       enabled: boolean;

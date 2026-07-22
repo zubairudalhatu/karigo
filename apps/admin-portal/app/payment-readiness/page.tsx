@@ -223,8 +223,43 @@ export default function PaymentReadinessPage() {
                   <div className="item"><span>Backend verification required</span><strong>{yesNo(readiness.launchPaymentOptions.wallet.backendVerificationRequired)}</strong></div>
                   <div className="item"><span>Client-side credit disabled</span><strong>{yesNo(readiness.launchPaymentOptions.wallet.clientSideCreditDisabled)}</strong></div>
                   <div className="item"><span>Admin wallet visibility available</span><strong>{yesNo(readiness.launchPaymentOptions.wallet.adminWalletVisibilityAvailable)}</strong></div>
-                  <p className="muted">Recommended fallback values: WALLET_TOP_UP_ENABLED=false, WALLET_PAYMENTS_ENABLED={readiness.launchPaymentOptions.wallet.recommendedValues.WALLET_PAYMENTS_ENABLED}</p>
+                  <p className="muted">Recommended launch values: WALLET_TOP_UP_ENABLED={readiness.launchPaymentOptions.wallet.recommendedValues.WALLET_TOP_UP_ENABLED}, WALLET_PAYMENTS_ENABLED={readiness.launchPaymentOptions.wallet.recommendedValues.WALLET_PAYMENTS_ENABLED}</p>
                   <p className="muted">{readiness.launchPaymentOptions.wallet.note}</p>
+                </article>
+              </div>
+            </section>
+          ) : null}
+
+          {readiness.utilityReadiness ? (
+            <section className="section">
+              <h2>Bills & Utilities provider readiness</h2>
+              <p className="muted">Accelerate.ng readiness is shown for backend/provider setup only. Customer utility purchases remain disabled until a separate approved utility activation task.</p>
+              <div className="grid">
+                <article className="card">
+                  <h3>{readiness.utilityReadiness.providerLabel}</h3>
+                  <p><Badge>{readiness.utilityReadiness.accountStatus}</Badge> <Badge>{readiness.utilityReadiness.integrationStatus}</Badge></p>
+                  <div className="item"><span>Backend utilities enabled</span><strong>{yesNo(readiness.utilityReadiness.enabled)}</strong></div>
+                  <div className="item"><span>Test mode</span><strong>{yesNo(readiness.utilityReadiness.testMode)}</strong></div>
+                  <div className="item"><span>Customer purchases</span><strong>{readiness.utilityReadiness.liveCustomerPurchaseStatus}</strong></div>
+                  <div className="item"><span>Backend connectivity test available</span><strong>{yesNo(readiness.utilityReadiness.backendConnectivityTestAvailable)}</strong></div>
+                  <div className="item"><span>Missing required keys</span><strong>{readiness.utilityReadiness.missingRequiredKeys.length}</strong></div>
+                  <p className="muted">Customer Bills & Utilities purchase remains disabled until a separate utility purchase approval task enables it.</p>
+                  {readiness.utilityReadiness.notes.map((note) => <p className="muted" key={note}>{note}</p>)}
+                </article>
+                <article className="card">
+                  <h3>Accelerate configuration keys</h3>
+                  <table className="table">
+                    <thead><tr><th>Variable</th><th>Required</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {readiness.utilityReadiness.requiredEnv.map((requirement) => (
+                        <tr key={requirement.name}>
+                          <td>{requirement.name}</td>
+                          <td>{requirement.required ? "Yes" : "No"}</td>
+                          <td><Badge>{requirement.issue ? "Not ready" : requirement.configured ? "Configured" : "Optional"}</Badge></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </article>
               </div>
             </section>

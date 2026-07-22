@@ -48,6 +48,12 @@ describe("environment configuration", () => {
     expect(result.PAYMENTS_PROVIDER).toBe("mock");
     expect(result.MONNIFY_BASE_URL).toBe("https://sandbox.monnify.com");
     expect(result.SQUAD_BASE_URL).toBe("https://sandbox-api-d.squadco.com");
+    expect(result.UTILITIES_PROVIDER).toBe("mock");
+    expect(result.UTILITIES_ENABLED).toBe(false);
+    expect(result.UTILITIES_TEST_MODE).toBe(true);
+    expect(result.UTILITIES_CUSTOMER_PURCHASE_ENABLED).toBe(false);
+    expect(result.ACCELERATE_ENABLED).toBe(false);
+    expect(result.ACCELERATE_BASE_URL).toBe("");
     expect(result.APPLICATION_NOTIFICATIONS_ENABLED).toBe(false);
     expect(result.TRANSACTIONAL_EMAIL_NOTIFICATION_PROVIDER).toBe("mock");
     expect(result.TRANSACTIONAL_SMS_NOTIFICATION_PROVIDER).toBe("mock");
@@ -302,6 +308,41 @@ describe("environment configuration", () => {
     expect(result.FLUTTERWAVE_V4_CHECKOUT_PATH).toBe("/orders");
     expect(result.FLUTTERWAVE_TOKEN_URL).toBe("https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token");
     expect(result.FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED).toBe(true);
+  });
+
+  it("allows Accelerate utility readiness flags without enabling customer purchases", () => {
+    const result = validateEnvironment({
+      ...baseConfig(),
+      UTILITIES_PROVIDER: "accelerate",
+      UTILITIES_ENABLED: "false",
+      UTILITIES_TEST_MODE: "true",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "false",
+      ACCELERATE_ENABLED: "true",
+      ACCELERATE_BASE_URL: "https://api.accelerate.example"
+    });
+
+    expect(result.UTILITIES_PROVIDER).toBe("accelerate");
+    expect(result.UTILITIES_ENABLED).toBe(false);
+    expect(result.UTILITIES_TEST_MODE).toBe(true);
+    expect(result.UTILITIES_CUSTOMER_PURCHASE_ENABLED).toBe(false);
+    expect(result.ACCELERATE_ENABLED).toBe(true);
+    expect(result.ACCELERATE_BASE_URL).toBe("https://api.accelerate.example");
+  });
+
+  it("keeps customer utility purchases disabled until separately approved", () => {
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      UTILITIES_PROVIDER: "accelerate",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true"
+    })).toThrow("UTILITIES_CUSTOMER_PURCHASE_ENABLED must remain false");
+  });
+
+  it("rejects non-HTTPS Accelerate provider base URLs", () => {
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      UTILITIES_PROVIDER: "accelerate",
+      ACCELERATE_BASE_URL: "http://accelerate.example"
+    })).toThrow("ACCELERATE_BASE_URL must use HTTPS");
   });
 
   it("allows Termii preparation only with configured non-production credentials", () => {

@@ -101,6 +101,10 @@ assert(paymentReadinessPage.includes("Captain cash collection confirmation avail
 assert(paymentReadinessPage.includes("Vendor visibility available"), "Payment Readiness page must show vendor Cash/POD visibility readiness.");
 assert(paymentReadinessPage.includes("Wallet readiness"), "Payment Readiness page must show wallet readiness.");
 assert(paymentReadinessPage.includes("Client-side credit disabled"), "Payment Readiness page must show client-side wallet credit remains disabled.");
+assert(paymentReadinessPage.includes("Bills & Utilities provider readiness"), "Payment Readiness page must show Bills & Utilities provider readiness.");
+assert(paymentReadinessPage.includes("Accelerate.ng"), "Payment Readiness page must show Accelerate readiness labels.");
+assert(paymentReadinessPage.includes("Customer Bills & Utilities purchase remains disabled"), "Payment Readiness page must state utility purchases remain disabled.");
+assert(paymentReadinessPage.includes("requiredEnv"), "Payment Readiness page must list Accelerate env key names only.");
 const liveSecretPrefix = ["sk", "live"].join("_");
 const livePublicPrefix = ["pk", "live"].join("_");
 assert(!paymentReadinessPage.includes(liveSecretPrefix) && !paymentReadinessPage.includes(livePublicPrefix), "Payment Readiness page must not contain live payment key values.");
@@ -110,6 +114,7 @@ assert(paymentsApiSource.includes("admin/payments/provider-readiness/test"), "Ad
 assert(paymentsApiSource.includes("PaymentProviderReadiness"), "Admin payments API must type provider readiness response.");
 assert(paymentsApiSource.includes("PaymentProviderInitializationTestResult"), "Admin payments API must type initialization test response.");
 assert(paymentsApiSource.includes("launchPaymentOptions"), "Admin payment readiness API type must include launch payment option visibility.");
+assert(paymentsApiSource.includes("utilityReadiness"), "Admin payment readiness API type must include Accelerate utility readiness.");
 assert(paymentsApiSource.includes("flutterwaveCustomerCheckout"), "Admin payment readiness API type must include Flutterwave customer checkout readiness.");
 assert(paymentsApiSource.includes("apiModeLabel") && paymentsApiSource.includes("v3StandardCheckoutReady"), "Admin payment readiness API type must include Flutterwave API mode and v3 hosted checkout readiness.");
 assert(paymentsApiSource.includes("v4CredentialsConfigured") && paymentsApiSource.includes("accessTokenAuthReady") && paymentsApiSource.includes("v4EndpointConfigured"), "Admin payment readiness API type must include Flutterwave v4 auth and endpoint readiness.");
@@ -256,6 +261,9 @@ assert(walletsPage.includes("controlled admin ledger entries only"), "Admin wall
 assert(walletsPage.includes("Wallet top-up records"), "Admin wallets page must show wallet top-up records.");
 assert(walletsPage.includes("Credits must come only from backend provider verification"), "Admin wallets page must state backend-only crediting.");
 assert(walletsPage.includes("Raw provider payloads and secrets are never shown"), "Admin wallets page must hide sensitive provider payloads.");
+assert(walletsPage.includes("topUpStatusLabel"), "Admin wallets page must render readable top-up status labels.");
+assert(walletsPage.includes("Pending verification"), "Admin wallets page must show pending top-up verification status.");
+assert(walletsPage.includes("Verified and credited"), "Admin wallets page must show verified credited top-up status.");
 assert(walletsPage.includes("does not activate live top-up, withdrawals, automatic refunds, wallet checkout, referral rewards or subscription billing"), "Admin wallets page must not imply live wallet features are active.");
 assert(walletsPage.includes("Record manual adjustment"), "Admin wallets page must expose a controlled adjustment action.");
 assert(walletsPage.includes("window.confirm"), "Admin wallet adjustments must require confirmation.");
@@ -301,7 +309,8 @@ assert(adsPage.includes("adsApi.list"), "Admin ads page must load campaigns.");
 assert(adsPage.includes("adsApi.create"), "Admin ads page must create admin-managed campaigns.");
 assert(adsPage.includes("adsApi.update"), "Admin ads page must review/update campaigns.");
 assert(adsPage.includes("adsApi.grantVendorCredit"), "Admin ads page must grant controlled vendor ad credits.");
-assert(adsPage.includes("Live payments, wallet top-up and automatic ad billing remain disabled."), "Admin ads page must state disabled payment/billing guardrails.");
+assert(adsPage.includes("Automatic ad billing remains disabled"), "Admin ads page must state disabled ad billing guardrails.");
+assert(adsPage.includes("wallet top-up is controlled separately"), "Admin ads page must not claim wallet top-up is globally disabled.");
 assert(adsPage.includes("Controlled vendor ad credit"), "Admin ads page must describe controlled ad credit.");
 assert(!adsPage.includes("Charge card") && !adsPage.includes("Pay now"), "Admin ads page must not expose live ad payment actions.");
 const adsApiSource = read("src", "api", "ads.api.ts");

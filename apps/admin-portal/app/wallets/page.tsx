@@ -19,6 +19,24 @@ const adjustmentDirections: Array<{ label: string; value: WalletLedgerDirection 
 
 const formatDate = (value?: string | null) => value ? new Date(value).toLocaleString() : "Not yet";
 const statusLabel = (value: string) => value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+const topUpStatusLabel = (value: string) => {
+  switch (value) {
+    case "PENDING": return "Pending verification";
+    case "SUCCESSFUL": return "Verified and credited";
+    case "FAILED": return "Failed";
+    case "CANCELLED": return "Cancelled/expired";
+    default: return statusLabel(value);
+  }
+};
+const topUpLedgerStatusLabel = (value?: string | null) => {
+  switch (value) {
+    case "PENDING": return "Pending verification";
+    case "POSTED": return "Verified and credited";
+    case "FAILED": return "Failed";
+    case "CANCELLED": return "Cancelled/expired";
+    default: return value ? statusLabel(value) : "";
+  }
+};
 
 export default function WalletsPage() {
   const [status, setStatus] = useState<WalletStatus | "ALL">("ALL");
@@ -149,7 +167,7 @@ export default function WalletsPage() {
                   <td>{topUp.customer.user.fullName}<br /><small className="muted">{topUp.customer.user.phoneNumber}</small></td>
                   <td>{money(topUp.amount)}</td>
                   <td>{topUp.reference}</td>
-                  <td><Badge>{topUp.status}</Badge>{topUp.ledgerStatus ? <><br /><small className="muted">Ledger: {topUp.ledgerStatus}</small></> : null}</td>
+                  <td><Badge>{topUpStatusLabel(topUp.status)}</Badge>{topUp.ledgerStatus ? <><br /><small className="muted">Ledger: {topUpLedgerStatusLabel(topUp.ledgerStatus)}</small></> : null}</td>
                   <td>{topUp.provider}</td>
                   <td>{formatDate(topUp.createdAt)}</td>
                   <td>{formatDate(topUp.verifiedAt)}</td>

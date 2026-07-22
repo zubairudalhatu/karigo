@@ -121,7 +121,7 @@ export default function AdminAdsPage() {
 
   return <PortalShell>
     <h1>Ads</h1>
-    <p className="muted">Manage labelled customer-home ad placements for vendors and external advertisers. Live payments, wallet top-up and automatic ad billing remain disabled.</p>
+    <p className="muted">Manage labelled customer-home ad placements for vendors and external advertisers. Automatic ad billing remains disabled; wallet top-up is controlled separately through backend payment readiness flags.</p>
     <ErrorMessage>{error}</ErrorMessage>
     {message ? <p className="success">{message}</p> : null}
     <div className="grid">

@@ -286,6 +286,30 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       }
     }
   }
+  const utilitiesProvider =
+    typeof config.UTILITIES_PROVIDER === "string" && config.UTILITIES_PROVIDER.trim()
+      ? config.UTILITIES_PROVIDER.trim().toLowerCase()
+      : "mock";
+  if (!["mock", "accelerate"].includes(utilitiesProvider)) {
+    throw new Error("UTILITIES_PROVIDER must be mock or accelerate");
+  }
+  const utilitiesEnabled = booleanFlag(config.UTILITIES_ENABLED, "UTILITIES_ENABLED", false);
+  const utilitiesTestMode = booleanFlag(config.UTILITIES_TEST_MODE, "UTILITIES_TEST_MODE", true);
+  const utilitiesCustomerPurchaseEnabled = booleanFlag(
+    config.UTILITIES_CUSTOMER_PURCHASE_ENABLED,
+    "UTILITIES_CUSTOMER_PURCHASE_ENABLED",
+    false
+  );
+  const accelerateEnabled = booleanFlag(config.ACCELERATE_ENABLED, "ACCELERATE_ENABLED", false);
+  const accelerateBaseUrl = typeof config.ACCELERATE_BASE_URL === "string" && config.ACCELERATE_BASE_URL.trim()
+    ? config.ACCELERATE_BASE_URL.trim()
+    : "";
+  if (accelerateBaseUrl && !accelerateBaseUrl.startsWith("https://")) {
+    throw new Error("ACCELERATE_BASE_URL must use HTTPS");
+  }
+  if (utilitiesCustomerPurchaseEnabled) {
+    throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED must remain false until live utility purchase approval");
+  }
   const notificationProvider =
     typeof config.NOTIFICATION_PROVIDER === "string" ? config.NOTIFICATION_PROVIDER.toLowerCase() : "mock";
   if (notificationProvider !== "mock") throw new Error("NOTIFICATION_PROVIDER must be mock");
@@ -533,6 +557,12 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     SQUAD_BASE_URL: typeof config.SQUAD_BASE_URL === "string" && config.SQUAD_BASE_URL.trim()
       ? config.SQUAD_BASE_URL.trim()
       : "https://sandbox-api-d.squadco.com",
+    UTILITIES_PROVIDER: utilitiesProvider,
+    UTILITIES_ENABLED: utilitiesEnabled,
+    UTILITIES_TEST_MODE: utilitiesTestMode,
+    UTILITIES_CUSTOMER_PURCHASE_ENABLED: utilitiesCustomerPurchaseEnabled,
+    ACCELERATE_ENABLED: accelerateEnabled,
+    ACCELERATE_BASE_URL: accelerateBaseUrl,
     NOTIFICATION_PROVIDER: notificationProvider,
     EMAIL_PROVIDER: emailProvider,
     EMAIL_FROM: typeof config.EMAIL_FROM === "string" && config.EMAIL_FROM.trim()

@@ -3,7 +3,7 @@ import { brand } from "@karigo/config";
 import type { PublicPaymentConfig } from "@karigo/shared-types";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { CustomerWalletLedgerResult, walletApi, WalletLedgerDirection, WalletLedgerEntryType } from "../../src/api/wallet.api";
+import { CustomerWalletLedgerResult, walletApi, WalletLedgerDirection, WalletLedgerEntryStatus, WalletLedgerEntryType } from "../../src/api/wallet.api";
 import { paymentsApi } from "../../src/api/payments.api";
 import { Button, Card, Empty, Field, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError, money } from "../../src/lib/errors";
@@ -26,6 +26,21 @@ function signedAmount(direction: WalletLedgerDirection, amount: string | number)
 
 function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleString() : "Not yet";
+}
+
+function walletTopUpEnabledForConfig(config: PublicPaymentConfig) {
+  return config.walletTopUpEnabled === true && config.walletTopUpProvider === "flutterwave";
+}
+
+function walletEntryStatusLabel(status: WalletLedgerEntryStatus) {
+  switch (status) {
+    case "PENDING": return "Pending verification";
+    case "POSTED": return "Verified and credited";
+    case "FAILED": return "Failed";
+    case "CANCELLED": return "Cancelled/expired";
+    case "REVERSED": return "Reversed";
+    default: return status;
+  }
 }
 
 export default function CustomerWalletScreen() {
@@ -70,9 +85,8 @@ export default function CustomerWalletScreen() {
   }, []);
 
   async function initiateTopUp() {
-    const walletTopUpAllowed = false;
     if (!walletTopUpAllowed) {
-      setTopUpError("Wallet top-up is temporarily unavailable while KariGO verifies the new payment provider.");
+      setTopUpError("Wallet top-up is temporarily unavailable.");
       return;
     }
     const amount = Number(topUpAmount);
@@ -147,7 +161,7 @@ export default function CustomerWalletScreen() {
   if (loading && !data) return <Protected><Loading label="Loading wallet..." /></Protected>;
 
   const wallet = data?.wallet;
-  const walletTopUpAllowed = false;
+  const walletTopUpAllowed = walletTopUpEnabledForConfig(paymentConfig);
 
   return <Protected>
     <Screen title="KariGO Wallet" refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); void loadPaymentConfig(); }}>
@@ -167,19 +181,19 @@ export default function CustomerWalletScreen() {
 
       <Card>
         <Text style={ui.cardTitle}>Wallet safety status</Text>
-        <Text style={ui.muted}>KariGO Wallet balances and activity remain visible. Top-up, wallet checkout, withdrawals, automatic refunds, referral rewards and subscription billing remain disabled until KariGO enables them safely.</Text>
+        <Text style={ui.muted}>{walletTopUpAllowed ? "KariGO Wallet top-up is available through Flutterwave. Wallet order payment, withdrawals, automatic refunds, referral rewards and subscription billing remain disabled until KariGO enables them safely." : "KariGO Wallet balances and activity remain visible. Top-up, wallet checkout, withdrawals, automatic refunds, referral rewards and subscription billing remain disabled until KariGO enables them safely."}</Text>
       </Card>
 
       <Card>
         <Text style={ui.cardTitle}>Top up wallet</Text>
-        <Text style={ui.muted}>{walletTopUpAllowed ? "Enter an amount, complete checkout, return to KariGO, then verify. KariGO will not credit the wallet from the app alone." : "Wallet top-up is temporarily unavailable while KariGO verifies the new payment provider."}</Text>
+        <Text style={ui.muted}>{walletTopUpAllowed ? "Wallet top-up credits only after Flutterwave verification. Wallet order payment is not active yet." : "Wallet top-up is temporarily unavailable."}</Text>
         <Message>{topUpMessage}</Message>
         <Message error>{topUpError}</Message>
         {walletTopUpAllowed ? <>
           <Text style={ui.muted}>Minimum amount: {money(paymentConfig.walletMinimumTopUpAmount ?? 100)}</Text>
           <Text style={ui.muted}>Wallet credit requires backend payment verification; KariGO will not credit the wallet from the app alone.</Text>
           <Field keyboardType="decimal-pad" value={topUpAmount} onChangeText={setTopUpAmount} placeholder="Amount e.g. 5000" />
-          <Button title={topUpBusy ? "Starting top-up..." : "Start wallet top-up"} onPress={initiateTopUp} disabled={topUpBusy || !!pendingTopUpReference} />
+          <Button title={topUpBusy ? "Starting top-up..." : "Top up with Flutterwave"} onPress={initiateTopUp} disabled={topUpBusy || !!pendingTopUpReference} />
         </> : null}
         {walletTopUpAllowed && pendingTopUpUrl ? <Button title="Open payment checkout again" tone="muted" onPress={reopenTopUpAuthorization} disabled={topUpBusy} /> : null}
         {walletTopUpAllowed && pendingTopUpReference ? <Button title={topUpBusy ? "Verifying..." : "Verify wallet top-up"} onPress={verifyTopUp} disabled={topUpBusy} /> : null}
@@ -206,6 +220,7 @@ export default function CustomerWalletScreen() {
             <View style={styles.ledgerCopy}>
               <Text style={styles.ledgerTitle}>{entry.description || titleForType[entry.entryType]}</Text>
               <Text style={ui.muted}>{titleForType[entry.entryType]} - {formatDate(entry.postedAt ?? entry.createdAt)}</Text>
+              <Text style={styles.statusText}>{walletEntryStatusLabel(entry.status)}</Text>
               <Text style={styles.referenceText}>{entry.reference}</Text>
             </View>
             <View style={styles.ledgerAmount}>
@@ -237,5 +252,6 @@ const styles = StyleSheet.create({
   ledgerRow: { alignItems: "center", borderBottomColor: brand.colors.border, borderBottomWidth: 1, flexDirection: "row", gap: 12, paddingVertical: 12 },
   ledgerTitle: { color: brand.colors.charcoal, fontSize: 15, fontWeight: "900" },
   referenceText: { color: brand.colors.muted, fontSize: 11 },
+  statusText: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "800" },
   walletIcon: { alignItems: "center", backgroundColor: brand.colors.white, borderRadius: 999, height: 42, justifyContent: "center", width: 42 }
 });

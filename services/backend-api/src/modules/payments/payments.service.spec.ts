@@ -412,7 +412,7 @@ describe("PaymentsService", () => {
         MONNIFY_API_KEY: "configured-monnify-api-key",
         MONNIFY_SECRET_KEY: "configured-monnify-secret",
         SQUAD_MODE: "sandbox",
-        SQUAD_SECRET_KEY: "sandbox_sk_configured_squad_secret"
+        SQUAD_SECRET_KEY: "sandbox_sk_x"
       };
       return values[key] ?? fallback;
     });
@@ -469,7 +469,7 @@ describe("PaymentsService", () => {
     expect(squad?.customerSelectableInStaging).toBe(false);
     expect(squad).toMatchObject({ launchStatus: "DEFERRED_FOR_LAUNCH" });
     expect(serialized).not.toContain("configured-monnify-secret");
-    expect(serialized).not.toContain("sandbox_sk_configured_squad_secret");
+    expect(serialized).not.toContain("sandbox_sk_x");
     expect(readiness.liveActivation.supportedByCurrentCode).toBe(true);
     expect(readiness.liveActivation.blockers).toContain("PAYMENTS_PROVIDER must be flutterwave");
   });
@@ -563,8 +563,18 @@ describe("PaymentsService", () => {
   });
 
   it("reports launch Cash/POD and wallet top-up readiness while wallet order payments remain disabled", () => {
+    registry.customerCheckoutProviders.mockReturnValue(["flutterwave"]);
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       const values: Record<string, string | boolean> = {
+        PAYMENTS_PROVIDER: "flutterwave",
+        PAYMENTS_LIVE_ENABLED: true,
+        FLUTTERWAVE_ENVIRONMENT: "live",
+        FLUTTERWAVE_API_MODE: "v3",
+        FLUTTERWAVE_SECRET_KEY: "flutterwave-secret-key-placeholder",
+        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
+        FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
+        FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder",
+        FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true",
         CASH_ON_DELIVERY_ENABLED: "true",
         WALLET_TOP_UP_ENABLED: "true",
         WALLET_PAYMENTS_ENABLED: "false",
@@ -580,22 +590,60 @@ describe("PaymentsService", () => {
     expect(readiness.providerEnabledFlags.WALLET_TOP_UP_ENABLED).toBe("true");
     expect(readiness.providerEnabledFlags.WALLET_PAYMENTS_ENABLED).toBe("false_or_unset");
     expect(readiness.launchPaymentOptions.cashOnDelivery.customerSelectable).toBe(true);
-    expect(readiness.launchPaymentOptions.flutterwaveCustomerCheckout.enabled).toBe(false);
+    expect(readiness.launchPaymentOptions.flutterwaveCustomerCheckout.enabled).toBe(true);
     expect(readiness.launchPaymentOptions.squadCustomerCheckout.enabled).toBe(false);
     expect(readiness.launchPaymentOptions.wallet.walletTopUpConfiguredByEnv).toBe(true);
-    expect(readiness.launchPaymentOptions.wallet.walletTopUpEnabled).toBe(false);
+    expect(readiness.launchPaymentOptions.wallet.walletTopUpEnabled).toBe(true);
     expect(readiness.launchPaymentOptions.wallet.walletPaymentsEnabled).toBe(false);
     expect(configResult).toEqual(expect.objectContaining({
       cashPaymentEnabled: true,
-      flutterwaveCustomerCheckoutEnabled: false,
+      flutterwaveCustomerCheckoutEnabled: true,
       squadCustomerCheckoutEnabled: false,
-      walletTopUpEnabled: false,
+      walletTopUpEnabled: true,
       walletTopUpProvider: "flutterwave",
       walletTopUpProviderLabel: "Flutterwave",
       walletMinimumTopUpAmount: 100,
       walletPaymentsEnabled: false,
       launchCities: ["Kano", "Abuja"]
     }));
+  });
+
+  it("reports Accelerate utility readiness without enabling customer utility purchases", () => {
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      const values: Record<string, string | boolean> = {
+        UTILITIES_PROVIDER: "accelerate",
+        UTILITIES_ENABLED: "false",
+        UTILITIES_TEST_MODE: "true",
+        UTILITIES_CUSTOMER_PURCHASE_ENABLED: "false",
+        ACCELERATE_ENABLED: "true",
+        ACCELERATE_BASE_URL: "https://api.accelerate.example",
+        ACCELERATE_API_KEY: "accelerate-api-key-placeholder",
+        ACCELERATE_CLIENT_ID: "accelerate-client-id-placeholder",
+        ACCELERATE_CLIENT_SECRET: "accelerate-client-secret-placeholder",
+        ACCELERATE_WEBHOOK_SECRET: "accelerate-webhook-secret-placeholder"
+      };
+      return values[key] ?? fallback;
+    });
+
+    const readiness = service.providerReadiness();
+    const serialized = JSON.stringify(readiness);
+
+    expect(readiness.utilityReadiness).toMatchObject({
+      provider: "accelerate",
+      providerLabel: "Accelerate.ng",
+      accountStatus: "Approved",
+      integrationStatus: "Readiness / controlled testing",
+      enabled: false,
+      testMode: true,
+      customerPurchaseEnabled: false,
+      customerPurchaseBlocked: true,
+      liveCustomerPurchaseStatus: "Disabled until separately approved",
+      backendConnectivityTestAvailable: true,
+      missingRequiredKeys: []
+    });
+    expect(serialized).not.toContain("accelerate-api-key-placeholder");
+    expect(serialized).not.toContain("accelerate-client-secret-placeholder");
+    expect(serialized).not.toContain("accelerate-webhook-secret-placeholder");
   });
 
   it("returns public-safe staging payment config", () => {
@@ -621,7 +669,7 @@ describe("PaymentsService", () => {
       walletTopUpProvider: "flutterwave",
       walletTopUpProviderLabel: "Flutterwave",
       walletMinimumTopUpAmount: 100,
-      walletPaymentNote: "Wallet top-up is temporarily unavailable while KariGO verifies the new payment provider.",
+      walletPaymentNote: "Wallet top-up is temporarily unavailable.",
       launchCities: ["Kano", "Abuja"]
     });
   });
@@ -666,7 +714,7 @@ describe("PaymentsService", () => {
       walletTopUpProvider: "flutterwave",
       walletTopUpProviderLabel: "Flutterwave",
       walletMinimumTopUpAmount: 100,
-      walletPaymentNote: "Wallet top-up is temporarily unavailable while KariGO verifies the new payment provider.",
+      walletPaymentNote: "Wallet top-up is temporarily unavailable.",
       launchCities: ["Kano", "Abuja"]
     });
     expect(serialized).not.toContain("live-flutterwave-secret-placeholder");
@@ -772,18 +820,108 @@ describe("PaymentsService", () => {
     expect(registry.active).not.toHaveBeenCalled();
   });
 
-  it("credits wallet only after backend verification and avoids duplicate crediting", async () => {
-    const squadProvider = {
-      name: "squad",
+  it("creates a Flutterwave wallet top-up checkout without crediting before verification", async () => {
+    const flutterwaveProvider = {
+      name: "flutterwave",
       initialize: jest.fn(),
       verify: jest.fn(),
       parseWebhook: jest.fn()
     };
-    registry.get.mockReturnValue(squadProvider);
+    registry.active.mockReturnValue(flutterwaveProvider);
+    registry.customerCheckoutProviders.mockReturnValue(["flutterwave"]);
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      const values: Record<string, string | boolean> = {
+        PAYMENTS_PROVIDER: "flutterwave",
+        PAYMENTS_LIVE_ENABLED: true,
+        FLUTTERWAVE_ENVIRONMENT: "live",
+        FLUTTERWAVE_API_MODE: "v3",
+        FLUTTERWAVE_SECRET_KEY: "flutterwave-secret-key-placeholder",
+        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
+        FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
+        FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder",
+        FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true",
+        WALLET_TOP_UP_ENABLED: "true",
+        WALLET_PAYMENTS_ENABLED: "false"
+      };
+      return values[key] ?? fallback;
+    });
+    prisma.customerProfile.findUnique.mockResolvedValue({
+      id: "customer-1",
+      user: { fullName: "Test Customer", email: "customer@example.com", phoneNumber: "+2348012345678" }
+    });
+    tx.customerWallet.upsert.mockResolvedValue({
+      id: "wallet-1",
+      customerId: "customer-1",
+      currency: "NGN",
+      availableBalance: new Prisma.Decimal(0),
+      status: WalletStatus.ACTIVE
+    });
+    tx.customerWalletLedgerEntry.create.mockResolvedValue({
+      id: "ledger-1",
+      walletId: "wallet-1",
+      customerId: "customer-1",
+      entryType: WalletLedgerEntryType.TOP_UP,
+      direction: WalletLedgerDirection.CREDIT,
+      status: WalletLedgerEntryStatus.PENDING,
+      amount: new Prisma.Decimal(5000),
+      currency: "NGN",
+      balanceAfter: new Prisma.Decimal(0),
+      reference: "KGO-WALLET-TOPUP-FLUTTERWAVE",
+      createdAt: new Date()
+    });
+    tx.payment.create.mockResolvedValue({
+      id: "payment-wallet-topup",
+      transactionReference: "KGO-WALLET-TOPUP-FLUTTERWAVE",
+      amount: new Prisma.Decimal(5000),
+      currency: "NGN",
+      paymentStatus: PaymentStatus.PENDING
+    });
+    prisma.payment.update.mockResolvedValue({
+      id: "payment-wallet-topup",
+      transactionReference: "KGO-WALLET-TOPUP-FLUTTERWAVE",
+      amount: new Prisma.Decimal(5000),
+      currency: "NGN",
+      paymentStatus: PaymentStatus.PENDING
+    });
+    flutterwaveProvider.initialize.mockResolvedValue({
+      authorizationUrl: "https://checkout.flutterwave.com/v3/hosted/pay/test-wallet-top-up",
+      providerResponse: { status: "success", data: { link: "https://checkout.flutterwave.com/v3/hosted/pay/test-wallet-top-up" } }
+    });
+
+    const result = await service.initiateWalletTopUp("user-1", { amount: 5000 });
+
+    expect(tx.customerWalletLedgerEntry.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        status: WalletLedgerEntryStatus.PENDING,
+        amount: new Prisma.Decimal(5000),
+        description: "Pending wallet top-up"
+      })
+    });
+    expect(tx.payment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        gateway: "flutterwave",
+        paymentPurpose: PaymentPurpose.WALLET_TOP_UP,
+        paymentStatus: PaymentStatus.PENDING,
+        paymentMethod: "flutterwave_wallet_top_up"
+      })
+    });
+    expect(tx.customerWallet.update).not.toHaveBeenCalled();
+    expect(result.authorization.authorizationUrl).toBe("https://checkout.flutterwave.com/v3/hosted/pay/test-wallet-top-up");
+    expect(result.walletLedgerEntry.status).toBe(WalletLedgerEntryStatus.PENDING);
+  });
+
+  it("credits wallet only after backend verification and avoids duplicate crediting", async () => {
+    const flutterwaveProvider = {
+      name: "flutterwave",
+      initialize: jest.fn(),
+      verify: jest.fn(),
+      parseWebhook: jest.fn()
+    };
+    registry.get.mockReturnValue(flutterwaveProvider);
     prisma.payment.findFirst.mockResolvedValue({
       id: "payment-wallet-topup",
       customerId: "customer-1",
-      gateway: "squad",
+      gateway: "flutterwave",
       amount: new Prisma.Decimal(5000),
       currency: "NGN",
       transactionReference: "KGO-WALLET-TOPUP",
@@ -792,7 +930,7 @@ describe("PaymentsService", () => {
       paymentStatus: PaymentStatus.PENDING,
       order: null
     });
-    squadProvider.verify.mockResolvedValue({
+    flutterwaveProvider.verify.mockResolvedValue({
       transactionReference: "KGO-WALLET-TOPUP",
       successful: true,
       amountMinor: 500000,
@@ -802,7 +940,7 @@ describe("PaymentsService", () => {
     tx.payment.findUnique.mockResolvedValue({
       id: "payment-wallet-topup",
       customerId: "customer-1",
-      gateway: "squad",
+      gateway: "flutterwave",
       amount: new Prisma.Decimal(5000),
       currency: "NGN",
       transactionReference: "KGO-WALLET-TOPUP",
