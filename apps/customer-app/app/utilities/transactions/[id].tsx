@@ -35,8 +35,8 @@ export default function UtilityReceiptDetail() {
 
 function UtilityReceipt({ transaction }: { transaction: UtilityTransactionSummary }) {
   return <Card>
-    <Text style={ui.cardTitle}>Utility review receipt</Text>
-    <Text style={ui.muted}>Bills & Utilities is under provider review. No real airtime, data, electricity token or cable subscription was delivered from this build.</Text>
+    <Text style={ui.cardTitle}>{transaction.testMode ? "Utility review receipt" : "Utility request receipt"}</Text>
+    <Text style={ui.muted}>{transaction.testMode ? "This request is running in controlled provider test mode." : "Your request is being processed. KariGO will confirm once the provider completes fulfillment."}</Text>
     <Text>Reference: {transaction.reference}</Text>
     <Text>Service: {transaction.serviceType.replace("_", " ")}</Text>
     <Text>Provider: {transaction.provider.name}</Text>

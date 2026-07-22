@@ -637,7 +637,7 @@ describe("PaymentsService", () => {
       testMode: true,
       customerPurchaseEnabled: false,
       customerPurchaseBlocked: true,
-      liveCustomerPurchaseStatus: "Disabled until separately approved",
+      liveCustomerPurchaseStatus: "Disabled or readiness-only",
       backendConnectivityTestAvailable: true,
       missingRequiredKeys: []
     });
@@ -670,6 +670,12 @@ describe("PaymentsService", () => {
       walletTopUpProviderLabel: "Flutterwave",
       walletMinimumTopUpAmount: 100,
       walletPaymentNote: "Wallet top-up is temporarily unavailable.",
+      utilitiesEnabled: false,
+      utilitiesCustomerPurchaseEnabled: false,
+      utilitiesProvider: "mock",
+      utilitiesProviderLabel: "Mock utility provider",
+      utilitiesTestMode: true,
+      utilitiesStatusNote: "Utilities are being activated. Please try again later or use test mode where available.",
       launchCities: ["Kano", "Abuja"]
     });
   });
@@ -715,6 +721,12 @@ describe("PaymentsService", () => {
       walletTopUpProviderLabel: "Flutterwave",
       walletMinimumTopUpAmount: 100,
       walletPaymentNote: "Wallet top-up is temporarily unavailable.",
+      utilitiesEnabled: false,
+      utilitiesCustomerPurchaseEnabled: false,
+      utilitiesProvider: "mock",
+      utilitiesProviderLabel: "Mock utility provider",
+      utilitiesTestMode: true,
+      utilitiesStatusNote: "Utilities are being activated. Please try again later or use test mode where available.",
       launchCities: ["Kano", "Abuja"]
     });
     expect(serialized).not.toContain("live-flutterwave-secret-placeholder");

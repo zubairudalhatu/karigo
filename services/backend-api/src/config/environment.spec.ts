@@ -54,11 +54,16 @@ describe("environment configuration", () => {
     expect(result.MONNIFY_BASE_URL).toBe("https://sandbox.monnify.com");
     expect(result.SQUAD_BASE_URL).toBe("https://sandbox-api-d.squadco.com");
     expect(result.UTILITIES_PROVIDER).toBe("mock");
+    expect(result.UTILITIES_PROVIDER_NAME).toBe("mock");
     expect(result.UTILITIES_ENABLED).toBe(false);
+    expect(result.UTILITIES_PROVIDER_ENABLED).toBe(false);
     expect(result.UTILITIES_TEST_MODE).toBe(true);
     expect(result.UTILITIES_CUSTOMER_PURCHASE_ENABLED).toBe(false);
     expect(result.ACCELERATE_ENABLED).toBe(false);
+    expect(result.ACCELERATE_UTILITIES_ENABLED).toBe(false);
     expect(result.ACCELERATE_BASE_URL).toBe("");
+    expect(result.ACCELERATE_API_BASE_URL).toBe("");
+    expect(result.ACCELERATE_ENV).toBe("sandbox");
     expect(result.APPLICATION_NOTIFICATIONS_ENABLED).toBe(false);
     expect(result.TRANSACTIONAL_EMAIL_NOTIFICATION_PROVIDER).toBe("mock");
     expect(result.TRANSACTIONAL_SMS_NOTIFICATION_PROVIDER).toBe("mock");
@@ -376,7 +381,8 @@ describe("environment configuration", () => {
       UTILITIES_TEST_MODE: "true",
       UTILITIES_CUSTOMER_PURCHASE_ENABLED: "false",
       ACCELERATE_ENABLED: "true",
-      ACCELERATE_BASE_URL: "https://api.accelerate.example"
+      ACCELERATE_BASE_URL: "https://api.accelerate.example",
+      ACCELERATE_API_KEY: "accelerate-api-key-placeholder"
     });
 
     expect(result.UTILITIES_PROVIDER).toBe("accelerate");
@@ -385,14 +391,67 @@ describe("environment configuration", () => {
     expect(result.UTILITIES_CUSTOMER_PURCHASE_ENABLED).toBe(false);
     expect(result.ACCELERATE_ENABLED).toBe(true);
     expect(result.ACCELERATE_BASE_URL).toBe("https://api.accelerate.example");
+    expect(result.ACCELERATE_API_KEY).toBe("accelerate-api-key-placeholder");
   });
 
-  it("keeps customer utility purchases disabled until separately approved", () => {
+  it("allows provider-backed utility purchases only with guarded Accelerate test-mode configuration", () => {
+    const result = validateEnvironment({
+      ...baseConfig(),
+      UTILITIES_PROVIDER: "accelerate",
+      UTILITIES_ENABLED: "true",
+      UTILITIES_TEST_MODE: "true",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
+      ACCELERATE_ENABLED: "true",
+      ACCELERATE_BASE_URL: "https://api.accelerate.example",
+      ACCELERATE_API_KEY: "accelerate-api-key-placeholder",
+      ACCELERATE_ENV: "sandbox"
+    });
+
+    expect(result.UTILITIES_PROVIDER).toBe("accelerate");
+    expect(result.UTILITIES_ENABLED).toBe(true);
+    expect(result.UTILITIES_CUSTOMER_PURCHASE_ENABLED).toBe(true);
+    expect(result.ACCELERATE_ENV).toBe("sandbox");
+  });
+
+  it("rejects customer utility purchases without complete Accelerate configuration", () => {
     expect(() => validateEnvironment({
       ...baseConfig(),
       UTILITIES_PROVIDER: "accelerate",
-      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true"
-    })).toThrow("UTILITIES_CUSTOMER_PURCHASE_ENABLED must remain false");
+      UTILITIES_ENABLED: "false",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
+      ACCELERATE_ENABLED: "true",
+      ACCELERATE_BASE_URL: "https://api.accelerate.example",
+      ACCELERATE_API_KEY: "accelerate-api-key-placeholder"
+    })).toThrow("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires UTILITIES_ENABLED=true");
+
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      UTILITIES_PROVIDER: "accelerate",
+      UTILITIES_ENABLED: "true",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
+      ACCELERATE_ENABLED: "true",
+      ACCELERATE_API_KEY: "accelerate-api-key-placeholder"
+    })).toThrow("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_BASE_URL");
+
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      UTILITIES_PROVIDER: "accelerate",
+      UTILITIES_ENABLED: "true",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
+      ACCELERATE_ENABLED: "true",
+      ACCELERATE_BASE_URL: "https://api.accelerate.example"
+    })).toThrow("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_API_KEY");
+
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      UTILITIES_PROVIDER: "accelerate",
+      UTILITIES_ENABLED: "true",
+      UTILITIES_TEST_MODE: "false",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
+      ACCELERATE_ENABLED: "true",
+      ACCELERATE_BASE_URL: "https://api.accelerate.example",
+      ACCELERATE_API_KEY: "accelerate-api-key-placeholder"
+    })).toThrow("UTILITIES_TEST_MODE must remain true");
   });
 
   it("rejects non-HTTPS Accelerate provider base URLs", () => {

@@ -8,7 +8,9 @@ import { CreateUtilityTransactionDto, UtilityQuoteDto } from "./dto/customer-uti
 import { ListUtilityTransactionsQueryDto } from "./dto/list-utility-transactions-query.dto";
 import { UtilityProductsQueryDto, UtilityProvidersQueryDto } from "./dto/utility-catalogue-query.dto";
 import { UpdateUtilityTransactionStatusDto } from "./dto/update-utility-status.dto";
+import { AccelerateUtilityProvider } from "./providers/accelerate-utility.provider";
 import { MockUtilityProvider } from "./providers/mock-utility.provider";
+import { UtilityProviderClient, UtilityPurchaseResult } from "./providers/utility-provider.interface";
 
 const DEFAULT_AMOUNT_BOUNDARIES: Record<UtilityServiceType, { min: number; max: number }> = {
   AIRTIME: { min: 10000, max: 10000000 },
@@ -29,6 +31,7 @@ export class UtilitiesService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly mockProvider: MockUtilityProvider,
+    private readonly accelerateProvider: AccelerateUtilityProvider,
     private readonly audit: AdminAuditService
   ) {}
 
@@ -65,8 +68,9 @@ export class UtilitiesService {
 
   async quote(userId: string, dto: UtilityQuoteDto) {
     const customer = await this.requireCustomer(userId);
-    const resolved = await this.resolveRequest(dto);
-    const providerQuote = await this.mockProvider.quote({
+    const utilityProvider = this.activeUtilityProvider();
+    const resolved = await this.resolveRequest(dto, utilityProvider.client);
+    const providerQuote = await utilityProvider.client.quote({
       serviceType: resolved.provider.type,
       providerCode: resolved.provider.code,
       productCode: resolved.product?.code,
@@ -87,25 +91,17 @@ export class UtilitiesService {
       recipientName: resolved.recipientName,
       providerStatus: providerQuote.providerStatus,
       customerNote: providerQuote.customerNote,
-      testMode: true,
+      providerMode: utilityProvider.mode,
+      testMode: utilityProvider.testMode,
       createdAt: new Date().toISOString()
     };
   }
 
   async createTransaction(userId: string, dto: CreateUtilityTransactionDto) {
     const customer = await this.requireCustomer(userId);
-    const resolved = await this.resolveRequest(dto);
+    const utilityProvider = this.activeUtilityProvider();
+    const resolved = await this.resolveRequest(dto, utilityProvider.client);
     const reference = await this.uniqueReference();
-    const purchase = await this.mockProvider.purchase({
-      serviceType: resolved.provider.type,
-      providerCode: resolved.provider.code,
-      productCode: resolved.product?.code,
-      amountKobo: resolved.amountKobo,
-      recipient: resolved.recipient,
-      recipientName: resolved.recipientName,
-      reference,
-      totalKobo: resolved.totalKobo
-    });
     const transaction = await this.prisma.utilityTransaction.create({
       data: {
         reference,
@@ -118,22 +114,66 @@ export class UtilitiesService {
         totalKobo: resolved.totalKobo,
         recipient: resolved.recipient,
         recipientName: resolved.recipientName,
+        status: UtilityTransactionStatus.PENDING,
+        providerStatus: `${utilityProvider.providerStatusPrefix}_PENDING`,
+        customerNote: dto.customerNote,
+        metadata: this.utilityMetadata(utilityProvider.mode, utilityProvider.testMode)
+      },
+      include: this.customerInclude()
+    });
+    const purchase = await utilityProvider.client.purchase({
+      serviceType: resolved.provider.type,
+      providerCode: resolved.provider.code,
+      productCode: resolved.product?.code,
+      amountKobo: resolved.amountKobo,
+      recipient: resolved.recipient,
+      recipientName: resolved.recipientName,
+      reference,
+      totalKobo: resolved.totalKobo
+    });
+    const updated = await this.applyProviderResult(transaction.id, purchase, this.customerInclude(), transaction.metadata);
+    return this.customerTransaction(updated);
+  }
+
+  async adminVerifyProviderStatus(adminUserId: string, transactionId: string) {
+    const transaction = await this.prisma.utilityTransaction.findUnique({
+      where: { id: transactionId },
+      include: this.adminInclude(true)
+    });
+    if (!transaction) throw new NotFoundException("Utility transaction not found");
+    if (TERMINAL_STATUSES.includes(transaction.status)) return this.adminTransaction(transaction);
+
+    const utilityProvider = this.providerForMode(this.transactionProviderMode(transaction.metadata));
+    const purchase = await utilityProvider.client.checkStatus(transaction.providerReference ?? transaction.reference);
+    const updated = await this.applyProviderResult(transaction.id, purchase, this.adminInclude(true), transaction.metadata);
+    await this.audit.record(adminUserId, "admin.utilities.provider_verify", "UtilityTransaction", transactionId, {
+      providerMode: utilityProvider.mode,
+      status: updated.status,
+      providerStatus: updated.providerStatus
+    });
+    return this.adminTransaction(updated);
+  }
+
+  private async applyProviderResult<TInclude extends ReturnType<UtilitiesService["customerInclude"]> | ReturnType<UtilitiesService["adminInclude"]>>(
+    transactionId: string,
+    purchase: UtilityPurchaseResult,
+    include: TInclude,
+    currentMetadata?: Prisma.JsonValue | null
+  ) {
+    return this.prisma.utilityTransaction.update({
+      where: { id: transactionId },
+      data: {
         status: purchase.status,
         providerStatus: purchase.providerStatus,
         providerReference: purchase.providerReference,
         mockToken: purchase.mockToken,
-        customerNote: purchase.customerNote ?? dto.customerNote,
+        customerNote: purchase.customerNote,
         failureReason: purchase.failureReason,
-        metadata: {
-          mode: "mock",
-          testMode: true,
-          ...(purchase.metadata ?? {})
-        },
-        completedAt: purchase.status === UtilityTransactionStatus.SUCCESSFUL ? new Date() : undefined
+        metadata: this.mergeMetadata(currentMetadata, purchase.metadata),
+        completedAt: TERMINAL_STATUSES.includes(purchase.status) ? new Date() : undefined
       },
-      include: this.customerInclude()
+      include
     });
-    return this.customerTransaction(transaction);
   }
 
   async listMine(userId: string, query: ListUtilityTransactionsQueryDto) {
@@ -188,7 +228,8 @@ export class UtilitiesService {
       this.prisma.utilityTransaction.count({ where: { status: UtilityTransactionStatus.FAILED } }),
       this.prisma.utilityTransaction.aggregate({ _sum: { totalKobo: true } })
     ]);
-    return { totalTransactions: total, pending, successful, failed, totalTestValueKobo: totalValue._sum.totalKobo ?? 0 };
+    const valueKobo = totalValue._sum.totalKobo ?? 0;
+    return { totalTransactions: total, pending, successful, failed, totalValueKobo: valueKobo, totalTestValueKobo: valueKobo };
   }
 
   async adminList(query: ListUtilityTransactionsQueryDto) {
@@ -234,7 +275,7 @@ export class UtilitiesService {
     return this.adminTransaction(updated);
   }
 
-  private async resolveRequest(dto: UtilityQuoteDto) {
+  private async resolveRequest(dto: UtilityQuoteDto, providerClient: UtilityProviderClient) {
     const provider = await this.prisma.utilityProvider.findFirst({
       where: { id: dto.providerId, type: dto.serviceType, isActive: true }
     });
@@ -246,7 +287,7 @@ export class UtilitiesService {
     if (dto.productId && !product) throw new NotFoundException("Utility product not found");
 
     const amountKobo = this.resolveAmount(provider.type, product, dto.amountKobo);
-    const validation = await this.mockProvider.validateRecipient(provider.type, dto.recipient);
+    const validation = await providerClient.validateRecipient(provider.type, dto.recipient);
     if (!validation.isValid || !validation.normalizedRecipient) {
       throw new BadRequestException(validation.message ?? "Recipient could not be validated.");
     }
@@ -318,6 +359,81 @@ export class UtilitiesService {
     return `${prefix}-${Date.now()}-${randomBytes(3).toString("hex").toUpperCase()}`;
   }
 
+  private activeUtilityProvider() {
+    if (this.accelerateCustomerPurchasesEnabled()) {
+      if (!this.accelerateProvider.isConfigured()) {
+        throw new BadRequestException("Utilities are being activated. Please try again later.");
+      }
+      return {
+        client: this.accelerateProvider,
+        mode: "accelerate",
+        providerStatusPrefix: "ACCELERATE",
+        testMode: this.flagValue("UTILITIES_TEST_MODE", true)
+      };
+    }
+    return this.providerForMode("mock");
+  }
+
+  private providerForMode(mode: string) {
+    if (mode === "accelerate" && this.accelerateProvider.isConfigured()) {
+      return {
+        client: this.accelerateProvider,
+        mode: "accelerate",
+        providerStatusPrefix: "ACCELERATE",
+        testMode: this.flagValue("UTILITIES_TEST_MODE", true)
+      };
+    }
+    return {
+      client: this.mockProvider,
+      mode: "mock",
+      providerStatusPrefix: "MOCK",
+      testMode: true
+    };
+  }
+
+  private accelerateCustomerPurchasesEnabled() {
+    return this.stringValue("UTILITIES_PROVIDER", "mock") === "accelerate" &&
+      this.flagValue("UTILITIES_ENABLED", false) &&
+      this.flagValue("UTILITIES_CUSTOMER_PURCHASE_ENABLED", false) &&
+      this.flagValue("ACCELERATE_ENABLED", false);
+  }
+
+  private utilityMetadata(mode: string, testMode: boolean): Prisma.InputJsonObject {
+    return { mode, testMode };
+  }
+
+  private mergeMetadata(currentMetadata: Prisma.JsonValue | null | undefined, metadata: Record<string, unknown> | undefined): Prisma.InputJsonObject {
+    return {
+      ...(this.jsonObject(currentMetadata)),
+      ...(metadata ?? {})
+    } as Prisma.InputJsonObject;
+  }
+
+  private transactionProviderMode(metadata: Prisma.JsonValue | null) {
+    if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+      const mode = (metadata as Record<string, unknown>).mode;
+      if (typeof mode === "string") return mode;
+    }
+    return "mock";
+  }
+
+  private stringValue(key: string, fallback = ""): string {
+    const value = this.config.get<unknown>(key);
+    return typeof value === "string" && value.trim() ? value.trim().toLowerCase() : fallback;
+  }
+
+  private flagValue(key: string, fallback: boolean): boolean {
+    const value = this.config.get<unknown>(key);
+    if (value === undefined || value === null || value === "") return fallback;
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
+    return fallback;
+  }
+
+  private jsonObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
+    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  }
+
   private publicProvider(provider: { id: string; type: UtilityServiceType; name: string; code: string }) {
     return { id: provider.id, type: provider.type, name: provider.name, code: provider.code };
   }
@@ -348,6 +464,7 @@ export class UtilitiesService {
   }
 
   private customerTransaction(transaction: Prisma.UtilityTransactionGetPayload<{ include: ReturnType<UtilitiesService["customerInclude"]> }>, list = false) {
+    const metadata = this.jsonObject(transaction.metadata);
     return {
       id: transaction.id,
       reference: transaction.reference,
@@ -364,7 +481,8 @@ export class UtilitiesService {
       mockToken: transaction.mockToken,
       customerNote: transaction.customerNote,
       failureReason: transaction.failureReason,
-      testMode: true,
+      providerMode: typeof metadata.mode === "string" ? metadata.mode : "mock",
+      testMode: typeof metadata.testMode === "boolean" ? metadata.testMode : true,
       createdAt: transaction.createdAt,
       updatedAt: transaction.updatedAt,
       completedAt: transaction.completedAt
@@ -372,6 +490,7 @@ export class UtilitiesService {
   }
 
   private adminTransaction(transaction: Prisma.UtilityTransactionGetPayload<{ include: ReturnType<UtilitiesService["adminInclude"]> }>, list = false) {
+    const metadata = this.jsonObject(transaction.metadata);
     return {
       id: transaction.id,
       reference: transaction.reference,
@@ -396,7 +515,8 @@ export class UtilitiesService {
         phoneNumber: transaction.customer.user.phoneNumber,
         email: transaction.customer.user.email
       },
-      testMode: true,
+      providerMode: typeof metadata.mode === "string" ? metadata.mode : "mock",
+      testMode: typeof metadata.testMode === "boolean" ? metadata.testMode : true,
       createdAt: transaction.createdAt,
       updatedAt: transaction.updatedAt,
       completedAt: transaction.completedAt

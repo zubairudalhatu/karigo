@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AdminRole, UserRole } from "@prisma/client";
 import { AdminRoles } from "../../common/decorators/admin-roles.decorator";
@@ -47,12 +47,21 @@ export class AdminUtilitiesController {
   }
 
   @Patch("transactions/:transactionId/status")
-  @ApiOperation({ summary: "Override a mock utility transaction status for staging operations" })
+  @ApiOperation({ summary: "Override a utility transaction status for staging operations" })
   async updateStatus(
     @CurrentUser() user: AuthenticatedUser,
     @Param("transactionId", ParseUUIDPipe) transactionId: string,
     @Body() dto: UpdateUtilityTransactionStatusDto
   ) {
     return { message: "Utility transaction status updated", data: await this.utilities.adminUpdateStatus(user.id, transactionId, dto) };
+  }
+
+  @Post("transactions/:transactionId/verify")
+  @ApiOperation({ summary: "Verify utility transaction status with the configured provider" })
+  async verifyProviderStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("transactionId", ParseUUIDPipe) transactionId: string
+  ) {
+    return { message: "Utility provider status checked", data: await this.utilities.adminVerifyProviderStatus(user.id, transactionId) };
   }
 }

@@ -3,9 +3,11 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { UtilityProductSummary, UtilityProviderSummary, UtilityQuoteResult, UtilityServiceType, UtilityTransactionSummary } from "@karigo/shared-types";
+import { paymentsApi } from "../../src/api/payments.api";
 import { utilitiesApi } from "../../src/api/utilities.api";
 import { Button, Card, Empty, Field, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError } from "../../src/lib/errors";
+import { fallbackCustomerPaymentConfig } from "../../src/lib/payment-status";
 
 const configs: Record<string, {
   type: UtilityServiceType;
@@ -21,7 +23,7 @@ const configs: Record<string, {
     title: "Airtime",
     recipientLabel: "Phone number",
     amountLabel: "Amount in NGN",
-    description: "Review a safe airtime request for a Nigerian phone number.",
+    description: "Request airtime for a Nigerian phone number.",
     needsProduct: false
   },
   data: {
@@ -29,7 +31,7 @@ const configs: Record<string, {
     title: "Data",
     recipientLabel: "Phone number",
     amountLabel: "Plan amount in NGN",
-    description: "Choose a demo data bundle for provider review.",
+    description: "Choose a data bundle for provider processing.",
     needsProduct: true
   },
   electricity: {
@@ -37,7 +39,7 @@ const configs: Record<string, {
     title: "Electricity",
     recipientLabel: "Meter number",
     amountLabel: "Amount in NGN",
-    description: "Validate a demo meter for provider review.",
+    description: "Enter a meter number for electricity token processing.",
     needsProduct: false,
     showRecipientName: true
   },
@@ -46,7 +48,7 @@ const configs: Record<string, {
     title: "Cable TV",
     recipientLabel: "Smartcard / IUC number",
     amountLabel: "Package amount in NGN",
-    description: "Choose a demo cable package for provider review.",
+    description: "Choose a cable package for smartcard or IUC processing.",
     needsProduct: true
   }
 };
@@ -66,6 +68,8 @@ export default function UtilityServiceFlow() {
   const [amount, setAmount] = useState("");
   const [quote, setQuote] = useState<UtilityQuoteResult | null>(null);
   const [transaction, setTransaction] = useState<UtilityTransactionSummary | null>(null);
+  const [utilitiesEnabled, setUtilitiesEnabled] = useState(false);
+  const [utilitiesStatusNote, setUtilitiesStatusNote] = useState(fallbackCustomerPaymentConfig.utilitiesStatusNote);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -73,8 +77,10 @@ export default function UtilityServiceFlow() {
   useEffect(() => {
     if (!config) return;
     setLoading(true);
-    Promise.all([utilitiesApi.providers(config.type), utilitiesApi.products({ type: config.type })])
-      .then(([nextProviders, nextProducts]) => {
+    Promise.all([paymentsApi.publicConfig(), utilitiesApi.providers(config.type), utilitiesApi.products({ type: config.type })])
+      .then(([paymentConfig, nextProviders, nextProducts]) => {
+        setUtilitiesEnabled(Boolean(paymentConfig.utilitiesCustomerPurchaseEnabled));
+        setUtilitiesStatusNote(paymentConfig.utilitiesStatusNote ?? fallbackCustomerPaymentConfig.utilitiesStatusNote);
         setProviders(nextProviders);
         setProducts(nextProducts);
         setProviderId(nextProviders[0]?.id ?? "");
@@ -82,7 +88,11 @@ export default function UtilityServiceFlow() {
         setProductId(firstProduct?.id ?? "");
         setAmount(firstProduct?.amountKobo ? String(firstProduct.amountKobo / 100) : "");
       })
-      .catch((e) => setError(friendlyError(e)))
+      .catch((e) => {
+        setUtilitiesEnabled(false);
+        setUtilitiesStatusNote(fallbackCustomerPaymentConfig.utilitiesStatusNote);
+        setError(friendlyError(e));
+      })
       .finally(() => setLoading(false));
   }, [config?.type]);
 
@@ -131,7 +141,7 @@ export default function UtilityServiceFlow() {
     }
   }
 
-  async function runTestTransaction() {
+  async function submitTransaction() {
     if (!config || !quote) return;
     setBusy(true);
     setError("");
@@ -155,9 +165,9 @@ export default function UtilityServiceFlow() {
 
   return <Protected><Screen title={config.title}>
     <Text style={ui.pageIntro}>{config.description}</Text>
-    <Message>Bills & Utilities is under provider review. No real airtime, data, electricity token or cable subscription will be delivered from this build.</Message>
+    <Message>{utilitiesStatusNote}</Message>
     <Message error>{error}</Message>
-    {loading ? <Loading label={`Loading ${config.title} demo catalogue...`} /> : <>
+    {loading ? <Loading label={`Loading ${config.title} catalogue...`} /> : <>
       <Text style={ui.sectionTitle}>Provider</Text>
       {providers.map((provider) => <Button key={provider.id} title={`${provider.id === providerId ? "Selected - " : ""}${provider.name}`} tone="muted" onPress={() => chooseProvider(provider.id)} />)}
       {config.needsProduct ? <>
@@ -174,21 +184,21 @@ export default function UtilityServiceFlow() {
       <Field placeholder={config.amountLabel} value={amount} onChangeText={(value) => { setAmount(value); setQuote(null); setTransaction(null); }} keyboardType="numeric" editable={!selectedProduct?.amountKobo} />
       <Button title={busy ? "Checking..." : "Review Utility Request"} disabled={busy || !canQuote} onPress={quoteTransaction} />
       {quote ? <Card>
-        <Text style={ui.cardTitle}>Confirm utility review</Text>
+        <Text style={ui.cardTitle}>{utilitiesEnabled ? "Confirm utility request" : "Confirm utility review"}</Text>
         <View style={ui.priceRow}><Text style={ui.priceLabel}>Amount:</Text><Text style={ui.priceValue}>{moneyKobo(quote.amountKobo)}</Text></View>
         <View style={ui.priceRow}><Text style={ui.priceLabel}>Fee:</Text><Text style={ui.priceValue}>{moneyKobo(quote.convenienceFeeKobo)}</Text></View>
         <View style={ui.priceRow}><Text style={ui.sectionTitle}>Total:</Text><Text style={ui.payable}>{moneyKobo(quote.totalKobo)}</Text></View>
         <Text style={ui.quoteText}>Quote: {quote.quoteReference}</Text>
-        <Button title={busy ? "Submitting..." : "Submit Review Record"} disabled={busy} onPress={runTestTransaction} />
+        <Button title={busy ? "Submitting..." : utilitiesEnabled ? "Submit Utility Request" : "Submit Review Record"} disabled={busy} onPress={submitTransaction} />
       </Card> : null}
       {transaction ? <Card>
-        <Text style={ui.cardTitle}>Utility review receipt</Text>
+        <Text style={ui.cardTitle}>{transaction.testMode ? "Utility review receipt" : "Utility request receipt"}</Text>
         <Text>Reference: {transaction.reference}</Text>
         <Text>Provider: {transaction.provider.name}</Text>
         <Text>Total: {moneyKobo(transaction.totalKobo)}</Text>
         {transaction.mockToken ? <Text style={ui.otpCode}>{transaction.mockToken}</Text> : null}
         <StatusBadge status={transaction.status} />
-        <Text style={ui.muted}>This is a provider-review record. No live provider fulfilment occurred.</Text>
+        <Text style={ui.muted}>{transaction.testMode ? "This request is running in controlled provider test mode." : "Your request is being processed. KariGO will confirm once the provider completes fulfillment."}</Text>
         <Button title="View full receipt" tone="muted" onPress={() => router.push(`/utilities/transactions/${transaction.id}`)} />
       </Card> : null}
     </>}

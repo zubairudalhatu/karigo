@@ -103,7 +103,8 @@ assert(paymentReadinessPage.includes("Wallet readiness"), "Payment Readiness pag
 assert(paymentReadinessPage.includes("Client-side credit disabled"), "Payment Readiness page must show client-side wallet credit remains disabled.");
 assert(paymentReadinessPage.includes("Bills & Utilities provider readiness"), "Payment Readiness page must show Bills & Utilities provider readiness.");
 assert(paymentReadinessPage.includes("Accelerate.ng"), "Payment Readiness page must show Accelerate readiness labels.");
-assert(paymentReadinessPage.includes("Customer Bills & Utilities purchase remains disabled"), "Payment Readiness page must state utility purchases remain disabled.");
+assert(paymentReadinessPage.includes("Customer utility processing remains controlled by explicit Utilities flags"), "Payment Readiness page must state utility purchases remain flag-controlled.");
+assert(paymentReadinessPage.includes("Wallet-to-utility payment and live fulfilment settlement remain disabled"), "Payment Readiness page must state utility wallet/live fulfilment guardrails.");
 assert(paymentReadinessPage.includes("requiredEnv"), "Payment Readiness page must list Accelerate env key names only.");
 const liveSecretPrefix = ["sk", "live"].join("_");
 const livePublicPrefix = ["pk", "live"].join("_");
@@ -341,13 +342,15 @@ assert(taxiApi.includes("admin/taxi/trips"), "Admin ride API client must call ex
 assert(taxiApi.includes("admin/taxi/summary"), "Admin ride API client must call the existing staging summary endpoint.");
 
 const utilitiesPage = read("app", "utilities", "page.tsx");
-assert(utilitiesPage.includes("Test-mode utility transaction monitoring"), "Admin utilities page must clearly state test mode.");
+assert(utilitiesPage.includes("Utility transaction monitoring for Airtime, Data, Electricity and Cable TV"), "Admin utilities page must describe utility transaction monitoring scope.");
 assert(utilitiesPage.includes("Total transactions"), "Admin utilities page must show summary cards.");
 assert(utilitiesPage.includes("Reference") && utilitiesPage.includes("Provider") && utilitiesPage.includes("Status"), "Admin utilities table must show core columns.");
-assert(utilitiesPage.includes("Update this mock utility transaction status?"), "Admin utility status override must require confirmation.");
+assert(utilitiesPage.includes("Update this utility transaction status for operations review?"), "Admin utility status override must require confirmation.");
+assert(utilitiesPage.includes("Verify provider status"), "Admin utilities page must expose admin-only provider status verification.");
 assert(!utilitiesPage.includes("Fulfil") && !utilitiesPage.includes("Send token"), "Admin utilities page must not expose live fulfilment actions.");
 const utilitiesApi = read("src", "api", "utilities.api.ts");
 assert(utilitiesApi.includes("admin/utilities/summary"), "Admin utilities API must load summary.");
 assert(utilitiesApi.includes("admin/utilities/transactions"), "Admin utilities API must load transactions.");
+assert(utilitiesApi.includes("admin/utilities/transactions/${id}/verify"), "Admin utilities API must call provider status verification endpoint.");
 
 console.log("Admin portal staging regression checks passed.");

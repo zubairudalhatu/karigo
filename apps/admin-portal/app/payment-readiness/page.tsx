@@ -233,7 +233,7 @@ export default function PaymentReadinessPage() {
           {readiness.utilityReadiness ? (
             <section className="section">
               <h2>Bills & Utilities provider readiness</h2>
-              <p className="muted">Accelerate.ng readiness is shown for backend/provider setup only. Customer utility purchases remain disabled until a separate approved utility activation task.</p>
+              <p className="muted">Accelerate.ng readiness is shown for backend/provider setup only. Customer utility processing remains controlled by explicit Utilities flags.</p>
               <div className="grid">
                 <article className="card">
                   <h3>{readiness.utilityReadiness.providerLabel}</h3>
@@ -243,7 +243,7 @@ export default function PaymentReadinessPage() {
                   <div className="item"><span>Customer purchases</span><strong>{readiness.utilityReadiness.liveCustomerPurchaseStatus}</strong></div>
                   <div className="item"><span>Backend connectivity test available</span><strong>{yesNo(readiness.utilityReadiness.backendConnectivityTestAvailable)}</strong></div>
                   <div className="item"><span>Missing required keys</span><strong>{readiness.utilityReadiness.missingRequiredKeys.length}</strong></div>
-                  <p className="muted">Customer Bills & Utilities purchase remains disabled until a separate utility purchase approval task enables it.</p>
+                  <p className="muted">Wallet-to-utility payment and live fulfilment settlement remain disabled until separately approved.</p>
                   {readiness.utilityReadiness.notes.map((note) => <p className="muted" key={note}>{note}</p>)}
                 </article>
                 <article className="card">

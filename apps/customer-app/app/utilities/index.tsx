@@ -1,8 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { paymentsApi } from "../../src/api/payments.api";
 import { Card, Protected, Screen, ui } from "../../src/components/ui";
+import { fallbackCustomerPaymentConfig } from "../../src/lib/payment-status";
 
 const services = [
   { label: "Airtime", slug: "airtime", icon: "phone", description: "Review a safe airtime request for a Nigerian phone number." },
@@ -12,8 +15,23 @@ const services = [
 ] as const;
 
 export default function UtilitiesHome() {
+  const [utilitiesStatusNote, setUtilitiesStatusNote] = useState(fallbackCustomerPaymentConfig.utilitiesStatusNote);
+  const [utilitiesEnabled, setUtilitiesEnabled] = useState(false);
+
+  useEffect(() => {
+    paymentsApi.publicConfig()
+      .then((config) => {
+        setUtilitiesStatusNote(config.utilitiesStatusNote ?? fallbackCustomerPaymentConfig.utilitiesStatusNote);
+        setUtilitiesEnabled(Boolean(config.utilitiesCustomerPurchaseEnabled));
+      })
+      .catch(() => {
+        setUtilitiesStatusNote(fallbackCustomerPaymentConfig.utilitiesStatusNote);
+        setUtilitiesEnabled(false);
+      });
+  }, []);
+
   return <Protected><Screen title="Bills & Utilities">
-    <Text style={ui.pageIntro}>Bills & Utilities is under provider review. No real airtime, data, electricity token or cable subscription will be delivered from this build.</Text>
+    <Text style={ui.pageIntro}>{utilitiesStatusNote}</Text>
     <View style={styles.grid}>
       {services.map((service) => <Pressable
         key={service.slug}
@@ -25,7 +43,7 @@ export default function UtilitiesHome() {
         <View style={styles.icon}><Feather name={service.icon} size={22} color={brand.colors.primary} /></View>
         <Text style={ui.cardTitle}>{service.label}</Text>
         <Text style={ui.muted}>{service.description}</Text>
-        <Text style={styles.badge}>Provider review</Text>
+        <Text style={styles.badge}>{utilitiesEnabled ? "Provider processing" : "Provider review"}</Text>
       </Pressable>)}
     </View>
     <Card>

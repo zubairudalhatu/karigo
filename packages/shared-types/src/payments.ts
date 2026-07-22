@@ -29,6 +29,12 @@ export interface PublicPaymentConfig {
   walletTopUpProviderLabel?: string;
   walletMinimumTopUpAmount?: number;
   walletPaymentNote?: string;
+  utilitiesEnabled?: boolean;
+  utilitiesCustomerPurchaseEnabled?: boolean;
+  utilitiesProvider?: string;
+  utilitiesProviderLabel?: string;
+  utilitiesTestMode?: boolean;
+  utilitiesStatusNote?: string;
   launchCities?: string[];
 }
 

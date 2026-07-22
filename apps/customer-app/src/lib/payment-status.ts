@@ -81,7 +81,13 @@ export const fallbackCustomerPaymentConfig: PublicPaymentConfig = flutterwaveLiv
       walletPaymentsEnabled: false,
       walletTopUpProvider: "flutterwave",
       walletTopUpProviderLabel: "Flutterwave",
-      walletMinimumTopUpAmount: 100
+      walletMinimumTopUpAmount: 100,
+      utilitiesEnabled: false,
+      utilitiesCustomerPurchaseEnabled: false,
+      utilitiesProvider: "mock",
+      utilitiesProviderLabel: "Mock utility provider",
+      utilitiesTestMode: true,
+      utilitiesStatusNote: "Utilities are being activated. Please try again later or use test mode where available."
     }
   : {
       livePaymentsEnabled: false,
@@ -103,7 +109,13 @@ export const fallbackCustomerPaymentConfig: PublicPaymentConfig = flutterwaveLiv
       walletPaymentsEnabled: false,
       walletTopUpProvider: "flutterwave",
       walletTopUpProviderLabel: "Flutterwave",
-      walletMinimumTopUpAmount: 100
+      walletMinimumTopUpAmount: 100,
+      utilitiesEnabled: false,
+      utilitiesCustomerPurchaseEnabled: false,
+      utilitiesProvider: "mock",
+      utilitiesProviderLabel: "Mock utility provider",
+      utilitiesTestMode: true,
+      utilitiesStatusNote: "Utilities are being activated. Please try again later or use test mode where available."
     };
 
 export function isFlutterwaveLivePaymentConfig(config: PublicPaymentConfig = fallbackCustomerPaymentConfig): boolean {

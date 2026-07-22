@@ -48,6 +48,7 @@ export interface UtilityQuoteResult {
   recipientName?: string | null;
   providerStatus: string;
   customerNote: string;
+  providerMode?: string;
   testMode: boolean;
   createdAt: string;
 }
@@ -68,6 +69,7 @@ export interface UtilityTransactionSummary {
   mockToken?: string | null;
   customerNote?: string | null;
   failureReason?: string | null;
+  providerMode?: string;
   testMode: boolean;
   createdAt: string;
   updatedAt: string;
@@ -79,5 +81,6 @@ export interface AdminUtilitySummary {
   pending: number;
   successful: number;
   failed: number;
+  totalValueKobo?: number;
   totalTestValueKobo: number;
 }

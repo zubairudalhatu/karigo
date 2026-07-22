@@ -18,6 +18,7 @@ export interface AdminUtilityTransaction {
   mockToken?: string | null;
   customerNote?: string | null;
   failureReason?: string | null;
+  providerMode?: string | null;
   metadata?: unknown;
   customer: { id: string; fullName: string; phoneNumber?: string | null; email?: string | null };
   testMode: boolean;
@@ -40,6 +41,7 @@ export const utilitiesApi = {
   list: (filters: { serviceType?: string; status?: string; search?: string }) =>
     api.get<AdminUtilityTransaction[]>(`admin/utilities/transactions${query(filters)}`),
   detail: (id: string) => api.get<AdminUtilityTransaction>(`admin/utilities/transactions/${id}`),
+  verifyProviderStatus: (id: string) => api.post<AdminUtilityTransaction>(`admin/utilities/transactions/${id}/verify`),
   updateStatus: (id: string, status: UtilityTransactionStatus, note?: string) =>
     api.patch<AdminUtilityTransaction>(`admin/utilities/transactions/${id}/status`, { status, note })
 };

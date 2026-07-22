@@ -329,11 +329,13 @@ export class PaymentsService {
         CASH_ON_DELIVERY_ENABLED: this.flagValue("CASH_ON_DELIVERY_ENABLED", false) ? "true" : "false_or_unset",
         WALLET_TOP_UP_ENABLED: this.flagValue("WALLET_TOP_UP_ENABLED", false) ? "true" : "false_or_unset",
         WALLET_PAYMENTS_ENABLED: this.flagValue("WALLET_PAYMENTS_ENABLED", false) ? "true" : "false_or_unset",
-        UTILITIES_PROVIDER: this.optionalValue("UTILITIES_PROVIDER") ?? "mock",
+        UTILITIES_PROVIDER: this.optionalValue("UTILITIES_PROVIDER") ?? this.optionalValue("UTILITIES_PROVIDER_NAME") ?? "mock",
         UTILITIES_ENABLED: this.flagValue("UTILITIES_ENABLED", false) ? "true" : "false_or_unset",
+        UTILITIES_PROVIDER_ENABLED: this.flagValue("UTILITIES_PROVIDER_ENABLED", false) ? "true" : "false_or_unset",
         UTILITIES_TEST_MODE: this.flagValue("UTILITIES_TEST_MODE", true) ? "true" : "false",
         UTILITIES_CUSTOMER_PURCHASE_ENABLED: this.flagValue("UTILITIES_CUSTOMER_PURCHASE_ENABLED", false) ? "true" : "false_or_unset",
-        ACCELERATE_ENABLED: this.flagValue("ACCELERATE_ENABLED", false) ? "true" : "false_or_unset"
+        ACCELERATE_ENABLED: this.flagValue("ACCELERATE_ENABLED", false) ? "true" : "false_or_unset",
+        ACCELERATE_UTILITIES_ENABLED: this.flagValue("ACCELERATE_UTILITIES_ENABLED", false) ? "true" : "false_or_unset"
       },
       launchPaymentOptions: this.launchPaymentOptions(),
       utilityReadiness: this.utilityReadiness(),
@@ -357,6 +359,7 @@ export class PaymentsService {
     const squadCustomerCheckoutEnabled = this.squadCustomerCheckoutEnabled();
     const flutterwaveVisible = customerSelectableProviders.includes("flutterwave");
     const squadVisible = customerSelectableProviders.includes("squad");
+    const utilityReadiness = this.utilityReadiness();
 
     return {
       livePaymentsEnabled,
@@ -381,6 +384,14 @@ export class PaymentsService {
       walletPaymentNote: this.walletTopUpCustomerEnabled()
         ? "Wallet top-up credits only after Flutterwave verification. Wallet order payment is not active yet."
         : "Wallet top-up is temporarily unavailable.",
+      utilitiesEnabled: utilityReadiness.enabled,
+      utilitiesCustomerPurchaseEnabled: utilityReadiness.customerPurchaseEnabled,
+      utilitiesProvider: utilityReadiness.provider,
+      utilitiesProviderLabel: utilityReadiness.providerLabel,
+      utilitiesTestMode: utilityReadiness.testMode,
+      utilitiesStatusNote: utilityReadiness.customerPurchaseEnabled
+        ? "Your request is being processed. KariGO will confirm once the provider completes fulfillment."
+        : "Utilities are being activated. Please try again later or use test mode where available.",
       launchCities: ["Kano", "Abuja"]
     };
   }
@@ -956,16 +967,30 @@ export class PaymentsService {
   }
 
   private utilityReadiness() {
-    const provider = this.optionalValue("UTILITIES_PROVIDER")?.toLowerCase() ?? "mock";
-    const accelerateEnabled = this.flagValue("ACCELERATE_ENABLED", false);
-    const utilitiesEnabled = this.flagValue("UTILITIES_ENABLED", false);
+    const provider = (this.optionalValue("UTILITIES_PROVIDER") ?? this.optionalValue("UTILITIES_PROVIDER_NAME"))?.toLowerCase() ?? "mock";
+    const accelerateEnabled = this.flagValue("ACCELERATE_ENABLED", false) || this.flagValue("ACCELERATE_UTILITIES_ENABLED", false);
+    const utilitiesEnabled = this.flagValue("UTILITIES_ENABLED", false) || this.flagValue("UTILITIES_PROVIDER_ENABLED", false);
     const testMode = this.flagValue("UTILITIES_TEST_MODE", true);
     const customerPurchaseEnabled = this.flagValue("UTILITIES_CUSTOMER_PURCHASE_ENABLED", false);
+    const accelerateBaseUrl = this.optionalValue("ACCELERATE_BASE_URL") ?? this.optionalValue("ACCELERATE_API_BASE_URL") ?? this.optionalValue("UTILITIES_PROVIDER_BASE_URL");
+    const accelerateApiKey = this.optionalValue("ACCELERATE_API_KEY") ?? this.optionalValue("UTILITIES_PROVIDER_API_KEY");
     const requirements: ProviderRequirement[] = [
       this.utilityFlagRequirement("UTILITIES_PROVIDER", provider === "accelerate", "Set to accelerate for approved Accelerate.ng provider readiness"),
       this.utilityFlagRequirement("ACCELERATE_ENABLED", accelerateEnabled, "Enable backend Accelerate readiness visibility after account approval"),
-      this.utilityUrlRequirement("ACCELERATE_BASE_URL", "Accelerate.ng provider base URL configured in Render/secret manager"),
-      this.utilitySecretRequirement("ACCELERATE_API_KEY", "Accelerate.ng API key configured in Render/secret manager"),
+      {
+        name: "ACCELERATE_BASE_URL",
+        required: true,
+        configured: Boolean(accelerateBaseUrl),
+        purpose: "Accelerate.ng provider base URL configured in Render/secret manager",
+        issue: !accelerateBaseUrl ? "missing ACCELERATE_BASE_URL" : !accelerateBaseUrl.startsWith("https://") ? "ACCELERATE_BASE_URL must use HTTPS" : undefined
+      },
+      {
+        name: "ACCELERATE_API_KEY",
+        required: true,
+        configured: Boolean(accelerateApiKey),
+        purpose: "Accelerate.ng API key configured in Render/secret manager",
+        issue: accelerateApiKey ? undefined : "missing ACCELERATE_API_KEY"
+      },
       this.utilityOptionalSecretRequirement("ACCELERATE_CLIENT_ID", "Accelerate.ng client ID if required by the approved account"),
       this.utilityOptionalSecretRequirement("ACCELERATE_CLIENT_SECRET", "Accelerate.ng client secret if required by the approved account"),
       this.utilityOptionalSecretRequirement("ACCELERATE_WEBHOOK_SECRET", "Accelerate.ng webhook secret if required for callbacks")
@@ -978,20 +1003,22 @@ export class PaymentsService {
       providerLabel: provider === "accelerate" ? "Accelerate.ng" : "Mock utility provider",
       accountStatus: accelerateEnabled ? "Approved" : "Not enabled",
       integrationStatus: provider === "accelerate" && accelerateEnabled
-        ? "Readiness / controlled testing"
+        ? utilitiesEnabled ? "Provider integration configured" : "Readiness / controlled testing"
         : "Mock/test-mode only",
       enabled: utilitiesEnabled,
       testMode,
       customerPurchaseEnabled: utilitiesEnabled && customerPurchaseEnabled,
       customerPurchaseBlocked: !(utilitiesEnabled && customerPurchaseEnabled),
-      liveCustomerPurchaseStatus: utilitiesEnabled && customerPurchaseEnabled ? "Enabled by environment" : "Disabled until separately approved",
+      liveCustomerPurchaseStatus: utilitiesEnabled && customerPurchaseEnabled ? "Provider-backed test-mode processing enabled" : "Disabled or readiness-only",
       backendConnectivityTestAvailable: provider === "accelerate" && accelerateEnabled && missingRequiredKeys.length === 0,
       requiredEnv: requirements,
       missingRequiredKeys,
       notes: [
-        "Accelerate.ng is approved as the future Bills & Utilities provider, but customer purchases remain disabled until separately approved.",
+        utilitiesEnabled && customerPurchaseEnabled
+          ? "Customer Utilities can submit provider-backed requests in controlled test/sandbox mode only."
+          : "Customer Utilities remain readiness/test-mode until provider-backed customer purchases are explicitly enabled.",
         "No Accelerate API keys, client secrets or webhook secrets are returned by this readiness response.",
-        "Wallet-to-utility payment remains a future flow and is not active."
+        "Wallet-to-utility payment remains a future flow and is not active. Live fulfilment with payment-backed settlement remains disabled until separately approved."
       ]
     };
   }

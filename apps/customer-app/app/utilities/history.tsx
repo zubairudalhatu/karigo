@@ -31,7 +31,7 @@ export default function UtilityHistory() {
 
   return <Protected><Screen title="Utility history" refreshing={refreshing} onRefresh={load}>
     <Message error>{error}</Message>
-    {loading ? <Loading label="Loading utility test transactions..." /> : transactions.length === 0 ? <Empty message="No utility test transactions yet." /> :
+    {loading ? <Loading label="Loading utility transactions..." /> : transactions.length === 0 ? <Empty message="No utility transactions yet." /> :
       transactions.map((transaction) => <Pressable key={transaction.id} onPress={() => router.push(`/utilities/transactions/${transaction.id}`)} accessibilityRole="button" accessibilityLabel={`Open receipt ${transaction.reference}`}>
         <Card>
           <Text style={ui.cardTitle}>{transaction.provider.name}</Text>

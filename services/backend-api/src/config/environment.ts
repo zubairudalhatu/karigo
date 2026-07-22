@@ -355,29 +355,70 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       }
     }
   }
+  const configuredUtilitiesProvider = firstConfigured(config, ["UTILITIES_PROVIDER", "UTILITIES_PROVIDER_NAME"]);
   const utilitiesProvider =
-    typeof config.UTILITIES_PROVIDER === "string" && config.UTILITIES_PROVIDER.trim()
-      ? config.UTILITIES_PROVIDER.trim().toLowerCase()
+    typeof configuredUtilitiesProvider === "string" && configuredUtilitiesProvider.trim()
+      ? configuredUtilitiesProvider.trim().toLowerCase()
       : "mock";
   if (!["mock", "accelerate"].includes(utilitiesProvider)) {
     throw new Error("UTILITIES_PROVIDER must be mock or accelerate");
   }
-  const utilitiesEnabled = booleanFlag(config.UTILITIES_ENABLED, "UTILITIES_ENABLED", false);
+  const utilitiesEnabled = booleanAlias(
+    config,
+    ["UTILITIES_ENABLED", "UTILITIES_PROVIDER_ENABLED"],
+    "UTILITIES_ENABLED",
+    false
+  );
   const utilitiesTestMode = booleanFlag(config.UTILITIES_TEST_MODE, "UTILITIES_TEST_MODE", true);
   const utilitiesCustomerPurchaseEnabled = booleanFlag(
     config.UTILITIES_CUSTOMER_PURCHASE_ENABLED,
     "UTILITIES_CUSTOMER_PURCHASE_ENABLED",
     false
   );
-  const accelerateEnabled = booleanFlag(config.ACCELERATE_ENABLED, "ACCELERATE_ENABLED", false);
-  const accelerateBaseUrl = typeof config.ACCELERATE_BASE_URL === "string" && config.ACCELERATE_BASE_URL.trim()
-    ? config.ACCELERATE_BASE_URL.trim()
-    : "";
+  const accelerateEnabled = booleanAlias(
+    config,
+    ["ACCELERATE_ENABLED", "ACCELERATE_UTILITIES_ENABLED"],
+    "ACCELERATE_ENABLED",
+    false
+  );
+  const accelerateBaseUrl = stringAlias(
+    config,
+    ["ACCELERATE_BASE_URL", "ACCELERATE_API_BASE_URL", "UTILITIES_PROVIDER_BASE_URL"],
+    ""
+  );
+  const accelerateApiKey = liveString(config, "ACCELERATE_API_KEY") ?? liveString(config, "UTILITIES_PROVIDER_API_KEY");
+  const accelerateApiSecret = liveString(config, "ACCELERATE_API_SECRET") ?? liveString(config, "UTILITIES_PROVIDER_SECRET");
+  const accelerateWebhookSecret = liveString(config, "ACCELERATE_WEBHOOK_SECRET") ?? liveString(config, "UTILITIES_PROVIDER_WEBHOOK_SECRET");
+  const accelerateEnv = stringAlias(
+    config,
+    ["ACCELERATE_ENV", "UTILITIES_PROVIDER_ENV"],
+    utilitiesTestMode ? "sandbox" : "live"
+  ).toLowerCase();
+  if (!["sandbox", "test", "live"].includes(accelerateEnv)) {
+    throw new Error("ACCELERATE_ENV must be sandbox, test or live");
+  }
   if (accelerateBaseUrl && !accelerateBaseUrl.startsWith("https://")) {
     throw new Error("ACCELERATE_BASE_URL must use HTTPS");
   }
   if (utilitiesCustomerPurchaseEnabled) {
-    throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED must remain false until live utility purchase approval");
+    if (!utilitiesEnabled) {
+      throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires UTILITIES_ENABLED=true");
+    }
+    if (utilitiesProvider !== "accelerate") {
+      throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires UTILITIES_PROVIDER=accelerate");
+    }
+    if (!accelerateEnabled) {
+      throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_ENABLED=true");
+    }
+    if (!accelerateBaseUrl) {
+      throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_BASE_URL");
+    }
+    if (!accelerateApiKey) {
+      throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_API_KEY");
+    }
+    if (!utilitiesTestMode) {
+      throw new Error("UTILITIES_TEST_MODE must remain true until payment-backed live utility fulfilment is approved");
+    }
   }
   const notificationProvider =
     typeof config.NOTIFICATION_PROVIDER === "string" ? config.NOTIFICATION_PROVIDER.toLowerCase() : "mock";
@@ -644,11 +685,20 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       ? config.SQUAD_BASE_URL.trim()
       : "https://sandbox-api-d.squadco.com",
     UTILITIES_PROVIDER: utilitiesProvider,
+    UTILITIES_PROVIDER_NAME: utilitiesProvider,
     UTILITIES_ENABLED: utilitiesEnabled,
+    UTILITIES_PROVIDER_ENABLED: utilitiesEnabled,
     UTILITIES_TEST_MODE: utilitiesTestMode,
     UTILITIES_CUSTOMER_PURCHASE_ENABLED: utilitiesCustomerPurchaseEnabled,
     ACCELERATE_ENABLED: accelerateEnabled,
+    ACCELERATE_UTILITIES_ENABLED: accelerateEnabled,
     ACCELERATE_BASE_URL: accelerateBaseUrl,
+    ACCELERATE_API_BASE_URL: accelerateBaseUrl,
+    ACCELERATE_ENV: accelerateEnv,
+    UTILITIES_PROVIDER_ENV: accelerateEnv,
+    ACCELERATE_API_KEY: accelerateApiKey,
+    ACCELERATE_API_SECRET: accelerateApiSecret,
+    ACCELERATE_WEBHOOK_SECRET: accelerateWebhookSecret,
     NOTIFICATION_PROVIDER: notificationProvider,
     EMAIL_PROVIDER: emailProvider,
     EMAIL_FROM: typeof config.EMAIL_FROM === "string" && config.EMAIL_FROM.trim()
