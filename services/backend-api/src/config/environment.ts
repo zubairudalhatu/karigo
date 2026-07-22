@@ -1,3 +1,5 @@
+import { isPrismaAccelerateUrl } from "../prisma/prisma-accelerate";
+
 const DEFAULT_JWT_EXPIRY_SECONDS = 60 * 60 * 24 * 7;
 const JWT_DURATION_PATTERN = /^(\d+)([smhd])$/i;
 
@@ -235,7 +237,46 @@ function optionalCustomerAppReturnUrl(config: Record<string, unknown>, key: stri
   return value;
 }
 
+function optionalString(config: Record<string, unknown>, key: string): string {
+  return typeof config[key] === "string" && config[key].trim() ? config[key].trim() : "";
+}
+
+function validDirectDatabaseUrl(value: string): boolean {
+  return /^postgres(?:ql)?:\/\//i.test(value);
+}
+
+function validatePrismaAccelerateConfig(config: Record<string, unknown>, databaseUrl: string) {
+  const accelerateFlagEnabled = booleanFlag(config.PRISMA_ACCELERATE_ENABLED, "PRISMA_ACCELERATE_ENABLED", false);
+  const accelerateUrlConfigured = isPrismaAccelerateUrl(databaseUrl);
+  const prismaAccelerateEnabled = accelerateFlagEnabled || accelerateUrlConfigured;
+  const directUrl = optionalString(config, "DIRECT_URL");
+
+  if (accelerateFlagEnabled && !accelerateUrlConfigured) {
+    throw new Error("PRISMA_ACCELERATE_ENABLED=true requires DATABASE_URL to use Prisma Accelerate");
+  }
+
+  if (directUrl) {
+    if (isPrismaAccelerateUrl(directUrl)) {
+      throw new Error("DIRECT_URL must be a direct PostgreSQL URL, not a Prisma Accelerate URL");
+    }
+    if (!validDirectDatabaseUrl(directUrl)) {
+      throw new Error("DIRECT_URL must be a PostgreSQL connection string");
+    }
+  }
+
+  if (prismaAccelerateEnabled && !directUrl) {
+    throw new Error("Prisma Accelerate requires DIRECT_URL for Prisma migrations");
+  }
+
+  return {
+    directUrl,
+    prismaAccelerateEnabled
+  };
+}
+
 export function validateEnvironment(config: Record<string, unknown>): Record<string, unknown> {
+  const databaseUrl = requireValue(config, "DATABASE_URL");
+  const prismaAccelerate = validatePrismaAccelerateConfig(config, databaseUrl);
   const appEnvironment = typeof config.APP_ENV === "string" ? config.APP_ENV : "development";
   const otpProvider =
     typeof config.OTP_PROVIDER === "string"
@@ -555,7 +596,9 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     APP_ENV: appEnvironment,
     APP_PORT: positiveInteger(config.APP_PORT ?? config.PORT, "APP_PORT", 4000),
     API_PREFIX: `/${normalizeApiPrefix(typeof config.API_PREFIX === "string" ? config.API_PREFIX : "/api/v1")}`,
-    DATABASE_URL: requireValue(config, "DATABASE_URL"),
+    DATABASE_URL: databaseUrl,
+    DIRECT_URL: prismaAccelerate.directUrl,
+    PRISMA_ACCELERATE_ENABLED: prismaAccelerate.prismaAccelerateEnabled,
     JWT_SECRET: requireValue(config, "JWT_SECRET"),
     JWT_EXPIRES_IN_SECONDS: jwtExpirySeconds(config.JWT_EXPIRES_IN),
     OTP_EXPIRY_MINUTES: positiveInteger(config.OTP_EXPIRY_MINUTES, "OTP_EXPIRY_MINUTES", 10),

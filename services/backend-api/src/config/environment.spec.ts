@@ -46,6 +46,8 @@ describe("environment configuration", () => {
     expect(result.CUSTOMER_APP_DEEP_LINK_BASE).toBe("karigo-customer:///profile/wallet");
     expect(result.CUSTOMER_APP_WALLET_TOP_UP_RETURN_URL).toBe("karigo-customer:///profile/wallet");
     expect(result.CUSTOMER_WEB_PAYMENT_FALLBACK_URL).toBe("https://www.karigo.com.ng/payment/flutterwave/return");
+    expect(result.DIRECT_URL).toBe("");
+    expect(result.PRISMA_ACCELERATE_ENABLED).toBe(false);
     expect(result.PAYMENTS_LIVE_ENABLED).toBe(false);
     expect(result.PAYMENT_PROVIDER).toBe("mock");
     expect(result.PAYMENTS_PROVIDER).toBe("mock");
@@ -94,6 +96,59 @@ describe("environment configuration", () => {
     expect(() => validateEnvironment({ JWT_SECRET: "test-secret" })).toThrow(
       "Missing required environment variable: DATABASE_URL"
     );
+  });
+
+  it("auto-enables Prisma Accelerate when DATABASE_URL is an Accelerate URL", () => {
+    const result = validateEnvironment({
+      DATABASE_URL: "prisma://accelerate.prisma-data.net/?api_key=placeholder",
+      DIRECT_URL: "postgresql://user:password@db.example.test:5432/karigo",
+      JWT_SECRET: "test-secret"
+    });
+
+    expect(result.PRISMA_ACCELERATE_ENABLED).toBe(true);
+  });
+
+  it("allows explicit Prisma Accelerate only with an Accelerate DATABASE_URL and DIRECT_URL", () => {
+    const result = validateEnvironment({
+      DATABASE_URL: "prisma://accelerate.prisma-data.net/?api_key=placeholder",
+      DIRECT_URL: "postgresql://user:password@db.example.test:5432/karigo",
+      JWT_SECRET: "test-secret",
+      PRISMA_ACCELERATE_ENABLED: "true"
+    });
+
+    expect(result.DIRECT_URL).toBe("postgresql://user:password@db.example.test:5432/karigo");
+    expect(result.PRISMA_ACCELERATE_ENABLED).toBe(true);
+  });
+
+  it("rejects explicit Prisma Accelerate with a direct DATABASE_URL", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: "postgresql://user:password@db.example.test:5432/karigo",
+      DIRECT_URL: "postgresql://user:password@db.example.test:5432/karigo",
+      JWT_SECRET: "test-secret",
+      PRISMA_ACCELERATE_ENABLED: "true"
+    })).toThrow("PRISMA_ACCELERATE_ENABLED=true requires DATABASE_URL to use Prisma Accelerate");
+  });
+
+  it("rejects explicit Prisma Accelerate without DIRECT_URL", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: "prisma://accelerate.prisma-data.net/?api_key=placeholder",
+      JWT_SECRET: "test-secret",
+      PRISMA_ACCELERATE_ENABLED: "true"
+    })).toThrow("Prisma Accelerate requires DIRECT_URL for Prisma migrations");
+  });
+
+  it("rejects DIRECT_URL when it is not a direct PostgreSQL URL", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      DIRECT_URL: "prisma://accelerate.prisma-data.net/?api_key=placeholder",
+      JWT_SECRET: "test-secret"
+    })).toThrow("DIRECT_URL must be a direct PostgreSQL URL");
+
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      DIRECT_URL: "mysql://user:password@db.example.test:3306/karigo",
+      JWT_SECRET: "test-secret"
+    })).toThrow("DIRECT_URL must be a PostgreSQL connection string");
   });
 
   it("allows Paystack sandbox selection with a test key", () => {
