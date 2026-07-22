@@ -86,7 +86,7 @@ export default function AdminUtilitiesPage() {
 
   return <PortalShell>
     <h1>Utilities</h1>
-    <p className="muted">Utility transaction monitoring for Airtime, Data, Electricity and Cable TV. Provider payloads and secrets are not shown.</p>
+    <p className="muted">Utility transaction monitoring for Airtime, Data, Electricity and Cable TV. Wallet debit/reversal references and provider status are shown for operations; raw provider payloads and secrets are not shown.</p>
     <p className="success">{message}</p>
     <ErrorMessage>{error}</ErrorMessage>
 
@@ -118,12 +118,13 @@ export default function AdminUtilitiesPage() {
     {loading ? <Loading /> : <section className="detail-grid">
       <div className="section">
         {transactions.length ? <table className="table">
-          <thead><tr><th>Reference</th><th>Customer</th><th>Service</th><th>Provider</th><th>Amount</th><th>Status</th><th>Created</th><th>Action</th></tr></thead>
+          <thead><tr><th>Reference</th><th>Customer</th><th>Service</th><th>Provider</th><th>Payment</th><th>Amount</th><th>Status</th><th>Created</th><th>Action</th></tr></thead>
           <tbody>{transactions.map((transaction) => <tr key={transaction.id}>
             <td>{transaction.reference}</td>
             <td>{transaction.customer.fullName}</td>
             <td>{label(transaction.serviceType)}</td>
             <td>{transaction.provider.name}</td>
+            <td>{transaction.paymentMethod ?? (transaction.testMode ? "Review" : "Provider")}</td>
             <td>{moneyKobo(transaction.totalKobo)}</td>
             <td><Badge>{transaction.status}</Badge></td>
             <td>{new Date(transaction.createdAt).toLocaleString()}</td>
@@ -141,6 +142,7 @@ export default function AdminUtilitiesPage() {
           <div className="item"><span>Service</span><strong>{label(selected.serviceType)}</strong></div>
           <div className="item"><span>Provider</span><strong>{selected.provider.name}</strong></div>
           <div className="item"><span>Provider mode</span><strong>{selected.providerMode ?? (selected.testMode ? "test" : "provider")}</strong></div>
+          <div className="item"><span>Payment method</span><strong>{selected.paymentMethod ?? (selected.testMode ? "Review" : "Provider")}</strong></div>
           {selected.product ? <div className="item"><span>Plan</span><strong>{selected.product.name}</strong></div> : null}
           <div className="item"><span>Recipient</span><strong>{selected.recipient}</strong></div>
           <div className="item"><span>Amount</span><strong>{moneyKobo(selected.amountKobo)}</strong></div>
@@ -148,6 +150,10 @@ export default function AdminUtilitiesPage() {
           <div className="item"><span>Total</span><strong>{moneyKobo(selected.totalKobo)}</strong></div>
           <div className="item"><span>Status</span><Badge>{selected.status}</Badge></div>
           {selected.providerReference ? <div className="item"><span>Provider reference</span><strong>{selected.providerReference}</strong></div> : null}
+          {selected.walletDebitReference ? <div className="item"><span>Wallet debit reference</span><strong>{selected.walletDebitReference}</strong></div> : null}
+          {selected.walletDebitStatus ? <div className="item"><span>Wallet debit status</span><Badge>{selected.walletDebitStatus}</Badge></div> : null}
+          {selected.walletReversalReference ? <div className="item"><span>Wallet reversal reference</span><strong>{selected.walletReversalReference}</strong></div> : null}
+          {selected.walletReversalStatus ? <div className="item"><span>Wallet reversal status</span><Badge>{selected.walletReversalStatus}</Badge></div> : null}
           {selected.mockToken ? <div className="item"><span>Mock token</span><strong>{selected.mockToken}</strong></div> : null}
           {selected.customerNote ? <p className="muted">{selected.customerNote}</p> : null}
           {selected.failureReason ? <p className="error">{selected.failureReason}</p> : null}

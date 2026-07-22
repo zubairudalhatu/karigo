@@ -40,6 +40,9 @@ export interface PaymentProviderReadiness {
     testMode: boolean;
     customerPurchaseEnabled: boolean;
     customerPurchaseBlocked: boolean;
+    walletPaymentEnabled?: boolean;
+    liveFulfillmentEnabled?: boolean;
+    paymentMethod?: string;
     liveCustomerPurchaseStatus: string;
     backendConnectivityTestAvailable: boolean;
     requiredEnv: PaymentProviderRequirement[];

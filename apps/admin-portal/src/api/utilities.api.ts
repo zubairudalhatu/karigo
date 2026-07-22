@@ -19,6 +19,11 @@ export interface AdminUtilityTransaction {
   customerNote?: string | null;
   failureReason?: string | null;
   providerMode?: string | null;
+  paymentMethod?: string | null;
+  walletDebitReference?: string | null;
+  walletDebitStatus?: string | null;
+  walletReversalReference?: string | null;
+  walletReversalStatus?: string | null;
   metadata?: unknown;
   customer: { id: string; fullName: string; phoneNumber?: string | null; email?: string | null };
   testMode: boolean;

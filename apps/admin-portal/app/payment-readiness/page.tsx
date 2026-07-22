@@ -241,9 +241,14 @@ export default function PaymentReadinessPage() {
                   <div className="item"><span>Backend utilities enabled</span><strong>{yesNo(readiness.utilityReadiness.enabled)}</strong></div>
                   <div className="item"><span>Test mode</span><strong>{yesNo(readiness.utilityReadiness.testMode)}</strong></div>
                   <div className="item"><span>Customer purchases</span><strong>{readiness.utilityReadiness.liveCustomerPurchaseStatus}</strong></div>
+                  <div className="item"><span>Wallet utility payment</span><strong>{yesNo(readiness.utilityReadiness.walletPaymentEnabled)}</strong></div>
+                  <div className="item"><span>Live provider fulfilment</span><strong>{yesNo(readiness.utilityReadiness.liveFulfillmentEnabled)}</strong></div>
+                  <div className="item"><span>Payment method</span><strong>{readiness.utilityReadiness.paymentMethod ?? "READINESS_ONLY"}</strong></div>
                   <div className="item"><span>Backend connectivity test available</span><strong>{yesNo(readiness.utilityReadiness.backendConnectivityTestAvailable)}</strong></div>
                   <div className="item"><span>Missing required keys</span><strong>{readiness.utilityReadiness.missingRequiredKeys.length}</strong></div>
-                  <p className="muted">Wallet-to-utility payment and live fulfilment settlement remain disabled until separately approved.</p>
+                  <p className="muted">{readiness.utilityReadiness.walletPaymentEnabled && readiness.utilityReadiness.liveFulfillmentEnabled
+                    ? "Wallet-to-utility payment is enabled for Utilities only. Backend balance checks, wallet ledger debit and automatic reversal controls are required for every provider request."
+                    : "Wallet-to-utility payment remains disabled until Utilities customer purchases, wallet payment and live fulfilment flags are explicitly enabled."}</p>
                   {readiness.utilityReadiness.notes.map((note) => <p className="muted" key={note}>{note}</p>)}
                 </article>
                 <article className="card">

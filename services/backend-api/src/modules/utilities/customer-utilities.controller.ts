@@ -25,9 +25,9 @@ export class CustomerUtilitiesController {
   }
 
   @Post("transactions")
-  @ApiOperation({ summary: "Run a mock Bills & Utilities transaction" })
+  @ApiOperation({ summary: "Create a Bills & Utilities transaction" })
   async create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateUtilityTransactionDto) {
-    return { message: "Utility test transaction created", data: await this.utilities.createTransaction(user.id, dto) };
+    return { message: "Utility transaction created", data: await this.utilities.createTransaction(user.id, dto) };
   }
 
   @Get("transactions")

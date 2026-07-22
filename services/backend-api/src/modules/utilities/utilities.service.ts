@@ -1,6 +1,14 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Prisma, UtilityServiceType, UtilityTransactionStatus } from "@prisma/client";
+import {
+  Prisma,
+  UtilityServiceType,
+  UtilityTransactionStatus,
+  WalletLedgerDirection,
+  WalletLedgerEntryStatus,
+  WalletLedgerEntryType,
+  WalletStatus
+} from "@prisma/client";
 import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -24,6 +32,8 @@ const TERMINAL_STATUSES: UtilityTransactionStatus[] = [
   UtilityTransactionStatus.FAILED,
   UtilityTransactionStatus.CANCELLED
 ];
+const UTILITY_WALLET_SOURCE_TYPE = "UTILITY_TRANSACTION";
+const UTILITY_WALLET_REVERSAL_SOURCE_TYPE = "UTILITY_TRANSACTION_REVERSAL";
 
 @Injectable()
 export class UtilitiesService {
@@ -100,8 +110,18 @@ export class UtilitiesService {
   async createTransaction(userId: string, dto: CreateUtilityTransactionDto) {
     const customer = await this.requireCustomer(userId);
     const utilityProvider = this.activeUtilityProvider();
+    if (this.walletUtilityPaymentEnabled(utilityProvider)) {
+      const existing = await this.findIdempotentWalletUtilityTransaction(customer.id, dto.idempotencyKey);
+      if (existing) return this.customerTransaction(existing);
+    }
     const resolved = await this.resolveRequest(dto, utilityProvider.client);
     const reference = await this.uniqueReference();
+    if (this.walletUtilityPaymentEnabled(utilityProvider)) {
+      return this.createWalletFundedTransaction(customer.id, dto, resolved, reference, utilityProvider);
+    }
+    if (utilityProvider.mode === "accelerate" && !utilityProvider.testMode) {
+      throw new BadRequestException("Live Utilities require wallet payment and live fulfilment flags.");
+    }
     const transaction = await this.prisma.utilityTransaction.create({
       data: {
         reference,
@@ -135,6 +155,139 @@ export class UtilitiesService {
     return this.customerTransaction(updated);
   }
 
+  private async createWalletFundedTransaction(
+    customerId: string,
+    dto: CreateUtilityTransactionDto,
+    resolved: Awaited<ReturnType<UtilitiesService["resolveRequest"]>>,
+    reference: string,
+    utilityProvider: ReturnType<UtilitiesService["activeUtilityProvider"]>
+  ) {
+    const amount = this.walletAmountFromKobo(resolved.totalKobo);
+    const idempotencyKey = this.walletDebitIdempotencyKey(customerId, dto.idempotencyKey ?? reference);
+    const created = await this.prisma.$transaction(async (tx) => {
+      const existingLedger = await tx.customerWalletLedgerEntry.findUnique({
+        where: { idempotencyKey },
+        include: { wallet: true }
+      });
+      if (existingLedger?.sourceId) {
+        const existingTransaction = await tx.utilityTransaction.findFirst({
+          where: { id: existingLedger.sourceId, customerId },
+          include: this.customerInclude()
+        });
+        if (existingTransaction) {
+          return { transaction: existingTransaction, duplicate: true };
+        }
+      }
+
+      const wallet = await tx.customerWallet.upsert({
+        where: { customerId },
+        update: {},
+        create: { customerId }
+      });
+      if (wallet.status !== WalletStatus.ACTIVE) {
+        throw new BadRequestException("Only active wallets can pay for Utilities.");
+      }
+      if (wallet.availableBalance.lessThan(amount)) {
+        throw new BadRequestException("Insufficient wallet balance. Please top up your wallet and try again.");
+      }
+
+      const now = new Date();
+      const balanceBefore = wallet.availableBalance;
+      const balanceAfter = balanceBefore.sub(amount);
+      const transaction = await tx.utilityTransaction.create({
+        data: {
+          reference,
+          customerId,
+          serviceType: resolved.provider.type,
+          providerId: resolved.provider.id,
+          productId: resolved.product?.id,
+          amountKobo: resolved.amountKobo,
+          convenienceFeeKobo: resolved.convenienceFeeKobo,
+          totalKobo: resolved.totalKobo,
+          recipient: resolved.recipient,
+          recipientName: resolved.recipientName,
+          status: UtilityTransactionStatus.PENDING,
+          providerStatus: `${utilityProvider.providerStatusPrefix}_PENDING`,
+          customerNote: "Your KariGO Wallet has been debited. Utility fulfilment is being processed.",
+          metadata: this.utilityMetadata(utilityProvider.mode, utilityProvider.testMode, "WALLET")
+        }
+      });
+      await tx.customerWallet.update({
+        where: { id: wallet.id },
+        data: {
+          availableBalance: balanceAfter,
+          ledgerBalance: balanceAfter,
+          lastActivityAt: now
+        }
+      });
+      const debitLedger = await tx.customerWalletLedgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          customerId,
+          entryType: WalletLedgerEntryType.SERVICE_PAYMENT,
+          direction: WalletLedgerDirection.DEBIT,
+          status: WalletLedgerEntryStatus.POSTED,
+          amount,
+          currency: wallet.currency,
+          balanceBefore,
+          balanceAfter,
+          reference: `${reference}-WALLET-DEBIT`,
+          idempotencyKey,
+          sourceType: UTILITY_WALLET_SOURCE_TYPE,
+          sourceId: transaction.id,
+          description: `Utilities wallet payment for ${reference}`,
+          metadata: {
+            utilityTransactionId: transaction.id,
+            utilityReference: reference,
+            serviceType: resolved.provider.type,
+            providerId: resolved.provider.id
+          } as Prisma.InputJsonValue,
+          postedAt: now
+        }
+      });
+      const transactionWithMetadata = await tx.utilityTransaction.update({
+        where: { id: transaction.id },
+        data: {
+          metadata: this.mergeMetadata(transaction.metadata, {
+            paymentMethod: "WALLET",
+            walletDebitLedgerEntryId: debitLedger.id,
+            walletDebitReference: debitLedger.reference,
+            walletDebitStatus: debitLedger.status,
+            walletDebitAmount: amount.toFixed(2),
+            walletBalanceAfterDebit: balanceAfter.toFixed(2)
+          })
+        },
+        include: this.customerInclude()
+      });
+      return { transaction: transactionWithMetadata, duplicate: false };
+    });
+
+    if (created.duplicate) return this.customerTransaction(created.transaction);
+
+    let purchase: UtilityPurchaseResult;
+    try {
+      purchase = await utilityProvider.client.purchase({
+        serviceType: resolved.provider.type,
+        providerCode: resolved.provider.code,
+        productCode: resolved.product?.code,
+        amountKobo: resolved.amountKobo,
+        recipient: resolved.recipient,
+        recipientName: resolved.recipientName,
+        reference,
+        totalKobo: resolved.totalKobo
+      });
+    } catch {
+      const reversed = await this.reverseWalletDebitIfNeeded(created.transaction.id, "Utilities provider could not be reached safely.");
+      return this.customerTransaction(reversed ?? created.transaction);
+    }
+    const updated = await this.applyProviderResult(created.transaction.id, purchase, this.customerInclude(), created.transaction.metadata);
+    if (purchase.status === UtilityTransactionStatus.FAILED) {
+      const reversed = await this.reverseWalletDebitIfNeeded(created.transaction.id, purchase.failureReason ?? "Utilities provider reported a failed transaction.");
+      return this.customerTransaction(reversed ?? updated);
+    }
+    return this.customerTransaction(updated);
+  }
+
   async adminVerifyProviderStatus(adminUserId: string, transactionId: string) {
     const transaction = await this.prisma.utilityTransaction.findUnique({
       where: { id: transactionId },
@@ -146,20 +299,48 @@ export class UtilitiesService {
     const utilityProvider = this.providerForMode(this.transactionProviderMode(transaction.metadata));
     const purchase = await utilityProvider.client.checkStatus(transaction.providerReference ?? transaction.reference);
     const updated = await this.applyProviderResult(transaction.id, purchase, this.adminInclude(true), transaction.metadata);
+    if (purchase.status === UtilityTransactionStatus.FAILED) {
+      const reversed = await this.reverseWalletDebitIfNeeded(transaction.id, purchase.failureReason ?? "Utilities provider reported a failed transaction.", true);
+      if (reversed) {
+        await this.audit.record(adminUserId, "admin.utilities.wallet_reversal", "UtilityTransaction", transactionId, {
+          providerMode: utilityProvider.mode,
+          status: reversed.status,
+          providerStatus: reversed.providerStatus
+        });
+        return this.adminTransaction(reversed as Prisma.UtilityTransactionGetPayload<{ include: ReturnType<UtilitiesService["adminInclude"]> }>);
+      }
+    }
     await this.audit.record(adminUserId, "admin.utilities.provider_verify", "UtilityTransaction", transactionId, {
       providerMode: utilityProvider.mode,
       status: updated.status,
       providerStatus: updated.providerStatus
     });
-    return this.adminTransaction(updated);
+    return this.adminTransaction(updated as Prisma.UtilityTransactionGetPayload<{ include: ReturnType<UtilitiesService["adminInclude"]> }>);
   }
 
-  private async applyProviderResult<TInclude extends ReturnType<UtilitiesService["customerInclude"]> | ReturnType<UtilitiesService["adminInclude"]>>(
+  private applyProviderResult(
     transactionId: string,
     purchase: UtilityPurchaseResult,
-    include: TInclude,
+    include: ReturnType<UtilitiesService["customerInclude"]>,
+    currentMetadata?: Prisma.JsonValue | null
+  ): Promise<Prisma.UtilityTransactionGetPayload<{ include: ReturnType<UtilitiesService["customerInclude"]> }>>;
+  private applyProviderResult(
+    transactionId: string,
+    purchase: UtilityPurchaseResult,
+    include: ReturnType<UtilitiesService["adminInclude"]>,
+    currentMetadata?: Prisma.JsonValue | null
+  ): Promise<Prisma.UtilityTransactionGetPayload<{ include: ReturnType<UtilitiesService["adminInclude"]> }>>;
+  private async applyProviderResult(
+    transactionId: string,
+    purchase: UtilityPurchaseResult,
+    include: ReturnType<UtilitiesService["customerInclude"]> | ReturnType<UtilitiesService["adminInclude"]>,
     currentMetadata?: Prisma.JsonValue | null
   ) {
+    const customerNote = purchase.customerNote ?? (purchase.status === UtilityTransactionStatus.SUCCESSFUL
+      ? "Utility payment successful. Your request has been processed."
+      : purchase.status === UtilityTransactionStatus.FAILED
+        ? "Utility payment failed. Your wallet reversal will be confirmed if a debit was posted."
+        : "Your utility payment is being processed. Please check status shortly.");
     return this.prisma.utilityTransaction.update({
       where: { id: transactionId },
       data: {
@@ -167,12 +348,121 @@ export class UtilitiesService {
         providerStatus: purchase.providerStatus,
         providerReference: purchase.providerReference,
         mockToken: purchase.mockToken,
-        customerNote: purchase.customerNote,
+        customerNote,
         failureReason: purchase.failureReason,
         metadata: this.mergeMetadata(currentMetadata, purchase.metadata),
         completedAt: TERMINAL_STATUSES.includes(purchase.status) ? new Date() : undefined
       },
       include
+    }) as Promise<
+      Prisma.UtilityTransactionGetPayload<{ include: ReturnType<UtilitiesService["customerInclude"]> }> |
+      Prisma.UtilityTransactionGetPayload<{ include: ReturnType<UtilitiesService["adminInclude"]> }>
+    >;
+  }
+
+  private async reverseWalletDebitIfNeeded(transactionId: string, reason: string, adminInclude = false) {
+    const transaction = await this.prisma.utilityTransaction.findUnique({
+      where: { id: transactionId },
+      include: adminInclude ? this.adminInclude(true) : this.customerInclude()
+    });
+    if (!transaction) throw new NotFoundException("Utility transaction not found");
+    const metadata = this.jsonObject(transaction.metadata);
+    const debitLedgerEntryId = typeof metadata.walletDebitLedgerEntryId === "string" ? metadata.walletDebitLedgerEntryId : undefined;
+    if (!debitLedgerEntryId) return null;
+
+    return this.prisma.$transaction(async (tx) => {
+      const debitLedger = await tx.customerWalletLedgerEntry.findUnique({ where: { id: debitLedgerEntryId } });
+      if (!debitLedger) return transaction;
+      const reversalIdempotencyKey = `utility:${transaction.reference}:wallet-reversal`;
+      const existingReversal = await tx.customerWalletLedgerEntry.findUnique({
+        where: { idempotencyKey: reversalIdempotencyKey }
+      });
+      if (existingReversal) {
+        const refreshed = await tx.utilityTransaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: UtilityTransactionStatus.FAILED,
+            customerNote: "Utility payment failed. Your wallet has been reversed.",
+            failureReason: reason,
+            metadata: this.mergeMetadata(transaction.metadata, {
+              walletDebitStatus: "REVERSED",
+              walletReversalLedgerEntryId: existingReversal.id,
+              walletReversalReference: existingReversal.reference,
+              walletReversalStatus: existingReversal.status
+            })
+          },
+          include: adminInclude ? this.adminInclude(true) : this.customerInclude()
+        });
+        return refreshed;
+      }
+      if (debitLedger.status !== WalletLedgerEntryStatus.POSTED) {
+        return transaction;
+      }
+      const wallet = await tx.customerWallet.findUnique({ where: { id: debitLedger.walletId } });
+      if (!wallet) throw new NotFoundException("Customer wallet not found");
+      const now = new Date();
+      const balanceBefore = wallet.availableBalance;
+      const balanceAfter = wallet.availableBalance.add(debitLedger.amount);
+      await tx.customerWallet.update({
+        where: { id: wallet.id },
+        data: {
+          availableBalance: balanceAfter,
+          ledgerBalance: balanceAfter,
+          lastActivityAt: now
+        }
+      });
+      await tx.customerWalletLedgerEntry.update({
+        where: { id: debitLedger.id },
+        data: {
+          status: WalletLedgerEntryStatus.REVERSED,
+          reversedAt: now,
+          metadata: this.mergeMetadata(debitLedger.metadata, {
+            reversedForUtilityTransactionId: transaction.id,
+            reversalReason: reason
+          })
+        }
+      });
+      const reversalLedger = await tx.customerWalletLedgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          customerId: wallet.customerId,
+          entryType: WalletLedgerEntryType.REVERSAL,
+          direction: WalletLedgerDirection.CREDIT,
+          status: WalletLedgerEntryStatus.POSTED,
+          amount: debitLedger.amount,
+          currency: wallet.currency,
+          balanceBefore,
+          balanceAfter,
+          reference: `${transaction.reference}-WALLET-REVERSAL`,
+          idempotencyKey: reversalIdempotencyKey,
+          sourceType: UTILITY_WALLET_REVERSAL_SOURCE_TYPE,
+          sourceId: transaction.id,
+          description: `Wallet reversal for failed utility transaction ${transaction.reference}`,
+          metadata: {
+            utilityTransactionId: transaction.id,
+            utilityReference: transaction.reference,
+            debitLedgerEntryId: debitLedger.id,
+            debitReference: debitLedger.reference
+          } as Prisma.InputJsonValue,
+          postedAt: now
+        }
+      });
+      return tx.utilityTransaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: UtilityTransactionStatus.FAILED,
+          customerNote: "Utility payment failed. Your wallet has been reversed.",
+          failureReason: reason,
+          metadata: this.mergeMetadata(transaction.metadata, {
+            walletDebitStatus: WalletLedgerEntryStatus.REVERSED,
+            walletReversalLedgerEntryId: reversalLedger.id,
+            walletReversalReference: reversalLedger.reference,
+            walletReversalStatus: reversalLedger.status,
+            walletBalanceAfterReversal: balanceAfter.toFixed(2)
+          })
+        },
+        include: adminInclude ? this.adminInclude(true) : this.customerInclude()
+      });
     });
   }
 
@@ -394,12 +684,25 @@ export class UtilitiesService {
   private accelerateCustomerPurchasesEnabled() {
     return this.stringValue("UTILITIES_PROVIDER", "mock") === "accelerate" &&
       this.flagValue("UTILITIES_ENABLED", false) &&
-      this.flagValue("UTILITIES_CUSTOMER_PURCHASE_ENABLED", false) &&
+      this.customerUtilityPurchasesFlagEnabled() &&
       this.flagValue("ACCELERATE_ENABLED", false);
   }
 
-  private utilityMetadata(mode: string, testMode: boolean): Prisma.InputJsonObject {
-    return { mode, testMode };
+  private walletUtilityPaymentEnabled(utilityProvider: ReturnType<UtilitiesService["activeUtilityProvider"]>) {
+    return utilityProvider.mode === "accelerate" &&
+      !utilityProvider.testMode &&
+      this.customerUtilityPurchasesFlagEnabled() &&
+      this.flagValue("UTILITIES_WALLET_PAYMENT_ENABLED", false) &&
+      this.flagValue("UTILITIES_LIVE_FULFILLMENT_ENABLED", false);
+  }
+
+  private customerUtilityPurchasesFlagEnabled() {
+    return this.flagValue("UTILITIES_CUSTOMER_PURCHASE_ENABLED", false) ||
+      this.flagValue("UTILITIES_CUSTOMER_PURCHASES_ENABLED", false);
+  }
+
+  private utilityMetadata(mode: string, testMode: boolean, paymentMethod?: string): Prisma.InputJsonObject {
+    return { mode, testMode, ...(paymentMethod ? { paymentMethod } : {}) };
   }
 
   private mergeMetadata(currentMetadata: Prisma.JsonValue | null | undefined, metadata: Record<string, unknown> | undefined): Prisma.InputJsonObject {
@@ -415,6 +718,27 @@ export class UtilitiesService {
       if (typeof mode === "string") return mode;
     }
     return "mock";
+  }
+
+  private async findIdempotentWalletUtilityTransaction(customerId: string, idempotencyKey?: string) {
+    if (!idempotencyKey) return null;
+    const ledger = await this.prisma.customerWalletLedgerEntry.findUnique({
+      where: { idempotencyKey: this.walletDebitIdempotencyKey(customerId, idempotencyKey) }
+    });
+    if (!ledger?.sourceId) return null;
+    return this.prisma.utilityTransaction.findFirst({
+      where: { id: ledger.sourceId, customerId },
+      include: this.customerInclude()
+    });
+  }
+
+  private walletDebitIdempotencyKey(customerId: string, key: string) {
+    const safeKey = key.trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 90);
+    return `utility:${customerId}:${safeKey}`;
+  }
+
+  private walletAmountFromKobo(amountKobo: number) {
+    return new Prisma.Decimal(amountKobo).div(100).toDecimalPlaces(2);
   }
 
   private stringValue(key: string, fallback = ""): string {
@@ -482,6 +806,11 @@ export class UtilitiesService {
       customerNote: transaction.customerNote,
       failureReason: transaction.failureReason,
       providerMode: typeof metadata.mode === "string" ? metadata.mode : "mock",
+      paymentMethod: typeof metadata.paymentMethod === "string" ? metadata.paymentMethod : undefined,
+      walletDebitReference: typeof metadata.walletDebitReference === "string" ? metadata.walletDebitReference : undefined,
+      walletDebitStatus: typeof metadata.walletDebitStatus === "string" ? metadata.walletDebitStatus : undefined,
+      walletReversalReference: typeof metadata.walletReversalReference === "string" ? metadata.walletReversalReference : undefined,
+      walletReversalStatus: typeof metadata.walletReversalStatus === "string" ? metadata.walletReversalStatus : undefined,
       testMode: typeof metadata.testMode === "boolean" ? metadata.testMode : true,
       createdAt: transaction.createdAt,
       updatedAt: transaction.updatedAt,
@@ -516,6 +845,11 @@ export class UtilitiesService {
         email: transaction.customer.user.email
       },
       providerMode: typeof metadata.mode === "string" ? metadata.mode : "mock",
+      paymentMethod: typeof metadata.paymentMethod === "string" ? metadata.paymentMethod : undefined,
+      walletDebitReference: typeof metadata.walletDebitReference === "string" ? metadata.walletDebitReference : undefined,
+      walletDebitStatus: typeof metadata.walletDebitStatus === "string" ? metadata.walletDebitStatus : undefined,
+      walletReversalReference: typeof metadata.walletReversalReference === "string" ? metadata.walletReversalReference : undefined,
+      walletReversalStatus: typeof metadata.walletReversalStatus === "string" ? metadata.walletReversalStatus : undefined,
       testMode: typeof metadata.testMode === "boolean" ? metadata.testMode : true,
       createdAt: transaction.createdAt,
       updatedAt: transaction.updatedAt,

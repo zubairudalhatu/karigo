@@ -392,6 +392,14 @@ assert(utilitiesHome.includes("/utilities/history"), "Utilities hub must link to
 const utilityFlow = read("app", "utilities", "[service].tsx");
 assert(utilityFlow.includes("Review Utility Request"), "Utility quote button must use provider-review copy.");
 assert(utilityFlow.includes("Submit Utility Request") && utilityFlow.includes("Submit Review Record"), "Utility confirm button must support provider-backed and review copy.");
+assert(utilityFlow.includes("Pay with Wallet"), "Utility flow must expose wallet payment only when backend public config enables it.");
+assert(utilityFlow.includes("walletApi.summary"), "Utility flow must load the server-side wallet balance.");
+assert(utilityFlow.includes("walletUtilitiesEnabled"), "Utility flow must use backend utility wallet/live fulfilment flags.");
+assert(utilityFlow.includes("Insufficient wallet balance. Please top up your wallet and try again."), "Utility flow must show insufficient wallet balance state.");
+assert(utilityFlow.includes("idempotencyKey: quote.quoteReference"), "Utility flow must submit quote reference as idempotency guard.");
+assert(utilityFlow.includes("Your KariGO Wallet will be debited after you submit this request."), "Utility flow must explain backend wallet debit timing.");
+assert(utilityFlow.includes("Utility payment failed. Your wallet has been reversed."), "Utility flow must show reversal copy for failed provider fulfilment.");
+assert(utilityFlow.includes("walletDebitReference") && utilityFlow.includes("walletReversalReference"), "Utility receipt must show wallet debit and reversal references.");
 assert(!utilityFlow.includes("Pay Now"), "Utility flow must not use Pay Now wording.");
 assert(utilityFlow.includes("utilitiesStatusNote"), "Utility flow must render backend-controlled provider safety copy.");
 assert(utilityFlow.includes("Your request is being processed. KariGO will confirm once the provider completes fulfillment."), "Utility flow must include provider-backed pending copy.");
@@ -401,6 +409,9 @@ assert(utilityFlow.includes("utilitiesApi.create"), "Utility flow must create th
 const utilityReceipt = read("app", "utilities", "transactions", "[id].tsx");
 assert(utilityReceipt.includes("Utility review receipt"), "Utility receipt detail must be explicit.");
 assert(utilityReceipt.includes("Utility request receipt"), "Utility receipt detail must support provider-backed request receipts.");
+assert(utilityReceipt.includes("Utility payment successful. Your request has been processed."), "Utility receipt must show successful provider fulfilment copy.");
+assert(utilityReceipt.includes("Utility payment failed. Your wallet has been reversed."), "Utility receipt must show failed/reversed copy.");
+assert(utilityReceipt.includes("walletDebitReference") && utilityReceipt.includes("walletReversalReference"), "Utility receipt detail must show wallet debit and reversal references.");
 assert(utilityReceipt.includes("This request is running in controlled provider test mode."), "Utility receipt must keep controlled test-mode copy.");
 assert(utilityReceipt.includes("Your request is being processed. KariGO will confirm once the provider completes fulfillment."), "Utility receipt must keep provider-backed pending copy.");
 

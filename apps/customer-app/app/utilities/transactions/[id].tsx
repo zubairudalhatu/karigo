@@ -8,6 +8,21 @@ import { friendlyError } from "../../../src/lib/errors";
 
 const moneyKobo = (value: number) => `NGN ${(value / 100).toLocaleString()}`;
 
+function receiptMessage(transaction: UtilityTransactionSummary) {
+  if (transaction.walletReversalReference || transaction.walletDebitStatus === "REVERSED") {
+    return "Utility payment failed. Your wallet has been reversed.";
+  }
+  if (transaction.status === "SUCCESSFUL") {
+    return "Utility payment successful. Your request has been processed.";
+  }
+  if (transaction.paymentMethod === "WALLET") {
+    return "Your utility payment is being processed. Please check status shortly.";
+  }
+  return transaction.testMode
+    ? "This request is running in controlled provider test mode."
+    : "Your request is being processed. KariGO will confirm once the provider completes fulfillment.";
+}
+
 export default function UtilityReceiptDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [transaction, setTransaction] = useState<UtilityTransactionSummary | null>(null);
@@ -36,7 +51,7 @@ export default function UtilityReceiptDetail() {
 function UtilityReceipt({ transaction }: { transaction: UtilityTransactionSummary }) {
   return <Card>
     <Text style={ui.cardTitle}>{transaction.testMode ? "Utility review receipt" : "Utility request receipt"}</Text>
-    <Text style={ui.muted}>{transaction.testMode ? "This request is running in controlled provider test mode." : "Your request is being processed. KariGO will confirm once the provider completes fulfillment."}</Text>
+    <Text style={ui.muted}>{receiptMessage(transaction)}</Text>
     <Text>Reference: {transaction.reference}</Text>
     <Text>Service: {transaction.serviceType.replace("_", " ")}</Text>
     <Text>Provider: {transaction.provider.name}</Text>
@@ -45,6 +60,8 @@ function UtilityReceipt({ transaction }: { transaction: UtilityTransactionSummar
     <Text>Amount: {moneyKobo(transaction.amountKobo)}</Text>
     <Text>Fee: {moneyKobo(transaction.convenienceFeeKobo)}</Text>
     <Text>Total: {moneyKobo(transaction.totalKobo)}</Text>
+    {transaction.walletDebitReference ? <Text>Wallet debit: {transaction.walletDebitReference}</Text> : null}
+    {transaction.walletReversalReference ? <Text>Wallet reversal: {transaction.walletReversalReference}</Text> : null}
     {transaction.mockToken ? <Text style={ui.otpCode}>{transaction.mockToken}</Text> : null}
     <StatusBadge status={transaction.status} />
     <Text style={ui.muted}>{new Date(transaction.createdAt).toLocaleString()}</Text>

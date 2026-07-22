@@ -104,7 +104,10 @@ assert(paymentReadinessPage.includes("Client-side credit disabled"), "Payment Re
 assert(paymentReadinessPage.includes("Bills & Utilities provider readiness"), "Payment Readiness page must show Bills & Utilities provider readiness.");
 assert(paymentReadinessPage.includes("Accelerate.ng"), "Payment Readiness page must show Accelerate readiness labels.");
 assert(paymentReadinessPage.includes("Customer utility processing remains controlled by explicit Utilities flags"), "Payment Readiness page must state utility purchases remain flag-controlled.");
-assert(paymentReadinessPage.includes("Wallet-to-utility payment and live fulfilment settlement remain disabled"), "Payment Readiness page must state utility wallet/live fulfilment guardrails.");
+assert(paymentReadinessPage.includes("Wallet utility payment"), "Payment Readiness page must show wallet utility payment readiness.");
+assert(paymentReadinessPage.includes("Live provider fulfilment"), "Payment Readiness page must show utility live provider fulfilment readiness.");
+assert(paymentReadinessPage.includes("Wallet-to-utility payment is enabled for Utilities only"), "Payment Readiness page must state wallet utility payment live guardrails.");
+assert(paymentReadinessPage.includes("Wallet-to-utility payment remains disabled until Utilities customer purchases"), "Payment Readiness page must state utility rollback guardrails when flags are disabled.");
 assert(paymentReadinessPage.includes("requiredEnv"), "Payment Readiness page must list Accelerate env key names only.");
 const liveSecretPrefix = ["sk", "live"].join("_");
 const livePublicPrefix = ["pk", "live"].join("_");
@@ -343,8 +346,13 @@ assert(taxiApi.includes("admin/taxi/summary"), "Admin ride API client must call 
 
 const utilitiesPage = read("app", "utilities", "page.tsx");
 assert(utilitiesPage.includes("Utility transaction monitoring for Airtime, Data, Electricity and Cable TV"), "Admin utilities page must describe utility transaction monitoring scope.");
+assert(utilitiesPage.includes("Wallet debit/reversal references"), "Admin utilities page must describe wallet evidence visibility.");
 assert(utilitiesPage.includes("Total transactions"), "Admin utilities page must show summary cards.");
-assert(utilitiesPage.includes("Reference") && utilitiesPage.includes("Provider") && utilitiesPage.includes("Status"), "Admin utilities table must show core columns.");
+assert(utilitiesPage.includes("Reference") && utilitiesPage.includes("Provider") && utilitiesPage.includes("Payment") && utilitiesPage.includes("Status"), "Admin utilities table must show core columns including payment method.");
+assert(utilitiesPage.includes("Wallet debit reference"), "Admin utilities detail must show wallet debit reference.");
+assert(utilitiesPage.includes("Wallet debit status"), "Admin utilities detail must show wallet debit status.");
+assert(utilitiesPage.includes("Wallet reversal reference"), "Admin utilities detail must show wallet reversal reference.");
+assert(utilitiesPage.includes("Wallet reversal status"), "Admin utilities detail must show wallet reversal status.");
 assert(utilitiesPage.includes("Update this utility transaction status for operations review?"), "Admin utility status override must require confirmation.");
 assert(utilitiesPage.includes("Verify provider status"), "Admin utilities page must expose admin-only provider status verification.");
 assert(!utilitiesPage.includes("Fulfil") && !utilitiesPage.includes("Send token"), "Admin utilities page must not expose live fulfilment actions.");

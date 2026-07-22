@@ -34,6 +34,7 @@ export interface UtilityQuoteRequest {
 
 export interface CreateUtilityTransactionRequest extends UtilityQuoteRequest {
   customerNote?: string;
+  idempotencyKey?: string;
 }
 
 export interface UtilityQuoteResult {
@@ -70,6 +71,11 @@ export interface UtilityTransactionSummary {
   customerNote?: string | null;
   failureReason?: string | null;
   providerMode?: string;
+  paymentMethod?: string;
+  walletDebitReference?: string;
+  walletDebitStatus?: string;
+  walletReversalReference?: string;
+  walletReversalStatus?: string;
   testMode: boolean;
   createdAt: string;
   updatedAt: string;

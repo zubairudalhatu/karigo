@@ -333,7 +333,10 @@ export class PaymentsService {
         UTILITIES_ENABLED: this.flagValue("UTILITIES_ENABLED", false) ? "true" : "false_or_unset",
         UTILITIES_PROVIDER_ENABLED: this.flagValue("UTILITIES_PROVIDER_ENABLED", false) ? "true" : "false_or_unset",
         UTILITIES_TEST_MODE: this.flagValue("UTILITIES_TEST_MODE", true) ? "true" : "false",
-        UTILITIES_CUSTOMER_PURCHASE_ENABLED: this.flagValue("UTILITIES_CUSTOMER_PURCHASE_ENABLED", false) ? "true" : "false_or_unset",
+        UTILITIES_CUSTOMER_PURCHASE_ENABLED: this.customerUtilityPurchasesEnabled() ? "true" : "false_or_unset",
+        UTILITIES_CUSTOMER_PURCHASES_ENABLED: this.flagValue("UTILITIES_CUSTOMER_PURCHASES_ENABLED", false) ? "true" : "false_or_unset",
+        UTILITIES_WALLET_PAYMENT_ENABLED: this.flagValue("UTILITIES_WALLET_PAYMENT_ENABLED", false) ? "true" : "false_or_unset",
+        UTILITIES_LIVE_FULFILLMENT_ENABLED: this.flagValue("UTILITIES_LIVE_FULFILLMENT_ENABLED", false) ? "true" : "false_or_unset",
         ACCELERATE_ENABLED: this.flagValue("ACCELERATE_ENABLED", false) ? "true" : "false_or_unset",
         ACCELERATE_UTILITIES_ENABLED: this.flagValue("ACCELERATE_UTILITIES_ENABLED", false) ? "true" : "false_or_unset"
       },
@@ -389,8 +392,13 @@ export class PaymentsService {
       utilitiesProvider: utilityReadiness.provider,
       utilitiesProviderLabel: utilityReadiness.providerLabel,
       utilitiesTestMode: utilityReadiness.testMode,
+      utilitiesWalletPaymentEnabled: utilityReadiness.walletPaymentEnabled,
+      utilitiesLiveFulfillmentEnabled: utilityReadiness.liveFulfillmentEnabled,
+      utilitiesPaymentMethod: utilityReadiness.walletPaymentEnabled ? "WALLET" : undefined,
       utilitiesStatusNote: utilityReadiness.customerPurchaseEnabled
-        ? "Your request is being processed. KariGO will confirm once the provider completes fulfillment."
+        ? utilityReadiness.walletPaymentEnabled
+          ? "Utilities are paid with KariGO Wallet. Your balance is debited by the backend before provider fulfilment and reversed automatically if fulfilment fails."
+          : "Your request is being processed. KariGO will confirm once the provider completes fulfillment."
         : "Utilities are being activated. Please try again later or use test mode where available.",
       launchCities: ["Kano", "Abuja"]
     };
@@ -971,7 +979,9 @@ export class PaymentsService {
     const accelerateEnabled = this.flagValue("ACCELERATE_ENABLED", false) || this.flagValue("ACCELERATE_UTILITIES_ENABLED", false);
     const utilitiesEnabled = this.flagValue("UTILITIES_ENABLED", false) || this.flagValue("UTILITIES_PROVIDER_ENABLED", false);
     const testMode = this.flagValue("UTILITIES_TEST_MODE", true);
-    const customerPurchaseEnabled = this.flagValue("UTILITIES_CUSTOMER_PURCHASE_ENABLED", false);
+    const customerPurchaseEnabled = this.customerUtilityPurchasesEnabled();
+    const walletPaymentEnabled = this.flagValue("UTILITIES_WALLET_PAYMENT_ENABLED", false);
+    const liveFulfillmentEnabled = this.flagValue("UTILITIES_LIVE_FULFILLMENT_ENABLED", false);
     const accelerateBaseUrl = this.optionalValue("ACCELERATE_BASE_URL") ?? this.optionalValue("ACCELERATE_API_BASE_URL") ?? this.optionalValue("UTILITIES_PROVIDER_BASE_URL");
     const accelerateApiKey = this.optionalValue("ACCELERATE_API_KEY") ?? this.optionalValue("UTILITIES_PROVIDER_API_KEY");
     const requirements: ProviderRequirement[] = [
@@ -1009,18 +1019,34 @@ export class PaymentsService {
       testMode,
       customerPurchaseEnabled: utilitiesEnabled && customerPurchaseEnabled,
       customerPurchaseBlocked: !(utilitiesEnabled && customerPurchaseEnabled),
-      liveCustomerPurchaseStatus: utilitiesEnabled && customerPurchaseEnabled ? "Provider-backed test-mode processing enabled" : "Disabled or readiness-only",
+      walletPaymentEnabled: utilitiesEnabled && customerPurchaseEnabled && walletPaymentEnabled,
+      liveFulfillmentEnabled: utilitiesEnabled && customerPurchaseEnabled && liveFulfillmentEnabled,
+      paymentMethod: utilitiesEnabled && customerPurchaseEnabled && walletPaymentEnabled ? "WALLET" : "READINESS_ONLY",
+      liveCustomerPurchaseStatus: utilitiesEnabled && customerPurchaseEnabled
+        ? walletPaymentEnabled && liveFulfillmentEnabled && !testMode
+          ? "Wallet-funded provider fulfilment enabled"
+          : "Provider-backed test-mode processing enabled"
+        : "Disabled or readiness-only",
       backendConnectivityTestAvailable: provider === "accelerate" && accelerateEnabled && missingRequiredKeys.length === 0,
       requiredEnv: requirements,
       missingRequiredKeys,
       notes: [
-        utilitiesEnabled && customerPurchaseEnabled
-          ? "Customer Utilities can submit provider-backed requests in controlled test/sandbox mode only."
+        utilitiesEnabled && customerPurchaseEnabled && walletPaymentEnabled && liveFulfillmentEnabled && !testMode
+          ? "Customer Utilities can submit wallet-funded provider requests. Wallet debits are backend-controlled and reversed automatically if provider fulfilment fails."
+          : utilitiesEnabled && customerPurchaseEnabled
+            ? "Customer Utilities can submit provider-backed requests in controlled test/sandbox mode only."
           : "Customer Utilities remain readiness/test-mode until provider-backed customer purchases are explicitly enabled.",
         "No Accelerate API keys, client secrets or webhook secrets are returned by this readiness response.",
-        "Wallet-to-utility payment remains a future flow and is not active. Live fulfilment with payment-backed settlement remains disabled until separately approved."
+        walletPaymentEnabled
+          ? "Wallet-to-utility payment is enabled only for Utilities and only when backend balance checks pass; no card/bank direct utility payment is active."
+          : "Wallet-to-utility payment remains a future flow and is not active. Live fulfilment with payment-backed settlement remains disabled until separately approved."
       ]
     };
+  }
+
+  private customerUtilityPurchasesEnabled(): boolean {
+    return this.flagValue("UTILITIES_CUSTOMER_PURCHASE_ENABLED", false) ||
+      this.flagValue("UTILITIES_CUSTOMER_PURCHASES_ENABLED", false);
   }
 
   private providerReadinessRecord(

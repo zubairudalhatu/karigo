@@ -14,8 +14,8 @@ Supported utility categories:
 Current safety position:
 
 - Utilities can run in provider-backed controlled test/sandbox mode.
-- Live utility fulfilment remains disabled until payment-backed utility settlement is separately approved.
-- Wallet-to-utility payment remains disabled until a dedicated wallet debit and reversal workflow is approved.
+- Live utility fulfilment is allowed only through the Task 191 wallet-funded lifecycle when all wallet and provider flags are enabled.
+- Wallet-to-utility payment must use backend wallet balance checks, ledger debit and automatic reversal controls.
 - Raw provider payloads, API keys, tokens and webhook secrets must never be committed or shown in customer/admin UI.
 
 ## Required Environment Variables
@@ -29,6 +29,9 @@ UTILITIES_PROVIDER=accelerate
 UTILITIES_ENABLED=true
 UTILITIES_TEST_MODE=true
 UTILITIES_CUSTOMER_PURCHASE_ENABLED=true
+UTILITIES_CUSTOMER_PURCHASES_ENABLED=true
+UTILITIES_WALLET_PAYMENT_ENABLED=false
+UTILITIES_LIVE_FULFILLMENT_ENABLED=false
 ```
 
 Provider aliases supported by the backend:
@@ -81,14 +84,22 @@ ACCELERATE_API_KEY is configured
 UTILITIES_TEST_MODE=true
 ```
 
-The backend intentionally rejects `UTILITIES_TEST_MODE=false` until a future task approves payment-backed live utility fulfilment.
+For live wallet-funded fulfilment, these additional gates are required:
+
+```text
+UTILITIES_TEST_MODE=false
+UTILITIES_WALLET_PAYMENT_ENABLED=true
+UTILITIES_LIVE_FULFILLMENT_ENABLED=true
+```
+
+The backend rejects `UTILITIES_TEST_MODE=false` unless wallet payment and live fulfilment flags are both enabled.
 
 ## Activation Steps
 
 1. Confirm provider contract details for Airtime, Data, Electricity and Cable TV.
 2. Confirm provider base URL, request paths and status endpoint shape.
 3. Configure env vars in Render with secrets stored only in Render.
-4. Keep `UTILITIES_TEST_MODE=true`.
+4. Keep `UTILITIES_TEST_MODE=true` for controlled provider testing, or set the Task 191 wallet/live flags for approved wallet-funded live fulfilment.
 5. Redeploy backend.
 6. Open Admin Payment Readiness and confirm Utilities show provider-backed test mode.
 7. Open Customer App Utilities and confirm categories still load.
@@ -109,10 +120,10 @@ The backend intentionally rejects `UTILITIES_TEST_MODE=false` until a future tas
 
 ## Go-Live Blockers
 
-Do not disable test mode until these are completed in a separate approved task:
+Do not disable test mode unless these are completed and approved:
 
 - Payment-backed utility funding is approved.
-- Wallet-to-utility debit and automatic reversal rules are implemented and tested, if wallet payment will be used.
+- Wallet-to-utility debit and automatic reversal rules are implemented and tested.
 - Provider webhook contract and signature verification are confirmed.
 - Reconciliation and support processes are approved.
 - Low-value live provider tests pass across all intended categories.
@@ -124,6 +135,9 @@ If provider processing fails or provider configuration is uncertain:
 
 ```text
 UTILITIES_CUSTOMER_PURCHASE_ENABLED=false
+UTILITIES_CUSTOMER_PURCHASES_ENABLED=false
+UTILITIES_WALLET_PAYMENT_ENABLED=false
+UTILITIES_LIVE_FULFILLMENT_ENABLED=false
 UTILITIES_ENABLED=false
 ACCELERATE_ENABLED=false
 ```

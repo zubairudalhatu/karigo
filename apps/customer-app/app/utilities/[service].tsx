@@ -5,8 +5,9 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { UtilityProductSummary, UtilityProviderSummary, UtilityQuoteResult, UtilityServiceType, UtilityTransactionSummary } from "@karigo/shared-types";
 import { paymentsApi } from "../../src/api/payments.api";
 import { utilitiesApi } from "../../src/api/utilities.api";
+import { CustomerWallet, walletApi } from "../../src/api/wallet.api";
 import { Button, Card, Empty, Field, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
-import { friendlyError } from "../../src/lib/errors";
+import { friendlyError, money } from "../../src/lib/errors";
 import { fallbackCustomerPaymentConfig } from "../../src/lib/payment-status";
 
 const configs: Record<string, {
@@ -55,6 +56,35 @@ const configs: Record<string, {
 
 const moneyKobo = (value: number) => `NGN ${(value / 100).toLocaleString()}`;
 const toKobo = (value: string) => Math.round(Number(value.replace(/[^\d.]/g, "")) * 100);
+const walletBalanceKobo = (wallet: CustomerWallet | null) => Math.round(Number(wallet?.availableBalance ?? 0) * 100);
+const walletUtilitiesEnabled = (config: {
+  utilitiesCustomerPurchaseEnabled?: boolean;
+  utilitiesWalletPaymentEnabled?: boolean;
+  utilitiesLiveFulfillmentEnabled?: boolean;
+  utilitiesPaymentMethod?: string;
+  utilitiesTestMode?: boolean;
+}) => Boolean(
+  config.utilitiesCustomerPurchaseEnabled &&
+  config.utilitiesWalletPaymentEnabled &&
+  config.utilitiesLiveFulfillmentEnabled &&
+  config.utilitiesPaymentMethod === "WALLET" &&
+  config.utilitiesTestMode === false
+);
+
+function receiptMessage(transaction: UtilityTransactionSummary) {
+  if (transaction.walletReversalReference || transaction.walletDebitStatus === "REVERSED") {
+    return "Utility payment failed. Your wallet has been reversed.";
+  }
+  if (transaction.status === "SUCCESSFUL") {
+    return "Utility payment successful. Your request has been processed.";
+  }
+  if (transaction.paymentMethod === "WALLET") {
+    return "Your utility payment is being processed. Please check status shortly.";
+  }
+  return transaction.testMode
+    ? "This request is running in controlled provider test mode."
+    : "Your request is being processed. KariGO will confirm once the provider completes fulfillment.";
+}
 
 export default function UtilityServiceFlow() {
   const { service } = useLocalSearchParams<{ service: string }>();
@@ -69,7 +99,9 @@ export default function UtilityServiceFlow() {
   const [quote, setQuote] = useState<UtilityQuoteResult | null>(null);
   const [transaction, setTransaction] = useState<UtilityTransactionSummary | null>(null);
   const [utilitiesEnabled, setUtilitiesEnabled] = useState(false);
+  const [walletPaymentEnabled, setWalletPaymentEnabled] = useState(false);
   const [utilitiesStatusNote, setUtilitiesStatusNote] = useState(fallbackCustomerPaymentConfig.utilitiesStatusNote);
+  const [wallet, setWallet] = useState<CustomerWallet | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -77,10 +109,12 @@ export default function UtilityServiceFlow() {
   useEffect(() => {
     if (!config) return;
     setLoading(true);
-    Promise.all([paymentsApi.publicConfig(), utilitiesApi.providers(config.type), utilitiesApi.products({ type: config.type })])
-      .then(([paymentConfig, nextProviders, nextProducts]) => {
+    Promise.all([paymentsApi.publicConfig(), utilitiesApi.providers(config.type), utilitiesApi.products({ type: config.type }), walletApi.summary()])
+      .then(([paymentConfig, nextProviders, nextProducts, walletSummary]) => {
         setUtilitiesEnabled(Boolean(paymentConfig.utilitiesCustomerPurchaseEnabled));
+        setWalletPaymentEnabled(walletUtilitiesEnabled(paymentConfig));
         setUtilitiesStatusNote(paymentConfig.utilitiesStatusNote ?? fallbackCustomerPaymentConfig.utilitiesStatusNote);
+        setWallet(walletSummary);
         setProviders(nextProviders);
         setProducts(nextProducts);
         setProviderId(nextProviders[0]?.id ?? "");
@@ -90,6 +124,7 @@ export default function UtilityServiceFlow() {
       })
       .catch((e) => {
         setUtilitiesEnabled(false);
+        setWalletPaymentEnabled(false);
         setUtilitiesStatusNote(fallbackCustomerPaymentConfig.utilitiesStatusNote);
         setError(friendlyError(e));
       })
@@ -100,6 +135,7 @@ export default function UtilityServiceFlow() {
   const selectedProduct = providerProducts.find((product) => product.id === productId);
   const amountKobo = selectedProduct?.amountKobo ?? toKobo(amount);
   const canQuote = !!config && !!providerId && !!recipient.trim() && amountKobo > 0 && (!config.needsProduct || !!productId);
+  const hasInsufficientWalletBalance = walletPaymentEnabled && quote ? walletBalanceKobo(wallet) < quote.totalKobo : false;
 
   function chooseProvider(id: string) {
     setProviderId(id);
@@ -152,8 +188,10 @@ export default function UtilityServiceFlow() {
         productId: productId || undefined,
         amountKobo,
         recipient,
-        recipientName: recipientName || undefined
+        recipientName: recipientName || undefined,
+        idempotencyKey: quote.quoteReference
       }));
+      if (walletPaymentEnabled) setWallet(await walletApi.summary());
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -168,6 +206,11 @@ export default function UtilityServiceFlow() {
     <Message>{utilitiesStatusNote}</Message>
     <Message error>{error}</Message>
     {loading ? <Loading label={`Loading ${config.title} catalogue...`} /> : <>
+      {walletPaymentEnabled ? <Card>
+        <Text style={ui.cardTitle}>Pay with KariGO Wallet</Text>
+        <Text style={ui.muted}>Available balance: {money(wallet?.availableBalance)}</Text>
+        <Text style={ui.muted}>Your KariGO Wallet will be debited after you submit this request. If provider fulfilment fails, KariGO will reverse the debit automatically.</Text>
+      </Card> : null}
       <Text style={ui.sectionTitle}>Provider</Text>
       {providers.map((provider) => <Button key={provider.id} title={`${provider.id === providerId ? "Selected - " : ""}${provider.name}`} tone="muted" onPress={() => chooseProvider(provider.id)} />)}
       {config.needsProduct ? <>
@@ -189,16 +232,19 @@ export default function UtilityServiceFlow() {
         <View style={ui.priceRow}><Text style={ui.priceLabel}>Fee:</Text><Text style={ui.priceValue}>{moneyKobo(quote.convenienceFeeKobo)}</Text></View>
         <View style={ui.priceRow}><Text style={ui.sectionTitle}>Total:</Text><Text style={ui.payable}>{moneyKobo(quote.totalKobo)}</Text></View>
         <Text style={ui.quoteText}>Quote: {quote.quoteReference}</Text>
-        <Button title={busy ? "Submitting..." : utilitiesEnabled ? "Submit Utility Request" : "Submit Review Record"} disabled={busy} onPress={submitTransaction} />
+        {walletPaymentEnabled ? <Text style={hasInsufficientWalletBalance ? styles.warning : ui.muted}>{hasInsufficientWalletBalance ? "Insufficient wallet balance. Please top up your wallet and try again." : "Payment method: KariGO Wallet"}</Text> : null}
+        <Button title={busy ? "Submitting..." : walletPaymentEnabled ? "Pay with Wallet" : utilitiesEnabled ? "Submit Utility Request" : "Submit Review Record"} disabled={busy || hasInsufficientWalletBalance} onPress={submitTransaction} />
       </Card> : null}
       {transaction ? <Card>
         <Text style={ui.cardTitle}>{transaction.testMode ? "Utility review receipt" : "Utility request receipt"}</Text>
         <Text>Reference: {transaction.reference}</Text>
         <Text>Provider: {transaction.provider.name}</Text>
         <Text>Total: {moneyKobo(transaction.totalKobo)}</Text>
+        {transaction.walletDebitReference ? <Text>Wallet debit: {transaction.walletDebitReference}</Text> : null}
+        {transaction.walletReversalReference ? <Text>Wallet reversal: {transaction.walletReversalReference}</Text> : null}
         {transaction.mockToken ? <Text style={ui.otpCode}>{transaction.mockToken}</Text> : null}
         <StatusBadge status={transaction.status} />
-        <Text style={ui.muted}>{transaction.testMode ? "This request is running in controlled provider test mode." : "Your request is being processed. KariGO will confirm once the provider completes fulfillment."}</Text>
+        <Text style={ui.muted}>{receiptMessage(transaction)}</Text>
         <Button title="View full receipt" tone="muted" onPress={() => router.push(`/utilities/transactions/${transaction.id}`)} />
       </Card> : null}
     </>}
@@ -207,5 +253,6 @@ export default function UtilityServiceFlow() {
 
 const styles = StyleSheet.create({
   option: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, padding: 14 },
-  optionActive: { borderColor: brand.colors.primary, backgroundColor: "#FEF2F2" }
+  optionActive: { borderColor: brand.colors.primary, backgroundColor: "#FEF2F2" },
+  warning: { color: brand.colors.primary, fontSize: 13, fontWeight: "900" }
 });

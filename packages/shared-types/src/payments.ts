@@ -34,6 +34,9 @@ export interface PublicPaymentConfig {
   utilitiesProvider?: string;
   utilitiesProviderLabel?: string;
   utilitiesTestMode?: boolean;
+  utilitiesWalletPaymentEnabled?: boolean;
+  utilitiesLiveFulfillmentEnabled?: boolean;
+  utilitiesPaymentMethod?: string;
   utilitiesStatusNote?: string;
   launchCities?: string[];
 }

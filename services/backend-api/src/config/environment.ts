@@ -371,8 +371,18 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   );
   const utilitiesTestMode = booleanFlag(config.UTILITIES_TEST_MODE, "UTILITIES_TEST_MODE", true);
   const utilitiesCustomerPurchaseEnabled = booleanFlag(
-    config.UTILITIES_CUSTOMER_PURCHASE_ENABLED,
+    firstConfigured(config, ["UTILITIES_CUSTOMER_PURCHASE_ENABLED", "UTILITIES_CUSTOMER_PURCHASES_ENABLED"]),
     "UTILITIES_CUSTOMER_PURCHASE_ENABLED",
+    false
+  );
+  const utilitiesWalletPaymentEnabled = booleanFlag(
+    config.UTILITIES_WALLET_PAYMENT_ENABLED,
+    "UTILITIES_WALLET_PAYMENT_ENABLED",
+    false
+  );
+  const utilitiesLiveFulfillmentEnabled = booleanFlag(
+    config.UTILITIES_LIVE_FULFILLMENT_ENABLED,
+    "UTILITIES_LIVE_FULFILLMENT_ENABLED",
     false
   );
   const accelerateEnabled = booleanAlias(
@@ -416,9 +426,18 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     if (!accelerateApiKey) {
       throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_API_KEY");
     }
-    if (!utilitiesTestMode) {
-      throw new Error("UTILITIES_TEST_MODE must remain true until payment-backed live utility fulfilment is approved");
+    if (!utilitiesTestMode && !utilitiesWalletPaymentEnabled) {
+      throw new Error("UTILITIES_TEST_MODE=false requires UTILITIES_WALLET_PAYMENT_ENABLED=true");
     }
+    if (!utilitiesTestMode && !utilitiesLiveFulfillmentEnabled) {
+      throw new Error("UTILITIES_TEST_MODE=false requires UTILITIES_LIVE_FULFILLMENT_ENABLED=true");
+    }
+  }
+  if (utilitiesWalletPaymentEnabled && !utilitiesCustomerPurchaseEnabled) {
+    throw new Error("UTILITIES_WALLET_PAYMENT_ENABLED=true requires UTILITIES_CUSTOMER_PURCHASE_ENABLED=true");
+  }
+  if (utilitiesLiveFulfillmentEnabled && (!utilitiesCustomerPurchaseEnabled || !utilitiesWalletPaymentEnabled)) {
+    throw new Error("UTILITIES_LIVE_FULFILLMENT_ENABLED=true requires wallet-funded utility purchases to be enabled");
   }
   const notificationProvider =
     typeof config.NOTIFICATION_PROVIDER === "string" ? config.NOTIFICATION_PROVIDER.toLowerCase() : "mock";
@@ -690,6 +709,9 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     UTILITIES_PROVIDER_ENABLED: utilitiesEnabled,
     UTILITIES_TEST_MODE: utilitiesTestMode,
     UTILITIES_CUSTOMER_PURCHASE_ENABLED: utilitiesCustomerPurchaseEnabled,
+    UTILITIES_CUSTOMER_PURCHASES_ENABLED: utilitiesCustomerPurchaseEnabled,
+    UTILITIES_WALLET_PAYMENT_ENABLED: utilitiesWalletPaymentEnabled,
+    UTILITIES_LIVE_FULFILLMENT_ENABLED: utilitiesLiveFulfillmentEnabled,
     ACCELERATE_ENABLED: accelerateEnabled,
     ACCELERATE_UTILITIES_ENABLED: accelerateEnabled,
     ACCELERATE_BASE_URL: accelerateBaseUrl,

@@ -637,6 +637,9 @@ describe("PaymentsService", () => {
       testMode: true,
       customerPurchaseEnabled: false,
       customerPurchaseBlocked: true,
+      walletPaymentEnabled: false,
+      liveFulfillmentEnabled: false,
+      paymentMethod: "READINESS_ONLY",
       liveCustomerPurchaseStatus: "Disabled or readiness-only",
       backendConnectivityTestAvailable: true,
       missingRequiredKeys: []
@@ -675,6 +678,9 @@ describe("PaymentsService", () => {
       utilitiesProvider: "mock",
       utilitiesProviderLabel: "Mock utility provider",
       utilitiesTestMode: true,
+      utilitiesWalletPaymentEnabled: false,
+      utilitiesLiveFulfillmentEnabled: false,
+      utilitiesPaymentMethod: undefined,
       utilitiesStatusNote: "Utilities are being activated. Please try again later or use test mode where available.",
       launchCities: ["Kano", "Abuja"]
     });
@@ -726,6 +732,9 @@ describe("PaymentsService", () => {
       utilitiesProvider: "mock",
       utilitiesProviderLabel: "Mock utility provider",
       utilitiesTestMode: true,
+      utilitiesWalletPaymentEnabled: false,
+      utilitiesLiveFulfillmentEnabled: false,
+      utilitiesPaymentMethod: undefined,
       utilitiesStatusNote: "Utilities are being activated. Please try again later or use test mode where available.",
       launchCities: ["Kano", "Abuja"]
     });
@@ -733,6 +742,50 @@ describe("PaymentsService", () => {
     expect(serialized).not.toContain("flutterwave-secret-key-placeholder");
     expect(serialized).not.toContain("flutterwave-client-secret-placeholder");
     expect(serialized).not.toContain("live-webhook-secret-placeholder");
+  });
+
+  it("returns public-safe wallet-funded utility readiness when live fulfilment gates are enabled", () => {
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      const values: Record<string, string | boolean> = {
+        UTILITIES_PROVIDER: "accelerate",
+        UTILITIES_ENABLED: "true",
+        UTILITIES_TEST_MODE: "false",
+        UTILITIES_CUSTOMER_PURCHASES_ENABLED: "true",
+        UTILITIES_WALLET_PAYMENT_ENABLED: "true",
+        UTILITIES_LIVE_FULFILLMENT_ENABLED: "true",
+        ACCELERATE_ENABLED: "true",
+        ACCELERATE_BASE_URL: "https://api.accelerate.example",
+        ACCELERATE_API_KEY: "accelerate-api-key-placeholder"
+      };
+      return values[key] ?? fallback;
+    });
+
+    const readiness = service.providerReadiness();
+    const publicConfig = service.publicPaymentConfig();
+    const serialized = JSON.stringify({ readiness, publicConfig });
+
+    expect(readiness.utilityReadiness).toMatchObject({
+      provider: "accelerate",
+      enabled: true,
+      testMode: false,
+      customerPurchaseEnabled: true,
+      walletPaymentEnabled: true,
+      liveFulfillmentEnabled: true,
+      paymentMethod: "WALLET",
+      liveCustomerPurchaseStatus: "Wallet-funded provider fulfilment enabled"
+    });
+    expect(publicConfig).toMatchObject({
+      utilitiesEnabled: true,
+      utilitiesCustomerPurchaseEnabled: true,
+      utilitiesProvider: "accelerate",
+      utilitiesProviderLabel: "Accelerate.ng",
+      utilitiesTestMode: false,
+      utilitiesWalletPaymentEnabled: true,
+      utilitiesLiveFulfillmentEnabled: true,
+      utilitiesPaymentMethod: "WALLET"
+    });
+    expect(publicConfig.utilitiesStatusNote).toContain("KariGO Wallet");
+    expect(serialized).not.toContain("accelerate-api-key-placeholder");
   });
 
   it("runs a safe admin sandbox initialization test without storing a payment", async () => {

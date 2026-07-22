@@ -35,4 +35,9 @@ export class CreateUtilityTransactionDto extends UtilityQuoteDto {
   @IsString()
   @MaxLength(250)
   customerNote?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(140)
+  idempotencyKey?: string;
 }

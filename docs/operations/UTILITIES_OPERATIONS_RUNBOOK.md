@@ -1,15 +1,16 @@
 # KariGO Utilities Operations Runbook
 
-This runbook describes how KariGO Operations should monitor Utilities while provider-backed processing is in controlled test/sandbox mode.
+This runbook describes how KariGO Operations should monitor Utilities in controlled provider test mode and in the Task 191 wallet-funded live fulfilment mode.
 
 ## Operating Position
 
-Utilities support Airtime, Data, Electricity and Cable TV. Provider-backed processing is available only when explicitly enabled by backend flags. Live payment-backed fulfilment and wallet-to-utility payments are not active in this phase.
+Utilities support Airtime, Data, Electricity and Cable TV. Provider-backed processing is available only when explicitly enabled by backend flags. Live fulfilment must use KariGO Wallet only, with backend balance checks, wallet ledger debit and automatic reversal if provider fulfilment fails.
 
 Customers should see safe messages only:
 
 - If provider-backed mode is off: `Utilities are being activated. Please try again later or use test mode where available.`
 - If provider-backed mode is on: `Your request is being processed. KariGO will confirm once the provider completes fulfillment.`
+- If wallet-funded live mode is on: `Utilities are paid with KariGO Wallet. Your balance is debited by the backend before provider fulfilment and reversed automatically if fulfilment fails.`
 
 ## Transaction Lifecycle
 
@@ -43,6 +44,9 @@ Use Admin Portal -> Utilities to review:
 - Amount
 - KariGO transaction reference
 - Provider reference
+- Payment method
+- Wallet debit reference
+- Wallet reversal reference, if any
 - Status
 - Created/updated dates
 - Safe provider note
@@ -76,6 +80,7 @@ If provider submission fails:
 - Customer note should remain safe and concise.
 - Raw provider payload must not be exposed.
 - Admin should review provider dashboard/reference, if available.
+- If a wallet debit was posted, backend reversal should create a reversal ledger entry.
 - Do not charge/deduct customer wallet from the app.
 
 If a transaction remains `PROCESSING`:
@@ -85,15 +90,13 @@ If a transaction remains `PROCESSING`:
 - Record support notes outside customer-facing text.
 - Escalate if the provider cannot confirm final status.
 
-## Reversal and Refund Position
+## Wallet Debit And Reversal Position
 
-This task does not debit KariGO Wallet or process customer payment for utilities. Therefore no automatic wallet reversal is active.
-
-Future wallet-to-utility payment must include:
+When Task 191 wallet-funded live mode is enabled, every utility payment must include:
 
 - Server-side wallet balance check.
-- Pending wallet debit ledger entry.
-- Provider fulfilment after approved debit/payment.
+- Wallet debit ledger entry linked to the utility transaction.
+- Provider fulfilment after approved backend debit.
 - Automatic reversal if provider fulfilment fails.
 - Idempotent webhook/status handling to prevent double debit or double success.
 
@@ -132,6 +135,9 @@ Set these backend env flags and redeploy:
 
 ```text
 UTILITIES_CUSTOMER_PURCHASE_ENABLED=false
+UTILITIES_CUSTOMER_PURCHASES_ENABLED=false
+UTILITIES_WALLET_PAYMENT_ENABLED=false
+UTILITIES_LIVE_FULFILLMENT_ENABLED=false
 UTILITIES_ENABLED=false
 ACCELERATE_ENABLED=false
 ```

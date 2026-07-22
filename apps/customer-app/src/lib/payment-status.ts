@@ -87,6 +87,9 @@ export const fallbackCustomerPaymentConfig: PublicPaymentConfig = flutterwaveLiv
       utilitiesProvider: "mock",
       utilitiesProviderLabel: "Mock utility provider",
       utilitiesTestMode: true,
+      utilitiesWalletPaymentEnabled: false,
+      utilitiesLiveFulfillmentEnabled: false,
+      utilitiesPaymentMethod: undefined,
       utilitiesStatusNote: "Utilities are being activated. Please try again later or use test mode where available."
     }
   : {
@@ -115,6 +118,9 @@ export const fallbackCustomerPaymentConfig: PublicPaymentConfig = flutterwaveLiv
       utilitiesProvider: "mock",
       utilitiesProviderLabel: "Mock utility provider",
       utilitiesTestMode: true,
+      utilitiesWalletPaymentEnabled: false,
+      utilitiesLiveFulfillmentEnabled: false,
+      utilitiesPaymentMethod: undefined,
       utilitiesStatusNote: "Utilities are being activated. Please try again later or use test mode where available."
     };
 
