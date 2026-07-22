@@ -48,7 +48,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
       backgroundColor: "#FFFFFF"
     },
     package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer",
-    versionCode: isStaging ? 1 : 8
+    versionCode: isStaging ? 1 : 9
   },
   ios: {
     ...config.ios,
