@@ -27,12 +27,14 @@ Expected result:
 
 ## Backend diagnostic expectations
 
-Flutterwave initialization should first request a v4 OAuth token, then call the configured hosted-checkout path:
+Task 185 corrected the provider request shape. For current launch hosted checkout, Flutterwave initialization should use v3 Standard checkout:
 
 ```text
-POST https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token
-POST /payments
+FLUTTERWAVE_API_MODE=v3
+POST https://api.flutterwave.com/v3/payments
 ```
+
+V4 OAuth token retrieval is valid only for Flutterwave v4/direct API flows. Do not call `/payments` on the v4/F4B host.
 
 The backend should log safe metadata only:
 

@@ -273,9 +273,9 @@ describe("PaymentsService", () => {
         PAYMENTS_PROVIDER: "flutterwave",
         PAYMENTS_LIVE_ENABLED: true,
         FLUTTERWAVE_ENVIRONMENT: "live",
-        FLUTTERWAVE_CLIENT_ID: "flutterwave-client-id-placeholder",
-        FLUTTERWAVE_CLIENT_SECRET: "flutterwave-client-secret-placeholder",
-        FLUTTERWAVE_BASE_URL: "https://f4bexperience.flutterwave.com",
+        FLUTTERWAVE_API_MODE: "v3",
+        FLUTTERWAVE_SECRET_KEY: "flutterwave-secret-key-placeholder",
+        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
         FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
         FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder",
         FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true"
@@ -448,6 +448,10 @@ describe("PaymentsService", () => {
     expect(readiness.launchPaymentOptions.flutterwaveCustomerCheckout).toMatchObject({
       enabled: false,
       customerSelectable: false,
+      apiMode: "v3",
+      apiModeLabel: "v3 Standard checkout",
+      v3SecretConfigured: false,
+      v3StandardCheckoutReady: false,
       envFlag: "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED",
       recommendedValue: "true"
     });
@@ -477,10 +481,10 @@ describe("PaymentsService", () => {
         PAYMENTS_PROVIDER: "flutterwave",
         PAYMENTS_LIVE_ENABLED: true,
         FLUTTERWAVE_ENVIRONMENT: "live",
-        FLUTTERWAVE_CLIENT_ID: "flutterwave-client-id-placeholder",
-        FLUTTERWAVE_CLIENT_SECRET: "flutterwave-client-secret-placeholder",
+        FLUTTERWAVE_API_MODE: "v3",
+        FLUTTERWAVE_SECRET_KEY: "flutterwave-secret-key-placeholder",
         FLUTTERWAVE_PUBLIC_KEY: "live-flutterwave-public-placeholder",
-        FLUTTERWAVE_BASE_URL: "https://f4bexperience.flutterwave.com",
+        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
         FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
         FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder",
         FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true"
@@ -501,12 +505,59 @@ describe("PaymentsService", () => {
       readyForSandboxCheckout: false,
       status: "READY"
     });
+    expect(readiness.launchPaymentOptions.flutterwaveCustomerCheckout).toMatchObject({
+      apiMode: "v3",
+      apiModeLabel: "v3 Standard checkout",
+      v3SecretConfigured: true,
+      v3StandardCheckoutReady: true,
+      v4CredentialsConfigured: false,
+      accessTokenAuthReady: false
+    });
     expect(readiness.liveActivation).toEqual({
       supportedByCurrentCode: true,
       status: "READY",
       blockers: []
     });
     expect(serialized).not.toContain("live-flutterwave-secret-placeholder");
+    expect(serialized).not.toContain("flutterwave-secret-key-placeholder");
+    expect(serialized).not.toContain("flutterwave-client-secret-placeholder");
+    expect(serialized).not.toContain("live-webhook-secret-placeholder");
+  });
+
+  it("reports v4 Flutterwave readiness with OAuth credentials and a non-payments endpoint", () => {
+    registry.customerCheckoutProviders.mockReturnValue(["flutterwave"]);
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      const values: Record<string, string | boolean> = {
+        PAYMENTS_PROVIDER: "flutterwave",
+        PAYMENTS_LIVE_ENABLED: true,
+        FLUTTERWAVE_ENVIRONMENT: "live",
+        FLUTTERWAVE_API_MODE: "v4",
+        FLUTTERWAVE_CLIENT_ID: "flutterwave-client-id-placeholder",
+        FLUTTERWAVE_CLIENT_SECRET: "flutterwave-client-secret-placeholder",
+        FLUTTERWAVE_BASE_URL: "https://f4bexperience.flutterwave.com",
+        FLUTTERWAVE_V4_CHECKOUT_PATH: "/orders",
+        FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
+        FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder",
+        FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true"
+      };
+      return values[key] ?? fallback;
+    });
+
+    const readiness = service.providerReadiness();
+    const flutterwave = readiness.providers.find((provider) => provider.provider === "flutterwave");
+    const serialized = JSON.stringify(readiness);
+
+    expect(flutterwave?.status).toBe("READY");
+    expect(readiness.launchPaymentOptions.flutterwaveCustomerCheckout).toMatchObject({
+      apiMode: "v4",
+      apiModeLabel: "v4 OAuth/direct API",
+      v3SecretConfigured: false,
+      v3StandardCheckoutReady: false,
+      v4CredentialsConfigured: true,
+      accessTokenAuthReady: true,
+      v4EndpointConfigured: true,
+      v4CheckoutPath: "/orders"
+    });
     expect(serialized).not.toContain("flutterwave-client-secret-placeholder");
     expect(serialized).not.toContain("live-webhook-secret-placeholder");
   });
@@ -582,9 +633,9 @@ describe("PaymentsService", () => {
         PAYMENTS_PROVIDER: "flutterwave",
         PAYMENTS_LIVE_ENABLED: true,
         FLUTTERWAVE_ENVIRONMENT: "live",
-        FLUTTERWAVE_CLIENT_ID: "flutterwave-client-id-placeholder",
-        FLUTTERWAVE_CLIENT_SECRET: "flutterwave-client-secret-placeholder",
-        FLUTTERWAVE_BASE_URL: "https://f4bexperience.flutterwave.com",
+        FLUTTERWAVE_API_MODE: "v3",
+        FLUTTERWAVE_SECRET_KEY: "flutterwave-secret-key-placeholder",
+        FLUTTERWAVE_BASE_URL: "https://api.flutterwave.com/v3",
         FLUTTERWAVE_REDIRECT_URL: "https://api.karigo.com.ng/api/v1/payments/callback/flutterwave",
         FLUTTERWAVE_SECRET_HASH: "live-webhook-secret-placeholder",
         FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "true"
@@ -619,6 +670,7 @@ describe("PaymentsService", () => {
       launchCities: ["Kano", "Abuja"]
     });
     expect(serialized).not.toContain("live-flutterwave-secret-placeholder");
+    expect(serialized).not.toContain("flutterwave-secret-key-placeholder");
     expect(serialized).not.toContain("flutterwave-client-secret-placeholder");
     expect(serialized).not.toContain("live-webhook-secret-placeholder");
   });

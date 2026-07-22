@@ -116,11 +116,47 @@ function requireOneLiveHttpsUrl(config: Record<string, unknown>, keys: string[],
   return value;
 }
 
+function flutterwaveApiMode(config: Record<string, unknown>): "v3" | "v4" {
+  const value = typeof config.FLUTTERWAVE_API_MODE === "string" && config.FLUTTERWAVE_API_MODE.trim()
+    ? config.FLUTTERWAVE_API_MODE.trim().toLowerCase()
+    : "v3";
+  if (value !== "v3" && value !== "v4") {
+    throw new Error("FLUTTERWAVE_API_MODE must be v3 or v4");
+  }
+  return value;
+}
+
+function defaultFlutterwaveBaseUrl(apiMode: "v3" | "v4"): string {
+  return apiMode === "v3"
+    ? "https://api.flutterwave.com/v3"
+    : "https://f4bexperience.flutterwave.com";
+}
+
+function validateFlutterwaveBaseUrl(apiMode: "v3" | "v4", baseUrl: string): void {
+  if (!baseUrl.startsWith("https://")) {
+    throw new Error("Live Flutterwave payments require HTTPS FLUTTERWAVE_BASE_URL");
+  }
+  const normalized = baseUrl.toLowerCase();
+  if (normalized.includes("sandbox")) {
+    throw new Error("Live Flutterwave payments require live FLUTTERWAVE_BASE_URL");
+  }
+  if (apiMode === "v3" && normalized.includes("f4bexperience.flutterwave.com")) {
+    throw new Error("Live Flutterwave v3 checkout requires FLUTTERWAVE_BASE_URL=https://api.flutterwave.com/v3 or another approved v3 HTTPS host");
+  }
+  if (apiMode === "v4" && normalized.includes("api.flutterwave.com/v3")) {
+    throw new Error("Live Flutterwave v4 checkout requires a v4 Flutterwave API host");
+  }
+}
+
 function validateFlutterwaveLivePaymentGate(config: Record<string, unknown>, paymentProvider: string): void {
   if (paymentProvider !== "flutterwave") {
     throw new Error("Live payments require PAYMENT_PROVIDER=flutterwave");
   }
 
+  if (typeof config.FLUTTERWAVE_API_MODE !== "string" || !config.FLUTTERWAVE_API_MODE.trim()) {
+    throw new Error("Live Flutterwave payments require FLUTTERWAVE_API_MODE=v3 or v4");
+  }
+  const apiMode = flutterwaveApiMode(config);
   const flutterwaveEnvironment = typeof config.FLUTTERWAVE_ENVIRONMENT === "string"
     ? config.FLUTTERWAVE_ENVIRONMENT.trim().toLowerCase()
     : "";
@@ -128,23 +164,30 @@ function validateFlutterwaveLivePaymentGate(config: Record<string, unknown>, pay
     throw new Error("Live Flutterwave payments require FLUTTERWAVE_ENVIRONMENT=live");
   }
 
-  requireLiveValue(config, "FLUTTERWAVE_CLIENT_ID", "Live Flutterwave payments require FLUTTERWAVE_CLIENT_ID");
-  requireLiveValue(config, "FLUTTERWAVE_CLIENT_SECRET", "Live Flutterwave payments require FLUTTERWAVE_CLIENT_SECRET");
+  const configuredBaseUrl = typeof config.FLUTTERWAVE_BASE_URL === "string" && config.FLUTTERWAVE_BASE_URL.trim()
+    ? config.FLUTTERWAVE_BASE_URL.trim()
+    : defaultFlutterwaveBaseUrl(apiMode);
+  validateFlutterwaveBaseUrl(apiMode, configuredBaseUrl);
 
-  const baseUrl = requireLiveHttpsUrl(
-    config,
-    "FLUTTERWAVE_BASE_URL",
-    "Live Flutterwave payments require FLUTTERWAVE_BASE_URL",
-    "Live Flutterwave payments require HTTPS FLUTTERWAVE_BASE_URL"
-  );
-  if (baseUrl.toLowerCase().includes("sandbox")) {
-    throw new Error("Live Flutterwave payments require live FLUTTERWAVE_BASE_URL");
-  }
-  const tokenUrl = typeof config.FLUTTERWAVE_TOKEN_URL === "string" && config.FLUTTERWAVE_TOKEN_URL.trim()
-    ? config.FLUTTERWAVE_TOKEN_URL.trim()
-    : "https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token";
-  if (!tokenUrl.startsWith("https://")) {
-    throw new Error("Live Flutterwave payments require HTTPS FLUTTERWAVE_TOKEN_URL");
+  if (apiMode === "v3") {
+    requireLiveValue(config, "FLUTTERWAVE_SECRET_KEY", "Live Flutterwave v3 checkout requires FLUTTERWAVE_SECRET_KEY");
+  } else {
+    requireLiveValue(config, "FLUTTERWAVE_CLIENT_ID", "Live Flutterwave v4 checkout requires FLUTTERWAVE_CLIENT_ID");
+    requireLiveValue(config, "FLUTTERWAVE_CLIENT_SECRET", "Live Flutterwave v4 checkout requires FLUTTERWAVE_CLIENT_SECRET");
+
+    const tokenUrl = typeof config.FLUTTERWAVE_TOKEN_URL === "string" && config.FLUTTERWAVE_TOKEN_URL.trim()
+      ? config.FLUTTERWAVE_TOKEN_URL.trim()
+      : "https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token";
+    if (!tokenUrl.startsWith("https://")) {
+      throw new Error("Live Flutterwave v4 checkout requires HTTPS FLUTTERWAVE_TOKEN_URL");
+    }
+    const v4CheckoutPath = typeof config.FLUTTERWAVE_V4_CHECKOUT_PATH === "string" && config.FLUTTERWAVE_V4_CHECKOUT_PATH.trim()
+      ? config.FLUTTERWAVE_V4_CHECKOUT_PATH.trim()
+      : "/orders";
+    const normalizedV4Path = v4CheckoutPath.startsWith("/") ? v4CheckoutPath : `/${v4CheckoutPath}`;
+    if (normalizedV4Path.toLowerCase() === "/payments") {
+      throw new Error("Live Flutterwave v4 checkout cannot use FLUTTERWAVE_V4_CHECKOUT_PATH=/payments");
+    }
   }
 
   requireOneLiveHttpsUrl(
@@ -193,6 +236,10 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   if (!["mock", "paystack", "flutterwave", "monnify", "squad"].includes(paymentProvider)) {
     throw new Error("PAYMENT_PROVIDER must be mock, paystack, flutterwave, monnify or squad");
   }
+  const flutterwaveMode = flutterwaveApiMode(config);
+  const flutterwaveBaseUrl = typeof config.FLUTTERWAVE_BASE_URL === "string" && config.FLUTTERWAVE_BASE_URL.trim()
+    ? config.FLUTTERWAVE_BASE_URL.trim()
+    : defaultFlutterwaveBaseUrl(flutterwaveMode);
   if (paymentsLiveEnabled) {
     validateFlutterwaveLivePaymentGate(config, paymentProvider);
   }
@@ -471,12 +518,17 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     FLUTTERWAVE_ENVIRONMENT: typeof config.FLUTTERWAVE_ENVIRONMENT === "string" && config.FLUTTERWAVE_ENVIRONMENT.trim()
       ? config.FLUTTERWAVE_ENVIRONMENT.trim().toLowerCase()
       : "",
-    FLUTTERWAVE_BASE_URL: typeof config.FLUTTERWAVE_BASE_URL === "string" && config.FLUTTERWAVE_BASE_URL.trim()
-      ? config.FLUTTERWAVE_BASE_URL.trim()
-      : "https://f4bexperience.flutterwave.com",
+    FLUTTERWAVE_API_MODE: flutterwaveMode,
+    FLUTTERWAVE_BASE_URL: flutterwaveBaseUrl,
     FLUTTERWAVE_TOKEN_URL: typeof config.FLUTTERWAVE_TOKEN_URL === "string" && config.FLUTTERWAVE_TOKEN_URL.trim()
       ? config.FLUTTERWAVE_TOKEN_URL.trim()
       : "https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token",
+    FLUTTERWAVE_CHECKOUT_PATH: typeof config.FLUTTERWAVE_CHECKOUT_PATH === "string" && config.FLUTTERWAVE_CHECKOUT_PATH.trim()
+      ? config.FLUTTERWAVE_CHECKOUT_PATH.trim()
+      : "/payments",
+    FLUTTERWAVE_V4_CHECKOUT_PATH: typeof config.FLUTTERWAVE_V4_CHECKOUT_PATH === "string" && config.FLUTTERWAVE_V4_CHECKOUT_PATH.trim()
+      ? config.FLUTTERWAVE_V4_CHECKOUT_PATH.trim()
+      : "/orders",
     FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: booleanFlag(config.FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED, "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED", false),
     SQUAD_BASE_URL: typeof config.SQUAD_BASE_URL === "string" && config.SQUAD_BASE_URL.trim()
       ? config.SQUAD_BASE_URL.trim()

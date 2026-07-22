@@ -78,11 +78,14 @@ Use these checks after the Task 181 backend redeploy and Customer EAS Update.
 ### Flutterwave hosted checkout link
 
 1. Start a low-value Customer App order with `Pay with Flutterwave`.
-2. Confirm the backend accepts the Flutterwave Standard response field `data.link`.
-3. Confirm the Customer App receives the hosted checkout URL normalized as both `authorizationUrl` and `checkoutUrl`.
-4. Confirm the URL starts with `https://checkout.flutterwave.com/` and opens externally in a browser/custom tab.
-5. Confirm no Expo Router `Unknown Page 404` appears.
-6. If Flutterwave does not return a valid HTTPS hosted link, confirm the Customer App shows: `Flutterwave checkout link was not returned. Please retry or use Pay on Delivery.`
+2. Confirm Admin Payment Readiness shows `API mode: v3 Standard checkout`.
+3. Confirm the backend accepts the Flutterwave Standard response field `data.link` and normalizes it to `authorizationUrl` / `checkoutUrl`.
+4. Confirm backend logs show `apiMode=v3`, `baseHost=api.flutterwave.com`, `path=/payments`, `linkFound=true` and `linkAlias=data.link`.
+5. If logs show the v4/F4B host with `path=/payments`, treat it as a configuration error and switch to the Task 185 runbook.
+6. Confirm the Customer App receives the hosted checkout URL normalized as both `authorizationUrl` and `checkoutUrl`.
+7. Confirm the URL starts with `https://checkout.flutterwave.com/` and opens externally in a browser/custom tab.
+8. Confirm no Expo Router `Unknown Page 404` appears.
+9. If Flutterwave does not return a valid HTTPS hosted link or endpoint setup fails, confirm the Customer App guides the customer to Pay on Delivery.
 
 ### Pay on Delivery Kano/Abuja eligibility
 

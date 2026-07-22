@@ -33,6 +33,8 @@ interface FlutterwaveTokenCache {
   expiresAtMs: number;
 }
 
+type FlutterwaveApiMode = "v3" | "v4";
+
 @Injectable()
 export class FlutterwaveProvider implements PaymentProvider {
   readonly name = "flutterwave" as const;
@@ -42,36 +44,15 @@ export class FlutterwaveProvider implements PaymentProvider {
   constructor(private readonly config: ConfigService) {}
 
   async initialize(input: InitializePaymentInput): Promise<InitializePaymentResult> {
-    const response = await this.request(this.checkoutPath(), {
+    const apiMode = this.apiMode();
+    const response = await this.request(this.checkoutPath(apiMode), {
       method: "POST",
-      body: JSON.stringify({
-        tx_ref: input.transactionReference,
-        reference: input.transactionReference,
-        amount: input.amount,
-        currency: input.currency || "NGN",
-        redirect_url: this.redirectUrl(),
-        callback_url: this.redirectUrl(),
-        narration: "KariGO order payment",
-        description: "KariGO order payment",
-        customer: {
-          email: this.customerEmail(input),
-          phonenumber: input.customerPhone,
-          phone_number: input.customerPhone,
-          name: this.string(input.metadata.customerName)
-        },
-        customizations: {
-          title: "KariGO",
-          description: "KariGO order payment",
-          logo: this.logoUrl()
-        },
-        meta: input.metadata,
-        metadata: input.metadata
-      })
-    }, "initialize-transaction");
+      body: JSON.stringify(this.checkoutPayload(apiMode, input))
+    }, "initialize-transaction", apiMode);
 
     const data = this.record(response.data) ?? {};
     const checkoutLink = this.checkoutUrlFromResponse(response);
-    this.logCheckoutDiagnostic(input, response, checkoutLink.alias);
+    this.logCheckoutDiagnostic(apiMode, input, response, checkoutLink.alias);
     const authorizationUrl = checkoutLink.url;
     if (!authorizationUrl) {
       const safeDiagnostics = this.safeResponseDiagnostics(response);
@@ -85,7 +66,7 @@ export class FlutterwaveProvider implements PaymentProvider {
     }
 
     return {
-      transactionReference: this.string(data.tx_ref) ?? this.string(response.tx_ref) ?? input.transactionReference,
+      transactionReference: this.string(data.tx_ref) ?? this.string(data.reference) ?? this.string(response.tx_ref) ?? this.string(response.reference) ?? input.transactionReference,
       authorizationUrl,
       accessCode: this.string(data.flw_ref) ?? this.string(response.flw_ref) ?? null,
       providerResponse: response as unknown as Record<string, unknown>
@@ -93,9 +74,12 @@ export class FlutterwaveProvider implements PaymentProvider {
   }
 
   async verify(transactionReference: string): Promise<VerifyPaymentResult> {
+    const apiMode = this.apiMode();
     const response = await this.request(
       `/transactions/verify_by_reference?tx_ref=${encodeURIComponent(transactionReference)}`,
-      { method: "GET" }
+      { method: "GET" },
+      "provider-response",
+      apiMode
     );
     const data = this.record(response.data) ?? {};
     return {
@@ -131,14 +115,62 @@ export class FlutterwaveProvider implements PaymentProvider {
   private async request(
     path: string,
     init: RequestInit,
-    stage: PaymentInitializationStage = "provider-response"
+    stage: PaymentInitializationStage = "provider-response",
+    apiMode: FlutterwaveApiMode = this.apiMode()
   ): Promise<FlutterwaveEnvelope> {
     const normalizedPath = this.normalizedPath(path);
-    const baseUrl = this.baseUrl();
-    return this.providerRequest(`${baseUrl}${normalizedPath}`, normalizedPath, init, stage, false);
+    const baseUrl = this.baseUrl(apiMode);
+    if (apiMode === "v3") {
+      return this.providerRequestV3(`${baseUrl}${normalizedPath}`, normalizedPath, init, stage);
+    }
+    return this.providerRequestV4(`${baseUrl}${normalizedPath}`, normalizedPath, init, stage, false);
   }
 
-  private async providerRequest(
+  private async providerRequestV3(
+    url: string,
+    path: string,
+    init: RequestInit,
+    stage: PaymentInitializationStage
+  ): Promise<FlutterwaveEnvelope> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    const apiMode: FlutterwaveApiMode = "v3";
+    try {
+      const response = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${this.secretKey()}`,
+          "Content-Type": "application/json",
+          ...(init.headers ?? {})
+        }
+      });
+      const parsedBody = await response.json().catch(() => ({}));
+      const body = (this.record(parsedBody) ?? {}) as FlutterwaveEnvelope;
+      Object.defineProperty(body, "__httpStatusCode", { value: response.status, enumerable: false });
+      this.logger.log(
+        `Flutterwave provider response provider=flutterwave apiMode=${apiMode} environment=${this.environmentLabel()} baseHost=${this.hostFromUrl(this.baseUrl(apiMode))} path=${path} stage=${stage} statusCode=${response.status} responseKeys=${this.safeKeys(body).join("|") || "none"} dataKeys=${this.safeKeys(this.record(body.data)).join("|") || "none"}`
+      );
+      if (!response.ok || body.status?.toLowerCase() !== "success") {
+        if (response.status === 401) {
+          throw this.authException(stage, response.status, this.safeResponseDiagnostics(body));
+        }
+        throw this.initializationException(stage, body.message || "Flutterwave request failed", response.status);
+      }
+      return body;
+    } catch (error) {
+      if (
+        error instanceof PaymentProviderInitializationException
+        || error instanceof BadGatewayException
+        || error instanceof BadRequestException
+      ) throw error;
+      throw this.initializationException(stage, "Flutterwave is currently unavailable");
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async providerRequestV4(
     url: string,
     path: string,
     init: RequestInit,
@@ -147,6 +179,7 @@ export class FlutterwaveProvider implements PaymentProvider {
   ): Promise<FlutterwaveEnvelope> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
+    const apiMode: FlutterwaveApiMode = "v4";
     try {
       const token = await this.accessToken(retryingAfterUnauthorized);
       const response = await fetch(url, {
@@ -162,18 +195,21 @@ export class FlutterwaveProvider implements PaymentProvider {
       const body = (this.record(parsedBody) ?? {}) as FlutterwaveEnvelope;
       Object.defineProperty(body, "__httpStatusCode", { value: response.status, enumerable: false });
       this.logger.log(
-        `Flutterwave provider response provider=flutterwave environment=${this.environmentLabel()} baseHost=${this.hostFromUrl(this.baseUrl())} path=${path} stage=${stage} statusCode=${response.status} responseKeys=${this.safeKeys(body).join("|") || "none"} dataKeys=${this.safeKeys(this.record(body.data)).join("|") || "none"}`
+        `Flutterwave provider response provider=flutterwave apiMode=${apiMode} environment=${this.environmentLabel()} baseHost=${this.hostFromUrl(this.baseUrl(apiMode))} path=${path} stage=${stage} statusCode=${response.status} responseKeys=${this.safeKeys(body).join("|") || "none"} dataKeys=${this.safeKeys(this.record(body.data)).join("|") || "none"}`
       );
       if (response.status === 401 && !retryingAfterUnauthorized) {
         this.tokenCache = null;
         this.logger.warn(
-          `Flutterwave provider authorization retry provider=flutterwave environment=${this.environmentLabel()} baseHost=${this.hostFromUrl(this.baseUrl())} path=${path} stage=${stage} statusCode=401 tokenRefreshAttempted=true`
+          `Flutterwave provider authorization retry provider=flutterwave apiMode=${apiMode} environment=${this.environmentLabel()} baseHost=${this.hostFromUrl(this.baseUrl(apiMode))} path=${path} stage=${stage} statusCode=401 tokenRefreshAttempted=true`
         );
-        return this.providerRequest(url, path, init, stage, true);
+        return this.providerRequestV4(url, path, init, stage, true);
       }
       if (!response.ok || body.status?.toLowerCase() !== "success") {
         if (response.status === 401) {
           throw this.authException(stage, response.status, this.safeResponseDiagnostics(body));
+        }
+        if (response.status === 404) {
+          throw this.endpointException(stage, response.status, this.safeResponseDiagnostics(body));
         }
         throw this.initializationException(stage, body.message || "Flutterwave request failed", response.status);
       }
@@ -216,7 +252,7 @@ export class FlutterwaveProvider implements PaymentProvider {
       const token = this.string(body.access_token);
       const expiresInSeconds = this.positiveNumber(body.expires_in) ?? 600;
       this.logger.log(
-        `Flutterwave auth token response provider=flutterwave environment=${this.environmentLabel()} authHost=${this.hostFromUrl(tokenUrl)} stage=auth-token statusCode=${response.status} tokenFetched=${Boolean(token)} tokenExpiresInSeconds=${token ? expiresInSeconds : "n/a"} responseKeys=${this.safeKeys(body).join("|") || "none"}`
+        `Flutterwave auth token response provider=flutterwave apiMode=v4 environment=${this.environmentLabel()} authHost=${this.hostFromUrl(tokenUrl)} stage=auth-token statusCode=${response.status} tokenFetched=${Boolean(token)} tokenExpiresInSeconds=${token ? expiresInSeconds : "n/a"} responseKeys=${this.safeKeys(body).join("|") || "none"}`
       );
       if (!response.ok || !token) {
         throw this.authException("auth-token", response.status, {
@@ -258,13 +294,38 @@ export class FlutterwaveProvider implements PaymentProvider {
     return value;
   }
 
-  private baseUrl(): string {
-    const value = (configText(this.config.get<unknown>("FLUTTERWAVE_BASE_URL", "https://f4bexperience.flutterwave.com")) ?? "https://f4bexperience.flutterwave.com").replace(/\/+$/, "");
+  private secretKey(): string {
+    this.assertLiveMode();
+    const value = configText(this.config.get<unknown>("FLUTTERWAVE_SECRET_KEY"));
+    if (!value) {
+      throw new BadRequestException("missing FLUTTERWAVE_SECRET_KEY");
+    }
+    return value;
+  }
+
+  private apiMode(): FlutterwaveApiMode {
+    const value = configText(this.config.get<unknown>("FLUTTERWAVE_API_MODE", "v3"))?.toLowerCase() ?? "v3";
+    if (value === "v3" || value === "v4") return value;
+    throw new BadRequestException("FLUTTERWAVE_API_MODE must be v3 or v4");
+  }
+
+  private baseUrl(apiMode: FlutterwaveApiMode): string {
+    const defaultBaseUrl = apiMode === "v3"
+      ? "https://api.flutterwave.com/v3"
+      : "https://f4bexperience.flutterwave.com";
+    const value = (configText(this.config.get<unknown>("FLUTTERWAVE_BASE_URL", defaultBaseUrl)) ?? defaultBaseUrl).replace(/\/+$/, "");
     if (!value.startsWith("https://")) {
       throw new BadRequestException("FLUTTERWAVE_BASE_URL must use HTTPS");
     }
     if (value.toLowerCase().includes("sandbox")) {
       throw new BadRequestException("FLUTTERWAVE_BASE_URL must be a live Flutterwave API URL");
+    }
+    const lowerValue = value.toLowerCase();
+    if (apiMode === "v3" && lowerValue.includes("f4bexperience.flutterwave.com")) {
+      throw new BadRequestException("FLUTTERWAVE_BASE_URL must use the v3 Standard checkout API host when FLUTTERWAVE_API_MODE=v3");
+    }
+    if (apiMode === "v4" && lowerValue.includes("api.flutterwave.com/v3")) {
+      throw new BadRequestException("FLUTTERWAVE_BASE_URL must use a v4 Flutterwave API host when FLUTTERWAVE_API_MODE=v4");
     }
     return value;
   }
@@ -282,8 +343,18 @@ export class FlutterwaveProvider implements PaymentProvider {
     return value;
   }
 
-  private checkoutPath(): string {
-    return this.normalizedPath(configText(this.config.get<unknown>("FLUTTERWAVE_CHECKOUT_PATH", "/payments")) ?? "/payments");
+  private checkoutPath(apiMode: FlutterwaveApiMode): string {
+    const path = apiMode === "v3"
+      ? this.normalizedPath(configText(this.config.get<unknown>("FLUTTERWAVE_CHECKOUT_PATH", "/payments")) ?? "/payments")
+      : this.normalizedPath(configText(this.config.get<unknown>("FLUTTERWAVE_V4_CHECKOUT_PATH", "/orders")) ?? "/orders");
+    if (apiMode === "v4" && path.toLowerCase() === "/payments") {
+      throw this.endpointException("config-read", undefined, {
+        apiMode,
+        path,
+        reason: "FLUTTERWAVE_V4_CHECKOUT_PATH cannot be /payments"
+      });
+    }
+    return path;
   }
 
   private normalizedPath(path: string): string {
@@ -356,8 +427,11 @@ export class FlutterwaveProvider implements PaymentProvider {
 
   private checkoutUrlFromResponse(response: FlutterwaveEnvelope): { url: string | null; alias: string | null } {
     const data = this.record(response.data) ?? {};
+    const nextAction = this.record(data.next_action);
+    const redirectUrl = this.record(nextAction?.redirect_url);
     const candidates = [
       ["data.link", data.link],
+      ["data.next_action.redirect_url.url", redirectUrl?.url],
       ["link", response.link],
       ["data.authorization_url", data.authorization_url],
       ["data.authorizationUrl", data.authorizationUrl],
@@ -390,12 +464,13 @@ export class FlutterwaveProvider implements PaymentProvider {
   }
 
   private logCheckoutDiagnostic(
+    apiMode: FlutterwaveApiMode,
     input: InitializePaymentInput,
     response: FlutterwaveEnvelope,
     linkAlias: string | null
   ): void {
     this.logger.log(
-      `Flutterwave checkout initialization provider=flutterwave environment=${this.environmentLabel()} baseHost=${this.hostFromUrl(this.baseUrl())} amount=${input.amount} currency=${input.currency || "NGN"} txRef=${input.transactionReference} statusCode=${this.statusCode(response) ?? "n/a"} responseKeys=${this.safeKeys(response).join("|") || "none"} dataKeys=${this.safeKeys(this.record(response.data)).join("|") || "none"} checkoutLinkFound=${linkAlias ? "true" : "false"} checkoutLinkAlias=${linkAlias ?? "none"}`
+      `Flutterwave checkout initialization provider=flutterwave apiMode=${apiMode} environment=${this.environmentLabel()} baseHost=${this.hostFromUrl(this.baseUrl(apiMode))} amount=${input.amount} currency=${input.currency || "NGN"} txRef=${input.transactionReference} statusCode=${this.statusCode(response) ?? "n/a"} responseKeys=${this.safeKeys(response).join("|") || "none"} dataKeys=${this.safeKeys(this.record(response.data)).join("|") || "none"} linkFound=${linkAlias ? "true" : "false"} linkAlias=${linkAlias ?? "none"}`
     );
   }
 
@@ -451,6 +526,36 @@ export class FlutterwaveProvider implements PaymentProvider {
     return value?.startsWith("https://") ? value : undefined;
   }
 
+  private checkoutPayload(apiMode: FlutterwaveApiMode, input: InitializePaymentInput): Record<string, unknown> {
+    if (apiMode === "v3") {
+      return {
+        tx_ref: input.transactionReference,
+        amount: input.amount,
+        currency: input.currency || "NGN",
+        redirect_url: this.redirectUrl(),
+        customer: {
+          email: this.customerEmail(input),
+          phonenumber: input.customerPhone,
+          name: this.string(input.metadata.customerName)
+        },
+        customizations: {
+          title: "KariGO",
+          description: "KariGO order payment",
+          logo: this.logoUrl()
+        },
+        meta: input.metadata
+      };
+    }
+    return {
+      reference: input.transactionReference,
+      amount: input.amount,
+      currency: input.currency || "NGN",
+      redirect_url: this.redirectUrl(),
+      description: "KariGO order payment",
+      meta: input.metadata
+    };
+  }
+
   private safeReference(reference: string): string {
     return reference
       .toLowerCase()
@@ -487,6 +592,20 @@ export class FlutterwaveProvider implements PaymentProvider {
       "Flutterwave authentication failed.",
       httpStatusCode,
       "FLUTTERWAVE_AUTH_FAILED",
+      safeDiagnostics
+    );
+  }
+
+  private endpointException(
+    stage: PaymentInitializationStage,
+    httpStatusCode?: number,
+    safeDiagnostics?: Record<string, unknown>
+  ): PaymentProviderInitializationException {
+    return this.initializationException(
+      stage,
+      "Flutterwave checkout endpoint is not configured for this API mode.",
+      httpStatusCode,
+      "FLUTTERWAVE_ENDPOINT_NOT_FOUND",
       safeDiagnostics
     );
   }

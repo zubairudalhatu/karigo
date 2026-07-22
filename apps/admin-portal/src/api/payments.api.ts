@@ -49,8 +49,14 @@ export interface PaymentProviderReadiness {
       enabled: boolean;
       label: string;
       customerSelectable: boolean;
+      apiMode?: string;
+      apiModeLabel?: string;
+      v3SecretConfigured?: boolean;
+      v3StandardCheckoutReady?: boolean;
       v4CredentialsConfigured?: boolean;
       accessTokenAuthReady?: boolean;
+      v4EndpointConfigured?: boolean;
+      v4CheckoutPath?: string;
       liveModeConfigured?: boolean;
       webhookConfigured?: boolean;
       callbackConfigured?: boolean;

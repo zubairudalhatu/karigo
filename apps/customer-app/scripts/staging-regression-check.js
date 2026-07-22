@@ -424,7 +424,7 @@ assert(paymentStatus.includes("APP_VARIANT") && paymentStatus.includes("customer
 assert(paymentStatus.includes("customerSelectableProviders: []"), "Customer production fallback must not expose electronic providers until backend config is loaded.");
 assert(paymentStatus.includes("cashPaymentEnabled: true"), "Customer production fallback must keep Pay on Delivery available.");
 assert(paymentStatus.includes("Flutterwave payment could not be started.") && paymentStatus.includes("Please use Pay on Delivery."), "Live Flutterwave startup failures must guide customers to Pay on Delivery.");
-assert(errors.includes("FLUTTERWAVE_CHECKOUT_LINK_MISSING") && errors.includes("FLUTTERWAVE_AUTH_FAILED") && errors.includes("Flutterwave checkout is temporarily unavailable. Please use Pay on Delivery."), "Customer errors must map missing Flutterwave checkout links and auth failures to Pay on Delivery fallback copy.");
+assert(errors.includes("FLUTTERWAVE_CHECKOUT_LINK_MISSING") && errors.includes("FLUTTERWAVE_AUTH_FAILED") && errors.includes("FLUTTERWAVE_ENDPOINT_NOT_FOUND") && errors.includes("Flutterwave checkout is temporarily unavailable. Please use Pay on Delivery."), "Customer errors must map missing Flutterwave checkout links, auth failures and endpoint/config errors to Pay on Delivery fallback copy.");
 assert(paymentStatus.includes("Complete the ${providerLabel} checkout page"), "Checkout must show provider-specific authorization guidance.");
 assert(paymentStatus.includes("KariGO will only mark the order paid after backend verification."), "Payment copy must state backend verification is required.");
 assert(paymentStatus.includes("Payment could not be verified yet."), "Payment failures must have a clear retry-oriented message.");

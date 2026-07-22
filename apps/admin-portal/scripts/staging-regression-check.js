@@ -67,7 +67,12 @@ assert(paymentReadinessPage.includes("Test sandbox initialization"), "Payment Re
 assert(paymentReadinessPage.includes("Verify live readiness"), "Payment Readiness page must use live readiness wording for Flutterwave live mode.");
 assert(paymentReadinessPage.includes("Low-value live test required"), "Payment Readiness page must tell operators that Flutterwave live mode still needs a low-value test.");
 assert(paymentReadinessPage.includes("FLUTTERWAVE_ENVIRONMENT"), "Payment Readiness page must treat Flutterwave environment as the live mode requirement.");
+assert(paymentReadinessPage.includes("API mode"), "Payment Readiness page must show the configured Flutterwave API mode.");
+assert(paymentReadinessPage.includes("v3 Standard checkout"), "Payment Readiness page must show Flutterwave v3 Standard checkout mode.");
+assert(paymentReadinessPage.includes("V4 OAuth/direct API"), "Payment Readiness page must show Flutterwave v4 OAuth/direct API mode.");
+assert(paymentReadinessPage.includes("V3 hosted checkout ready"), "Payment Readiness page must show Flutterwave v3 hosted checkout readiness.");
 assert(paymentReadinessPage.includes("V4 credentials configured"), "Payment Readiness page must distinguish Flutterwave v4 client credential readiness.");
+assert(paymentReadinessPage.includes("V4 endpoint configured"), "Payment Readiness page must distinguish Flutterwave v4 endpoint readiness.");
 assert(paymentReadinessPage.includes("Access-token/auth readiness"), "Payment Readiness page must distinguish Flutterwave access-token readiness.");
 assert(paymentReadinessPage.includes("Ready for token request"), "Payment Readiness page must show Flutterwave v4 token request readiness without fetching tokens.");
 assert(paymentReadinessPage.includes("Configured: {configured ? \"Yes\" : \"No\"}"), "Payment Readiness page must distinguish configured state from low-value live test status.");
@@ -106,7 +111,8 @@ assert(paymentsApiSource.includes("PaymentProviderReadiness"), "Admin payments A
 assert(paymentsApiSource.includes("PaymentProviderInitializationTestResult"), "Admin payments API must type initialization test response.");
 assert(paymentsApiSource.includes("launchPaymentOptions"), "Admin payment readiness API type must include launch payment option visibility.");
 assert(paymentsApiSource.includes("flutterwaveCustomerCheckout"), "Admin payment readiness API type must include Flutterwave customer checkout readiness.");
-assert(paymentsApiSource.includes("v4CredentialsConfigured") && paymentsApiSource.includes("accessTokenAuthReady"), "Admin payment readiness API type must include Flutterwave v4 auth readiness.");
+assert(paymentsApiSource.includes("apiModeLabel") && paymentsApiSource.includes("v3StandardCheckoutReady"), "Admin payment readiness API type must include Flutterwave API mode and v3 hosted checkout readiness.");
+assert(paymentsApiSource.includes("v4CredentialsConfigured") && paymentsApiSource.includes("accessTokenAuthReady") && paymentsApiSource.includes("v4EndpointConfigured"), "Admin payment readiness API type must include Flutterwave v4 auth and endpoint readiness.");
 assert(paymentsApiSource.includes("squadCustomerCheckout"), "Admin payment readiness API type must include Squad customer checkout readiness.");
 
 const settingsPage = read("app", "settings", "page.tsx");

@@ -22,8 +22,8 @@ Do not commit or paste Flutterwave live keys, public keys, webhook secrets, encr
 
 1. Customer creates an order with `paymentMethod=FLUTTERWAVE`.
 2. Backend creates a pending `Payment` record linked to the order.
-3. Backend requests a Flutterwave v4 OAuth access token using server-side client credentials.
-4. Backend calls Flutterwave hosted checkout using the server-side bearer token only.
+3. Backend uses the explicit `FLUTTERWAVE_API_MODE`.
+4. For launch hosted checkout, `FLUTTERWAVE_API_MODE=v3` calls Flutterwave Standard checkout with the server-side secret key only.
 5. Backend returns safe fields to the Customer App:
    - `provider`
    - `transactionReference`
@@ -48,11 +48,11 @@ PAYMENTS_PROVIDER=flutterwave
 PAYMENT_PROVIDER=flutterwave
 FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED=true
 FLUTTERWAVE_ENVIRONMENT=live
-FLUTTERWAVE_CLIENT_ID=<set in Render only>
-FLUTTERWAVE_CLIENT_SECRET=<set in Render only>
+FLUTTERWAVE_API_MODE=v3
+FLUTTERWAVE_SECRET_KEY=<set in Render only>
 FLUTTERWAVE_PUBLIC_KEY=<set in Render only if needed>
-FLUTTERWAVE_BASE_URL=https://f4bexperience.flutterwave.com/
-FLUTTERWAVE_TOKEN_URL=https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token
+FLUTTERWAVE_BASE_URL=https://api.flutterwave.com/v3
+FLUTTERWAVE_CHECKOUT_PATH=/payments
 FLUTTERWAVE_REDIRECT_URL=<public HTTPS redirect/callback URL>
 FLUTTERWAVE_CALLBACK_URL=<optional legacy alias if used>
 FLUTTERWAVE_SECRET_HASH=<set in Render only>
@@ -65,7 +65,7 @@ WALLET_PAYMENTS_ENABLED=false
 
 Use either `FLUTTERWAVE_SECRET_HASH` or `FLUTTERWAVE_WEBHOOK_SECRET` according to the provider dashboard setup. Do not store either value in source control.
 
-`FLUTTERWAVE_SECRET_KEY` is a legacy/v3 credential name and is not used for the v4 live hosted-checkout authentication path.
+For v3 Standard hosted checkout, `FLUTTERWAVE_SECRET_KEY` is required server-side. V4 OAuth client credentials remain reserved for a later approved direct API/payment-method flow and must not be mixed with the v3 `/payments` endpoint.
 
 ## Public Config Expectations
 

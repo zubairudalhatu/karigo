@@ -193,8 +193,13 @@ export default function PaymentReadinessPage() {
                     <h3>{readiness.launchPaymentOptions.flutterwaveCustomerCheckout.label}</h3>
                     <p><Badge>{readiness.launchPaymentOptions.flutterwaveCustomerCheckout.enabled ? "Enabled" : "Disabled"}</Badge></p>
                     <div className="item"><span>Customer selectable</span><strong>{yesNo(readiness.launchPaymentOptions.flutterwaveCustomerCheckout.customerSelectable)}</strong></div>
+                    <div className="item"><span>API mode</span><strong>{readiness.launchPaymentOptions.flutterwaveCustomerCheckout.apiModeLabel ?? "v3 Standard checkout"}</strong></div>
+                    <div className="item"><span>V3 secret configured</span><strong>{yesNo(readiness.launchPaymentOptions.flutterwaveCustomerCheckout.v3SecretConfigured)}</strong></div>
+                    <div className="item"><span>V3 hosted checkout ready</span><strong>{yesNo(readiness.launchPaymentOptions.flutterwaveCustomerCheckout.v3StandardCheckoutReady)}</strong></div>
                     <div className="item"><span>V4 credentials configured</span><strong>{yesNo(readiness.launchPaymentOptions.flutterwaveCustomerCheckout.v4CredentialsConfigured)}</strong></div>
-                    <div className="item"><span>Access-token/auth readiness</span><strong>{readiness.launchPaymentOptions.flutterwaveCustomerCheckout.accessTokenAuthReady ? "Ready for token request" : "Missing credentials or token URL"}</strong></div>
+                    <div className="item"><span>V4 endpoint configured</span><strong>{yesNo(readiness.launchPaymentOptions.flutterwaveCustomerCheckout.v4EndpointConfigured)}</strong></div>
+                    <div className="item"><span>V4 checkout path</span><strong>{readiness.launchPaymentOptions.flutterwaveCustomerCheckout.v4CheckoutPath ?? "/orders"}</strong></div>
+                    <div className="item"><span>Access-token/auth readiness</span><strong>{readiness.launchPaymentOptions.flutterwaveCustomerCheckout.accessTokenAuthReady ? "Ready for token request" : "Required only for v4 mode"}</strong></div>
                     <div className="item"><span>Live mode configured</span><strong>{yesNo(readiness.launchPaymentOptions.flutterwaveCustomerCheckout.liveModeConfigured)}</strong></div>
                     <div className="item"><span>Webhook configured</span><strong>{yesNo(readiness.launchPaymentOptions.flutterwaveCustomerCheckout.webhookConfigured)}</strong></div>
                     <div className="item"><span>Callback configured</span><strong>{yesNo(readiness.launchPaymentOptions.flutterwaveCustomerCheckout.callbackConfigured)}</strong></div>
@@ -237,7 +242,8 @@ export default function PaymentReadinessPage() {
                 const configured = missing.length === 0;
                 const customerCheckoutRequirement = configuredRequirement(provider, "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED");
                 const flutterwaveLaunch = readiness.launchPaymentOptions?.flutterwaveCustomerCheckout;
-                const liveModeConfigured = modeStatus(provider) === "Configured";
+                const liveModeConfigured = requirementConfigured(provider, "FLUTTERWAVE_ENVIRONMENT");
+                const flutterwaveApiModeConfigured = requirementConfigured(provider, "FLUTTERWAVE_API_MODE");
                 const webhookCallbackConfigured = requirementConfigured(provider, "FLUTTERWAVE_SECRET_HASH or FLUTTERWAVE_WEBHOOK_SECRET") && requirementConfigured(provider, "FLUTTERWAVE_REDIRECT_URL or FLUTTERWAVE_CALLBACK_URL");
                 return (
                   <article className="card" key={provider.provider}>
@@ -262,8 +268,10 @@ export default function PaymentReadinessPage() {
                         <strong>Verify live readiness</strong>
                         <p className="muted">Configured: {configured ? "Yes" : "No"}.</p>
                         <p className="muted">Customer checkout enabled: {customerCheckoutRequirement?.configured && !customerCheckoutRequirement.issue ? "Yes" : "No"}.</p>
-                        <p className="muted">V4 credentials configured: {flutterwaveLaunch?.v4CredentialsConfigured ? "Yes" : "No"}.</p>
-                        <p className="muted">Access-token/auth readiness: {flutterwaveLaunch?.accessTokenAuthReady ? "Ready for token request" : "Missing v4 credentials or HTTPS token URL"}.</p>
+                        <p className="muted">API mode: {flutterwaveLaunch?.apiModeLabel ?? "v3 Standard checkout"}; explicit config: {flutterwaveApiModeConfigured ? "Yes" : "No"}.</p>
+                        <p className="muted">V3 Standard checkout: {flutterwaveLaunch?.v3StandardCheckoutReady ? "Ready for hosted link" : "Missing v3 secret or valid v3 API base"}.</p>
+                        <p className="muted">V4 OAuth/direct API: {flutterwaveLaunch?.v4CredentialsConfigured && flutterwaveLaunch?.v4EndpointConfigured ? "Configured" : "Not configured for launch checkout"}.</p>
+                        <p className="muted">Access-token/auth readiness: {flutterwaveLaunch?.accessTokenAuthReady ? "Ready for token request" : "Required only for v4 mode"}.</p>
                         <p className="muted">Primary launch provider. Live mode configured: {liveModeConfigured ? "Yes" : "No"}.</p>
                         <p className="muted">Webhook/callback configured: {webhookCallbackConfigured ? "Yes" : "No"}.</p>
                         <p className="muted">Low-value live test required: Yes, but this is not a configuration blocker.</p>

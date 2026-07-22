@@ -24,11 +24,11 @@ PAYMENTS_PROVIDER=flutterwave
 PAYMENT_PROVIDER=flutterwave
 FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED=true
 FLUTTERWAVE_ENVIRONMENT=live
-FLUTTERWAVE_CLIENT_ID=<Render secret only>
-FLUTTERWAVE_CLIENT_SECRET=<Render secret only>
+FLUTTERWAVE_API_MODE=v3
+FLUTTERWAVE_SECRET_KEY=<Render secret only>
 FLUTTERWAVE_PUBLIC_KEY=<Render secret only if needed>
-FLUTTERWAVE_BASE_URL=https://f4bexperience.flutterwave.com/
-FLUTTERWAVE_TOKEN_URL=https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token
+FLUTTERWAVE_BASE_URL=https://api.flutterwave.com/v3
+FLUTTERWAVE_CHECKOUT_PATH=/payments
 FLUTTERWAVE_REDIRECT_URL=<public HTTPS redirect/callback URL>
 FLUTTERWAVE_SECRET_HASH=<Render secret only>
 CASH_ON_DELIVERY_ENABLED=true
@@ -39,7 +39,9 @@ WALLET_PAYMENTS_ENABLED=false
 
 If the deployment uses `FLUTTERWAVE_CALLBACK_URL` or `FLUTTERWAVE_WEBHOOK_SECRET` aliases, keep them aligned with the approved redirect URL and webhook secret hash. Prefer one source of truth in Render where possible.
 
-`FLUTTERWAVE_SECRET_KEY` is a legacy/v3 credential name and is not used for v4 live checkout authentication.
+For launch hosted checkout, use `FLUTTERWAVE_API_MODE=v3` with the server-side `FLUTTERWAVE_SECRET_KEY`. Do not use the v4 F4B host with `/payments`.
+
+V4 OAuth remains available only for a later approved direct API/payment-method flow. If v4 is selected later, use `FLUTTERWAVE_V4_CHECKOUT_PATH=/orders` or another approved v4 endpoint, never `/payments`.
 
 ## Callback and Webhook Checklist
 

@@ -11,11 +11,7 @@ import { SquadProvider } from "./squad.provider";
 export const CUSTOMER_TEST_PAYMENT_PROVIDERS = ["mock", "paystack", "monnify", "squad", "flutterwave"] as const;
 export type CustomerTestPaymentProviderName = (typeof CUSTOMER_TEST_PAYMENT_PROVIDERS)[number];
 export const DEFAULT_CUSTOMER_CHECKOUT_PAYMENT_PROVIDERS = ["mock", "monnify", "paystack"] as const satisfies readonly CustomerTestPaymentProviderName[];
-const FLUTTERWAVE_LIVE_REQUIRED_KEYS = [
-  "FLUTTERWAVE_CLIENT_ID",
-  "FLUTTERWAVE_CLIENT_SECRET",
-  "FLUTTERWAVE_BASE_URL"
-] as const;
+type FlutterwaveApiMode = "v3" | "v4";
 
 @Injectable()
 export class PaymentProviderRegistry {
@@ -109,10 +105,26 @@ export class PaymentProviderRegistry {
     if (configText(this.config.get<unknown>("FLUTTERWAVE_ENVIRONMENT"))?.toLowerCase() !== "live") {
       throw new BadRequestException("FLUTTERWAVE_ENVIRONMENT must be live before live payment checkout is enabled");
     }
-    for (const key of FLUTTERWAVE_LIVE_REQUIRED_KEYS) {
-      const value = configText(this.config.get<unknown>(key));
-      if (!value) {
-        throw new BadRequestException(`missing ${key}`);
+    const apiMode = this.flutterwaveApiMode();
+    this.assertFlutterwaveBaseUrl(apiMode);
+    if (apiMode === "v3") {
+      if (!configText(this.config.get<unknown>("FLUTTERWAVE_SECRET_KEY"))) {
+        throw new BadRequestException("missing FLUTTERWAVE_SECRET_KEY");
+      }
+    } else {
+      if (!configText(this.config.get<unknown>("FLUTTERWAVE_CLIENT_ID"))) {
+        throw new BadRequestException("missing FLUTTERWAVE_CLIENT_ID");
+      }
+      if (!configText(this.config.get<unknown>("FLUTTERWAVE_CLIENT_SECRET"))) {
+        throw new BadRequestException("missing FLUTTERWAVE_CLIENT_SECRET");
+      }
+      const tokenUrl = configText(this.config.get<unknown>("FLUTTERWAVE_TOKEN_URL"));
+      if (tokenUrl && !tokenUrl.startsWith("https://")) {
+        throw new BadRequestException("FLUTTERWAVE_TOKEN_URL must use HTTPS before live payment checkout is enabled");
+      }
+      const v4Path = this.normalizedPath(configText(this.config.get<unknown>("FLUTTERWAVE_V4_CHECKOUT_PATH", "/orders")) ?? "/orders");
+      if (v4Path.toLowerCase() === "/payments") {
+        throw new BadRequestException("FLUTTERWAVE_V4_CHECKOUT_PATH cannot be /payments before live payment checkout is enabled");
       }
     }
     const webhookSecret = configText(this.config.get<unknown>("FLUTTERWAVE_SECRET_HASH"))
@@ -125,10 +137,38 @@ export class PaymentProviderRegistry {
     if (!redirectUrl?.startsWith("https://")) {
       throw new BadRequestException("FLUTTERWAVE_REDIRECT_URL or FLUTTERWAVE_CALLBACK_URL must use HTTPS before live payment checkout is enabled");
     }
-    const baseUrl = configText(this.config.get<unknown>("FLUTTERWAVE_BASE_URL"));
-    if (!baseUrl?.startsWith("https://") || baseUrl.toLowerCase().includes("sandbox")) {
+  }
+
+  private flutterwaveApiMode(): FlutterwaveApiMode {
+    const configured = configText(this.config.get<unknown>("FLUTTERWAVE_API_MODE"));
+    if (!configured) {
+      throw new BadRequestException("missing FLUTTERWAVE_API_MODE");
+    }
+    const value = configured.toLowerCase();
+    if (value === "v3" || value === "v4") return value;
+    throw new BadRequestException("FLUTTERWAVE_API_MODE must be v3 or v4 before live payment checkout is enabled");
+  }
+
+  private assertFlutterwaveBaseUrl(apiMode: FlutterwaveApiMode): void {
+    const defaultBaseUrl = apiMode === "v3"
+      ? "https://api.flutterwave.com/v3"
+      : "https://f4bexperience.flutterwave.com";
+    const baseUrl = configText(this.config.get<unknown>("FLUTTERWAVE_BASE_URL", defaultBaseUrl)) ?? defaultBaseUrl;
+    const normalized = baseUrl.toLowerCase();
+    if (!baseUrl.startsWith("https://") || normalized.includes("sandbox")) {
       throw new BadRequestException("FLUTTERWAVE_BASE_URL must be a live HTTPS Flutterwave API base URL before live payment checkout is enabled");
     }
+    if (apiMode === "v3" && normalized.includes("f4bexperience.flutterwave.com")) {
+      throw new BadRequestException("FLUTTERWAVE_BASE_URL must use the v3 Standard checkout API host before live payment checkout is enabled");
+    }
+    if (apiMode === "v4" && normalized.includes("api.flutterwave.com/v3")) {
+      throw new BadRequestException("FLUTTERWAVE_BASE_URL must use a v4 Flutterwave API host before live payment checkout is enabled");
+    }
+  }
+
+  private normalizedPath(path: string): string {
+    const value = path.trim() || "/orders";
+    return value.startsWith("/") ? value : `/${value}`;
   }
 
   private squadCustomerCheckoutEnabled(): boolean {

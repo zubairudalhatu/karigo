@@ -2,6 +2,20 @@
 
 Date: 2026-07-19
 
+## Task 185 Update
+
+Task 184 fixed Flutterwave v4 OAuth token retrieval, but live diagnostics then showed `f4bexperience.flutterwave.com/payments` returns HTTP 404. Task 185 supersedes the hosted-checkout setup below for launch payment links.
+
+Use `docs/operations/flutterwave-api-mode-task185.md` for the current approved configuration:
+
+```text
+FLUTTERWAVE_API_MODE=v3
+FLUTTERWAVE_BASE_URL=https://api.flutterwave.com/v3
+FLUTTERWAVE_CHECKOUT_PATH=/payments
+```
+
+V4 OAuth remains fenced for a later direct API/payment-method flow and must not call `/payments`.
+
 ## Purpose
 
 KariGO Flutterwave live checkout now uses Flutterwave v4 OAuth client-credentials authentication before creating a hosted checkout. This runbook records the safe Render configuration and verification steps without storing payment credentials in source control.
@@ -47,16 +61,16 @@ Optional aliases:
 FLUTTERWAVE_CALLBACK_URL=<legacy alias for redirect URL>
 FLUTTERWAVE_WEBHOOK_SECRET=<legacy alias for secret hash>
 FLUTTERWAVE_TOKEN_URL=https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token
-FLUTTERWAVE_CHECKOUT_PATH=/payments
+FLUTTERWAVE_V4_CHECKOUT_PATH=/orders
 ```
 
-`FLUTTERWAVE_SECRET_KEY` is a legacy/v3 credential name and is not used for v4 live checkout authentication.
+`FLUTTERWAVE_SECRET_KEY` is used for v3 Standard checkout. It is not used for v4 OAuth authentication.
 
 ## Checkout Endpoint Note
 
-KariGO keeps the hosted-checkout path configurable through `FLUTTERWAVE_CHECKOUT_PATH`, defaulting to `/payments`.
+KariGO keeps the v4 direct API path configurable through `FLUTTERWAVE_V4_CHECKOUT_PATH`, defaulting to `/orders`.
 
-Flutterwave v4 also documents an `/orders` API, but that flow requires provider-side `customer_id` and `payment_method_id` inputs and should not replace the hosted-checkout flow without a separate approved integration task.
+Flutterwave v4 `/orders` requires provider-side `customer_id` and `payment_method_id` inputs and should not replace the v3 Standard hosted-checkout flow without a separate approved integration task. V4 mode must not call `/payments`.
 
 ## Safe Diagnostics
 
