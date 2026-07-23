@@ -108,6 +108,7 @@ assert(paymentReadinessPage.includes("Wallet utility payment"), "Payment Readine
 assert(paymentReadinessPage.includes("Live provider fulfilment"), "Payment Readiness page must show utility live provider fulfilment readiness.");
 assert(paymentReadinessPage.includes("Wallet-to-utility payment is enabled for Utilities only"), "Payment Readiness page must state wallet utility payment live guardrails.");
 assert(paymentReadinessPage.includes("Wallet-to-utility payment remains disabled until Utilities customer purchases"), "Payment Readiness page must state utility rollback guardrails when flags are disabled.");
+assert(paymentReadinessPage.includes("Accelerate may require KariGO backend outbound IP allowlisting before live fulfilment works."), "Payment Readiness page must warn operators about Accelerate backend IP allowlisting.");
 assert(paymentReadinessPage.includes("requiredEnv"), "Payment Readiness page must list Accelerate env key names only.");
 const liveSecretPrefix = ["sk", "live"].join("_");
 const livePublicPrefix = ["pk", "live"].join("_");
@@ -353,6 +354,7 @@ assert(utilitiesPage.includes("Wallet debit reference"), "Admin utilities detail
 assert(utilitiesPage.includes("Wallet debit status"), "Admin utilities detail must show wallet debit status.");
 assert(utilitiesPage.includes("Wallet reversal reference"), "Admin utilities detail must show wallet reversal reference.");
 assert(utilitiesPage.includes("Wallet reversal status"), "Admin utilities detail must show wallet reversal status.");
+assert(utilitiesPage.includes("providerSafeNote"), "Admin utilities detail must show provider-safe operational notes.");
 assert(utilitiesPage.includes("Update this utility transaction status for operations review?"), "Admin utility status override must require confirmation.");
 assert(utilitiesPage.includes("Verify provider status"), "Admin utilities page must expose admin-only provider status verification.");
 assert(!utilitiesPage.includes("Fulfil") && !utilitiesPage.includes("Send token"), "Admin utilities page must not expose live fulfilment actions.");

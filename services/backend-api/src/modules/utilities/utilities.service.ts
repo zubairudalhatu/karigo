@@ -867,6 +867,7 @@ export class UtilitiesService {
       customerNote: transaction.customerNote,
       failureReason: transaction.failureReason,
       metadata: list ? undefined : transaction.metadata,
+      providerSafeNote: typeof metadata.providerSafeNote === "string" ? metadata.providerSafeNote : undefined,
       customer: {
         id: transaction.customer.id,
         fullName: transaction.customer.user.fullName,

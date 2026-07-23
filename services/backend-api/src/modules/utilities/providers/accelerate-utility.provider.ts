@@ -102,16 +102,20 @@ export class AccelerateUtilityProvider implements UtilityProviderClient {
       return this.purchaseResult(response, input.reference, "vend", validation.validationReference);
     } catch (error) {
       this.logger.warn(`Accelerate utility purchase failed reference=${input.reference} reason=${this.safeErrorMessage(error)}`);
+      const ipAllowlistDenied = this.isIpAllowlistDenied(error);
       return {
         status: UtilityTransactionStatus.FAILED,
-        providerStatus: "ACCELERATE_SUBMISSION_FAILED",
+        providerStatus: ipAllowlistDenied ? "ACCELERATE_ACCESS_DENIED_IP_ALLOWLIST" : "ACCELERATE_SUBMISSION_FAILED",
         failureReason: this.safeFailureReason(error),
-        customerNote: "Utility payment could not be processed safely. Your wallet has been reversed if a debit was posted.",
+        customerNote: ipAllowlistDenied
+          ? "Utilities provider access is not fully enabled yet. Please try again later."
+          : "Utility payment could not be processed safely. Your wallet has been reversed if a debit was posted.",
         metadata: {
           mode: "accelerate",
           provider: "accelerate",
           stage: "purchase",
-          error: this.safeErrorMessage(error)
+          error: ipAllowlistDenied ? "provider_ip_allowlist_required" : this.safeErrorMessage(error),
+          ...(ipAllowlistDenied ? { providerSafeNote: "Provider rejected request because backend IP is not allowlisted." } : {})
         }
       };
     }
@@ -125,15 +129,19 @@ export class AccelerateUtilityProvider implements UtilityProviderClient {
       return this.purchaseResult(response, reference, "requery");
     } catch (error) {
       this.logger.warn(`Accelerate utility status check failed reference=${reference} reason=${this.safeErrorMessage(error)}`);
+      const ipAllowlistDenied = this.isIpAllowlistDenied(error);
       return {
         status: UtilityTransactionStatus.PROCESSING,
-        providerStatus: "ACCELERATE_STATUS_UNAVAILABLE",
-        customerNote: "KariGO could not confirm provider status yet. Please check again later.",
+        providerStatus: ipAllowlistDenied ? "ACCELERATE_STATUS_IP_ALLOWLIST_REQUIRED" : "ACCELERATE_STATUS_UNAVAILABLE",
+        customerNote: ipAllowlistDenied
+          ? "Utilities provider access is not fully enabled yet. Please try again later."
+          : "KariGO could not confirm provider status yet. Please check again later.",
         metadata: {
           mode: "accelerate",
           provider: "accelerate",
           stage: "requery",
-          error: this.safeErrorMessage(error)
+          error: ipAllowlistDenied ? "provider_ip_allowlist_required" : this.safeErrorMessage(error),
+          ...(ipAllowlistDenied ? { providerSafeNote: "Provider rejected request because backend IP is not allowlisted." } : {})
         }
       };
     }
@@ -274,6 +282,7 @@ export class AccelerateUtilityProvider implements UtilityProviderClient {
 
   private safeFailureReason(error: unknown): string {
     const message = this.safeErrorMessage(error);
+    if (this.isIpAllowlistDenied(error)) return "Utilities provider access is not fully enabled yet. Please try again later.";
     if (/missing_accelerate/i.test(message)) return "Utilities provider is not configured correctly.";
     if (/missing_product|demo_product/i.test(message)) return "This utility product is currently unavailable.";
     if (/missing_customer_phone/i.test(message)) return "Customer phone number is required for this utility provider request.";
@@ -566,5 +575,11 @@ export class AccelerateUtilityProvider implements UtilityProviderClient {
 
   private safeErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+  }
+
+  private isIpAllowlistDenied(error: unknown): boolean {
+    const message = this.safeErrorMessage(error).toLowerCase();
+    return /provider_(http|auth)_401/.test(message) &&
+      (/ip/.test(message) && /(not allowed|not allowlisted|allowlist|whitelist)/.test(message));
   }
 }

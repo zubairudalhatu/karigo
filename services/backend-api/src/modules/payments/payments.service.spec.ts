@@ -785,6 +785,7 @@ describe("PaymentsService", () => {
       utilitiesPaymentMethod: "WALLET"
     });
     expect(publicConfig.utilitiesStatusNote).toContain("KariGO Wallet");
+    expect(serialized).toContain("Accelerate may require KariGO backend outbound IP allowlisting before live fulfilment works.");
     expect(serialized).not.toContain("accelerate-api-key-placeholder");
   });
 

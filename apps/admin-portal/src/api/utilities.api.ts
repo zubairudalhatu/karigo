@@ -18,6 +18,7 @@ export interface AdminUtilityTransaction {
   mockToken?: string | null;
   customerNote?: string | null;
   failureReason?: string | null;
+  providerSafeNote?: string | null;
   providerMode?: string | null;
   paymentMethod?: string | null;
   walletDebitReference?: string | null;

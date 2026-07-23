@@ -155,6 +155,7 @@ export default function AdminUtilitiesPage() {
           {selected.walletReversalReference ? <div className="item"><span>Wallet reversal reference</span><strong>{selected.walletReversalReference}</strong></div> : null}
           {selected.walletReversalStatus ? <div className="item"><span>Wallet reversal status</span><Badge>{selected.walletReversalStatus}</Badge></div> : null}
           {selected.mockToken ? <div className="item"><span>Mock token</span><strong>{selected.mockToken}</strong></div> : null}
+          {selected.providerSafeNote ? <p className="warning">{selected.providerSafeNote}</p> : null}
           {selected.customerNote ? <p className="muted">{selected.customerNote}</p> : null}
           {selected.failureReason ? <p className="error">{selected.failureReason}</p> : null}
           <textarea placeholder="Staging override note" value={note} onChange={(event) => setNote(event.target.value)} />

@@ -13,6 +13,13 @@ This runbook covers wallet-funded Utilities fulfilment through the approved prov
 - Accelerate requests must follow the official API contract documented at https://istrategytech.gitbook.io/accelerate and https://istrategytech.gitbook.io/accelerate-payment.
 - Seeded `DEMO_*` Data and Cable TV products are not live Accelerate package codes and must remain blocked until real provider package codes are configured.
 
+## Accelerate IP Allowlist Requirement
+
+- Accelerate may reject live provider requests with `Access denied: IP not allowed` until KariGO's backend outbound IP is allowlisted.
+- Prefer Render Dedicated IPs or another fixed outbound IP method for production Utilities fulfilment.
+- Share the production backend outbound IP with Accelerate before live wallet-funded testing.
+- Do not retry real customer fulfilment until provider IP allowlisting is confirmed.
+
 ## Accelerate Request Flow
 
 1. Backend obtains an Accelerate JWT using Basic auth with the Render-only public/private API keys.

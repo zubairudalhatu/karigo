@@ -10,17 +10,20 @@ const moneyKobo = (value: number) => `NGN ${(value / 100).toLocaleString()}`;
 
 function receiptMessage(transaction: UtilityTransactionSummary) {
   if (transaction.walletReversalReference || transaction.walletDebitStatus === "REVERSED") {
-    return "Utility payment failed. Your wallet has been reversed.";
+    return "This utility request failed and your wallet has been reversed.";
   }
   if (transaction.status === "SUCCESSFUL") {
-    return "Utility payment successful. Your request has been processed.";
+    return "Your utility request was successful.";
   }
-  if (transaction.paymentMethod === "WALLET") {
-    return "Your utility payment is being processed. Please check status shortly.";
+  if (transaction.status === "FAILED") {
+    return "This utility request failed. If your wallet was debited, KariGO will reverse it automatically.";
+  }
+  if (transaction.status === "PENDING" || transaction.status === "PROCESSING") {
+    return "Your request is being processed. KariGO will confirm once the provider completes fulfilment.";
   }
   return transaction.testMode
     ? "This request is running in controlled provider test mode."
-    : "Your request is being processed. KariGO will confirm once the provider completes fulfillment.";
+    : "Your request is being processed. KariGO will confirm once the provider completes fulfilment.";
 }
 
 export default function UtilityReceiptDetail() {

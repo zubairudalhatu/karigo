@@ -1037,6 +1037,7 @@ export class PaymentsService {
             ? "Customer Utilities can submit provider-backed requests in controlled test/sandbox mode only."
           : "Customer Utilities remain readiness/test-mode until provider-backed customer purchases are explicitly enabled.",
         "No Accelerate API keys, client secrets or webhook secrets are returned by this readiness response.",
+        "Accelerate may require KariGO backend outbound IP allowlisting before live fulfilment works.",
         walletPaymentEnabled
           ? "Wallet-to-utility payment is enabled only for Utilities and only when backend balance checks pass; no card/bank direct utility payment is active."
           : "Wallet-to-utility payment remains a future flow and is not active. Live fulfilment with payment-backed settlement remains disabled until separately approved."

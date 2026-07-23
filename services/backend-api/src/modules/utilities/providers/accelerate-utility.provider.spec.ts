@@ -100,6 +100,33 @@ describe("AccelerateUtilityProvider", () => {
     expect(result.failureReason).toBe("Invalid receiver");
   });
 
+  it("maps Accelerate IP allowlist denials to safe customer and admin notes", async () => {
+    jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce(response({ data: { access_token: "jwt-token" } }))
+      .mockResolvedValueOnce(response({ message: "Access denied: IP not allowed" }, false, 401));
+    const provider = new AccelerateUtilityProvider(config);
+
+    const result = await provider.purchase({
+      serviceType: UtilityServiceType.AIRTIME,
+      providerCode: "MTN",
+      amountKobo: 50000,
+      recipient: "+2348030000000",
+      reference: "KGO-UTIL-123",
+      totalKobo: 50000
+    });
+
+    expect(result).toMatchObject({
+      status: UtilityTransactionStatus.FAILED,
+      providerStatus: "ACCELERATE_ACCESS_DENIED_IP_ALLOWLIST",
+      failureReason: "Utilities provider access is not fully enabled yet. Please try again later.",
+      customerNote: "Utilities provider access is not fully enabled yet. Please try again later."
+    });
+    expect(result.metadata).toMatchObject({
+      error: "provider_ip_allowlist_required",
+      providerSafeNote: "Provider rejected request because backend IP is not allowlisted."
+    });
+  });
+
   it("uses service-specific power requery path for electricity status checks", async () => {
     const fetchMock = jest.spyOn(global, "fetch")
       .mockResolvedValueOnce(response({ data: { access_token: "jwt-token" } }))

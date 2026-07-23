@@ -13,6 +13,7 @@ import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/comp
 
 const providerPriority = ["flutterwave", "squad", "monnify", "paystack"];
 const sandboxTestProviders = ["paystack", "monnify", "squad"];
+const accelerateIpAllowlistNote = "Accelerate may require KariGO backend outbound IP allowlisting before live fulfilment works.";
 
 function providerLabel(value: string) {
   switch (value) {
@@ -249,7 +250,10 @@ export default function PaymentReadinessPage() {
                   <p className="muted">{readiness.utilityReadiness.walletPaymentEnabled && readiness.utilityReadiness.liveFulfillmentEnabled
                     ? "Wallet-to-utility payment is enabled for Utilities only. Backend balance checks, wallet ledger debit and automatic reversal controls are required for every provider request."
                     : "Wallet-to-utility payment remains disabled until Utilities customer purchases, wallet payment and live fulfilment flags are explicitly enabled."}</p>
-                  {readiness.utilityReadiness.notes.map((note) => <p className="muted" key={note}>{note}</p>)}
+                  <p className="muted">{accelerateIpAllowlistNote}</p>
+                  {readiness.utilityReadiness.notes
+                    .filter((note) => note !== accelerateIpAllowlistNote)
+                    .map((note) => <p className="muted" key={note}>{note}</p>)}
                 </article>
                 <article className="card">
                   <h3>Accelerate configuration keys</h3>
