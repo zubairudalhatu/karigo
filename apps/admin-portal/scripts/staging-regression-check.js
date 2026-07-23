@@ -38,6 +38,12 @@ assert(shell.includes("SME Services"), "Admin sidebar must include SME Services.
 assert(shell.includes("SME Provider Applications"), "Admin sidebar must include SME provider applications.");
 assert(shell.includes("SME Providers"), "Admin sidebar must include SME provider directory.");
 
+const vendorApplicationsPage = read("app", "vendor-applications", "page.tsx");
+assert(vendorApplicationsPage.includes("Review public partner applications"), "Admin vendor applications page must explain unified partner application review.");
+assert(vendorApplicationsPage.includes("Partner type:"), "Admin vendor applications page must display partner type context.");
+assert(vendorApplicationsPage.includes("Service Provider"), "Admin vendor applications page must distinguish service-provider applications.");
+assert(vendorApplicationsPage.includes("Product Seller / Marketplace Vendor"), "Admin vendor applications page must distinguish product-seller applications.");
+
 const deliveryCaptainApplicationsPage = read("app", "delivery-captain-applications", "page.tsx");
 assert(deliveryCaptainApplicationsPage.includes("Delivery Captain Applications"), "Admin Delivery Captain applications page must exist.");
 assert(deliveryCaptainApplicationsPage.includes("deliveryCaptainApplicationsApi.list"), "Admin Delivery Captain applications page must list applications.");
@@ -198,11 +204,13 @@ assert(smeServicesPage.includes("smeServicesApi.list"), "Admin SME Services page
 assert(smeServicesPage.includes("Total requests"), "Admin SME Services page must show summary cards.");
 assert(smeServicesPage.includes("All service types"), "Admin SME Services page must support service-type filtering.");
 assert(smeServicesPage.includes("Provider directory"), "Admin SME Services page must link to provider directory.");
+["PRINTING", "CAR_HIRE", "LAUNDRY", "LESSON_TEACHER", "LEGAL_PRACTITIONER", "RENT_A_CAR"].forEach((type) => assert(smeServicesPage.includes(type), `Admin SME Services page must support ${type} filtering.`));
 const smeProviderApplicationsPage = read("app", "sme-services", "applications", "page.tsx");
 assert(smeProviderApplicationsPage.includes("SME Provider Applications"), "Admin SME provider applications list page must exist.");
 assert(smeProviderApplicationsPage.includes("providerApplications"), "Admin SME provider applications page must call the applications endpoint.");
 assert(smeProviderApplicationsPage.includes("does not activate live dispatch, payment collection, payout automation, provider login or medical booking"), "Admin SME provider applications list must state safety limits.");
 assert(smeProviderApplicationsPage.includes("All service types"), "Admin SME provider applications page must support service-type filtering.");
+["PRINTING", "CAR_HIRE", "LAUNDRY", "LESSON_TEACHER", "LEGAL_PRACTITIONER", "RENT_A_CAR"].forEach((type) => assert(smeProviderApplicationsPage.includes(type), `Admin SME provider applications page must support ${type} filtering.`));
 const smeProviderApplicationDetail = read("app", "sme-services", "applications", "[id]", "page.tsx");
 assert(smeProviderApplicationDetail.includes("Update review status"), "Admin SME provider application detail must support status updates.");
 assert(smeProviderApplicationDetail.includes("Create provider record"), "Admin SME provider application detail must support conversion to provider record.");
@@ -226,11 +234,13 @@ assert(smeProvidersPage.includes("Provider could not be created. Please check th
 assert(smeProvidersPage.includes("Service provider record has been created."), "Admin provider creation must show the approved success message.");
 assert(smeProvidersPage.includes("friendlyError(e, \"form\")"), "Admin provider creation must surface safe API form errors.");
 assert(smeProvidersPage.includes("does not create provider login, live dispatch, payment collection, payout automation or medical booking"), "Admin provider directory must state safety limits.");
+["PRINTING", "CAR_HIRE", "LAUNDRY", "LESSON_TEACHER", "LEGAL_PRACTITIONER", "RENT_A_CAR"].forEach((type) => assert(smeProvidersPage.includes(type), `Admin provider directory must support ${type}.`));
 const smeProviderDetail = read("app", "sme-services", "providers", "[id]", "page.tsx");
 assert(smeProviderDetail.includes("Edit provider"), "Admin provider detail must support provider record editing.");
 assert(smeProviderDetail.includes("Customers do not receive provider phone numbers"), "Provider detail must document customer contact privacy.");
 assert(!smeProviderDetail.includes("Pay Now") && !smeProviderDetail.includes("Transfer funds"), "Provider directory must not expose payment actions.");
 const smeServicesApiSource = read("src", "api", "sme-services.api.ts");
+["PRINTING", "CAR_HIRE", "LAUNDRY", "LESSON_TEACHER", "LEGAL_PRACTITIONER", "RENT_A_CAR"].forEach((type) => assert(smeServicesApiSource.includes(type), `Admin SME Services API type must include ${type}.`));
 assert(smeServicesApiSource.includes("admin/service-provider-requests/summary"), "Admin portal must call admin SME Services summary endpoint.");
 assert(smeServicesApiSource.includes("admin/service-provider-requests/report"), "Admin portal must call admin SME Services report endpoint.");
 assert(smeServicesApiSource.includes("admin/sme-services/pilot-readiness"), "Admin portal must call admin SME Services pilot readiness endpoint.");

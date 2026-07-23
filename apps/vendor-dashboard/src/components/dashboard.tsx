@@ -19,8 +19,8 @@ export function DashboardShell({ children, unread = 0 }: { children: ReactNode; 
   }
   return <main className="shell">
     <aside className="sidebar">
-      <Image src="/karigo-logo.png" alt="KariGO Vendor Dashboard" width={300} height={300} priority />
-      <p className="sidebar-label">Vendor workspace</p>
+      <Image src="/karigo-logo.png" alt="KariGO Partner Workspace" width={300} height={300} priority />
+      <p className="sidebar-label">Partner workspace</p>
       <nav className="nav" aria-label="Vendor dashboard navigation">{nav.map(([label, href]) => {
         const active = href === "/" ? pathname === href : pathname.startsWith(href);
         return <a href={href} key={href} aria-current={active ? "page" : undefined}>{label}{label === "Notifications" && unread ? <span className="nav-count">{unread}</span> : null}</a>;
@@ -34,6 +34,6 @@ export function StatusBadge({ children }: { children: ReactNode }) {
   const status = typeof children === "string" ? children.toUpperCase().replaceAll(" ", "_") : "";
   return <span className="badge" data-status={status}>{statusLabel(children)}</span>;
 }
-export function Loading() { return <div className="loading" role="status"><span className="spinner" />Loading KariGO vendor dashboard...</div>; }
+export function Loading() { return <div className="loading" role="status"><span className="spinner" />Loading KariGO Partner Workspace...</div>; }
 export function Empty({ children }: { children: ReactNode }) { return <div className="empty"><strong>Nothing here yet</strong><span>{children}</span></div>; }
 export function ErrorMessage({ children }: { children?: ReactNode }) { return children ? <p className="error" role="alert">{children}</p> : null; }

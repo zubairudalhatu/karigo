@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 const navLinks = [
+  { label: "Customer App", href: "/app" },
   { label: "Services", href: "/services" },
   { label: "Vendors", href: "/vendors" },
   { label: "Vendor Login", href: "https://vendor.karigo.com.ng" },

@@ -22,6 +22,12 @@ const serviceTypeLabels: Record<ServiceProviderType, string> = {
   TILER: "Tiler",
   CCTV_TECHNICIAN: "CCTV technician",
   MOVING_HELP: "Moving help",
+  PRINTING: "Printing",
+  CAR_HIRE: "Car hire",
+  LAUNDRY: "Laundry",
+  LESSON_TEACHER: "Lesson teacher",
+  LEGAL_PRACTITIONER: "Legal practitioner",
+  RENT_A_CAR: "Rent a car",
   HEALTH_PROFESSIONAL: "Health professional readiness",
   OTHER: "Other approved service"
 };

@@ -12,6 +12,18 @@ type ServiceProviderType =
   | "CARPENTER"
   | "AC_TECHNICIAN"
   | "GENERATOR_REPAIR"
+  | "APPLIANCE_REPAIR"
+  | "FUMIGATION"
+  | "WELDER"
+  | "TILER"
+  | "CCTV_TECHNICIAN"
+  | "MOVING_HELP"
+  | "PRINTING"
+  | "CAR_HIRE"
+  | "LAUNDRY"
+  | "LESSON_TEACHER"
+  | "LEGAL_PRACTITIONER"
+  | "RENT_A_CAR"
   | "HEALTH_PROFESSIONAL"
   | "OTHER";
 
@@ -24,6 +36,18 @@ const serviceTypeOptions: Array<{ label: string; value: ServiceProviderType; not
   { label: "Carpenter", value: "CARPENTER" },
   { label: "AC technician", value: "AC_TECHNICIAN" },
   { label: "Generator repair technician", value: "GENERATOR_REPAIR" },
+  { label: "Appliance repair technician", value: "APPLIANCE_REPAIR" },
+  { label: "Fumigation / pest control", value: "FUMIGATION" },
+  { label: "Welder", value: "WELDER" },
+  { label: "Tiler", value: "TILER" },
+  { label: "CCTV / security technician", value: "CCTV_TECHNICIAN" },
+  { label: "Moving / loading help", value: "MOVING_HELP" },
+  { label: "Printing", value: "PRINTING" },
+  { label: "Car Hire", value: "CAR_HIRE" },
+  { label: "Laundry", value: "LAUNDRY" },
+  { label: "Lesson Teacher", value: "LESSON_TEACHER" },
+  { label: "Legal Practitioner", value: "LEGAL_PRACTITIONER", note: "Request a verified legal practitioner. KariGO will review and coordinate availability." },
+  { label: "Rent a Car", value: "RENT_A_CAR" },
   { label: "Doctor / health professional review only", value: "HEALTH_PROFESSIONAL", note: "Compliance approval required before booking." },
   { label: "Other approved service provider", value: "OTHER" }
 ];
@@ -119,6 +143,7 @@ export function ServiceProviderApplicationForm() {
         <label>State<select required value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })}>{launchStateOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         <label>Service areas<input value={form.serviceAreas} onChange={(event) => setForm({ ...form, serviceAreas: event.target.value })} placeholder="Nasarawa GRA, Wuse, Bompai, Tarauni" /></label>
       </div>
+      {serviceTypeOptions.find((option) => option.value === form.serviceType)?.note ? <p className="notice">{serviceTypeOptions.find((option) => option.value === form.serviceType)?.note}</p> : null}
       {form.serviceType === "HEALTH_PROFESSIONAL" ? <p className="notice">Health professional applications are collected for compliance review only. KariGO is not activating medical booking through this form.</p> : null}
       <label>Address optional<textarea value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} /></label>
       <label>Experience summary<textarea required value={form.experienceSummary} onChange={(event) => setForm({ ...form, experienceSummary: event.target.value })} placeholder="Tell KariGO about your work experience, service quality and typical jobs." /></label>

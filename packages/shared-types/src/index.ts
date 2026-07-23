@@ -34,6 +34,12 @@ export const serviceProviderTypes = [
   "TILER",
   "CCTV_TECHNICIAN",
   "MOVING_HELP",
+  "PRINTING",
+  "CAR_HIRE",
+  "LAUNDRY",
+  "LESSON_TEACHER",
+  "LEGAL_PRACTITIONER",
+  "RENT_A_CAR",
   "HEALTH_PROFESSIONAL",
   "OTHER"
 ] as const;

@@ -177,6 +177,28 @@ describe("ServiceProviderRequestsService admin operations", () => {
     audit.record.mockResolvedValue({});
   });
 
+  it("returns the expanded SME Services catalogue with safe coordination copy", () => {
+    const result = service.catalogue();
+
+    expect(result).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: ServiceProviderType.PRINTING, label: "Printing", readinessOnly: false }),
+      expect.objectContaining({ type: ServiceProviderType.CAR_HIRE, label: "Car Hire", readinessOnly: false }),
+      expect.objectContaining({ type: ServiceProviderType.LAUNDRY, label: "Laundry", readinessOnly: false }),
+      expect.objectContaining({ type: ServiceProviderType.LESSON_TEACHER, label: "Lesson Teacher", readinessOnly: false }),
+      expect.objectContaining({
+        type: ServiceProviderType.LEGAL_PRACTITIONER,
+        label: "Legal Practitioner",
+        description: "Request a verified legal practitioner. KariGO will review and coordinate availability.",
+        readinessOnly: false
+      }),
+      expect.objectContaining({ type: ServiceProviderType.RENT_A_CAR, label: "Rent a Car", readinessOnly: false })
+    ]));
+    expect(result.find((item) => item.type === ServiceProviderType.HEALTH_PROFESSIONAL)).toMatchObject({
+      readinessOnly: true,
+      statusLabel: "Future approval required"
+    });
+  });
+
   function mockAdminSummaryQueries() {
     prisma.serviceProviderRequest.count
       .mockResolvedValueOnce(8)

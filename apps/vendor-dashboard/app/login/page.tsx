@@ -33,8 +33,8 @@ export default function VendorLogin() {
     <main className="login">
       <form className="login-card" onSubmit={submit}>
         <Image src="/karigo-logo.png" alt="KariGO" width={300} height={300} priority />
-        <h1>Vendor login</h1>
-        <p className="muted">Manage your KariGO orders.</p>
+        <h1>Partner Workspace login</h1>
+        <p className="muted">Manage KariGO orders, products, services, onboarding and account activity.</p>
         <input
           type="tel"
           placeholder="+234..."
@@ -53,6 +53,7 @@ export default function VendorLogin() {
         />
         <p className="error">{error}</p>
         <button disabled={busy}>{busy ? "Signing in..." : "Sign in"}</button>
+        <p className="muted">New partner? <a href="/register">Choose your onboarding path</a>.</p>
       </form>
     </main>
   );

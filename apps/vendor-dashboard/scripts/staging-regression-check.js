@@ -32,6 +32,18 @@ const shell = read("src", "components", "dashboard.tsx");
 assert(shell.includes("Payout account"), "Vendor sidebar must include the payout account page.");
 assert(shell.includes("Services"), "Vendor sidebar must include the services catalogue page.");
 assert(shell.includes("Ads"), "Vendor sidebar must include the ads page.");
+assert(shell.includes("Partner workspace"), "Vendor shell must use Partner Workspace copy.");
+assert(shell.includes("KariGO Partner Workspace"), "Vendor shell must expose KariGO Partner Workspace branding.");
+
+const loginPage = read("app", "login", "page.tsx");
+assert(loginPage.includes("Partner Workspace login"), "Partner login page must use Partner Workspace copy.");
+assert(loginPage.includes("/register"), "Partner login page must link new partners to onboarding choice.");
+const registerPage = read("app", "register", "page.tsx");
+["Product Seller", "Service Provider", "Both"].forEach((type) => assert(registerPage.includes(type), `Partner registration page must include ${type}.`));
+assert(registerPage.includes("https://www.karigo.com.ng/vendors/apply?partnerType=product-seller"), "Partner registration must route product sellers to vendor application.");
+assert(registerPage.includes("https://www.karigo.com.ng/vendors/apply?partnerType=service-provider"), "Partner registration must route service providers to vendor application.");
+assert(registerPage.includes("https://www.karigo.com.ng/vendors/apply?partnerType=both"), "Partner registration must route mixed partners to vendor application.");
+assert(registerPage.includes("No live dispatch, payouts, legal advice automation"), "Partner registration must state operational guardrails.");
 
 const notificationsPage = read("app", "notifications", "page.tsx");
 assert(notificationsPage.includes("notification-title"), "Notifications must render title separately.");
@@ -82,6 +94,13 @@ assert(servicesPage.includes("vendorApi.archiveService"), "Services page must su
 assert(servicesPage.includes("SME Services vendors"), "Services page must clearly identify SME Services workflow.");
 assert(servicesPage.includes("does not activate automatic dispatch"), "Services page must preserve dispatch/payment guardrail copy.");
 assert(servicesPage.includes("HEALTH_PROFESSIONAL"), "Services page must handle health professional readiness-only services.");
+["Printing", "Car hire", "Laundry", "Lesson teacher", "Legal practitioner", "Rent a car"].forEach((label) => assert(servicesPage.includes(label), `Services page must label ${label}.`));
+
+const onboardingPage = read("app", "onboarding", "page.tsx");
+assert(onboardingPage.includes("Partner onboarding"), "Vendor onboarding page must use Partner onboarding copy.");
+assert(onboardingPage.includes("Product sellers and SME service providers may be asked for different evidence"), "Partner onboarding must explain account-type evidence differences.");
+assert(onboardingPage.includes("SERVICE_PROVIDER_EVIDENCE"), "Partner onboarding must support service-provider evidence documents.");
+assert(onboardingPage.includes("PORTFOLIO_OR_WORK_SAMPLE"), "Partner onboarding must support portfolio/work sample documents.");
 
 const vendorApi = read("src", "api", "vendor.api.ts");
 assert(vendorApi.includes("vendors/uploads"), "Vendor API must include vendor-scoped upload endpoint.");

@@ -7,7 +7,7 @@ import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../../src/c
 import { friendlyError } from "../../../src/lib/errors";
 
 const statuses: Array<"" | ServiceProviderStatus> = ["", "PENDING_REVIEW", "APPROVED", "SUSPENDED", "INACTIVE"];
-const serviceTypes: Array<"" | ServiceProviderType> = ["", "PAINTER", "PLUMBER", "MECHANIC", "ELECTRICIAN", "CLEANER", "CARPENTER", "AC_TECHNICIAN", "GENERATOR_REPAIR", "HEALTH_PROFESSIONAL", "OTHER"];
+const serviceTypes: Array<"" | ServiceProviderType> = ["", "PAINTER", "PLUMBER", "MECHANIC", "ELECTRICIAN", "CLEANER", "CARPENTER", "AC_TECHNICIAN", "GENERATOR_REPAIR", "APPLIANCE_REPAIR", "FUMIGATION", "WELDER", "TILER", "CCTV_TECHNICIAN", "MOVING_HELP", "PRINTING", "CAR_HIRE", "LAUNDRY", "LESSON_TEACHER", "LEGAL_PRACTITIONER", "RENT_A_CAR", "HEALTH_PROFESSIONAL", "OTHER"];
 
 const initialForm = {
   fullName: "",

@@ -8,6 +8,11 @@ import { friendlyError } from "../../src/lib/errors";
 
 const reviewStatuses = ["UNDER_REVIEW", "CHANGES_REQUESTED", "PROVISIONALLY_APPROVED", "APPROVED", "REJECTED"];
 
+function partnerTypeLabel(application: VendorApplication) {
+  if (application.businessCategory === "SME_SERVICES") return "Service Provider";
+  return "Product Seller / Marketplace Vendor";
+}
+
 export default function VendorApplicationsPage() {
   const [applications, setApplications] = useState<VendorApplication[]>([]);
   const [error, setError] = useState("");
@@ -53,13 +58,14 @@ export default function VendorApplicationsPage() {
 
   return <PortalShell>
     <h1>Vendor Applications</h1>
-    <p className="muted">Review public vendor applications. Approval does not automatically publish a storefront, activate payouts, approve promotions or enable pharmacy scope.</p>
+    <p className="muted">Review public partner applications for product sellers, SME service providers and mixed product/service operators. Approval does not automatically publish a storefront, activate payouts, approve promotions or enable pharmacy scope.</p>
     <p className="success">{message}</p>
     <ErrorMessage>{error}</ErrorMessage>
     <section className="section">
       {applications.length ? applications.map((application) => <article className="card" key={application.id}>
         <strong>{application.businessName}</strong>
         <p className="muted">{application.reference} - {application.businessCategory} - {application.city}, {application.state}</p>
+        <p className="muted">Partner type: {partnerTypeLabel(application)}</p>
         <p>{application.contactFullName} - {application.contactEmail}</p>
         <p><Badge>{application.status}</Badge></p>
         {application.applicant ? <div className="notice">

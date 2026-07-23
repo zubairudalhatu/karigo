@@ -74,6 +74,7 @@ export function SiteFooter() {
 
         <nav className="footer-links" aria-label="Platform links">
           <h2>Platform</h2>
+          <Link href="/app">Customer Web Portal</Link>
           <Link href="/services">Services</Link>
           <Link href="/vendors">Vendors</Link>
           <Link href="/riders">Captains</Link>
@@ -83,7 +84,7 @@ export function SiteFooter() {
         <nav className="footer-links" aria-label="Get started links">
           <h2>Get started</h2>
           <Link href="/vendors/apply">Vendor Application</Link>
-          <Link href="/sme-services/apply">Service Provider Application</Link>
+          <a href="https://vendor.karigo.com.ng/register">Service Provider Application</a>
           <a href="https://vendor.karigo.com.ng">Vendor Login</a>
           <Link href="/riders#ride-waitlist">Ride Waitlist</Link>
           <Link href="/riders#ride-captain-application">Ride review</Link>

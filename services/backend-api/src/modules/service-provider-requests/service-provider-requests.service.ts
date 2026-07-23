@@ -39,6 +39,16 @@ const SERVICE_CATALOGUE: Array<{
   { type: ServiceProviderType.TILER, label: "Tiler", description: "Tile fitting, repair and finishing requests." },
   { type: ServiceProviderType.CCTV_TECHNICIAN, label: "CCTV / security technician", description: "CCTV, access-control and light security-device support requests." },
   { type: ServiceProviderType.MOVING_HELP, label: "Moving / loading help", description: "Manual moving, loading and small relocation support requests." },
+  { type: ServiceProviderType.PRINTING, label: "Printing", description: "Request printing, photocopying, branding and document services." },
+  { type: ServiceProviderType.CAR_HIRE, label: "Car Hire", description: "Request chauffeur or scheduled vehicle hire." },
+  { type: ServiceProviderType.LAUNDRY, label: "Laundry", description: "Request laundry and dry-cleaning services." },
+  { type: ServiceProviderType.LESSON_TEACHER, label: "Lesson Teacher", description: "Request private lesson or tutoring support." },
+  {
+    type: ServiceProviderType.LEGAL_PRACTITIONER,
+    label: "Legal Practitioner",
+    description: "Request a verified legal practitioner. KariGO will review and coordinate availability."
+  },
+  { type: ServiceProviderType.RENT_A_CAR, label: "Rent a Car", description: "Request rental car availability." },
   {
     type: ServiceProviderType.HEALTH_PROFESSIONAL,
     label: "Doctor / health professional",

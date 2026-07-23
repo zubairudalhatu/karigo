@@ -78,8 +78,8 @@ export default function VendorOnboardingPage() {
   }
 
   return <DashboardShell>
-    <h1>Vendor onboarding</h1>
-    <p className="muted">Upload verification documents for KariGO Admin review. Accepted files: PDF, JPG, PNG or WebP. Do not upload passwords, OTPs, payment secrets or unnecessary private details.</p>
+    <h1>Partner onboarding</h1>
+    <p className="muted">Upload verification documents for KariGO Admin review. Product sellers and SME service providers may be asked for different evidence. Accepted files: PDF, JPG, PNG or WebP. Do not upload passwords, OTPs, payment secrets or unnecessary private details.</p>
     <p className="success">{message}</p>
     <ErrorMessage>{error}</ErrorMessage>
 
@@ -93,6 +93,8 @@ export default function VendorOnboardingPage() {
             <option value="OWNER_ID">Owner ID</option>
             <option value="FOOD_SAFETY_OR_HEALTH_PERMIT">Food safety or health permit</option>
             <option value="STORE_PHOTO">Store photo</option>
+            <option value="SERVICE_PROVIDER_EVIDENCE">Service provider evidence</option>
+            <option value="PORTFOLIO_OR_WORK_SAMPLE">Portfolio or work sample</option>
             <option value="OTHER">Other</option>
           </select>
         </label>

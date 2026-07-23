@@ -31,6 +31,12 @@ const fallbackCatalogue: ServiceProviderCategory[] = [
   { type: "TILER", label: "Tiler", description: "Tile fitting, repair and finishing requests.", readinessOnly: false, statusLabel: "Request review" },
   { type: "CCTV_TECHNICIAN", label: "CCTV / security technician", description: "CCTV, access-control and light security-device support requests.", readinessOnly: false, statusLabel: "Request review" },
   { type: "MOVING_HELP", label: "Moving / loading help", description: "Manual moving, loading and small relocation support requests.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "PRINTING", label: "Printing", description: "Request printing, photocopying, branding and document services.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "CAR_HIRE", label: "Car Hire", description: "Request chauffeur or scheduled vehicle hire.", readinessOnly: false, statusLabel: "Coordination review" },
+  { type: "LAUNDRY", label: "Laundry", description: "Request laundry and dry-cleaning services.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "LESSON_TEACHER", label: "Lesson Teacher", description: "Request private lesson or tutoring support.", readinessOnly: false, statusLabel: "Request review" },
+  { type: "LEGAL_PRACTITIONER", label: "Legal Practitioner", description: "Request a verified legal practitioner. KariGO will review and coordinate availability.", readinessOnly: false, statusLabel: "Verification required" },
+  { type: "RENT_A_CAR", label: "Rent a Car", description: "Request rental car availability.", readinessOnly: false, statusLabel: "Coordination review" },
   { type: "HEALTH_PROFESSIONAL", label: "Doctor / health professional", description: "Compliance approval required before health-service booking.", readinessOnly: true, statusLabel: "Approval required" },
   { type: "OTHER", label: "Other approved service provider", description: "Describe another service need for KariGO review.", readinessOnly: false, statusLabel: "Request review" }
 ];
@@ -50,6 +56,12 @@ const icons: Record<ServiceProviderType, keyof typeof Feather.glyphMap> = {
   TILER: "grid",
   CCTV_TECHNICIAN: "video",
   MOVING_HELP: "archive",
+  PRINTING: "printer",
+  CAR_HIRE: "truck",
+  LAUNDRY: "droplet",
+  LESSON_TEACHER: "book-open",
+  LEGAL_PRACTITIONER: "file-text",
+  RENT_A_CAR: "key",
   HEALTH_PROFESSIONAL: "plus-square",
   OTHER: "briefcase"
 };

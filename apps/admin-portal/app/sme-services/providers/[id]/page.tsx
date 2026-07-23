@@ -8,7 +8,7 @@ import { Badge, ErrorMessage, Loading, PortalShell } from "../../../../src/compo
 import { friendlyError } from "../../../../src/lib/errors";
 
 const statuses: ServiceProviderStatus[] = ["PENDING_REVIEW", "APPROVED", "SUSPENDED", "INACTIVE"];
-const serviceTypes: ServiceProviderType[] = ["PAINTER", "PLUMBER", "MECHANIC", "ELECTRICIAN", "CLEANER", "CARPENTER", "AC_TECHNICIAN", "GENERATOR_REPAIR", "HEALTH_PROFESSIONAL", "OTHER"];
+const serviceTypes: ServiceProviderType[] = ["PAINTER", "PLUMBER", "MECHANIC", "ELECTRICIAN", "CLEANER", "CARPENTER", "AC_TECHNICIAN", "GENERATOR_REPAIR", "APPLIANCE_REPAIR", "FUMIGATION", "WELDER", "TILER", "CCTV_TECHNICIAN", "MOVING_HELP", "PRINTING", "CAR_HIRE", "LAUNDRY", "LESSON_TEACHER", "LEGAL_PRACTITIONER", "RENT_A_CAR", "HEALTH_PROFESSIONAL", "OTHER"];
 
 function date(value?: string | null) {
   if (!value) return "Not set";

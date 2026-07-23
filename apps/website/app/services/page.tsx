@@ -21,7 +21,7 @@ export default function ServicesPage() {
           <h2>Live / Active</h2>
           <ul className="list">{liveServices.map((service) => <li key={service}>{service}</li>)}</ul>
           <p>Skilled workers and SMEs can apply for KariGO review before joining the SME Services provider directory.</p>
-          <Link className="button secondary" href="/sme-services/apply">Become a Service Provider</Link>
+          <a className="button secondary" href="https://vendor.karigo.com.ng/register">Become a Service Provider</a>
         </article>
         <article className="info-card"><h2>Preparing Launch</h2><ul className="list">{preparingServices.map((service) => <li key={service}>{service}</li>)}</ul><p>KariGO Rides is being prepared with Ride Captain onboarding, vehicle checks, fare controls and safety review.</p><Link className="button secondary" href="/riders#ride-waitlist">Join Ride Waitlist</Link></article>
       </section>

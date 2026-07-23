@@ -13,7 +13,7 @@ export default function VendorDashboard() {
   useEffect(() => { Promise.all([ordersApi.list(), notificationsApi.unreadCount()]).then(([o, n]) => { setOrders(o); setUnread(n.count); }).catch((e) => setError(String(e instanceof Error ? e.message : e))).finally(() => setLoading(false)); }, []);
   const count = (statuses: string[]) => orders.filter((order) => statuses.includes(order.orderStatus)).length;
   if (loading) return <DashboardShell><Loading /></DashboardShell>;
-  return <DashboardShell unread={unread}><header className="topbar"><div><p className="muted">Vendor workspace</p><h1>Operations overview</h1></div><StatusBadge>Live API</StatusBadge></header><ErrorMessage>{error}</ErrorMessage>
+  return <DashboardShell unread={unread}><header className="topbar"><div><p className="muted">Partner workspace</p><h1>Operations overview</h1><p className="muted">Product sellers and SME service providers can manage the approved workspace areas for their account.</p></div><StatusBadge>Live API</StatusBadge></header><ErrorMessage>{error}</ErrorMessage>
     <div className="grid">
       <article className="card"><span className="muted">New orders</span><p className="metric">{count(["PAID", "VENDOR_CONFIRMING"])}</p></article>
       <article className="card"><span className="muted">Active orders</span><p className="metric">{count(["VENDOR_ACCEPTED", "PREPARING", "READY_FOR_PICKUP"])}</p></article>

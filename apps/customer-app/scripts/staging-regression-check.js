@@ -155,7 +155,10 @@ assert(smeServices.includes("View my SME Services requests"), "SME Services scre
 assert(smeServices.includes("View submitted request status"), "SME Services screen must link to the submitted request detail.");
 assert(smeServices.includes("Doctor / health professional booking requires compliance approval"), "Health professional category must remain compliance-gated.");
 assert(smeServices.includes("Parcel Delivery remains for sending packages only."), "SME Services copy must differentiate from Parcel Delivery.");
-["APPLIANCE_REPAIR", "FUMIGATION", "WELDER", "TILER", "CCTV_TECHNICIAN", "MOVING_HELP"].forEach((type) => assert(smeServices.includes(type), `SME Services must include expanded category ${type}.`));
+["APPLIANCE_REPAIR", "FUMIGATION", "WELDER", "TILER", "CCTV_TECHNICIAN", "MOVING_HELP", "PRINTING", "CAR_HIRE", "LAUNDRY", "LESSON_TEACHER", "LEGAL_PRACTITIONER", "RENT_A_CAR"].forEach((type) => assert(smeServices.includes(type), `SME Services must include expanded category ${type}.`));
+assert(smeServices.includes("Request a verified legal practitioner. KariGO will review and coordinate availability."), "Legal practitioner category must use coordination-only copy.");
+assert(smeServices.includes("Request chauffeur or scheduled vehicle hire."), "Car hire category must use coordination-only copy.");
+assert(smeServices.includes("Request rental car availability."), "Rent a Car category must use coordination-only copy.");
 const serviceProviderApi = read("src", "api", "service-provider-requests.api.ts");
 assert(serviceProviderApi.includes("service-provider-requests/catalogue"), "Customer app must call the SME Services catalogue endpoint.");
 assert(serviceProviderApi.includes("service-provider-requests/providers"), "Customer app must call the SME Services provider marketplace endpoint.");
@@ -166,6 +169,7 @@ assert(serviceProviderApi.includes("service-provider-requests/${id}/review"), "C
 assert(serviceProviderApi.includes("PublicServiceProvider"), "Customer SME Services API type must expose a safe public provider profile.");
 assert(serviceProviderApi.includes("preferredProviderId"), "Customer SME Services API type must support preferred provider selection.");
 assert(serviceProviderApi.includes("customerUpdateNote"), "Customer SME Services API type must include customer-visible admin status updates.");
+["PRINTING", "CAR_HIRE", "LAUNDRY", "LESSON_TEACHER", "LEGAL_PRACTITIONER", "RENT_A_CAR"].forEach((type) => assert(serviceProviderApi.includes(type), `Customer SME Services API type must include ${type}.`));
 assert(!serviceProviderApi.includes("adminNote"), "Customer SME Services API type must not expose internal admin notes.");
 assert(!serviceProviderApi.includes("phoneNumber") && !serviceProviderApi.includes("email:"), "Customer SME Services provider type must not expose private provider phone/email.");
 const smeRequestHistory = read("app", "sme-services", "requests", "index.tsx");

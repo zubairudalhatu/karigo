@@ -14,7 +14,8 @@ export default function HomePage() {
           <div className="actions">
             <a className="button" href="#download">Download the App</a>
             <Link className="button secondary" href="/vendors/apply">Become a Vendor</Link>
-            <Link className="button secondary" href="/sme-services/apply">Become a Service Provider</Link>
+            <a className="button secondary" href="https://vendor.karigo.com.ng/register">Become a Service Provider</a>
+            <Link className="button secondary" href="/app">Open Customer Web Portal</Link>
           </div>
         </div>
         <div className="app-visual" aria-label="KariGO app-style preview">
@@ -72,7 +73,7 @@ export default function HomePage() {
           <p>Restaurants, groceries, market sellers and approved service providers can apply to reach customers across Kano and Abuja. KariGO reviews every application before onboarding.</p>
           <div className="actions">
             <Link className="button" href="/vendors/apply">Apply as a Vendor</Link>
-            <Link className="button secondary" href="/sme-services/apply">Become a Service Provider</Link>
+            <a className="button secondary" href="https://vendor.karigo.com.ng/register">Become a Service Provider</a>
           </div>
         </article>
         <article className="info-card">
