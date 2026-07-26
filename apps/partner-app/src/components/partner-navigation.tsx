@@ -8,6 +8,7 @@ const tabs = [
   { label: "Orders", path: "/orders", icon: "clipboard" },
   { label: "Products", path: "/products", icon: "shopping-bag" },
   { label: "Services", path: "/services", icon: "tool" },
+  { label: "Earnings", path: "/earnings", icon: "dollar-sign" },
   { label: "Profile", path: "/profile", icon: "user" }
 ] satisfies Array<{ label: string; path: string; icon: keyof typeof Feather.glyphMap }>;
 
@@ -83,7 +84,7 @@ const styles = StyleSheet.create({
   },
   label: {
     color: brand.colors.muted,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800"
   },
   labelActive: {

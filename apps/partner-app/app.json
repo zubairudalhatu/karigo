@@ -23,8 +23,19 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/karigo-adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
-      }
+      },
+      "package": "com.karigo.partner",
+      "versionCode": 1
     },
-    "owner": "zamkah"
+    "owner": "zamkah",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/44e595bd-739a-430f-8d4d-99e961ac2451"
+    },
+    "ios": {
+      "bundleIdentifier": "com.karigo.partner"
+    }
   }
 }

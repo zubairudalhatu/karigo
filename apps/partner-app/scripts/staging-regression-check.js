@@ -20,15 +20,21 @@ const dashboard = read("app/index.tsx");
 const orders = read("app/orders/index.tsx");
 const orderDetail = read("app/orders/[orderId].tsx");
 const products = read("app/products/index.tsx");
+const productNew = read("app/products/new.tsx");
+const productEdit = read("app/products/[productId].tsx");
 const services = read("app/services/index.tsx");
+const earnings = read("app/earnings/index.tsx");
+const payout = read("app/payout/index.tsx");
 const documents = read("app/documents/index.tsx");
 const profile = read("app/profile/index.tsx");
+const profileEdit = read("app/profile/edit.tsx");
 const apiClient = read("src/api/client.ts");
 const authContext = read("src/contexts/auth-context.tsx");
 const partnerApi = read("src/api/partner.api.ts");
 const nav = read("src/components/partner-navigation.tsx");
 const labels = read("src/lib/labels.ts");
 const partnerProfile = read("src/lib/partner-profile.ts");
+const productForm = read("src/components/product-form.tsx");
 
 expect(packageJson.name === "@karigo/partner-app", "Partner app package name must be @karigo/partner-app.");
 expect(packageJson.main === "expo-router/entry", "Partner app must use Expo Router entry.");
@@ -41,6 +47,9 @@ expect(appJson.expo.name === "KariGO Partner", "Base app.json name must be KariG
 expect(appJson.expo.slug === "karigo-partner", "Base app.json slug must be karigo-partner.");
 expect(appJson.expo.scheme === "karigo-partner", "Base app.json scheme must be karigo-partner.");
 expect(appJson.expo.extra?.eas?.projectId === "44e595bd-739a-430f-8d4d-99e961ac2451", "Partner app must keep the linked EAS project ID.");
+expect(appJson.expo.updates?.url === "https://u.expo.dev/44e595bd-739a-430f-8d4d-99e961ac2451", "Partner app must keep the linked EAS updates URL.");
+expect(appJson.expo.android?.package === "com.karigo.partner", "Partner app base Android package must remain com.karigo.partner.");
+expect(appJson.expo.ios?.bundleIdentifier === "com.karigo.partner", "Partner app base iOS bundle identifier must remain com.karigo.partner.");
 
 expect(appConfig.includes("KariGO Partner"), "App config must use KariGO Partner branding.");
 expect(appConfig.includes("KariGO Partner Staging"), "App config must support staging branding.");
@@ -71,17 +80,28 @@ expect(login.includes("passwordVisible"), "Login screen must include password vi
 
 expect(rootLayout.includes("PartnerBottomNav"), "Root layout must mount Partner bottom navigation.");
 expect(rootLayout.includes("orders/[orderId]"), "Root layout must register the order detail route.");
+expect(rootLayout.includes("products/new") && rootLayout.includes("products/[productId]"), "Root layout must register product create/edit routes.");
+expect(rootLayout.includes("earnings/index") && rootLayout.includes("payout/index"), "Root layout must register earnings and payout routes.");
+expect(rootLayout.includes("profile/edit"), "Root layout must register partner profile edit route.");
 expect(nav.includes("Home") && nav.includes("Orders") && nav.includes("Products") && nav.includes("Services") && nav.includes("Profile"), "Bottom nav must expose Partner foundation tabs.");
+expect(nav.includes("Earnings"), "Bottom nav must expose earnings and settlements.");
 expect(nav.includes("@expo/vector-icons") && nav.includes("Feather"), "Bottom nav must use proper icons.");
 expect(!nav.includes('icon: "H"') && !nav.includes('icon: "O"'), "Bottom nav must not use first-letter icon substitutes.");
 expect(nav.includes("pathname.startsWith(\"/auth\")"), "Bottom nav must hide on auth screens.");
 
 expect(partnerApi.includes("vendors/me"), "Partner API must load existing vendor/partner profile endpoint.");
+expect(partnerApi.includes("updateProfile") && partnerApi.includes('api.patch<PartnerProfile>("vendors/me"'), "Partner API must update profile/availability through the vendor profile endpoint.");
 expect(partnerApi.includes("vendor-dashboard/orders"), "Partner API must load existing vendor orders endpoint.");
 expect(partnerApi.includes("orderDetail") && partnerApi.includes("vendor-dashboard/orders/${orderId}"), "Partner API must expose order detail lookup.");
 expect(partnerApi.includes("vendor/products"), "Partner API must load existing vendor products endpoint.");
+expect(partnerApi.includes("createProduct") && partnerApi.includes('api.post<ProductSummary>("vendor/products"'), "Partner API must create products through vendor-owned endpoints.");
+expect(partnerApi.includes("updateProduct") && partnerApi.includes("vendor/products/${productId}"), "Partner API must update products through vendor-owned endpoints.");
+expect(partnerApi.includes("updateProductAvailability") && partnerApi.includes("vendor/products/${productId}/availability"), "Partner API must update product availability safely.");
 expect(partnerApi.includes("vendors/services"), "Partner API must load existing vendor services endpoint.");
 expect(partnerApi.includes("vendors/onboarding-documents"), "Partner API must load onboarding document endpoint.");
+expect(partnerApi.includes("vendor/settlements"), "Partner API must load vendor settlement visibility endpoint.");
+expect(partnerApi.includes("vendor/payout-account"), "Partner API must maintain vendor payout account details through vendor-scoped endpoints.");
+expect(!partnerApi.includes("admin/vendor-payout-accounts"), "Partner app must not call admin payout account endpoints.");
 
 expect(dashboard.includes("Product Seller") && dashboard.includes("Service Provider") && dashboard.includes("Both"), "Dashboard must describe supported partner types.");
 expect(dashboard.includes("Your partner profile is not active."), "Dashboard must handle missing Partner profile safely.");
@@ -89,6 +109,9 @@ expect(dashboard.includes("Contact Support"), "Missing profile state must expose
 expect(dashboard.includes("No active orders yet"), "Dashboard must have a safe empty order state.");
 expect(dashboard.includes("Open order detail"), "Dashboard latest active order must open order detail.");
 expect(dashboard.includes("partnerProfileWarning"), "Dashboard must warn for closed/demo partner profiles.");
+expect(dashboard.includes("Go Online") && dashboard.includes("Go Offline"), "Dashboard must support partner online/offline availability.");
+expect(dashboard.includes("partnerApi.updateProfile({ isOpen"), "Dashboard availability must use the safe profile update endpoint.");
+expect(dashboard.includes("Add product") && dashboard.includes("View earnings and settlements") && dashboard.includes("Edit partner profile"), "Dashboard must expose operations shortcuts.");
 expect(orders.includes("Partner orders"), "Orders screen must be Partner branded.");
 expect(orders.includes("router.push(`/orders/${order.id}`)"), "Orders list cards must navigate to order detail.");
 expect(orders.includes("Tap to view order detail"), "Orders list must show a clear tap affordance.");
@@ -97,12 +120,25 @@ expect(orderDetail.includes("partnerApi.orderDetail"), "Order detail route must 
 expect(orderDetail.includes("Status history"), "Order detail route must show status history.");
 expect(orderDetail.includes("Read-only order view"), "Order detail route must stay read-only.");
 expect(products.includes("Product Seller"), "Products screen must use Product Seller language.");
+expect(products.includes("Add product") && products.includes("Mark unavailable") && products.includes("Mark available"), "Products screen must support add and availability actions.");
+expect(productNew.includes("partnerApi.createProduct") && productNew.includes("Create product"), "Product create route must call partnerApi.createProduct.");
+expect(productEdit.includes("partnerApi.product") && productEdit.includes("partnerApi.updateProduct"), "Product edit route must load and update vendor-owned products.");
+expect(productForm.includes("Product image URL must start with https://"), "Product form must enforce HTTPS product image URLs.");
+expect(productForm.includes("Mobile product image upload is still handled from Partner Workspace"), "Product form must keep mobile upload scope controlled.");
 expect(services.includes("Service Provider"), "Services screen must use Service Provider language.");
+expect(services.includes("Mobile service management can be expanded"), "Services screen must keep service create/edit out of this controlled release.");
+expect(earnings.includes("Automated payouts remain disabled") && earnings.includes("partnerApi.settlements"), "Earnings screen must show settlement visibility without automated payouts.");
+expect(earnings.includes("Manage payout account"), "Earnings screen must link payout account setup.");
+expect(payout.includes("partnerApi.payoutAccount") && payout.includes("partnerApi.createPayoutAccount") && payout.includes("partnerApi.updatePayoutAccount"), "Payout screen must support vendor payout account create/update.");
+expect(payout.includes("This does not trigger payouts") && payout.includes("No money is sent from this screen"), "Payout screen must make payout automation guardrail explicit.");
 expect(documents.includes("Uploads remain controlled through Partner Workspace"), "Documents screen must keep uploads guarded in foundation release.");
-expect(profile.includes("Mobile foundation scope"), "Profile must disclose this is foundation scope.");
+expect(profile.includes("Edit partner profile") && profile.includes("Payout account") && profile.includes("View earnings"), "Profile must expose operations and payout routes.");
 expect(profile.includes("partnerProfileWarning"), "Profile must warn for closed/demo partner profiles.");
 expect(profile.includes("Log out"), "Profile screen must expose logout.");
+expect(profileEdit.includes("partnerApi.updateProfile") && profileEdit.includes("Save profile"), "Profile edit route must save through vendor profile endpoint.");
+expect(profileEdit.includes("Logo URL") && profileEdit.includes("Cover image URL"), "Profile edit must support branding URL updates without adding upload dependencies.");
 expect(labels.includes("Pay on Delivery") && labels.includes("formatLabel") && labels.includes("statusTone"), "Partner app must format raw enum labels safely.");
+expect(labels.includes("Pending verification") && labels.includes("Verified"), "Partner app must format payout account statuses safely.");
 expect(partnerProfile.includes("Demo or test partner record") && partnerProfile.includes("Partner profile is closed or inactive"), "Partner profile helper must handle demo and closed profiles.");
 
 if (failures.length) {

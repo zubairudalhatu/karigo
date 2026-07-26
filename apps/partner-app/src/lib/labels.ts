@@ -14,13 +14,18 @@ const labelOverrides: Record<string, string> = {
   PAID: "Paid",
   PAYMENT_PENDING: "Payment pending",
   PENDING: "Pending",
+  PENDING_VERIFICATION: "Pending verification",
   PREPARING: "Preparing",
   READY: "Ready",
   READY_FOR_PICKUP: "Ready for pickup",
   REJECTED: "Rejected",
+  NEEDS_UPDATE: "Needs update",
+  PROCESSING: "Processing",
   SUBMITTED: "Submitted",
   UNDER_REVIEW: "Under review",
-  VENDOR_ACCEPTED: "Accepted"
+  VENDOR_ACCEPTED: "Accepted",
+  VERIFIED: "Verified",
+  FAILED: "Failed"
 };
 
 export function formatLabel(value?: string | null, fallback = "Pending") {
@@ -39,13 +44,13 @@ export function formatLabel(value?: string | null, fallback = "Pending") {
 
 export function statusTone(value?: string | null): BadgeTone {
   const normalized = value?.toUpperCase() ?? "";
-  if (["APPROVED", "ACTIVE", "OPEN", "PAID", "DELIVERED", "READY", "READY_FOR_PICKUP"].includes(normalized)) {
+  if (["APPROVED", "ACTIVE", "OPEN", "PAID", "DELIVERED", "READY", "READY_FOR_PICKUP", "VERIFIED"].includes(normalized)) {
     return "success";
   }
-  if (["PENDING", "PAYMENT_PENDING", "CASH_PENDING", "SUBMITTED", "UNDER_REVIEW", "PREPARING", "ASSIGNED"].includes(normalized)) {
+  if (["PENDING", "PENDING_VERIFICATION", "PROCESSING", "PAYMENT_PENDING", "CASH_PENDING", "SUBMITTED", "UNDER_REVIEW", "PREPARING", "ASSIGNED"].includes(normalized)) {
     return "info";
   }
-  if (["CLOSED", "INACTIVE", "ARCHIVED", "REJECTED", "CANCELLED", "SUSPENDED", "DELETED", "TRASHED"].includes(normalized)) {
+  if (["CLOSED", "INACTIVE", "ARCHIVED", "REJECTED", "CANCELLED", "FAILED", "SUSPENDED", "DELETED", "TRASHED", "NEEDS_UPDATE"].includes(normalized)) {
     return "warning";
   }
   return "neutral";

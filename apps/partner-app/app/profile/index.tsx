@@ -1,4 +1,5 @@
 import { brand } from "@karigo/config";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { RefreshControl, StyleSheet, Text, View } from "react-native";
 import { partnerApi, PartnerProfile } from "../../src/api/partner.api";
@@ -10,6 +11,7 @@ import { partnerProfileWarning } from "../../src/lib/partner-profile";
 
 function ProfileContent() {
   const { logout, user } = useAuth();
+  const router = useRouter();
   const [profile, setProfile] = useState<PartnerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -66,12 +68,16 @@ function ProfileContent() {
         <MutedText>{profile?.address ?? "Address pending"}</MutedText>
         <MutedText>{profile?.city ?? "City pending"}, {profile?.state ?? "State pending"}</MutedText>
         <MutedText>{profile?.description ?? "Description can be maintained from Partner Workspace."}</MutedText>
+        <Badge label={profile?.isOpen ? "Online" : "Offline"} tone={profile?.isOpen ? "success" : "warning"} />
+        <PrimaryButton label="Edit partner profile" onPress={() => router.push("/profile/edit")} />
       </Card>
       <Card>
-        <Text style={styles.sectionTitle}>Mobile foundation scope</Text>
+        <Text style={styles.sectionTitle}>Settlement readiness</Text>
         <MutedText>
-          This first Partner app release provides mobile sign-in, profile visibility and activity views. Full create/edit workflows will be added after pilot feedback.
+          View earnings and maintain payout account details for future manual settlement review. This does not trigger automated payouts.
         </MutedText>
+        <PrimaryButton label="View earnings" onPress={() => router.push("/earnings")} variant="secondary" />
+        <PrimaryButton label="Payout account" onPress={() => router.push("/payout")} variant="secondary" />
       </Card>
       <PrimaryButton label="Log out" onPress={() => void logout()} variant="secondary" />
     </Screen>

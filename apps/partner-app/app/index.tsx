@@ -45,6 +45,8 @@ function DashboardContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [missingProfile, setMissingProfile] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [availabilityMessage, setAvailabilityMessage] = useState<string | null>(null);
+  const [availabilitySaving, setAvailabilitySaving] = useState(false);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
@@ -76,6 +78,21 @@ function DashboardContent() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const toggleAvailability = useCallback(async () => {
+    if (!data.profile) return;
+    setAvailabilitySaving(true);
+    setAvailabilityMessage(null);
+    try {
+      const updatedProfile = await partnerApi.updateProfile({ isOpen: !data.profile.isOpen });
+      setData((current) => ({ ...current, profile: updatedProfile }));
+      setAvailabilityMessage(updatedProfile.isOpen ? "Partner profile is now Online." : "Partner profile is now Offline.");
+    } catch (err) {
+      setAvailabilityMessage(err instanceof Error ? err.message : "Availability could not be updated.");
+    } finally {
+      setAvailabilitySaving(false);
+    }
+  }, [data.profile]);
 
   if (loading) return <LoadingState />;
 
@@ -132,6 +149,23 @@ function DashboardContent() {
         </MutedText>
       </Card>
 
+      <Card>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Availability</Text>
+          <Badge label={data.profile?.isOpen ? "Online" : "Offline"} tone={data.profile?.isOpen ? "success" : "warning"} />
+        </View>
+        <MutedText>
+          Go Online when your team can receive KariGO activity. Go Offline when you need to pause incoming marketplace visibility.
+        </MutedText>
+        {availabilityMessage ? <MutedText>{availabilityMessage}</MutedText> : null}
+        <PrimaryButton
+          label={availabilitySaving ? "Updating..." : data.profile?.isOpen ? "Go Offline" : "Go Online"}
+          onPress={() => void toggleAvailability()}
+          disabled={!data.profile || !!profileWarning || availabilitySaving}
+          variant={data.profile?.isOpen ? "secondary" : "primary"}
+        />
+      </Card>
+
       {profileWarning ? (
         <Card>
           <View style={styles.cardHeader}>
@@ -147,6 +181,13 @@ function DashboardContent() {
         <StatCard label="Products" value={data.products.length} />
         <StatCard label="Services" value={data.services.length} />
       </View>
+
+      <Card>
+        <Text style={styles.cardTitle}>Operations shortcuts</Text>
+        <PrimaryButton label="Add product" onPress={() => router.push("/products/new")} />
+        <PrimaryButton label="View earnings and settlements" onPress={() => router.push("/earnings")} variant="secondary" />
+        <PrimaryButton label="Edit partner profile" onPress={() => router.push("/profile/edit")} variant="secondary" />
+      </Card>
 
       <Card>
         <View style={styles.cardHeader}>
