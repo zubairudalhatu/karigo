@@ -16,6 +16,7 @@ Use this checklist for a controlled deployment review. Unchecked items are not i
 - [ ] Keep `/api/v1/health` available to the hosting health checker.
 - [ ] Validate every environment variable before accepting traffic.
 - [ ] Define production admin provisioning. Never use the development seed password.
+- [ ] Keep `ALLOW_DEMO_SEED_DATA=false` and `SEED_PRODUCTION_DEMO_DATA=false` unless demo production seeding is explicitly approved for a temporary review window.
 
 ## Database
 
@@ -27,6 +28,7 @@ Use this checklist for a controlled deployment review. Unchecked items are not i
 - [ ] Review migration SQL before deployment.
 - [ ] Define rollback: restore backup or deploy a reviewed forward-fix migration.
 - [ ] Never run the development seed against production.
+- [ ] Run the production demo cleanup dry-run and confirm no demo vendors/products/utilities remain on public-facing surfaces.
 
 ## Frontends
 

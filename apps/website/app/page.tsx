@@ -31,8 +31,8 @@ export default function HomePage() {
                 <div className="preview-tile">Bills</div>
               </div>
               <div className="preview-order">
-                <strong>Kano Kitchen</strong>
-                <span>Order paid - vendor preparing</span>
+                <strong>Local restaurant order</strong>
+                <span>Order confirmed - vendor preparing</span>
                 <span className="badge">Track order</span>
               </div>
             </div>

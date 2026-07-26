@@ -28,7 +28,13 @@ npm run build
 npx prisma migrate deploy --schema services/backend-api/prisma/schema.prisma
 ```
 
-Do not run the development seed in production. Provision production admins through an approved one-time process with temporary credentials and forced rotation.
+Do not run the development seed in production for demo content. The seed now skips demo data in production unless both `ALLOW_DEMO_SEED_DATA=true` and `SEED_PRODUCTION_DEMO_DATA=true` are deliberately set. Provision production admins through an approved one-time process with temporary credentials and forced rotation. See `production-seed-data-guardrails-task194.md`.
+
+Before wider launch, run the production demo cleanup dry-run and review the candidate counts:
+
+```bash
+npm run cleanup:production-demo-data --workspace @karigo/backend-api
+```
 
 ## 4. Start Backend
 

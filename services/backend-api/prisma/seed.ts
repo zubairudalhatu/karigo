@@ -19,7 +19,10 @@ import {
   DEMO_ACCOUNT_PHONES,
   demoCredentialUpdate,
   isDemoCredentialResetRequested,
+  isDemoSeedDataAllowed,
+  isProductionSeedEnvironment,
   isStagingDemoCredentialResetEnabled,
+  productionSeedMessages,
   stagingSeedMessages
 } from "../src/seed/demo-seed-controls";
 
@@ -191,6 +194,11 @@ async function seedUtilityCatalogue() {
 async function main() {
   const seedPassword = process.env.SEED_DEMO_PASSWORD ?? "ChangeMe123!";
   const passwordHash = await hash(seedPassword, 10);
+  const productionSeed = isProductionSeedEnvironment();
+  const demoSeedDataAllowed = isDemoSeedDataAllowed();
+  if (productionSeed && !process.env.SUPER_ADMIN_PASSWORD) {
+    throw new Error("SUPER_ADMIN_PASSWORD is required when running the seed in production.");
+  }
   const superAdminPasswordHash = await hash(process.env.SUPER_ADMIN_PASSWORD ?? seedPassword, 10);
   const resetDemoCredentials = isStagingDemoCredentialResetEnabled();
   if (isDemoCredentialResetRequested() && !resetDemoCredentials) {
@@ -220,6 +228,12 @@ async function main() {
       phoneVerified: true
     }
   });
+
+  if (productionSeed && !demoSeedDataAllowed) {
+    productionSeedMessages(demoSeedDataAllowed).forEach((message) => console.info(message));
+    return;
+  }
+
   await prisma.user.upsert({
     where: { phoneNumber: DEMO_ACCOUNT_PHONES.operationsAdmin },
     update: {
@@ -672,6 +686,9 @@ async function main() {
 
   await seedUtilityCatalogue();
 
+  if (productionSeed) {
+    productionSeedMessages(demoSeedDataAllowed).forEach((message) => console.warn(message));
+  }
   stagingSeedMessages(resetDemoCredentials).forEach((message) => console.info(message));
   console.info("Demo Bills & Utilities catalogue ensured");
 }

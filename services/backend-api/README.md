@@ -199,7 +199,7 @@ npm run seed
 ```
 
 An initial Prisma migration is committed. Use `prisma migrate deploy` for controlled production deployment; use `prisma migrate dev` only for local development.
-The idempotent development seed creates vendor categories, an active sample vendor, sample products, a customer address and a sample parcel order.
+The idempotent development/staging seed creates vendor categories, sample vendors, products, a customer address and a sample parcel order. In production, demo users/vendors/products/orders/utilities are skipped unless both `ALLOW_DEMO_SEED_DATA=true` and `SEED_PRODUCTION_DEMO_DATA=true` are deliberately configured. See `docs/deployment/production-seed-data-guardrails-task194.md`.
 
 ## Verification
 
