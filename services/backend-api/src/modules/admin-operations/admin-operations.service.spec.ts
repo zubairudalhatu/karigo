@@ -114,7 +114,7 @@ describe("AdminOperationsService vendor cleanup", () => {
     prisma.vendor.findUnique.mockResolvedValue({ ...vendor, deletedAt: new Date("2026-07-15T01:00:00.000Z") });
     prisma.order.count.mockResolvedValue(1);
 
-    await expect(service.permanentlyDeleteVendor("admin-1", vendor.id)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.permanentlyDeleteVendor("admin-1", vendor.id, "DELETE")).rejects.toBeInstanceOf(BadRequestException);
     expect(tx.vendor.delete).not.toHaveBeenCalled();
     expect(tx.user.delete).not.toHaveBeenCalled();
   });
@@ -122,7 +122,7 @@ describe("AdminOperationsService vendor cleanup", () => {
   it("permanently deletes only a trashed vendor with no protected records", async () => {
     prisma.vendor.findUnique.mockResolvedValue({ ...vendor, deletedAt: new Date("2026-07-15T01:00:00.000Z") });
 
-    await service.permanentlyDeleteVendor("admin-1", vendor.id);
+    await service.permanentlyDeleteVendor("admin-1", vendor.id, "DELETE");
 
     expect(tx.productOption.deleteMany).toHaveBeenCalled();
     expect(tx.productOptionGroup.deleteMany).toHaveBeenCalled();

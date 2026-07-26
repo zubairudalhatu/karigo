@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AdminRole, UserRole, VendorApplicationStatus } from "@prisma/client";
 import { AdminRoles } from "../../common/decorators/admin-roles.decorator";
@@ -10,6 +10,7 @@ import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { CreateVendorApplicationDto } from "./dto/create-vendor-application.dto";
 import { ReviewVendorApplicationDto } from "./dto/review-vendor-application.dto";
+import { VendorApplicationPermanentDeleteDto, VendorApplicationRestoreDto, VendorApplicationTrashDto } from "./dto/vendor-application-cleanup.dto";
 import { VendorApplicationStatusQueryDto } from "./dto/vendor-application-status-query.dto";
 import { VendorApplicationsService } from "./vendor-applications.service";
 
@@ -43,8 +44,8 @@ export class AdminVendorApplicationsController {
   constructor(private readonly vendorApplicationsService: VendorApplicationsService) {}
 
   @Get()
-  async list(@Query("status") status?: VendorApplicationStatus) {
-    return { message: "Vendor applications retrieved", data: await this.vendorApplicationsService.list(status) };
+  async list(@Query("status") status?: VendorApplicationStatus, @Query("trash") trash?: "active" | "trashed" | "all") {
+    return { message: "Vendor applications retrieved", data: await this.vendorApplicationsService.list(status, trash) };
   }
 
   @Get("review-queue")
@@ -60,6 +61,21 @@ export class AdminVendorApplicationsController {
   @Patch(":applicationId")
   async review(@CurrentUser() user: AuthenticatedUser, @Param("applicationId", ParseUUIDPipe) applicationId: string, @Body() dto: ReviewVendorApplicationDto) {
     return { message: "Vendor application reviewed", data: await this.vendorApplicationsService.review(applicationId, user.id, dto) };
+  }
+
+  @Patch(":applicationId/trash")
+  async trash(@CurrentUser() user: AuthenticatedUser, @Param("applicationId", ParseUUIDPipe) applicationId: string, @Body() dto: VendorApplicationTrashDto) {
+    return { message: "Vendor application moved to Trash", data: await this.vendorApplicationsService.trash(applicationId, user.id, dto.reason, dto.note) };
+  }
+
+  @Patch(":applicationId/restore")
+  async restore(@CurrentUser() user: AuthenticatedUser, @Param("applicationId", ParseUUIDPipe) applicationId: string, @Body() dto: VendorApplicationRestoreDto) {
+    return { message: "Vendor application restored from Trash", data: await this.vendorApplicationsService.restore(applicationId, user.id, dto.reason) };
+  }
+
+  @Delete(":applicationId/permanent")
+  async permanentlyDelete(@CurrentUser() user: AuthenticatedUser, @Param("applicationId", ParseUUIDPipe) applicationId: string, @Body() dto: VendorApplicationPermanentDeleteDto) {
+    return { message: "Vendor application permanently deleted", data: await this.vendorApplicationsService.permanentlyDelete(applicationId, user.id, dto.confirmation) };
   }
 
   @Post(":applicationId/request-changes")

@@ -13,7 +13,7 @@ function safetySummary(vendor: AdminVendor) {
   const safety = vendor.cleanupSafety;
   if (!safety) return "Safety check not loaded.";
   if (safety.canPermanentlyDelete) {
-    return `Safe to permanently delete. ${safety.removableCatalogRecords.products} catalog product(s) will also be removed.`;
+    return `Safe to permanently delete this trashed Partner Account. ${safety.removableCatalogRecords.products} catalog product(s) will also be removed.`;
   }
   return safety.blockedBy.join(" ");
 }
@@ -83,12 +83,15 @@ export default function VendorsPage() {
 
   async function permanentlyDeleteVendor(vendor: AdminVendor) {
     if (!vendor.cleanupSafety?.canPermanentlyDelete) return;
-    const confirmed = window.confirm(`Permanently delete ${vendor.businessName}? This only works for trashed test vendors with no protected operational records.`);
-    if (!confirmed) return;
+    const confirmation = window.prompt(`Type DELETE to permanently delete Partner Account ${vendor.businessName}. This only works for trashed test accounts with no protected operational records.`);
+    if (confirmation !== "DELETE" && confirmation !== "PERMANENTLY DELETE") {
+      setError("Permanent delete cancelled. Type DELETE to confirm.");
+      return;
+    }
     try {
       setError("");
       setMessage("");
-      await managementApi.permanentlyDeleteVendor(vendor.id);
+      await managementApi.permanentlyDeleteVendor(vendor.id, confirmation);
       setMessage(`${vendor.businessName} was permanently deleted.`);
       await load();
     } catch (e) {
@@ -135,7 +138,7 @@ export default function VendorsPage() {
 
   return <PortalShell>
     <h1>Vendors</h1>
-    <p className="muted">Clean up staging and pilot test vendor accounts safely. Move vendors to Trash first; permanent deletion is allowed only when the backend confirms there are no protected operational records.</p>
+    <p className="muted">Clean up staging and pilot test Partner Accounts safely. Move accounts to Trash first; permanent deletion requires typing DELETE and is allowed only when the backend confirms there are no protected operational records.</p>
     <p className="success">{message}</p>
     <ErrorMessage>{error}</ErrorMessage>
     <div className="actions"><button className="secondary" onClick={() => void load()}>{loading ? "Refreshing..." : "Refresh"}</button></div>
@@ -164,14 +167,14 @@ export default function VendorsPage() {
           <button className="secondary" onClick={() => void updateVendorStatus(vendor, "PENDING_APPROVAL")}>Mark pending</button>
           <button className="secondary" onClick={() => void updateVendorStatus(vendor, "ACTIVE")}>Mark operational</button>
           <button className="secondary" onClick={() => void updateVendorStatus(vendor, "SUSPENDED")}>Suspend</button>
-          <button className="secondary" disabled={vendor.trashSafety ? !vendor.trashSafety.canMoveToTrash : true} onClick={() => void trashVendor(vendor)}>Move to Trash</button>
+          <button className="secondary" disabled={vendor.trashSafety ? !vendor.trashSafety.canMoveToTrash : true} onClick={() => void trashVendor(vendor)}>Move Partner Account to Trash / Close</button>
         </div>
       </article>) : <Empty>No active vendors found.</Empty>}
     </section>
 
     <section className="section">
       <h2>Trash</h2>
-      <p className="muted">Trashed vendors are hidden from public discovery and vendor dashboard operations. Restore if needed, or permanently delete only safe test accounts.</p>
+      <p className="muted">Trashed Partner Accounts are hidden from public discovery and Partner Workspace operations. Restore if needed, or permanently delete only safe test accounts after typing DELETE.</p>
       {trashedVendors.length ? trashedVendors.map((vendor) => <article className="card internal" key={vendor.id}>
         <strong>{vendor.businessName}</strong>
         <p className="muted">{vendor.businessCategory} - {vendorLocation(vendor)}</p>
@@ -179,7 +182,7 @@ export default function VendorsPage() {
         <p>{safetySummary(vendor)}</p>
         <div className="actions">
           <button className="secondary" onClick={() => void restoreVendor(vendor)}>Restore</button>
-          <button disabled={!vendor.cleanupSafety?.canPermanentlyDelete} onClick={() => void permanentlyDeleteVendor(vendor)}>Delete permanently</button>
+          <button disabled={!vendor.cleanupSafety?.canPermanentlyDelete} onClick={() => void permanentlyDeleteVendor(vendor)}>Permanently Delete Partner Account</button>
         </div>
       </article>) : <Empty>No vendors in Trash.</Empty>}
     </section>

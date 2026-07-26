@@ -20,6 +20,14 @@ export interface VendorApplication {
   contactEmail: string;
   status: string;
   submittedAt: string;
+  reviewedAt?: string | null;
+  deletedAt?: string | null;
+  restoredAt?: string | null;
+  trashReason?: string | null;
+  trashNote?: string | null;
+  trashedByAdminId?: string | null;
+  restoredByAdminId?: string | null;
+  inTrash?: boolean;
   documents?: VendorApplicationDocument[];
   applicant?: {
     id: string;
@@ -39,7 +47,13 @@ export interface VendorApplication {
   } | null;
 }
 
+export type VendorApplicationTrashFilter = "active" | "trashed" | "all";
+
 export const vendorApplicationsApi = {
-  list: () => api.get<VendorApplication[]>("admin/vendor-applications"),
-  review: (id: string, status: string, notes?: string) => api.patch<VendorApplication>(`admin/vendor-applications/${id}`, { status, notes })
+  list: (trash: VendorApplicationTrashFilter = "active") => api.get<VendorApplication[]>(`admin/vendor-applications?trash=${trash}`),
+  review: (id: string, status: string, notes?: string) => api.patch<VendorApplication>(`admin/vendor-applications/${id}`, { status, notes }),
+  trash: (id: string, reason: string, note?: string) => api.patch<VendorApplication>(`admin/vendor-applications/${id}/trash`, { reason, note }),
+  restore: (id: string, reason?: string) => api.patch<VendorApplication>(`admin/vendor-applications/${id}/restore`, { reason }),
+  permanentlyDelete: (id: string, confirmation: "DELETE" | "PERMANENTLY DELETE") =>
+    api.delete<{ applicationId: string; permanentlyDeleted: boolean }>(`admin/vendor-applications/${id}/permanent`, { body: { confirmation } })
 };

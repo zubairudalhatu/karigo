@@ -43,6 +43,12 @@ const vendorApplication = {
   status: VendorApplicationStatus.SUBMITTED,
   submittedAt: now,
   reviewedAt: null,
+  deletedAt: null,
+  trashReason: null,
+  trashNote: null,
+  trashedByAdminId: null,
+  restoredAt: null,
+  restoredByAdminId: null,
   applicantUserId: "00000000-0000-0000-0000-00000000vusr",
   applicant: {
     id: "00000000-0000-0000-0000-00000000vusr",
@@ -73,8 +79,17 @@ describe("VendorApplicationsService", () => {
     vendorApplication: {
       create: jest.fn(),
       findUnique: jest.fn(),
-      findFirst: jest.fn()
-    }
+      findFirst: jest.fn(),
+      findMany: jest.fn()
+    },
+    order: { count: jest.fn() },
+    vendorSettlement: { count: jest.fn() },
+    vendorPayoutAccount: { count: jest.fn() },
+    orderItem: { count: jest.fn() },
+    payment: { count: jest.fn() },
+    vendorApplicationDocument: { count: jest.fn() },
+    vendorApplicationReview: { count: jest.fn() },
+    vendorApplicationStatusHistory: { count: jest.fn() }
   };
   const applicationNotifications = {
     vendorApplicationSubmitted: jest.fn(),
@@ -87,7 +102,16 @@ describe("VendorApplicationsService", () => {
     prisma.user.findUnique.mockResolvedValue(vendorApplication.applicant);
     prisma.vendorApplication.findUnique.mockResolvedValue(null);
     prisma.vendorApplication.findFirst.mockResolvedValue(null);
+    prisma.vendorApplication.findMany.mockResolvedValue([]);
     prisma.vendorApplication.create.mockResolvedValue(vendorApplication);
+    prisma.order.count.mockResolvedValue(0);
+    prisma.vendorSettlement.count.mockResolvedValue(0);
+    prisma.vendorPayoutAccount.count.mockResolvedValue(0);
+    prisma.orderItem.count.mockResolvedValue(0);
+    prisma.payment.count.mockResolvedValue(0);
+    prisma.vendorApplicationDocument.count.mockResolvedValue(0);
+    prisma.vendorApplicationReview.count.mockResolvedValue(0);
+    prisma.vendorApplicationStatusHistory.count.mockResolvedValue(0);
     applicationNotifications.vendorApplicationSubmitted.mockResolvedValue(undefined);
     applicationNotifications.vendorApplicationReviewed.mockResolvedValue(undefined);
   });
@@ -238,5 +262,121 @@ describe("VendorApplicationsService", () => {
         userId: "00000000-0000-0000-0000-00000000vusr"
       })
     }));
+  });
+
+  it("excludes trashed vendor applications from the default admin list", async () => {
+    await service.list();
+
+    expect(prisma.vendorApplication.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { deletedAt: null }
+    }));
+
+    await service.list(undefined, "trashed");
+
+    expect(prisma.vendorApplication.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { deletedAt: { not: null } }
+    }));
+  });
+
+  it("moves a vendor application to Trash with an admin reason", async () => {
+    const trashedAt = new Date("2026-07-26T10:00:00.000Z");
+    const tx = {
+      vendorApplication: {
+        update: jest.fn().mockResolvedValue({
+          ...vendorApplication,
+          deletedAt: trashedAt,
+          trashReason: "duplicate",
+          trashNote: "Duplicate live-test application"
+        })
+      },
+      adminAuditLog: { create: jest.fn() }
+    };
+    prisma.vendorApplication.findUnique.mockResolvedValueOnce(vendorApplication);
+    prisma.$transaction.mockImplementationOnce(async (callback: any) => callback(tx));
+
+    const result = await service.trash(vendorApplication.id, "00000000-0000-0000-0000-00000000a001", "duplicate", "Duplicate live-test application");
+
+    expect(tx.vendorApplication.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: vendorApplication.id },
+      data: expect.objectContaining({
+        trashReason: "duplicate",
+        trashNote: "Duplicate live-test application",
+        trashedByAdminId: "00000000-0000-0000-0000-00000000a001"
+      })
+    }));
+    expect(tx.adminAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: "admin.vendor_application.trash" })
+    }));
+    expect(result).toMatchObject({ inTrash: true, trashReason: "duplicate" });
+  });
+
+  it("restores a trashed vendor application", async () => {
+    const trashedApplication = { ...vendorApplication, deletedAt: now, trashReason: "test account" };
+    const tx = {
+      vendorApplication: {
+        update: jest.fn().mockResolvedValue({ ...vendorApplication, restoredAt: now, restoredByAdminId: "00000000-0000-0000-0000-00000000a001" })
+      },
+      adminAuditLog: { create: jest.fn() }
+    };
+    prisma.vendorApplication.findUnique.mockResolvedValueOnce(trashedApplication);
+    prisma.$transaction.mockImplementationOnce(async (callback: any) => callback(tx));
+
+    const result = await service.restore(vendorApplication.id, "00000000-0000-0000-0000-00000000a001", "record needed");
+
+    expect(tx.vendorApplication.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ deletedAt: null, restoredByAdminId: "00000000-0000-0000-0000-00000000a001" })
+    }));
+    expect(tx.adminAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: "admin.vendor_application.restore" })
+    }));
+    expect(result).toMatchObject({ inTrash: false });
+  });
+
+  it("permanently deletes only a safe trashed vendor application", async () => {
+    const safeTrashedApplication = { ...vendorApplication, deletedAt: now };
+    const tx = {
+      vendorApplicationDocument: { deleteMany: jest.fn() },
+      vendorApplicationReview: { deleteMany: jest.fn() },
+      vendorApplicationStatusHistory: { deleteMany: jest.fn() },
+      vendorApplication: { delete: jest.fn() },
+      adminAuditLog: { create: jest.fn() }
+    };
+    prisma.vendorApplication.findUnique.mockResolvedValueOnce(safeTrashedApplication);
+    prisma.$transaction.mockImplementationOnce(async (callback: any) => callback(tx));
+
+    await expect(service.permanentlyDelete(vendorApplication.id, "00000000-0000-0000-0000-00000000a001", "DELETE"))
+      .resolves.toEqual({ applicationId: vendorApplication.id, permanentlyDeleted: true });
+
+    expect(tx.vendorApplication.delete).toHaveBeenCalledWith({ where: { id: vendorApplication.id } });
+    expect(tx.adminAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: "admin.vendor_application.permanent_delete" })
+    }));
+  });
+
+  it("blocks permanent vendor application delete when protected history exists", async () => {
+    prisma.vendorApplication.findUnique.mockResolvedValueOnce({
+      ...vendorApplication,
+      deletedAt: now,
+      vendorId: "00000000-0000-0000-0000-00000000v001",
+      vendor: {
+        id: "00000000-0000-0000-0000-00000000v001",
+        businessName: "Samira's Resto Limited",
+        status: "ACTIVE",
+        deletedAt: null,
+        user: { id: "00000000-0000-0000-0000-00000000vusr", accountStatus: "ACTIVE", email: "samira@example.test", phoneNumber: "+2348030000000" },
+        activationInvitations: []
+      }
+    });
+    prisma.order.count.mockResolvedValueOnce(1);
+
+    await expect(service.permanentlyDelete(vendorApplication.id, "00000000-0000-0000-0000-00000000a001", "DELETE"))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("blocks permanent vendor application delete before Trash", async () => {
+    prisma.vendorApplication.findUnique.mockResolvedValueOnce(vendorApplication);
+
+    await expect(service.permanentlyDelete(vendorApplication.id, "00000000-0000-0000-0000-00000000a001", "DELETE"))
+      .rejects.toBeInstanceOf(BadRequestException);
   });
 });

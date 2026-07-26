@@ -392,7 +392,10 @@ export class AdminOperationsService {
     return this.vendorCleanupView(restored);
   }
 
-  async permanentlyDeleteVendor(adminUserId: string, vendorId: string) {
+  async permanentlyDeleteVendor(adminUserId: string, vendorId: string, confirmation: "DELETE" | "PERMANENTLY DELETE") {
+    if (confirmation !== "DELETE" && confirmation !== "PERMANENTLY DELETE") {
+      throw new BadRequestException("Type DELETE to permanently delete this partner account.");
+    }
     const vendor = await this.findVendorForCleanup(vendorId);
     const safety = await this.vendorCleanupSafety(vendor.id);
 

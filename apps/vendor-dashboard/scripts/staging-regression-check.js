@@ -35,6 +35,12 @@ assert(shell.includes("Ads"), "Vendor sidebar must include the ads page.");
 assert(shell.includes("Partner workspace"), "Vendor shell must use Partner Workspace copy.");
 assert(shell.includes("KariGO Partner Workspace"), "Vendor shell must expose KariGO Partner Workspace branding.");
 
+const dashboardPage = read("app", "page.tsx");
+assert(dashboardPage.includes("Your partner profile is not active."), "Partner dashboard must show a friendly missing-profile state.");
+assert(dashboardPage.includes("Start Partner Onboarding"), "Missing-profile state must link to onboarding.");
+assert(dashboardPage.includes("Contact Support"), "Missing-profile state must expose support contact action.");
+assert(dashboardPage.includes("Only KariGO Admin can restore, approve or reactivate closed partner records."), "Missing-profile state must not self-restore closed partner records.");
+
 const loginPage = read("app", "login", "page.tsx");
 assert(loginPage.includes("Partner Workspace login"), "Partner login page must use Partner Workspace copy.");
 assert(loginPage.includes("/register"), "Partner login page must link new partners to onboarding choice.");

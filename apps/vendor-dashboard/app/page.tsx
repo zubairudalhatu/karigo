@@ -1,18 +1,52 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ordersApi, VendorOrderSummary } from "../src/api/orders.api";
 import { notificationsApi } from "../src/api/notifications.api";
 import { DashboardShell, Empty, ErrorMessage, Loading, StatusBadge } from "../src/components/dashboard";
+import { useAuth } from "../src/contexts/auth-context";
 import { money } from "../src/lib/errors";
 
 export default function VendorDashboard() {
+  const router = useRouter();
+  const { logout } = useAuth();
   const [orders, setOrders] = useState<VendorOrderSummary[]>([]);
   const [unread, setUnread] = useState(0);
   const [error, setError] = useState("");
+  const [missingProfile, setMissingProfile] = useState(false);
   const [loading, setLoading] = useState(true);
-  useEffect(() => { Promise.all([ordersApi.list(), notificationsApi.unreadCount()]).then(([o, n]) => { setOrders(o); setUnread(n.count); }).catch((e) => setError(String(e instanceof Error ? e.message : e))).finally(() => setLoading(false)); }, []);
+  useEffect(() => {
+    Promise.all([ordersApi.list(), notificationsApi.unreadCount()])
+      .then(([o, n]) => {
+        setOrders(o);
+        setUnread(n.count);
+      })
+      .catch((e) => {
+        const message = String(e instanceof Error ? e.message : e);
+        if (message.includes("Vendor profile not found")) {
+          setMissingProfile(true);
+          setError("");
+          return;
+        }
+        setError(message);
+      })
+      .finally(() => setLoading(false));
+  }, []);
   const count = (statuses: string[]) => orders.filter((order) => statuses.includes(order.orderStatus)).length;
   if (loading) return <DashboardShell><Loading /></DashboardShell>;
+  if (missingProfile) return <DashboardShell unread={unread}>
+    <section className="card missing-profile">
+      <p className="muted">Partner profile</p>
+      <h1>Your partner profile is not active.</h1>
+      <p>This account is signed in, but no active KariGO Partner profile is currently linked to it. If this is a new account, please complete onboarding. If this account was closed or removed, contact KariGO support.</p>
+      <div className="actions">
+        <a className="button-link" href="/register">Start Partner Onboarding</a>
+        <button className="secondary" onClick={async () => { await logout(); router.replace("/login"); }}>Log out</button>
+        <a className="button-link secondary-link" href="https://www.karigo.com.ng/contact">Contact Support</a>
+      </div>
+      <p className="muted">Only KariGO Admin can restore, approve or reactivate closed partner records.</p>
+    </section>
+  </DashboardShell>;
   return <DashboardShell unread={unread}><header className="topbar"><div><p className="muted">Partner workspace</p><h1>Operations overview</h1><p className="muted">Product sellers and SME service providers can manage the approved workspace areas for their account.</p></div><StatusBadge>Live API</StatusBadge></header><ErrorMessage>{error}</ErrorMessage>
     <div className="grid">
       <article className="card"><span className="muted">New orders</span><p className="metric">{count(["PAID", "VENDOR_CONFIRMING"])}</p></article>

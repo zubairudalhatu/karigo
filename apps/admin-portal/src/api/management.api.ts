@@ -108,7 +108,8 @@ export const managementApi = {
   trashedVendors: () => api.get<AdminVendor[]>("admin/vendors/trash"),
   trashVendor: (vendorId: string, reason?: string) => api.patch<AdminVendor>(`admin/vendors/${vendorId}/trash`, { reason }),
   restoreVendor: (vendorId: string, reason?: string) => api.patch<AdminVendor>(`admin/vendors/${vendorId}/restore`, { reason }),
-  permanentlyDeleteVendor: (vendorId: string) => api.delete<{ vendorId: string; permanentlyDeleted: boolean }>(`admin/vendors/${vendorId}`),
+  permanentlyDeleteVendor: (vendorId: string, confirmation: "DELETE" | "PERMANENTLY DELETE") =>
+    api.delete<{ vendorId: string; permanentlyDeleted: boolean }>(`admin/vendors/${vendorId}`, { body: { confirmation } }),
   createVendorActivationLink: (vendorId: string) => api.post<VendorActivationLinkResult>(`admin/vendors/${vendorId}/activation-link`),
   updateVendorStatus: (vendorId: string, status: string, note?: string) => api.patch<AdminVendor>(`admin/vendors/${vendorId}/status`, { status, note }),
   vendorOnboardingDocuments: (vendorId: string) => api.get<VendorOnboardingDocument[]>(`admin/vendors/${vendorId}/onboarding-documents`),

@@ -43,6 +43,21 @@ assert(vendorApplicationsPage.includes("Review public partner applications"), "A
 assert(vendorApplicationsPage.includes("Partner type:"), "Admin vendor applications page must display partner type context.");
 assert(vendorApplicationsPage.includes("Service Provider"), "Admin vendor applications page must distinguish service-provider applications.");
 assert(vendorApplicationsPage.includes("Product Seller / Marketplace Vendor"), "Admin vendor applications page must distinguish product-seller applications.");
+assert(vendorApplicationsPage.includes("Application view"), "Admin vendor applications page must expose active/trashed/all filtering.");
+assert(vendorApplicationsPage.includes("Move to Trash"), "Admin vendor applications page must expose a trash action.");
+assert(vendorApplicationsPage.includes("Restore from Trash"), "Admin vendor applications page must expose a restore action.");
+assert(vendorApplicationsPage.includes("Permanently Delete"), "Admin vendor applications page must expose guarded permanent delete for trashed applications.");
+assert(vendorApplicationsPage.includes("Trash reason"), "Admin vendor applications page must require a trash reason field.");
+assert(vendorApplicationsPage.includes("Type DELETE"), "Admin vendor applications permanent delete must require typed confirmation.");
+const vendorApplicationsApiSource = read("src", "api", "vendor-applications.api.ts");
+assert(vendorApplicationsApiSource.includes("trash: (id: string"), "Admin vendor applications API must call trash endpoint.");
+assert(vendorApplicationsApiSource.includes("restore: (id: string"), "Admin vendor applications API must call restore endpoint.");
+assert(vendorApplicationsApiSource.includes("permanentlyDelete"), "Admin vendor applications API must call permanent delete endpoint.");
+
+const vendorsPage = read("app", "vendors", "page.tsx");
+assert(vendorsPage.includes("Move Partner Account to Trash / Close"), "Admin Vendors page must use Partner Account trash wording.");
+assert(vendorsPage.includes("Permanently Delete Partner Account"), "Admin Vendors page must expose guarded Partner Account permanent delete.");
+assert(vendorsPage.includes("Type DELETE"), "Admin Vendors page must require typed confirmation before permanent delete.");
 
 const deliveryCaptainApplicationsPage = read("app", "delivery-captain-applications", "page.tsx");
 assert(deliveryCaptainApplicationsPage.includes("Delivery Captain Applications"), "Admin Delivery Captain applications page must exist.");

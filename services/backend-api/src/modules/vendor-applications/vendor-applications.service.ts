@@ -48,6 +48,12 @@ const APPLICATION_SELECT = {
   status: true,
   submittedAt: true,
   reviewedAt: true,
+  deletedAt: true,
+  trashReason: true,
+  trashNote: true,
+  trashedByAdminId: true,
+  restoredAt: true,
+  restoredByAdminId: true,
   vendorId: true,
   createdAt: true,
   updatedAt: true,
@@ -70,6 +76,7 @@ const APPLICATION_SELECT = {
       id: true,
       businessName: true,
       status: true,
+      deletedAt: true,
       user: { select: { id: true, accountStatus: true, email: true, phoneNumber: true } },
       activationInvitations: {
         orderBy: { createdAt: "desc" },
@@ -181,11 +188,16 @@ export class VendorApplicationsService {
     return this.toPublicStatus(application);
   }
 
-  async list(status?: VendorApplicationStatus) {
+  async list(status?: VendorApplicationStatus, trash: "active" | "trashed" | "all" = "active") {
+    const trashFilter = trash === "trashed" || trash === "all" ? trash : "active";
+    const where: Prisma.VendorApplicationWhereInput = {
+      ...(status ? { status } : {}),
+      ...(trashFilter === "trashed" ? { deletedAt: { not: null } } : trashFilter === "all" ? {} : { deletedAt: null })
+    };
     const applications = await this.prisma.vendorApplication.findMany({
-      where: status ? { status } : {},
+      where,
       select: APPLICATION_SELECT,
-      orderBy: { submittedAt: "desc" },
+      orderBy: trashFilter === "trashed" ? { deletedAt: "desc" } : { submittedAt: "desc" },
       take: 100
     });
     return applications.map((application) => this.toAdminDetail(application));
@@ -206,6 +218,7 @@ export class VendorApplicationsService {
       select: APPLICATION_SELECT
     });
     if (!current) throw new NotFoundException("Vendor application not found");
+    if (current.deletedAt) throw new BadRequestException("Trashed vendor applications must be restored before review.");
 
     const shouldApprove = dto.status === VendorApplicationStatus.APPROVED;
     const activationToken = shouldApprove ? randomBytes(40).toString("base64url") : null;
@@ -290,6 +303,126 @@ export class VendorApplicationsService {
     return this.toAdminDetail(application);
   }
 
+  async trash(applicationId: string, adminUserId: string, reason: string, note?: string) {
+    const current = await this.prisma.vendorApplication.findUnique({
+      where: { id: applicationId },
+      select: APPLICATION_SELECT
+    });
+    if (!current) throw new NotFoundException("Vendor application not found");
+    if (current.deletedAt) return this.toAdminDetail(current);
+
+    const deletedAt = new Date();
+    const application = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.vendorApplication.update({
+        where: { id: applicationId },
+        data: {
+          deletedAt,
+          trashReason: reason,
+          trashNote: note,
+          trashedByAdminId: adminUserId,
+          restoredAt: null,
+          restoredByAdminId: null
+        },
+        select: APPLICATION_SELECT
+      });
+      await tx.adminAuditLog.create({
+        data: {
+          adminUserId,
+          action: "admin.vendor_application.trash",
+          entityType: "VendorApplication",
+          entityId: applicationId,
+          newValue: {
+            applicationReference: current.reference,
+            businessName: current.businessName,
+            reason,
+            note: note ?? null
+          } as Prisma.InputJsonValue
+        }
+      });
+      return updated;
+    });
+
+    return this.toAdminDetail(application);
+  }
+
+  async restore(applicationId: string, adminUserId: string, reason?: string) {
+    const current = await this.prisma.vendorApplication.findUnique({
+      where: { id: applicationId },
+      select: APPLICATION_SELECT
+    });
+    if (!current) throw new NotFoundException("Vendor application not found");
+    if (!current.deletedAt) return this.toAdminDetail(current);
+
+    const application = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.vendorApplication.update({
+        where: { id: applicationId },
+        data: {
+          deletedAt: null,
+          restoredAt: new Date(),
+          restoredByAdminId: adminUserId
+        },
+        select: APPLICATION_SELECT
+      });
+      await tx.adminAuditLog.create({
+        data: {
+          adminUserId,
+          action: "admin.vendor_application.restore",
+          entityType: "VendorApplication",
+          entityId: applicationId,
+          newValue: {
+            applicationReference: current.reference,
+            businessName: current.businessName,
+            reason: reason ?? null
+          } as Prisma.InputJsonValue
+        }
+      });
+      return updated;
+    });
+
+    return this.toAdminDetail(application);
+  }
+
+  async permanentlyDelete(applicationId: string, adminUserId: string, confirmation: "DELETE" | "PERMANENTLY DELETE") {
+    if (confirmation !== "DELETE" && confirmation !== "PERMANENTLY DELETE") {
+      throw new BadRequestException("Type DELETE to permanently delete this vendor application.");
+    }
+    const current = await this.prisma.vendorApplication.findUnique({
+      where: { id: applicationId },
+      select: APPLICATION_SELECT
+    });
+    if (!current) throw new NotFoundException("Vendor application not found");
+
+    const safety = await this.permanentDeleteSafety(current);
+    if (!safety.canPermanentlyDelete) {
+      throw new BadRequestException({
+        message: "This record cannot be permanently deleted because it has linked operational or financial history. You may keep it in Trash instead.",
+        details: safety
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.vendorApplicationDocument.deleteMany({ where: { applicationId } });
+      await tx.vendorApplicationReview.deleteMany({ where: { applicationId } });
+      await tx.vendorApplicationStatusHistory.deleteMany({ where: { applicationId } });
+      await tx.vendorApplication.delete({ where: { id: applicationId } });
+      await tx.adminAuditLog.create({
+        data: {
+          adminUserId,
+          action: "admin.vendor_application.permanent_delete",
+          entityType: "VendorApplication",
+          entityId: applicationId,
+          newValue: {
+            applicationReference: current.reference,
+            businessName: current.businessName,
+            cleanupSafety: safety
+          } as Prisma.InputJsonValue
+        }
+      });
+    });
+
+    return { applicationId, permanentlyDeleted: true };
+  }
+
   private async nextReference(): Promise<string> {
     const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
     const reference = `KGO-APP-${new Date().getFullYear()}-${suffix}`;
@@ -322,8 +455,11 @@ export class VendorApplicationsService {
       ...application,
       submittedAt: application.submittedAt.toISOString(),
       reviewedAt: application.reviewedAt?.toISOString() ?? null,
+      deletedAt: application.deletedAt?.toISOString() ?? null,
+      restoredAt: application.restoredAt?.toISOString() ?? null,
       createdAt: application.createdAt.toISOString(),
       updatedAt: application.updatedAt.toISOString(),
+      inTrash: Boolean(application.deletedAt),
       reviews: application.reviews.map((review) => ({ ...review, createdAt: review.createdAt.toISOString() })),
       statusHistory: application.statusHistory.map((history) => ({ ...history, createdAt: history.createdAt.toISOString() })),
       documents: (application.documents ?? []).map((document) => ({
@@ -493,6 +629,7 @@ export class VendorApplicationsService {
   private async assertNoActiveDuplicateApplication(applicantUserId: string, contactPhoneNumber: string) {
     const duplicate = await this.prisma.vendorApplication.findFirst({
       where: {
+        deletedAt: null,
         status: { notIn: [VendorApplicationStatus.REJECTED, VendorApplicationStatus.WITHDRAWN] },
         OR: [
           { applicantUserId },
@@ -538,5 +675,38 @@ export class VendorApplicationsService {
       WITHDRAWN: "This application has been withdrawn."
     };
     return messages[status];
+  }
+
+  private async permanentDeleteSafety(application: Prisma.VendorApplicationGetPayload<{ select: typeof APPLICATION_SELECT }>) {
+    const vendorId = application.vendorId;
+    const [orders, settlements, payoutAccounts, orderItems, payments, documents, reviews, history] = await Promise.all([
+      vendorId ? this.prisma.order.count({ where: { vendorId } }) : Promise.resolve(0),
+      vendorId ? this.prisma.vendorSettlement.count({ where: { vendorId } }) : Promise.resolve(0),
+      vendorId ? this.prisma.vendorPayoutAccount.count({ where: { vendorId } }) : Promise.resolve(0),
+      vendorId ? this.prisma.orderItem.count({ where: { product: { vendorId } } }) : Promise.resolve(0),
+      vendorId ? this.prisma.payment.count({ where: { order: { is: { vendorId } } } }) : Promise.resolve(0),
+      this.prisma.vendorApplicationDocument.count({ where: { applicationId: application.id } }),
+      this.prisma.vendorApplicationReview.count({ where: { applicationId: application.id } }),
+      this.prisma.vendorApplicationStatusHistory.count({ where: { applicationId: application.id } })
+    ]);
+
+    const protectedRecordCounts = { orders, settlements, payoutAccounts, orderItems, payments };
+    const activeApprovedVendorProfile = Boolean(application.vendor && !application.vendor.deletedAt);
+    const blockedBy = [
+      ...(!application.deletedAt ? ["Application must be moved to Trash before permanent deletion."] : []),
+      ...(activeApprovedVendorProfile ? ["Application is linked to an active partner/vendor profile."] : []),
+      ...(orders ? ["Linked vendor has order history."] : []),
+      ...(settlements ? ["Linked vendor has settlement history."] : []),
+      ...(payoutAccounts ? ["Linked vendor has payout account records."] : []),
+      ...(orderItems ? ["Linked vendor products are tied to historical order items."] : []),
+      ...(payments ? ["Linked vendor orders have payment records."] : [])
+    ];
+
+    return {
+      canPermanentlyDelete: blockedBy.length === 0,
+      blockedBy,
+      protectedRecordCounts,
+      removableApplicationRecords: { documents, reviews, history }
+    };
   }
 }

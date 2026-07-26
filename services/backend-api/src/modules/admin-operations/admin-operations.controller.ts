@@ -14,7 +14,7 @@ import { ListAdminOrdersQueryDto } from "./dto/list-admin-orders-query.dto";
 import { OrderStatusNoteDto } from "./dto/order-status-note.dto";
 import { ReviewVendorOnboardingDocumentDto } from "../vendors/dto/review-vendor-onboarding-document.dto";
 import { UpdateVendorStatusDto } from "./dto/update-vendor-status.dto";
-import { VendorCleanupNoteDto } from "./dto/vendor-cleanup-note.dto";
+import { VendorCleanupNoteDto, VendorPermanentDeleteDto } from "./dto/vendor-cleanup-note.dto";
 
 const OPS_ADMINS = [AdminRole.SUPER_ADMIN, AdminRole.OPERATIONS_ADMIN, AdminRole.FINANCE_OFFICER, AdminRole.DISPATCH_OFFICER];
 
@@ -62,8 +62,8 @@ export class AdminOperationsController {
     return { message: "Vendor restored from Trash", data: await this.operations.restoreVendor(user.id, vendorId, dto.reason) };
   }
   @Delete("vendors/:vendorId")
-  async permanentlyDeleteVendor(@CurrentUser() user: AuthenticatedUser, @Param("vendorId", ParseUUIDPipe) vendorId: string) {
-    return { message: "Vendor permanently deleted", data: await this.operations.permanentlyDeleteVendor(user.id, vendorId) };
+  async permanentlyDeleteVendor(@CurrentUser() user: AuthenticatedUser, @Param("vendorId", ParseUUIDPipe) vendorId: string, @Body() dto: VendorPermanentDeleteDto) {
+    return { message: "Vendor permanently deleted", data: await this.operations.permanentlyDeleteVendor(user.id, vendorId, dto.confirmation) };
   }
   @Post("vendors/:vendorId/activation-link")
   async createVendorActivationLink(@CurrentUser() user: AuthenticatedUser, @Param("vendorId", ParseUUIDPipe) vendorId: string) {
