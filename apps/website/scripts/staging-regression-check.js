@@ -34,8 +34,14 @@ const customerWebPortal = read("src", "components", "customer-web-portal.tsx");
 ].forEach((endpoint) => assert(customerWebPortal.includes(endpoint), `Customer Web Portal must call ${endpoint}.`));
 assert(customerWebPortal.includes("sessionStorage"), "Customer Web Portal must use browser-session token storage.");
 assert(customerWebPortal.includes("window.open") && customerWebPortal.includes("https://"), "Customer Web Portal must open wallet checkout links as external HTTPS URLs.");
-assert(customerWebPortal.includes("Food/grocery cart and full checkout on web remain Phase 2."), "Customer Web Portal must keep food/grocery ordering in Phase 2.");
+assert(customerWebPortal.includes("sessionChecked"), "Customer Web Portal must avoid login flicker while restoring a browser session.");
+assert(customerWebPortal.includes("paymentReference"), "Customer Web Portal must tolerate provider reference aliases.");
+assert(customerWebPortal.includes("browser blocked the new window"), "Customer Web Portal must show safe copy if hosted checkout pop-up is blocked.");
+assert(customerWebPortal.includes("Available on web"), "Customer Web Portal must use public-facing availability copy.");
+assert(customerWebPortal.includes("Food/grocery checkout remains best in the mobile app."), "Customer Web Portal must keep food/grocery ordering mobile-first.");
 assert(customerWebPortal.includes("Ride requests remain readiness-only"), "Customer Web Portal must keep Rides readiness-only.");
+assert(customerWebPortal.includes("Refresh") && customerWebPortal.includes("Retry"), "Customer Web Portal must expose refresh/retry actions.");
+assert(!customerWebPortal.includes("Phase 1") && !customerWebPortal.includes("Phase 2"), "Customer Web Portal must not show internal phase labels.");
 assert(!customerWebPortal.includes("localStorage"), "Customer Web Portal must not persist auth tokens in localStorage.");
 
 const site = read("src", "lib", "site.ts");
@@ -77,7 +83,8 @@ const serviceProviderApply = read("app", "sme-services", "apply", "page.tsx");
 assert(serviceProviderApply.includes("Join KariGO as a Service Provider"), "SME Services provider application page must use approved headline.");
 assert(serviceProviderApply.includes("https://vendor.karigo.com.ng/register"), "SME Services provider application page must route to unified partner onboarding.");
 assert(serviceProviderApply.includes("Product Seller") && serviceProviderApply.includes("Service Provider") && serviceProviderApply.includes("Both"), "SME Services provider application page must explain partner account type choices.");
-assert(serviceProviderApply.includes("Admin/back-office fallback"), "SME Services provider application page must document the fallback route.");
+assert(serviceProviderApply.includes("Need help choosing a path?"), "SME Services provider application page must use public-friendly onboarding guidance.");
+assert(!serviceProviderApply.includes("Admin/back-office fallback") && !serviceProviderApply.includes("Legacy form fallback"), "SME Services provider application page must not expose internal fallback copy.");
 assert(!serviceProviderApply.includes("ServiceProviderApplicationForm"), "Public SME Services provider application page must not render the legacy standalone form by default.");
 
 const serviceProviderForm = read("src", "components", "service-provider-application-form.tsx");
@@ -187,6 +194,11 @@ assert(!footer.includes("Official store links will appear here when available.")
 assert(!footer.includes("Email:"), "Footer must not expose email contact text.");
 assert(!footer.includes("Phone:"), "Footer must not expose phone contact text.");
 assert(!footer.includes("Location:"), "Footer must not expose location contact text.");
+
+const css = read("app", "globals.css");
+assert(css.includes(".portal-actions"), "Customer Web Portal must style topbar refresh/logout actions.");
+assert(css.includes(".inline-action"), "Customer Web Portal must style inline retry actions.");
+assert(css.includes("overflow-wrap: anywhere"), "Customer Web Portal must wrap long references safely.");
 
 const privacy = read("app", "privacy", "page.tsx");
 assert(privacy.includes("Information we may collect"), "Privacy page must include data collection content.");

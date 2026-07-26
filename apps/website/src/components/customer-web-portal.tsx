@@ -52,9 +52,21 @@ function hostedPaymentUrl(authorization: Record<string, unknown> | undefined) {
   return "";
 }
 
+function paymentReference(...sources: Array<Record<string, unknown> | undefined>) {
+  const candidates = ["transactionReference", "reference", "paymentReference"];
+  for (const source of sources) {
+    for (const key of candidates) {
+      const value = source?.[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+  }
+  return "";
+}
+
 export function CustomerWebPortal() {
   const [activeTab, setActiveTab] = useState<Tab>("Dashboard");
   const [authMode, setAuthMode] = useState<"login" | "register" | "verify">("login");
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [accessToken, setAccessToken] = useState("");
   const [refreshToken, setRefreshToken] = useState("");
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
@@ -193,9 +205,11 @@ export function CustomerWebPortal() {
     const storedToken = sessionStorage.getItem(TOKEN_KEY) ?? "";
     const storedRefreshToken = sessionStorage.getItem(REFRESH_TOKEN_KEY) ?? "";
     if (storedToken) {
+      setLoading(true);
       setAccessToken(storedToken);
       setRefreshToken(storedRefreshToken);
     }
+    setSessionChecked(true);
   }, []);
 
   useEffect(() => {
@@ -322,16 +336,19 @@ export function CustomerWebPortal() {
     setMessage("");
     setError("");
     try {
-      const result = await request<{ authorization: Record<string, unknown> }>("payments/wallet-top-ups", {
+      const result = await request<{ authorization?: Record<string, unknown>; reference?: string; transactionReference?: string }>("payments/wallet-top-ups", {
         method: "POST",
         body: JSON.stringify({ amount: Number(topUpAmount) })
       });
-      const url = hostedPaymentUrl(result.authorization);
-      const reference = typeof result.authorization.transactionReference === "string" ? result.authorization.transactionReference : "";
+      const authorization = result.authorization ?? result as Record<string, unknown>;
+      const url = hostedPaymentUrl(authorization);
+      const reference = paymentReference(authorization, result as Record<string, unknown>);
       if (!url) throw new Error("Flutterwave checkout link was not returned. Please retry later.");
       setPendingTopUpReference(reference);
-      window.open(url, "_blank", "noopener,noreferrer");
-      setMessage("Flutterwave checkout opened. Return here and verify after payment. KariGO credits wallet only after backend verification.");
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      setMessage(opened
+        ? "Flutterwave checkout opened. Return here and verify after payment. KariGO credits wallet only after backend verification."
+        : "Flutterwave checkout is ready, but your browser blocked the new window. Allow pop-ups for KariGO and try again.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Wallet top-up could not be started.");
     }
@@ -403,6 +420,16 @@ export function CustomerWebPortal() {
     setMessage("You have been logged out.");
   }
 
+  if (!sessionChecked || (accessToken && !user && loading)) {
+    return <main className="customer-web">
+      <section className="customer-web-hero">
+        <p className="eyebrow">Customer Web Portal</p>
+        <h1>Opening your KariGO account portal.</h1>
+        <p className="lead">Checking your secure browser session...</p>
+      </section>
+    </main>;
+  }
+
   if (!authenticated) {
     return <main className="customer-web">
       <section className="customer-web-hero">
@@ -415,14 +442,14 @@ export function CustomerWebPortal() {
       </section>
       <section className="section soft portal-auth-grid">
         <article className="info-card">
-          <h2>What works in Phase 1</h2>
+          <h2>Available on web</h2>
           <ul className="list">
             <li>Customer login, registration and OTP verification</li>
             <li>Profile, saved addresses, wallet and ledger visibility</li>
-            <li>Flutterwave wallet top-up initiation with backend verification</li>
+            <li>Flutterwave wallet top-up with backend verification</li>
             <li>Utilities and SME Services request/history foundations</li>
           </ul>
-          <p className="muted">Food/grocery cart and full checkout on web remain Phase 2. Ride requests remain readiness-only unless separately approved.</p>
+          <p className="muted">Food/grocery checkout remains best in the mobile app. Ride requests remain readiness-only unless separately approved.</p>
         </article>
         <article className="form-card">
           <div className="portal-switch">
@@ -470,15 +497,18 @@ export function CustomerWebPortal() {
           <p className="eyebrow">Customer Portal</p>
           <h1>{activeTab}</h1>
         </div>
-        <button className="button secondary" onClick={() => void logout()}>Log out</button>
+        <div className="portal-actions">
+          <button type="button" className="button secondary" onClick={() => void loadPortalData()} disabled={loading}>{loading ? "Refreshing..." : "Refresh"}</button>
+          <button type="button" className="button secondary" onClick={() => void logout()}>Log out</button>
+        </div>
       </div>
       {message ? <p className="success">{message}</p> : null}
-      {error ? <p className="error" role="alert">{error}</p> : null}
+      {error ? <p className="error" role="alert">{error} <button type="button" className="inline-action" onClick={() => void loadPortalData()}>Retry</button></p> : null}
       {loading ? <p className="notice">Loading customer portal data...</p> : null}
 
       {activeTab === "Dashboard" ? <section className="portal-grid">
         <article className="portal-card"><span>Wallet balance</span><strong>{money(wallet?.availableBalance)}</strong><p>Wallet credits only after backend verification.</p></article>
-        <article className="portal-card"><span>Orders</span><strong>{orders.length}</strong><p>Food and grocery checkout remains best in the mobile app for Phase 1.</p></article>
+        <article className="portal-card"><span>Orders</span><strong>{orders.length}</strong><p>Use the mobile app for the full shopping and checkout experience.</p></article>
         <article className="portal-card"><span>SME requests</span><strong>{smeRequests.length}</strong><p>{supportedSmeCategoryLabels.join(", ")} now supported.</p></article>
         <article className="portal-card"><span>Addresses</span><strong>{addresses.length}</strong><p>Manage saved delivery and service addresses.</p></article>
       </section> : null}
@@ -489,12 +519,12 @@ export function CustomerWebPortal() {
           <h2>Top up with Flutterwave</h2>
           <p>Wallet top-up opens Flutterwave externally. KariGO does not credit your wallet from the browser alone.</p>
           <label>Amount NGN<input required type="number" min="100" value={topUpAmount} onChange={(event) => setTopUpAmount(event.target.value)} /></label>
-          <button>Start wallet top-up</button>
+          <button type="submit">Start wallet top-up</button>
         </form>
         <article className="portal-card">
           <h2>Verify top-up</h2>
           <label>Top-up reference<input value={pendingTopUpReference} onChange={(event) => setPendingTopUpReference(event.target.value)} /></label>
-          <button onClick={() => void verifyTopUp()}>Verify wallet top-up</button>
+          <button type="button" onClick={() => void verifyTopUp()} disabled={!pendingTopUpReference.trim()}>Verify wallet top-up</button>
         </article>
         <section className="portal-card"><h2>Ledger</h2>{ledger.length ? ledger.slice(0, 8).map((entry) => <p key={entry.id}><strong>{entry.reference}</strong> - {entry.direction} {money(entry.amount)} - {label(entry.status)}</p>) : <p>No wallet entries yet.</p>}</section>
       </section> : null}
@@ -512,7 +542,7 @@ export function CustomerWebPortal() {
             <label>Recipient name optional<input value={utilityForm.recipientName} onChange={(event) => setUtilityForm({ ...utilityForm, recipientName: event.target.value })} /></label>
             {utilityForm.serviceType === "ELECTRICITY" ? <label>Meter type<select value={utilityForm.meterType} onChange={(event) => setUtilityForm({ ...utilityForm, meterType: event.target.value })}><option value="PREPAID">Prepaid</option><option value="POSTPAID">Postpaid</option></select></label> : null}
           </div>
-          <button disabled={!utilityForm.providerId || !utilityForm.recipient}>Submit utility request</button>
+          <button type="submit" disabled={!utilityForm.providerId || !utilityForm.recipient}>Submit utility request</button>
         </form>
         <section className="portal-card"><h2>Utility history</h2>{utilityTransactions.length ? utilityTransactions.slice(0, 8).map((item) => <p key={item.id}><strong>{item.reference}</strong> - {label(item.serviceType)} - {label(item.status)} - {moneyKobo(item.totalKobo)}</p>) : <p>No utility transactions yet.</p>}</section>
       </section> : null}
@@ -529,12 +559,12 @@ export function CustomerWebPortal() {
           </div>
           {selectedSmeCategory ? <p className="notice">{selectedSmeCategory.description}</p> : null}
           <label>Description<textarea required value={smeForm.description} onChange={(event) => setSmeForm({ ...smeForm, description: event.target.value })} /></label>
-          <button disabled={!smeForm.serviceAddressId || !smeForm.description || selectedSmeCategory?.readinessOnly}>Submit SME Services request</button>
+          <button type="submit" disabled={!smeForm.serviceAddressId || !smeForm.description || selectedSmeCategory?.readinessOnly}>Submit SME Services request</button>
         </form>
         <section className="portal-card"><h2>Request history</h2>{smeRequests.length ? smeRequests.slice(0, 8).map((request) => <p key={request.id}><strong>{request.requestNumber}</strong> - {request.serviceLabel} - {label(request.status)}</p>) : <p>No SME Services requests yet.</p>}</section>
       </section> : null}
 
-      {activeTab === "Orders" ? <section className="portal-card"><h2>Order history</h2>{orders.length ? orders.map((order) => <p key={order.id}><strong>{order.orderNumber}</strong> - {order.vendor?.businessName ?? "KariGO"} - {label(order.orderStatus)} - {money(order.totalAmount)}</p>) : <p>No orders yet. Full food/grocery cart and checkout on web is planned for Phase 2.</p>}</section> : null}
+      {activeTab === "Orders" ? <section className="portal-card"><h2>Order history</h2>{orders.length ? orders.map((order) => <p key={order.id}><strong>{order.orderNumber}</strong> - {order.vendor?.businessName ?? "KariGO"} - {label(order.orderStatus)} - {money(order.totalAmount)}</p>) : <p>No orders yet. Use the KariGO mobile app for full food, grocery and market checkout.</p>}</section> : null}
 
       {activeTab === "Addresses" ? <section className="portal-stack">
         <form className="portal-card" onSubmit={createAddress}>
@@ -547,7 +577,7 @@ export function CustomerWebPortal() {
           </div>
           <label>Address<textarea required value={addressForm.addressLine} onChange={(event) => setAddressForm({ ...addressForm, addressLine: event.target.value })} /></label>
           <label className="check-row"><input type="checkbox" checked={addressForm.isDefault} onChange={(event) => setAddressForm({ ...addressForm, isDefault: event.target.checked })} /> Make default address</label>
-          <button>Save address</button>
+          <button type="submit">Save address</button>
         </form>
         <section className="portal-card"><h2>Saved addresses</h2>{addresses.length ? addresses.map((address) => <p key={address.id}><strong>{address.label}</strong> - {address.addressLine}, {address.city}, {address.state}</p>) : <p>No saved addresses yet.</p>}</section>
       </section> : null}
@@ -557,12 +587,12 @@ export function CustomerWebPortal() {
         <p>{profile?.phoneNumber}</p>
         <label>Full name<input required value={profileForm.fullName} onChange={(event) => setProfileForm({ ...profileForm, fullName: event.target.value })} /></label>
         <label>Email optional<input type="email" value={profileForm.email} onChange={(event) => setProfileForm({ ...profileForm, email: event.target.value })} /></label>
-        <button>Save profile</button>
+        <button type="submit">Save profile</button>
       </form> : null}
 
       {activeTab === "Support" ? <section className="portal-card">
         <h2>Support and help</h2>
-        <p>Use this portal for account, wallet, Utilities and SME Services visibility. For urgent pilot support, use the approved KariGO support channel shared with your launch group.</p>
+        <p>Use this portal for account, wallet, Utilities and SME Services visibility. For urgent help, use the approved KariGO support channel shared by KariGO Support.</p>
         <p>Never share OTPs, card details, wallet secrets or provider credentials in support messages.</p>
       </section> : null}
     </section>

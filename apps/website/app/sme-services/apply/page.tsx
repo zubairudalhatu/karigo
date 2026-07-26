@@ -30,8 +30,8 @@ export default function SmeServiceProviderApplicationPage() {
           <p className="muted">Health professional applications remain compliance-review only until legal, compliance and operational approval is complete.</p>
         </article>
         <article className="info-card">
-          <h2>Legacy form fallback</h2>
-          <p>The older public service-provider application endpoint remains available internally for Admin/back-office fallback, but public onboarding now routes through the Partner Workspace.</p>
+          <h2>Need help choosing a path?</h2>
+          <p>Choose Service Provider if your main offer is a skill or service. Choose Both if your business sells products and also offers approved SME Services.</p>
           <p className="muted">KariGO will review service category, operating areas, availability, documents and verification details before any provider appears in customer-facing SME Services.</p>
         </article>
       </section>
