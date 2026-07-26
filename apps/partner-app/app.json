@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "KariGO Partner",
+    "slug": "karigo-partner",
+    "scheme": "karigo-partner",
+    "plugins": [
+      "expo-router"
+    ],
+    "icon": "./assets/karigo-icon.png",
+    "splash": {
+      "image": "./assets/karigo-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "extra": {
+      "router": {}
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/karigo-adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
+    }
+  }
+}

@@ -13,6 +13,7 @@
     "dev:api": "npm run start:dev --workspace @karigo/backend-api",
     "dev:customer": "npm run start --workspace @karigo/customer-app",
     "dev:rider": "npm run start --workspace @karigo/rider-app",
+    "dev:partner": "npm run start --workspace @karigo/partner-app",
     "dev:vendor": "npm run dev --workspace @karigo/vendor-dashboard",
     "dev:admin": "npm run dev --workspace @karigo/admin-portal",
     "db:format": "npm run prisma:format --workspace @karigo/backend-api",
