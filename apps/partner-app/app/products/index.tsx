@@ -5,6 +5,7 @@ import { RefreshControl, StyleSheet, Text, View } from "react-native";
 import { partnerApi } from "../../src/api/partner.api";
 import { AuthGate } from "../../src/components/auth-gate";
 import { Badge, Card, EmptyState, Hero, LoadingState, MutedText, Screen } from "../../src/components/ui";
+import { money } from "../../src/lib/labels";
 
 function ProductsContent() {
   const [products, setProducts] = useState<ProductSummary[]>([]);
@@ -46,7 +47,7 @@ function ProductsContent() {
               <Badge label={product.isAvailable ? "Available" : "Unavailable"} tone={product.isAvailable ? "success" : "warning"} />
             </View>
             <MutedText>{product.description}</MutedText>
-            <Text style={styles.amount}>NGN {Number(product.price).toLocaleString()}</Text>
+            <Text style={styles.amount}>{money(product.price)}</Text>
           </Card>
         ))
       )}

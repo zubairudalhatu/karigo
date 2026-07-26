@@ -1,11 +1,14 @@
 import { brand } from "@karigo/config";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { RefreshControl, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { partnerApi, PartnerOrderSummary } from "../../src/api/partner.api";
 import { AuthGate } from "../../src/components/auth-gate";
 import { Badge, Card, EmptyState, Hero, LoadingState, MutedText, Screen } from "../../src/components/ui";
+import { formatLabel, money, statusTone } from "../../src/lib/labels";
 
 function OrdersContent() {
+  const router = useRouter();
   const [orders, setOrders] = useState<PartnerOrderSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -39,15 +42,26 @@ function OrdersContent() {
         <EmptyState title="No orders yet" body="Orders will appear here when customers place product orders for this partner account." />
       ) : (
         orders.map((order) => (
-          <Card key={order.id}>
-            <View style={styles.row}>
-              <Text style={styles.title}>{order.orderNumber}</Text>
-              <Badge label={order.orderStatus} tone="info" />
-            </View>
-            <MutedText>{order.customerName} · {order.itemsCount} item(s)</MutedText>
-            <Text style={styles.amount}>NGN {Number(order.totalAmount).toLocaleString()}</Text>
-            <MutedText>Payment: {order.paymentStatus}{order.paymentMethod ? ` · ${order.paymentMethod}` : ""}</MutedText>
-          </Card>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Open order ${order.orderNumber}`}
+            key={order.id}
+            onPress={() => router.push(`/orders/${order.id}`)}
+          >
+            <Card>
+              <View style={styles.row}>
+                <Text style={styles.title}>{order.orderNumber}</Text>
+                <Badge label={formatLabel(order.orderStatus)} tone={statusTone(order.orderStatus)} />
+              </View>
+              <MutedText>{order.customerName} - {order.itemsCount} item(s)</MutedText>
+              <Text style={styles.amount}>{money(order.totalAmount)}</Text>
+              <MutedText>
+                Payment: {formatLabel(order.paymentStatus)}
+                {order.paymentMethod ? ` - ${formatLabel(order.paymentMethod)}` : ""}
+              </MutedText>
+              <Text style={styles.openHint}>Tap to view order detail</Text>
+            </Card>
+          </Pressable>
         ))
       )}
     </Screen>
@@ -78,6 +92,11 @@ const styles = StyleSheet.create({
   amount: {
     color: brand.colors.charcoal,
     fontSize: 18,
+    fontWeight: "900"
+  },
+  openHint: {
+    color: brand.colors.primary,
+    fontSize: 13,
     fontWeight: "900"
   }
 });

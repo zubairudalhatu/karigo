@@ -7,6 +7,8 @@ import { partnerApi, PartnerOnboardingDocument, PartnerOrderSummary, PartnerProf
 import { AuthGate } from "../src/components/auth-gate";
 import { Badge, Card, EmptyState, Hero, LoadingState, MutedText, PrimaryButton, Screen, StatCard } from "../src/components/ui";
 import { useAuth } from "../src/contexts/auth-context";
+import { formatLabel, statusTone } from "../src/lib/labels";
+import { partnerProfileWarning } from "../src/lib/partner-profile";
 
 interface DashboardState {
   profile: PartnerProfile | null;
@@ -108,12 +110,13 @@ function DashboardContent() {
 
   const activeOrders = data.orders.filter((order) => !["DELIVERED", "CANCELLED", "REJECTED"].includes(order.orderStatus));
   const documentPending = data.documents.filter((document) => document.verificationStatus !== "APPROVED").length;
+  const profileWarning = partnerProfileWarning(data.profile);
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}>
       <View style={styles.header}>
         <Image source={require("../assets/karigo-logo.png")} resizeMode="contain" style={styles.logo} />
-        <Badge label={data.profile?.status ?? "Partner"} tone={data.profile?.isOpen ? "success" : "warning"} />
+        <Badge label={formatLabel(data.profile?.status, "Partner")} tone={statusTone(data.profile?.status)} />
       </View>
 
       <Hero
@@ -125,9 +128,19 @@ function DashboardContent() {
       <Card>
         <Text style={styles.businessName}>{data.profile?.businessName ?? "Partner profile"}</Text>
         <MutedText>
-          {data.profile?.city ?? "City pending"}, {data.profile?.state ?? "State pending"} · {partnerType(data.products, data.services)}
+          {data.profile?.city ?? "City pending"}, {data.profile?.state ?? "State pending"} - {partnerType(data.products, data.services)}
         </MutedText>
       </Card>
+
+      {profileWarning ? (
+        <Card>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>{profileWarning.title}</Text>
+            <Badge label="Review only" tone="warning" />
+          </View>
+          <MutedText>{profileWarning.body}</MutedText>
+        </Card>
+      ) : null}
 
       <View style={styles.statsRow}>
         <StatCard label="Active orders" value={activeOrders.length} />
@@ -150,8 +163,8 @@ function DashboardContent() {
         <Card>
           <Text style={styles.cardTitle}>Latest active order</Text>
           <Text style={styles.businessName}>{activeOrders[0].orderNumber}</Text>
-          <MutedText>{activeOrders[0].orderStatus} · {activeOrders[0].itemsCount} item(s)</MutedText>
-          <PrimaryButton label="View orders" onPress={() => router.push("/orders")} />
+          <MutedText>{formatLabel(activeOrders[0].orderStatus)} - {activeOrders[0].itemsCount} item(s)</MutedText>
+          <PrimaryButton label="Open order detail" onPress={() => router.push(`/orders/${activeOrders[0].id}`)} />
         </Card>
       ) : (
         <EmptyState title="No active orders yet" body="New product orders will appear here once customers place orders for this partner account." />

@@ -53,7 +53,9 @@ export function MutedText({ children }: { children: ReactNode }) {
   return <Text style={styles.muted}>{children}</Text>;
 }
 
-export function Badge({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "success" | "warning" | "info" }) {
+export type BadgeTone = "neutral" | "success" | "warning" | "info";
+
+export function Badge({ label, tone = "neutral" }: { label: string; tone?: BadgeTone }) {
   return (
     <View style={[styles.badge, badgeToneStyles[tone]]}>
       <Text style={[styles.badgeText, badgeTextToneStyles[tone]]}>{label}</Text>

@@ -5,6 +5,8 @@ import { partnerApi, PartnerProfile } from "../../src/api/partner.api";
 import { AuthGate } from "../../src/components/auth-gate";
 import { Badge, Card, Hero, LoadingState, MutedText, PrimaryButton, Screen } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
+import { formatLabel, statusTone } from "../../src/lib/labels";
+import { partnerProfileWarning } from "../../src/lib/partner-profile";
 
 function ProfileContent() {
   const { logout, user } = useAuth();
@@ -32,6 +34,7 @@ function ProfileContent() {
   }, [load]);
 
   if (loading) return <LoadingState label="Loading Partner profile..." />;
+  const profileWarning = partnerProfileWarning(profile);
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}>
@@ -46,9 +49,18 @@ function ProfileContent() {
             <Text style={styles.name}>{user?.fullName ?? "Partner user"}</Text>
             <MutedText>{user?.phoneNumber ?? "Phone pending"}</MutedText>
           </View>
-          <Badge label={profile?.status ?? "Profile"} tone={profile?.isOpen ? "success" : "warning"} />
+          <Badge label={formatLabel(profile?.status, "Profile")} tone={statusTone(profile?.status)} />
         </View>
       </Card>
+      {profileWarning ? (
+        <Card>
+          <View style={styles.warningHeader}>
+            <Text style={styles.sectionTitle}>{profileWarning.title}</Text>
+            <Badge label="Review only" tone="warning" />
+          </View>
+          <MutedText>{profileWarning.body}</MutedText>
+        </Card>
+      ) : null}
       <Card>
         <Text style={styles.sectionTitle}>{profile?.businessName ?? "Business profile pending"}</Text>
         <MutedText>{profile?.address ?? "Address pending"}</MutedText>
@@ -105,5 +117,11 @@ const styles = StyleSheet.create({
     color: brand.colors.charcoal,
     fontSize: 17,
     fontWeight: "900"
+  },
+  warningHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
   }
 });

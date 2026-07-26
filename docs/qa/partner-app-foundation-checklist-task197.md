@@ -9,7 +9,7 @@ Use this checklist before moving KariGO Partner into a production build task.
 - [ ] Staging Android package is `com.karigo.partner.staging`.
 - [ ] Production scheme is `karigo-partner`.
 - [ ] Production API base is `https://karigo-8htn.onrender.com/api/v1`.
-- [ ] No EAS project ID is invented before app linking.
+- [ ] Linked Expo/EAS project metadata is present and correct.
 - [ ] No secrets or environment values are committed.
 
 ## Authentication

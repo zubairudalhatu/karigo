@@ -13,13 +13,18 @@
       "backgroundColor": "#FFFFFF"
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "apiBaseUrl": "",
+      "eas": {
+        "projectId": "44e595bd-739a-430f-8d4d-99e961ac2451"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/karigo-adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       }
-    }
+    },
+    "owner": "zamkah"
   }
 }

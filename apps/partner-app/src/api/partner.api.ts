@@ -30,6 +30,36 @@ export interface PartnerOrderSummary {
   availableActions: string[];
 }
 
+export interface PartnerOrderDetail extends Omit<PartnerOrderSummary, "customerName" | "itemsCount"> {
+  subtotal: string | number;
+  deliveryFee: string | number;
+  customer: {
+    name: string;
+    phoneNumber: string;
+  };
+  deliveryAddress?: {
+    label: string;
+    addressLine: string;
+    city: string;
+    state: string;
+    deliveryNote?: string | null;
+  } | null;
+  items: Array<{
+    id: string;
+    productName: string;
+    unitPrice: string | number;
+    quantity: number;
+    totalPrice: string | number;
+    specialInstruction?: string | null;
+  }>;
+  statusHistory: Array<{
+    id: string;
+    newStatus: string;
+    note?: string | null;
+    createdAt: string;
+  }>;
+}
+
 export interface PartnerOnboardingDocument {
   id: string;
   documentType: string;
@@ -44,6 +74,7 @@ export interface PartnerOnboardingDocument {
 export const partnerApi = {
   profile: () => api.get<PartnerProfile>("vendors/me"),
   orders: () => api.get<PartnerOrderSummary[]>("vendor-dashboard/orders"),
+  orderDetail: (orderId: string) => api.get<PartnerOrderDetail>(`vendor-dashboard/orders/${orderId}`),
   products: () => api.get<ProductSummary[]>("vendor/products"),
   services: () => api.get<VendorServiceSummary[]>("vendors/services"),
   documents: () => api.get<PartnerOnboardingDocument[]>("vendors/onboarding-documents")

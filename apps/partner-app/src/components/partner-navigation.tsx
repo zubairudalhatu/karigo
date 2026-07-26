@@ -1,14 +1,15 @@
+import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import { usePathname, useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 const tabs = [
-  { label: "Home", path: "/", icon: "H" },
-  { label: "Orders", path: "/orders", icon: "O" },
-  { label: "Products", path: "/products", icon: "P" },
-  { label: "Services", path: "/services", icon: "S" },
-  { label: "Profile", path: "/profile", icon: "M" }
-];
+  { label: "Home", path: "/", icon: "home" },
+  { label: "Orders", path: "/orders", icon: "clipboard" },
+  { label: "Products", path: "/products", icon: "shopping-bag" },
+  { label: "Services", path: "/services", icon: "tool" },
+  { label: "Profile", path: "/profile", icon: "user" }
+] satisfies Array<{ label: string; path: string; icon: keyof typeof Feather.glyphMap }>;
 
 function isActive(pathname: string, tabPath: string) {
   if (tabPath === "/") return pathname === "/";
@@ -34,7 +35,7 @@ export function PartnerBottomNav() {
             style={styles.tab}
           >
             <View style={[styles.icon, active ? styles.iconActive : null]}>
-              <Text style={[styles.iconText, active ? styles.iconTextActive : null]}>{tab.icon}</Text>
+              <Feather name={tab.icon} size={19} color={active ? brand.colors.white : brand.colors.muted} />
             </View>
             <Text style={[styles.label, active ? styles.labelActive : null]}>{tab.label}</Text>
           </Pressable>
@@ -79,14 +80,6 @@ const styles = StyleSheet.create({
   },
   iconActive: {
     backgroundColor: brand.colors.primary
-  },
-  iconText: {
-    color: brand.colors.muted,
-    fontSize: 12,
-    fontWeight: "900"
-  },
-  iconTextActive: {
-    color: brand.colors.white
   },
   label: {
     color: brand.colors.muted,

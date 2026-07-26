@@ -5,6 +5,7 @@ import { RefreshControl, StyleSheet, Text, View } from "react-native";
 import { partnerApi } from "../../src/api/partner.api";
 import { AuthGate } from "../../src/components/auth-gate";
 import { Badge, Card, EmptyState, Hero, LoadingState, MutedText, Screen } from "../../src/components/ui";
+import { formatLabel, statusTone } from "../../src/lib/labels";
 
 function ServicesContent() {
   const [services, setServices] = useState<VendorServiceSummary[]>([]);
@@ -43,7 +44,10 @@ function ServicesContent() {
           <Card key={service.id}>
             <View style={styles.row}>
               <Text style={styles.title}>{service.name}</Text>
-              <Badge label={service.readinessOnly ? "Readiness" : service.status} tone={service.isAvailable ? "success" : "warning"} />
+              <Badge
+                label={service.readinessOnly ? "Readiness only" : formatLabel(service.status)}
+                tone={service.readinessOnly ? "warning" : statusTone(service.status)}
+              />
             </View>
             <MutedText>{service.description}</MutedText>
             <MutedText>{service.serviceAreas.join(", ") || "Service area pending"}</MutedText>

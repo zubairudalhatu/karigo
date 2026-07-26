@@ -32,11 +32,11 @@ The app currently includes:
 - Partner dashboard.
 - Read-only mobile visibility for orders, products, services, onboarding documents and profile.
 - Partner-specific staging and production EAS profiles.
+- Linked Expo/EAS project metadata in `apps/partner-app/app.json`.
 - Regression check for identity, routing, auth boundaries and launch guardrails.
 
 ## Not Included Yet
 
-- EAS project link/project ID.
 - Google Play or App Store submission.
 - Native production build.
 - Product or service create/edit workflows.
@@ -49,7 +49,7 @@ The app currently includes:
 
 Before building store artifacts:
 
-1. Link the app to a dedicated Expo/EAS project.
+1. Confirm the linked Expo/EAS project metadata is still correct.
 2. Confirm production package remains `com.karigo.partner`.
 3. Confirm API base remains `https://karigo-8htn.onrender.com/api/v1` unless production backend changes.
 4. Run Partner typecheck, regression check, Expo config validation and Expo Doctor.

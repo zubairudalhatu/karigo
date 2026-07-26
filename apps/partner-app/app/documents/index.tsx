@@ -4,6 +4,7 @@ import { RefreshControl, StyleSheet, Text, View } from "react-native";
 import { partnerApi, PartnerOnboardingDocument } from "../../src/api/partner.api";
 import { AuthGate } from "../../src/components/auth-gate";
 import { Badge, Card, EmptyState, Hero, LoadingState, MutedText, Screen } from "../../src/components/ui";
+import { formatLabel, statusTone } from "../../src/lib/labels";
 
 function DocumentsContent() {
   const [documents, setDocuments] = useState<PartnerOnboardingDocument[]>([]);
@@ -42,7 +43,7 @@ function DocumentsContent() {
           <Card key={document.id}>
             <View style={styles.row}>
               <Text style={styles.title}>{document.documentName || document.documentType}</Text>
-              <Badge label={document.verificationStatus} tone={document.verificationStatus === "APPROVED" ? "success" : "warning"} />
+              <Badge label={formatLabel(document.verificationStatus)} tone={statusTone(document.verificationStatus)} />
             </View>
             <MutedText>Uploaded {new Date(document.uploadedAt).toLocaleDateString()}</MutedText>
             {document.adminNote ? <MutedText>Admin note: {document.adminNote}</MutedText> : null}
