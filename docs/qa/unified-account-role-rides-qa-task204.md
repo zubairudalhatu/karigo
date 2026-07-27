@@ -58,6 +58,43 @@ Task 205 deployed the Task 204 backend/mobile update set and recorded the produc
 
 No fresh AAB was generated during Task 205. OTA production updates were published first as required. Fresh AABs should be built only if the installed apps fail to receive these updates, report runtime incompatibility, or controlled distribution requires a new binary.
 
+## Task 205B Real-Device Acceptance Log
+
+Recorded: 2026-07-27
+
+Task 205B is the real-device acceptance phase for the deployed Task 204 update set. No real-device observations, screenshots, device models, Android versions, or app-version confirmations were supplied during this documentation pass, and no Android Debug Bridge tooling was available on the workstation. Therefore the real-device scenarios remain pending until the installed apps are checked on physical Android devices.
+
+### Pre-Test Environment Checks
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Backend health | Passed | `GET https://karigo-8htn.onrender.com/api/v1/health` returned `200`. |
+| Rides route protected/live | Passed | `GET /api/v1/customer/taxi/ride-categories` returned `401` without auth, confirming the protected route remains registered. |
+| Partner application route protected/live | Passed | `GET /api/v1/vendor-applications/me` returned `401` without auth, confirming the protected route remains registered. |
+| Customer production branch latest Android group | Passed | `customer-production` latest Android update group is `6da17148-d659-40c6-a238-57734d4e503c`. |
+| Captain production branch latest Android group | Passed | `captain-production` latest Android update group is `449f5bea-8e1c-49c1-acd7-521443de79d8`. |
+| Partner production branch latest Android group | Passed | `partner-production` latest Android update group is `c7b90519-2520-44f1-b1c5-0cc59cf6438c`. |
+| Runtime version alignment | Passed for published OTA metadata | All three latest Android production updates report runtime `0.1.0`. Installed binary runtime must still be checked on-device. |
+| Workstation Android device access | Not available | `adb` was not installed or available in `PATH`, so installed apps could not be inspected from this workstation. |
+
+### Real-Device Acceptance Status
+
+| Scenario | Status | Evidence Needed |
+| --- | --- | --- |
+| Customer App receives and runs production OTA update | Pending real-device verification | Device model, Android version, installed app version/versionCode, and visible Task 204 UI confirmation. |
+| Captain App receives and runs production OTA update | Pending real-device verification | Device model, Android version, installed app version/versionCode, and Captain onboarding continuation evidence. |
+| Partner App receives and runs production OTA update | Pending real-device verification | Device model, Android version, installed app version/versionCode, and Partner onboarding continuation evidence. |
+| Existing Customer login remains functional | Pending real-device verification | Controlled QA account result with private details redacted. |
+| Existing Customer starts/resumes Captain onboarding | Pending real-device verification | Confirmation that login does not loop and no duplicate Captain application is created. |
+| Existing Customer starts/resumes Partner onboarding | Pending real-device verification | Confirmation that the old generic Partner role rejection does not appear and no duplicate Partner application is created. |
+| Local/international Nigerian phone formats resolve to one account | Pending credentialed/device verification | Redacted confirmation from Customer, Captain, Partner, OTP/password lookup, and application retrieval flows. |
+| KariGO Rides home and booking flow | Pending real-device verification | Pickup, destination, route preview, categories, fare estimate, and controlled-pilot request creation evidence. |
+| Safe-area and Android navigation behavior | Pending real-device verification | Smaller/taller Android screens and gesture/three-button navigation observations. |
+
+### Task 205B Acceptance Status
+
+Task 205B partially completed — environment and OTA branch checks passed, but real-device acceptance remains pending for Customer App, Captain App, Partner App, phone-normalisation, unified-account onboarding, KariGO Rides booking, and safe-area/device testing.
+
 ## Unified Account QA
 
 Use one existing active customer account. Record only a masked reference such as `customer account A`.

@@ -121,6 +121,47 @@ Task 205 cannot be fully signed off until a controlled Android device verifies t
 
 Do not use obsolete Rider profile names for Captain production builds.
 
+## Task 205B Acceptance Operations Record
+
+Recorded: 2026-07-27
+
+Task 205B is the physical Android device acceptance phase. During this pass, backend readiness and EAS production branch metadata were rechecked, but no physical Android device was available through workstation tooling and no owner/tester observations were supplied. Real-device acceptance is therefore still open.
+
+### Environment Readiness
+
+- Backend health remained available: `GET /health` returned `200`.
+- Protected Task 204 routes remained registered:
+  - `GET /customer/taxi/ride-categories` returned `401` without auth.
+  - `GET /vendor-applications/me` returned `401` without auth.
+- Latest Android production OTA branch metadata remained aligned:
+  - Customer `customer-production` group: `6da17148-d659-40c6-a238-57734d4e503c`.
+  - Captain `captain-production` group: `449f5bea-8e1c-49c1-acd7-521443de79d8`.
+  - Partner `partner-production` group: `c7b90519-2520-44f1-b1c5-0cc59cf6438c`.
+- Runtime reported by the latest Android OTA metadata for all three apps: `0.1.0`.
+- `adb` was not available on the workstation, so installed app versions, update receipt, and in-app behavior could not be inspected directly.
+
+### Operational Acceptance Gate
+
+The following must still be completed on installed Android apps before final Task 205B signoff:
+
+1. Confirm installed app versions/version codes and runtime compatibility for Customer, Captain, and Partner.
+2. Confirm each app receives the expected production OTA update.
+3. Confirm an existing Customer account retains Customer access.
+4. Confirm the same account can start or resume Partner onboarding without the old generic role rejection.
+5. Confirm the same account can start or resume Captain onboarding without login loops.
+6. Confirm local and international Nigerian phone formats resolve to one central account.
+7. Confirm no duplicate Customer account, Partner application, or Captain application is created.
+8. Confirm KariGO Rides pickup, destination, route preview, categories, fare estimate, and controlled-pilot request creation on-device.
+9. Confirm safe-area and Android navigation behavior across smaller/taller devices and gesture/three-button navigation.
+
+### Fresh AAB Decision
+
+No fresh AAB was generated in Task 205B. Continue with OTA unless real-device testing shows stale bundles, runtime mismatch, wrong production channel, or update receipt failure. If a fresh build is required, use:
+
+- Customer: `customer-production`
+- Captain: `captain-production`
+- Partner: `partner-production`
+
 ## Post-Deployment Smoke Checks
 
 1. Login as an existing customer in Customer App.
