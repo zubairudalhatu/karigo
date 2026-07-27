@@ -4,14 +4,16 @@
 
 Use these commands for the KariGO backend service on Render:
 
-- Build Command: `npm install && npm run build --workspace @karigo/backend-api`
-- Start Command: `node services/backend-api/dist/main`
+- Build Command: `npm ci && npx prisma generate --schema services/backend-api/prisma/schema.prisma && npx prisma migrate deploy --schema services/backend-api/prisma/schema.prisma && npm run build --workspace @karigo/backend-api`
+- Preferred Start Command: `cd services/backend-api && npm run start:prod`
+- Compatibility Start Command: `node services/backend-api/dist/main`
 
 If Render runs from `services/backend-api` as the service root instead of the monorepo
 root, use:
 
-- Build Command: `npm install && npm run build`
-- Start Command: `node dist/main`
+- Build Command: `npm ci && npx prisma generate && npx prisma migrate deploy && npm run build`
+- Preferred Start Command: `npm run start:prod`
+- Compatibility Start Command: `node dist/main`
 
 ## Port Binding
 
@@ -28,11 +30,22 @@ Do not use `npm run start` / `nest start` for staging or production on Render. `
 loads the Nest CLI and TypeScript tooling at runtime, which is heavier and can trigger
 JavaScript heap pressure on constrained instances.
 
-Use the compiled output instead:
+Use the package production script instead:
 
 ```bash
-node services/backend-api/dist/main
+npm run start:prod
 ```
+
+`start:prod` runs the real compiled Nest entrypoint:
+
+```bash
+node dist/services/backend-api/src/main.js
+```
+
+For Render services that are still configured with the old `dist/main` path, the
+backend build now writes a small compatibility entrypoint at `dist/main.js`. That
+file requires `./services/backend-api/src/main.js` and does not copy the compiled
+Nest entrypoint, so relative imports such as `./app.module` continue to resolve.
 
 ## Node Version
 

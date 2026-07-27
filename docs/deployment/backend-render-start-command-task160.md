@@ -59,6 +59,33 @@ Start Command: npm run start:prod
 
 The verifier now confirms the real compiled entrypoint exists and does not copy or move `main.js`.
 
+## Task 205 Compatibility Note
+
+During Task 205 deployment verification, the live Render service appeared to keep
+serving the older route table after `main` was pushed. A likely operational cause is
+an existing Render start command still pointing at:
+
+```text
+node dist/main
+```
+
+or, from the monorepo root:
+
+```text
+node services/backend-api/dist/main
+```
+
+The build verifier now writes a small compatibility entrypoint at `dist/main.js`
+that requires the real compiled entrypoint:
+
+```text
+./services/backend-api/src/main.js
+```
+
+This is not a copy of `main.js`; it keeps the compiled module beside its relative
+dependencies and allows both the preferred `npm run start:prod` command and the
+older Render command to start the current build safely.
+
 ## Safety
 
 - No secrets are stored in Git.
