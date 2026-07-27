@@ -16,7 +16,7 @@ assert(appConfig.includes("compileSdkVersion: 36"), "Customer app must compile a
 assert(appConfig.includes("targetSdkVersion: 36"), "Customer app must target Android API 36.");
 assert(appConfig.includes('buildToolsVersion: "36.0.0"'), "Customer app must use Android build tools 36.0.0.");
 assert(appConfig.includes('package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer"'), "Customer app package names must remain stable.");
-assert(appConfig.includes("versionCode: isStaging ? 1 : 10"), "Customer production versionCode must be bumped for the next API 36 Play build.");
+assert(appConfig.includes("versionCode: isStaging ? 1 : 11"), "Customer production versionCode must be bumped to 11 for the next Play-ready AAB.");
 assert(
   easJson.build?.["customer-production"]?.env?.EXPO_PUBLIC_API_BASE_URL === "https://karigo-8htn.onrender.com/api/v1",
   "Customer production profile must keep the Render production API base URL."

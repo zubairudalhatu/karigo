@@ -59,7 +59,7 @@ export default ({ config }: ExpoConfigInput) => {
         backgroundColor: "#FFFFFF"
       },
       package: isStaging ? "com.karigo.partner.staging" : "com.karigo.partner",
-      versionCode: isStaging ? 1 : 2
+      versionCode: isStaging ? 1 : 3
     },
     ios: {
       ...config.ios,
