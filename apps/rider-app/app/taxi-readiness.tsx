@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { riderApi } from "../src/api/rider.api";
 import { taxiApi } from "../src/api/taxi.api";
 import { Button, Card, Field, Message, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
+import { useAuth } from "../src/contexts/auth-context";
 import { friendlyError } from "../src/lib/errors";
 
 const vehicleTypes: TaxiVehicleType[] = ["SEDAN", "SUV", "MINI_BUS", "TRICYCLE", "OTHER"];
@@ -56,6 +57,7 @@ function chipLabel(value: string) {
 }
 
 export default function TaxiReadiness() {
+  const { user } = useAuth();
   const [form, setForm] = useState(initialForm);
   const [status, setStatus] = useState<TaxiDriverApplicationStatus | null>(null);
   const [profile, setProfile] = useState<TaxiDriverProfile | null>(null);
@@ -78,6 +80,15 @@ export default function TaxiReadiness() {
   }
 
   useEffect(() => {
+    if (user) {
+      setForm((current) => ({
+        ...current,
+        fullName: user.fullName || current.fullName,
+        phoneNumber: user.phoneNumber || current.phoneNumber,
+        email: user.email || current.email
+      }));
+      void taxiApi.currentUserApplicationStatus().then(setStatus).catch(() => undefined);
+    }
     riderApi.profile()
       .then((riderProfile) => {
         const phoneNumber = riderProfile.phoneNumber ?? "";
@@ -94,7 +105,7 @@ export default function TaxiReadiness() {
       })
       .then(() => loadTaxiMode())
       .catch(() => undefined);
-  }, [taxiEnabled]);
+  }, [taxiEnabled, user]);
 
   const missingRequiredFields = useMemo(() => requiredFields
     .filter((field) => !String(form[field.key] ?? "").trim())
@@ -113,7 +124,10 @@ export default function TaxiReadiness() {
       return;
     }
     try {
-      const submitted = await taxiApi.submitDriverApplication({
+      const submitRideApplication = user
+        ? taxiApi.submitDriverApplicationForCurrentUser
+        : taxiApi.submitDriverApplication;
+      const submitted = await submitRideApplication({
         fullName: form.fullName.trim(),
         phoneNumber: form.phoneNumber.trim(),
         email: form.email.trim() || undefined,

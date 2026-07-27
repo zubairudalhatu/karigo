@@ -1,10 +1,8 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
-import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
-import { Roles } from "../../common/decorators/roles.decorator";
+import { ApprovedCaptainGuard } from "../../common/guards/approved-captain.guard";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
-import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { CompleteRiderJobDto } from "./dto/complete-rider-job.dto";
 import { RejectRiderJobDto } from "./dto/reject-rider-job.dto";
@@ -16,8 +14,7 @@ import { DispatchService } from "./dispatch.service";
 @ApiTags("Rider Dispatch")
 @ApiBearerAuth()
 @Controller("rider")
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.RIDER)
+@UseGuards(JwtAuthGuard, ApprovedCaptainGuard)
 export class RiderDispatchController {
   constructor(private readonly dispatch: DispatchService) {}
 

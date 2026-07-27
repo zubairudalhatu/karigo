@@ -42,11 +42,18 @@ export interface DeliveryCaptainApplicationStatus {
   createsLogin: boolean;
   activatesDispatch: boolean;
   payoutActivation: boolean;
+  exists?: boolean;
+  nextStep?: string;
+  operationalAccess?: boolean;
+  applicationAccountRole?: string | null;
 }
 
 export const deliveryCaptainApplicationsApi = {
   submit: (body: DeliveryCaptainApplicationInput) =>
     api.post<DeliveryCaptainApplicationStatus>("delivery-captain-applications", body, { authenticated: false }),
+  submitForCurrentUser: (body: DeliveryCaptainApplicationInput) =>
+    api.post<DeliveryCaptainApplicationStatus>("delivery-captain-applications/me", body),
   status: (phoneNumber: string) =>
-    api.get<DeliveryCaptainApplicationStatus>(`delivery-captain-applications/status?phoneNumber=${encodeURIComponent(phoneNumber)}`, { authenticated: false })
+    api.get<DeliveryCaptainApplicationStatus>(`delivery-captain-applications/status?phoneNumber=${encodeURIComponent(phoneNumber)}`, { authenticated: false }),
+  statusForCurrentUser: () => api.get<DeliveryCaptainApplicationStatus>("delivery-captain-applications/me")
 };

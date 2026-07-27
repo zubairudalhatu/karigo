@@ -22,6 +22,10 @@ function isAuthStatus(error: unknown) {
   return error instanceof KariGoApiError && (error.status === 401 || error.status === 403);
 }
 
+function canUseCaptainApp(user: AuthenticatedUser) {
+  return user.role === "RIDER" || user.role === "CUSTOMER";
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const current = await authApi.me();
         if (!active) return;
-        current.role === "RIDER" ? setUser(current) : await tokenStore.clearToken?.();
+        canUseCaptainApp(current) ? setUser(current) : await tokenStore.clearToken?.();
       } catch (error) {
         if (isAuthStatus(error)) await tokenStore.clearToken?.();
       } finally {
@@ -67,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function saveSession(accessToken: string, refreshToken: string | undefined, nextUser: AuthenticatedUser) {
-    if (nextUser.role !== "RIDER") throw new Error("This account cannot use the Captain app.");
+    if (!canUseCaptainApp(nextUser)) throw new Error("This account cannot use the Captain app.");
     await tokenStore.setToken?.(accessToken);
     if (refreshToken) await refreshTokenStore.setToken(refreshToken);
     setUser(nextUser);

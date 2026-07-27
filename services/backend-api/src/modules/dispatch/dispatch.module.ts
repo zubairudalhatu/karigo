@@ -6,10 +6,11 @@ import { DispatchStatusService } from "./dispatch-status.service";
 import { DispatchService } from "./dispatch.service";
 import { RiderDispatchController } from "./rider-dispatch.controller";
 import { AdminRolesGuard } from "../../common/guards/admin-roles.guard";
+import { ApprovedCaptainGuard } from "../../common/guards/approved-captain.guard";
 
 @Module({
   imports: [AuthModule],
   controllers: [AdminDispatchController, RiderDispatchController],
-  providers: [DispatchService, DispatchStatusService, DispatchEventsService, AdminRolesGuard]
+  providers: [DispatchService, DispatchStatusService, DispatchEventsService, AdminRolesGuard, ApprovedCaptainGuard]
 })
 export class DispatchModule {}

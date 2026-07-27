@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
-import { TaxiApplicationStatus, TaxiDriverProfileStatus, TaxiTripStatus, TaxiVehicleOwnership, TaxiVehicleType, TaxiWaitlistStatus, UserRole } from "@prisma/client";
+import { AccountStatus, TaxiApplicationStatus, TaxiDriverProfileStatus, TaxiTripStatus, TaxiVehicleOwnership, TaxiVehicleType, TaxiWaitlistStatus, UserRole } from "@prisma/client";
 import * as bcrypt from "bcrypt";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
@@ -198,6 +198,8 @@ describe("TaxiService", () => {
     prisma.user.findUnique.mockResolvedValue({
       id: "rider-user",
       role: UserRole.RIDER,
+      accountStatus: AccountStatus.PENDING,
+      phoneNumber: "+2348030000000",
       phoneVerified: true,
       onboardingPasswordSetAt: now,
       deletedAt: null
@@ -316,6 +318,82 @@ describe("TaxiService", () => {
       email: application.email
     });
     expect(result).toMatchObject({ readinessOnly: true, status: TaxiApplicationStatus.SUBMITTED });
+  });
+
+  it("links an existing verified Customer account to a Ride Captain readiness application", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: "customer-user",
+      role: UserRole.CUSTOMER,
+      phoneNumber: "+2348030000000",
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      onboardingPasswordSetAt: null,
+      deletedAt: null
+    });
+    prisma.taxiDriverApplication.create.mockResolvedValueOnce({
+      ...application,
+      applicantUserId: "customer-user",
+      applicant: {
+        id: "customer-user",
+        role: UserRole.CUSTOMER,
+        phoneNumber: "+2348030000000",
+        accountStatus: AccountStatus.ACTIVE,
+        deletedAt: null,
+        phoneVerified: true,
+        onboardingPasswordSetAt: null,
+        rider: null
+      }
+    });
+
+    const result = await service.submitDriverApplication({
+      fullName: "Existing Customer",
+      phoneNumber: "08030000000",
+      city: "Kano",
+      state: "Kano",
+      address: "Nasarawa GRA",
+      driverLicenceNumber: "DL-123",
+      driverLicenceDocumentUrl: "https://docs.example.test/licence.jpg",
+      driverLicenceExpiry: "2028-12-31",
+      vehicleMake: "Toyota",
+      vehicleModel: "Corolla",
+      vehicleYear: 2015,
+      vehicleColour: "Black",
+      vehiclePlateNumber: "KGO-123AA",
+      vehicleType: TaxiVehicleType.SEDAN,
+      vehicleOwnership: TaxiVehicleOwnership.OWNER,
+      vehicleParticularsDocumentUrl: "https://docs.example.test/particulars.pdf"
+    }, "customer-user");
+
+    expect(prisma.taxiDriverApplication.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ applicantUserId: "customer-user" })
+    }));
+    expect(result).toMatchObject({ readinessOnly: true, status: TaxiApplicationStatus.SUBMITTED });
+  });
+
+  it("returns an existing active Ride Captain readiness application instead of creating a duplicate", async () => {
+    prisma.taxiDriverApplication.findFirst.mockResolvedValueOnce(application);
+
+    const result = await service.submitDriverApplication({
+      fullName: "Demo Driver",
+      phoneNumber: "08030000000",
+      city: "Kano",
+      state: "Kano",
+      address: "Nasarawa GRA",
+      driverLicenceNumber: "DL-123",
+      driverLicenceDocumentUrl: "https://docs.example.test/licence.jpg",
+      driverLicenceExpiry: "2028-12-31",
+      vehicleMake: "Toyota",
+      vehicleModel: "Corolla",
+      vehicleYear: 2015,
+      vehicleColour: "Black",
+      vehiclePlateNumber: "KGO-123AA",
+      vehicleType: TaxiVehicleType.SEDAN,
+      vehicleOwnership: TaxiVehicleOwnership.OWNER,
+      vehicleParticularsDocumentUrl: "https://docs.example.test/particulars.pdf"
+    });
+
+    expect(prisma.taxiDriverApplication.create).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ applicationReference: application.applicationReference, status: TaxiApplicationStatus.SUBMITTED });
   });
 
   it("returns latest public application status by phone number", async () => {

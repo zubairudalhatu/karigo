@@ -49,7 +49,7 @@ const TAXI_APPLICATION_LIST_SELECT = {
   insuranceDocumentUrl: true,
   vehicleType: true,
   vehicleOwnership: true,
-  applicant: { select: { id: true, accountStatus: true, phoneVerified: true, onboardingPasswordSetAt: true, rider: { select: { id: true, riderCode: true, verificationStatus: true } } } },
+  applicant: { select: { id: true, role: true, phoneNumber: true, accountStatus: true, deletedAt: true, phoneVerified: true, onboardingPasswordSetAt: true, rider: { select: { id: true, riderCode: true, verificationStatus: true } } } },
   status: true,
   applicantVisibleNote: true,
   reviewedAt: true,
@@ -68,7 +68,7 @@ const TAXI_APPLICATION_DETAIL_SELECT = {
   insuranceDocumentUrl: true,
   notes: true,
   adminNote: true,
-  applicant: { select: { id: true, accountStatus: true, phoneVerified: true, onboardingPasswordSetAt: true, rider: { select: { id: true, riderCode: true, verificationStatus: true } } } },
+  applicant: { select: { id: true, role: true, phoneNumber: true, accountStatus: true, deletedAt: true, phoneVerified: true, onboardingPasswordSetAt: true, rider: { select: { id: true, riderCode: true, verificationStatus: true } } } },
   reviewedByAdmin: { select: { id: true, fullName: true, adminRole: true } }
 } satisfies Prisma.TaxiDriverApplicationSelect;
 
@@ -179,9 +179,10 @@ export class TaxiService {
   async submitDriverApplication(dto: CreateTaxiDriverApplicationDto, applicantUserId?: string) {
     const phoneNumber = this.normalizePhone(dto.phoneNumber);
     const applicant = applicantUserId
-      ? await this.requireApplicantUserById(applicantUserId)
+      ? await this.requireApplicantUserById(applicantUserId, phoneNumber)
       : await this.requireApplicantAccount(phoneNumber);
-    await this.assertNoActiveDuplicateApplication(applicant.id, phoneNumber);
+    const duplicate = await this.findActiveDuplicateApplication(applicant.id, phoneNumber);
+    if (duplicate) return this.formatPublicApplicationStatus(duplicate);
     const application = await this.prisma.taxiDriverApplication.create({
       data: {
         applicationReference: await this.nextApplicationReference(),
@@ -228,6 +229,37 @@ export class TaxiService {
     return this.formatPublicApplicationStatus(application);
   }
 
+  async currentUserApplicationStatus(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, fullName: true, phoneNumber: true, email: true, deletedAt: true }
+    });
+    if (!user || user.deletedAt) throw new NotFoundException("KariGO account not found");
+
+    const application = await this.prisma.taxiDriverApplication.findFirst({
+      where: {
+        OR: [
+          { applicantUserId: user.id },
+          { phoneNumber: user.phoneNumber }
+        ]
+      },
+      select: TAXI_APPLICATION_DETAIL_SELECT,
+      orderBy: { createdAt: "desc" }
+    });
+
+    if (application) return { exists: true, ...this.formatPublicApplicationStatus(application) };
+
+    return {
+      exists: false,
+      nextStep: "SUBMIT_APPLICATION",
+      fullName: user.fullName,
+      phoneNumber: user.phoneNumber,
+      email: user.email,
+      message: "You are signed in with your KariGO account. Complete your Captain application to start onboarding.",
+      readinessOnly: true
+    };
+  }
+
   async listDriverApplications(query: ListTaxiDriverApplicationsQueryDto) {
     const applications = await this.prisma.taxiDriverApplication.findMany({
       where: this.applicationWhere(query),
@@ -254,7 +286,7 @@ export class TaxiService {
     });
     if (!current) throw new NotFoundException("Ride Captain application not found");
     const application = await this.prisma.$transaction(async (tx) => {
-      if (dto.status === TaxiApplicationStatus.APPROVED && current.applicant?.phoneVerified && current.applicant.onboardingPasswordSetAt) {
+      if (dto.status === TaxiApplicationStatus.APPROVED && this.applicantReadyForRideApproval(current.applicant)) {
         await this.ensureRiderProfileForRideApplication(tx, current);
       }
       return tx.taxiDriverApplication.update({
@@ -665,13 +697,21 @@ export class TaxiService {
       select: {
         id: true,
         role: true,
+        phoneNumber: true,
+        accountStatus: true,
         phoneVerified: true,
         onboardingPasswordSetAt: true,
         deletedAt: true
       }
     });
-    if (!applicant || applicant.role !== UserRole.RIDER || applicant.deletedAt) {
+    if (!applicant || applicant.deletedAt) {
       throw new BadRequestException("Create a Captain applicant account before submitting the Ride Captain application.");
+    }
+    if (applicant.role === UserRole.CUSTOMER) {
+      throw new BadRequestException("This phone number already has a KariGO account. Sign in with your existing KariGO password to continue your Captain application.");
+    }
+    if (applicant.role !== UserRole.RIDER) {
+      throw new BadRequestException("This KariGO account is not eligible for Ride Captain onboarding from the Captain app.");
     }
     if (!applicant.phoneVerified) {
       throw new BadRequestException("Verify the Captain applicant phone number before submitting the Ride Captain application.");
@@ -682,25 +722,39 @@ export class TaxiService {
     return applicant;
   }
 
-  private async requireApplicantUserById(applicantUserId: string) {
+  private async requireApplicantUserById(applicantUserId: string, phoneNumber: string) {
     const applicant = await this.prisma.user.findUnique({
       where: { id: applicantUserId },
       select: {
         id: true,
         role: true,
+        phoneNumber: true,
+        accountStatus: true,
         phoneVerified: true,
         onboardingPasswordSetAt: true,
         deletedAt: true
       }
     });
-    if (!applicant || applicant.role !== UserRole.RIDER || applicant.deletedAt || !applicant.phoneVerified || !applicant.onboardingPasswordSetAt) {
+    if (!applicant || applicant.deletedAt) {
+      throw new BadRequestException("Captain applicant account is not ready for application submission.");
+    }
+    if (applicant.phoneNumber !== phoneNumber) {
+      throw new BadRequestException("Use your signed-in KariGO account phone number for this Captain application.");
+    }
+    if (applicant.role === UserRole.CUSTOMER) {
+      if (!applicant.phoneVerified || applicant.accountStatus !== AccountStatus.ACTIVE) {
+        throw new BadRequestException("Sign in with an active verified KariGO Customer account before continuing Captain onboarding.");
+      }
+      return applicant;
+    }
+    if (applicant.role !== UserRole.RIDER || !applicant.phoneVerified || !applicant.onboardingPasswordSetAt) {
       throw new BadRequestException("Captain applicant account is not ready for application submission.");
     }
     return applicant;
   }
 
-  private async assertNoActiveDuplicateApplication(applicantUserId: string, phoneNumber: string) {
-    const duplicate = await this.prisma.taxiDriverApplication.findFirst({
+  private async findActiveDuplicateApplication(applicantUserId: string, phoneNumber: string) {
+    return this.prisma.taxiDriverApplication.findFirst({
       where: {
         status: { not: TaxiApplicationStatus.REJECTED },
         OR: [
@@ -708,11 +762,17 @@ export class TaxiService {
           { phoneNumber }
         ]
       },
-      select: { applicationReference: true, status: true }
+      select: TAXI_APPLICATION_DETAIL_SELECT,
+      orderBy: { createdAt: "desc" }
     });
-    if (duplicate) {
-      throw new BadRequestException(`A Ride Captain application is already active for this account (${duplicate.applicationReference}, ${duplicate.status}).`);
-    }
+  }
+
+  private applicantReadyForRideApproval(
+    applicant: Prisma.TaxiDriverApplicationGetPayload<{ select: typeof TAXI_APPLICATION_DETAIL_SELECT }>["applicant"]
+  ) {
+    if (!applicant || applicant.deletedAt || !applicant.phoneVerified) return false;
+    if (applicant.role === UserRole.CUSTOMER) return applicant.accountStatus === AccountStatus.ACTIVE;
+    return applicant.role === UserRole.RIDER && Boolean(applicant.onboardingPasswordSetAt);
   }
 
   private async ensureRiderProfileForRideApplication(

@@ -5,6 +5,7 @@ import { AdminRoles } from "../../common/decorators/admin-roles.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { AdminRolesGuard } from "../../common/guards/admin-roles.guard";
+import { ApprovedCaptainGuard } from "../../common/guards/approved-captain.guard";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
@@ -37,6 +38,22 @@ export class DeliveryCaptainApplicationsController {
   @ApiOperation({ summary: "Check public Delivery Captain application status by phone number" })
   async status(@Query() query: DeliveryCaptainApplicationStatusQueryDto) {
     return { message: "Delivery Captain application status retrieved", data: await this.ridersService.deliveryCaptainApplicationStatus(query) };
+  }
+
+  @Post("me")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Submit a Delivery Captain application for the authenticated KariGO account" })
+  async createForCurrentUser(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateDeliveryCaptainApplicationDto) {
+    return { message: "Delivery Captain application submitted", data: await this.ridersService.createDeliveryCaptainApplicationForUser(user.id, dto) };
+  }
+
+  @Get("me")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Check the authenticated user's Delivery Captain application status" })
+  async statusForCurrentUser(@CurrentUser() user: AuthenticatedUser) {
+    return { message: "Delivery Captain application status retrieved", data: await this.ridersService.currentUserDeliveryCaptainApplicationStatus(user.id) };
   }
 }
 
@@ -71,8 +88,7 @@ export class AdminDeliveryCaptainApplicationsController {
 @ApiTags("Riders")
 @ApiBearerAuth()
 @Controller("riders")
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.RIDER)
+@UseGuards(JwtAuthGuard, ApprovedCaptainGuard)
 export class RidersController {
   constructor(private readonly ridersService: RidersService) {}
 

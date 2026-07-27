@@ -23,7 +23,8 @@ import { ConfirmPasswordResetDto } from "./dto/confirm-password-reset.dto";
 import { RequestPasswordResetDto } from "./dto/request-password-reset.dto";
 import { RequestVendorActivationLinkDto } from "./dto/request-vendor-activation-link.dto";
 
-const PASSWORD_RESET_USER_ROLES: UserRole[] = [UserRole.CUSTOMER, UserRole.VENDOR];
+const PASSWORD_RESET_USER_ROLES: UserRole[] = [UserRole.CUSTOMER, UserRole.VENDOR, UserRole.RIDER];
+type ApplicantNextStep = "OTP_REQUIRED" | "PASSWORD_REQUIRED" | "READY_FOR_APPLICATION" | "SIGN_IN_REQUIRED";
 
 @Injectable()
 export class AuthService {
@@ -97,6 +98,14 @@ export class AuthService {
     }
 
     if (existingByPhone) {
+      if (role === UserRole.RIDER && existingByPhone.role === UserRole.CUSTOMER && !existingByPhone.deletedAt) {
+        return this.applicantAccountResponse(
+          existingByPhone,
+          "SIGN_IN_REQUIRED",
+          undefined,
+          "This phone number already has a KariGO account. Sign in with your existing KariGO password to continue your Captain application."
+        );
+      }
       if (existingByPhone.role !== role || existingByPhone.deletedAt) {
         throw new BadRequestException("Phone number is already linked to another KariGO account.");
       }
@@ -551,8 +560,9 @@ export class AuthService {
       phoneVerified: boolean;
       onboardingPasswordSetAt?: Date | null;
     },
-    nextStep: "OTP_REQUIRED" | "PASSWORD_REQUIRED" | "READY_FOR_APPLICATION",
-    verification?: { expiresAt: Date; otp?: string }
+    nextStep: ApplicantNextStep,
+    verification?: { expiresAt: Date; otp?: string },
+    message?: string
   ) {
     return {
       account: {
@@ -566,6 +576,7 @@ export class AuthService {
         passwordCreated: Boolean(user.onboardingPasswordSetAt)
       },
       nextStep,
+      message,
       otpExpiresAt: verification?.expiresAt,
       ...(verification && this.shouldExposeMockOtp() ? { mockOtp: verification.otp } : {})
     };

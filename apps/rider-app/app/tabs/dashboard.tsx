@@ -1,10 +1,12 @@
 import { Image, StyleSheet, Text, View } from "react-native";
 import { useEffect, useMemo, useState } from "react";
 import { brand } from "@karigo/config";
+import { deliveryCaptainApplicationsApi, DeliveryCaptainApplicationStatus } from "../../src/api/delivery-captain-applications.api";
 import { riderApi, RiderProfile } from "../../src/api/rider.api";
 import { jobsApi, RiderJob } from "../../src/api/jobs.api";
 import { notificationsApi } from "../../src/api/notifications.api";
 import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
+import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 import { requestCaptainForegroundLocation } from "../../src/lib/location";
 
@@ -47,9 +49,11 @@ function statusChipStyle(profile?: RiderProfile | null) {
 }
 
 export default function RiderDashboard() {
+  const { user } = useAuth();
   const [profile, setProfile] = useState<RiderProfile | null>(null);
   const [jobs, setJobs] = useState<RiderJob[]>([]);
   const [unread, setUnread] = useState(0);
+  const [onboardingStatus, setOnboardingStatus] = useState<DeliveryCaptainApplicationStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -61,9 +65,19 @@ export default function RiderDashboard() {
       setProfile(p);
       setJobs(j);
       setUnread(n.count);
+      setOnboardingStatus(null);
       setError("");
     } catch (e) {
-      setError(friendlyError(e));
+      try {
+        const status = await deliveryCaptainApplicationsApi.statusForCurrentUser();
+        setProfile(null);
+        setJobs([]);
+        setUnread(0);
+        setOnboardingStatus(status);
+        setError("");
+      } catch {
+        setError(friendlyError(e));
+      }
     } finally {
       setLoading(false);
     }
@@ -102,6 +116,9 @@ export default function RiderDashboard() {
   }
 
   const canToggle = !!profile && profile.verificationStatus === "ACTIVE" && profile.availabilityStatus !== "BUSY";
+  const onboardingCopy = onboardingStatus?.exists && onboardingStatus.status !== "REJECTED"
+    ? "Your Captain application is under review. KariGO will notify you after approval."
+    : onboardingStatus?.message;
 
   return (
     <Protected><Screen refreshing={loading} onRefresh={load}>
@@ -111,12 +128,21 @@ export default function RiderDashboard() {
           <View style={statusChipStyle(profile)}><Text style={styles.statusChipText}>{availabilityLabel(profile)}</Text></View>
         </View>
         <Text style={styles.kicker}>KariGO Captain</Text>
-        <Text style={styles.title}>Hi, {firstName(profile?.user?.fullName)}</Text>
+        <Text style={styles.title}>Hi, {firstName(profile?.user?.fullName ?? user?.fullName)}</Text>
         <Text style={styles.heroCopy}>Manage your delivery assignments and availability.</Text>
       </View>
       <Message>{message}</Message>
       <Message error>{error}</Message>
 
+      {!profile && onboardingStatus ? <Card>
+        <Text style={ui.title}>Captain onboarding</Text>
+        {onboardingStatus.exists ? <StatusBadge status={onboardingStatus.status} /> : null}
+        <Text style={ui.muted}>{onboardingCopy}</Text>
+        <Text style={ui.muted}>Captain operations will be available after KariGO approves your application.</Text>
+        <NavLink href="/auth/apply" label={onboardingStatus.exists ? "Open Captain application" : "Start Captain application"} />
+      </Card> : null}
+
+      {profile ? <>
       <Card>
         <Text style={ui.title}>Availability</Text>
         <Text style={ui.muted}>{availabilityCopy(profile)}</Text>
@@ -149,6 +175,7 @@ export default function RiderDashboard() {
         <Text style={ui.muted}>{unread ? `${unread} unread update${unread === 1 ? "" : "s"}.` : "No unread updates."}</Text>
         <NavLink href="/notifications" label="Open notifications" />
       </Card>
+      </> : null}
     </Screen></Protected>
   );
 }

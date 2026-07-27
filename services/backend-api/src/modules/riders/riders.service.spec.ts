@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException } from "@nestjs/common";
-import { AccountStatus, DeliveryCaptainApplicationStatus, DeliveryCaptainVehicleType, UserRole } from "@prisma/client";
+import { AccountStatus, DeliveryCaptainApplicationStatus, DeliveryCaptainVehicleType, RiderStatus, UserRole } from "@prisma/client";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { RidersService } from "./riders.service";
@@ -162,6 +162,122 @@ describe("RidersService delivery captain applications", () => {
       privacyAccepted: true,
       contactConsentAccepted: true
     })).resolves.toMatchObject({ pilotCity: "Abuja", launchCities: ["Kano", "Abuja"] });
+  });
+
+  it("links an existing verified Customer account to a Delivery Captain application", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      ...deliveryCaptainApplication.applicant,
+      id: "customer-user",
+      role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE,
+      onboardingPasswordSetAt: null
+    });
+    prisma.deliveryCaptainApplication.create.mockResolvedValueOnce({
+      ...deliveryCaptainApplication,
+      applicantUserId: "customer-user",
+      applicant: {
+        ...deliveryCaptainApplication.applicant,
+        id: "customer-user",
+        role: UserRole.CUSTOMER,
+        accountStatus: AccountStatus.ACTIVE,
+        onboardingPasswordSetAt: null
+      }
+    });
+
+    const result = await service.createDeliveryCaptainApplicationForUser("customer-user", {
+      fullName: "Existing Customer",
+      phoneNumber: "08030000000",
+      email: "customer@example.test",
+      city: "Kano",
+      state: "Kano",
+      address: "Tarauni, Kano",
+      preferredZone: "Tarauni",
+      vehicleType: DeliveryCaptainVehicleType.MOTORCYCLE,
+      guarantorName: "Demo Guarantor",
+      guarantorPhone: "08030000001",
+      declarationAccepted: true,
+      privacyAccepted: true,
+      contactConsentAccepted: true
+    });
+
+    expect(prisma.deliveryCaptainApplication.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ applicant: { connect: { id: "customer-user" } } })
+    }));
+    expect(result).toMatchObject({
+      createsLogin: true,
+      applicationAccountRole: UserRole.CUSTOMER,
+      activatesDispatch: false
+    });
+  });
+
+  it("returns the existing active Delivery Captain application instead of creating a duplicate", async () => {
+    prisma.deliveryCaptainApplication.findFirst.mockResolvedValueOnce(deliveryCaptainApplication);
+
+    const result = await service.createDeliveryCaptainApplication({
+      fullName: "Demo Captain",
+      phoneNumber: "08030000000",
+      city: "Kano",
+      state: "Kano",
+      address: "Tarauni, Kano",
+      vehicleType: DeliveryCaptainVehicleType.MOTORCYCLE,
+      guarantorName: "Demo Guarantor",
+      guarantorPhone: "08030000001",
+      declarationAccepted: true,
+      privacyAccepted: true,
+      contactConsentAccepted: true
+    });
+
+    expect(prisma.deliveryCaptainApplication.create).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      applicationReference: deliveryCaptainApplication.applicationReference,
+      status: DeliveryCaptainApplicationStatus.SUBMITTED
+    });
+  });
+
+  it("creates an approved rider profile when Admin approves a linked Customer application", async () => {
+    const customerApplication = {
+      ...deliveryCaptainApplication,
+      applicant: {
+        ...deliveryCaptainApplication.applicant,
+        role: UserRole.CUSTOMER,
+        accountStatus: AccountStatus.ACTIVE,
+        onboardingPasswordSetAt: null
+      }
+    };
+    prisma.deliveryCaptainApplication.findUnique.mockResolvedValueOnce(customerApplication);
+    prisma.deliveryCaptainApplication.update.mockResolvedValueOnce({
+      ...customerApplication,
+      status: DeliveryCaptainApplicationStatus.APPROVED,
+      reviewedAt: now
+    });
+
+    await service.reviewDeliveryCaptainApplication(deliveryCaptainApplication.id, {
+      status: DeliveryCaptainApplicationStatus.APPROVED
+    });
+
+    expect(prisma.rider.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        userId: deliveryCaptainApplication.applicantUserId,
+        verificationStatus: RiderStatus.ACTIVE
+      })
+    }));
+  });
+
+  it("returns not-yet-applied status for a signed-in Customer without a Captain application", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: "customer-user",
+      fullName: "Existing Customer",
+      phoneNumber: "+2348030000000",
+      email: "customer@example.test",
+      deletedAt: null
+    });
+    prisma.deliveryCaptainApplication.findFirst.mockResolvedValueOnce(null);
+
+    await expect(service.currentUserDeliveryCaptainApplicationStatus("customer-user")).resolves.toMatchObject({
+      exists: false,
+      nextStep: "SUBMIT_APPLICATION",
+      message: "You are signed in with your KariGO account. Complete your Captain application to start onboarding."
+    });
   });
 
   it("rejects Delivery Captain applications outside approved launch city pairs", async () => {

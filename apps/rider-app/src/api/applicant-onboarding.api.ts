@@ -1,6 +1,6 @@
 import { api } from "./client";
 
-export type ApplicantNextStep = "OTP_REQUIRED" | "PASSWORD_REQUIRED" | "READY_FOR_APPLICATION";
+export type ApplicantNextStep = "OTP_REQUIRED" | "PASSWORD_REQUIRED" | "READY_FOR_APPLICATION" | "SIGN_IN_REQUIRED";
 
 export interface ApplicantAccount {
   id: string;
@@ -17,6 +17,7 @@ export interface ApplicantOnboardingResult {
   account: ApplicantAccount;
   nextStep: ApplicantNextStep;
   otpExpiresAt?: string;
+  message?: string;
 }
 
 const prefix = "auth/captain-onboarding";

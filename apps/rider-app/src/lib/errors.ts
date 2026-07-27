@@ -5,7 +5,7 @@ export function friendlyError(error: unknown, context: ErrorContext = "default")
   if (error instanceof KariGoApiError) {
     if (context === "login" && error.status === 401) return "Invalid phone number or password.";
     if (error.status === 401) return "Your session has expired. Please sign in again.";
-    if (error.status === 403) return "You do not have access to this app.";
+    if (error.status === 403) return error.message || "Captain operations will be available after KariGO approves your application.";
     return error.message || "We could not complete that request. Please try again.";
   }
   if (error instanceof Error && error.message.includes("cannot use the Captain app")) return error.message;

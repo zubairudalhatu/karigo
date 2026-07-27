@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Link } from "expo-router";
 import { TaxiVehicleOwnership, TaxiVehicleType } from "@karigo/shared-types";
@@ -13,6 +13,7 @@ import {
 } from "../../src/api/delivery-captain-applications.api";
 import { taxiApi } from "../../src/api/taxi.api";
 import { Button, Card, Field, Message, PasswordField, Screen, ui } from "../../src/components/ui";
+import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 import { normalizeNigerianPhoneNumber } from "../../src/lib/phone";
 
@@ -113,10 +114,12 @@ function documentPayload(form: typeof initialForm) {
 function nextStepFor(result: ApplicantOnboardingResult): AccountStep {
   if (result.nextStep === "OTP_REQUIRED") return "OTP";
   if (result.nextStep === "PASSWORD_REQUIRED") return "PASSWORD";
+  if (result.nextStep === "SIGN_IN_REQUIRED") return "ACCOUNT";
   return "APPLICATION";
 }
 
 export default function CaptainApplication() {
+  const { user } = useAuth();
   const [form, setForm] = useState(initialForm);
   const [step, setStep] = useState<AccountStep>("ACCOUNT");
   const [otp, setOtp] = useState("");
@@ -127,6 +130,18 @@ export default function CaptainApplication() {
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (!user) return;
+    setForm((current) => ({
+      ...current,
+      fullName: user.fullName || current.fullName || "",
+      phoneNumber: user.phoneNumber || current.phoneNumber || "",
+      email: user.email || current.email || ""
+    }));
+    setStep("APPLICATION");
+    setSuccess("You are signed in with your KariGO account. Complete your Captain application to start onboarding.");
+  }, [user]);
+
   function applyAccountResult(result: ApplicantOnboardingResult) {
     setForm((current) => ({
       ...current,
@@ -136,6 +151,10 @@ export default function CaptainApplication() {
     }));
     const nextStep = nextStepFor(result);
     setStep(nextStep);
+    if (result.nextStep === "SIGN_IN_REQUIRED") {
+      setSuccess(result.message ?? "This phone number already has a KariGO account. Sign in with your existing KariGO password to continue your Captain application.");
+      return;
+    }
     setSuccess(nextStep === "OTP"
       ? "OTP sent. Enter the code sent to your phone."
       : nextStep === "PASSWORD"
@@ -243,7 +262,10 @@ export default function CaptainApplication() {
           !form.address.trim() ? "Address not provided in app application; collect during review." : ""
         ].filter(Boolean).join("\n");
 
-        await deliveryCaptainApplicationsApi.submit({
+        const submitDeliveryApplication = user
+          ? deliveryCaptainApplicationsApi.submitForCurrentUser
+          : deliveryCaptainApplicationsApi.submit;
+        await submitDeliveryApplication({
           fullName: form.fullName,
           phoneNumber: normalizedPhone,
           email: form.email || undefined,
@@ -267,7 +289,10 @@ export default function CaptainApplication() {
       }
 
       if (form.rideCaptainReviewInterest) {
-        await taxiApi.submitDriverApplication({
+        const submitRideApplication = user
+          ? taxiApi.submitDriverApplicationForCurrentUser
+          : taxiApi.submitDriverApplication;
+        await submitRideApplication({
           fullName: form.fullName,
           phoneNumber: normalizedPhone,
           email: form.email || undefined,
@@ -291,8 +316,8 @@ export default function CaptainApplication() {
       }
 
       setSuccess(`Your ${selectedModes} application has been submitted. KariGO will review your details and contact you with the next steps.`);
-      setForm(initialForm);
-      setStep("ACCOUNT");
+      setForm(user ? { ...initialForm, fullName: user.fullName ?? "", phoneNumber: user.phoneNumber ?? "", email: user.email ?? "" } : initialForm);
+      setStep(user ? "APPLICATION" : "ACCOUNT");
     } catch (err) {
       setError(err instanceof Error ? err.message : friendlyError(err));
     } finally {
@@ -326,7 +351,7 @@ export default function CaptainApplication() {
     form.confirmed
   );
 
-  return <Screen title="Apply to become a Captain" subtitle="Create your account, verify OTP, set a password, then submit Delivery Captain or Ride Captain details.">
+  return <Screen title="Apply to become a Captain" subtitle="Use your existing KariGO account or create a new Captain applicant account, then submit Delivery Captain or Ride Captain details.">
     <Card tone="soft">
       <Image source={require("../../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
       <Text style={ui.sectionTitle}>Account-first Captain onboarding</Text>
@@ -335,9 +360,10 @@ export default function CaptainApplication() {
 
     <Card>
       <Text style={ui.sectionTitle}>Step 1: Account and OTP</Text>
-      <Field placeholder="Full name" value={form.fullName} onChangeText={(fullName) => setForm({ ...form, fullName })} />
-      <Field placeholder="Phone number e.g. 080..." keyboardType="phone-pad" value={form.phoneNumber} onChangeText={(phoneNumber) => setForm({ ...form, phoneNumber })} />
-      <Field placeholder="Email optional" keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={(email) => setForm({ ...form, email })} />
+      {user ? <Message>You are signed in with your KariGO account. Complete your Captain application to start onboarding.</Message> : null}
+      <Field placeholder="Full name" editable={!user} value={form.fullName} onChangeText={(fullName) => setForm({ ...form, fullName })} />
+      <Field placeholder="Phone number e.g. 080..." editable={!user} keyboardType="phone-pad" value={form.phoneNumber} onChangeText={(phoneNumber) => setForm({ ...form, phoneNumber })} />
+      <Field placeholder="Email optional" editable={!user} keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={(email) => setForm({ ...form, email })} />
       {step === "ACCOUNT" ? <Button title={busy ? "Starting..." : "Create account and send OTP"} disabled={busy || !canStartAccount} onPress={startAccount} /> : null}
       {step === "OTP" ? <>
         <Field placeholder="OTP code" keyboardType="number-pad" value={otp} onChangeText={(value) => setOtp(value.replace(/\D/g, "").slice(0, 8))} />
@@ -427,7 +453,7 @@ export default function CaptainApplication() {
     <Card>
       <Message>{success}</Message>
       <Message error>{error}</Message>
-      <Link href="/auth/login" style={styles.loginLink}>Already approved? Sign in</Link>
+      <Link href="/auth/login" style={styles.loginLink}>{success.includes("already has a KariGO account") ? "Sign in to continue" : "Already approved? Sign in"}</Link>
     </Card>
   </Screen>;
 }

@@ -9,8 +9,11 @@ import { api } from "./client";
 export const taxiApi = {
   submitDriverApplication: (body: TaxiDriverApplicationInput) =>
     api.post<TaxiDriverApplicationStatus>("taxi/driver-applications", body, { authenticated: false }),
+  submitDriverApplicationForCurrentUser: (body: TaxiDriverApplicationInput) =>
+    api.post<TaxiDriverApplicationStatus>("taxi/driver-applications/me", body),
   applicationStatus: (phoneNumber: string) =>
     api.get<TaxiDriverApplicationStatus>(`taxi/driver-applications/status?phoneNumber=${encodeURIComponent(phoneNumber)}`, { authenticated: false }),
+  currentUserApplicationStatus: () => api.get<TaxiDriverApplicationStatus & { exists?: boolean; nextStep?: string }>("taxi/driver-applications/me"),
   profile: () => api.get<TaxiDriverProfile>("rider/taxi/profile"),
   updateAvailability: (body: { isAvailableForTaxi: boolean; latitude?: number; longitude?: number }) =>
     api.patch<TaxiDriverProfile>("rider/taxi/availability", body),

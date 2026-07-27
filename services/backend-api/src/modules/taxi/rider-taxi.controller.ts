@@ -1,10 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
-import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
-import { Roles } from "../../common/decorators/roles.decorator";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
-import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { TaxiCancelDto } from "./dto/taxi-cancel.dto";
 import { TaxiDriverAvailabilityDto } from "./dto/taxi-driver-availability.dto";
@@ -14,8 +11,7 @@ import { TaxiService } from "./taxi.service";
 @ApiTags("Rider Taxi Staging")
 @ApiBearerAuth()
 @Controller("rider/taxi")
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.RIDER)
+@UseGuards(JwtAuthGuard)
 export class RiderTaxiController {
   constructor(private readonly taxi: TaxiService) {}
 

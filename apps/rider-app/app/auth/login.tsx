@@ -46,12 +46,13 @@ export default function CaptainLogin() {
     <Screen>
       <Image source={require("../../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
       <Text style={styles.title}>Captain login</Text>
-      <Text style={styles.copy}>Sign in with your approved KariGO Captain account.</Text>
+      <Text style={styles.copy}>This account can continue Captain onboarding. Sign in to proceed.</Text>
       <Field placeholder="+234..." keyboardType="phone-pad" value={phoneNumber} onChangeText={setPhoneNumber} />
       <PasswordField placeholder="Password" visible={passwordVisible} onToggleVisible={() => setPasswordVisible((visible) => !visible)} value={password} onChangeText={setPassword} />
       <Message error>{error}</Message>
       <Button title={busy ? "Signing in..." : "Sign in"} disabled={busy || !phoneNumber || !password} onPress={submit} />
       {biometricEnabled ? <Button title="Sign in with biometrics" tone="muted" disabled={busy || !biometricAvailable} onPress={biometricSignIn} /> : null}
+      <Link href="/auth/forgot-password" style={styles.forgotLink}>Forgot password?</Link>
       <Text style={styles.applyCopy}>New to KariGO Captain?</Text>
       <Link href="/auth/apply" style={styles.applyLink}>Apply to become a Captain</Link>
     </Screen>
@@ -63,5 +64,6 @@ const styles = StyleSheet.create({
   title: { color: brand.colors.charcoal, fontSize: 28, fontWeight: "800" },
   copy: { color: brand.colors.muted, marginBottom: 10 },
   applyCopy: { color: brand.colors.muted, marginTop: 12, textAlign: "center" },
-  applyLink: { color: brand.colors.primary, fontWeight: "900", paddingVertical: 8, textAlign: "center" }
+  applyLink: { color: brand.colors.primary, fontWeight: "900", paddingVertical: 8, textAlign: "center" },
+  forgotLink: { color: brand.colors.charcoal, fontWeight: "800", paddingVertical: 8, textAlign: "center" }
 });
