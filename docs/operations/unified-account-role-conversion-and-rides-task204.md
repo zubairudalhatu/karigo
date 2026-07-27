@@ -82,6 +82,45 @@ The Customer App hides normal marketplace bottom navigation during ride booking 
 - Prisma migration is not required.
 - Fresh AABs are required only if the current Play/Internal Testing binaries do not apply OTA updates reliably.
 
+## Task 205 Deployment Record
+
+Recorded: 2026-07-27
+
+Task 205 deployed and verified the Task 204 release path in this order: backend first, then Customer, Captain, and Partner Android production-channel EAS updates.
+
+### Backend Deployment
+
+- Task 204 implementation commit: `90dd47d feat: support unified account role onboarding`.
+- Deployment trigger commit: `2980296 chore: trigger task 204 backend deploy`.
+- Backend compatibility correction commit: `73c21e6 fix: add backend render compatibility entrypoint`.
+- Deployed backend URL: `https://karigo-8htn.onrender.com/api/v1`.
+- Health check result: `GET /health` returned `200`.
+- Task 204 route existence checks:
+  - `GET /customer/taxi/ride-categories` returned `401` without auth, confirming the protected Rides category route is live.
+  - `GET /vendor-applications/me` returned `401` without auth, confirming the protected Partner application state route is live.
+
+Render initially served a healthy but stale backend route table after the Task 204 deploy trigger. The correction added a safe compatibility entrypoint at `services/backend-api/dist/main.js` that requires the real compiled Nest entrypoint at `services/backend-api/dist/services/backend-api/src/main.js`. This keeps existing Render start commands working while preserving the preferred `npm run start:prod` path.
+
+### Mobile OTA Updates
+
+| App | Channel | Branch | Runtime | Platform | Update ID | Group ID | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Customer App | `customer-production` | `customer-production` | `0.1.0` | Android | `019fa496-334d-7ead-bed6-c54256311472` | `6da17148-d659-40c6-a238-57734d4e503c` | Published |
+| KariGO Captain App | `captain-production` | `captain-production` | `0.1.0` | Android | `019fa497-9b34-72e9-9323-f7144a66064c` | `449f5bea-8e1c-49c1-acd7-521443de79d8` | Published |
+| KariGO Partner App | `partner-production` | `partner-production` | `0.1.0` | Android | `019fa499-1c6d-74d0-84f4-7724410ddc35` | `c7b90519-2520-44f1-b1c5-0cc59cf6438c` | Published |
+
+All three updates were published with message: `Task 204 unified account onboarding and rides flow`.
+
+### Device Verification Requirement
+
+Task 205 cannot be fully signed off until a controlled Android device verifies that the installed Customer, Captain, and Partner apps receive the updates and complete the account-conversion/Rides scenarios. If any installed app remains on stale bundled code or reports runtime incompatibility, build a fresh AAB using the confirmed production profiles:
+
+- Customer: `customer-production`
+- Captain: `captain-production`
+- Partner: `partner-production`
+
+Do not use obsolete Rider profile names for Captain production builds.
+
 ## Post-Deployment Smoke Checks
 
 1. Login as an existing customer in Customer App.

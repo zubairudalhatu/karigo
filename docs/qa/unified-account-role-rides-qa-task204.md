@@ -15,6 +15,49 @@ Do not record passwords, OTPs, payment card data, tokens, screenshots, or privat
 - Rides remain controlled-pilot/manual-operations only.
 - Live ride dispatch, automated matching, ride payments, payouts, and public ride launch remain disabled unless separately approved.
 
+## Task 205 Deployment Verification
+
+Recorded: 2026-07-27
+
+Task 205 deployed the Task 204 backend/mobile update set and recorded the production-channel deployment evidence. This section records only non-sensitive deployment metadata and does not include passwords, OTPs, tokens, private phone numbers, screenshots, or Expo artifact URLs.
+
+### Backend
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Task 204 commit present on main | Passed | `90dd47d feat: support unified account role onboarding` is in the deployed commit history. |
+| Backend deploy commit | Passed | Latest pushed deployment commit: `73c21e698b49f9410becf0e2e43d09f00be6ae5a`. |
+| Backend health | Passed | `GET https://karigo-8htn.onrender.com/api/v1/health` returned `200`. |
+| Rides category route registered | Passed | `GET /api/v1/customer/taxi/ride-categories` returned `401` without auth, confirming the protected Task 204 route is live instead of missing. |
+| Partner application state route registered | Passed | `GET /api/v1/vendor-applications/me` returned `401` without auth, confirming the protected Task 204 route is live instead of missing. |
+| Deployment correction | Passed | Render compatibility entrypoint was fixed so old `node dist/main` style start commands load the real compiled backend entrypoint. |
+
+### Mobile Production Updates
+
+| App | Channel | Branch | Runtime | Platform | Update ID | Group ID | Commit | Result |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Customer App | `customer-production` | `customer-production` | `0.1.0` | Android | `019fa496-334d-7ead-bed6-c54256311472` | `6da17148-d659-40c6-a238-57734d4e503c` | `73c21e698b49f9410becf0e2e43d09f00be6ae5a` | Published |
+| KariGO Captain App | `captain-production` | `captain-production` | `0.1.0` | Android | `019fa497-9b34-72e9-9323-f7144a66064c` | `449f5bea-8e1c-49c1-acd7-521443de79d8` | `73c21e698b49f9410becf0e2e43d09f00be6ae5a` | Published |
+| KariGO Partner App | `partner-production` | `partner-production` | `0.1.0` | Android | `019fa499-1c6d-74d0-84f4-7724410ddc35` | `c7b90519-2520-44f1-b1c5-0cc59cf6438c` | `73c21e698b49f9410becf0e2e43d09f00be6ae5a` | Published |
+
+### Device QA Status
+
+| Area | Result | Notes |
+| --- | --- | --- |
+| Installed Customer App receives update | Pending real-device verification | Force-close/reopen and confirm Task 204 Rides/onboarding UI appears. |
+| Installed KariGO Captain App receives update | Pending real-device verification | Confirm Captain app no longer loops or blocks existing customer credentials generically. |
+| Installed KariGO Partner App receives update | Pending real-device verification | Confirm Partner app allows an existing customer account to continue onboarding. |
+| Existing customer retains Customer access | Pending real-device verification | Use a controlled QA account only; do not record credentials here. |
+| Same account starts/resumes Partner onboarding | Pending real-device verification | Confirm no duplicate central user or Partner application is created. |
+| Same account starts/resumes Captain onboarding | Pending real-device verification | Confirm no duplicate central user or Captain application is created. |
+| Local and international Nigerian phone formats match one account | Pending credentialed verification | Test local `0...` and international `+234...` formats without recording the private number. |
+| KariGO Rides booking flow works on device | Pending real-device verification | Verify pickup, destination, categories, fare estimate, and controlled-pilot ride request creation. |
+| Safe-area/device-size checks | Pending real-device verification | Test smaller/taller Android screens and gesture/three-button navigation where available. |
+
+### Fresh AAB Decision
+
+No fresh AAB was generated during Task 205. OTA production updates were published first as required. Fresh AABs should be built only if the installed apps fail to receive these updates, report runtime incompatibility, or controlled distribution requires a new binary.
+
 ## Unified Account QA
 
 Use one existing active customer account. Record only a masked reference such as `customer account A`.
