@@ -63,7 +63,7 @@ expect(appConfig.includes("expo-build-properties"), "Captain app config must reg
 expect(appConfig.includes("compileSdkVersion: 36"), "Captain app must compile against Android API 36.");
 expect(appConfig.includes("targetSdkVersion: 36"), "Captain app must target Android API 36.");
 expect(appConfig.includes('buildToolsVersion: "36.0.0"'), "Captain app must use Android build tools 36.0.0.");
-expect(appConfig.includes("versionCode: isStaging ? 1 : 8"), "Captain production versionCode must be bumped to 8 for the next Play-ready AAB.");
+expect(appConfig.includes("versionCode: isStaging ? 1 : 9"), "Captain production versionCode must be bumped to 9 for the next Play-ready AAB.");
 
 expect(apiClient.includes("karigo_rider_access_token"), "Rider token storage key must be rider-specific.");
 expect(apiClient.includes("karigo_rider_refresh_token"), "Rider refresh token storage key must be rider-specific.");

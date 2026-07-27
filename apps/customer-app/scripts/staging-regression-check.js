@@ -16,7 +16,9 @@ assert(appConfig.includes("compileSdkVersion: 36"), "Customer app must compile a
 assert(appConfig.includes("targetSdkVersion: 36"), "Customer app must target Android API 36.");
 assert(appConfig.includes('buildToolsVersion: "36.0.0"'), "Customer app must use Android build tools 36.0.0.");
 assert(appConfig.includes('package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer"'), "Customer app package names must remain stable.");
-assert(appConfig.includes("versionCode: isStaging ? 1 : 11"), "Customer production versionCode must be bumped to 11 for the next Play-ready AAB.");
+assert(appConfig.includes("versionCode: isStaging ? 1 : 12"), "Customer production versionCode must be bumped to 12 for the next Play-ready map AAB.");
+assert(appConfig.includes("GOOGLE_MAPS_ANDROID_API_KEY"), "Customer map builds must read the Android Maps SDK key from environment variables.");
+assert(packageJson.dependencies?.["react-native-maps"] === "1.20.1", "Customer app must include the Expo SDK 53-compatible react-native-maps package.");
 assert(
   easJson.build?.["customer-production"]?.env?.EXPO_PUBLIC_API_BASE_URL === "https://karigo-8htn.onrender.com/api/v1",
   "Customer production profile must keep the Render production API base URL."
@@ -150,19 +152,26 @@ assert(taxiWaitlist.includes("verified Ride Captains, vehicle checks, fare contr
 assert(taxiWaitlist.includes("taxiApi.joinWaitlist"), "Customer ride waitlist must use the backend readiness endpoint.");
 const taxiRequest = read("app", "taxi", "request.tsx");
 assert(taxiRequest.includes("KariGO Rides"), "Customer app must include the controlled KariGO Rides request screen.");
-assert(taxiRequest.includes("KariGO Rides Pilot - availability may be limited in your area."), "Ride request flow must show controlled-pilot safety copy.");
+assert(taxiRequest.includes("Controlled pilot"), "Ride request flow must show controlled-pilot safety copy.");
 assert(taxiRequest.includes("ridesControlledPilotEnabled"), "Ride request flow must be gated by the shared controlled-pilot flag helper.");
+assert(taxiRequest.includes("react-native-maps"), "Ride request flow must use the native-backed map provider.");
+assert(taxiRequest.includes("MapView") && taxiRequest.includes("Marker") && taxiRequest.includes("Polyline"), "Ride request flow must render map markers and route preview.");
+assert(taxiRequest.includes("Location.geocodeAsync") && taxiRequest.includes("Location.reverseGeocodeAsync"), "Ride request flow must support search suggestions and reverse geocoding.");
 assert(taxiRequest.includes("Use current location as pickup"), "Ride request flow must expose current-location pickup selection.");
 assert(taxiRequest.includes("Saved places"), "Ride request flow must expose saved places.");
 assert(taxiRequest.includes("Recent destinations"), "Ride request flow must expose recent destination shortcuts.");
 assert(taxiRequest.includes("Route preview"), "Ride request flow must include a staged route preview.");
+assert(taxiRequest.includes("Pickup on map") && taxiRequest.includes("Destination on map"), "Ride request flow must support choosing pickup/destination on the map.");
+assert(taxiRequest.includes("Choose pickup on map") && taxiRequest.includes("Choose destination on map"), "Ride request flow must provide a full-screen map picker.");
+assert(taxiRequest.includes("fareRange(category.fareRangeKobo)"), "Ride request flow must show fare ranges for categories.");
+assert(taxiRequest.includes("\\u20A6") && taxiRequest.includes("\\u2013"), "Ride request fares must use compact naira range formatting.");
 assert(taxiRequest.includes("taxiApi.rideCategories"), "Ride request flow must load backend ride categories.");
 assert(taxiRequest.includes("taxiApi.fareEstimate"), "Ride request flow must quote through the backend.");
 assert(taxiRequest.includes("taxiApi.createTrip"), "Ride request flow must create requests through the backend.");
 assert(taxiRequest.includes("Join Ride Waitlist") && taxiRequest.includes("/taxi/waitlist"), "Disabled Ride request flow must route customers to the waitlist.");
 assert(taxiRequest.includes("taxiApi.cancelTrip"), "Ride request flow must support customer cancellation before pickup.");
-assert(taxiRequest.includes("Manual assignment is required; ride payment and payout automation remain disabled."), "Ride request flow must keep ride payment and payout automation disabled.");
-assert(taxiRequest.includes("Finding a nearby Captain"), "Ride request flow must show a controlled tracking/status screen after booking.");
+assert(taxiRequest.includes("Ride payment and payout automation remain disabled"), "Ride request flow must keep ride payment and payout automation disabled.");
+assert(taxiRequest.includes("Ride request received"), "Ride request flow must show a controlled tracking/status screen after booking.");
 assert(!taxiRequest.includes("Pay Now"), "Ride Test Mode must not show a payment action.");
 
 const smeServices = read("app", "sme-services.tsx");

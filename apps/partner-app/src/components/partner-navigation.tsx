@@ -1,7 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import { usePathname, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { partnerApi } from "../api/partner.api";
+import { useAuth } from "../contexts/auth-context";
 
 const tabs = [
   { label: "Home", path: "/", icon: "home" },
@@ -20,11 +24,35 @@ function isActive(pathname: string, tabPath: string) {
 export function PartnerBottomNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const [approved, setApproved] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!user || pathname.startsWith("/auth") || pathname.startsWith("/register")) {
+      setApproved(false);
+      return;
+    }
+
+    partnerApi.onboardingState()
+      .then((state) => {
+        if (active) setApproved(state.state === "approved");
+      })
+      .catch(() => {
+        if (active) setApproved(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [pathname, user?.id]);
 
   if (pathname.startsWith("/auth") || pathname.startsWith("/register")) return null;
+  if (!approved) return null;
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { bottom: Math.max(insets.bottom, 12) }]}>
       {tabs.map((tab) => {
         const active = isActive(pathname, tab.path);
         return (
@@ -50,7 +78,6 @@ const styles = StyleSheet.create({
   wrap: {
     position: "absolute",
     right: 14,
-    bottom: 14,
     left: 14,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -59,7 +86,8 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     backgroundColor: brand.colors.white,
     paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingBottom: 8,
+    paddingTop: 8,
     shadowColor: "#000000",
     shadowOpacity: 0.12,
     shadowRadius: 18,

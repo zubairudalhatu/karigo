@@ -211,6 +211,54 @@ Fresh AAB build phase is complete. Real-device installation and acceptance remai
 - KariGO Rides pickup/destination/category/fare/request flow.
 - Android safe-area and navigation-mode checks.
 
+## Task 205D Operations Update
+
+Recorded: 2026-07-27
+
+Task 205D moves the post-Task-205C fixes into a release-candidate build path:
+
+- Customer App: versionCode `12`, required because native map support was added for KariGO Rides.
+- KariGO Captain App: versionCode `9`, required because Google Play reported versionCode `8` had already been used.
+- KariGO Partner App: versionCode remains `3`; current changes are JavaScript-only and should be delivered by production EAS Update unless later device testing proves a fresh AAB is needed.
+
+### Customer Rides Operations Notes
+
+- The Customer App now uses a native-backed map provider and Expo Location for pickup/destination convenience.
+- Android builds must have a Google Maps API key configured in EAS or the build environment through `GOOGLE_MAPS_ANDROID_API_KEY` or `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY`.
+- The app does not commit any Google Maps key or location-provider secret.
+- The Rides flow remains a controlled-pilot workflow. Backend fare estimate and trip creation remain the authority.
+- Live ride dispatch, automated matching, ride payment capture, ride payouts and auto-assignment remain disabled.
+- No backend location proxy was added in this task. A backend Places/Directions proxy can be added later if KariGO wants server-side provider control, quota protection, or route-polylines from a paid Maps provider.
+
+### Partner App Operations Notes
+
+- Existing Customer credentials can enter Partner onboarding without the old generic role rejection.
+- The registration start screen validates visible prefilled full name, phone and email values, then hydrates Partner registration state before moving to account type.
+- Partner workspace navigation is now hidden until the account state is approved.
+- Partner profile editing is blocked until the Partner profile is active/approved.
+- Bottom navigation now respects Android bottom safe-area spacing.
+
+### Build and Distribution Plan
+
+| App | Required Action | Reason |
+| --- | --- | --- |
+| Customer App | Build fresh production AAB | Native map dependency requires a new binary. |
+| KariGO Captain App | Build fresh production AAB | Play upload retry needs versionCode `9`. |
+| KariGO Partner App | Publish production EAS Update | Fix is JavaScript-only; fresh AAB is optional if OTA does not apply. |
+
+### Post-Upload Acceptance
+
+After uploading the new AABs to Google Play internal testing and publishing the Partner update:
+
+1. Install the Customer App internal-testing build and confirm versionCode `12`.
+2. Install the KariGO Captain internal-testing build and confirm versionCode `9`.
+3. Force-close/reopen the Partner App and confirm the latest Partner production update applies.
+4. Verify Customer Rides current-location, search, map-pin, route-preview, category fare range and controlled request creation.
+5. Verify Partner existing-customer onboarding and pre-approval navigation gating.
+6. Verify approved Partner profile workspace tabs still load.
+7. Verify Captain login/session and delivery/ride readiness screens still load.
+8. Record any issue without passwords, OTPs, screenshots, direct artifact URLs, keystores or private phone numbers.
+
 ## Post-Deployment Smoke Checks
 
 1. Login as an existing customer in Customer App.

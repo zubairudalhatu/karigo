@@ -14,6 +14,10 @@ const androidApi36BuildProperties = {
   }
 };
 
+const googleMapsAndroidApiKey =
+  process.env.GOOGLE_MAPS_ANDROID_API_KEY ??
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY;
+
 export default ({ config }: { config: Record<string, any> }) => ({
   ...config,
   name: isStaging ? "KariGO Customer Staging" : "KariGO",
@@ -51,13 +55,22 @@ export default ({ config }: { config: Record<string, any> }) => ({
   },
   android: {
     ...config.android,
+    config: googleMapsAndroidApiKey
+      ? {
+        ...(config.android?.config ?? {}),
+        googleMaps: {
+          ...(config.android?.config?.googleMaps ?? {}),
+          apiKey: googleMapsAndroidApiKey
+        }
+      }
+      : config.android?.config,
     adaptiveIcon: {
       ...(config.android?.adaptiveIcon ?? {}),
       foregroundImage: "./assets/karigo-adaptive-icon.png",
       backgroundColor: "#FFFFFF"
     },
     package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer",
-    versionCode: isStaging ? 1 : 11
+    versionCode: isStaging ? 1 : 12
   },
   ios: {
     ...config.ios,

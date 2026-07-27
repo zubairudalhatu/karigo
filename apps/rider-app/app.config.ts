@@ -66,7 +66,7 @@ export default ({ config }: ExpoConfigInput) => {
         backgroundColor: "#FFFFFF"
       },
       package: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider",
-      versionCode: isStaging ? 1 : 8
+      versionCode: isStaging ? 1 : 9
     },
     ios: {
       ...config.ios,

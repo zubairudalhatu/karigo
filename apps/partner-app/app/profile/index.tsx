@@ -2,7 +2,7 @@ import { brand } from "@karigo/config";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { RefreshControl, StyleSheet, Text, View } from "react-native";
-import { partnerApi, PartnerProfile } from "../../src/api/partner.api";
+import { partnerApi, PartnerOnboardingState, PartnerProfile } from "../../src/api/partner.api";
 import { AuthGate } from "../../src/components/auth-gate";
 import { Badge, Card, Hero, LoadingState, MutedText, PrimaryButton, Screen } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
@@ -13,6 +13,7 @@ function ProfileContent() {
   const { logout, user } = useAuth();
   const router = useRouter();
   const [profile, setProfile] = useState<PartnerProfile | null>(null);
+  const [partnerState, setPartnerState] = useState<PartnerOnboardingState | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +23,12 @@ function ProfileContent() {
     else setLoading(true);
     setError(null);
     try {
+      const onboardingState = await partnerApi.onboardingState();
+      setPartnerState(onboardingState);
+      if (onboardingState.state !== "approved") {
+        setProfile(null);
+        return;
+      }
       setProfile(await partnerApi.profile());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Partner profile could not be loaded.");
@@ -37,6 +44,32 @@ function ProfileContent() {
 
   if (loading) return <LoadingState label="Loading Partner profile..." />;
   const profileWarning = partnerProfileWarning(profile);
+
+  if (partnerState?.state && partnerState.state !== "approved") {
+    const canContinue = ["application_not_started", "application_in_progress", "correction_required"].includes(partnerState.state);
+    const title = partnerState.state === "application_submitted"
+      ? "Application under review"
+      : partnerState.state === "rejected"
+        ? "Application not approved"
+        : partnerState.state === "restricted"
+          ? "Partner access restricted"
+          : "Partner profile not active yet";
+
+    return (
+      <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}>
+        <Hero eyebrow="Partner application" title={title} subtitle={partnerState.message} />
+        <Card>
+          <MutedText>
+            Your Customer account remains active. KariGO will unlock Partner profile editing only after Operations approves the Partner application.
+          </MutedText>
+          {partnerState.correctionNote ? <MutedText>{partnerState.correctionNote}</MutedText> : null}
+          {canContinue ? <PrimaryButton label={partnerState.state === "correction_required" ? "Update requested information" : "Continue application"} onPress={() => router.push("/register")} /> : null}
+          <PrimaryButton label="Back to Partner home" onPress={() => router.replace("/")} variant="secondary" />
+        </Card>
+        <PrimaryButton label="Log out" onPress={() => void logout()} variant="secondary" />
+      </Screen>
+    );
+  }
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}>
@@ -69,7 +102,7 @@ function ProfileContent() {
         <MutedText>{profile?.city ?? "City pending"}, {profile?.state ?? "State pending"}</MutedText>
         <MutedText>{profile?.description ?? "Description can be maintained from Partner Workspace."}</MutedText>
         <Badge label={profile?.isOpen ? "Online" : "Offline"} tone={profile?.isOpen ? "success" : "warning"} />
-        <PrimaryButton label="Edit partner profile" onPress={() => router.push("/profile/edit")} />
+        {profile ? <PrimaryButton label="Edit partner profile" onPress={() => router.push("/profile/edit")} /> : null}
       </Card>
       <Card>
         <Text style={styles.sectionTitle}>Settlement readiness</Text>

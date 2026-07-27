@@ -128,6 +128,9 @@ expect(nav.includes("@expo/vector-icons") && nav.includes("Feather"), "Bottom na
 expect(!nav.includes('icon: "H"') && !nav.includes('icon: "O"'), "Bottom nav must not use first-letter icon substitutes.");
 expect(nav.includes("pathname.startsWith(\"/auth\")"), "Bottom nav must hide on auth screens.");
 expect(nav.includes("pathname.startsWith(\"/register\")"), "Bottom nav must hide on registration screens.");
+expect(nav.includes("partnerApi.onboardingState"), "Bottom nav must check Partner onboarding state before showing workspace tabs.");
+expect(nav.includes('state.state === "approved"'), "Bottom nav must show only after the Partner profile is approved.");
+expect(nav.includes("useSafeAreaInsets") && nav.includes("Math.max(insets.bottom, 12)"), "Bottom nav must respect bottom safe-area insets.");
 
 expect(authApi.includes("auth/password-reset/request") && authApi.includes("auth/password-reset/confirm"), "Auth API must expose password reset endpoints.");
 expect(authApi.includes("auth/vendor-onboarding/account") && authApi.includes("auth/vendor-onboarding/password"), "Auth API must expose vendor applicant onboarding endpoints.");
@@ -138,6 +141,9 @@ expect(uploadPickers.includes("expo-image-picker") && uploadPickers.includes("ex
 expect(uploadPickers.includes("pickAndUploadImage") && uploadPickers.includes("pickAndUploadDocument"), "Upload picker helper must expose image and document upload helpers.");
 expect(registrationContext.includes("PRODUCT_SELLER") && registrationContext.includes("SERVICE_PROVIDER") && registrationContext.includes("BOTH"), "Registration context must support all Partner account types.");
 expect(registerIndex.includes("authApi.createVendorApplicantAccount") && registerIndex.includes("/register/verify"), "In-app registration must create a vendor applicant account and continue to OTP.");
+expect(registerIndex.includes("visibleFullName") && registerIndex.includes("visiblePhoneNumber") && registerIndex.includes("normalizedPhone"), "Registration start must validate the visible prefilled account values.");
+expect(registerIndex.includes("formErrors") && registerIndex.includes("disabled={!canContinue}"), "Registration start must disable Continue only from visible validation errors.");
+expect(registerIndex.includes("Your KariGO account has been recognised"), "Registration start must explain existing Customer account continuation.");
 expect(registerVerify.includes("authApi.verifyVendorApplicantOtp") && registerVerify.includes("authApi.resendVendorApplicantOtp"), "In-app registration must verify and resend OTP.");
 expect(registerPassword.includes("authApi.createVendorApplicantPassword"), "In-app registration must create applicant password after OTP.");
 expect(registerAccountType.includes("Product Seller") && registerAccountType.includes("Service Provider") && registerAccountType.includes("Both"), "In-app registration must collect Partner account type.");
@@ -195,8 +201,11 @@ expect(payout.includes("This does not trigger payouts") && payout.includes("No m
 expect(documents.includes("pickAndUploadDocument") && documents.includes("partnerApi.uploadOnboardingDocument"), "Documents screen must support controlled mobile onboarding document upload.");
 expect(profile.includes("Edit partner profile") && profile.includes("Payout account") && profile.includes("View earnings"), "Profile must expose operations and payout routes.");
 expect(profile.includes("partnerProfileWarning"), "Profile must warn for closed/demo partner profiles.");
+expect(profile.includes("partnerApi.onboardingState"), "Profile must resolve application state before showing profile actions.");
+expect(profile.includes("Partner profile not active yet"), "Profile must not show contradictory approved-profile actions before approval.");
 expect(profile.includes("Log out"), "Profile screen must expose logout.");
 expect(profileEdit.includes("partnerApi.updateProfile") && profileEdit.includes("Save profile"), "Profile edit route must save through vendor profile endpoint.");
+expect(profileEdit.includes("Partner profile editing is not active yet"), "Profile edit must block editing before Partner profile approval.");
 expect(profileEdit.includes("Logo URL") && profileEdit.includes("Cover image URL"), "Profile edit must keep HTTPS branding URL fields alongside mobile uploads.");
 expect(profileEdit.includes('pickAndUploadImage(kind)') && profileEdit.includes("Upload logo") && profileEdit.includes("Upload cover image"), "Profile edit must support controlled mobile logo and cover uploads.");
 expect(labels.includes("Pay on Delivery") && labels.includes("formatLabel") && labels.includes("statusTone"), "Partner app must format raw enum labels safely.");

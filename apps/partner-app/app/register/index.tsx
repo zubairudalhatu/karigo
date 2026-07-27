@@ -1,6 +1,6 @@
 import { brand } from "@karigo/config";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { authApi } from "../../src/api/auth.api";
 import { Card, Hero, MutedText, PrimaryButton, Screen, TextField } from "../../src/components/ui";
@@ -15,6 +15,32 @@ export default function RegisterStartScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const visibleFullName = user?.fullName ?? registration.fullName ?? "";
+  const visiblePhoneNumber = user?.phoneNumber ?? registration.phoneNumber ?? "";
+  const visibleEmail = user?.email ?? registration.email ?? "";
+  const normalizedPhone = useMemo(() => normalizeNigerianPhoneNumber(visiblePhoneNumber), [visiblePhoneNumber]);
+  const emailLooksValid = !visibleEmail.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(visibleEmail.trim());
+  const phoneLooksValid = /^\+234\d{10}$/.test(normalizedPhone);
+  const formErrors = [
+    visibleFullName.trim().length < 2 ? "Full name is required." : "",
+    !phoneLooksValid ? "Enter a valid Nigerian phone number. Local 080... and +234... formats are accepted." : "",
+    !emailLooksValid ? "Enter a valid email address or leave it blank." : ""
+  ].filter(Boolean);
+  const canContinue = !submitting && formErrors.length === 0;
+
+  useEffect(() => {
+    if (!user) return;
+    updateRegistration({
+      fullName: user.fullName,
+      phoneNumber: normalizedPhone,
+      businessPhoneNumber: normalizedPhone,
+      contactPhoneNumber: normalizedPhone,
+      email: user.email ?? registration.email,
+      businessEmail: user.email ?? registration.email,
+      contactEmail: user.email ?? registration.email,
+      contactFullName: user.fullName
+    });
+  }, [user?.id, user?.fullName, user?.phoneNumber, user?.email, normalizedPhone]);
 
   async function submit() {
     setSubmitting(true);
@@ -23,14 +49,14 @@ export default function RegisterStartScreen() {
     try {
       if (user) {
         updateRegistration({
-          fullName: user.fullName,
-          phoneNumber: user.phoneNumber,
-          businessPhoneNumber: user.phoneNumber,
-          contactPhoneNumber: user.phoneNumber,
-          email: user.email ?? registration.email,
-          businessEmail: user.email ?? registration.email,
-          contactEmail: user.email ?? registration.email,
-          contactFullName: user.fullName
+          fullName: visibleFullName.trim(),
+          phoneNumber: normalizedPhone,
+          businessPhoneNumber: normalizedPhone,
+          contactPhoneNumber: normalizedPhone,
+          email: visibleEmail.trim(),
+          businessEmail: visibleEmail.trim(),
+          contactEmail: visibleEmail.trim(),
+          contactFullName: visibleFullName.trim()
         });
         router.push("/register/account-type");
         return;
@@ -76,15 +102,16 @@ export default function RegisterStartScreen() {
         subtitle={user ? "Your KariGO account has been recognised. Continue to create your Partner profile." : "Product Sellers, Service Providers and mixed partners can start onboarding directly in the app."}
       />
       <Card>
-        <TextField label="Full name" editable={!user} value={user?.fullName ?? registration.fullName} onChangeText={(fullName) => updateRegistration({ fullName })} />
-        <TextField label="Phone number" editable={!user} placeholder="080..." keyboardType="phone-pad" value={user?.phoneNumber ?? registration.phoneNumber} onChangeText={(phoneNumber) => updateRegistration({ phoneNumber })} />
-        <TextField label="Email optional" editable={!user} autoCapitalize="none" keyboardType="email-address" value={user?.email ?? registration.email} onChangeText={(email) => updateRegistration({ email })} />
+        <TextField label="Full name" editable={!user} value={visibleFullName} onChangeText={(fullName) => updateRegistration({ fullName })} />
+        <TextField label="Phone number" editable={!user} placeholder="080..." keyboardType="phone-pad" value={visiblePhoneNumber} onChangeText={(phoneNumber) => updateRegistration({ phoneNumber })} />
+        <TextField label="Email optional" editable={!user} autoCapitalize="none" keyboardType="email-address" value={visibleEmail} onChangeText={(email) => updateRegistration({ email })} />
+        {formErrors.map((item) => <Text key={item} style={styles.error}>{item}</Text>)}
         {message ? <MutedText>{message}</MutedText> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <PrimaryButton
           label={submitting ? "Starting..." : user ? "Continue Partner onboarding" : "Start onboarding"}
           onPress={() => void submit()}
-          disabled={submitting || !registration.fullName.trim() || !registration.phoneNumber.trim()}
+          disabled={!canContinue}
         />
         <PrimaryButton label="Back to sign in" onPress={() => router.replace("/auth/login")} variant="secondary" />
       </Card>

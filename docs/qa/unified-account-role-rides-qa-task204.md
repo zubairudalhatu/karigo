@@ -158,6 +158,79 @@ Direct AAB artifact URLs and build log signed URLs were not recorded in this rep
 
 Task 205C build phase completed — real-device installation and acceptance pending.
 
+## Task 205D Implementation and Build Verification
+
+Recorded: 2026-07-27
+
+Task 205D addresses the next real-device findings after the Task 205C AABs:
+
+- Captain Google Play internal-testing upload rejected the previous Captain AAB because versionCode `8` had already been used.
+- Partner App now accepts existing Customer credentials, but `Continue Partner onboarding` was disabled even when visible prefilled account data was valid.
+- Partner App profile and navigation could expose approved-workspace actions before the application/profile state was approved.
+- Partner App bottom navigation could sit too close to Android gesture/three-button navigation.
+- Customer App KariGO Rides needed native-backed map/location UX instead of the older form-heavy staged flow.
+
+### Task 205D Code Verification
+
+| Area | Expected Result | Status | Notes |
+| --- | --- | --- | --- |
+| Customer Rides native map provider | Rides request flow uses native-backed map preview, markers, route line, map picking, current location, geocoding and reverse geocoding | Implemented | Uses Expo Location and `react-native-maps`; no backend map secret was added. |
+| Customer Rides copy/layout | Booking uses compact Rides copy, no duplicate native header, no normal marketplace bottom nav during booking | Implemented | Route remains controlled-pilot/manual operations only. |
+| Customer Rides fare formatting | Category cards show compact fare ranges such as `NGN 1,900-2,160` in-app with naira symbol formatting | Implemented | Backend remains fare authority. |
+| Customer map API key handling | Android Maps SDK key is read from EAS/build env only | Implemented | Expected env names: `GOOGLE_MAPS_ANDROID_API_KEY` or `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY`. No key is committed. |
+| Customer versionCode | Customer production versionCode is bumped for map-native AAB | Implemented | New Customer versionCode: `12`. |
+| Partner registration continuation | Existing Customer account values are hydrated into registration state and validated from visible fields | Implemented | Fixes disabled Continue button for prefilled valid data. |
+| Partner workspace gating | Bottom navigation and profile edit actions appear only after approved Partner state | Implemented | Pre-approved users stay in safe onboarding/status screens. |
+| Partner safe area | Bottom nav respects device bottom safe area | Implemented | Adds extra scroll bottom padding to reduce overlap. |
+| Captain versionCode | Captain production versionCode is bumped for Play upload retry | Implemented | New Captain versionCode: `9`. |
+
+### Task 205D Build Records
+
+| App | Profile | Package | Version Code | Build ID | Artifact Type | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Customer App | `customer-production` | `com.karigo.customer` | `12` | Pending | Android AAB | Pending EAS build |
+| KariGO Captain App | `captain-production` | `com.karigo.rider` | `9` | Pending | Android AAB | Pending EAS build |
+| KariGO Partner App | `partner-production` | `com.karigo.partner` | `3` | Pending OTA update ID | OTA update | Pending EAS Update |
+
+Direct AAB artifact URLs, signed build log URLs, screenshots, keystores, credentials, OTPs, tokens, and private account details must not be recorded in this file.
+
+### Task 205D Validation Status
+
+| Check | Result |
+| --- | --- |
+| Customer typecheck | Passed |
+| Customer regression check | Passed |
+| Customer Expo config validation | Passed: package `com.karigo.customer`, versionCode `12` |
+| Captain typecheck | Passed |
+| Captain regression check | Passed |
+| Captain Expo config validation | Passed: package `com.karigo.rider`, versionCode `9` |
+| Partner typecheck | Passed |
+| Partner regression check | Passed |
+| Partner Expo config validation | Passed: package `com.karigo.partner`, versionCode `3` |
+| Prisma validate | Passed |
+| Prisma generate | Passed |
+| Backend typecheck | Passed |
+| Backend build | Passed |
+| Backend full test suite | Passed: 65 suites, 516 tests |
+| Expo Doctor | Passed for Customer, Captain and Partner |
+| Secret/artifact scan | Passed on changed Task 205D files |
+| Git diff check | Passed |
+
+### Task 205D Real-Device Acceptance Status
+
+Implementation and build preparation are complete. Final real-device acceptance remains pending until the new Customer and Captain AABs are uploaded to Google Play internal testing, installed by testers, and the Partner production update is confirmed on-device.
+
+Required real-device checks:
+
+1. Customer Rides opens the compact map-based flow and does not show the old form-heavy ride page.
+2. Customer Rides can use current location, saved places, typed search suggestions, and map pin selection.
+3. Customer Rides shows markers, a route line, category fare ranges, safe Cash-only ride payment copy, and manual Operations assignment copy.
+4. Existing Customer credentials can continue Partner onboarding with the `Continue Partner onboarding` button enabled when visible data is valid.
+5. Partner bottom navigation is hidden before approval and no longer overlaps Android bottom navigation.
+6. Partner approved profile can still use the normal workspace tabs.
+7. Captain AAB versionCode `9` uploads successfully to Google Play internal testing.
+8. No live ride dispatch, ride payments, payouts, or auto-approval are activated.
+
 ## Unified Account QA
 
 Use one existing active customer account. Record only a masked reference such as `customer account A`.

@@ -11,7 +11,7 @@ import {
   TextInputProps,
   View
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 export function Screen({
   children,
@@ -22,11 +22,12 @@ export function Screen({
   refreshControl?: ReactElement<RefreshControlProps>;
   scroll?: boolean;
 }) {
+  const insets = useSafeAreaInsets();
   const content = <View style={styles.content}>{children}</View>;
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {scroll ? <ScrollView contentContainerStyle={styles.scrollContent} refreshControl={refreshControl}>{content}</ScrollView> : content}
+      {scroll ? <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: 132 + insets.bottom }]} refreshControl={refreshControl}>{content}</ScrollView> : content}
     </SafeAreaView>
   );
 }
@@ -138,9 +139,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: brand.colors.background
   },
-  scrollContent: {
-    paddingBottom: 112
-  },
+  scrollContent: {},
   content: {
     flex: 1,
     gap: 16,

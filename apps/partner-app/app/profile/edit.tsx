@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { RefreshControl, StyleSheet, Text } from "react-native";
-import { partnerApi, PartnerProfile, PartnerProfileUpdateInput } from "../../src/api/partner.api";
+import { partnerApi, PartnerOnboardingState, PartnerProfile, PartnerProfileUpdateInput } from "../../src/api/partner.api";
 import { AuthGate } from "../../src/components/auth-gate";
 import { Card, Hero, LoadingState, MutedText, PrimaryButton, Screen, TextField } from "../../src/components/ui";
 import { pickAndUploadImage } from "../../src/lib/upload-pickers";
@@ -57,6 +57,7 @@ function toPayload(form: ProfileFormState): PartnerProfileUpdateInput {
 function EditProfileContent() {
   const router = useRouter();
   const [profile, setProfile] = useState<PartnerProfile | null>(null);
+  const [partnerState, setPartnerState] = useState<PartnerOnboardingState | null>(null);
   const [form, setForm] = useState<ProfileFormState | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,6 +72,13 @@ function EditProfileContent() {
     else setLoading(true);
     setError(null);
     try {
+      const onboardingState = await partnerApi.onboardingState();
+      setPartnerState(onboardingState);
+      if (onboardingState.state !== "approved") {
+        setProfile(null);
+        setForm(null);
+        return;
+      }
       const nextProfile = await partnerApi.profile();
       setProfile(nextProfile);
       setForm(profileToForm(nextProfile));
@@ -128,6 +136,23 @@ function EditProfileContent() {
 
   if (loading) return <LoadingState label="Loading partner profile..." />;
 
+  if (partnerState?.state && partnerState.state !== "approved") {
+    const canContinue = ["application_not_started", "application_in_progress", "correction_required"].includes(partnerState.state);
+    return (
+      <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}>
+        <Hero eyebrow="Partner application" title="Partner profile editing is not active yet" subtitle={partnerState.message} />
+        <Card>
+          <MutedText>
+            KariGO opens profile editing after Operations approves the Partner application. This account can continue or view the current application state instead.
+          </MutedText>
+          {partnerState.correctionNote ? <MutedText>{partnerState.correctionNote}</MutedText> : null}
+          {canContinue ? <PrimaryButton label={partnerState.state === "correction_required" ? "Update requested information" : "Continue application"} onPress={() => router.replace("/register")} /> : null}
+          <PrimaryButton label="Back to Partner home" onPress={() => router.replace("/")} variant="secondary" />
+        </Card>
+      </Screen>
+    );
+  }
+
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}>
       <Hero eyebrow="Profile" title="Edit partner profile" subtitle="Keep your public business details clean for KariGO review and customer-facing surfaces." />
@@ -170,8 +195,9 @@ function EditProfileContent() {
         </Card>
       ) : (
         <Card>
-          <Text style={styles.emptyTitle}>Profile not available</Text>
-          <MutedText>{profile ? "Refresh and try again." : "This account does not have an active partner profile yet."}</MutedText>
+          <Text style={styles.emptyTitle}>Partner profile not active yet</Text>
+          <MutedText>Profile editing opens after KariGO Operations approves the Partner application.</MutedText>
+          <PrimaryButton label="Back to Partner home" onPress={() => router.replace("/")} variant="secondary" />
         </Card>
       )}
     </Screen>
