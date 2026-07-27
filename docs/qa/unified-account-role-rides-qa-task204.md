@@ -95,6 +95,69 @@ Task 205B is the real-device acceptance phase for the deployed Task 204 update s
 
 Task 205B partially completed — environment and OTA branch checks passed, but real-device acceptance remains pending for Customer App, Captain App, Partner App, phone-normalisation, unified-account onboarding, KariGO Rides booking, and safe-area/device testing.
 
+## Task 205C Fresh AAB Build Verification
+
+Recorded: 2026-07-27
+
+Owner-reported real-device evidence showed that the installed Android binaries did not apply the Task 204 OTA updates. The Customer App still showed the old `Request KariGO Ride` form, duplicate back controls, large pilot information card, unlabelled numeric fields, and marketplace bottom navigation during ride booking. The Partner App still showed the old generic role rejection for an existing Customer account. A fresh production AAB build was therefore required for Customer, Captain, and Partner.
+
+No passwords, OTPs, tokens, private account details, screenshots, direct AAB artifact URLs, keystores, or credentials were committed.
+
+### Build Profiles and Configuration
+
+| App | Profile | Package | Version | Version Code | Runtime | Channel | API Base | Result |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Customer App | `customer-production` | `com.karigo.customer` | `0.1.0` | `11` | `0.1.0` | `customer-production` | `https://karigo-8htn.onrender.com/api/v1` | Config validated |
+| KariGO Captain App | `captain-production` | `com.karigo.rider` | `0.1.0` | `8` | `0.1.0` | `captain-production` | `https://karigo-8htn.onrender.com/api/v1` | Config validated |
+| KariGO Partner App | `partner-production` | `com.karigo.partner` | `0.1.0` | `3` | `0.1.0` | `partner-production` | `https://karigo-8htn.onrender.com/api/v1` | Config validated |
+
+### EAS Build Results
+
+| App | Build ID | Build Page | Status | Artifact Type | Source Commit |
+| --- | --- | --- | --- | --- | --- |
+| Customer App | `88246831-24a5-451d-9ba1-95e3d60c6ad0` | `https://expo.dev/accounts/zamkah/projects/karigo-customer/builds/88246831-24a5-451d-9ba1-95e3d60c6ad0` | Finished | Android AAB | `9646db004a694f10fcedb9fc66e25cefeac37933` |
+| KariGO Captain App | `157b005f-8a2b-41f8-b6fe-3000cfd081f6` | `https://expo.dev/accounts/zamkah/projects/karigo-rider/builds/157b005f-8a2b-41f8-b6fe-3000cfd081f6` | Finished | Android AAB | `9646db004a694f10fcedb9fc66e25cefeac37933` |
+| KariGO Partner App | `ced51023-5d89-4bc9-9f61-7008bb4ba280` | `https://expo.dev/accounts/zamkah/projects/karigo-partner/builds/ced51023-5d89-4bc9-9f61-7008bb4ba280` | Finished | Android AAB | `9646db004a694f10fcedb9fc66e25cefeac37933` |
+
+Direct AAB artifact URLs and build log signed URLs were not recorded in this repository. Artifact checksums were not computed because the AAB files were not downloaded into the workspace.
+
+### Validation
+
+| Check | Result |
+| --- | --- |
+| Backend Prisma validate | Passed |
+| Backend typecheck | Passed |
+| Backend build | Passed |
+| Backend full test suite | Passed: 65 suites, 516 tests |
+| Customer typecheck | Passed |
+| Customer regression check | Passed |
+| Customer Expo config validation | Passed |
+| Captain typecheck | Passed |
+| Captain regression check | Passed |
+| Captain Expo config validation | Passed |
+| Partner typecheck | Passed |
+| Partner regression check | Passed |
+| Partner Expo config validation | Passed |
+| Secret/artifact scan on changed files | Passed before build-doc commit |
+| Git diff check | Passed before build-doc commit |
+
+### Installation and Acceptance Status
+
+| Area | Status | Notes |
+| --- | --- | --- |
+| Customer AAB distribution/install | Pending | Upload the AAB to Google Play internal testing, internal app sharing, or another approved AAB distribution flow. |
+| Captain AAB distribution/install | Pending | Upload the AAB to Google Play internal testing, internal app sharing, or another approved AAB distribution flow. |
+| Partner AAB distribution/install | Pending | Upload the AAB to Google Play internal testing, internal app sharing, or another approved AAB distribution flow. |
+| Customer Rides Task 204 interface appears | Pending real-device verification | Confirm the old ride form, duplicate back controls, numeric fields, and marketplace nav issue are gone. |
+| Partner unified onboarding works | Pending real-device verification | Confirm the old generic role rejection no longer appears. |
+| Captain unified onboarding works | Pending real-device verification | Confirm login does not loop and the first incomplete onboarding step opens. |
+| Phone normalisation | Pending real-device/admin verification | Confirm equivalent Nigerian phone formats resolve to one central account and one application per role. |
+| Safe-area checks | Pending real-device verification | Test Android gesture/three-button navigation and small/tall screens. |
+
+### Task 205C Acceptance Status
+
+Task 205C build phase completed — real-device installation and acceptance pending.
+
 ## Unified Account QA
 
 Use one existing active customer account. Record only a masked reference such as `customer account A`.

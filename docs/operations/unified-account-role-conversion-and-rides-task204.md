@@ -162,6 +162,55 @@ No fresh AAB was generated in Task 205B. Continue with OTA unless real-device te
 - Captain: `captain-production`
 - Partner: `partner-production`
 
+## Task 205C Fresh Production AAB Build Record
+
+Recorded: 2026-07-27
+
+Real-device screenshots and observations showed that the installed binaries stayed on old bundled code and did not apply the Task 204 OTA updates. The build path moved from OTA-only to fresh production Android AABs for Customer, Captain, and Partner.
+
+### Version Changes
+
+| App | Version Name | Previous Version Code | New Version Code | Package |
+| --- | --- | --- | --- | --- |
+| Customer App | `0.1.0` | `10` | `11` | `com.karigo.customer` |
+| KariGO Captain App | `0.1.0` | `7` | `8` | `com.karigo.rider` |
+| KariGO Partner App | `0.1.0` | `2` | `3` | `com.karigo.partner` |
+
+The Captain production profile used was `captain-production`; `rider-production` was not used.
+
+### Build Results
+
+| App | Profile | Channel | Runtime | Build ID | EAS Build Page | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Customer App | `customer-production` | `customer-production` | `0.1.0` | `88246831-24a5-451d-9ba1-95e3d60c6ad0` | `https://expo.dev/accounts/zamkah/projects/karigo-customer/builds/88246831-24a5-451d-9ba1-95e3d60c6ad0` | Finished |
+| KariGO Captain App | `captain-production` | `captain-production` | `0.1.0` | `157b005f-8a2b-41f8-b6fe-3000cfd081f6` | `https://expo.dev/accounts/zamkah/projects/karigo-rider/builds/157b005f-8a2b-41f8-b6fe-3000cfd081f6` | Finished |
+| KariGO Partner App | `partner-production` | `partner-production` | `0.1.0` | `ced51023-5d89-4bc9-9f61-7008bb4ba280` | `https://expo.dev/accounts/zamkah/projects/karigo-partner/builds/ced51023-5d89-4bc9-9f61-7008bb4ba280` | Finished |
+
+All builds used source commit `9646db004a694f10fcedb9fc66e25cefeac37933`.
+
+Direct AAB artifact URLs, signed log URLs, keystores, credentials, and downloaded artifacts were not committed. Artifact checksums were not computed because the AAB files were not downloaded to the workspace.
+
+### Distribution Procedure
+
+AAB files cannot normally be installed directly on Android devices. Use one approved route:
+
+1. Google Play internal testing.
+2. Google Play internal app sharing.
+3. Another approved bundle-to-device procedure.
+
+After installation, record the device model, Android version, installed version code, navigation mode, and whether the old binary was replaced.
+
+### Acceptance Status
+
+Fresh AAB build phase is complete. Real-device installation and acceptance remain pending for:
+
+- Customer App Task 204 Rides interface.
+- Partner existing-customer onboarding.
+- Captain existing-customer onboarding.
+- Phone-normalisation and duplicate prevention.
+- KariGO Rides pickup/destination/category/fare/request flow.
+- Android safe-area and navigation-mode checks.
+
 ## Post-Deployment Smoke Checks
 
 1. Login as an existing customer in Customer App.
