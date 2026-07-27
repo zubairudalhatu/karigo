@@ -5,6 +5,22 @@ const assert = require("node:assert/strict");
 const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const packageJson = JSON.parse(read("package.json"));
+const appJson = JSON.parse(read("app.json"));
+const easConfig = read("eas.json");
+const easJson = JSON.parse(easConfig);
+const appConfig = read("app.config.ts");
+
+assert(packageJson.dependencies?.["expo-build-properties"] === "~0.14.8", "Customer app must use Expo build-properties for Android API 36 readiness.");
+assert(JSON.stringify(appJson.expo.plugins).includes("expo-build-properties"), "Customer app base config must include build-properties.");
+assert(appConfig.includes("compileSdkVersion: 36"), "Customer app must compile against Android API 36.");
+assert(appConfig.includes("targetSdkVersion: 36"), "Customer app must target Android API 36.");
+assert(appConfig.includes('buildToolsVersion: "36.0.0"'), "Customer app must use Android build tools 36.0.0.");
+assert(appConfig.includes('package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer"'), "Customer app package names must remain stable.");
+assert(appConfig.includes("versionCode: isStaging ? 1 : 10"), "Customer production versionCode must be bumped for the next API 36 Play build.");
+assert(
+  easJson.build?.["customer-production"]?.env?.EXPO_PUBLIC_API_BASE_URL === "https://karigo-8htn.onrender.com/api/v1",
+  "Customer production profile must keep the Render production API base URL."
+);
 
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
@@ -375,8 +391,6 @@ const editAddressScreen = read("app", "addresses", "[id].tsx");
 assert(editAddressScreen.includes("Use current location"), "Edit address screen must expose location refresh.");
 assert(editAddressScreen.includes("requestForegroundPermissionsAsync"), "Edit address location refresh must request foreground permission.");
 
-const appConfig = read("app.config.ts");
-const easConfig = read("eas.json");
 assert(appConfig.includes('name: isStaging ? "KariGO Customer Staging" : "KariGO"'), "Customer production app name must remain KariGO.");
 assert(appConfig.includes("karigo-icon.png") && appConfig.includes("karigo-adaptive-icon.png"), "Customer App config must use launch-ready icon and adaptive icon assets.");
 assert(easConfig.includes("EXPO_PUBLIC_PAYMENT_LAUNCH_MODE") && easConfig.includes("flutterwave_live"), "Customer production EAS profile must default to live Flutterwave checkout mode.");

@@ -15,6 +15,14 @@ const isStaging =
 const objectValue = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 
+const androidApi36BuildProperties = {
+  android: {
+    compileSdkVersion: 36,
+    targetSdkVersion: 36,
+    buildToolsVersion: "36.0.0"
+  }
+};
+
 export default ({ config }: ExpoConfigInput) => {
   const extra = objectValue(config.extra);
 
@@ -31,7 +39,8 @@ export default ({ config }: ExpoConfigInput) => {
           photosPermission: "KariGO Partner uses photo access only when you choose product images, business logo or cover images to upload."
         }
       ],
-      "expo-document-picker"
+      "expo-document-picker",
+      ["expo-build-properties", androidApi36BuildProperties]
     ],
     icon: "./assets/karigo-icon.png",
     splash: {
@@ -50,7 +59,7 @@ export default ({ config }: ExpoConfigInput) => {
         backgroundColor: "#FFFFFF"
       },
       package: isStaging ? "com.karigo.partner.staging" : "com.karigo.partner",
-      versionCode: isStaging ? 1 : 1
+      versionCode: isStaging ? 1 : 2
     },
     ios: {
       ...config.ios,

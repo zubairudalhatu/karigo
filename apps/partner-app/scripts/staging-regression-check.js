@@ -58,6 +58,7 @@ expect(packageJson.dependencies?.["@expo/vector-icons"] === "^14.1.0", "Partner 
 expect(packageJson.dependencies?.["expo-secure-store"] === "~14.2.3", "Partner app must persist tokens with Expo SecureStore.");
 expect(packageJson.dependencies?.["expo-image-picker"] === "~16.1.4", "Partner app must declare Expo Image Picker for mobile image uploads.");
 expect(packageJson.dependencies?.["expo-document-picker"] === "~13.1.6", "Partner app must declare Expo Document Picker for mobile document uploads.");
+expect(packageJson.dependencies?.["expo-build-properties"] === "~0.14.8", "Partner app must use Expo build-properties for Android API 36 readiness.");
 expect(!JSON.stringify(packageJson).includes("eas-cli"), "Partner app must not depend on eas-cli.");
 
 expect(appJson.expo.name === "KariGO Partner", "Base app.json name must be KariGO Partner.");
@@ -66,9 +67,12 @@ expect(appJson.expo.scheme === "karigo-partner", "Base app.json scheme must be k
 expect(appJson.expo.extra?.eas?.projectId === "44e595bd-739a-430f-8d4d-99e961ac2451", "Partner app must keep the linked EAS project ID.");
 expect(appJson.expo.updates?.url === "https://u.expo.dev/44e595bd-739a-430f-8d4d-99e961ac2451", "Partner app must keep the linked EAS updates URL.");
 expect(appJson.expo.android?.package === "com.karigo.partner", "Partner app base Android package must remain com.karigo.partner.");
+expect(appJson.expo.android?.versionCode === 2, "Partner app base Android versionCode must be 2 for the next Play-ready AAB.");
 expect(appJson.expo.ios?.bundleIdentifier === "com.karigo.partner", "Partner app base iOS bundle identifier must remain com.karigo.partner.");
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-image-picker"), "Base app.json must configure Expo Image Picker.");
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-document-picker"), "Base app.json must configure Expo Document Picker.");
+expect(JSON.stringify(appJson.expo.plugins).includes("expo-build-properties"), "Base app.json must configure Expo build-properties.");
+expect(JSON.stringify(appJson.expo.plugins).includes('"targetSdkVersion":36'), "Base app.json must target Android API 36.");
 
 expect(appConfig.includes("KariGO Partner"), "App config must use KariGO Partner branding.");
 expect(appConfig.includes("KariGO Partner Staging"), "App config must support staging branding.");
@@ -77,6 +81,11 @@ expect(appConfig.includes("com.karigo.partner.staging"), "Staging package must b
 expect(appConfig.includes("karigo-partner"), "Production scheme must be karigo-partner.");
 expect(appConfig.includes("EXPO_PUBLIC_API_BASE_URL"), "App config must read EXPO_PUBLIC_API_BASE_URL.");
 expect(appConfig.includes("expo-image-picker") && appConfig.includes("expo-document-picker"), "App config must register mobile upload plugins.");
+expect(appConfig.includes("expo-build-properties"), "App config must register Android build-properties.");
+expect(appConfig.includes("compileSdkVersion: 36"), "Partner app must compile against Android API 36.");
+expect(appConfig.includes("targetSdkVersion: 36"), "Partner app must target Android API 36.");
+expect(appConfig.includes('buildToolsVersion: "36.0.0"'), "Partner app must use Android build tools 36.0.0.");
+expect(appConfig.includes("versionCode: isStaging ? 1 : 2"), "Partner production versionCode must be 2 for the next Play-ready AAB.");
 expect(!appConfig.includes("https://u.expo.dev/"), "Partner app must not configure an Expo Updates URL before EAS project linking.");
 
 expect(easJson.build?.["partner-staging"]?.distribution === "internal", "partner-staging must be internal.");

@@ -18,6 +18,14 @@ type ExpoConfigInput = {
 const objectValue = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 
+const androidApi36BuildProperties = {
+  android: {
+    compileSdkVersion: 36,
+    targetSdkVersion: 36,
+    buildToolsVersion: "36.0.0"
+  }
+};
+
 export default ({ config }: ExpoConfigInput) => {
   const extra = objectValue(config.extra);
   const existingEas = objectValue(extra.eas);
@@ -37,7 +45,8 @@ export default ({ config }: ExpoConfigInput) => {
       "expo-router",
       ["expo-location", {
         locationWhenInUsePermission: "KariGO Captain uses your location only while you are online or on an active delivery so dispatch can coordinate pickups and drop-offs."
-      }]
+      }],
+      ["expo-build-properties", androidApi36BuildProperties]
     ],
     icon: "./assets/karigo-icon.png",
     splash: {
@@ -57,7 +66,7 @@ export default ({ config }: ExpoConfigInput) => {
         backgroundColor: "#FFFFFF"
       },
       package: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider",
-      versionCode: isStaging ? 1 : 6
+      versionCode: isStaging ? 1 : 7
     },
     ios: {
       ...config.ios,

@@ -11,6 +11,7 @@ const expect = (condition, message) => {
 };
 
 const packageJson = readJson("package.json");
+const appJson = readJson("app.json");
 const easJson = readJson("eas.json");
 const appConfig = read("app.config.ts");
 const rootLayout = read("app/_layout.tsx");
@@ -52,7 +53,15 @@ expect(appConfig.includes('policy: "appVersion"'), "Rider runtimeVersion must us
 expect(packageJson.dependencies?.["expo-updates"] === "~0.28.18", "Rider app must use the Expo SDK 53-compatible expo-updates package.");
 expect(packageJson.dependencies?.["expo-location"] === "~18.1.6", "Captain app must use the Expo SDK 53-compatible expo-location package.");
 expect(packageJson.dependencies?.["expo-local-authentication"] === "~16.0.5", "Captain app must use the Expo SDK 53-compatible expo-local-authentication package.");
+expect(packageJson.dependencies?.["expo-build-properties"] === "~0.14.8", "Captain app must use Expo build-properties for Android API 36 readiness.");
 expect(appConfig.includes("expo-location") && appConfig.includes("locationWhenInUsePermission"), "Captain app config must include safe foreground location permission copy.");
+expect(JSON.stringify(appJson.expo.plugins).includes("expo-build-properties"), "Captain app base config must include build-properties.");
+expect(JSON.stringify(appJson.expo.plugins).includes('"targetSdkVersion":36'), "Captain app base config must target Android API 36.");
+expect(appConfig.includes("expo-build-properties"), "Captain app config must register Android build-properties.");
+expect(appConfig.includes("compileSdkVersion: 36"), "Captain app must compile against Android API 36.");
+expect(appConfig.includes("targetSdkVersion: 36"), "Captain app must target Android API 36.");
+expect(appConfig.includes('buildToolsVersion: "36.0.0"'), "Captain app must use Android build tools 36.0.0.");
+expect(appConfig.includes("versionCode: isStaging ? 1 : 7"), "Captain production versionCode must be bumped to 7 for the next Play-ready AAB.");
 
 expect(apiClient.includes("karigo_rider_access_token"), "Rider token storage key must be rider-specific.");
 expect(apiClient.includes("karigo_rider_refresh_token"), "Rider refresh token storage key must be rider-specific.");

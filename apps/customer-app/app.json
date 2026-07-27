@@ -10,6 +10,16 @@
         {
           "photosPermission": "KariGO uses photo library access only when you choose a customer profile photo."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0"
+          }
+        }
       ]
     ],
     "icon": "./assets/karigo-icon.png",

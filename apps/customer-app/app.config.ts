@@ -6,6 +6,14 @@ const isStaging =
   process.env.EAS_BUILD_PROFILE === "customer-staging" ||
   process.env.EAS_BUILD_PROFILE === "customer-staging-ios-simulator";
 
+const androidApi36BuildProperties = {
+  android: {
+    compileSdkVersion: 36,
+    targetSdkVersion: 36,
+    buildToolsVersion: "36.0.0"
+  }
+};
+
 export default ({ config }: { config: Record<string, any> }) => ({
   ...config,
   name: isStaging ? "KariGO Customer Staging" : "KariGO",
@@ -25,7 +33,8 @@ export default ({ config }: { config: Record<string, any> }) => ({
       {
         locationWhenInUsePermission: "KariGO uses your location only when you choose to detect a delivery or service address."
       }
-    ]
+    ],
+    ["expo-build-properties", androidApi36BuildProperties]
   ],
   icon: "./assets/karigo-icon.png",
   splash: {
@@ -48,7 +57,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
       backgroundColor: "#FFFFFF"
     },
     package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer",
-    versionCode: isStaging ? 1 : 9
+    versionCode: isStaging ? 1 : 10
   },
   ios: {
     ...config.ios,
