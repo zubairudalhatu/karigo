@@ -666,10 +666,28 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   if (pushProvider !== "mock") {
     throw new Error("PUSH_PROVIDER must remain mock until push sandbox testing is approved");
   }
-  const taxiServiceEnabled = booleanFlag(config.TAXI_SERVICE_ENABLED, "TAXI_SERVICE_ENABLED", false);
-  const taxiStagingDispatchEnabled = booleanFlag(config.TAXI_STAGING_DISPATCH_ENABLED, "TAXI_STAGING_DISPATCH_ENABLED", false);
-  if (taxiStagingDispatchEnabled && appEnvironment === "production") {
-    throw new Error("TAXI_STAGING_DISPATCH_ENABLED cannot be enabled in production");
+  const ridesServiceEnabled = booleanAlias(
+    config,
+    ["RIDES_SERVICE_ENABLED", "TAXI_SERVICE_ENABLED"],
+    "RIDES_SERVICE_ENABLED",
+    false
+  );
+  const ridesControlledPilotEnabled = booleanAlias(
+    config,
+    ["RIDES_CONTROLLED_PILOT_ENABLED", "TAXI_STAGING_DISPATCH_ENABLED"],
+    "RIDES_CONTROLLED_PILOT_ENABLED",
+    false
+  );
+  const ridesAutoDispatchEnabled = booleanFlag(config.RIDES_AUTO_DISPATCH_ENABLED, "RIDES_AUTO_DISPATCH_ENABLED", false);
+  const ridesPaymentEnabled = booleanFlag(config.RIDES_PAYMENT_ENABLED, "RIDES_PAYMENT_ENABLED", false);
+  if (ridesControlledPilotEnabled && !ridesServiceEnabled) {
+    throw new Error("RIDES_CONTROLLED_PILOT_ENABLED=true requires RIDES_SERVICE_ENABLED=true");
+  }
+  if (ridesAutoDispatchEnabled) {
+    throw new Error("RIDES_AUTO_DISPATCH_ENABLED must remain false for controlled pilot");
+  }
+  if (ridesPaymentEnabled) {
+    throw new Error("RIDES_PAYMENT_ENABLED must remain false for controlled pilot");
   }
 
   return {
@@ -795,8 +813,12 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       ? config.WHATSAPP_API_VERSION.trim()
       : "v20.0",
     PUSH_PROVIDER: pushProvider,
-    TAXI_SERVICE_ENABLED: taxiServiceEnabled,
-    TAXI_STAGING_DISPATCH_ENABLED: taxiStagingDispatchEnabled,
+    RIDES_SERVICE_ENABLED: ridesServiceEnabled,
+    RIDES_CONTROLLED_PILOT_ENABLED: ridesControlledPilotEnabled,
+    RIDES_AUTO_DISPATCH_ENABLED: ridesAutoDispatchEnabled,
+    RIDES_PAYMENT_ENABLED: ridesPaymentEnabled,
+    TAXI_SERVICE_ENABLED: ridesServiceEnabled,
+    TAXI_STAGING_DISPATCH_ENABLED: ridesControlledPilotEnabled,
     TAXI_BASE_FARE_KOBO: positiveInteger(config.TAXI_BASE_FARE_KOBO, "TAXI_BASE_FARE_KOBO", 70000),
     TAXI_PER_KM_KOBO: positiveInteger(config.TAXI_PER_KM_KOBO, "TAXI_PER_KM_KOBO", 25000),
     TAXI_PER_MINUTE_KOBO: positiveInteger(config.TAXI_PER_MINUTE_KOBO, "TAXI_PER_MINUTE_KOBO", 4000),

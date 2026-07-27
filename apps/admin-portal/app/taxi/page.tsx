@@ -16,7 +16,7 @@ const tabLabels: Record<Tab, string> = {
   applications: "Ride Applications",
   waitlist: "Customer Waitlist",
   profiles: "Ride Captain Profiles",
-  trips: "Test Ride Requests",
+  trips: "Pilot Ride Requests",
   summary: "Ride Summary"
 };
 
@@ -76,15 +76,15 @@ export default function AdminTaxiPage() {
     const adminNote = window.prompt("Internal admin note optional") ?? undefined;
     await taxiApi.reviewDriverApplication(id, { status, applicantVisibleNote, adminNote });
     setMessage(status === "APPROVED"
-      ? "Ride readiness review saved. A linked verified account can be prepared for future Ride Captain review, but public KariGO Rides remains disabled."
-      : "Ride readiness review saved. This does not activate public KariGO Rides.");
+      ? "Ride application review saved. Prepare or activate a Ride Captain profile before assigning pilot ride requests."
+      : "Ride application review saved. This does not activate automatic dispatch, ride payment or payouts.");
     await load();
   }
 
   async function createProfile(applicationId: string) {
-    if (!window.confirm("Create a staging-only Ride Captain profile from this approved application?")) return;
+    if (!window.confirm("Prepare a controlled-pilot Ride Captain profile from this approved application?")) return;
     await taxiApi.createProfileFromApplication(applicationId);
-    setMessage("Ride Captain test profile created. KariGO Rides remains staging-only.");
+    setMessage("Ride Captain pilot profile prepared. Set profile status to ACTIVE TEST before assigning ride requests.");
     await load();
   }
 
@@ -107,20 +107,24 @@ export default function AdminTaxiPage() {
     const driverProfileId = window.prompt("Ride Captain profile ID to assign", fallback) ?? "";
     if (!driverProfileId) return;
     await taxiApi.assignDriver(tripId, driverProfileId);
-    setMessage("Staging Ride Captain assigned.");
+    setMessage("Ride Captain assigned for controlled pilot.");
     await load();
   }
 
   async function cancelTrip(tripId: string) {
-    const reason = window.prompt("Cancellation reason") ?? "Admin cancelled staging test ride";
+    const reason = window.prompt("Cancellation reason") ?? "Admin cancelled controlled pilot ride";
     await taxiApi.cancelTrip(tripId, reason);
-    setMessage("Staging ride request cancelled.");
+    setMessage("Controlled pilot ride request cancelled.");
     await load();
   }
 
   return <PortalShell>
     <h1>Ride Operations</h1>
-    <p className="muted">KariGO Rides remains staging-only and feature-flagged. This page supports ride readiness, Ride Captain profiles and test ride requests; it does not perform live dispatch, maps billing or payment capture.</p>
+    <p className="muted">KariGO Rides is available for controlled pilot testing only. Admin manually reviews ride requests, assigns approved Ride Captains and monitors status history; automatic matching, ride payment and payout automation remain disabled.</p>
+    <div className="notice">
+      <strong>Operational safety note</strong>
+      <p>Use this page for Kano/Abuja pilot checks only. Customer App initiates ride requests, Admin assigns Captains manually, and Captains progress assigned trips inside KariGO Captain.</p>
+    </div>
     {message ? <p className="success">{message}</p> : null}
     <ErrorMessage>{error}</ErrorMessage>
     <div className="filters">
@@ -139,14 +143,17 @@ export default function AdminTaxiPage() {
           {application.applicantAccount ? <div className="notice">
             <strong>Applicant account</strong>
             <p><Badge>{application.applicantAccount.accountStatus}</Badge> <Badge>{application.applicantAccount.phoneVerified ? "PHONE VERIFIED" : "OTP PENDING"}</Badge> <Badge>{application.applicantAccount.passwordCreated ? "PASSWORD CREATED" : "PASSWORD PENDING"}</Badge></p>
-            {application.applicantAccount.riderProfile ? <p className="muted">Captain profile: {application.applicantAccount.riderProfile.riderCode} - {application.applicantAccount.riderProfile.verificationStatus}</p> : <p className="muted">Ride profile will be prepared only after approved account review.</p>}
+            {application.applicantAccount.riderProfile ? <p className="muted">Captain account: {application.applicantAccount.riderProfile.riderCode} - {application.applicantAccount.riderProfile.verificationStatus}</p> : <p className="muted">Ride operations profile can be prepared after approved account review.</p>}
           </div> : <p className="muted">No account-first applicant is linked to this ride application.</p>}
           {application.documentEvidence?.length ? <div className="notice">
             <strong>Document evidence</strong>
             {application.documentEvidence.map((document) => <p key={document.label}><a href={document.url} target="_blank" rel="noreferrer">{document.label}</a></p>)}
           </div> : <p className="muted">No ride document evidence supplied yet.</p>}
           <p><Badge>{application.status}</Badge></p>
-          <div className="filters">{reviewStatuses.map((status) => <button className="secondary" key={status} onClick={() => void reviewApplication(application.id, status)}>{status.replaceAll("_", " ")}</button>)}{application.applicantAccount ? null : <button onClick={() => void createProfile(application.id)}>Create legacy Ride Captain profile</button>}</div>
+          <div className="filters">
+            {reviewStatuses.map((status) => <button className="secondary" key={status} onClick={() => void reviewApplication(application.id, status)}>{status.replaceAll("_", " ")}</button>)}
+            {["APPROVED", "PROVISIONALLY_APPROVED"].includes(application.status) ? <button onClick={() => void createProfile(application.id)}>Prepare Ride Captain profile</button> : null}
+          </div>
         </article>) : <Empty>No ride applications found.</Empty>}
       </section> : null}
       {activeTab === "waitlist" ? <section className="section">
@@ -166,7 +173,7 @@ export default function AdminTaxiPage() {
           <strong>{profile.fullName}</strong>
           <p className="muted">{profile.city}, {profile.state} - {profile.phoneNumber}</p>
           <p>{[profile.vehicleMake, profile.vehicleModel, profile.vehicleYear, profile.vehiclePlateNumber].filter(Boolean).join(" ") || "Vehicle pending"}</p>
-          <p><Badge>{profile.status}</Badge> {profile.isAvailableForTaxi ? "Available" : "Offline"}</p>
+          <p><Badge>{profile.status}</Badge> {profile.isAvailableForTaxi ? "Online for assigned rides" : "Offline for rides"}</p>
           <div className="filters">{profileStatuses.map((status) => <button className="secondary" key={status} onClick={() => void updateProfile(profile.id, status)}>{status.replaceAll("_", " ")}</button>)}</div>
         </article>) : <Empty>No Ride Captain profiles yet.</Empty>}
       </section> : null}
@@ -177,9 +184,9 @@ export default function AdminTaxiPage() {
           <p className="muted">Fare estimate: NGN {Math.round(trip.estimatedFareKobo / 100).toLocaleString()} - PIN last four: {trip.tripPinLastFour ?? "hidden"}</p>
           <p><Badge>{trip.status}</Badge></p>
           <p className="muted">{trip.driver ? `Ride Captain: ${trip.driver.fullName}` : "No Ride Captain assigned"}</p>
-          <div className="filters"><button onClick={() => void assignDriver(trip.id)}>Assign Ride Captain</button><button className="secondary" onClick={() => void cancelTrip(trip.id)}>Cancel Test Ride</button></div>
+          <div className="filters"><button onClick={() => void assignDriver(trip.id)}>Assign Ride Captain</button><button className="secondary" onClick={() => void cancelTrip(trip.id)}>Cancel Pilot Ride</button></div>
           <details><summary>Timeline/events</summary>{trip.events?.map((event) => <p key={event.id}>{event.createdAt} - {event.eventType} - {event.note}</p>)}</details>
-        </article>) : <Empty>No staging ride requests yet.</Empty>}
+        </article>) : <Empty>No pilot ride requests yet.</Empty>}
       </section> : null}
       {activeTab === "summary" ? <section className="section">
         {summary ? <>
@@ -195,7 +202,7 @@ export default function AdminTaxiPage() {
           </div>
           <article className="card">
             <h2>Ride pricing defaults</h2>
-            <p className="muted">Read-only launch defaults for Kano and Abuja. This visibility does not activate live Ride dispatch or ride payment collection.</p>
+            <p className="muted">Read-only launch defaults for Kano and Abuja. This visibility does not activate automatic dispatch, ride payment collection or payout automation.</p>
             <div className="grid">
               <div className="item"><span>Launch cities</span><strong>{summary.pricingDefaults.launchCities.join(", ")}</strong></div>
               <div className="item"><span>Passenger charge</span><strong>{money(summary.pricingDefaults.perKmKobo)} / km</strong></div>

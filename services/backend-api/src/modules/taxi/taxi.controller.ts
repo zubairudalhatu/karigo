@@ -9,27 +9,27 @@ import { TaxiApplicationStatusQueryDto } from "./dto/taxi-application-status-que
 import { TaxiFareEstimateDto } from "./dto/taxi-fare-estimate.dto";
 import { TaxiService } from "./taxi.service";
 
-@ApiTags("Taxi Readiness")
+@ApiTags("KariGO Rides")
 @Controller("taxi")
 export class TaxiController {
   constructor(private readonly taxi: TaxiService) {}
 
   @Post("waitlist")
-  @ApiOperation({ summary: "Join the customer Taxi waitlist" })
+  @ApiOperation({ summary: "Join the customer KariGO Rides waitlist" })
   async joinWaitlist(@Body() dto: CreateTaxiWaitlistDto) {
-    return { message: "Taxi waitlist entry submitted", data: await this.taxi.joinWaitlist(dto) };
+    return { message: "KariGO Rides waitlist entry submitted", data: await this.taxi.joinWaitlist(dto) };
   }
 
   @Post("driver-applications")
-  @ApiOperation({ summary: "Submit a Taxi driver readiness application" })
+  @ApiOperation({ summary: "Submit a Ride Captain application" })
   async submitDriverApplication(@Body() dto: CreateTaxiDriverApplicationDto) {
-    return { message: "Taxi driver readiness application submitted", data: await this.taxi.submitDriverApplication(dto) };
+    return { message: "Ride Captain application submitted", data: await this.taxi.submitDriverApplication(dto) };
   }
 
   @Get("driver-applications/status")
-  @ApiOperation({ summary: "Check Taxi driver readiness application status" })
+  @ApiOperation({ summary: "Check Ride Captain application status" })
   async driverApplicationStatus(@Query() query: TaxiApplicationStatusQueryDto) {
-    return { message: "Taxi driver readiness application status retrieved", data: await this.taxi.publicApplicationStatus(query) };
+    return { message: "Ride Captain application status retrieved", data: await this.taxi.publicApplicationStatus(query) };
   }
 
   @Post("driver-applications/me")
@@ -37,7 +37,7 @@ export class TaxiController {
   @ApiBearerAuth()
   @ApiOperation({ summary: "Submit a Ride Captain readiness application for the authenticated KariGO account" })
   async submitDriverApplicationForCurrentUser(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateTaxiDriverApplicationDto) {
-    return { message: "Taxi driver readiness application submitted", data: await this.taxi.submitDriverApplication(dto, user.id) };
+    return { message: "Ride Captain application submitted", data: await this.taxi.submitDriverApplication(dto, user.id) };
   }
 
   @Get("driver-applications/me")
@@ -45,12 +45,12 @@ export class TaxiController {
   @ApiBearerAuth()
   @ApiOperation({ summary: "Check the authenticated user's Ride Captain readiness application status" })
   async currentUserDriverApplicationStatus(@CurrentUser() user: AuthenticatedUser) {
-    return { message: "Taxi driver readiness application status retrieved", data: await this.taxi.currentUserApplicationStatus(user.id) };
+    return { message: "Ride Captain application status retrieved", data: await this.taxi.currentUserApplicationStatus(user.id) };
   }
 
   @Post("fare-estimate")
-  @ApiOperation({ summary: "Create a staging-only public Taxi fare estimate" })
+  @ApiOperation({ summary: "Create a public KariGO Rides fare estimate when controlled pilot is enabled" })
   async fareEstimate(@Body() dto: TaxiFareEstimateDto) {
-    return { message: "Taxi fare estimate calculated", data: this.taxi.fareEstimate(dto) };
+    return { message: "KariGO Rides fare estimate calculated", data: this.taxi.fareEstimate(dto) };
   }
 }

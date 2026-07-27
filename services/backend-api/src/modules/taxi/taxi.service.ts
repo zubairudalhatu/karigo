@@ -470,10 +470,8 @@ export class TaxiService {
     if (!profile.isAvailableForTaxi) return [];
     const trips = await this.prisma.taxiTrip.findMany({
       where: {
-        OR: [
-          { status: TaxiTripStatus.REQUESTED, driverProfileId: null },
-          { status: TaxiTripStatus.DRIVER_ASSIGNED, driverProfileId: profile.id }
-        ]
+        driverProfileId: profile.id,
+        status: { in: ACTIVE_TAXI_TRIP_STATUSES }
       },
       include: this.tripInclude(),
       orderBy: { createdAt: "asc" },
@@ -488,13 +486,14 @@ export class TaxiService {
     await this.assertDriverHasNoActiveTrip(profile.id, tripId);
     const trip = await this.prisma.taxiTrip.findUnique({ where: { id: tripId } });
     if (!trip) throw new NotFoundException("Ride request not found");
-    if (trip.driverProfileId && trip.driverProfileId !== profile.id) throw new ConflictException("Ride request is assigned to another Captain");
-    const acceptableStatuses: TaxiTripStatus[] = [TaxiTripStatus.REQUESTED, TaxiTripStatus.DRIVER_ASSIGNED];
-    if (!acceptableStatuses.includes(trip.status)) {
-      throw new BadRequestException("Ride request cannot be accepted from its current status");
+    if (!trip.driverProfileId) {
+      throw new BadRequestException("Ride request must be manually assigned by KariGO Operations before it can be accepted");
+    }
+    if (trip.driverProfileId !== profile.id) throw new ConflictException("Ride request is assigned to another Captain");
+    if (trip.status !== TaxiTripStatus.DRIVER_ASSIGNED) {
+      throw new BadRequestException("Ride request must be assigned before it can be accepted");
     }
     const updated = await this.updateTripWithEvent(trip.id, {
-      driverProfile: { connect: { id: profile.id } },
       status: TaxiTripStatus.ACCEPTED,
       acceptedAt: new Date()
     }, userId, TaxiTripActorType.DRIVER, "taxi.trip.accepted", "Ride Captain accepted ride request");
@@ -593,8 +592,7 @@ export class TaxiService {
     });
     await this.audit.record(adminUserId, "admin.taxi.driver_profile.created_from_application", "TaxiDriverProfile", profile.id, {
       applicationId,
-      readinessOnly: false,
-      stagingOnly: true
+      controlledPilot: true
     });
     return this.formatDriverProfile(profile);
   }
@@ -611,7 +609,7 @@ export class TaxiService {
     await this.audit.record(adminUserId, "admin.taxi.driver_profile.status_updated", "TaxiDriverProfile", profile.id, {
       status: dto.status,
       note: dto.note,
-      stagingOnly: true
+      controlledPilot: true
     });
     return this.formatDriverProfile(profile);
   }
@@ -651,7 +649,7 @@ export class TaxiService {
     }, adminUserId, TaxiTripActorType.ADMIN, "taxi.trip.driver_assigned", "Admin assigned Ride Captain");
     await this.audit.record(adminUserId, "admin.taxi.trip.driver_assigned", "TaxiTrip", trip.id, {
       driverProfileId: profile.id,
-      stagingOnly: true
+      controlledPilot: true
     });
     return this.formatTrip(updated);
   }
@@ -664,7 +662,7 @@ export class TaxiService {
     const updated = await this.cancelTrip(trip.id, TaxiTripStatus.CANCELLED_BY_ADMIN, adminUserId, TaxiTripActorType.ADMIN, dto.reason);
     await this.audit.record(adminUserId, "admin.taxi.trip.cancelled", "TaxiTrip", trip.id, {
       reason: dto.reason,
-      stagingOnly: true
+      controlledPilot: true
     });
     return updated;
   }
@@ -857,8 +855,17 @@ export class TaxiService {
   }
 
   private assertTaxiStagingEnabled() {
-    if (!this.config.get<boolean>("TAXI_SERVICE_ENABLED", false) || !this.config.get<boolean>("TAXI_STAGING_DISPATCH_ENABLED", false)) {
-      throw new ForbiddenException("KariGO Rides dispatch is disabled. Ride requests remain behind operations approval.");
+    if (!this.config.get<boolean>("RIDES_SERVICE_ENABLED", this.config.get<boolean>("TAXI_SERVICE_ENABLED", false))) {
+      throw new ForbiddenException("KariGO Rides is preparing launch in your area.");
+    }
+    if (!this.config.get<boolean>("RIDES_CONTROLLED_PILOT_ENABLED", this.config.get<boolean>("TAXI_STAGING_DISPATCH_ENABLED", false))) {
+      throw new ForbiddenException("KariGO Rides is preparing launch in your area.");
+    }
+    if (this.config.get<boolean>("RIDES_AUTO_DISPATCH_ENABLED", false)) {
+      throw new ForbiddenException("KariGO Rides auto-dispatch is disabled during controlled pilot.");
+    }
+    if (this.config.get<boolean>("RIDES_PAYMENT_ENABLED", false)) {
+      throw new ForbiddenException("KariGO Rides payment is disabled during controlled pilot.");
     }
   }
 
@@ -914,12 +921,12 @@ export class TaxiService {
       waitingGraceMinutes: this.config.get<number>("RIDE_WAITING_GRACE_MINUTES", 5),
       vatTaxKobo,
       vatTaxConfigured: vatTaxKobo > 0,
-      dispatchEnabled: this.config.get<boolean>("TAXI_STAGING_DISPATCH_ENABLED", false)
+      dispatchEnabled: this.config.get<boolean>("RIDES_CONTROLLED_PILOT_ENABLED", this.config.get<boolean>("TAXI_STAGING_DISPATCH_ENABLED", false))
     };
   }
 
   private testModeNotice() {
-    return "KariGO Rides remains controlled by operations flags. No ride dispatch or ride payment is active unless approved.";
+    return "KariGO Rides is available for controlled pilot testing in selected areas. Manual assignment is required; ride payment and payout automation remain disabled.";
   }
 
   private decimalOrUndefined(value?: number) {
@@ -934,9 +941,9 @@ export class TaxiService {
 
   private async requireActiveTaxiDriverProfile(userId: string) {
     const profile = await this.prisma.taxiDriverProfile.findUnique({ where: { userId } });
-    if (!profile) throw new NotFoundException("Ride Captain profile not found");
+    if (!profile) throw new ForbiddenException("Ride operations will be available after KariGO approves your Captain account.");
     if (profile.status !== TaxiDriverProfileStatus.ACTIVE_TEST) {
-      throw new BadRequestException("Ride Captain profile is not active for Ride requests");
+      throw new ForbiddenException("Ride operations will be available after KariGO approves your Captain account.");
     }
     return profile;
   }
@@ -1094,7 +1101,8 @@ export class TaxiService {
       lastSeenAt: profile.lastSeenAt?.toISOString() ?? null,
       createdAt: profile.createdAt.toISOString(),
       updatedAt: profile.updatedAt.toISOString(),
-      testModeOnly: true
+      testModeOnly: true,
+      controlledPilotOnly: true
     };
   }
 

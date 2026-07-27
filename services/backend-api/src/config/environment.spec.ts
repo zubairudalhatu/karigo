@@ -88,6 +88,64 @@ describe("environment configuration", () => {
     expect(result.WHATSAPP_PROVIDER).toBe("mock");
     expect(result.WHATSAPP_API_VERSION).toBe("v20.0");
     expect(result.PUSH_PROVIDER).toBe("mock");
+    expect(result.RIDES_SERVICE_ENABLED).toBe(false);
+    expect(result.RIDES_CONTROLLED_PILOT_ENABLED).toBe(false);
+    expect(result.RIDES_AUTO_DISPATCH_ENABLED).toBe(false);
+    expect(result.RIDES_PAYMENT_ENABLED).toBe(false);
+    expect(result.TAXI_SERVICE_ENABLED).toBe(false);
+    expect(result.TAXI_STAGING_DISPATCH_ENABLED).toBe(false);
+  });
+
+  it("enables controlled KariGO Rides pilot with explicit RIDES flags", () => {
+    const result = validateEnvironment({
+      ...baseConfig(),
+      APP_ENV: "production",
+      RIDES_SERVICE_ENABLED: "true",
+      RIDES_CONTROLLED_PILOT_ENABLED: "true"
+    });
+
+    expect(result.RIDES_SERVICE_ENABLED).toBe(true);
+    expect(result.RIDES_CONTROLLED_PILOT_ENABLED).toBe(true);
+    expect(result.TAXI_SERVICE_ENABLED).toBe(true);
+    expect(result.TAXI_STAGING_DISPATCH_ENABLED).toBe(true);
+    expect(result.RIDES_AUTO_DISPATCH_ENABLED).toBe(false);
+    expect(result.RIDES_PAYMENT_ENABLED).toBe(false);
+  });
+
+  it("preserves legacy TAXI aliases for controlled Rides pilot", () => {
+    const result = validateEnvironment({
+      ...baseConfig(),
+      TAXI_SERVICE_ENABLED: "true",
+      TAXI_STAGING_DISPATCH_ENABLED: "true"
+    });
+
+    expect(result.RIDES_SERVICE_ENABLED).toBe(true);
+    expect(result.RIDES_CONTROLLED_PILOT_ENABLED).toBe(true);
+    expect(result.TAXI_SERVICE_ENABLED).toBe(true);
+    expect(result.TAXI_STAGING_DISPATCH_ENABLED).toBe(true);
+  });
+
+  it("requires the Rides service flag before controlled pilot activation", () => {
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      RIDES_CONTROLLED_PILOT_ENABLED: "true"
+    })).toThrow("RIDES_CONTROLLED_PILOT_ENABLED=true requires RIDES_SERVICE_ENABLED=true");
+  });
+
+  it("keeps Rides auto-dispatch and payment disabled during controlled pilot", () => {
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      RIDES_SERVICE_ENABLED: "true",
+      RIDES_CONTROLLED_PILOT_ENABLED: "true",
+      RIDES_AUTO_DISPATCH_ENABLED: "true"
+    })).toThrow("RIDES_AUTO_DISPATCH_ENABLED must remain false for controlled pilot");
+
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      RIDES_SERVICE_ENABLED: "true",
+      RIDES_CONTROLLED_PILOT_ENABLED: "true",
+      RIDES_PAYMENT_ENABLED: "true"
+    })).toThrow("RIDES_PAYMENT_ENABLED must remain false for controlled pilot");
   });
 
   it("converts JWT duration strings to seconds", () => {

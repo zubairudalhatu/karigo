@@ -11,7 +11,7 @@ import { TaxiCancelDto } from "./dto/taxi-cancel.dto";
 import { TaxiFareEstimateDto } from "./dto/taxi-fare-estimate.dto";
 import { TaxiService } from "./taxi.service";
 
-@ApiTags("Customer Taxi Staging")
+@ApiTags("Customer KariGO Rides")
 @ApiBearerAuth()
 @Controller("customer/taxi")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -20,32 +20,32 @@ export class CustomerTaxiController {
   constructor(private readonly taxi: TaxiService) {}
 
   @Post("fare-estimate")
-  @ApiOperation({ summary: "Create a staging-only Taxi fare estimate" })
+  @ApiOperation({ summary: "Create a controlled-pilot KariGO Rides fare estimate" })
   async fareEstimate(@CurrentUser() user: AuthenticatedUser, @Body() dto: TaxiFareEstimateDto) {
-    return { message: "Taxi fare estimate calculated", data: this.taxi.customerFareEstimate(user.id, dto) };
+    return { message: "KariGO Rides fare estimate calculated", data: this.taxi.customerFareEstimate(user.id, dto) };
   }
 
   @Post("trips")
-  @ApiOperation({ summary: "Create a staging-only Taxi test trip" })
+  @ApiOperation({ summary: "Create a controlled-pilot KariGO Rides trip request" })
   async createTrip(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateTaxiTripDto) {
-    return { message: "Test Taxi Trip requested", data: await this.taxi.createCustomerTrip(user.id, dto) };
+    return { message: "KariGO Rides request submitted", data: await this.taxi.createCustomerTrip(user.id, dto) };
   }
 
   @Get("trips")
-  @ApiOperation({ summary: "List my staging Taxi test trips" })
+  @ApiOperation({ summary: "List my controlled-pilot KariGO Rides trips" })
   async trips(@CurrentUser() user: AuthenticatedUser) {
-    return { message: "Taxi trips retrieved", data: await this.taxi.customerTrips(user.id) };
+    return { message: "KariGO Rides trips retrieved", data: await this.taxi.customerTrips(user.id) };
   }
 
   @Get("trips/:tripId")
-  @ApiOperation({ summary: "Get my staging Taxi test trip" })
+  @ApiOperation({ summary: "Get my controlled-pilot KariGO Rides trip" })
   async trip(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {
-    return { message: "Taxi trip retrieved", data: await this.taxi.customerTrip(user.id, tripId) };
+    return { message: "KariGO Rides trip retrieved", data: await this.taxi.customerTrip(user.id, tripId) };
   }
 
   @Post("trips/:tripId/cancel")
-  @ApiOperation({ summary: "Cancel my staging Taxi test trip" })
+  @ApiOperation({ summary: "Cancel my controlled-pilot KariGO Rides trip" })
   async cancel(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: TaxiCancelDto) {
-    return { message: "Taxi trip cancelled", data: await this.taxi.customerCancelTrip(user.id, tripId, dto) };
+    return { message: "KariGO Rides trip cancelled", data: await this.taxi.customerCancelTrip(user.id, tripId, dto) };
   }
 }

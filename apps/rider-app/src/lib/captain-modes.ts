@@ -13,8 +13,14 @@ export type CaptainMode = {
 };
 
 export function isTaxiStagingEnabled() {
-  return process.env.EXPO_PUBLIC_TAXI_SERVICE_ENABLED === "true" &&
+  const serviceEnabled =
+    process.env.EXPO_PUBLIC_RIDES_SERVICE_ENABLED === "true" ||
+    process.env.EXPO_PUBLIC_TAXI_SERVICE_ENABLED === "true";
+  const pilotEnabled =
+    process.env.EXPO_PUBLIC_RIDES_CONTROLLED_PILOT_ENABLED === "true" ||
     process.env.EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED === "true";
+
+  return serviceEnabled && pilotEnabled;
 }
 
 export function deliveryCaptainMode(profile?: RiderProfile | null): CaptainMode {
@@ -34,12 +40,12 @@ export function driverCaptainMode(taxiStagingEnabled = isTaxiStagingEnabled()): 
   return {
     key: "DRIVER_CAPTAIN",
     label: "Ride Captain",
-    status: taxiStagingEnabled ? "READINESS_ONLY" : "DISABLED",
-    badge: taxiStagingEnabled ? "Operations review" : "Review only",
+    status: taxiStagingEnabled ? "ACTIVE" : "DISABLED",
+    badge: taxiStagingEnabled ? "Controlled pilot" : "Review only",
     description: taxiStagingEnabled
-      ? "KariGO Rides is limited to approved operations checks. Ride dispatch remains controlled."
+      ? "Receive and progress manually assigned KariGO Rides pilot trips after approval."
       : "Submit ride and vehicle details while KariGO Rides remains gated.",
-    ctaLabel: "Ride review",
+    ctaLabel: taxiStagingEnabled ? "Ride operations" : "Ride review",
     href: "/taxi-readiness"
   };
 }

@@ -5,11 +5,14 @@ import { riderApi } from "../src/api/rider.api";
 import { taxiApi } from "../src/api/taxi.api";
 import { Button, Card, Field, Message, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
 import { useAuth } from "../src/contexts/auth-context";
+import { isTaxiStagingEnabled } from "../src/lib/captain-modes";
 import { friendlyError } from "../src/lib/errors";
 
 const vehicleTypes: TaxiVehicleType[] = ["SEDAN", "SUV", "MINI_BUS", "TRICYCLE", "OTHER"];
 const ownershipTypes: TaxiVehicleOwnership[] = ["OWNER", "LEASED", "COMPANY_ASSIGNED", "OTHER"];
-const rideReviewNotice = "Ride operations review mode. No ride fare billing, payout or public ride dispatch is active.";
+const ridePilotNotice = "KariGO Rides is running in controlled pilot mode. Captains receive only manually assigned ride trips; fare payment and payout automation remain disabled.";
+const blockedRideOperationsCopy = "Ride operations will be available after KariGO approves your Captain account.";
+const closedTripStatuses = new Set(["COMPLETED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_DRIVER", "CANCELLED_BY_ADMIN", "EXPIRED"]);
 
 const initialForm = {
   fullName: "",
@@ -66,7 +69,7 @@ export default function TaxiReadiness() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const taxiEnabled = process.env.EXPO_PUBLIC_TAXI_SERVICE_ENABLED === "true" && process.env.EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED === "true";
+  const taxiEnabled = isTaxiStagingEnabled();
 
   async function loadTaxiMode() {
     if (!taxiEnabled) return;
@@ -75,7 +78,7 @@ export default function TaxiReadiness() {
       setProfile(loadedProfile);
       setTrips(await taxiApi.availableTrips());
     } catch {
-      // Ride review form remains useful even before an approved operations profile exists.
+      // The application form remains useful before an approved Ride operations profile exists.
     }
   }
 
@@ -162,7 +165,7 @@ export default function TaxiReadiness() {
     try {
       const updated = await taxiApi.updateAvailability({ isAvailableForTaxi: !profile.isAvailableForTaxi });
       setProfile(updated);
-      setMessage(updated.isAvailableForTaxi ? "Ride review availability enabled." : "Ride review availability disabled.");
+      setMessage(updated.isAvailableForTaxi ? "Ride operations availability enabled." : "Ride operations availability disabled.");
       setTrips(await taxiApi.availableTrips());
     } catch (e) {
       setError(friendlyError(e));
@@ -177,46 +180,52 @@ export default function TaxiReadiness() {
       if (action === "start") await taxiApi.startTrip(tripId, tripPin);
       if (action === "arrivedDestination") await taxiApi.arrivedDestination(tripId);
       if (action === "complete") await taxiApi.completeTrip(tripId);
-      if (action === "cancel") await taxiApi.cancelTrip(tripId, "Ride Captain cancelled operations review ride");
+      if (action === "cancel") await taxiApi.cancelTrip(tripId, "Ride Captain cancelled controlled pilot ride");
       setTripPin("");
-      setMessage("Ride review trip updated.");
+      setMessage("Ride trip updated.");
       setTrips(await taxiApi.availableTrips());
     } catch (e) {
       setError(friendlyError(e));
     }
   }
 
-  return <Protected><Screen title="Ride review" subtitle="Prepare Ride Captain and vehicle verification details before KariGO Rides is approved for dispatch activation.">
+  return <Protected><Screen title={taxiEnabled ? "Ride operations" : "Ride review"} subtitle={taxiEnabled ? "Receive and progress manually assigned KariGO Rides pilot trips." : "Prepare Ride Captain and vehicle verification details before KariGO Rides is enabled in your area."}>
     <Card tone="soft">
-      <Text style={ui.sectionTitle}>KariGO Rides requires operations approval</Text>
-      <Text style={ui.pageIntro}>This form helps KariGO prepare Ride Captain onboarding, vehicle checks and safe ride operations. It does not activate ride jobs, dispatch, fare billing or payment.</Text>
+      <Text style={ui.sectionTitle}>{taxiEnabled ? "KariGO Rides controlled pilot" : "KariGO Rides requires operations approval"}</Text>
+      <Text style={ui.pageIntro}>{taxiEnabled ? ridePilotNotice : "This form helps KariGO prepare Ride Captain onboarding, vehicle checks and safe ride operations. It does not activate ride jobs, fare billing or payment before approval."}</Text>
     </Card>
 
     {taxiEnabled ? <Card>
-      <Text style={ui.sectionTitle}>Ride operations review</Text>
-      <Text style={ui.muted}>{rideReviewNotice}</Text>
+      <Text style={ui.sectionTitle}>Ride operations</Text>
+      <Text style={ui.muted}>{ridePilotNotice}</Text>
       {profile ? <>
         <StatusBadge status={profile.status} />
-        <Text style={ui.muted}>{profile.isAvailableForTaxi ? "Available for review ride requests" : "Offline for review ride requests"}</Text>
-        <Button title={profile.isAvailableForTaxi ? "Go offline for Ride review" : "Go online for Ride review"} onPress={toggleTaxiAvailability} />
-      </> : <Text style={ui.muted}>An approved Ride Captain review profile is required before this area appears.</Text>}
+        <Text style={ui.muted}>{profile.isAvailableForTaxi ? "Online for manually assigned ride trips" : "Offline for ride trips"}</Text>
+        <Button title={profile.isAvailableForTaxi ? "Go offline for Rides" : "Go online for Rides"} onPress={toggleTaxiAvailability} />
+      </> : <Text style={ui.muted}>{blockedRideOperationsCopy}</Text>}
     </Card> : null}
 
     {taxiEnabled && trips.length ? <Card>
-      <Text style={ui.sectionTitle}>Available review ride requests</Text>
+      <Text style={ui.sectionTitle}>Assigned ride trips</Text>
       {trips.map((trip) => <Card key={trip.id}>
         <Text style={ui.sectionTitle}>{trip.tripReference}</Text>
         <Text>{trip.pickupAddress} to {trip.destinationAddress}</Text>
         <Text>{money(trip.estimatedFareKobo)}</Text>
         <StatusBadge status={trip.status} />
-        <Button title="Accept trip" onPress={() => updateTrip(trip.id, "accept")} />
-        <Button title="Arrived pickup" tone="muted" onPress={() => updateTrip(trip.id, "arrivedPickup")} />
-        <Field placeholder="Customer trip PIN" value={tripPin} onChangeText={(value) => setTripPin(value.replace(/\D/g, "").slice(0, 6))} keyboardType="number-pad" />
-        <Button title="Start trip with PIN" tone="muted" disabled={tripPin.length !== 6} onPress={() => updateTrip(trip.id, "start")} />
-        <Button title="Arrived destination" tone="muted" onPress={() => updateTrip(trip.id, "arrivedDestination")} />
-        <Button title="Complete trip" tone="muted" onPress={() => updateTrip(trip.id, "complete")} />
-        <Button title="Cancel review ride" tone="danger" onPress={() => updateTrip(trip.id, "cancel")} />
+        {trip.status === "DRIVER_ASSIGNED" ? <Button title="Accept assigned ride" onPress={() => updateTrip(trip.id, "accept")} /> : null}
+        {trip.status === "ACCEPTED" ? <Button title="Arrived at pickup" tone="muted" onPress={() => updateTrip(trip.id, "arrivedPickup")} /> : null}
+        {trip.status === "ARRIVED_PICKUP" ? <>
+          <Field placeholder="Customer trip PIN" value={tripPin} onChangeText={(value) => setTripPin(value.replace(/\D/g, "").slice(0, 6))} keyboardType="number-pad" />
+          <Button title="Start trip with PIN" tone="muted" disabled={tripPin.length !== 6} onPress={() => updateTrip(trip.id, "start")} />
+        </> : null}
+        {trip.status === "STARTED" ? <Button title="Arrived at destination" tone="muted" onPress={() => updateTrip(trip.id, "arrivedDestination")} /> : null}
+        {trip.status === "ARRIVED_DESTINATION" ? <Button title="Complete trip" tone="muted" onPress={() => updateTrip(trip.id, "complete")} /> : null}
+        {!closedTripStatuses.has(trip.status) ? <Button title="Cancel assigned ride" tone="danger" onPress={() => updateTrip(trip.id, "cancel")} /> : null}
       </Card>)}
+    </Card> : null}
+    {taxiEnabled && profile && !trips.length ? <Card>
+      <Text style={ui.sectionTitle}>Assigned ride trips</Text>
+      <Text style={ui.muted}>No ride trip is assigned yet. KariGO Operations will assign controlled pilot ride requests manually.</Text>
     </Card> : null}
 
     {status ? <Card>

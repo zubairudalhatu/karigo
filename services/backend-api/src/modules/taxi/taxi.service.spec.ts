@@ -182,6 +182,10 @@ describe("TaxiService", () => {
   function enableTaxiStaging() {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       const values: Record<string, unknown> = {
+        RIDES_SERVICE_ENABLED: true,
+        RIDES_CONTROLLED_PILOT_ENABLED: true,
+        RIDES_AUTO_DISPATCH_ENABLED: false,
+        RIDES_PAYMENT_ENABLED: false,
         TAXI_SERVICE_ENABLED: true,
         TAXI_STAGING_DISPATCH_ENABLED: true,
         RIDE_PER_KM_KOBO: 40000,
@@ -456,7 +460,7 @@ describe("TaxiService", () => {
     }));
   });
 
-  it("blocks Taxi trip requests when staging dispatch flags are disabled", async () => {
+  it("blocks Ride trip requests when controlled pilot flags are disabled", async () => {
     await expect(service.createCustomerTrip("customer-user", {
       pickupAddress: "Tarauni, Kano",
       destinationAddress: "Zoo Road, Kano"
@@ -494,10 +498,10 @@ describe("TaxiService", () => {
         vatTaxConfigured: false
       }
     });
-    expect(result.testModeNotice).toContain("operations flags");
+    expect(result.testModeNotice).toContain("controlled pilot");
   });
 
-  it("creates staging Taxi trips with a unique reference and hashed trip PIN", async () => {
+  it("creates controlled-pilot Ride trips with a unique reference and hashed trip PIN", async () => {
     enableTaxiStaging();
     prisma.taxiTrip.findUnique.mockResolvedValue(null);
 
@@ -519,30 +523,55 @@ describe("TaxiService", () => {
     }));
   });
 
-  it("allows an approved available Taxi test driver to accept a requested trip", async () => {
+  it("returns only manually assigned active ride trips to approved available Captains", async () => {
     enableTaxiStaging();
-    prisma.taxiTrip.findUnique.mockResolvedValue(taxiTrip);
+    prisma.taxiTrip.findMany.mockResolvedValueOnce([
+      { ...taxiTrip, driverProfileId: driverProfile.id, driverProfile, status: TaxiTripStatus.DRIVER_ASSIGNED }
+    ]);
+
+    const result = await service.availableTaxiTrips("rider-user");
+
+    expect(prisma.taxiTrip.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        driverProfileId: driverProfile.id,
+        status: { in: expect.arrayContaining([TaxiTripStatus.DRIVER_ASSIGNED, TaxiTripStatus.ACCEPTED]) }
+      })
+    }));
+    expect(result).toHaveLength(1);
+    expect(result[0].status).toBe(TaxiTripStatus.DRIVER_ASSIGNED);
+  });
+
+  it("allows an approved available Ride Captain to accept a manually assigned trip", async () => {
+    enableTaxiStaging();
+    prisma.taxiTrip.findUnique.mockResolvedValue({ ...taxiTrip, driverProfileId: driverProfile.id, status: TaxiTripStatus.DRIVER_ASSIGNED });
 
     const result = await service.acceptTaxiTrip("rider-user", taxiTrip.id);
 
     expect(prisma.taxiTrip.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        driverProfile: { connect: { id: driverProfile.id } },
         status: TaxiTripStatus.ACCEPTED
       })
     }));
     expect(result.status).toBe(TaxiTripStatus.ACCEPTED);
   });
 
-  it("blocks unapproved drivers from accepting Taxi test trips", async () => {
+  it("blocks Captains from self-claiming unassigned ride requests", async () => {
     enableTaxiStaging();
-    prisma.taxiDriverProfile.findUnique.mockResolvedValueOnce({ ...driverProfile, status: TaxiDriverProfileStatus.PENDING_ACTIVATION });
+    prisma.taxiTrip.findUnique.mockResolvedValue(taxiTrip);
 
     await expect(service.acceptTaxiTrip("rider-user", taxiTrip.id)).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.taxiTrip.update).not.toHaveBeenCalled();
   });
 
-  it("rejects starting a Taxi test trip without the correct customer PIN", async () => {
+  it("blocks unapproved Captains from accepting Ride trips", async () => {
+    enableTaxiStaging();
+    prisma.taxiDriverProfile.findUnique.mockResolvedValueOnce({ ...driverProfile, status: TaxiDriverProfileStatus.PENDING_ACTIVATION });
+
+    await expect(service.acceptTaxiTrip("rider-user", taxiTrip.id)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.taxiTrip.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects starting a Ride trip without the correct customer PIN", async () => {
     enableTaxiStaging();
     prisma.taxiTrip.findFirst.mockResolvedValueOnce({
       ...taxiTrip,
@@ -556,7 +585,7 @@ describe("TaxiService", () => {
     expect(prisma.taxiTrip.update).not.toHaveBeenCalled();
   });
 
-  it("lets admins assign and cancel staging Taxi trips with audit records", async () => {
+  it("lets admins assign and cancel controlled-pilot Ride trips with audit records", async () => {
     enableTaxiStaging();
     prisma.taxiTrip.findUnique.mockResolvedValueOnce(taxiTrip).mockResolvedValueOnce({ ...taxiTrip, status: TaxiTripStatus.DRIVER_ASSIGNED });
 
@@ -576,7 +605,7 @@ describe("TaxiService", () => {
       })
     }));
     expect(audit.record).toHaveBeenCalledWith("admin-user", "admin.taxi.trip.driver_assigned", "TaxiTrip", taxiTrip.id, expect.objectContaining({
-      stagingOnly: true
+      controlledPilot: true
     }));
   });
 
