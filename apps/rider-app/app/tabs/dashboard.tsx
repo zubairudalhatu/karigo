@@ -1,10 +1,12 @@
 import { Image, StyleSheet, Text, View } from "react-native";
 import { useEffect, useMemo, useState } from "react";
 import { brand } from "@karigo/config";
+import type { TaxiDriverApplicationStatus } from "@karigo/shared-types";
 import { deliveryCaptainApplicationsApi, DeliveryCaptainApplicationStatus } from "../../src/api/delivery-captain-applications.api";
 import { riderApi, RiderProfile } from "../../src/api/rider.api";
 import { jobsApi, RiderJob } from "../../src/api/jobs.api";
 import { notificationsApi } from "../../src/api/notifications.api";
+import { taxiApi } from "../../src/api/taxi.api";
 import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
@@ -54,6 +56,7 @@ export default function RiderDashboard() {
   const [jobs, setJobs] = useState<RiderJob[]>([]);
   const [unread, setUnread] = useState(0);
   const [onboardingStatus, setOnboardingStatus] = useState<DeliveryCaptainApplicationStatus | null>(null);
+  const [rideOnboardingStatus, setRideOnboardingStatus] = useState<(TaxiDriverApplicationStatus & { exists?: boolean; nextStep?: string }) | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -66,17 +69,22 @@ export default function RiderDashboard() {
       setJobs(j);
       setUnread(n.count);
       setOnboardingStatus(null);
+      setRideOnboardingStatus(null);
       setError("");
     } catch (e) {
-      try {
-        const status = await deliveryCaptainApplicationsApi.statusForCurrentUser();
+      const [deliveryStatus, rideStatus] = await Promise.allSettled([
+        deliveryCaptainApplicationsApi.statusForCurrentUser(),
+        taxiApi.currentUserApplicationStatus()
+      ]);
+      if (deliveryStatus.status === "rejected" && rideStatus.status === "rejected") {
+        setError(friendlyError(e));
+      } else {
         setProfile(null);
         setJobs([]);
         setUnread(0);
-        setOnboardingStatus(status);
+        setOnboardingStatus(deliveryStatus.status === "fulfilled" ? deliveryStatus.value : null);
+        setRideOnboardingStatus(rideStatus.status === "fulfilled" ? rideStatus.value : null);
         setError("");
-      } catch {
-        setError(friendlyError(e));
       }
     } finally {
       setLoading(false);
@@ -119,6 +127,9 @@ export default function RiderDashboard() {
   const onboardingCopy = onboardingStatus?.exists && onboardingStatus.status !== "REJECTED"
     ? "Your Captain application is under review. KariGO will notify you after approval."
     : onboardingStatus?.message;
+  const rideOnboardingCopy = rideOnboardingStatus?.exists && rideOnboardingStatus.status !== "REJECTED"
+    ? "Your Ride Captain application is under review. KariGO Rides assignments remain controlled by Operations after approval."
+    : rideOnboardingStatus?.message;
 
   return (
     <Protected><Screen refreshing={loading} onRefresh={load}>
@@ -140,6 +151,14 @@ export default function RiderDashboard() {
         <Text style={ui.muted}>{onboardingCopy}</Text>
         <Text style={ui.muted}>Captain operations will be available after KariGO approves your application.</Text>
         <NavLink href="/auth/apply" label={onboardingStatus.exists ? "Open Captain application" : "Start Captain application"} />
+      </Card> : null}
+
+      {!profile && rideOnboardingStatus ? <Card>
+        <Text style={ui.title}>Ride Captain onboarding</Text>
+        {rideOnboardingStatus.exists ? <StatusBadge status={rideOnboardingStatus.status} /> : null}
+        <Text style={ui.muted}>{rideOnboardingCopy}</Text>
+        <Text style={ui.muted}>KariGO Rides stays manual-assignment only during controlled pilot.</Text>
+        <NavLink href="/auth/apply" label={rideOnboardingStatus.exists ? "Open Ride Captain application" : "Start Ride Captain application"} />
       </Card> : null}
 
       {profile ? <>

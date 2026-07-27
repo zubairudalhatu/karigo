@@ -19,7 +19,7 @@ export function CustomerBottomNav() {
   const cart = useCart();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const hidden = !user || pathname === "/" || pathname.startsWith("/auth");
+  const hidden = !user || pathname === "/" || pathname.startsWith("/auth") || pathname.startsWith("/taxi/request");
   if (hidden) return null;
 
   return <View style={[styles.nav, { paddingBottom: Math.max(insets.bottom, 8) }]}>

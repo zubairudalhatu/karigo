@@ -10,11 +10,13 @@ import { ListVendorOrdersQueryDto } from "./dto/list-vendor-orders-query.dto";
 import { RejectVendorOrderDto } from "./dto/reject-vendor-order.dto";
 import { VendorDashboardOrdersService } from "./vendor-dashboard-orders.service";
 
+const PARTNER_WORKSPACE_ROLES = [UserRole.VENDOR, UserRole.CUSTOMER];
+
 @ApiTags("Vendor Dashboard Orders")
 @ApiBearerAuth()
 @Controller("vendor-dashboard/orders")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.VENDOR)
+@Roles(...PARTNER_WORKSPACE_ROLES)
 export class VendorDashboardOrdersController {
   constructor(private readonly ordersService: VendorDashboardOrdersService) {}
 

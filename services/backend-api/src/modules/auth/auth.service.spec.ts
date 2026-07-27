@@ -267,6 +267,37 @@ describe("AuthService", () => {
     });
   });
 
+  it("guides existing Customer accounts to sign in for Partner onboarding instead of duplicating the account", async () => {
+    usersService.findByPhoneForAuth.mockResolvedValue({
+      id: "customer-user-1",
+      fullName: "Existing Customer",
+      phoneNumber: "+2348012345678",
+      email: "customer@example.test",
+      role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      onboardingPasswordSetAt: null,
+      deletedAt: null
+    });
+
+    const result = await service.createApplicantAccount(UserRole.VENDOR, {
+      fullName: "Existing Customer",
+      phoneNumber: "08012345678",
+      email: "customer@example.test"
+    });
+
+    expect(prisma.user.create).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      nextStep: "SIGN_IN_REQUIRED",
+      message: "This phone number already has a KariGO account. Sign in with your existing KariGO password to continue Partner onboarding.",
+      account: {
+        id: "customer-user-1",
+        role: UserRole.CUSTOMER,
+        phoneVerified: true
+      }
+    });
+  });
+
   it("verifies a Captain applicant OTP and then creates the onboarding password", async () => {
     usersService.findByPhoneForAuth.mockResolvedValueOnce({
       id: "captain-applicant-1",

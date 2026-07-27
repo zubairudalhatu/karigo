@@ -32,6 +32,14 @@ export class PublicVendorApplicationsController {
   async status(@Query() query: VendorApplicationStatusQueryDto) {
     return { message: "Vendor application status retrieved", data: await this.vendorApplicationsService.publicStatus(query) };
   }
+
+  @Get("me")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get authenticated Partner onboarding state for the central KariGO account" })
+  async currentUserStatus(@CurrentUser() user: AuthenticatedUser) {
+    return { message: "Partner onboarding state retrieved", data: await this.vendorApplicationsService.currentUserPartnerStatus(user.id) };
+  }
 }
 
 @ApiTags("Admin Vendor Applications")

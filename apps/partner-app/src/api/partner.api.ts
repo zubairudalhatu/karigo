@@ -40,6 +40,39 @@ export type PartnerProfileUpdateInput = Partial<Pick<
   | "coverImageUrl"
 >>;
 
+export interface PartnerOnboardingState {
+  authenticated: boolean;
+  state:
+    | "approved"
+    | "application_not_started"
+    | "application_in_progress"
+    | "application_submitted"
+    | "correction_required"
+    | "rejected"
+    | "restricted";
+  message: string;
+  account?: {
+    id: string;
+    fullName: string;
+    phoneNumber: string;
+    email?: string | null;
+    role: string;
+    accountStatus: string;
+    phoneVerified: boolean;
+  };
+  partnerProfile?: Pick<PartnerProfile, "id" | "businessName" | "status"> | null;
+  application?: {
+    reference: string;
+    businessName: string;
+    businessCategory: string;
+    status: string;
+    submittedAt: string;
+    reviewedAt?: string | null;
+    message: string;
+  };
+  correctionNote?: string | null;
+}
+
 export interface PartnerOrderSummary {
   id: string;
   orderNumber: string;
@@ -149,6 +182,7 @@ export interface PayoutAccountPayload {
 }
 
 export const partnerApi = {
+  onboardingState: () => api.get<PartnerOnboardingState>("vendor-applications/me"),
   profile: () => api.get<PartnerProfile>("vendors/me"),
   updateProfile: (body: PartnerProfileUpdateInput) => api.patch<PartnerProfile>("vendors/me", body),
   orders: () => api.get<PartnerOrderSummary[]>("vendor-dashboard/orders"),

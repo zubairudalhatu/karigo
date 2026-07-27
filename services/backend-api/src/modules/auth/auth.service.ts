@@ -98,12 +98,14 @@ export class AuthService {
     }
 
     if (existingByPhone) {
-      if (role === UserRole.RIDER && existingByPhone.role === UserRole.CUSTOMER && !existingByPhone.deletedAt) {
+      if ((role === UserRole.RIDER || role === UserRole.VENDOR) && existingByPhone.role === UserRole.CUSTOMER && !existingByPhone.deletedAt) {
         return this.applicantAccountResponse(
           existingByPhone,
           "SIGN_IN_REQUIRED",
           undefined,
-          "This phone number already has a KariGO account. Sign in with your existing KariGO password to continue your Captain application."
+          role === UserRole.RIDER
+            ? "This phone number already has a KariGO account. Sign in with your existing KariGO password to continue your Captain application."
+            : "This phone number already has a KariGO account. Sign in with your existing KariGO password to continue Partner onboarding."
         );
       }
       if (existingByPhone.role !== role || existingByPhone.deletedAt) {

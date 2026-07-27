@@ -1,9 +1,11 @@
-import { TaxiFareEstimate, TaxiFareEstimateInput, TaxiTrip, TaxiTripInput, TaxiWaitlistEntry, TaxiWaitlistInput } from "@karigo/shared-types";
+import { TaxiFareEstimate, TaxiFareEstimateInput, TaxiRideCategory, TaxiTrip, TaxiTripInput, TaxiWaitlistEntry, TaxiWaitlistInput } from "@karigo/shared-types";
 import { api } from "./client";
 
 export const taxiApi = {
   joinWaitlist: (body: TaxiWaitlistInput) =>
     api.post<TaxiWaitlistEntry>("taxi/waitlist", body, { authenticated: false }),
+  rideCategories: (city?: string) =>
+    api.get<TaxiRideCategory[]>(`customer/taxi/ride-categories${city ? `?city=${encodeURIComponent(city)}` : ""}`),
   fareEstimate: (body: TaxiFareEstimateInput) =>
     api.post<TaxiFareEstimate>("customer/taxi/fare-estimate", body),
   createTrip: (body: TaxiTripInput) =>

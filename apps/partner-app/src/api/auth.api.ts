@@ -23,7 +23,8 @@ export interface ApplicantOnboardingResult {
   phoneNumber?: string;
   phoneVerified?: boolean;
   email?: string | null;
-  nextStep: "CREATE_ACCOUNT" | "OTP_REQUIRED" | "PASSWORD_REQUIRED" | "READY_FOR_APPLICATION";
+  nextStep: "CREATE_ACCOUNT" | "OTP_REQUIRED" | "PASSWORD_REQUIRED" | "READY_FOR_APPLICATION" | "SIGN_IN_REQUIRED";
+  message?: string;
   otpExpiresAt?: string;
   mockOtp?: string;
 }

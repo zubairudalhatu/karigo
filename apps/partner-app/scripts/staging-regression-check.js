@@ -100,8 +100,9 @@ expect(
 expect(apiClient.includes("karigo_partner_access_token"), "Partner app must use partner-specific access token key.");
 expect(apiClient.includes("karigo_partner_refresh_token"), "Partner app must use partner-specific refresh token key.");
 expect(apiClient.includes("refreshAuth"), "Partner app must support refresh sessions.");
-expect(authContext.includes('currentUser.role === "VENDOR"'), "Partner app must currently accept approved VENDOR role accounts.");
-expect(authContext.includes("KariGO Partner app"), "Role rejection copy must use Partner app branding.");
+expect(authContext.includes("canUsePartnerApp(currentUser)"), "Partner app must authorize compatible accounts after authentication.");
+expect(authContext.includes('user.role === "VENDOR" || user.role === "CUSTOMER"'), "Partner app must accept approved Partner accounts and recognised Customer accounts.");
+expect(authContext.includes("cannot access Partner onboarding"), "Role rejection copy must use Partner onboarding branding.");
 expect(login.includes("KariGO Partner"), "Login screen must use KariGO Partner branding.");
 expect(login.includes("Start Partner Onboarding"), "Login screen must link new partners to onboarding.");
 expect(login.includes('router.push("/register")'), "Login screen must route onboarding to the in-app Partner registration flow.");
@@ -160,7 +161,10 @@ expect(partnerApi.includes("vendor/payout-account"), "Partner API must maintain 
 expect(!partnerApi.includes("admin/vendor-payout-accounts"), "Partner app must not call admin payout account endpoints.");
 
 expect(dashboard.includes("Product Seller") && dashboard.includes("Service Provider") && dashboard.includes("Both"), "Dashboard must describe supported partner types.");
-expect(dashboard.includes("Your partner profile is not active."), "Dashboard must handle missing Partner profile safely.");
+expect(dashboard.includes("Your KariGO account has been recognised."), "Dashboard must handle recognised Customer accounts without a Partner profile safely.");
+expect(dashboard.includes("Your Partner application is under review."), "Dashboard must show submitted Partner application state.");
+expect(dashboard.includes("Partner access needs support."), "Dashboard must show restricted Partner access state safely.");
+expect(dashboard.includes("Partner application was not approved."), "Dashboard must show rejected Partner application state safely.");
 expect(dashboard.includes("Contact Support"), "Missing profile state must expose support.");
 expect(dashboard.includes('router.push("/register")'), "Missing profile state must route to in-app Partner onboarding.");
 expect(dashboard.includes("No active orders yet"), "Dashboard must have a safe empty order state.");

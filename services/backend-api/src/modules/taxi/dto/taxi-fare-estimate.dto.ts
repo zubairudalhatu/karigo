@@ -58,4 +58,9 @@ export class TaxiFareEstimateDto {
   @Min(0)
   @Max(240)
   waitingMinutes?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  rideCategory?: string;
 }

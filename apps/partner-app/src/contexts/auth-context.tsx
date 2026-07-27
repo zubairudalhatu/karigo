@@ -18,6 +18,10 @@ function isAuthStatus(error: unknown): boolean {
   return error instanceof KariGoApiError && (error.status === 401 || error.status === 403);
 }
 
+function canUsePartnerApp(user: AuthenticatedUser): boolean {
+  return user.role === "VENDOR" || user.role === "CUSTOMER";
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const currentUser = await authApi.me();
         if (!active) return;
 
-        if (currentUser.role === "VENDOR") {
+        if (canUsePartnerApp(currentUser)) {
           setUser(currentUser);
         } else {
           await tokenStore.clearToken?.();
@@ -77,8 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error("Login response did not include an access token.");
           }
 
-          if (result.user.role !== "VENDOR") {
-            throw new Error("This account cannot use the KariGO Partner app.");
+          if (!canUsePartnerApp(result.user)) {
+            throw new Error("This KariGO account cannot access Partner onboarding. Contact KariGO support if this looks wrong.");
           }
 
           await tokenStore.setToken?.(result.accessToken);

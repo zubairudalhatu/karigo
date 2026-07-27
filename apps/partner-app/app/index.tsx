@@ -3,7 +3,7 @@ import { KariGoApiError, ProductSummary, VendorServiceSummary } from "@karigo/sh
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Image, Linking, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { partnerApi, PartnerOnboardingDocument, PartnerOrderSummary, PartnerProfile } from "../src/api/partner.api";
+import { partnerApi, PartnerOnboardingDocument, PartnerOnboardingState, PartnerOrderSummary, PartnerProfile } from "../src/api/partner.api";
 import { AuthGate } from "../src/components/auth-gate";
 import { Badge, Card, EmptyState, Hero, LoadingState, MutedText, PrimaryButton, Screen, StatCard } from "../src/components/ui";
 import { useAuth } from "../src/contexts/auth-context";
@@ -44,6 +44,7 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [missingProfile, setMissingProfile] = useState(false);
+  const [partnerState, setPartnerState] = useState<PartnerOnboardingState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [availabilityMessage, setAvailabilityMessage] = useState<string | null>(null);
   const [availabilitySaving, setAvailabilitySaving] = useState(false);
@@ -53,8 +54,16 @@ function DashboardContent() {
     else setLoading(true);
     setError(null);
     setMissingProfile(false);
+    setPartnerState(null);
 
     try {
+      const onboardingState = await partnerApi.onboardingState();
+      setPartnerState(onboardingState);
+      if (onboardingState.state !== "approved") {
+        setMissingProfile(true);
+        return;
+      }
+
       const [profile, orders, products, services, documents] = await Promise.all([
         partnerApi.profile(),
         partnerApi.orders().catch(() => []),
@@ -97,18 +106,33 @@ function DashboardContent() {
   if (loading) return <LoadingState />;
 
   if (missingProfile) {
+    const state = partnerState?.state ?? "application_not_started";
+    const isCorrection = state === "correction_required";
+    const canContinue = state === "application_not_started" || state === "application_in_progress" || isCorrection;
+    const title = state === "application_submitted"
+      ? "Your Partner application is under review."
+      : state === "restricted"
+        ? "Partner access needs support."
+        : state === "rejected"
+          ? "Partner application was not approved."
+          : "Your KariGO account has been recognised.";
+    const body = isCorrection && partnerState?.correctionNote
+      ? partnerState.correctionNote
+      : partnerState?.message ?? "Continue to create your Partner profile with your existing KariGO account.";
     return (
       <Screen>
         <Hero
           eyebrow="Partner profile"
-          title="Your partner profile is not active."
-          subtitle="This account is signed in, but no active KariGO Partner profile is linked to it."
+          title={title}
+          subtitle={body}
         />
         <Card>
           <MutedText>
-            If this is a new account, start Partner Onboarding. If this account was closed or removed, contact KariGO support.
+            {partnerState?.account?.phoneNumber
+              ? `Signed in as ${partnerState.account.fullName} (${partnerState.account.phoneNumber}).`
+              : "Your central KariGO account remains active for Customer access."}
           </MutedText>
-          <PrimaryButton label="Start Partner Onboarding" onPress={() => router.push("/register")} />
+          {canContinue ? <PrimaryButton label={isCorrection ? "Update application" : "Continue Partner onboarding"} onPress={() => router.push("/register")} /> : null}
           <PrimaryButton label="Contact Support" onPress={() => void Linking.openURL("https://www.karigo.com.ng/contact")} variant="secondary" />
           <PrimaryButton label="Log out" onPress={() => void logout()} variant="secondary" />
         </Card>

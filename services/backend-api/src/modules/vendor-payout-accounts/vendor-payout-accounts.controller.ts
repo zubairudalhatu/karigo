@@ -14,12 +14,13 @@ import { UpsertVendorPayoutAccountDto } from "./dto/upsert-vendor-payout-account
 import { VendorPayoutAccountsService } from "./vendor-payout-accounts.service";
 
 const PAYOUT_ACCOUNT_ADMINS = [AdminRole.SUPER_ADMIN, AdminRole.OPERATIONS_ADMIN, AdminRole.FINANCE_OFFICER, AdminRole.VENDOR_MANAGER];
+const PARTNER_WORKSPACE_ROLES = [UserRole.VENDOR, UserRole.CUSTOMER];
 
 @ApiTags("Vendor Payout Accounts")
 @ApiBearerAuth()
 @Controller("vendor/payout-account")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.VENDOR)
+@Roles(...PARTNER_WORKSPACE_ROLES)
 export class VendorPayoutAccountsController {
   constructor(private readonly payoutAccounts: VendorPayoutAccountsService) {}
 

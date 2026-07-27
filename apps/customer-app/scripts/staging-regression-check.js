@@ -149,14 +149,20 @@ assert(taxiWaitlist.includes("Join Ride Waitlist"), "Customer ride waitlist form
 assert(taxiWaitlist.includes("verified Ride Captains, vehicle checks, fare controls"), "Ride waitlist form must explain readiness-only controls.");
 assert(taxiWaitlist.includes("taxiApi.joinWaitlist"), "Customer ride waitlist must use the backend readiness endpoint.");
 const taxiRequest = read("app", "taxi", "request.tsx");
-assert(taxiRequest.includes("Request KariGO Ride"), "Customer app must include the controlled KariGO Rides request screen.");
-assert(taxiRequest.includes("KariGO Rides is available for controlled pilot testing in selected areas."), "Ride request flow must show controlled-pilot safety copy.");
+assert(taxiRequest.includes("KariGO Rides"), "Customer app must include the controlled KariGO Rides request screen.");
+assert(taxiRequest.includes("KariGO Rides Pilot - availability may be limited in your area."), "Ride request flow must show controlled-pilot safety copy.");
 assert(taxiRequest.includes("ridesControlledPilotEnabled"), "Ride request flow must be gated by the shared controlled-pilot flag helper.");
+assert(taxiRequest.includes("Use current location as pickup"), "Ride request flow must expose current-location pickup selection.");
+assert(taxiRequest.includes("Saved places"), "Ride request flow must expose saved places.");
+assert(taxiRequest.includes("Recent destinations"), "Ride request flow must expose recent destination shortcuts.");
+assert(taxiRequest.includes("Route preview"), "Ride request flow must include a staged route preview.");
+assert(taxiRequest.includes("taxiApi.rideCategories"), "Ride request flow must load backend ride categories.");
 assert(taxiRequest.includes("taxiApi.fareEstimate"), "Ride request flow must quote through the backend.");
 assert(taxiRequest.includes("taxiApi.createTrip"), "Ride request flow must create requests through the backend.");
 assert(taxiRequest.includes("Join Ride Waitlist") && taxiRequest.includes("/taxi/waitlist"), "Disabled Ride request flow must route customers to the waitlist.");
 assert(taxiRequest.includes("taxiApi.cancelTrip"), "Ride request flow must support customer cancellation before pickup.");
-assert(taxiRequest.includes("Ride payment is not collected in-app during the controlled pilot"), "Ride request flow must keep ride payment disabled.");
+assert(taxiRequest.includes("Manual assignment is required; ride payment and payout automation remain disabled."), "Ride request flow must keep ride payment and payout automation disabled.");
+assert(taxiRequest.includes("Finding a nearby Captain"), "Ride request flow must show a controlled tracking/status screen after booking.");
 assert(!taxiRequest.includes("Pay Now"), "Ride Test Mode must not show a payment action.");
 
 const smeServices = read("app", "sme-services.tsx");

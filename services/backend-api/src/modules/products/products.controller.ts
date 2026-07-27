@@ -12,6 +12,8 @@ import { UpdateProductAvailabilityDto } from "./dto/update-product-availability.
 import { UpdateProductDto } from "./dto/update-product.dto";
 import { ProductsService } from "./products.service";
 
+const PARTNER_WORKSPACE_ROLES = [UserRole.VENDOR, UserRole.CUSTOMER];
+
 @ApiTags("Products")
 @Controller("vendors/:vendorId/products")
 export class ProductsController {
@@ -45,7 +47,7 @@ export class ProductCatalogueController {
 @ApiTags("Vendor Products")
 @Controller("vendor/products")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.VENDOR)
+@Roles(...PARTNER_WORKSPACE_ROLES)
 @ApiBearerAuth()
 export class VendorProductsController {
   constructor(private readonly productsService: ProductsService) {}

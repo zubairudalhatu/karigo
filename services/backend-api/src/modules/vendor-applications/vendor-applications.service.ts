@@ -188,6 +188,86 @@ export class VendorApplicationsService {
     return this.toPublicStatus(application);
   }
 
+  async currentUserPartnerStatus(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        fullName: true,
+        phoneNumber: true,
+        email: true,
+        role: true,
+        accountStatus: true,
+        phoneVerified: true,
+        deletedAt: true,
+        vendor: {
+          select: {
+            id: true,
+            businessName: true,
+            status: true,
+            deletedAt: true
+          }
+        }
+      }
+    });
+    if (!user || user.deletedAt) throw new NotFoundException("KariGO account not found");
+    if (
+      user.accountStatus === AccountStatus.SUSPENDED ||
+      user.accountStatus === AccountStatus.BLOCKED ||
+      user.accountStatus === AccountStatus.DEACTIVATED
+    ) {
+      return {
+        authenticated: true,
+        state: "restricted",
+        account: this.partnerAccountSummary(user),
+        message: "This KariGO account is restricted. Contact KariGO support before continuing Partner onboarding."
+      };
+    }
+
+    if (user.vendor && !user.vendor.deletedAt) {
+      return {
+        authenticated: true,
+        state: user.vendor.status === VendorStatus.SUSPENDED || user.vendor.status === VendorStatus.CLOSED ? "restricted" : "approved",
+        account: this.partnerAccountSummary(user),
+        partnerProfile: user.vendor,
+        message: user.vendor.status === VendorStatus.SUSPENDED || user.vendor.status === VendorStatus.CLOSED
+          ? "This Partner profile is restricted. Contact KariGO support for help."
+          : "Approved Partner profile found. Open the Partner Workspace."
+      };
+    }
+
+    const application = await this.prisma.vendorApplication.findFirst({
+      where: {
+        deletedAt: null,
+        OR: [
+          { applicantUserId: user.id },
+          { contactPhoneNumber: user.phoneNumber },
+          ...(user.email ? [{ contactEmail: { equals: user.email, mode: "insensitive" as const } }] : [])
+        ]
+      },
+      select: APPLICATION_SELECT,
+      orderBy: { createdAt: "desc" }
+    });
+
+    if (application) {
+      return {
+        authenticated: true,
+        state: this.partnerApplicationState(application.status),
+        account: this.partnerAccountSummary(user),
+        application: this.toPublicStatus(application),
+        correctionNote: application.reviews[0]?.notes ?? null,
+        message: this.statusMessage(application.status)
+      };
+    }
+
+    return {
+      authenticated: true,
+      state: "application_not_started",
+      account: this.partnerAccountSummary(user),
+      message: "Your KariGO account has been recognised. Continue to create your Partner profile."
+    };
+  }
+
   async list(status?: VendorApplicationStatus, trash: "active" | "trashed" | "all" = "active") {
     const trashFilter = trash === "trashed" || trash === "all" ? trash : "active";
     const where: Prisma.VendorApplicationWhereInput = {
@@ -502,10 +582,6 @@ export class VendorApplicationsService {
       select: { id: true, role: true, accountStatus: true, email: true, phoneNumber: true, vendor: { select: { id: true } } }
     });
 
-    if (existingUser && existingUser.role !== UserRole.VENDOR) {
-      throw new BadRequestException("The applicant phone number or email is already linked to another account. Use a separate vendor onboarding contact.");
-    }
-
     const user = existingUser ?? await tx.user.create({
       data: {
         fullName: application.contactFullName,
@@ -614,8 +690,17 @@ export class VendorApplicationsService {
         deletedAt: true
       }
     });
-    if (!applicant || applicant.role !== UserRole.VENDOR || applicant.deletedAt) {
+    if (!applicant || applicant.deletedAt) {
       throw new BadRequestException("Create a Vendor applicant account before submitting the application.");
+    }
+    if (applicant.role === UserRole.CUSTOMER) {
+      if (!applicant.phoneVerified || applicant.accountStatus !== AccountStatus.ACTIVE) {
+        throw new BadRequestException("Sign in with an active verified KariGO account before continuing Partner onboarding.");
+      }
+      return applicant;
+    }
+    if (applicant.role !== UserRole.VENDOR) {
+      throw new BadRequestException("This KariGO account is not eligible for Partner onboarding.");
     }
     if (!applicant.phoneVerified) {
       throw new BadRequestException("Verify the Vendor applicant phone number before submitting the application.");
@@ -675,6 +760,41 @@ export class VendorApplicationsService {
       WITHDRAWN: "This application has been withdrawn."
     };
     return messages[status];
+  }
+
+  private partnerApplicationState(status: VendorApplicationStatus) {
+    const states: Record<VendorApplicationStatus, string> = {
+      DRAFT: "application_in_progress",
+      SUBMITTED: "application_submitted",
+      UNDER_REVIEW: "application_submitted",
+      CHANGES_REQUESTED: "correction_required",
+      PROVISIONALLY_APPROVED: "application_submitted",
+      APPROVED: "approved",
+      REJECTED: "rejected",
+      SUSPENDED: "restricted",
+      WITHDRAWN: "application_not_started"
+    };
+    return states[status];
+  }
+
+  private partnerAccountSummary(user: {
+    id: string;
+    fullName: string;
+    phoneNumber: string;
+    email: string | null;
+    role: UserRole;
+    accountStatus: AccountStatus;
+    phoneVerified: boolean;
+  }) {
+    return {
+      id: user.id,
+      fullName: user.fullName,
+      phoneNumber: user.phoneNumber,
+      email: user.email,
+      role: user.role,
+      accountStatus: user.accountStatus,
+      phoneVerified: user.phoneVerified
+    };
   }
 
   private async permanentDeleteSafety(application: Prisma.VendorApplicationGetPayload<{ select: typeof APPLICATION_SELECT }>) {

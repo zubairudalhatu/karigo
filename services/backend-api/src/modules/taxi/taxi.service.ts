@@ -133,6 +133,41 @@ const CLOSED_TAXI_TRIP_STATUSES: TaxiTripStatus[] = [
   TaxiTripStatus.EXPIRED
 ];
 
+const RIDE_CATEGORIES = [
+  {
+    id: "ECONOMY",
+    name: "KariGO Economy",
+    description: "Affordable everyday rides for up to 4 passengers.",
+    passengerCapacity: 4,
+    arrivalEstimateMinutes: 8,
+    fareMultiplier: 1
+  },
+  {
+    id: "COMFORT",
+    name: "KariGO Comfort",
+    description: "Newer vehicles and extra comfort for daily movement.",
+    passengerCapacity: 4,
+    arrivalEstimateMinutes: 10,
+    fareMultiplier: 1.25
+  },
+  {
+    id: "EXECUTIVE",
+    name: "KariGO Executive",
+    description: "Premium ride review category for approved vehicles.",
+    passengerCapacity: 4,
+    arrivalEstimateMinutes: 12,
+    fareMultiplier: 1.6
+  },
+  {
+    id: "XL",
+    name: "KariGO XL",
+    description: "Larger vehicle option for groups and extra space.",
+    passengerCapacity: 6,
+    arrivalEstimateMinutes: 15,
+    fareMultiplier: 1.8
+  }
+];
+
 @Injectable()
 export class TaxiService {
   constructor(
@@ -344,6 +379,11 @@ export class TaxiService {
     return this.calculateFare(dto);
   }
 
+  rideCategories(city?: string) {
+    this.assertTaxiStagingEnabled();
+    return this.enabledRideCategories(city).map((category) => this.formatRideCategory(category));
+  }
+
   customerFareEstimate(_userId: string, dto: TaxiFareEstimateDto) {
     this.assertTaxiStagingEnabled();
     return this.calculateFare(dto);
@@ -374,7 +414,7 @@ export class TaxiService {
           estimatedFareKobo: estimate.estimatedFareKobo,
           tripPinHash,
           tripPinLastFour: tripPin.slice(-4),
-          customerNote: dto.customerNote?.trim(),
+          customerNote: this.composeTripCustomerNote(dto),
           requestedAt: now
         },
         include: this.tripInclude()
@@ -389,6 +429,9 @@ export class TaxiService {
           metadata: {
             isTestMode: true,
             estimatedFareKobo: estimate.estimatedFareKobo,
+            rideCategory: dto.rideCategory?.trim() || "ECONOMY",
+            paymentMethod: dto.paymentMethod?.trim() || "Cash",
+            scheduledPickupAt: dto.scheduledPickupAt?.trim() || null,
             pricing: estimate.pricing
           } as Prisma.InputJsonValue
         }
@@ -878,10 +921,13 @@ export class TaxiService {
     if (!Number.isFinite(waitingMinutes)) throw new BadRequestException("Waiting minutes must be a valid number");
 
     const pricing = this.ridePricingDefaults();
+    const categories = this.enabledRideCategories();
+    const selectedCategory = categories.find((category) => category.id === (dto.rideCategory?.trim().toUpperCase() || "ECONOMY")) ?? categories[0];
     const billableWaitingMinutes = Math.max(0, waitingMinutes - pricing.waitingGraceMinutes);
     const distanceFareKobo = Math.round(distance * pricing.perKmKobo);
     const waitingChargeKobo = billableWaitingMinutes * pricing.waitingChargeKoboPerMinute;
-    const estimatedFareKobo = distanceFareKobo + waitingChargeKobo;
+    const baseFareKobo = distanceFareKobo + waitingChargeKobo;
+    const estimatedFareKobo = Math.round(baseFareKobo * selectedCategory.fareMultiplier);
     const karigoCommissionKobo = Math.round(estimatedFareKobo * (pricing.karigoCommissionPercent / 100));
     const captainNetEstimateKobo = Math.max(0, estimatedFareKobo - karigoCommissionKobo);
 
@@ -898,6 +944,8 @@ export class TaxiService {
       karigoCommissionKobo,
       captainNetEstimateKobo,
       currency: "NGN",
+      selectedRideCategory: this.formatRideCategory(selectedCategory, estimatedFareKobo),
+      rideCategories: categories.map((category) => this.formatRideCategory(category, Math.round(baseFareKobo * category.fareMultiplier))),
       formula: {
         perKmKobo: pricing.perKmKobo,
         waitingChargeKoboPerMinute: pricing.waitingChargeKoboPerMinute,
@@ -909,6 +957,36 @@ export class TaxiService {
       pricing,
       testModeNotice: this.testModeNotice()
     };
+  }
+
+  private enabledRideCategories(_city?: string) {
+    return RIDE_CATEGORIES;
+  }
+
+  private formatRideCategory(category: (typeof RIDE_CATEGORIES)[number], fareEstimateKobo?: number) {
+    const fareMin = fareEstimateKobo ? Math.round(fareEstimateKobo * 0.95) : undefined;
+    const fareMax = fareEstimateKobo ? Math.round(fareEstimateKobo * 1.08) : undefined;
+    return {
+      id: category.id,
+      name: category.name,
+      description: category.description,
+      passengerCapacity: category.passengerCapacity,
+      arrivalEstimateMinutes: category.arrivalEstimateMinutes,
+      fareEstimateKobo,
+      fareRangeKobo: fareMin && fareMax ? { min: fareMin, max: fareMax } : undefined,
+      available: true,
+      controlledPilotOnly: true
+    };
+  }
+
+  private composeTripCustomerNote(dto: CreateTaxiTripDto) {
+    return [
+      dto.customerNote?.trim(),
+      dto.rideCategory?.trim() ? `Ride category: ${dto.rideCategory.trim().toUpperCase()}` : null,
+      dto.paymentMethod?.trim() ? `Payment preference: ${dto.paymentMethod.trim()}` : null,
+      dto.scheduledPickupAt?.trim() ? `Scheduled pickup: ${dto.scheduledPickupAt.trim()}` : null,
+      dto.pickupInstruction?.trim() ? `Pickup instruction: ${dto.pickupInstruction.trim()}` : null
+    ].filter(Boolean).join("\n") || undefined;
   }
 
   private ridePricingDefaults() {

@@ -501,6 +501,37 @@ describe("TaxiService", () => {
     expect(result.testModeNotice).toContain("controlled pilot");
   });
 
+  it("returns ride categories and applies the selected category multiplier to fare estimates", () => {
+    enableTaxiStaging();
+
+    const categories = service.rideCategories("Kano");
+    const result = service.fareEstimate({
+      pickupAddress: "Tarauni, Kano",
+      destinationAddress: "Zoo Road, Kano",
+      estimatedDistanceKm: 6.5,
+      estimatedDurationMin: 18,
+      waitingMinutes: 8,
+      rideCategory: "COMFORT"
+    });
+
+    expect(categories).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "ECONOMY", name: "KariGO Economy" }),
+      expect.objectContaining({ id: "COMFORT", name: "KariGO Comfort" })
+    ]));
+    expect(result.selectedRideCategory).toMatchObject({ id: "COMFORT", name: "KariGO Comfort" });
+    expect(result.estimatedFareKobo).toBe(326875);
+    expect(result.rideCategories).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "ECONOMY",
+        fareEstimateKobo: 261500
+      }),
+      expect.objectContaining({
+        id: "COMFORT",
+        fareEstimateKobo: 326875
+      })
+    ]));
+  });
+
   it("creates controlled-pilot Ride trips with a unique reference and hashed trip PIN", async () => {
     enableTaxiStaging();
     prisma.taxiTrip.findUnique.mockResolvedValue(null);
@@ -509,17 +540,31 @@ describe("TaxiService", () => {
       pickupAddress: "Tarauni, Kano",
       destinationAddress: "Zoo Road, Kano",
       estimatedDistanceKm: 6.5,
-      estimatedDurationMin: 18
+      estimatedDurationMin: 18,
+      rideCategory: "COMFORT",
+      paymentMethod: "CASH_ON_DELIVERY",
+      scheduledPickupAt: "2026-07-28T09:30:00.000Z",
+      pickupInstruction: "Meet at the main gate"
     });
     const createCall = prisma.taxiTrip.create.mock.calls[0][0];
 
     expect(createCall.data.tripReference).toMatch(/^KGO-TAXI-TRIP-2026-/);
+    expect(createCall.data.customerNote).toContain("Ride category: COMFORT");
+    expect(createCall.data.customerNote).toContain("Payment preference: CASH_ON_DELIVERY");
+    expect(createCall.data.customerNote).toContain("Pickup instruction: Meet at the main gate");
     expect(result.tripPin).toMatch(/^\d{6}$/);
     expect(createCall.data.tripPinHash).not.toBe(result.tripPin);
     expect(createCall.data.tripPinLastFour).toBe(result.tripPin.slice(-4));
     expect(await bcrypt.compare(result.tripPin, createCall.data.tripPinHash)).toBe(true);
     expect(prisma.taxiTripEvent.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ eventType: "taxi.trip.requested" })
+      data: expect.objectContaining({
+        eventType: "taxi.trip.requested",
+        metadata: expect.objectContaining({
+          rideCategory: "COMFORT",
+          paymentMethod: "CASH_ON_DELIVERY",
+          scheduledPickupAt: "2026-07-28T09:30:00.000Z"
+        })
+      })
     }));
   });
 

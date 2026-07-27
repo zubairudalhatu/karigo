@@ -110,6 +110,22 @@ export interface TaxiFareEstimateInput {
   estimatedDistanceKm?: number;
   estimatedDurationMin?: number;
   waitingMinutes?: number;
+  rideCategory?: string;
+}
+
+export interface TaxiRideCategory {
+  id: string;
+  name: string;
+  description: string;
+  passengerCapacity: number;
+  arrivalEstimateMinutes: number;
+  fareEstimateKobo?: number;
+  fareRangeKobo?: {
+    min: number;
+    max: number;
+  };
+  available: boolean;
+  controlledPilotOnly: true;
 }
 
 export interface TaxiFareEstimate {
@@ -125,6 +141,8 @@ export interface TaxiFareEstimate {
   karigoCommissionKobo?: number;
   captainNetEstimateKobo?: number;
   currency: "NGN";
+  selectedRideCategory?: TaxiRideCategory;
+  rideCategories?: TaxiRideCategory[];
   formula?: {
     perKmKobo: number;
     waitingChargeKoboPerMinute: number;
@@ -150,6 +168,9 @@ export interface TaxiRidePricingDefaults {
 
 export interface TaxiTripInput extends TaxiFareEstimateInput {
   customerNote?: string;
+  paymentMethod?: string;
+  scheduledPickupAt?: string;
+  pickupInstruction?: string;
 }
 
 export interface TaxiDriverProfile {

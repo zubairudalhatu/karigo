@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -18,6 +18,12 @@ import { TaxiService } from "./taxi.service";
 @Roles(UserRole.CUSTOMER)
 export class CustomerTaxiController {
   constructor(private readonly taxi: TaxiService) {}
+
+  @Get("ride-categories")
+  @ApiOperation({ summary: "List controlled-pilot KariGO Rides categories available for booking" })
+  async rideCategories(@Query("city") city?: string) {
+    return { message: "KariGO Rides categories retrieved", data: this.taxi.rideCategories(city) };
+  }
 
   @Post("fare-estimate")
   @ApiOperation({ summary: "Create a controlled-pilot KariGO Rides fare estimate" })

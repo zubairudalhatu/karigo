@@ -1,5 +1,8 @@
 export function normalizeNigerianPhoneNumber(value: string): string {
-  const normalized = value.trim().replace(/[\s()-]/g, "");
+  const normalized = value
+    .trim()
+    .replace(/[^\d+]/g, "")
+    .replace(/(?!^)\+/g, "");
 
   if (/^0\d{10}$/.test(normalized)) {
     return `+234${normalized.slice(1)}`;

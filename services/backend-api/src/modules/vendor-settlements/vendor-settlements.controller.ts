@@ -9,11 +9,13 @@ import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.in
 import { ListVendorSettlementsQueryDto } from "./dto/list-vendor-settlements-query.dto";
 import { VendorSettlementsService } from "./vendor-settlements.service";
 
+const PARTNER_WORKSPACE_ROLES = [UserRole.VENDOR, UserRole.CUSTOMER];
+
 @ApiTags("Vendor Settlements")
 @ApiBearerAuth()
 @Controller("vendor/settlements")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.VENDOR)
+@Roles(...PARTNER_WORKSPACE_ROLES)
 export class VendorSettlementsController {
   constructor(private readonly settlements: VendorSettlementsService) {}
 

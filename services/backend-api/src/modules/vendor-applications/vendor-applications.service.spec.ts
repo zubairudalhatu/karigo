@@ -184,6 +184,85 @@ describe("VendorApplicationsService", () => {
     expect(result).toMatchObject({ status: VendorApplicationStatus.SUBMITTED });
   });
 
+  it("allows an active verified Customer account to submit Partner onboarding without creating a duplicate user", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: "customer-user-1",
+      role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      onboardingPasswordSetAt: null,
+      deletedAt: null
+    });
+
+    await service.create(baseDto);
+
+    expect(prisma.vendorApplication.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        applicant: { connect: { id: "customer-user-1" } },
+        contactPhoneNumber: "+2348030000000"
+      })
+    }));
+  });
+
+  it("returns a recognised Partner onboarding state for an existing Customer account without an application", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: "customer-user-1",
+      fullName: "Existing Customer",
+      phoneNumber: "+2348030000000",
+      email: "customer@example.test",
+      role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      deletedAt: null,
+      vendor: null
+    });
+    prisma.vendorApplication.findFirst.mockResolvedValueOnce(null);
+
+    await expect(service.currentUserPartnerStatus("customer-user-1")).resolves.toMatchObject({
+      authenticated: true,
+      state: "application_not_started",
+      account: {
+        id: "customer-user-1",
+        role: UserRole.CUSTOMER,
+        phoneVerified: true
+      },
+      message: "Your KariGO account has been recognised. Continue to create your Partner profile."
+    });
+  });
+
+  it("returns submitted Partner application status for a central Customer account", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: "customer-user-1",
+      fullName: "Existing Customer",
+      phoneNumber: "+2348030000000",
+      email: "customer@example.test",
+      role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      deletedAt: null,
+      vendor: null
+    });
+    prisma.vendorApplication.findFirst.mockResolvedValueOnce({
+      ...vendorApplication,
+      applicantUserId: "customer-user-1",
+      applicant: {
+        ...vendorApplication.applicant,
+        id: "customer-user-1",
+        role: UserRole.CUSTOMER,
+        accountStatus: AccountStatus.ACTIVE
+      }
+    });
+
+    await expect(service.currentUserPartnerStatus("customer-user-1")).resolves.toMatchObject({
+      authenticated: true,
+      state: "application_submitted",
+      application: {
+        reference: vendorApplication.reference,
+        status: VendorApplicationStatus.SUBMITTED
+      }
+    });
+  });
+
   it("rejects invalid vendor application phone numbers before persistence", async () => {
     await expect(service.create({
       ...baseDto,

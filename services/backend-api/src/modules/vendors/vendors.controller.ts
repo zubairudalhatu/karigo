@@ -20,6 +20,8 @@ interface RequestWithHeaders {
   headers: Record<string, string | string[] | undefined>;
 }
 
+const PARTNER_WORKSPACE_ROLES = [UserRole.VENDOR, UserRole.CUSTOMER];
+
 @ApiTags("Vendors")
 @Controller("vendors")
 export class VendorsController {
@@ -27,7 +29,7 @@ export class VendorsController {
 
   @Get("me")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get the authenticated vendor profile" })
   async me(@CurrentUser() user: AuthenticatedUser) {
@@ -36,7 +38,7 @@ export class VendorsController {
 
   @Patch("me")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Update the authenticated vendor profile" })
   async update(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateVendorProfileDto) {
@@ -45,7 +47,7 @@ export class VendorsController {
 
   @Get("team")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "List authenticated vendor team members and invitations" })
   async team(@CurrentUser() user: AuthenticatedUser) {
@@ -54,7 +56,7 @@ export class VendorsController {
 
   @Post("team")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Create a safe vendor team invitation without sending email or SMS" })
   async inviteTeamMember(@CurrentUser() user: AuthenticatedUser, @Body() dto: InviteVendorTeamMemberDto) {
@@ -63,7 +65,7 @@ export class VendorsController {
 
   @Patch("team/:memberId")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Update a vendor team member role" })
   async updateTeamMember(@CurrentUser() user: AuthenticatedUser, @Param("memberId", ParseUUIDPipe) memberId: string, @Body() dto: UpdateVendorTeamMemberDto) {
@@ -72,7 +74,7 @@ export class VendorsController {
 
   @Patch("team/:memberId/revoke")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Revoke a pending vendor team invitation" })
   async revokeTeamMember(@CurrentUser() user: AuthenticatedUser, @Param("memberId", ParseUUIDPipe) memberId: string) {
@@ -81,7 +83,7 @@ export class VendorsController {
 
   @Get("branches")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "List authenticated vendor branches" })
   async branches(@CurrentUser() user: AuthenticatedUser) {
@@ -90,7 +92,7 @@ export class VendorsController {
 
   @Post("branches")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Create a vendor branch/location" })
   async createBranch(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpsertVendorBranchDto) {
@@ -99,7 +101,7 @@ export class VendorsController {
 
   @Patch("branches/:branchId")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Update a vendor branch/location" })
   async updateBranch(@CurrentUser() user: AuthenticatedUser, @Param("branchId", ParseUUIDPipe) branchId: string, @Body() dto: Partial<UpsertVendorBranchDto>) {
@@ -108,7 +110,7 @@ export class VendorsController {
 
   @Get("audit-logs")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "List authenticated vendor audit logs" })
   async auditLogs(@CurrentUser() user: AuthenticatedUser) {
@@ -117,7 +119,7 @@ export class VendorsController {
 
   @Get("onboarding-documents")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "List authenticated vendor onboarding documents" })
   async onboardingDocuments(@CurrentUser() user: AuthenticatedUser) {
@@ -126,7 +128,7 @@ export class VendorsController {
 
   @Post("onboarding-documents")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Submit vendor onboarding document metadata" })
   async uploadOnboardingDocument(@CurrentUser() user: AuthenticatedUser, @Body() dto: ApplicationDocumentDto) {
@@ -135,7 +137,7 @@ export class VendorsController {
 
   @Post("uploads")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 10 * 1024 * 1024 } }))
   @ApiBearerAuth()
   @ApiOperation({ summary: "Upload a vendor-scoped file for onboarding, catalogue images or branding" })
@@ -145,7 +147,7 @@ export class VendorsController {
 
   @Get("services")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "List authenticated vendor service catalogue entries" })
   async services(@CurrentUser() user: AuthenticatedUser) {
@@ -154,7 +156,7 @@ export class VendorsController {
 
   @Post("services")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Create a vendor service catalogue entry" })
   async createService(@CurrentUser() user: AuthenticatedUser, @Body() dto: VendorServiceInputDto) {
@@ -163,7 +165,7 @@ export class VendorsController {
 
   @Patch("services/:serviceId")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Update a vendor service catalogue entry" })
   async updateService(@CurrentUser() user: AuthenticatedUser, @Param("serviceId", ParseUUIDPipe) serviceId: string, @Body() dto: UpdateVendorServiceDto) {
@@ -172,7 +174,7 @@ export class VendorsController {
 
   @Delete("services/:serviceId")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Archive a vendor service catalogue entry" })
   async archiveService(@CurrentUser() user: AuthenticatedUser, @Param("serviceId", ParseUUIDPipe) serviceId: string) {
