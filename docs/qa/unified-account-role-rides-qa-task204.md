@@ -188,9 +188,13 @@ Task 205D addresses the next real-device findings after the Task 205C AABs:
 
 | App | Profile | Package | Version Code | Build ID | Artifact Type | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Customer App | `customer-production` | `com.karigo.customer` | `12` | Pending | Android AAB | Pending EAS build |
-| KariGO Captain App | `captain-production` | `com.karigo.rider` | `9` | Pending | Android AAB | Pending EAS build |
-| KariGO Partner App | `partner-production` | `com.karigo.partner` | `3` | Pending OTA update ID | OTA update | Pending EAS Update |
+| Customer App | `customer-production` | `com.karigo.customer` | `12` | `1952bd4e-bec1-45a2-95d2-57191333dba8` | Android AAB | Finished |
+| KariGO Captain App | `captain-production` | `com.karigo.rider` | `9` | `33734820-a737-417f-803a-542564f2c350` | Android AAB | Finished |
+| KariGO Partner App | `partner-production` | `com.karigo.partner` | `3` | `019fa54d-0cfe-7dba-8499-060a383ee959` | OTA update | Published |
+
+Partner OTA group ID: `87e3cd47-8155-4666-b7ea-643e1418cf11`.
+
+Customer build note: the EAS build completed from commit `2ee9e05e761a31629e778a86bf064ec18aa54a47`, but EAS reported no production environment variable for the Android Google Maps API key. If the installed Customer build shows a blank map or Maps API key error, configure `GOOGLE_MAPS_ANDROID_API_KEY` or `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY` in EAS/approved secret manager and rebuild the Customer AAB.
 
 Direct AAB artifact URLs, signed build log URLs, screenshots, keystores, credentials, OTPs, tokens, and private account details must not be recorded in this file.
 
@@ -218,7 +222,7 @@ Direct AAB artifact URLs, signed build log URLs, screenshots, keystores, credent
 
 ### Task 205D Real-Device Acceptance Status
 
-Implementation and build preparation are complete. Final real-device acceptance remains pending until the new Customer and Captain AABs are uploaded to Google Play internal testing, installed by testers, and the Partner production update is confirmed on-device.
+Implementation and build phase are complete. Final real-device acceptance remains pending until the new Customer and Captain AABs are uploaded to Google Play internal testing, installed by testers, and the Partner production update is confirmed on-device.
 
 Required real-device checks:
 
@@ -229,7 +233,8 @@ Required real-device checks:
 5. Partner bottom navigation is hidden before approval and no longer overlaps Android bottom navigation.
 6. Partner approved profile can still use the normal workspace tabs.
 7. Captain AAB versionCode `9` uploads successfully to Google Play internal testing.
-8. No live ride dispatch, ride payments, payouts, or auto-approval are activated.
+8. Customer Rides map renders successfully after Android Maps SDK key configuration is confirmed.
+9. No live ride dispatch, ride payments, payouts, or auto-approval are activated.
 
 ## Unified Account QA
 

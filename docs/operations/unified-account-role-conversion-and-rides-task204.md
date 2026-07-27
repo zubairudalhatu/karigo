@@ -242,9 +242,13 @@ Task 205D moves the post-Task-205C fixes into a release-candidate build path:
 
 | App | Required Action | Reason |
 | --- | --- | --- |
-| Customer App | Build fresh production AAB | Native map dependency requires a new binary. |
-| KariGO Captain App | Build fresh production AAB | Play upload retry needs versionCode `9`. |
-| KariGO Partner App | Publish production EAS Update | Fix is JavaScript-only; fresh AAB is optional if OTA does not apply. |
+| Customer App | Fresh production AAB built: `1952bd4e-bec1-45a2-95d2-57191333dba8` | Native map dependency requires a new binary. |
+| KariGO Captain App | Fresh production AAB built: `33734820-a737-417f-803a-542564f2c350` | Play upload retry needs versionCode `9`. |
+| KariGO Partner App | Production OTA published: `019fa54d-0cfe-7dba-8499-060a383ee959` | Fix is JavaScript-only; fresh AAB is optional if OTA does not apply. |
+
+Partner OTA group ID: `87e3cd47-8155-4666-b7ea-643e1418cf11`.
+
+Customer build caveat: the Customer AAB build completed successfully, but the EAS build output reported no production Google Maps API key environment variable. Operations must confirm `GOOGLE_MAPS_ANDROID_API_KEY` or `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY` is configured before relying on Android map rendering. If the installed build shows a blank map, configure the key through EAS/approved secret manager and rebuild the Customer AAB.
 
 ### Post-Upload Acceptance
 
