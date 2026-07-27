@@ -113,16 +113,16 @@ export class AuthController {
   }
 
   @Post("password-reset/request")
-  @ApiOperation({ summary: "Request an OTP for customer password reset" })
+  @ApiOperation({ summary: "Request an OTP for customer or partner password reset" })
   async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
     return {
-      message: "If the customer account is eligible, a password reset OTP has been sent.",
+      message: "If the account is eligible, a password reset OTP has been sent.",
       data: await this.authService.requestPasswordReset(dto)
     };
   }
 
   @Post("password-reset/confirm")
-  @ApiOperation({ summary: "Confirm a customer password reset with OTP" })
+  @ApiOperation({ summary: "Confirm a customer or partner password reset with OTP" })
   async confirmPasswordReset(@Body() dto: ConfirmPasswordResetDto) {
     return {
       message: "Password reset completed",

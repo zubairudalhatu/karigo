@@ -429,6 +429,36 @@ describe("AuthService", () => {
     }));
   });
 
+  it("allows vendor password reset without activating a pending vendor account", async () => {
+    usersService.findByPhoneForAuth.mockResolvedValue({
+      id: "vendor-user-1",
+      role: UserRole.VENDOR,
+      phoneNumber: "+2348012345678",
+      accountStatus: AccountStatus.PENDING,
+      deletedAt: null
+    });
+    otpService.issue.mockResolvedValue({ otp: "123456", expiresAt: new Date("2030-01-01") });
+
+    const request = await service.requestPasswordReset({ phoneNumber: "+2348012345678" });
+    expect(request).toMatchObject({ requestAccepted: true, mockOtp: "123456" });
+    expect(otpService.issue).toHaveBeenCalledWith("vendor-user-1", "+2348012345678", { enforceCooldown: true });
+
+    const result = await service.confirmPasswordReset({
+      phoneNumber: "+2348012345678",
+      otp: "123456",
+      newPassword: "NewPassword1"
+    });
+
+    expect(result).toEqual({ passwordReset: true });
+    expect(otpService.verify).toHaveBeenCalledWith("vendor-user-1", "123456");
+    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "vendor-user-1" },
+      data: expect.not.objectContaining({
+        accountStatus: AccountStatus.ACTIVE
+      })
+    }));
+  });
+
   it("changes customer password only after the current password matches", async () => {
     const passwordHash = await hash("OldPassword1", 4);
     usersService.findByIdForAuth.mockResolvedValue({

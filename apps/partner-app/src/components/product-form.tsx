@@ -3,6 +3,7 @@ import type { ProductCategory, ProductSummary, VendorProductInput } from "@karig
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Card, MutedText, PrimaryButton, TextField } from "./ui";
+import { pickAndUploadImage } from "../lib/upload-pickers";
 
 const productCategories: Array<{ value: ProductCategory; label: string }> = [
   { value: "FOOD", label: "Food" },
@@ -81,6 +82,7 @@ export function PartnerProductForm({
   const initialState = useMemo(() => productToForm(initialProduct), [initialProduct]);
   const [form, setForm] = useState(initialState);
   const [error, setError] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   async function submit() {
     const validationError = validate(form);
@@ -90,6 +92,19 @@ export function PartnerProductForm({
     }
     setError(null);
     await onSubmit(toProductInput(form));
+  }
+
+  async function uploadProductImage() {
+    setUploadingImage(true);
+    setError(null);
+    try {
+      const uploaded = await pickAndUploadImage("product-image");
+      if (uploaded) setForm((current) => ({ ...current, imageUrl: uploaded.url }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Product image could not be uploaded.");
+    } finally {
+      setUploadingImage(false);
+    }
   }
 
   return (
@@ -140,7 +155,13 @@ export function PartnerProductForm({
         autoCapitalize="none"
         onChangeText={(imageUrl) => setForm({ ...form, imageUrl })}
       />
-      <MutedText>Mobile product image upload is still handled from Partner Workspace. Paste the approved HTTPS image URL here for now.</MutedText>
+      <PrimaryButton
+        label={uploadingImage ? "Uploading image..." : "Upload product image"}
+        onPress={() => void uploadProductImage()}
+        disabled={uploadingImage}
+        variant="secondary"
+      />
+      <MutedText>Choose an image from your device or paste an approved HTTPS image URL. Accepted image types are JPG, PNG and WebP.</MutedText>
       <View style={styles.choiceRow}>
         <Pressable
           accessibilityRole="button"

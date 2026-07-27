@@ -4,7 +4,14 @@
     "slug": "karigo-partner",
     "scheme": "karigo-partner",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "KariGO Partner uses photo access only when you choose product images, business logo or cover images to upload."
+        }
+      ],
+      "expo-document-picker"
     ],
     "icon": "./assets/karigo-icon.png",
     "splash": {

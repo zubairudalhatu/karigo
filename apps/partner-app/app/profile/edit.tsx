@@ -4,6 +4,7 @@ import { RefreshControl, StyleSheet, Text } from "react-native";
 import { partnerApi, PartnerProfile, PartnerProfileUpdateInput } from "../../src/api/partner.api";
 import { AuthGate } from "../../src/components/auth-gate";
 import { Card, Hero, LoadingState, MutedText, PrimaryButton, Screen, TextField } from "../../src/components/ui";
+import { pickAndUploadImage } from "../../src/lib/upload-pickers";
 
 interface ProfileFormState {
   businessName: string;
@@ -60,6 +61,8 @@ function EditProfileContent() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,6 +107,25 @@ function EditProfileContent() {
     }
   }
 
+  async function uploadBrandImage(kind: "logo" | "cover") {
+    if (!form) return;
+    const setBusy = kind === "logo" ? setUploadingLogo : setUploadingCover;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const uploaded = await pickAndUploadImage(kind);
+      if (uploaded) {
+        setForm(kind === "logo" ? { ...form, logoUrl: uploaded.url } : { ...form, coverImageUrl: uploaded.url });
+        setMessage(`${kind === "logo" ? "Logo" : "Cover image"} uploaded. Save profile to keep it.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `${kind === "logo" ? "Logo" : "Cover image"} could not be uploaded.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) return <LoadingState label="Loading partner profile..." />;
 
   return (
@@ -129,8 +151,20 @@ function EditProfileContent() {
           <TextField label="Opening time" placeholder="08:00" value={form.openingTime} onChangeText={(openingTime) => setForm({ ...form, openingTime })} />
           <TextField label="Closing time" placeholder="21:00" value={form.closingTime} onChangeText={(closingTime) => setForm({ ...form, closingTime })} />
           <TextField label="Logo URL" placeholder="https://..." value={form.logoUrl} autoCapitalize="none" onChangeText={(logoUrl) => setForm({ ...form, logoUrl })} />
+          <PrimaryButton
+            label={uploadingLogo ? "Uploading logo..." : "Upload logo"}
+            onPress={() => void uploadBrandImage("logo")}
+            disabled={uploadingLogo || saving}
+            variant="secondary"
+          />
           <TextField label="Cover image URL" placeholder="https://..." value={form.coverImageUrl} autoCapitalize="none" onChangeText={(coverImageUrl) => setForm({ ...form, coverImageUrl })} />
-          <MutedText>Logo and cover uploads remain available in Partner Workspace. Mobile editing accepts approved HTTPS URLs for now.</MutedText>
+          <PrimaryButton
+            label={uploadingCover ? "Uploading cover..." : "Upload cover image"}
+            onPress={() => void uploadBrandImage("cover")}
+            disabled={uploadingCover || saving}
+            variant="secondary"
+          />
+          <MutedText>Choose logo and cover images from your device or paste approved HTTPS URLs. Save profile after upload to keep the new branding.</MutedText>
           <PrimaryButton label={saving ? "Saving..." : "Save profile"} onPress={() => void submit()} disabled={saving} />
           <PrimaryButton label="Back to profile" onPress={() => router.replace("/profile")} variant="secondary" disabled={saving} />
         </Card>

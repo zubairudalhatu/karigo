@@ -23,7 +23,16 @@ export default ({ config }: ExpoConfigInput) => {
     name: isStaging ? "KariGO Partner Staging" : "KariGO Partner",
     slug: "karigo-partner",
     scheme: isStaging ? "karigo-partner-staging" : "karigo-partner",
-    plugins: ["expo-router"],
+    plugins: [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          photosPermission: "KariGO Partner uses photo access only when you choose product images, business logo or cover images to upload."
+        }
+      ],
+      "expo-document-picker"
+    ],
     icon: "./assets/karigo-icon.png",
     splash: {
       image: "./assets/karigo-logo.png",

@@ -21,7 +21,7 @@ export function PartnerBottomNav() {
   const pathname = usePathname();
   const router = useRouter();
 
-  if (pathname.startsWith("/auth")) return null;
+  if (pathname.startsWith("/auth") || pathname.startsWith("/register")) return null;
 
   return (
     <View style={styles.wrap}>

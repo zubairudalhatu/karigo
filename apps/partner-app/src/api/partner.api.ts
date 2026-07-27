@@ -166,6 +166,8 @@ export const partnerApi = {
     api.patch<ProductSummary>(`vendor/products/${productId}/availability`, body),
   services: () => api.get<VendorServiceSummary[]>("vendors/services"),
   documents: () => api.get<PartnerOnboardingDocument[]>("vendors/onboarding-documents"),
+  uploadOnboardingDocument: (body: { documentType: string; documentName?: string; documentUrl: string }) =>
+    api.post<PartnerOnboardingDocument>("vendors/onboarding-documents", body),
   settlements: (status: VendorSettlementFilter = "ALL") =>
     api.get<VendorSettlementsResult>(`vendor/settlements${status === "ALL" ? "" : `?status=${status}`}`),
   payoutAccount: () => api.get<VendorPayoutAccount | null>("vendor/payout-account"),

@@ -108,7 +108,7 @@ function DashboardContent() {
           <MutedText>
             If this is a new account, start Partner Onboarding. If this account was closed or removed, contact KariGO support.
           </MutedText>
-          <PrimaryButton label="Start Partner Onboarding" onPress={() => void Linking.openURL("https://vendor.karigo.com.ng/register")} />
+          <PrimaryButton label="Start Partner Onboarding" onPress={() => router.push("/register")} />
           <PrimaryButton label="Contact Support" onPress={() => void Linking.openURL("https://www.karigo.com.ng/contact")} variant="secondary" />
           <PrimaryButton label="Log out" onPress={() => void logout()} variant="secondary" />
         </Card>
@@ -195,7 +195,7 @@ function DashboardContent() {
           <Badge label={documentPending > 0 ? "Needs review" : "Ready check"} tone={documentPending > 0 ? "warning" : "info"} />
         </View>
         <MutedText>
-          Upload and verification workflows stay tied to the approved Partner Workspace. This app currently gives mobile visibility and route access.
+          Upload onboarding documents from your phone and track KariGO review status from the Partner App.
         </MutedText>
         <PrimaryButton label="View documents" onPress={() => router.push("/documents")} variant="secondary" />
       </Card>

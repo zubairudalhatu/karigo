@@ -1,12 +1,13 @@
 import { brand } from "@karigo/config";
-import { Redirect } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
-import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Card, LoadingState, PrimaryButton, Screen, TextField } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 
 export default function LoginScreen() {
   const { loading, login, user } = useAuth();
+  const router = useRouter();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -62,9 +63,10 @@ export default function LoginScreen() {
           label={submitting ? "Signing in..." : "Sign in"}
           onPress={submit}
         />
+        <PrimaryButton label="Forgot password" onPress={() => router.push("/auth/forgot-password")} variant="secondary" />
         <PrimaryButton
           label="Start Partner Onboarding"
-          onPress={() => void Linking.openURL("https://vendor.karigo.com.ng/register")}
+          onPress={() => router.push("/register")}
           variant="secondary"
         />
       </Card>

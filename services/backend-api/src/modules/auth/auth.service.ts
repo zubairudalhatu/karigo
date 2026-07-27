@@ -23,6 +23,8 @@ import { ConfirmPasswordResetDto } from "./dto/confirm-password-reset.dto";
 import { RequestPasswordResetDto } from "./dto/request-password-reset.dto";
 import { RequestVendorActivationLinkDto } from "./dto/request-vendor-activation-link.dto";
 
+const PASSWORD_RESET_USER_ROLES: UserRole[] = [UserRole.CUSTOMER, UserRole.VENDOR];
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -243,7 +245,7 @@ export class AuthService {
 
   async requestPasswordReset(dto: RequestPasswordResetDto) {
     const user = await this.usersService.findByPhoneForAuth(dto.phoneNumber);
-    if (!user || user.deletedAt || user.role !== UserRole.CUSTOMER) {
+    if (!user || user.deletedAt || !PASSWORD_RESET_USER_ROLES.includes(user.role)) {
       return { requestAccepted: true };
     }
 
@@ -257,7 +259,7 @@ export class AuthService {
 
   async confirmPasswordReset(dto: ConfirmPasswordResetDto) {
     const user = await this.usersService.findByPhoneForAuth(dto.phoneNumber);
-    if (!user || user.deletedAt || user.role !== UserRole.CUSTOMER) {
+    if (!user || user.deletedAt || !PASSWORD_RESET_USER_ROLES.includes(user.role)) {
       throw new BadRequestException("OTP is invalid or expired");
     }
 
@@ -268,7 +270,7 @@ export class AuthService {
       data: {
         passwordHash,
         phoneVerified: true,
-        ...(user.accountStatus === AccountStatus.PENDING
+        ...(user.role === UserRole.CUSTOMER && user.accountStatus === AccountStatus.PENDING
           ? { accountStatus: AccountStatus.ACTIVE }
           : {})
       }
