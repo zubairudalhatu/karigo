@@ -18,6 +18,7 @@ export default function DeliveryCaptainApplicationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [actioning, setActioning] = useState("");
 
   async function load() {
     setLoading(true);
@@ -36,11 +37,25 @@ export default function DeliveryCaptainApplicationsPage() {
   async function review(application: DeliveryCaptainApplication, nextStatus: DeliveryCaptainApplicationStatus) {
     const applicantVisibleNote = window.prompt("Applicant-visible note optional") ?? undefined;
     const adminNote = window.prompt("Internal admin note optional") ?? undefined;
-    await deliveryCaptainApplicationsApi.review(application.id, { status: nextStatus, applicantVisibleNote, adminNote });
-    setMessage(nextStatus === "APPROVED"
-      ? "Delivery Captain review saved. If the account-first applicant is verified, the linked Captain account can be activated for approved login. Dispatch and payouts remain controlled separately."
-      : "Delivery Captain application review saved.");
-    await load();
+    if (nextStatus === "REJECTED" && !applicantVisibleNote?.trim() && !adminNote?.trim()) {
+      setError("Rejecting a Delivery Captain application requires an applicant-visible or internal reason.");
+      return;
+    }
+    if (!window.confirm(`Save ${nextStatus.replaceAll("_", " ")} for ${application.fullName}?`)) return;
+    try {
+      setError("");
+      setMessage("");
+      setActioning(application.id);
+      await deliveryCaptainApplicationsApi.review(application.id, { status: nextStatus, applicantVisibleNote, adminNote });
+      setMessage(nextStatus === "APPROVED"
+        ? "Delivery Captain review saved. If the account-first applicant is verified, the linked Captain account can be activated for approved login. Dispatch and payouts remain controlled separately."
+        : "Delivery Captain application review saved.");
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    } finally {
+      setActioning("");
+    }
   }
 
   return <PortalShell>
@@ -73,7 +88,7 @@ export default function DeliveryCaptainApplicationsPage() {
         {application.adminNote ? <p className="muted">Internal note: {application.adminNote}</p> : null}
         <p><Badge>{application.status}</Badge> <span className="muted">{application.deliveryOnly ? "Delivery-only review" : "Review"}</span></p>
         <p className="muted">{application.launchWarning}</p>
-        <div className="filters">{reviewStatuses.map((nextStatus) => <button className="secondary" key={nextStatus} onClick={() => void review(application, nextStatus)}>{nextStatus.replaceAll("_", " ")}</button>)}</div>
+        <div className="filters">{reviewStatuses.map((nextStatus) => <button className="secondary" disabled={actioning === application.id || nextStatus === application.status} key={nextStatus} onClick={() => void review(application, nextStatus)}>{nextStatus.replaceAll("_", " ")}</button>)}</div>
       </article>) : <Empty>No Delivery Captain applications found.</Empty>}
     </section>}
   </PortalShell>;

@@ -39,6 +39,30 @@ export interface AdminVendor {
   onboardingDocuments?: VendorOnboardingDocument[];
 }
 
+export interface AdminUserSummary {
+  id: string;
+  fullName: string;
+  phoneNumber: string;
+  email?: string | null;
+  role: string;
+  adminRole?: string | null;
+  accountStatus: string;
+  createdAt: string;
+}
+
+export interface AdminRiderSummary {
+  id: string;
+  riderCode: string;
+  phoneNumber: string;
+  vehicleType?: string | null;
+  availabilityStatus: string;
+  verificationStatus: string;
+  currentLatitude?: string | null;
+  currentLongitude?: string | null;
+  currentLocationUpdatedAt?: string | null;
+  user: { id: string; fullName: string; accountStatus: string };
+}
+
 export interface VendorOnboardingDocument {
   id: string;
   documentType: string;
@@ -103,7 +127,7 @@ export interface VendorActivationLinkResult {
 }
 
 export const managementApi = {
-  users: () => api.get<any[]>("admin/users"),
+  users: () => api.get<AdminUserSummary[]>("admin/users"),
   vendors: () => api.get<AdminVendor[]>("admin/vendors"),
   trashedVendors: () => api.get<AdminVendor[]>("admin/vendors/trash"),
   trashVendor: (vendorId: string, reason?: string) => api.patch<AdminVendor>(`admin/vendors/${vendorId}/trash`, { reason }),
@@ -112,10 +136,16 @@ export const managementApi = {
     api.delete<{ vendorId: string; permanentlyDeleted: boolean }>(`admin/vendors/${vendorId}`, { body: { confirmation } }),
   createVendorActivationLink: (vendorId: string) => api.post<VendorActivationLinkResult>(`admin/vendors/${vendorId}/activation-link`),
   updateVendorStatus: (vendorId: string, status: string, note?: string) => api.patch<AdminVendor>(`admin/vendors/${vendorId}/status`, { status, note }),
+  updateVendorLifecycle: (vendorId: string, action: "SUSPEND" | "REACTIVATE", reason: string) =>
+    api.patch<AdminVendor>(`admin/vendors/${vendorId}/lifecycle`, { action, reason }),
   vendorOnboardingDocuments: (vendorId: string) => api.get<VendorOnboardingDocument[]>(`admin/vendors/${vendorId}/onboarding-documents`),
   reviewVendorOnboardingDocument: (vendorId: string, documentId: string, status: string, adminNote?: string) =>
     api.patch<VendorOnboardingDocument>(`admin/vendors/${vendorId}/onboarding-documents/${documentId}/review`, { status, adminNote }),
-  riders: () => api.get<any[]>("admin/riders"),
+  riders: () => api.get<AdminRiderSummary[]>("admin/riders"),
+  updateRiderLifecycle: (riderId: string, action: "SUSPEND" | "REACTIVATE", reason: string) =>
+    api.patch<AdminRiderSummary>(`admin/riders/${riderId}/lifecycle`, { action, reason }),
+  updateCustomerLifecycle: (userId: string, action: "SUSPEND" | "REACTIVATE", reason: string) =>
+    api.patch<AdminUserSummary>(`admin/users/${userId}/lifecycle`, { action, reason }),
   auditLogs: () => api.get<AdminAuditLog[]>("admin/audit-logs"),
   loginActivity: () => api.get<LoginActivity[]>("admin/login-activity"),
   integrationSettings: () => api.get<IntegrationSettings>("admin/settings/integration-modes")

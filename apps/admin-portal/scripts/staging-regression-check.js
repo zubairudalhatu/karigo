@@ -70,6 +70,10 @@ assert(vendorApplicationsPage.includes("Restore from Trash"), "Admin vendor appl
 assert(vendorApplicationsPage.includes("Permanently Delete"), "Admin vendor applications page must expose guarded permanent delete for trashed applications.");
 assert(vendorApplicationsPage.includes("Trash reason"), "Admin vendor applications page must require a trash reason field.");
 assert(vendorApplicationsPage.includes("Type DELETE"), "Admin vendor applications permanent delete must require typed confirmation.");
+assert(vendorApplicationsPage.includes("Rejecting a vendor application requires a reason."), "Admin vendor applications page must require a rejection reason.");
+assert(vendorApplicationsPage.includes("status === application.status"), "Admin vendor applications page must hide duplicate review transitions.");
+assert(vendorApplicationsPage.includes("actioning === application.id"), "Admin vendor applications review controls must disable while processing.");
+assert(vendorApplicationsPage.includes("Approval does not automatically publish a storefront"), "Admin vendor applications page must state approval guardrails.");
 const vendorApplicationsApiSource = read("src", "api", "vendor-applications.api.ts");
 assert(vendorApplicationsApiSource.includes("trash: (id: string"), "Admin vendor applications API must call trash endpoint.");
 assert(vendorApplicationsApiSource.includes("restore: (id: string"), "Admin vendor applications API must call restore endpoint.");
@@ -79,6 +83,33 @@ const vendorsPage = read("app", "vendors", "page.tsx");
 assert(vendorsPage.includes("Move Partner Account to Trash / Close"), "Admin Vendors page must use Partner Account trash wording.");
 assert(vendorsPage.includes("Permanently Delete Partner Account"), "Admin Vendors page must expose guarded Partner Account permanent delete.");
 assert(vendorsPage.includes("Type DELETE"), "Admin Vendors page must require typed confirmation before permanent delete.");
+assert(vendorsPage.includes("managementApi.updateVendorLifecycle"), "Admin Vendors page must call audited vendor lifecycle endpoint.");
+assert(vendorsPage.includes("A reason of at least 5 characters is required."), "Admin Vendors lifecycle controls must require a meaningful reason.");
+assert(vendorsPage.includes("Suspending this partner blocks workspace access"), "Admin Vendors page must warn about suspension impact.");
+assert(vendorsPage.includes("Reactivate"), "Admin Vendors page must expose reactivation for suspended vendors.");
+assert(vendorsPage.includes("window.confirm"), "Admin Vendors lifecycle controls must require confirmation.");
+
+const managementApiSource = read("src", "api", "management.api.ts");
+assert(managementApiSource.includes("admin/vendors/${vendorId}/lifecycle"), "Admin management API must call vendor lifecycle endpoint.");
+assert(managementApiSource.includes("admin/riders/${riderId}/lifecycle"), "Admin management API must call Captain lifecycle endpoint.");
+assert(managementApiSource.includes("admin/users/${userId}/lifecycle"), "Admin management API must call Customer lifecycle endpoint.");
+
+const ridersPage = read("app", "riders", "page.tsx");
+assert(ridersPage.includes("Captains"), "Admin Riders page must use Captain-facing operations copy.");
+assert(ridersPage.includes("managementApi.updateRiderLifecycle"), "Admin Captains page must call audited Captain lifecycle endpoint.");
+assert(ridersPage.includes("Suspend Captain"), "Admin Captains page must expose suspension for active Captains.");
+assert(ridersPage.includes("Reactivate Captain"), "Admin Captains page must expose reactivation for suspended Captains.");
+assert(ridersPage.includes("A reason of at least 5 characters is required."), "Admin Captains lifecycle controls must require a meaningful reason.");
+assert(ridersPage.includes("do not activate payouts or KariGO Rides"), "Admin Captains page must state lifecycle controls do not activate payouts or rides.");
+assert(ridersPage.includes("window.confirm"), "Admin Captains lifecycle controls must require confirmation.");
+
+const usersPage = read("app", "users", "page.tsx");
+assert(usersPage.includes("Customer account lifecycle controls are audited and reason-required"), "Admin Users page must explain Customer lifecycle scope.");
+assert(usersPage.includes("managementApi.updateCustomerLifecycle"), "Admin Users page must call audited Customer lifecycle endpoint.");
+assert(usersPage.includes("Suspend Customer"), "Admin Users page must expose Customer suspension.");
+assert(usersPage.includes("Reactivate Customer"), "Admin Users page must expose Customer reactivation.");
+assert(usersPage.includes("does not add Customer approval"), "Admin Users page must avoid implying Customer approval workflow.");
+assert(usersPage.includes("preserving order, wallet, utility and support history"), "Admin Users page must state Customer history is preserved.");
 
 const deliveryCaptainApplicationsPage = read("app", "delivery-captain-applications", "page.tsx");
 assert(deliveryCaptainApplicationsPage.includes("Delivery Captain Applications"), "Admin Delivery Captain applications page must exist.");
@@ -91,6 +122,9 @@ assert(deliveryCaptainApplicationsPage.includes("PASSWORD CREATED"), "Admin Deli
 assert(deliveryCaptainApplicationsPage.includes("Guarantor:"), "Admin Delivery Captain applications page must show guarantor verification information.");
 assert(deliveryCaptainApplicationsPage.includes("Applicant-visible note optional"), "Admin Delivery Captain review must support applicant-visible notes.");
 assert(deliveryCaptainApplicationsPage.includes("Internal admin note optional"), "Admin Delivery Captain review must support internal notes.");
+assert(deliveryCaptainApplicationsPage.includes("Rejecting a Delivery Captain application requires an applicant-visible or internal reason."), "Admin Delivery Captain review must require a rejection reason.");
+assert(deliveryCaptainApplicationsPage.includes("nextStatus === application.status"), "Admin Delivery Captain review must hide duplicate review transitions.");
+assert(deliveryCaptainApplicationsPage.includes("actioning === application.id"), "Admin Delivery Captain review controls must disable while processing.");
 assert(!deliveryCaptainApplicationsPage.includes("Create Test Ride Captain Profile") && !deliveryCaptainApplicationsPage.includes("Activate dispatch") && !deliveryCaptainApplicationsPage.includes("Pay Now"), "Admin Delivery Captain applications page must not expose activation, ride or payment actions.");
 const deliveryCaptainApplicationsApi = read("src", "api", "delivery-captain-applications.api.ts");
 assert(deliveryCaptainApplicationsApi.includes("admin/delivery-captain-applications"), "Admin Delivery Captain API must call admin application endpoints.");

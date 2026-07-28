@@ -299,6 +299,10 @@ export class VendorApplicationsService {
     });
     if (!current) throw new NotFoundException("Vendor application not found");
     if (current.deletedAt) throw new BadRequestException("Trashed vendor applications must be restored before review.");
+    if (current.status === dto.status) throw new BadRequestException(`Vendor application is already ${dto.status.replaceAll("_", " ")}.`);
+    if (dto.status === VendorApplicationStatus.REJECTED && !dto.notes?.trim()) {
+      throw new BadRequestException("Rejecting a vendor application requires a reason.");
+    }
 
     const shouldApprove = dto.status === VendorApplicationStatus.APPROVED;
     const activationToken = shouldApprove ? randomBytes(40).toString("base64url") : null;
@@ -324,6 +328,22 @@ export class VendorApplicationsService {
           toStatus: dto.status,
           note: dto.notes,
           changedById: reviewerId
+        }
+      });
+      await tx.adminAuditLog.create({
+        data: {
+          adminUserId: reviewerId,
+          action: "admin.vendor_application.reviewed",
+          entityType: "VendorApplication",
+          entityId: applicationId,
+          newValue: {
+            applicationReference: current.reference,
+            businessName: current.businessName,
+            previousStatus: current.status,
+            newStatus: dto.status,
+            hasReason: Boolean(dto.notes?.trim()),
+            operationalGuardrail: "Approval does not activate payouts, pharmacy marketplace, or unrestricted public operations."
+          } as Prisma.InputJsonValue
         }
       });
       const linkedVendor = shouldApprove

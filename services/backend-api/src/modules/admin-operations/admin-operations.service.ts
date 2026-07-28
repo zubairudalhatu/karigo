@@ -19,6 +19,7 @@ import { createHash, randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AccountLifecycleAction } from "./dto/account-lifecycle-action.dto";
 import { ListAdminOrdersQueryDto } from "./dto/list-admin-orders-query.dto";
 import { ReportDateRangeDto } from "./dto/report-date-range.dto";
 
@@ -310,7 +311,11 @@ export class AdminOperationsService {
   }
 
   users() {
-    return this.prisma.user.findMany({ where: { deletedAt: null }, select: { id: true, fullName: true, phoneNumber: true, email: true, role: true, adminRole: true, accountStatus: true, createdAt: true }, orderBy: { createdAt: "desc" } });
+    return this.prisma.user.findMany({
+      where: { deletedAt: null },
+      select: { id: true, fullName: true, phoneNumber: true, email: true, role: true, adminRole: true, accountStatus: true, createdAt: true },
+      orderBy: { createdAt: "desc" }
+    });
   }
   vendors() {
     return this.prisma.vendor.findMany({
@@ -438,7 +443,22 @@ export class AdminOperationsService {
     return { vendorId: vendor.id, permanentlyDeleted: true };
   }
   riders() {
-    return this.prisma.rider.findMany({ where: { deletedAt: null }, select: { id: true, riderCode: true, phoneNumber: true, vehicleType: true, availabilityStatus: true, verificationStatus: true, currentLatitude: true, currentLongitude: true, currentLocationUpdatedAt: true, user: { select: { fullName: true, accountStatus: true } } } });
+    return this.prisma.rider.findMany({
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        riderCode: true,
+        phoneNumber: true,
+        vehicleType: true,
+        availabilityStatus: true,
+        verificationStatus: true,
+        currentLatitude: true,
+        currentLongitude: true,
+        currentLocationUpdatedAt: true,
+        user: { select: { id: true, fullName: true, accountStatus: true } }
+      },
+      orderBy: { createdAt: "desc" }
+    });
   }
 
   auditLogs() {
@@ -619,15 +639,30 @@ export class AdminOperationsService {
       where: { id: vendorId },
       select: {
         id: true,
+        userId: true,
         businessName: true,
         status: true,
         deletedAt: true,
-        onboardingDocuments: { select: { id: true, verificationStatus: true } }
+        onboardingDocuments: { select: { id: true, verificationStatus: true } },
+        user: { select: { accountStatus: true, deletedAt: true } }
       }
     });
     if (!vendor) throw new NotFoundException("Vendor not found");
     if (vendor.deletedAt) throw new BadRequestException("Trashed vendors cannot be marked operational.");
+    if (vendor.status === status) throw new BadRequestException(`Vendor is already ${status.replaceAll("_", " ")}.`);
+    if (status === VendorStatus.SUSPENDED) {
+      return this.updateVendorLifecycle(adminUserId, vendorId, "SUSPEND", this.requiredReason(note, "Vendor suspension requires a reason."));
+    }
+    if (vendor.status === VendorStatus.SUSPENDED && status === VendorStatus.ACTIVE) {
+      return this.updateVendorLifecycle(adminUserId, vendorId, "REACTIVATE", this.requiredReason(note, "Vendor reactivation requires a reason."));
+    }
+    if (status === VendorStatus.CLOSED || status === VendorStatus.REJECTED) {
+      this.requiredReason(note, "Vendor closure or rejection requires a reason.");
+    }
     if (status === VendorStatus.ACTIVE) {
+      if (vendor.status !== VendorStatus.PENDING_APPROVAL) {
+        throw new BadRequestException("Only pending vendors can be marked operational through this action. Use reactivation for suspended vendors.");
+      }
       if (!vendor.onboardingDocuments.length) {
         throw new BadRequestException("At least one approved onboarding document is required before marking this vendor operational.");
       }
@@ -638,7 +673,10 @@ export class AdminOperationsService {
     }
     const updated = await this.prisma.vendor.update({
       where: { id: vendor.id },
-      data: { status },
+      data: {
+        status,
+        ...(status === VendorStatus.ACTIVE ? { isOpen: false } : {})
+      },
       select: VENDOR_CLEANUP_SELECT
     });
     await this.audit.record(adminUserId, "admin.vendor.status_updated", "Vendor", vendor.id, {
@@ -647,6 +685,209 @@ export class AdminOperationsService {
       note
     });
     return this.vendorCleanupView(updated);
+  }
+
+  async updateVendorLifecycle(adminUserId: string, vendorId: string, action: AccountLifecycleAction, reason: string) {
+    const safeReason = this.requiredReason(reason, "Vendor lifecycle action requires a reason.");
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { id: vendorId },
+      select: {
+        id: true,
+        userId: true,
+        businessName: true,
+        status: true,
+        deletedAt: true,
+        user: { select: { accountStatus: true, deletedAt: true } }
+      }
+    });
+    if (!vendor) throw new NotFoundException("Vendor not found");
+    if (vendor.deletedAt || vendor.user.deletedAt) throw new BadRequestException("Trashed vendors cannot be changed through lifecycle controls.");
+
+    const now = new Date();
+    if (action === "SUSPEND") {
+      if (vendor.status !== VendorStatus.ACTIVE || vendor.user.accountStatus !== AccountStatus.ACTIVE) {
+        throw new BadRequestException("Only active vendors can be suspended.");
+      }
+      const updated = await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({ where: { id: vendor.userId }, data: { accountStatus: AccountStatus.SUSPENDED } });
+        await tx.vendor.update({ where: { id: vendor.id }, data: { status: VendorStatus.SUSPENDED, isOpen: false } });
+        await this.revokeUserSessions(tx, vendor.userId, now);
+        return tx.vendor.findUniqueOrThrow({ where: { id: vendor.id }, select: VENDOR_CLEANUP_SELECT });
+      });
+      await this.audit.record(adminUserId, "admin.vendor.suspended", "Vendor", vendor.id, {
+        reason: safeReason,
+        previousStatus: vendor.status,
+        newStatus: VendorStatus.SUSPENDED,
+        previousAccountStatus: vendor.user.accountStatus,
+        newAccountStatus: AccountStatus.SUSPENDED,
+        sessionRevoked: true
+      });
+      return this.vendorCleanupView(updated);
+    }
+
+    if (vendor.status !== VendorStatus.SUSPENDED) {
+      throw new BadRequestException("Only suspended vendors can be reactivated.");
+    }
+    if (vendor.user.accountStatus === AccountStatus.BLOCKED || vendor.user.accountStatus === AccountStatus.DEACTIVATED) {
+      throw new BadRequestException("Blocked or deactivated vendor users cannot be reactivated through this action.");
+    }
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: vendor.userId }, data: { accountStatus: AccountStatus.ACTIVE } });
+      await tx.vendor.update({ where: { id: vendor.id }, data: { status: VendorStatus.ACTIVE, isOpen: false } });
+      return tx.vendor.findUniqueOrThrow({ where: { id: vendor.id }, select: VENDOR_CLEANUP_SELECT });
+    });
+    await this.audit.record(adminUserId, "admin.vendor.reactivated", "Vendor", vendor.id, {
+      reason: safeReason,
+      previousStatus: vendor.status,
+      newStatus: VendorStatus.ACTIVE,
+      previousAccountStatus: vendor.user.accountStatus,
+      newAccountStatus: AccountStatus.ACTIVE,
+      operationalNote: "Vendor is reactivated but remains closed until the Partner opens the workspace."
+    });
+    return this.vendorCleanupView(updated);
+  }
+
+  async updateRiderLifecycle(adminUserId: string, riderId: string, action: AccountLifecycleAction, reason: string) {
+    const safeReason = this.requiredReason(reason, "Captain lifecycle action requires a reason.");
+    const rider = await this.prisma.rider.findUnique({
+      where: { id: riderId },
+      select: {
+        id: true,
+        userId: true,
+        riderCode: true,
+        verificationStatus: true,
+        availabilityStatus: true,
+        deletedAt: true,
+        user: { select: { id: true, fullName: true, accountStatus: true, deletedAt: true } }
+      }
+    });
+    if (!rider) throw new NotFoundException("Captain not found");
+    if (rider.deletedAt || rider.user.deletedAt) throw new BadRequestException("Deleted captains cannot be changed through lifecycle controls.");
+
+    const now = new Date();
+    if (action === "SUSPEND") {
+      if (rider.verificationStatus !== RiderStatus.ACTIVE || rider.user.accountStatus !== AccountStatus.ACTIVE) {
+        throw new BadRequestException("Only active captains can be suspended.");
+      }
+      const updated = await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({ where: { id: rider.userId }, data: { accountStatus: AccountStatus.SUSPENDED } });
+        await tx.rider.update({
+          where: { id: rider.id },
+          data: { verificationStatus: RiderStatus.SUSPENDED, availabilityStatus: RiderStatus.OFFLINE }
+        });
+        await this.revokeUserSessions(tx, rider.userId, now);
+        return tx.rider.findUniqueOrThrow({
+          where: { id: rider.id },
+          select: {
+            id: true,
+            riderCode: true,
+            phoneNumber: true,
+            vehicleType: true,
+            availabilityStatus: true,
+            verificationStatus: true,
+            currentLatitude: true,
+            currentLongitude: true,
+            currentLocationUpdatedAt: true,
+            user: { select: { id: true, fullName: true, accountStatus: true } }
+          }
+        });
+      });
+      await this.audit.record(adminUserId, "admin.captain.suspended", "Rider", rider.id, {
+        reason: safeReason,
+        previousStatus: rider.verificationStatus,
+        newStatus: RiderStatus.SUSPENDED,
+        previousAvailability: rider.availabilityStatus,
+        newAvailability: RiderStatus.OFFLINE,
+        previousAccountStatus: rider.user.accountStatus,
+        newAccountStatus: AccountStatus.SUSPENDED,
+        sessionRevoked: true
+      });
+      return updated;
+    }
+
+    if (rider.verificationStatus !== RiderStatus.SUSPENDED) {
+      throw new BadRequestException("Only suspended captains can be reactivated.");
+    }
+    if (rider.user.accountStatus === AccountStatus.BLOCKED || rider.user.accountStatus === AccountStatus.DEACTIVATED) {
+      throw new BadRequestException("Blocked or deactivated captain users cannot be reactivated through this action.");
+    }
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: rider.userId }, data: { accountStatus: AccountStatus.ACTIVE } });
+      await tx.rider.update({
+        where: { id: rider.id },
+        data: { verificationStatus: RiderStatus.ACTIVE, availabilityStatus: RiderStatus.OFFLINE }
+      });
+      return tx.rider.findUniqueOrThrow({
+        where: { id: rider.id },
+        select: {
+          id: true,
+          riderCode: true,
+          phoneNumber: true,
+          vehicleType: true,
+          availabilityStatus: true,
+          verificationStatus: true,
+          currentLatitude: true,
+          currentLongitude: true,
+          currentLocationUpdatedAt: true,
+          user: { select: { id: true, fullName: true, accountStatus: true } }
+        }
+      });
+    });
+    await this.audit.record(adminUserId, "admin.captain.reactivated", "Rider", rider.id, {
+      reason: safeReason,
+      previousStatus: rider.verificationStatus,
+      newStatus: RiderStatus.ACTIVE,
+      previousAvailability: rider.availabilityStatus,
+      newAvailability: RiderStatus.OFFLINE,
+      previousAccountStatus: rider.user.accountStatus,
+      newAccountStatus: AccountStatus.ACTIVE,
+      operationalNote: "Captain is reactivated but remains offline until they choose to go online."
+    });
+    return updated;
+  }
+
+  async updateCustomerLifecycle(adminUserId: string, userId: string, action: AccountLifecycleAction, reason: string) {
+    const safeReason = this.requiredReason(reason, "Customer lifecycle action requires a reason.");
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, fullName: true, phoneNumber: true, email: true, role: true, adminRole: true, accountStatus: true, deletedAt: true, createdAt: true }
+    });
+    if (!user) throw new NotFoundException("Customer account not found");
+    if (user.deletedAt || user.role !== UserRole.CUSTOMER) throw new BadRequestException("Only active Customer accounts can be changed through customer lifecycle controls.");
+
+    const now = new Date();
+    if (action === "SUSPEND") {
+      if (user.accountStatus !== AccountStatus.ACTIVE) throw new BadRequestException("Only active Customer accounts can be suspended.");
+      const updated = await this.prisma.$transaction(async (tx) => {
+        const next = await tx.user.update({
+          where: { id: user.id },
+          data: { accountStatus: AccountStatus.SUSPENDED },
+          select: { id: true, fullName: true, phoneNumber: true, email: true, role: true, adminRole: true, accountStatus: true, createdAt: true }
+        });
+        await this.revokeUserSessions(tx, user.id, now);
+        return next;
+      });
+      await this.audit.record(adminUserId, "admin.customer.suspended", "User", user.id, {
+        reason: safeReason,
+        previousAccountStatus: user.accountStatus,
+        newAccountStatus: AccountStatus.SUSPENDED,
+        sessionRevoked: true
+      });
+      return updated;
+    }
+
+    if (user.accountStatus !== AccountStatus.SUSPENDED) throw new BadRequestException("Only suspended Customer accounts can be reactivated.");
+    const updated = await this.prisma.user.update({
+      where: { id: user.id },
+      data: { accountStatus: AccountStatus.ACTIVE },
+      select: { id: true, fullName: true, phoneNumber: true, email: true, role: true, adminRole: true, accountStatus: true, createdAt: true }
+    });
+    await this.audit.record(adminUserId, "admin.customer.reactivated", "User", user.id, {
+      reason: safeReason,
+      previousAccountStatus: user.accountStatus,
+      newAccountStatus: AccountStatus.ACTIVE
+    });
+    return updated;
   }
 
   private async findVendorForCleanup(vendorId: string) {
@@ -749,6 +990,17 @@ export class AdminOperationsService {
   }
   private hashSecret(value: string) {
     return createHash("sha256").update(value).digest("hex");
+  }
+  private async revokeUserSessions(tx: Prisma.TransactionClient, userId: string, revokedAt: Date) {
+    await tx.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt } });
+    await tx.deviceToken.updateMany({ where: { userId, isActive: true }, data: { isActive: false } });
+  }
+  private requiredReason(reason: string | undefined, message: string) {
+    const value = reason?.trim();
+    if (!value || value.length < 5) {
+      throw new BadRequestException(message);
+    }
+    return value;
   }
   private sum(values: Prisma.Decimal[]) {
     return values.reduce((total, value) => total.add(value), new Prisma.Decimal(0));

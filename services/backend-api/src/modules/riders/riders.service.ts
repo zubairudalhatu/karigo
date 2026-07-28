@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { AccountStatus, DeliveryCaptainApplicationStatus, Prisma, RiderStatus, UserRole } from "@prisma/client";
 import { randomBytes } from "crypto";
+import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -55,7 +56,11 @@ const DELIVERY_CAPTAIN_APPLICATION_SELECT = {
 
 @Injectable()
 export class RidersService {
-  constructor(private readonly prisma: PrismaService, private readonly applicationNotifications: ApplicationNotificationsService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly applicationNotifications: ApplicationNotificationsService,
+    private readonly audit: AdminAuditService
+  ) {}
 
   async me(userId: string) {
     const rider = await this.prisma.rider.findUnique({
@@ -219,12 +224,16 @@ export class RidersService {
     return this.toAdminDeliveryCaptainApplication(application);
   }
 
-  async reviewDeliveryCaptainApplication(applicationId: string, dto: ReviewDeliveryCaptainApplicationDto) {
+  async reviewDeliveryCaptainApplication(adminUserId: string, applicationId: string, dto: ReviewDeliveryCaptainApplicationDto) {
     const current = await this.prisma.deliveryCaptainApplication.findUnique({
       where: { id: applicationId },
       select: DELIVERY_CAPTAIN_APPLICATION_SELECT
     });
     if (!current) throw new NotFoundException("Delivery Captain application not found");
+    if (current.status === dto.status) throw new BadRequestException(`Delivery Captain application is already ${dto.status.replaceAll("_", " ")}.`);
+    if (dto.status === DeliveryCaptainApplicationStatus.REJECTED && !this.optionalText(dto.adminNote) && !this.optionalText(dto.applicantVisibleNote)) {
+      throw new BadRequestException("Rejecting a Delivery Captain application requires an internal or applicant-visible reason.");
+    }
     const application = await this.prisma.$transaction(async (tx) => {
       if (dto.status === DeliveryCaptainApplicationStatus.APPROVED && this.applicantReadyForCaptainApproval(current.applicant)) {
         await this.ensureRiderAccountForApplication(tx, current);
@@ -247,6 +256,14 @@ export class RidersService {
       email: application.email,
       status: application.status,
       note: application.applicantVisibleNote
+    });
+    await this.audit.record(adminUserId, "admin.delivery_captain_application.reviewed", "DeliveryCaptainApplication", application.id, {
+      applicationReference: application.applicationReference,
+      previousStatus: current.status,
+      newStatus: application.status,
+      hasApplicantVisibleNote: Boolean(application.applicantVisibleNote),
+      hasAdminNote: Boolean(application.adminNote),
+      operationalGuardrail: "Review does not activate payouts, ride dispatch, or unrestricted live operations."
     });
     return this.toAdminDeliveryCaptainApplication(application);
   }

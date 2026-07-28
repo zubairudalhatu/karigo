@@ -9,6 +9,7 @@ import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { AdminOperationsService } from "./admin-operations.service";
+import { AccountLifecycleActionDto } from "./dto/account-lifecycle-action.dto";
 import { CashReconciliationDto } from "./dto/cash-reconciliation.dto";
 import { ListAdminOrdersQueryDto } from "./dto/list-admin-orders-query.dto";
 import { OrderStatusNoteDto } from "./dto/order-status-note.dto";
@@ -17,6 +18,9 @@ import { UpdateVendorStatusDto } from "./dto/update-vendor-status.dto";
 import { VendorCleanupNoteDto, VendorPermanentDeleteDto } from "./dto/vendor-cleanup-note.dto";
 
 const OPS_ADMINS = [AdminRole.SUPER_ADMIN, AdminRole.OPERATIONS_ADMIN, AdminRole.FINANCE_OFFICER, AdminRole.DISPATCH_OFFICER];
+const VENDOR_LIFECYCLE_ADMINS = [AdminRole.SUPER_ADMIN, AdminRole.OPERATIONS_ADMIN, AdminRole.VENDOR_MANAGER];
+const CAPTAIN_LIFECYCLE_ADMINS = [AdminRole.SUPER_ADMIN, AdminRole.OPERATIONS_ADMIN, AdminRole.RIDER_MANAGER];
+const CUSTOMER_LIFECYCLE_ADMINS = [AdminRole.SUPER_ADMIN, AdminRole.OPERATIONS_ADMIN, AdminRole.SUPPORT_AGENT];
 
 @ApiTags("Admin Operations")
 @ApiBearerAuth()
@@ -83,11 +87,27 @@ export class AdminOperationsController {
     return { message: "Vendor onboarding document reviewed", data: await this.operations.reviewVendorOnboardingDocument(user.id, vendorId, documentId, dto.status, dto.adminNote) };
   }
   @Patch("vendors/:vendorId/status")
+  @AdminRoles(...VENDOR_LIFECYCLE_ADMINS)
   async updateVendorStatus(@CurrentUser() user: AuthenticatedUser, @Param("vendorId", ParseUUIDPipe) vendorId: string, @Body() dto: UpdateVendorStatusDto) {
     return { message: "Vendor status updated", data: await this.operations.updateVendorStatus(user.id, vendorId, dto.status, dto.note) };
   }
+  @Patch("vendors/:vendorId/lifecycle")
+  @AdminRoles(...VENDOR_LIFECYCLE_ADMINS)
+  async updateVendorLifecycle(@CurrentUser() user: AuthenticatedUser, @Param("vendorId", ParseUUIDPipe) vendorId: string, @Body() dto: AccountLifecycleActionDto) {
+    return { message: "Vendor lifecycle action recorded", data: await this.operations.updateVendorLifecycle(user.id, vendorId, dto.action, dto.reason) };
+  }
   @Get("riders") riders() {
     return this.operations.riders().then((data) => ({ message: "Riders retrieved", data }));
+  }
+  @Patch("riders/:riderId/lifecycle")
+  @AdminRoles(...CAPTAIN_LIFECYCLE_ADMINS)
+  async updateRiderLifecycle(@CurrentUser() user: AuthenticatedUser, @Param("riderId", ParseUUIDPipe) riderId: string, @Body() dto: AccountLifecycleActionDto) {
+    return { message: "Captain lifecycle action recorded", data: await this.operations.updateRiderLifecycle(user.id, riderId, dto.action, dto.reason) };
+  }
+  @Patch("users/:userId/lifecycle")
+  @AdminRoles(...CUSTOMER_LIFECYCLE_ADMINS)
+  async updateCustomerLifecycle(@CurrentUser() user: AuthenticatedUser, @Param("userId", ParseUUIDPipe) userId: string, @Body() dto: AccountLifecycleActionDto) {
+    return { message: "Customer lifecycle action recorded", data: await this.operations.updateCustomerLifecycle(user.id, userId, dto.action, dto.reason) };
   }
   @Get("audit-logs") auditLogs() {
     return this.operations.auditLogs().then((data) => ({ message: "Admin audit logs retrieved", data }));

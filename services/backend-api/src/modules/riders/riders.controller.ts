@@ -80,8 +80,8 @@ export class AdminDeliveryCaptainApplicationsController {
 
   @Patch(":applicationId/review")
   @ApiOperation({ summary: "Review a Delivery Captain application without activating dispatch or payouts" })
-  async review(@Param("applicationId", ParseUUIDPipe) applicationId: string, @Body() dto: ReviewDeliveryCaptainApplicationDto) {
-    return { message: "Delivery Captain application reviewed", data: await this.ridersService.reviewDeliveryCaptainApplication(applicationId, dto) };
+  async review(@CurrentUser() user: AuthenticatedUser, @Param("applicationId", ParseUUIDPipe) applicationId: string, @Body() dto: ReviewDeliveryCaptainApplicationDto) {
+    return { message: "Delivery Captain application reviewed", data: await this.ridersService.reviewDeliveryCaptainApplication(user.id, applicationId, dto) };
   }
 }
 

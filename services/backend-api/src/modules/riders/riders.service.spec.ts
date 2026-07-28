@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { AccountStatus, DeliveryCaptainApplicationStatus, DeliveryCaptainVehicleType, RiderStatus, UserRole } from "@prisma/client";
+import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { RidersService } from "./riders.service";
@@ -71,7 +72,12 @@ describe("RidersService delivery captain applications", () => {
     deliveryCaptainGuarantorListed: jest.fn(),
     deliveryCaptainApplicationReviewed: jest.fn()
   };
-  const service = new RidersService(prisma as unknown as PrismaService, applicationNotifications as unknown as ApplicationNotificationsService);
+  const audit = { record: jest.fn() };
+  const service = new RidersService(
+    prisma as unknown as PrismaService,
+    applicationNotifications as unknown as ApplicationNotificationsService,
+    audit as unknown as AdminAuditService
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -94,6 +100,7 @@ describe("RidersService delivery captain applications", () => {
     applicationNotifications.deliveryCaptainApplicationSubmitted.mockResolvedValue(undefined);
     applicationNotifications.deliveryCaptainGuarantorListed.mockResolvedValue(undefined);
     applicationNotifications.deliveryCaptainApplicationReviewed.mockResolvedValue(undefined);
+    audit.record.mockResolvedValue({});
   });
 
   it("creates a Kano or Abuja account-linked Delivery Captain application without activating dispatch or payouts", async () => {
@@ -251,7 +258,7 @@ describe("RidersService delivery captain applications", () => {
       reviewedAt: now
     });
 
-    await service.reviewDeliveryCaptainApplication(deliveryCaptainApplication.id, {
+    await service.reviewDeliveryCaptainApplication("admin-user", deliveryCaptainApplication.id, {
       status: DeliveryCaptainApplicationStatus.APPROVED
     });
 
@@ -368,7 +375,7 @@ describe("RidersService delivery captain applications", () => {
       reviewedAt: now
     });
 
-    await expect(service.reviewDeliveryCaptainApplication(deliveryCaptainApplication.id, {
+    await expect(service.reviewDeliveryCaptainApplication("admin-user", deliveryCaptainApplication.id, {
       status: DeliveryCaptainApplicationStatus.UNDER_REVIEW,
       applicantVisibleNote: "We are reviewing your application.",
       adminNote: "Verify guarantor."
@@ -392,5 +399,11 @@ describe("RidersService delivery captain applications", () => {
       status: DeliveryCaptainApplicationStatus.UNDER_REVIEW,
       note: "We are reviewing your application."
     });
+    expect(audit.record).toHaveBeenCalledWith("admin-user", "admin.delivery_captain_application.reviewed", "DeliveryCaptainApplication", deliveryCaptainApplication.id, expect.objectContaining({
+      previousStatus: DeliveryCaptainApplicationStatus.SUBMITTED,
+      newStatus: DeliveryCaptainApplicationStatus.UNDER_REVIEW,
+      hasApplicantVisibleNote: true,
+      hasAdminNote: true
+    }));
   });
 });

@@ -20,6 +20,7 @@ export default function VendorApplicationsPage() {
   const [trashInputs, setTrashInputs] = useState<Record<string, { reason: string; note: string }>>({});
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [actioning, setActioning] = useState("");
 
   async function load(filter: VendorApplicationTrashFilter = trashFilter) {
     try {
@@ -41,9 +42,15 @@ export default function VendorApplicationsPage() {
 
   async function review(id: string, status: string) {
     const notes = window.prompt(`Review note for ${status.toLowerCase().replaceAll("_", " ")}`) ?? undefined;
+    if (status === "REJECTED" && !notes?.trim()) {
+      setError("Rejecting a vendor application requires a reason.");
+      return;
+    }
+    if (!window.confirm(`Save vendor application status ${status.replaceAll("_", " ")}?`)) return;
     try {
       setError("");
       setMessage("");
+      setActioning(id);
       await vendorApplicationsApi.review(id, status, notes);
       setMessage(status === "APPROVED"
         ? "Vendor application approved. A vendor account is linked and a password setup link is sent by approved email notification settings."
@@ -51,6 +58,8 @@ export default function VendorApplicationsPage() {
       await load();
     } catch (e) {
       setError(friendlyError(e, "form"));
+    } finally {
+      setActioning("");
     }
   }
 
@@ -150,7 +159,7 @@ export default function VendorApplicationsPage() {
           {application.vendor.user.accountStatus !== "ACTIVE" ? <button className="secondary" onClick={() => void resendActivationLink(application)}>Send new activation link</button> : null}
         </div> : <p className="muted">No linked vendor account yet. Approving the application creates or links the Vendor account.</p>}
         {application.documents?.length ? <div className="notice"><strong>Documents</strong>{application.documents.map((document) => <p key={document.id}><a href={document.documentUrl} target="_blank" rel="noreferrer">{document.documentName || document.documentType}</a> <Badge>{document.verificationStatus}</Badge></p>)}</div> : <p className="muted">No application documents supplied yet.</p>}
-        {!application.inTrash ? <div className="filters">{reviewStatuses.map((status) => <button key={status} className="secondary" onClick={() => void review(application.id, status)}>{status.replaceAll("_", " ")}</button>)}</div> : null}
+        {!application.inTrash ? <div className="filters">{reviewStatuses.map((status) => <button key={status} className="secondary" disabled={actioning === application.id || status === application.status} onClick={() => void review(application.id, status)}>{status.replaceAll("_", " ")}</button>)}</div> : null}
         {!application.inTrash ? <div className="notice">
           <strong>Trash duplicate/test application</strong>
           <p className="muted">Use Trash for duplicate, test or created-in-error records. This hides the application from the active list while preserving audit history.</p>

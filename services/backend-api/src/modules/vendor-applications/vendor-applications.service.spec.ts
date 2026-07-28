@@ -341,6 +341,47 @@ describe("VendorApplicationsService", () => {
         userId: "00000000-0000-0000-0000-00000000vusr"
       })
     }));
+    expect(tx.adminAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        adminUserId: "00000000-0000-0000-0000-00000000a001",
+        action: "admin.vendor_application.reviewed",
+        entityType: "VendorApplication",
+        entityId: vendorApplication.id,
+        newValue: expect.objectContaining({
+          previousStatus: VendorApplicationStatus.SUBMITTED,
+          newStatus: VendorApplicationStatus.APPROVED,
+          hasReason: true
+        })
+      })
+    }));
+  });
+
+  it("requires a reason when rejecting a vendor application", async () => {
+    prisma.vendorApplication.findUnique.mockResolvedValueOnce({
+      ...vendorApplication,
+      status: VendorApplicationStatus.SUBMITTED
+    });
+
+    await expect(service.review(vendorApplication.id, "00000000-0000-0000-0000-00000000a001", {
+      status: VendorApplicationStatus.REJECTED
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(applicationNotifications.vendorApplicationReviewed).not.toHaveBeenCalled();
+  });
+
+  it("rejects duplicate vendor application review transitions", async () => {
+    prisma.vendorApplication.findUnique.mockResolvedValueOnce({
+      ...vendorApplication,
+      status: VendorApplicationStatus.SUBMITTED
+    });
+
+    await expect(service.review(vendorApplication.id, "00000000-0000-0000-0000-00000000a001", {
+      status: VendorApplicationStatus.SUBMITTED,
+      notes: "No status change"
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("excludes trashed vendor applications from the default admin list", async () => {

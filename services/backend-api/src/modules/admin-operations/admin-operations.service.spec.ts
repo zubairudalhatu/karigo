@@ -7,7 +7,8 @@ import { AdminOperationsService } from "./admin-operations.service";
 
 describe("AdminOperationsService vendor cleanup", () => {
   const tx = {
-    vendor: { update: jest.fn(), delete: jest.fn() },
+    vendor: { update: jest.fn(), delete: jest.fn(), findUniqueOrThrow: jest.fn() },
+    rider: { update: jest.fn(), findUniqueOrThrow: jest.fn() },
     user: { update: jest.fn(), delete: jest.fn() },
     refreshToken: { updateMany: jest.fn(), deleteMany: jest.fn() },
     deviceToken: { updateMany: jest.fn(), deleteMany: jest.fn() },
@@ -22,6 +23,8 @@ describe("AdminOperationsService vendor cleanup", () => {
   };
   const prisma = {
     vendor: { findUnique: jest.fn(), findMany: jest.fn(), count: jest.fn(), update: jest.fn() },
+    rider: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn(), update: jest.fn() },
     order: { count: jest.fn() },
     vendorSettlement: { count: jest.fn() },
     promoCode: { count: jest.fn() },
@@ -67,6 +70,29 @@ describe("AdminOperationsService vendor cleanup", () => {
     prisma.product.count.mockResolvedValue(0);
     applicationNotifications.vendorApplicationReviewed.mockResolvedValue(undefined);
     tx.vendor.update.mockResolvedValue({ ...vendor, deletedAt: new Date("2026-07-15T01:00:00.000Z") });
+    tx.vendor.findUniqueOrThrow.mockResolvedValue({ ...vendor, status: VendorStatus.SUSPENDED, isOpen: false, user: { accountStatus: AccountStatus.SUSPENDED, deletedAt: null } });
+    tx.rider.findUniqueOrThrow.mockResolvedValue({
+      id: "rider-1",
+      riderCode: "KGO-CAP-001",
+      phoneNumber: "+2348012345678",
+      vehicleType: "MOTORCYCLE",
+      availabilityStatus: "OFFLINE",
+      verificationStatus: "SUSPENDED",
+      currentLatitude: null,
+      currentLongitude: null,
+      currentLocationUpdatedAt: null,
+      user: { id: "rider-user-1", fullName: "Captain One", accountStatus: AccountStatus.SUSPENDED }
+    });
+    prisma.user.update.mockResolvedValue({
+      id: "customer-1",
+      fullName: "Customer One",
+      phoneNumber: "+2348012345000",
+      email: "customer@example.test",
+      role: UserRole.CUSTOMER,
+      adminRole: null,
+      accountStatus: AccountStatus.ACTIVE,
+      createdAt: vendor.createdAt
+    });
     tx.product.findMany.mockResolvedValue([{ id: "product-1" }]);
   });
 
@@ -204,5 +230,114 @@ describe("AdminOperationsService vendor cleanup", () => {
       notificationQueued: true
     }));
     expect(result).not.toHaveProperty("activationUrl");
+  });
+
+  it("suspends an active vendor, revokes sessions and writes an audit reason", async () => {
+    await service.updateVendorLifecycle("admin-1", vendor.id, "SUSPEND", "Fraud review");
+
+    expect(tx.user.update).toHaveBeenCalledWith({
+      where: { id: vendor.userId },
+      data: { accountStatus: AccountStatus.SUSPENDED }
+    });
+    expect(tx.vendor.update).toHaveBeenCalledWith({
+      where: { id: vendor.id },
+      data: { status: VendorStatus.SUSPENDED, isOpen: false }
+    });
+    expect(tx.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: vendor.userId, revokedAt: null },
+      data: { revokedAt: expect.any(Date) }
+    });
+    expect(audit.record).toHaveBeenCalledWith("admin-1", "admin.vendor.suspended", "Vendor", vendor.id, expect.objectContaining({
+      reason: "Fraud review",
+      previousStatus: VendorStatus.ACTIVE,
+      newStatus: VendorStatus.SUSPENDED,
+      sessionRevoked: true
+    }));
+  });
+
+  it("reactivates a suspended vendor without automatically opening the storefront", async () => {
+    prisma.vendor.findUnique.mockResolvedValueOnce({
+      ...vendor,
+      status: VendorStatus.SUSPENDED,
+      user: { accountStatus: AccountStatus.SUSPENDED, deletedAt: null }
+    });
+    tx.vendor.findUniqueOrThrow.mockResolvedValueOnce({
+      ...vendor,
+      status: VendorStatus.ACTIVE,
+      isOpen: false,
+      user: { accountStatus: AccountStatus.ACTIVE, deletedAt: null }
+    });
+
+    await service.updateVendorLifecycle("admin-1", vendor.id, "REACTIVATE", "Issue resolved");
+
+    expect(tx.vendor.update).toHaveBeenCalledWith({
+      where: { id: vendor.id },
+      data: { status: VendorStatus.ACTIVE, isOpen: false }
+    });
+    expect(audit.record).toHaveBeenCalledWith("admin-1", "admin.vendor.reactivated", "Vendor", vendor.id, expect.objectContaining({
+      reason: "Issue resolved",
+      newStatus: VendorStatus.ACTIVE
+    }));
+  });
+
+  it("requires a reason for lifecycle actions", async () => {
+    await expect(service.updateVendorLifecycle("admin-1", vendor.id, "SUSPEND", " ")).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.vendor.update).not.toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: VendorStatus.SUSPENDED })
+    }));
+  });
+
+  it("suspends an active Captain and takes them offline", async () => {
+    prisma.rider.findUnique.mockResolvedValueOnce({
+      id: "rider-1",
+      userId: "rider-user-1",
+      riderCode: "KGO-CAP-001",
+      verificationStatus: "ACTIVE",
+      availabilityStatus: "ONLINE",
+      deletedAt: null,
+      user: { id: "rider-user-1", fullName: "Captain One", accountStatus: AccountStatus.ACTIVE, deletedAt: null }
+    });
+
+    await service.updateRiderLifecycle("admin-1", "rider-1", "SUSPEND", "Unsafe delivery report");
+
+    expect(tx.rider.update).toHaveBeenCalledWith({
+      where: { id: "rider-1" },
+      data: { verificationStatus: "SUSPENDED", availabilityStatus: "OFFLINE" }
+    });
+    expect(audit.record).toHaveBeenCalledWith("admin-1", "admin.captain.suspended", "Rider", "rider-1", expect.objectContaining({
+      reason: "Unsafe delivery report",
+      previousAvailability: "ONLINE",
+      newAvailability: "OFFLINE",
+      sessionRevoked: true
+    }));
+  });
+
+  it("suspends a Customer account without deleting history", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: "customer-1",
+      fullName: "Customer One",
+      phoneNumber: "+2348012345000",
+      email: "customer@example.test",
+      role: UserRole.CUSTOMER,
+      adminRole: null,
+      accountStatus: AccountStatus.ACTIVE,
+      deletedAt: null,
+      createdAt: vendor.createdAt
+    });
+
+    await service.updateCustomerLifecycle("admin-1", "customer-1", "SUSPEND", "Chargeback investigation");
+
+    expect(tx.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "customer-1" },
+      data: { accountStatus: AccountStatus.SUSPENDED }
+    }));
+    expect(tx.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: "customer-1", revokedAt: null },
+      data: { revokedAt: expect.any(Date) }
+    });
+    expect(audit.record).toHaveBeenCalledWith("admin-1", "admin.customer.suspended", "User", "customer-1", expect.objectContaining({
+      reason: "Chargeback investigation",
+      newAccountStatus: AccountStatus.SUSPENDED
+    }));
   });
 });

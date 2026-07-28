@@ -38,6 +38,7 @@ export default function VendorsPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [actioning, setActioning] = useState("");
 
   async function load() {
     setLoading(true);
@@ -125,14 +126,42 @@ export default function VendorsPage() {
 
   async function updateVendorStatus(vendor: AdminVendor, status: "PENDING_APPROVAL" | "ACTIVE" | "SUSPENDED" | "CLOSED" | "REJECTED") {
     const note = window.prompt(`Update ${vendor.businessName} status to ${status.replaceAll("_", " ")}? Add an internal note.`) ?? undefined;
+    if (!window.confirm(`Confirm status update for ${vendor.businessName}?`)) return;
     try {
       setError("");
       setMessage("");
+      setActioning(vendor.id);
       await managementApi.updateVendorStatus(vendor.id, status, note);
       setMessage(`${vendor.businessName} status updated to ${status.replaceAll("_", " ")}.`);
       await load();
     } catch (e) {
       setError(friendlyError(e, "form"));
+    } finally {
+      setActioning("");
+    }
+  }
+
+  async function updateVendorLifecycle(vendor: AdminVendor, action: "SUSPEND" | "REACTIVATE") {
+    const reason = window.prompt(`${action === "SUSPEND" ? "Suspend" : "Reactivate"} ${vendor.businessName}? Enter the mandatory reason.`);
+    if (!reason?.trim() || reason.trim().length < 5) {
+      setError("A reason of at least 5 characters is required.");
+      return;
+    }
+    const warning = action === "SUSPEND"
+      ? "Suspension blocks Partner Workspace access, new product/service updates, order acceptance and active storefront operations. Existing order and settlement history is preserved."
+      : "Reactivation restores approved Partner access, but the partner remains closed until they open the workspace.";
+    if (!window.confirm(`${warning}\n\nContinue?`)) return;
+    try {
+      setError("");
+      setMessage("");
+      setActioning(vendor.id);
+      await managementApi.updateVendorLifecycle(vendor.id, action, reason);
+      setMessage(`${vendor.businessName} ${action === "SUSPEND" ? "suspended" : "reactivated"} with audit reason recorded.`);
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    } finally {
+      setActioning("");
     }
   }
 
@@ -150,6 +179,7 @@ export default function VendorsPage() {
         <p className="muted">{vendor.businessCategory} - {vendorLocation(vendor)}</p>
         <p><Badge>{vendor.status}</Badge> <Badge>{vendor.user.accountStatus}</Badge></p>
         <p className="muted">Orders recorded: {vendor.totalOrders} - Open now: {vendor.isOpen ? "Yes" : "No"}</p>
+        {vendor.status === "ACTIVE" ? <p className="notice">Suspending this partner blocks workspace access, product/service updates and new order acceptance. Outstanding operational history is preserved for audit and settlement review.</p> : null}
         <p className="muted">{trashSafetySummary(vendor)}</p>
         <p className="muted">{documentSummary(vendor)}</p>
         {vendor.onboardingDocuments?.length ? <div className="notice">
@@ -164,9 +194,9 @@ export default function VendorsPage() {
         </div> : null}
         <div className="actions">
           <button className="secondary" onClick={() => void sendActivationLink(vendor)}>Send activation link</button>
-          <button className="secondary" onClick={() => void updateVendorStatus(vendor, "PENDING_APPROVAL")}>Mark pending</button>
-          <button className="secondary" onClick={() => void updateVendorStatus(vendor, "ACTIVE")}>Mark operational</button>
-          <button className="secondary" onClick={() => void updateVendorStatus(vendor, "SUSPENDED")}>Suspend</button>
+          {vendor.status === "PENDING_APPROVAL" ? <button className="secondary" disabled={actioning === vendor.id} onClick={() => void updateVendorStatus(vendor, "ACTIVE")}>Mark operational</button> : null}
+          {vendor.status === "ACTIVE" ? <button className="secondary" disabled={actioning === vendor.id} onClick={() => void updateVendorLifecycle(vendor, "SUSPEND")}>Suspend</button> : null}
+          {vendor.status === "SUSPENDED" ? <button className="secondary" disabled={actioning === vendor.id} onClick={() => void updateVendorLifecycle(vendor, "REACTIVATE")}>Reactivate</button> : null}
           <button className="secondary" disabled={vendor.trashSafety ? !vendor.trashSafety.canMoveToTrash : true} onClick={() => void trashVendor(vendor)}>Move Partner Account to Trash / Close</button>
         </div>
       </article>) : <Empty>No active vendors found.</Empty>}
