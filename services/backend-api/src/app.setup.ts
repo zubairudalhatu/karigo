@@ -31,7 +31,7 @@ function createCorsOriginGuard(origins: string[]) {
       return;
     }
 
-    callback(new Error("CORS origin is not allowed"), false);
+    callback(null, false);
   };
 }
 

@@ -11,7 +11,8 @@ describe("Backend foundation (HTTP)", () => {
   const previousPaymentEnv = {
     PAYMENTS_LIVE_ENABLED: process.env.PAYMENTS_LIVE_ENABLED,
     PAYMENTS_PROVIDER: process.env.PAYMENTS_PROVIDER,
-    PAYMENT_PROVIDER: process.env.PAYMENT_PROVIDER
+    PAYMENT_PROVIDER: process.env.PAYMENT_PROVIDER,
+    CORS_ORIGINS: process.env.CORS_ORIGINS
   };
   const prismaMock = {
     vendor: {
@@ -25,6 +26,7 @@ describe("Backend foundation (HTTP)", () => {
     process.env.PAYMENTS_LIVE_ENABLED = "false";
     process.env.PAYMENTS_PROVIDER = "mock";
     process.env.PAYMENT_PROVIDER = "mock";
+    process.env.CORS_ORIGINS = "http://localhost:3000,http://localhost:3001,https://admin.karigo.com.ng,https://vendor.karigo.com.ng";
     const { AppModule } = await import("./app.module");
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -74,6 +76,31 @@ describe("Backend foundation (HTTP)", () => {
 
     expect(response.body.success).toBe(false);
     expect(response.body.error_code).toBe("VALIDATION_ERROR");
+  });
+
+  it("allows branded Admin and Partner Workspace origins for credentialed CORS preflight", async () => {
+    for (const origin of ["https://admin.karigo.com.ng", "https://vendor.karigo.com.ng"]) {
+      const response = await request(app!.getHttpServer())
+        .options("/api/v1/auth/login")
+        .set("Origin", origin)
+        .set("Access-Control-Request-Method", "POST")
+        .set("Access-Control-Request-Headers", "content-type,x-karigo-csrf")
+        .expect(204);
+
+      expect(response.headers["access-control-allow-origin"]).toBe(origin);
+      expect(response.headers["access-control-allow-credentials"]).toBe("true");
+      expect(response.headers["access-control-allow-headers"]).toContain("x-karigo-csrf");
+    }
+  });
+
+  it("rejects unknown credentialed CORS origins without wildcard access", async () => {
+    const response = await request(app!.getHttpServer())
+      .options("/api/v1/auth/login")
+      .set("Origin", "https://unknown.example")
+      .set("Access-Control-Request-Method", "POST");
+
+    expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+    expect(response.headers["access-control-allow-credentials"]).toBeUndefined();
   });
 
   it("protects authenticated identity and customer profile endpoints", async () => {

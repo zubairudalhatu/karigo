@@ -8,6 +8,20 @@ export function friendlyError(error: unknown, context: ErrorContext = "dashboard
       return "Invalid phone number or password.";
     }
 
+    if (context === "login" && error.status === 400) {
+      return error.message;
+    }
+
+    if (context === "login" && error.status === 403) {
+      return error.message.includes("admin") || error.errorCode === "PORTAL_ROLE_REJECTED"
+        ? "This account is not authorised for the Admin Portal."
+        : error.message;
+    }
+
+    if (context === "login" && error.status && error.status >= 500) {
+      return "KariGO services are temporarily unavailable. Please try again shortly.";
+    }
+
     if (error.status === 401 || error.status === 403) {
       return "Your session has expired. Please sign in again.";
     }
@@ -23,8 +37,15 @@ export function friendlyError(error: unknown, context: ErrorContext = "dashboard
       : "Unable to load dashboard. Please try again.";
   }
 
-  if (error instanceof Error && error.message.includes("cannot use the admin portal")) {
-    return error.message;
+  if (context === "login" && error instanceof Error) {
+    const safeMessages = [
+      "This account is not authorised for the Admin Portal.",
+      "Your session could not be created. Please try again.",
+      "Verify your phone number to finish account setup."
+    ];
+    if (safeMessages.some((message) => error.message.includes(message))) {
+      return error.message;
+    }
   }
 
   if (context === "form") {

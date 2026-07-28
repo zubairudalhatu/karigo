@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { AccountStatus, LoginActivityOutcome, Prisma, UserRole, VendorActivationInvitationStatus } from "@prisma/client";
@@ -221,6 +221,18 @@ export class AuthService {
         message: "Verify your phone number to finish account setup.",
         ...(this.shouldExposeMockOtp() ? { mockOtp: verification.otp } : {})
       };
+    }
+
+    if (user && passwordMatches && !user.deletedAt && user.accountStatus !== AccountStatus.ACTIVE) {
+      const reason = this.inactiveLoginMessage(user.role, user.accountStatus);
+      await this.recordLoginActivity({
+        userId: user.id,
+        phoneNumber: user.phoneNumber,
+        role: user.role,
+        outcome: LoginActivityOutcome.BLOCKED,
+        reason
+      });
+      throw new ForbiddenException(reason);
     }
 
     if (
@@ -544,6 +556,22 @@ export class AuthService {
   private refreshTokenTtlDays(): number {
     const configured = Number(this.config.get<string>("REFRESH_TOKEN_EXPIRES_DAYS", "30"));
     return Number.isFinite(configured) && configured > 0 ? configured : 30;
+  }
+
+  private inactiveLoginMessage(role: UserRole, status: AccountStatus) {
+    if (status === AccountStatus.SUSPENDED || status === AccountStatus.BLOCKED) {
+      return "This account is suspended. Contact KariGO support.";
+    }
+    if (status === AccountStatus.DEACTIVATED) {
+      return "This account is not active. Contact KariGO support.";
+    }
+    if (role === UserRole.VENDOR && status === AccountStatus.PENDING) {
+      return "Your Partner application is awaiting approval.";
+    }
+    if (role === UserRole.RIDER && status === AccountStatus.PENDING) {
+      return "Your Captain application is awaiting approval.";
+    }
+    return "This account is not active. Contact KariGO support.";
   }
 
   private shouldExposeMockOtp(): boolean {

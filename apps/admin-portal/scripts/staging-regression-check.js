@@ -14,6 +14,12 @@ assert(!authClient.includes("tokenStore"), "Admin API client must not expose a b
 const authContext = read("src", "contexts", "auth-context.tsx");
 assert(!authContext.includes("tokenStore"), "Admin auth context must not persist access tokens in browser storage.");
 assert(authContext.includes("authApi.logout()"), "Admin logout must call the BFF logout endpoint so HttpOnly cookies are cleared.");
+assert(!authContext.includes("result.accessToken"), "Admin login must not require browser-readable access tokens from the sanitized BFF response.");
+assert(authContext.includes("setUser(result.user)"), "Admin login must use the sanitized BFF user payload after HttpOnly session cookies are set.");
+assert(authContext.includes("This account is not authorised for the Admin Portal."), "Admin login must show a safe portal-authorisation message.");
+const authApiSource = read("src", "api", "auth.api.ts");
+assert(!authApiSource.includes("accessToken") && !authApiSource.includes("refreshToken"), "Admin auth API type must not model browser-readable login tokens.");
+assert(authApiSource.includes("LoginVerificationRequiredResult"), "Admin auth API type must handle verification-required login responses safely.");
 const bffSession = read("src", "lib", "bff-session.ts");
 const bffRoute = read("app", "api", "bff", "[...path]", "route.ts");
 assert(bffRoute.includes("handleBffRequest"), "Admin portal must expose the BFF catch-all route.");
@@ -25,6 +31,11 @@ assert(bffSession.includes('"x-karigo-csrf"'), "Admin BFF must validate the CSRF
 assert(bffSession.includes("CSRF_ORIGIN_REJECTED") && bffSession.includes("CSRF_TOKEN_REJECTED"), "Admin BFF must reject unsafe origin or token checks.");
 assert(bffSession.includes("/auth/refresh"), "Admin BFF must refresh sessions server-side only.");
 assert(bffSession.includes("sanitizePayload"), "Admin BFF must strip JWT fields from browser responses.");
+assert(bffSession.includes("BFF_BACKEND_UNAVAILABLE"), "Admin BFF must return a safe backend-unavailable login error.");
+assert(bffSession.includes("BFF_BACKEND_NON_JSON"), "Admin BFF must safely handle non-JSON backend responses.");
+assert(bffSession.includes("BFF_SESSION_USER_MISSING"), "Admin BFF must reject token payloads without a user profile.");
+assert(bffSession.includes("API_BASE_URL") && bffSession.includes("NEXT_PUBLIC_API_BASE_URL"), "Admin BFF must document and use production backend URL env names.");
+assert(bffSession.includes("productionPortal"), "Admin BFF must guard missing backend API URL in production deployments.");
 
 const payoutPage = read("app", "payout-accounts", "page.tsx");
 assert(payoutPage.includes("Payout Accounts"), "Admin portal must expose payout accounts page.");

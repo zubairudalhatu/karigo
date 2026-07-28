@@ -8,6 +8,21 @@ export function friendlyError(error: unknown, context: ErrorContext = "dashboard
       return "Invalid phone number or password.";
     }
 
+    if (context === "login" && error.status === 400) {
+      return error.message;
+    }
+
+    if (context === "login" && error.status === 403) {
+      if (error.errorCode === "PORTAL_ROLE_REJECTED") {
+        return "This account is not authorised for the Partner Workspace.";
+      }
+      return error.message;
+    }
+
+    if (context === "login" && error.status && error.status >= 500) {
+      return "KariGO services are temporarily unavailable. Please try again shortly.";
+    }
+
     if (error.status === 401 || error.status === 403) {
       return "Your session has expired. Please sign in again.";
     }
@@ -23,8 +38,15 @@ export function friendlyError(error: unknown, context: ErrorContext = "dashboard
       : "Your dashboard could not be loaded. Please try again.";
   }
 
-  if (error instanceof Error && error.message.includes("cannot use the vendor dashboard")) {
-    return error.message;
+  if (context === "login" && error instanceof Error) {
+    const safeMessages = [
+      "This account is not authorised for the Partner Workspace.",
+      "Your session could not be created. Please try again.",
+      "Verify your phone number to finish account setup."
+    ];
+    if (safeMessages.some((message) => error.message.includes(message))) {
+      return error.message;
+    }
   }
 
   if (context === "form") {

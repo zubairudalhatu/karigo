@@ -2,7 +2,6 @@ import { normalizeApiBaseUrl } from "@karigo/config";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-const API_BASE_URL = normalizeApiBaseUrl(process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL);
 const ACCESS_COOKIE = "karigo_vendor_access";
 const REFRESH_COOKIE = "karigo_vendor_refresh";
 const CSRF_COOKIE = "karigo_vendor_csrf";
@@ -28,6 +27,18 @@ type BackendPayload = {
 
 const unsafeMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
+function productionPortal() {
+  return process.env.VERCEL_ENV === "production" || process.env.APP_ENV === "production" || process.env.PORTAL_ENV === "production";
+}
+
+function apiBaseUrl() {
+  const configured = process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (!configured?.trim() && productionPortal()) {
+    throw new Error("Partner Workspace BFF requires API_BASE_URL or NEXT_PUBLIC_API_BASE_URL in production.");
+  }
+  return normalizeApiBaseUrl(configured);
+}
+
 function cookieSecure() {
   return process.env.COOKIE_SECURE === "false" ? false : process.env.NODE_ENV !== "development";
 }
@@ -42,22 +53,26 @@ function sameSite(): "lax" | "strict" {
   return process.env.COOKIE_SAME_SITE === "strict" ? "strict" : "lax";
 }
 
+function normalizeOrigin(value?: string | null) {
+  return value?.trim().replace(/\/+$/, "");
+}
+
 function portalOrigins(request: NextRequest) {
   return [
     request.nextUrl.origin,
     process.env.VENDOR_PORTAL_ORIGIN,
     process.env.NEXT_PUBLIC_VENDOR_PORTAL_ORIGIN
-  ].filter(Boolean) as string[];
+  ].map((origin) => normalizeOrigin(origin)).filter(Boolean) as string[];
 }
 
 function isAllowedOrigin(request: NextRequest) {
-  const origin = request.headers.get("origin");
+  const origin = normalizeOrigin(request.headers.get("origin"));
   const referer = request.headers.get("referer");
   const allowed = portalOrigins(request);
   if (origin) return allowed.includes(origin);
   if (referer) {
     try {
-      return allowed.includes(new URL(referer).origin);
+      return allowed.includes(new URL(referer).origin.replace(/\/+$/, ""));
     } catch {
       return false;
     }
@@ -152,7 +167,7 @@ async function fetchBackend(path: string, request: NextRequest, accessToken?: st
   if (path === "auth/logout") headers.set("Content-Type", "application/json");
   else if (contentType) headers.set("Content-Type", contentType);
   if (accessToken && !publicAuthPath(path)) headers.set("Authorization", `Bearer ${accessToken}`);
-  return fetch(`${API_BASE_URL}/${path}`, {
+  return fetch(`${apiBaseUrl()}/${path}`, {
     method: request.method,
     headers,
     body,
@@ -163,15 +178,17 @@ async function fetchBackend(path: string, request: NextRequest, accessToken?: st
 async function refreshSession(request: NextRequest) {
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
   if (!refreshToken) return null;
-  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ refreshToken }),
-    cache: "no-store"
-  });
+  const response = await fetch(`${apiBaseUrl()}/auth/refresh`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ refreshToken }),
+      cache: "no-store"
+    })
+    .catch(() => null);
+  if (!response) return null;
   const payload = await response.json().catch(() => null) as BackendPayload | null;
   if (!response.ok || payload?.success === false || !payload?.data?.accessToken) return null;
   return payload.data as { accessToken: string; refreshToken?: string; user?: { role?: string } };
@@ -184,20 +201,36 @@ export async function handleBffRequest(request: NextRequest, pathParts: string[]
 
   const body = await readBody(request, path);
   const accessToken = request.cookies.get(ACCESS_COOKIE)?.value;
-  let backendResponse = await fetchBackend(path, request, accessToken, body);
+  let backendResponse: Response;
+  try {
+    backendResponse = await fetchBackend(path, request, accessToken, body);
+  } catch (error) {
+    console.error(`Partner BFF backend request failed path=${path} reason=${error instanceof Error ? error.message : "unknown"}`);
+    return jsonError("KariGO services are temporarily unavailable. Please try again shortly.", 503, "BFF_BACKEND_UNAVAILABLE");
+  }
   let refreshed: { accessToken: string; refreshToken?: string; user?: { role?: string } } | null = null;
 
   if (backendResponse.status === 401 && !publicAuthPath(path) && path !== "auth/logout") {
     refreshed = await refreshSession(request);
     if (refreshed?.accessToken) {
-      backendResponse = await fetchBackend(path, request, refreshed.accessToken, body);
+      try {
+        backendResponse = await fetchBackend(path, request, refreshed.accessToken, body);
+      } catch (error) {
+        console.error(`Partner BFF backend retry failed path=${path} reason=${error instanceof Error ? error.message : "unknown"}`);
+        return jsonError("KariGO services are temporarily unavailable. Please try again shortly.", 503, "BFF_BACKEND_UNAVAILABLE");
+      }
     }
   }
 
   const contentType = backendResponse.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
-    const raw = await backendResponse.arrayBuffer();
-    const response = new NextResponse(raw, { status: backendResponse.status });
+    const response = jsonError(
+      backendResponse.status >= 500
+        ? "KariGO services are temporarily unavailable. Please try again shortly."
+        : "Request could not be completed safely.",
+      backendResponse.status,
+      "BFF_BACKEND_NON_JSON"
+    );
     if (backendResponse.status === 401) clearSessionCookies(response);
     return response;
   }
@@ -208,8 +241,14 @@ export async function handleBffRequest(request: NextRequest, pathParts: string[]
   const refreshFromPayload = typeof data?.refreshToken === "string" ? data.refreshToken : undefined;
   const role = data?.user && typeof data.user === "object" ? (data.user as { role?: string }).role : undefined;
 
-  if (accessFromPayload && role && role !== REQUIRED_ROLE) {
-    const response = jsonError("This account cannot use the partner workspace.", 403, "PORTAL_ROLE_REJECTED");
+  if (accessFromPayload && !role) {
+    const response = jsonError("Your session could not be created. Please try again.", 502, "BFF_SESSION_USER_MISSING");
+    clearSessionCookies(response);
+    return response;
+  }
+
+  if (accessFromPayload && role !== REQUIRED_ROLE) {
+    const response = jsonError("This account is not authorised for the Partner Workspace.", 403, "PORTAL_ROLE_REJECTED");
     clearSessionCookies(response);
     return response;
   }

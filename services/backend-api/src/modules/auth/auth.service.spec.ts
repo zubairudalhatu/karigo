@@ -445,6 +445,58 @@ describe("AuthService", () => {
     expect(otpService.issue).not.toHaveBeenCalled();
   });
 
+  it("returns a safe pending partner message when the password is correct", async () => {
+    const passwordHash = await hash("Password1", 4);
+    usersService.findByPhoneForAuth.mockResolvedValue({
+      id: "vendor-user-1",
+      role: UserRole.VENDOR,
+      phoneNumber: "+2348012345678",
+      passwordHash,
+      phoneVerified: true,
+      accountStatus: AccountStatus.PENDING,
+      deletedAt: null
+    });
+
+    await expect(service.login({
+      phoneNumber: "+2348012345678",
+      password: "Password1"
+    })).rejects.toThrow("Your Partner application is awaiting approval.");
+    expect(usersService.markLogin).not.toHaveBeenCalled();
+    expect(prisma.userLoginActivity.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        userId: "vendor-user-1",
+        outcome: "BLOCKED",
+        reason: "Your Partner application is awaiting approval."
+      })
+    }));
+  });
+
+  it("returns a safe suspended account message when the password is correct", async () => {
+    const passwordHash = await hash("Password1", 4);
+    usersService.findByPhoneForAuth.mockResolvedValue({
+      id: "admin-user-1",
+      role: UserRole.ADMIN,
+      phoneNumber: "+2348012345678",
+      passwordHash,
+      phoneVerified: true,
+      accountStatus: AccountStatus.SUSPENDED,
+      deletedAt: null
+    });
+
+    await expect(service.login({
+      phoneNumber: "+2348012345678",
+      password: "Password1"
+    })).rejects.toThrow("This account is suspended. Contact KariGO support.");
+    expect(usersService.markLogin).not.toHaveBeenCalled();
+    expect(prisma.userLoginActivity.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        userId: "admin-user-1",
+        outcome: "BLOCKED",
+        reason: "This account is suspended. Contact KariGO support."
+      })
+    }));
+  });
+
   it("requests customer password reset OTP without exposing account existence", async () => {
     usersService.findByPhoneForAuth.mockResolvedValue({
       id: "user-1",

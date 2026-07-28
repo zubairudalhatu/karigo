@@ -1,8 +1,7 @@
-import type { AuthenticatedUser, LoginRequest, LoginResult } from "@karigo/shared-types";
+import type { AuthenticatedUser, LoginRequest, LoginVerificationRequiredResult } from "@karigo/shared-types";
 import { api } from "./client";
 
-type PortalLoginResult = Omit<LoginResult, "accessToken" | "refreshToken"> &
-  Partial<Pick<LoginResult, "accessToken" | "refreshToken">>;
+type PortalLoginResult = { user: AuthenticatedUser } | LoginVerificationRequiredResult;
 
 export const authApi = {
   login: (body: LoginRequest) => api.post<PortalLoginResult>("auth/login", body, { authenticated: false }),

@@ -66,12 +66,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             phoneNumber: normalizeNigerianPhoneNumber(body.phoneNumber)
           });
 
-          if (!result.accessToken) {
-            throw new Error("Login response did not include an access token.");
+          if ("verificationRequired" in result) {
+            throw new Error(result.message || "Verify your phone number to finish account setup.");
+          }
+
+          if (!result.user) {
+            throw new Error("Your session could not be created. Please try again.");
           }
 
           if (result.user.role !== "VENDOR") {
-            throw new Error("This account cannot use the vendor dashboard.");
+            throw new Error("This account is not authorised for the Partner Workspace.");
           }
 
           setUser(result.user);

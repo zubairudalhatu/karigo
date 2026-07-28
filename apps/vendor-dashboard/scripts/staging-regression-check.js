@@ -14,6 +14,12 @@ assert(!authClient.includes("tokenStore") && !authClient.includes("refreshTokenS
 const authContext = read("src", "contexts", "auth-context.tsx");
 assert(!authContext.includes("tokenStore") && !authContext.includes("refreshTokenStore"), "Partner auth context must not persist tokens in browser storage.");
 assert(authContext.includes("authApi.logout()"), "Partner logout must call the BFF logout endpoint so HttpOnly cookies are cleared.");
+assert(!authContext.includes("result.accessToken"), "Partner login must not require browser-readable access tokens from the sanitized BFF response.");
+assert(authContext.includes("setUser(result.user)"), "Partner login must use the sanitized BFF user payload after HttpOnly session cookies are set.");
+assert(authContext.includes("This account is not authorised for the Partner Workspace."), "Partner login must show a safe workspace-authorisation message.");
+const authApiSource = read("src", "api", "auth.api.ts");
+assert(!authApiSource.includes("accessToken") && !authApiSource.includes("refreshToken"), "Partner auth API type must not model browser-readable login tokens.");
+assert(authApiSource.includes("LoginVerificationRequiredResult"), "Partner auth API type must handle verification-required login responses safely.");
 const activationPage = read("app", "activate", "page.tsx");
 assert(!activationPage.includes("tokenStore") && !activationPage.includes("refreshTokenStore"), "Partner activation must not write tokens to browser storage.");
 const bffSession = read("src", "lib", "bff-session.ts");
@@ -27,6 +33,11 @@ assert(bffSession.includes('"x-karigo-csrf"'), "Partner BFF must validate the CS
 assert(bffSession.includes("CSRF_ORIGIN_REJECTED") && bffSession.includes("CSRF_TOKEN_REJECTED"), "Partner BFF must reject unsafe origin or token checks.");
 assert(bffSession.includes("/auth/refresh"), "Partner BFF must refresh sessions server-side only.");
 assert(bffSession.includes("sanitizePayload"), "Partner BFF must strip JWT fields from browser responses.");
+assert(bffSession.includes("BFF_BACKEND_UNAVAILABLE"), "Partner BFF must return a safe backend-unavailable login error.");
+assert(bffSession.includes("BFF_BACKEND_NON_JSON"), "Partner BFF must safely handle non-JSON backend responses.");
+assert(bffSession.includes("BFF_SESSION_USER_MISSING"), "Partner BFF must reject token payloads without a user profile.");
+assert(bffSession.includes("API_BASE_URL") && bffSession.includes("NEXT_PUBLIC_API_BASE_URL"), "Partner BFF must document and use production backend URL env names.");
+assert(bffSession.includes("productionPortal"), "Partner BFF must guard missing backend API URL in production deployments.");
 const vendorApiSourceForSession = read("src", "api", "vendor.api.ts");
 assert(vendorApiSourceForSession.includes('fetch("/api/bff/vendors/uploads"'), "Partner uploads must use the same-origin BFF route.");
 assert(!vendorApiSourceForSession.includes("Authorization"), "Partner upload code must not attach browser-visible bearer tokens.");
