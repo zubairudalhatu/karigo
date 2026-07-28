@@ -41,10 +41,10 @@ const categories: {
   },
   { label: "Parcel Delivery", icon: "package", href: "/parcel", serviceCategory: "PARCEL", tone: "#FFFBEB", state: "active", requiresAuth: true },
   { label: "SME Services", subtitle: "Book trusted service providers", icon: "tool", href: "/sme-services", serviceCategory: "CORPORATE", tone: "#F5F3FF", state: "active", requiresAuth: true },
-  { label: "Airtime", icon: "phone", href: "/utilities/airtime", tone: "#FEF2F2", state: "readiness", statusLabel: "Preparing", requiresAuth: true },
-  { label: "Data", icon: "wifi", href: "/utilities/data", tone: "#FEF2F2", state: "readiness", statusLabel: "Preparing", requiresAuth: true },
-  { label: "Electricity", icon: "zap", href: "/utilities/electricity", tone: "#FEF2F2", state: "readiness", statusLabel: "Preparing", requiresAuth: true },
-  { label: "Cable TV", icon: "tv", href: "/utilities/cable-tv", tone: "#FEF2F2", state: "readiness", statusLabel: "Preparing", requiresAuth: true }
+  { label: "Airtime", icon: "phone", href: "/utilities/airtime", tone: "#FEF2F2", state: "readiness", statusLabel: "Pilot", requiresAuth: true },
+  { label: "Data", icon: "wifi", href: "/utilities/data", tone: "#FEF2F2", state: "readiness", statusLabel: "Pilot", requiresAuth: true },
+  { label: "Electricity", icon: "zap", href: "/utilities/electricity", tone: "#FEF2F2", state: "readiness", statusLabel: "Pilot", requiresAuth: true },
+  { label: "Cable TV", icon: "tv", href: "/utilities/cable-tv", tone: "#FEF2F2", state: "readiness", statusLabel: "Pilot", requiresAuth: true }
 ];
 
 function firstName(fullName?: string | null) {

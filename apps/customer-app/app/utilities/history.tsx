@@ -6,7 +6,7 @@ import { utilitiesApi } from "../../src/api/utilities.api";
 import { Card, Empty, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError } from "../../src/lib/errors";
 
-const moneyKobo = (value: number) => `NGN ${(value / 100).toLocaleString()}`;
+const moneyKobo = (value: number) => `\u20A6${(value / 100).toLocaleString()}`;
 
 export default function UtilityHistory() {
   const [transactions, setTransactions] = useState<UtilityTransactionSummary[]>([]);

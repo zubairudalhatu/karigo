@@ -8,10 +8,10 @@ import { Card, Protected, Screen, ui } from "../../src/components/ui";
 import { fallbackCustomerPaymentConfig } from "../../src/lib/payment-status";
 
 const services = [
-  { label: "Airtime", slug: "airtime", icon: "phone", description: "Review a safe airtime request for a Nigerian phone number." },
-  { label: "Data", slug: "data", icon: "wifi", description: "Choose a demo data bundle for provider review." },
-  { label: "Electricity", slug: "electricity", icon: "zap", description: "Validate a demo meter for provider review." },
-  { label: "Cable TV", slug: "cable-tv", icon: "tv", description: "Choose a demo package for provider review." }
+  { label: "Airtime", slug: "airtime", icon: "phone", description: "Select a mobile network and review an airtime request." },
+  { label: "Data", slug: "data", icon: "wifi", description: "Select a mobile network and data plan before review." },
+  { label: "Electricity", slug: "electricity", icon: "zap", description: "Select a distribution company and meter type before review." },
+  { label: "Cable TV", slug: "cable-tv", icon: "tv", description: "Select a TV provider and bouquet before review." }
 ] as const;
 
 export default function UtilitiesHome() {
@@ -43,7 +43,7 @@ export default function UtilitiesHome() {
         <View style={styles.icon}><Feather name={service.icon} size={22} color={brand.colors.primary} /></View>
         <Text style={ui.cardTitle}>{service.label}</Text>
         <Text style={ui.muted}>{service.description}</Text>
-        <Text style={styles.badge}>{utilitiesEnabled ? "Provider processing" : "Provider review"}</Text>
+        <Text style={styles.badge}>{utilitiesEnabled ? "Available" : "Provider review"}</Text>
       </Pressable>)}
     </View>
     <Card>

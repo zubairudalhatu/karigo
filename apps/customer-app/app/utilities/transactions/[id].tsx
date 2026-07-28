@@ -3,10 +3,11 @@ import { useEffect, useState } from "react";
 import { Alert, Text } from "react-native";
 import type { UtilityTransactionSummary } from "@karigo/shared-types";
 import { utilitiesApi } from "../../../src/api/utilities.api";
+import { walletApi } from "../../../src/api/wallet.api";
 import { Button, Card, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../../src/components/ui";
 import { friendlyError } from "../../../src/lib/errors";
 
-const moneyKobo = (value: number) => `NGN ${(value / 100).toLocaleString()}`;
+const moneyKobo = (value: number) => `\u20A6${(value / 100).toLocaleString()}`;
 
 function receiptMessage(transaction: UtilityTransactionSummary) {
   if (transaction.status === "CANCELLED" && (transaction.walletReversalReference || transaction.walletDebitStatus === "REVERSED")) {
@@ -71,6 +72,7 @@ export default function UtilityReceiptDetail() {
               setMessage("");
               const cancelled = await utilitiesApi.cancel(transaction.id);
               setTransaction(cancelled);
+              await walletApi.summary().catch(() => undefined);
               setMessage("Utility cancellation request updated. Receipt refreshed.");
             } catch (e) {
               setError(friendlyError(e));
