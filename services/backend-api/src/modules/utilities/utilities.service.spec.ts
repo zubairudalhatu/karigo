@@ -692,6 +692,248 @@ describe("UtilitiesService", () => {
     expect(result).toMatchObject({ status: UtilityTransactionStatus.SUCCESSFUL, providerMode: "accelerate" });
   });
 
+  it("lets a customer cancel an eligible pending utility transaction", async () => {
+    const pendingTransaction = {
+      id: "transaction-id",
+      reference: "KGO-UTIL-REFERENCE",
+      customerId: "customer-id",
+      serviceType: provider.type,
+      providerId: provider.id,
+      productId: product.id,
+      amountKobo: 50000,
+      convenienceFeeKobo: 0,
+      totalKobo: 50000,
+      recipient: "+2348030000000",
+      recipientName: null,
+      status: UtilityTransactionStatus.PENDING,
+      providerStatus: "PENDING",
+      providerReference: null,
+      mockToken: null,
+      customerNote: null,
+      failureReason: null,
+      metadata: { testMode: true },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: null,
+      provider,
+      product
+    };
+    const { prisma, service } = serviceWith({
+      prismaOverrides: {
+        utilityTransaction: {
+          findFirst: jest.fn().mockResolvedValue(pendingTransaction),
+          update: jest.fn().mockResolvedValue({
+            ...pendingTransaction,
+            status: UtilityTransactionStatus.CANCELLED,
+        providerStatus: "CUSTOMER_CANCELLED",
+        customerNote: "Utility request cancelled before fulfilment.",
+        failureReason: "Cancelled by customer before provider fulfilment.",
+        metadata: { testMode: true, cancelledBy: "customer", cancellationStatus: "ACCEPTED", cancelledAt: new Date().toISOString(), walletReversalStatus: "NOT_REQUIRED" },
+        completedAt: new Date()
+      })
+        }
+      }
+    });
+
+    const result = await service.cancel("user-id", "transaction-id");
+
+    expect(prisma.utilityTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: UtilityTransactionStatus.CANCELLED,
+        providerStatus: "CUSTOMER_CANCELLED",
+        metadata: expect.objectContaining({
+          cancelledBy: "customer",
+          cancellationStatus: "ACCEPTED",
+          cancelledAt: expect.any(String),
+          walletReversalStatus: "NOT_REQUIRED"
+        })
+      })
+    }));
+    expect(result).toMatchObject({ status: UtilityTransactionStatus.CANCELLED });
+  });
+
+  it("does not duplicate cancellation work for an already cancelled utility transaction", async () => {
+    const cancelledTransaction = {
+      id: "transaction-id",
+      reference: "KGO-UTIL-REFERENCE",
+      customerId: "customer-id",
+      serviceType: provider.type,
+      providerId: provider.id,
+      productId: product.id,
+      amountKobo: 50000,
+      convenienceFeeKobo: 0,
+      totalKobo: 50000,
+      recipient: "+2348030000000",
+      recipientName: null,
+      status: UtilityTransactionStatus.CANCELLED,
+      providerStatus: "CUSTOMER_CANCELLED",
+      providerReference: null,
+      mockToken: null,
+      customerNote: "Utility request cancelled before fulfilment.",
+      failureReason: "Cancelled by customer before provider fulfilment.",
+      metadata: { testMode: true },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+      provider,
+      product
+    };
+    const { prisma, service } = serviceWith({
+      prismaOverrides: {
+        utilityTransaction: {
+          findFirst: jest.fn().mockResolvedValue(cancelledTransaction),
+          update: jest.fn()
+        }
+      }
+    });
+
+    const result = await service.cancel("user-id", "transaction-id");
+
+    expect(prisma.utilityTransaction.update).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ status: UtilityTransactionStatus.CANCELLED });
+  });
+
+  it("blocks terminal and provider-processing utility cancellation", async () => {
+    const successfulTransaction = {
+      id: "transaction-id",
+      reference: "KGO-UTIL-REFERENCE",
+      customerId: "customer-id",
+      serviceType: provider.type,
+      providerId: provider.id,
+      productId: product.id,
+      amountKobo: 50000,
+      convenienceFeeKobo: 0,
+      totalKobo: 50000,
+      recipient: "+2348030000000",
+      recipientName: null,
+      status: UtilityTransactionStatus.SUCCESSFUL,
+      providerStatus: "SUCCESSFUL",
+      providerReference: "ACC-123",
+      mockToken: null,
+      customerNote: null,
+      failureReason: null,
+      metadata: { testMode: false },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+      provider,
+      product
+    };
+    const findFirst = jest.fn().mockResolvedValue(successfulTransaction);
+    const { service, prisma } = serviceWith({
+      prismaOverrides: {
+        utilityTransaction: {
+          findFirst,
+          update: jest.fn()
+        }
+      }
+    });
+
+    await expect(service.cancel("user-id", "transaction-id")).rejects.toBeInstanceOf(BadRequestException);
+
+    findFirst.mockResolvedValue({ ...successfulTransaction, status: UtilityTransactionStatus.PROCESSING, completedAt: null });
+    await expect(service.cancel("user-id", "transaction-id")).rejects.toThrow("provider");
+    expect(prisma.utilityTransaction.update).not.toHaveBeenCalled();
+  });
+
+  it("prevents another customer from cancelling a utility transaction", async () => {
+    const { service } = serviceWith({
+      prismaOverrides: {
+        utilityTransaction: {
+          findFirst: jest.fn().mockResolvedValue(null)
+        }
+      }
+    });
+
+    await expect(service.cancel("user-id", "other-transaction")).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("reverses a wallet debit once when cancelling an eligible utility transaction", async () => {
+    const pendingWalletTransaction = {
+      id: "transaction-id",
+      reference: "KGO-UTIL-REFERENCE",
+      customerId: "customer-id",
+      serviceType: provider.type,
+      providerId: provider.id,
+      productId: product.id,
+      amountKobo: 50000,
+      convenienceFeeKobo: 0,
+      totalKobo: 50000,
+      recipient: "+2348030000000",
+      recipientName: null,
+      status: UtilityTransactionStatus.PENDING,
+      providerStatus: "PENDING",
+      providerReference: null,
+      mockToken: null,
+      customerNote: null,
+      failureReason: null,
+      metadata: { testMode: false, walletDebitLedgerEntryId: "ledger-debit", walletDebitReference: "KGO-UTIL-REFERENCE-WALLET-DEBIT", walletDebitStatus: WalletLedgerEntryStatus.POSTED },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: null,
+      provider,
+      product
+    };
+    const debitLedger = {
+      id: "ledger-debit",
+      walletId: "wallet-id",
+      customerId: "customer-id",
+      entryType: WalletLedgerEntryType.SERVICE_PAYMENT,
+      direction: WalletLedgerDirection.DEBIT,
+      status: WalletLedgerEntryStatus.POSTED,
+      amount: new Prisma.Decimal(500),
+      currency: "NGN",
+      reference: "KGO-UTIL-REFERENCE-WALLET-DEBIT",
+      metadata: {},
+      createdAt: new Date()
+    };
+    const ledgerFindUnique = jest.fn(({ where }) => {
+      if (where.id === "ledger-debit") return Promise.resolve(debitLedger);
+      if (where.idempotencyKey) return Promise.resolve(null);
+      return Promise.resolve(null);
+    });
+    const { tx, service } = serviceWith({
+      txOverrides: {
+        customerWalletLedgerEntry: {
+          findUnique: ledgerFindUnique,
+          create: jest.fn().mockResolvedValue({
+            id: "ledger-reversal",
+            reference: "KGO-UTIL-REFERENCE-WALLET-REVERSAL",
+            status: WalletLedgerEntryStatus.POSTED
+          }),
+          update: jest.fn()
+        }
+      },
+      prismaOverrides: {
+        utilityTransaction: {
+          findFirst: jest.fn().mockResolvedValue(pendingWalletTransaction),
+          findUnique: jest.fn().mockResolvedValue(pendingWalletTransaction)
+        }
+      }
+    });
+
+    const result = await service.cancel("user-id", "transaction-id");
+
+    expect(tx.customerWalletLedgerEntry.create).toHaveBeenCalledTimes(1);
+    expect(tx.utilityTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: UtilityTransactionStatus.CANCELLED,
+        customerNote: "Utility request cancelled. Your wallet has been reversed.",
+          metadata: expect.objectContaining({
+          cancelledBy: "customer",
+          cancellationStatus: "ACCEPTED",
+          cancelledAt: expect.any(String),
+          walletDebitStatus: WalletLedgerEntryStatus.REVERSED,
+          walletReversalReference: "KGO-UTIL-REFERENCE-WALLET-REVERSAL"
+        })
+      })
+    }));
+    expect(result).toMatchObject({
+      status: UtilityTransactionStatus.CANCELLED,
+      walletReversalReference: "KGO-UTIL-REFERENCE-WALLET-REVERSAL"
+    });
+  });
+
   it("blocks live data purchases with unmapped demo product codes before wallet debit", async () => {
     const dataProvider = {
       ...provider,

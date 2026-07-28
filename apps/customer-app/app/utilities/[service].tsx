@@ -74,8 +74,14 @@ const walletUtilitiesEnabled = (config: {
 );
 
 function receiptMessage(transaction: UtilityTransactionSummary) {
+  if (transaction.status === "CANCELLED" && (transaction.walletReversalReference || transaction.walletDebitStatus === "REVERSED")) {
+    return "This utility request was cancelled and your wallet has been reversed.";
+  }
   if (transaction.walletReversalReference || transaction.walletDebitStatus === "REVERSED") {
     return "This utility request failed and your wallet has been reversed.";
+  }
+  if (transaction.status === "CANCELLED") {
+    return "This utility request was cancelled before fulfilment. If your wallet was debited, KariGO will confirm the reversal status.";
   }
   if (transaction.status === "SUCCESSFUL") {
     return "Your utility request was successful.";

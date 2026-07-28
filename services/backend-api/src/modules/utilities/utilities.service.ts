@@ -32,6 +32,10 @@ const TERMINAL_STATUSES: UtilityTransactionStatus[] = [
   UtilityTransactionStatus.FAILED,
   UtilityTransactionStatus.CANCELLED
 ];
+const CUSTOMER_CANCELLABLE_STATUSES: UtilityTransactionStatus[] = [
+  UtilityTransactionStatus.DRAFT,
+  UtilityTransactionStatus.PENDING
+];
 const UTILITY_WALLET_SOURCE_TYPE = "UTILITY_TRANSACTION";
 const UTILITY_WALLET_REVERSAL_SOURCE_TYPE = "UTILITY_TRANSACTION_REVERSAL";
 
@@ -372,7 +376,14 @@ export class UtilitiesService {
     >;
   }
 
-  private async reverseWalletDebitIfNeeded(transactionId: string, reason: string, adminInclude = false) {
+  private async reverseWalletDebitIfNeeded(
+    transactionId: string,
+    reason: string,
+    adminInclude = false,
+    finalStatus: UtilityTransactionStatus = UtilityTransactionStatus.FAILED,
+    customerNote = "Utility payment failed. Your wallet has been reversed.",
+    extraMetadata: Record<string, unknown> = {}
+  ) {
     const transaction = await this.prisma.utilityTransaction.findUnique({
       where: { id: transactionId },
       include: adminInclude ? this.adminInclude(true) : this.customerInclude()
@@ -393,10 +404,11 @@ export class UtilitiesService {
         const refreshed = await tx.utilityTransaction.update({
           where: { id: transaction.id },
           data: {
-            status: UtilityTransactionStatus.FAILED,
-            customerNote: "Utility payment failed. Your wallet has been reversed.",
+            status: finalStatus,
+            customerNote,
             failureReason: reason,
             metadata: this.mergeMetadata(transaction.metadata, {
+              ...extraMetadata,
               walletDebitStatus: "REVERSED",
               walletReversalLedgerEntryId: existingReversal.id,
               walletReversalReference: existingReversal.reference,
@@ -462,10 +474,11 @@ export class UtilitiesService {
       return tx.utilityTransaction.update({
         where: { id: transaction.id },
         data: {
-          status: UtilityTransactionStatus.FAILED,
-          customerNote: "Utility payment failed. Your wallet has been reversed.",
+          status: finalStatus,
+          customerNote,
           failureReason: reason,
           metadata: this.mergeMetadata(transaction.metadata, {
+            ...extraMetadata,
             walletDebitStatus: WalletLedgerEntryStatus.REVERSED,
             walletReversalLedgerEntryId: reversalLedger.id,
             walletReversalReference: reversalLedger.reference,
@@ -506,15 +519,45 @@ export class UtilitiesService {
       include: this.customerInclude()
     });
     if (!transaction) throw new NotFoundException("Utility transaction not found");
+    if (transaction.status === UtilityTransactionStatus.CANCELLED) {
+      return this.customerTransaction(transaction);
+    }
     if (TERMINAL_STATUSES.includes(transaction.status)) {
       throw new BadRequestException("This utility transaction can no longer be cancelled.");
+    }
+    if (!CUSTOMER_CANCELLABLE_STATUSES.includes(transaction.status)) {
+      throw new BadRequestException("This utility request is already being processed by the provider and cannot be cancelled from the app.");
+    }
+    const metadata = this.jsonObject(transaction.metadata);
+    const cancellationReason = "Cancelled by customer before provider fulfilment.";
+    const cancellationNote = "Utility request cancelled before fulfilment.";
+    const cancellationMetadata = {
+      cancelledBy: "customer",
+      cancellationStatus: "ACCEPTED",
+      cancelledAt: new Date().toISOString()
+    };
+    if (typeof metadata.walletDebitLedgerEntryId === "string") {
+      const reversed = await this.reverseWalletDebitIfNeeded(
+        transaction.id,
+        cancellationReason,
+        false,
+        UtilityTransactionStatus.CANCELLED,
+        "Utility request cancelled. Your wallet has been reversed.",
+        cancellationMetadata
+      );
+      if (reversed) return this.customerTransaction(reversed);
     }
     const updated = await this.prisma.utilityTransaction.update({
       where: { id: transaction.id },
       data: {
         status: UtilityTransactionStatus.CANCELLED,
-        providerStatus: "MOCK_CANCELLED",
-        failureReason: "Cancelled by customer before fulfilment.",
+        providerStatus: "CUSTOMER_CANCELLED",
+        customerNote: cancellationNote,
+        failureReason: cancellationReason,
+        metadata: this.mergeMetadata(transaction.metadata, {
+          ...cancellationMetadata,
+          walletReversalStatus: "NOT_REQUIRED"
+        }),
         completedAt: new Date()
       },
       include: this.customerInclude()
