@@ -97,6 +97,11 @@ assert(productsPage.includes("productsApi.updateAvailability"), "Products page m
 assert(productsPage.includes("productsApi.archive"), "Products page must support safe archive.");
 assert(productsPage.includes("Vendor catalogue"), "Products page must show the polished vendor catalogue eyebrow.");
 assert(productsPage.includes("SME Services vendors should use the Services workspace."), "Products page must route SME Services vendors to the services workspace.");
+assert(productsPage.includes("Only active, approved product-selling partners can create, update, publish or archive products."), "Products page must show inactive/suspended partner restriction copy.");
+assert(productsPage.includes("validateForm"), "Products page must validate product input before submitting.");
+assert(productsPage.includes("Use a valid HTTPS JPG, PNG or WebP product image."), "Products page must validate image URL policy.");
+assert(productsPage.includes("actioningProductId"), "Products page must disable duplicate product actions while processing.");
+assert(!productsPage.includes("> Featured</label>"), "Products page must not allow vendors to self-feature products.");
 assert(productsPage.includes("Options & add-ons"), "Products page must expose an options and add-ons section.");
 assert(productsPage.includes("Add option group"), "Products page must let vendors add option groups.");
 assert(productsPage.includes("priceAdjustmentKobo"), "Product options must use integer kobo price adjustments.");

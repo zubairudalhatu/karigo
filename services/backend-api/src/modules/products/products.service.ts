@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, ProductCategory } from "@prisma/client";
+import { AccountStatus, Prisma, ProductCategory, VendorStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ListProductsQueryDto } from "./dto/list-products-query.dto";
 import { ProductInputDto } from "./dto/product-input.dto";
@@ -44,6 +44,9 @@ const PRODUCT_SELECT = {
     }
   }
 } satisfies Prisma.ProductSelect;
+
+type SelectedProduct = Prisma.ProductGetPayload<{ select: typeof PRODUCT_SELECT }>;
+const PRODUCT_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 
 @Injectable()
 export class ProductsService {
@@ -92,7 +95,7 @@ export class ProductsService {
   }
 
   async listVendorProducts(userId: string, query: ListProductsQueryDto = {}) {
-    const vendor = await this.requireVendor(userId);
+    const vendor = await this.requireActiveProductVendor(userId);
     const products = await this.prisma.product.findMany({
       where: {
         vendorId: vendor.id,
@@ -108,22 +111,24 @@ export class ProductsService {
   }
 
   async createVendorProduct(userId: string, dto: ProductInputDto) {
-    const vendor = await this.requireVendor(userId);
+    const vendor = await this.requireActiveProductVendor(userId);
+    const input = await this.validatedInput(vendor.id, dto) as ProductInputDto;
     const product = await this.prisma.product.create({
       data: {
         vendorId: vendor.id,
-        name: dto.name,
-        description: dto.description,
-        category: dto.category ?? this.labelForCategory(dto.productCategory),
-        productCategory: dto.productCategory,
-        price: new Prisma.Decimal(dto.price),
-        imageUrl: dto.imageUrl,
-        isAvailable: dto.isAvailable ?? true,
-        isFeatured: dto.isFeatured ?? false,
-        optionGroups: this.optionGroupsCreate(dto.optionGroups)
+        name: input.name,
+        description: input.description,
+        category: input.category ?? this.labelForCategory(input.productCategory),
+        productCategory: input.productCategory,
+        price: new Prisma.Decimal(input.price),
+        imageUrl: input.imageUrl,
+        isAvailable: input.isAvailable ?? true,
+        isFeatured: false,
+        optionGroups: this.optionGroupsCreate(input.optionGroups)
       },
       select: PRODUCT_SELECT
-    });
+    }) as SelectedProduct;
+    await this.logProductAudit(vendor.id, userId, "vendor.product.created", product.id, null, this.auditSnapshot(product));
 
     return this.toProductSummary(product);
   }
@@ -134,22 +139,22 @@ export class ProductsService {
   }
 
   async updateVendorProduct(userId: string, productId: string, dto: UpdateProductDto) {
-    await this.requireOwnedProduct(userId, productId);
+    const existing = await this.requireOwnedProduct(userId, productId);
+    const input = await this.validatedInput(existing.vendorId, dto, productId);
     const productData: Prisma.ProductUpdateInput = {
-      ...(dto.name !== undefined ? { name: dto.name } : {}),
-      ...(dto.description !== undefined ? { description: dto.description } : {}),
-      ...(dto.category !== undefined ? { category: dto.category } : {}),
-      ...(dto.productCategory !== undefined ? { productCategory: dto.productCategory } : {}),
-      ...(dto.price !== undefined ? { price: new Prisma.Decimal(dto.price) } : {}),
-      ...(dto.imageUrl !== undefined ? { imageUrl: dto.imageUrl } : {}),
-      ...(dto.isAvailable !== undefined ? { isAvailable: dto.isAvailable } : {}),
-      ...(dto.isFeatured !== undefined ? { isFeatured: dto.isFeatured } : {}),
-      ...(dto.optionGroups !== undefined ? {
-        optionGroups: { create: this.optionGroupsCreate(dto.optionGroups)?.create ?? [] }
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.category !== undefined ? { category: input.category } : {}),
+      ...(input.productCategory !== undefined ? { productCategory: input.productCategory } : {}),
+      ...(input.price !== undefined ? { price: new Prisma.Decimal(input.price) } : {}),
+      ...(input.imageUrl !== undefined ? { imageUrl: input.imageUrl } : {}),
+      ...(input.isAvailable !== undefined ? { isAvailable: input.isAvailable } : {}),
+      ...(input.optionGroups !== undefined ? {
+        optionGroups: { create: this.optionGroupsCreate(input.optionGroups)?.create ?? [] }
       } : {})
     };
 
-    const product = dto.optionGroups !== undefined
+    const product = input.optionGroups !== undefined
       ? await this.prisma.$transaction(async (tx) => {
           await tx.productOptionGroup.updateMany({ where: { productId }, data: { isActive: false } });
           return tx.product.update({ where: { id: productId }, data: productData, select: PRODUCT_SELECT });
@@ -159,27 +164,40 @@ export class ProductsService {
           data: productData,
           select: PRODUCT_SELECT
         });
+    await this.logProductAudit(existing.vendorId, userId, "vendor.product.updated", product.id, this.auditSnapshot(existing), {
+      ...this.auditSnapshot(product),
+      changedFields: this.changedFields(existing, input)
+    });
 
     return this.toProductSummary(product);
   }
 
   async updateVendorProductAvailability(userId: string, productId: string, dto: UpdateProductAvailabilityDto) {
-    await this.requireOwnedProduct(userId, productId);
+    const existing = await this.requireOwnedProduct(userId, productId);
     const product = await this.prisma.product.update({
       where: { id: productId },
       data: { isAvailable: dto.isAvailable },
       select: PRODUCT_SELECT
+    });
+    await this.logProductAudit(existing.vendorId, userId, "vendor.product.availability_updated", product.id, {
+      isAvailable: existing.isAvailable
+    }, {
+      isAvailable: product.isAvailable
     });
 
     return this.toProductSummary(product);
   }
 
   async archiveVendorProduct(userId: string, productId: string) {
-    await this.requireOwnedProduct(userId, productId);
+    const existing = await this.requireOwnedProduct(userId, productId);
     const product = await this.prisma.product.update({
       where: { id: productId },
       data: { isActive: false, isAvailable: false, deletedAt: new Date() },
       select: PRODUCT_SELECT
+    });
+    await this.logProductAudit(existing.vendorId, userId, "vendor.product.archived", product.id, this.auditSnapshot(existing), {
+      isActive: false,
+      isAvailable: product.isAvailable
     });
 
     return this.toProductSummary(product);
@@ -202,16 +220,27 @@ export class ProductsService {
     };
   }
 
-  private async requireVendor(userId: string) {
-    const vendor = await this.prisma.vendor.findUnique({ where: { userId }, select: { id: true } });
+  private async requireActiveProductVendor(userId: string) {
+    const vendor = await this.prisma.vendor.findFirst({
+      where: {
+        userId,
+        deletedAt: null,
+        status: VendorStatus.ACTIVE,
+        user: { accountStatus: AccountStatus.ACTIVE, deletedAt: null }
+      },
+      select: { id: true, businessCategory: true }
+    });
     if (!vendor) {
-      throw new ForbiddenException("Vendor profile is required");
+      throw new ForbiddenException("Active approved Partner account is required to manage products.");
+    }
+    if (["SME_SERVICES", "SERVICE_PROVIDER"].includes(vendor.businessCategory.toUpperCase())) {
+      throw new BadRequestException("Service-only partners should manage listings from the Services workspace.");
     }
     return vendor;
   }
 
   private async requireOwnedProduct(userId: string, productId: string) {
-    const vendor = await this.requireVendor(userId);
+    const vendor = await this.requireActiveProductVendor(userId);
     const product = await this.prisma.product.findFirst({
       where: { id: productId, vendorId: vendor.id, deletedAt: null, isActive: true },
       select: PRODUCT_SELECT
@@ -224,7 +253,74 @@ export class ProductsService {
     return product;
   }
 
-  private toProductSummary(product: Prisma.ProductGetPayload<{ select: typeof PRODUCT_SELECT }>) {
+  private async validatedInput(vendorId: string, dto: Partial<ProductInputDto>, existingProductId?: string) {
+    const input = { ...dto };
+    if (input.name !== undefined) {
+      input.name = this.requiredText(input.name, "Product name", 2, 120);
+      await this.assertUniqueProductName(vendorId, input.name, existingProductId);
+    }
+    if (input.description !== undefined) {
+      input.description = this.requiredText(input.description, "Product description", 8, 280);
+    }
+    if (input.category !== undefined) {
+      input.category = input.category?.trim() ? this.requiredText(input.category, "Display category", 1, 80) : undefined;
+    }
+    if (input.productCategory !== undefined && !Object.values(ProductCategory).includes(input.productCategory)) {
+      throw new BadRequestException("Unsupported product category.");
+    }
+    if (input.price !== undefined && (!Number.isFinite(Number(input.price)) || Number(input.price) < 1)) {
+      throw new BadRequestException("Product price must be at least NGN 1.");
+    }
+    if (input.imageUrl !== undefined) {
+      input.imageUrl = this.validImageUrl(input.imageUrl);
+    }
+    if (input.isFeatured !== undefined) {
+      delete input.isFeatured;
+    }
+    return input;
+  }
+
+  private async assertUniqueProductName(vendorId: string, name: string, existingProductId?: string) {
+    const duplicate = await this.prisma.product.findFirst({
+      where: {
+        vendorId,
+        deletedAt: null,
+        isActive: true,
+        name: { equals: name, mode: "insensitive" },
+        ...(existingProductId ? { id: { not: existingProductId } } : {})
+      },
+      select: { id: true }
+    });
+    if (duplicate) {
+      throw new BadRequestException("A product with this name already exists in your catalogue.");
+    }
+  }
+
+  private requiredText(value: unknown, label: string, minLength: number, maxLength: number) {
+    const text = String(value ?? "").trim();
+    if (text.length < minLength) throw new BadRequestException(`${label} is too short.`);
+    if (text.length > maxLength) throw new BadRequestException(`${label} is too long.`);
+    return text;
+  }
+
+  private validImageUrl(value: unknown) {
+    const raw = String(value ?? "").trim();
+    try {
+      const parsed = new URL(raw);
+      if (parsed.protocol !== "https:") throw new Error("invalid protocol");
+      const path = parsed.pathname.toLowerCase();
+      const isKnownUpload = path.includes("/uploads/vendors/") && path.includes("/product-images/");
+      const hasImageExtension = PRODUCT_IMAGE_EXTENSIONS.some((extension) => path.endsWith(extension));
+      if (!isKnownUpload && !hasImageExtension) {
+        throw new Error("unsupported image type");
+      }
+      return raw;
+    } catch {
+      throw new BadRequestException("Product image must be a valid HTTPS JPG, PNG or WebP URL.");
+    }
+  }
+
+  private toProductSummary(product: SelectedProduct) {
     return {
       id: product.id,
       vendorId: product.vendorId,
@@ -298,5 +394,45 @@ export class ProductsService {
 
   private labelForCategory(category: ProductCategory) {
     return category === ProductCategory.FOOD ? "Food" : category === ProductCategory.GROCERIES ? "Groceries" : "Market Items";
+  }
+
+  private auditSnapshot(product: SelectedProduct) {
+    return {
+      name: product.name,
+      category: product.category,
+      productCategory: product.productCategory,
+      price: product.price.toNumber(),
+      isAvailable: product.isAvailable,
+      isFeatured: product.isFeatured,
+      imageUrlPresent: Boolean(product.imageUrl),
+      optionGroupCount: product.optionGroups.length
+    };
+  }
+
+  private changedFields(existing: SelectedProduct, input: Partial<ProductInputDto>) {
+    const fields: string[] = [];
+    if (input.name !== undefined && input.name !== existing.name) fields.push("name");
+    if (input.description !== undefined && input.description !== existing.description) fields.push("description");
+    if (input.category !== undefined && input.category !== existing.category) fields.push("category");
+    if (input.productCategory !== undefined && input.productCategory !== existing.productCategory) fields.push("productCategory");
+    if (input.price !== undefined && Number(input.price) !== existing.price.toNumber()) fields.push("price");
+    if (input.imageUrl !== undefined && input.imageUrl !== existing.imageUrl) fields.push("imageUrl");
+    if (input.isAvailable !== undefined && input.isAvailable !== existing.isAvailable) fields.push("isAvailable");
+    if (input.optionGroups !== undefined) fields.push("optionGroups");
+    return fields;
+  }
+
+  private async logProductAudit(vendorId: string, actorUserId: string, action: string, productId: string, oldValue: object | null, newValue: object) {
+    await this.prisma.vendorAuditLog.create({
+      data: {
+        vendorId,
+        actorUserId,
+        action,
+        entityType: "Product",
+        entityId: productId,
+        oldValue: oldValue as Prisma.InputJsonValue,
+        newValue: newValue as Prisma.InputJsonValue
+      }
+    });
   }
 }
