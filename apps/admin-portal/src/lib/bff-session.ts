@@ -18,7 +18,7 @@ const PUBLIC_AUTH_PATHS = [
 type BackendPayload = {
   success?: boolean;
   message?: string;
-  data?: Record<string, unknown>;
+  data?: unknown;
   error_code?: string;
   details?: unknown;
 };
@@ -124,8 +124,12 @@ function publicAuthPath(path: string) {
   return PUBLIC_AUTH_PATHS.some((item) => path === item || path.startsWith(`${item}/`));
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function sanitizePayload(payload: BackendPayload): BackendPayload {
-  if (!payload?.data || typeof payload.data !== "object") return payload;
+  if (!isPlainRecord(payload?.data)) return payload;
   const { accessToken: _accessToken, refreshToken: _refreshToken, refreshTokenId: _refreshTokenId, ...safeData } = payload.data;
   return { ...payload, data: safeData };
 }
@@ -188,8 +192,9 @@ async function refreshSession(request: NextRequest) {
     .catch(() => null);
   if (!response) return null;
   const payload = await response.json().catch(() => null) as BackendPayload | null;
-  if (!response.ok || payload?.success === false || !payload?.data?.accessToken) return null;
-  return payload.data as { accessToken: string; refreshToken?: string; user?: { role?: string } };
+  const data = isPlainRecord(payload?.data) ? payload.data : null;
+  if (!response.ok || payload?.success === false || typeof data?.accessToken !== "string") return null;
+  return data as { accessToken: string; refreshToken?: string; user?: { role?: string } };
 }
 
 export async function handleBffRequest(request: NextRequest, pathParts: string[]) {
@@ -234,7 +239,7 @@ export async function handleBffRequest(request: NextRequest, pathParts: string[]
   }
 
   const payload = await backendResponse.json().catch(() => null) as BackendPayload | null;
-  const data = payload?.data;
+  const data = isPlainRecord(payload?.data) ? payload.data : undefined;
   const accessFromPayload = typeof data?.accessToken === "string" ? data.accessToken : undefined;
   const refreshFromPayload = typeof data?.refreshToken === "string" ? data.refreshToken : undefined;
   const role = data?.user && typeof data.user === "object" ? (data.user as { role?: string }).role : undefined;

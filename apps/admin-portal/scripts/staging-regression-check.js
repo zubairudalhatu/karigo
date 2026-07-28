@@ -31,6 +31,7 @@ assert(bffSession.includes('"x-karigo-csrf"'), "Admin BFF must validate the CSRF
 assert(bffSession.includes("CSRF_ORIGIN_REJECTED") && bffSession.includes("CSRF_TOKEN_REJECTED"), "Admin BFF must reject unsafe origin or token checks.");
 assert(bffSession.includes("/auth/refresh"), "Admin BFF must refresh sessions server-side only.");
 assert(bffSession.includes("sanitizePayload"), "Admin BFF must strip JWT fields from browser responses.");
+assert(bffSession.includes("isPlainRecord") && bffSession.includes("!Array.isArray"), "Admin BFF sanitizer must preserve array collection payloads.");
 assert(bffSession.includes("BFF_BACKEND_UNAVAILABLE"), "Admin BFF must return a safe backend-unavailable login error.");
 assert(bffSession.includes("BFF_BACKEND_NON_JSON"), "Admin BFF must safely handle non-JSON backend responses.");
 assert(bffSession.includes("BFF_SESSION_USER_MISSING"), "Admin BFF must reject token payloads without a user profile.");
@@ -89,6 +90,7 @@ const vendorApplicationsApiSource = read("src", "api", "vendor-applications.api.
 assert(vendorApplicationsApiSource.includes("trash: (id: string"), "Admin vendor applications API must call trash endpoint.");
 assert(vendorApplicationsApiSource.includes("restore: (id: string"), "Admin vendor applications API must call restore endpoint.");
 assert(vendorApplicationsApiSource.includes("permanentlyDelete"), "Admin vendor applications API must call permanent delete endpoint.");
+assert(vendorApplicationsApiSource.includes("requireCollection"), "Admin vendor applications API must validate collection payloads before rendering empty states.");
 
 const vendorsPage = read("app", "vendors", "page.tsx");
 assert(vendorsPage.includes("Move Partner Account to Trash / Close"), "Admin Vendors page must use Partner Account trash wording.");
@@ -99,11 +101,13 @@ assert(vendorsPage.includes("A reason of at least 5 characters is required."), "
 assert(vendorsPage.includes("Suspending this partner blocks workspace access"), "Admin Vendors page must warn about suspension impact.");
 assert(vendorsPage.includes("Reactivate"), "Admin Vendors page must expose reactivation for suspended vendors.");
 assert(vendorsPage.includes("window.confirm"), "Admin Vendors lifecycle controls must require confirmation.");
+assert(vendorsPage.includes("loadError") && vendorsPage.includes("Vendors could not be loaded"), "Admin Vendors page must distinguish load failures from true empty states.");
 
 const managementApiSource = read("src", "api", "management.api.ts");
 assert(managementApiSource.includes("admin/vendors/${vendorId}/lifecycle"), "Admin management API must call vendor lifecycle endpoint.");
 assert(managementApiSource.includes("admin/riders/${riderId}/lifecycle"), "Admin management API must call Captain lifecycle endpoint.");
 assert(managementApiSource.includes("admin/users/${userId}/lifecycle"), "Admin management API must call Customer lifecycle endpoint.");
+assert(managementApiSource.includes("requireCollection"), "Admin management API must validate collection payloads before pages render them.");
 
 const ridersPage = read("app", "riders", "page.tsx");
 assert(ridersPage.includes("Captains"), "Admin Riders page must use Captain-facing operations copy.");
@@ -121,6 +125,10 @@ assert(usersPage.includes("Suspend Customer"), "Admin Users page must expose Cus
 assert(usersPage.includes("Reactivate Customer"), "Admin Users page must expose Customer reactivation.");
 assert(usersPage.includes("does not add Customer approval"), "Admin Users page must avoid implying Customer approval workflow.");
 assert(usersPage.includes("preserving order, wallet, utility and support history"), "Admin Users page must state Customer history is preserved.");
+assert(usersPage.includes("loadError") && usersPage.includes("Users could not be loaded"), "Admin Users page must distinguish load failures from true empty states.");
+const adminCollections = read("src", "lib", "collections.ts");
+assert(adminCollections.includes("ADMIN_COLLECTION_INVALID_SHAPE"), "Admin collection helper must throw a safe invalid-shape error.");
+assert(adminCollections.includes("We could not load ${label}. Please retry."), "Admin collection helper must use page-specific load failure copy.");
 
 const deliveryCaptainApplicationsPage = read("app", "delivery-captain-applications", "page.tsx");
 assert(deliveryCaptainApplicationsPage.includes("Delivery Captain Applications"), "Admin Delivery Captain applications page must exist.");

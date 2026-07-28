@@ -2,23 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { AdminUserSummary, managementApi } from "../../src/api/management.api";
-import { Badge, Empty, ErrorMessage, PortalShell } from "../../src/components/portal";
+import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
+import { collectionLoadError } from "../../src/lib/collections";
 import { friendlyError } from "../../src/lib/errors";
 
 export default function UsersPage() {
   const [users, setUsers] = useState<AdminUserSummary[]>([]);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState("");
 
   async function load() {
     setLoading(true);
-    setError("");
+    setLoadError("");
     try {
       setUsers(await managementApi.users());
     } catch (e) {
-      setError(friendlyError(e));
+      setUsers([]);
+      setLoadError(collectionLoadError(e, "users"));
     } finally {
       setLoading(false);
     }
@@ -57,7 +60,7 @@ export default function UsersPage() {
     <ErrorMessage>{error}</ErrorMessage>
     <div className="actions"><button className="secondary" onClick={() => void load()}>{loading ? "Refreshing..." : "Refresh"}</button></div>
     <section className="section">
-      {users.length ? users.map((user) => <article className="card" key={user.id}>
+      {loading ? <Loading /> : loadError ? <div className="empty" role="alert"><strong>Users could not be loaded</strong><span>{loadError}</span><button className="secondary" onClick={() => void load()}>Retry</button></div> : users.length ? users.map((user) => <article className="card" key={user.id}>
         <strong>{user.fullName}</strong>
         <p className="muted">{user.phoneNumber} - {user.email ?? "No email recorded"}</p>
         <p><Badge>{user.role}</Badge> {user.adminRole ? <Badge>{user.adminRole}</Badge> : null} <Badge>{user.accountStatus}</Badge></p>

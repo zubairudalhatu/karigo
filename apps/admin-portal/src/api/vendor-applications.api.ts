@@ -1,4 +1,5 @@
 import { api } from "./client";
+import { requireCollection } from "../lib/collections";
 
 export interface VendorApplicationDocument {
   id: string;
@@ -50,7 +51,8 @@ export interface VendorApplication {
 export type VendorApplicationTrashFilter = "active" | "trashed" | "all";
 
 export const vendorApplicationsApi = {
-  list: (trash: VendorApplicationTrashFilter = "active") => api.get<VendorApplication[]>(`admin/vendor-applications?trash=${trash}`),
+  list: async (trash: VendorApplicationTrashFilter = "active") =>
+    requireCollection<VendorApplication>(await api.get<unknown>(`admin/vendor-applications?trash=${trash}`), "vendor applications"),
   review: (id: string, status: string, notes?: string) => api.patch<VendorApplication>(`admin/vendor-applications/${id}`, { status, notes }),
   trash: (id: string, reason: string, note?: string) => api.patch<VendorApplication>(`admin/vendor-applications/${id}/trash`, { reason, note }),
   restore: (id: string, reason?: string) => api.patch<VendorApplication>(`admin/vendor-applications/${id}/restore`, { reason }),

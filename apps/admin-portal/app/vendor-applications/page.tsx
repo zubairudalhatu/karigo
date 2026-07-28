@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { managementApi } from "../../src/api/management.api";
 import { vendorApplicationsApi, VendorApplication, VendorApplicationTrashFilter } from "../../src/api/vendor-applications.api";
-import { Badge, Empty, ErrorMessage, PortalShell } from "../../src/components/portal";
+import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
+import { collectionLoadError } from "../../src/lib/collections";
 import { friendlyError } from "../../src/lib/errors";
 
 const reviewStatuses = ["UNDER_REVIEW", "CHANGES_REQUESTED", "PROVISIONALLY_APPROVED", "APPROVED", "REJECTED"];
@@ -19,14 +20,21 @@ export default function VendorApplicationsPage() {
   const [trashFilter, setTrashFilter] = useState<VendorApplicationTrashFilter>("active");
   const [trashInputs, setTrashInputs] = useState<Record<string, { reason: string; note: string }>>({});
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [message, setMessage] = useState("");
   const [actioning, setActioning] = useState("");
+  const [loading, setLoading] = useState(true);
 
   async function load(filter: VendorApplicationTrashFilter = trashFilter) {
+    setLoading(true);
+    setLoadError("");
     try {
       setApplications(await vendorApplicationsApi.list(filter));
     } catch (e) {
-      setError(friendlyError(e));
+      setApplications([]);
+      setLoadError(collectionLoadError(e, "vendor applications"));
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -135,7 +143,7 @@ export default function VendorApplicationsPage() {
       </label>
     </div>
     <section className="section">
-      {applications.length ? applications.map((application) => <article className="card" key={application.id}>
+      {loading ? <Loading /> : loadError ? <div className="empty" role="alert"><strong>Vendor applications could not be loaded</strong><span>{loadError}</span><button className="secondary" onClick={() => void load()}>Retry</button></div> : applications.length ? applications.map((application) => <article className="card" key={application.id}>
         <strong>{application.businessName}</strong>
         <p className="muted">{application.reference} - {application.businessCategory} - {application.city}, {application.state}</p>
         <p className="muted">Partner type: {partnerTypeLabel(application)}</p>

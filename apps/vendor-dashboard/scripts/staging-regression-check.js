@@ -33,6 +33,7 @@ assert(bffSession.includes('"x-karigo-csrf"'), "Partner BFF must validate the CS
 assert(bffSession.includes("CSRF_ORIGIN_REJECTED") && bffSession.includes("CSRF_TOKEN_REJECTED"), "Partner BFF must reject unsafe origin or token checks.");
 assert(bffSession.includes("/auth/refresh"), "Partner BFF must refresh sessions server-side only.");
 assert(bffSession.includes("sanitizePayload"), "Partner BFF must strip JWT fields from browser responses.");
+assert(bffSession.includes("isPlainRecord") && bffSession.includes("!Array.isArray"), "Partner BFF sanitizer must preserve array collection payloads.");
 assert(bffSession.includes("BFF_BACKEND_UNAVAILABLE"), "Partner BFF must return a safe backend-unavailable login error.");
 assert(bffSession.includes("BFF_BACKEND_NON_JSON"), "Partner BFF must safely handle non-JSON backend responses.");
 assert(bffSession.includes("BFF_SESSION_USER_MISSING"), "Partner BFF must reject token payloads without a user profile.");
@@ -77,6 +78,10 @@ assert(dashboardPage.includes("Your partner profile is not active."), "Partner d
 assert(dashboardPage.includes("Start Partner Onboarding"), "Missing-profile state must link to onboarding.");
 assert(dashboardPage.includes("Contact Support"), "Missing-profile state must expose support contact action.");
 assert(dashboardPage.includes("Only KariGO Admin can restore, approve or reactivate closed partner records."), "Missing-profile state must not self-restore closed partner records.");
+const appErrorBoundary = read("app", "error.tsx");
+assert(appErrorBoundary.includes("Your workspace could not be loaded."), "Partner Workspace must include a safe render error boundary.");
+assert(appErrorBoundary.includes("Retry") && appErrorBoundary.includes("Return to login"), "Partner error boundary must expose recovery actions.");
+assert(!appErrorBoundary.includes("error.stack"), "Partner error boundary must not expose stack traces to users.");
 
 const loginPage = read("app", "login", "page.tsx");
 assert(loginPage.includes("Partner Workspace login"), "Partner login page must use Partner Workspace copy.");

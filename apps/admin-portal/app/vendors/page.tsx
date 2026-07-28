@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { AdminVendor, managementApi } from "../../src/api/management.api";
-import { Badge, Empty, ErrorMessage, PortalShell } from "../../src/components/portal";
+import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
+import { collectionLoadError } from "../../src/lib/collections";
 import { friendlyError } from "../../src/lib/errors";
 
 function vendorLocation(vendor: AdminVendor) {
@@ -36,19 +37,22 @@ export default function VendorsPage() {
   const [vendors, setVendors] = useState<AdminVendor[]>([]);
   const [trashedVendors, setTrashedVendors] = useState<AdminVendor[]>([]);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState("");
 
   async function load() {
     setLoading(true);
-    setError("");
+    setLoadError("");
     try {
       const [active, trash] = await Promise.all([managementApi.vendors(), managementApi.trashedVendors()]);
       setVendors(active);
       setTrashedVendors(trash);
     } catch (e) {
-      setError(friendlyError(e));
+      setVendors([]);
+      setTrashedVendors([]);
+      setLoadError(collectionLoadError(e, "vendors"));
     } finally {
       setLoading(false);
     }
@@ -174,7 +178,7 @@ export default function VendorsPage() {
 
     <section className="section">
       <h2>Active vendors</h2>
-      {vendors.length ? vendors.map((vendor) => <article className="card" key={vendor.id}>
+      {loading ? <Loading /> : loadError ? <div className="empty" role="alert"><strong>Vendors could not be loaded</strong><span>{loadError}</span><button className="secondary" onClick={() => void load()}>Retry</button></div> : vendors.length ? vendors.map((vendor) => <article className="card" key={vendor.id}>
         <strong>{vendor.businessName}</strong>
         <p className="muted">{vendor.businessCategory} - {vendorLocation(vendor)}</p>
         <p><Badge>{vendor.status}</Badge> <Badge>{vendor.user.accountStatus}</Badge></p>
@@ -205,7 +209,7 @@ export default function VendorsPage() {
     <section className="section">
       <h2>Trash</h2>
       <p className="muted">Trashed Partner Accounts are hidden from public discovery and Partner Workspace operations. Restore if needed, or permanently delete only safe test accounts after typing DELETE.</p>
-      {trashedVendors.length ? trashedVendors.map((vendor) => <article className="card internal" key={vendor.id}>
+      {loading || loadError ? null : trashedVendors.length ? trashedVendors.map((vendor) => <article className="card internal" key={vendor.id}>
         <strong>{vendor.businessName}</strong>
         <p className="muted">{vendor.businessCategory} - {vendorLocation(vendor)}</p>
         <p><Badge>In Trash</Badge> <Badge>{vendor.user.accountStatus}</Badge></p>

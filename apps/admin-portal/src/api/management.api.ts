@@ -1,4 +1,5 @@
 import { api } from "./client";
+import { requireCollection } from "../lib/collections";
 
 export interface VendorCleanupSafety {
   canPermanentlyDelete: boolean;
@@ -127,9 +128,9 @@ export interface VendorActivationLinkResult {
 }
 
 export const managementApi = {
-  users: () => api.get<AdminUserSummary[]>("admin/users"),
-  vendors: () => api.get<AdminVendor[]>("admin/vendors"),
-  trashedVendors: () => api.get<AdminVendor[]>("admin/vendors/trash"),
+  users: async () => requireCollection<AdminUserSummary>(await api.get<unknown>("admin/users"), "users"),
+  vendors: async () => requireCollection<AdminVendor>(await api.get<unknown>("admin/vendors"), "vendors"),
+  trashedVendors: async () => requireCollection<AdminVendor>(await api.get<unknown>("admin/vendors/trash"), "trashed vendors"),
   trashVendor: (vendorId: string, reason?: string) => api.patch<AdminVendor>(`admin/vendors/${vendorId}/trash`, { reason }),
   restoreVendor: (vendorId: string, reason?: string) => api.patch<AdminVendor>(`admin/vendors/${vendorId}/restore`, { reason }),
   permanentlyDeleteVendor: (vendorId: string, confirmation: "DELETE" | "PERMANENTLY DELETE") =>
