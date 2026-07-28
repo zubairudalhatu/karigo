@@ -5,6 +5,27 @@ const assert = require("node:assert/strict");
 const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 
+const authClient = read("src", "api", "client.ts");
+assert(authClient.includes('baseUrl: "/api/bff"'), "Admin API client must use the same-origin BFF route.");
+assert(authClient.includes("karigo_admin_csrf"), "Admin API client must attach the CSRF cookie header.");
+assert(!authClient.includes("localStorage") && !authClient.includes("sessionStorage"), "Admin API client must not store JWTs in browser storage.");
+assert(!authClient.includes("karigo_admin_access_token"), "Admin API client must not reference the old browser access-token key.");
+assert(!authClient.includes("tokenStore"), "Admin API client must not expose a browser token store.");
+const authContext = read("src", "contexts", "auth-context.tsx");
+assert(!authContext.includes("tokenStore"), "Admin auth context must not persist access tokens in browser storage.");
+assert(authContext.includes("authApi.logout()"), "Admin logout must call the BFF logout endpoint so HttpOnly cookies are cleared.");
+const bffSession = read("src", "lib", "bff-session.ts");
+const bffRoute = read("app", "api", "bff", "[...path]", "route.ts");
+assert(bffRoute.includes("handleBffRequest"), "Admin portal must expose the BFF catch-all route.");
+assert(bffSession.includes('const REQUIRED_ROLE = "ADMIN"'), "Admin BFF must enforce ADMIN role sessions.");
+assert(bffSession.includes("httpOnly: true"), "Admin BFF must store access and refresh tokens in HttpOnly cookies.");
+assert(bffSession.includes("secure: cookieSecure()"), "Admin BFF cookies must be Secure outside local development.");
+assert(bffSession.includes("sameSite: sameSite()"), "Admin BFF cookies must set SameSite protection.");
+assert(bffSession.includes('"x-karigo-csrf"'), "Admin BFF must validate the CSRF header.");
+assert(bffSession.includes("CSRF_ORIGIN_REJECTED") && bffSession.includes("CSRF_TOKEN_REJECTED"), "Admin BFF must reject unsafe origin or token checks.");
+assert(bffSession.includes("/auth/refresh"), "Admin BFF must refresh sessions server-side only.");
+assert(bffSession.includes("sanitizePayload"), "Admin BFF must strip JWT fields from browser responses.");
+
 const payoutPage = read("app", "payout-accounts", "page.tsx");
 assert(payoutPage.includes("Payout Accounts"), "Admin portal must expose payout accounts page.");
 assert(payoutPage.includes("Pending review"), "Admin payout page must show pending review summary.");

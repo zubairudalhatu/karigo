@@ -4,7 +4,6 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { authApi } from "../../src/api/auth.api";
-import { refreshTokenStore, tokenStore } from "../../src/api/client";
 import { friendlyError } from "../../src/lib/errors";
 
 export default function VendorActivatePage() {
@@ -31,9 +30,7 @@ export default function VendorActivatePage() {
     setBusy(true);
     setError("");
     try {
-      const result = await authApi.activateVendorAccount({ token, password });
-      await tokenStore.setToken?.(result.accessToken);
-      if (result.refreshToken) refreshTokenStore.setToken(result.refreshToken);
+      await authApi.activateVendorAccount({ token, password });
       router.replace("/");
     } catch (e) {
       const message = friendlyError(e, "form");

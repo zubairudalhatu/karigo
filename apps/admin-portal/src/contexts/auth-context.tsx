@@ -4,7 +4,7 @@ import type { AuthenticatedUser, LoginRequest } from "@karigo/shared-types";
 import { KariGoApiError } from "@karigo/shared-types";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { authApi } from "../api/auth.api";
-import { onUnauthorized, tokenStore } from "../api/client";
+import { onUnauthorized } from "../api/client";
 import { normalizeNigerianPhoneNumber } from "../lib/phone";
 
 interface AuthContextValue {
@@ -29,12 +29,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
 
     async function bootstrap() {
-      const token = await tokenStore.getToken();
-      if (!token) {
-        if (active) setLoading(false);
-        return;
-      }
-
       try {
         const currentUser = await authApi.me();
         if (!active) return;
@@ -42,12 +36,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (currentUser.role === "ADMIN") {
           setUser(currentUser);
         } else {
-          await tokenStore.clearToken?.();
           setUser(null);
         }
       } catch (error) {
         if (isAuthStatus(error)) {
-          await tokenStore.clearToken?.();
           if (active) setUser(null);
         }
       } finally {
@@ -82,11 +74,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error("This account cannot use the admin portal.");
           }
 
-          await tokenStore.setToken?.(result.accessToken);
           setUser(result.user);
         },
         logout: async () => {
-          await tokenStore.clearToken?.();
+          await authApi.logout().catch(() => undefined);
           setUser(null);
         }
       }}

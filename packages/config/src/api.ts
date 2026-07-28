@@ -15,7 +15,7 @@ export interface TokenStore {
 export interface ApiClientOptions {
   baseUrl?: string;
   tokenStore?: TokenStore;
-  defaultHeaders?: Record<string, string>;
+  defaultHeaders?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>);
   onUnauthorized?: (status: number) => void | Promise<void>;
   refreshAuth?: () => boolean | Promise<boolean>;
 }
@@ -35,12 +35,15 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
   async function request<T>(path: string, requestOptions: ApiRequestOptions = {}, hasRetried = false): Promise<T> {
     const token = requestOptions.authenticated === false ? null : await options.tokenStore?.getToken();
+    const defaultHeaders = typeof options.defaultHeaders === "function"
+      ? await options.defaultHeaders()
+      : options.defaultHeaders;
     const response = await fetch(`${baseUrl}/${path.replace(/^\/+/, "")}`, {
       ...requestOptions,
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        ...options.defaultHeaders,
+        ...defaultHeaders,
         ...requestOptions.headers,
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       },

@@ -1,5 +1,5 @@
 import { api } from "./client";
-import { tokenStore } from "./client";
+import { csrfHeaders } from "./client";
 import type { ApiErrorResponse, ApiSuccessResponse, VendorServiceInput, VendorServiceSummary, VendorUploadPurpose, VendorUploadResult } from "@karigo/shared-types";
 import { KariGoApiError } from "@karigo/shared-types";
 
@@ -13,10 +13,9 @@ async function uploadVendorFile(file: File, purpose: VendorUploadPurpose) {
   const form = new FormData();
   form.append("purpose", purpose);
   form.append("file", file);
-  const token = await tokenStore.getToken();
-  const response = await fetch(`${api.baseUrl}/vendors/uploads`, {
+  const response = await fetch("/api/bff/vendors/uploads", {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    headers: csrfHeaders(),
     body: form
   });
   const payload = (await response.json().catch(() => null)) as ApiSuccessResponse<VendorUploadResult> | ApiErrorResponse | null;
