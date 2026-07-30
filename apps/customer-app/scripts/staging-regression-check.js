@@ -16,7 +16,7 @@ assert(appConfig.includes("compileSdkVersion: 36"), "Customer app must compile a
 assert(appConfig.includes("targetSdkVersion: 36"), "Customer app must target Android API 36.");
 assert(appConfig.includes('buildToolsVersion: "36.0.0"'), "Customer app must use Android build tools 36.0.0.");
 assert(appConfig.includes('package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer"'), "Customer app package names must remain stable.");
-assert(appConfig.includes("versionCode: isStaging ? 1 : 12"), "Customer production versionCode must be bumped to 12 for the next Play-ready map AAB.");
+assert(appConfig.includes("versionCode: isStaging ? 1 : 13"), "Customer production versionCode must be bumped to 13 for the next Play-ready utility/map AAB.");
 assert(appConfig.includes("GOOGLE_MAPS_ANDROID_API_KEY"), "Customer map builds must read the Android Maps SDK key from environment variables.");
 assert(packageJson.dependencies?.["react-native-maps"] === "1.20.1", "Customer app must include the Expo SDK 53-compatible react-native-maps package.");
 assert(
