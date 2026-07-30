@@ -100,6 +100,37 @@ export const taxiTripStatuses = [
 ] as const;
 export type TaxiTripStatus = (typeof taxiTripStatuses)[number];
 
+export const activeTaxiTripStatuses = [
+  "REQUESTED",
+  "DRIVER_ASSIGNED",
+  "ACCEPTED",
+  "ARRIVED_PICKUP",
+  "STARTED",
+  "ARRIVED_DESTINATION"
+] as const satisfies readonly TaxiTripStatus[];
+
+export const terminalTaxiTripStatuses = [
+  "COMPLETED",
+  "CANCELLED_BY_CUSTOMER",
+  "CANCELLED_BY_DRIVER",
+  "CANCELLED_BY_ADMIN",
+  "EXPIRED"
+] as const satisfies readonly TaxiTripStatus[];
+
+export const customerCancellableTaxiTripStatuses = [
+  "REQUESTED",
+  "DRIVER_ASSIGNED",
+  "ACCEPTED"
+] as const satisfies readonly TaxiTripStatus[];
+
+export function isActiveTaxiTripStatus(status: TaxiTripStatus): boolean {
+  return (activeTaxiTripStatuses as readonly TaxiTripStatus[]).includes(status);
+}
+
+export function isTerminalTaxiTripStatus(status: TaxiTripStatus): boolean {
+  return (terminalTaxiTripStatuses as readonly TaxiTripStatus[]).includes(status);
+}
+
 export interface TaxiFareEstimateInput {
   pickupAddress: string;
   destinationAddress: string;
@@ -244,6 +275,7 @@ export interface TaxiTripInput extends TaxiFareEstimateInput {
   paymentMethod?: string;
   scheduledPickupAt?: string;
   pickupInstruction?: string;
+  clientRequestId?: string;
 }
 
 export interface TaxiDriverProfile {
@@ -295,6 +327,8 @@ export interface TaxiTrip {
   arrivedAtDestinationAt?: string | null;
   completedAt?: string | null;
   cancelledAt?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
   driver?: TaxiDriverProfile | null;
   events?: Array<{
     id: string;

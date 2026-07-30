@@ -1,10 +1,20 @@
 import * as Location from "expo-location";
 import { router, Stack } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, AppState, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker, Polyline, Region } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { TaxiFareEstimate, TaxiRideCategory, TaxiRoutePreview, TaxiTrip } from "@karigo/shared-types";
+import {
+  KariGoApiError,
+  TaxiFareEstimate,
+  TaxiRideCategory,
+  TaxiRoutePreview,
+  TaxiTrip,
+  activeTaxiTripStatuses,
+  customerCancellableTaxiTripStatuses,
+  isActiveTaxiTripStatus,
+  isTerminalTaxiTripStatus
+} from "@karigo/shared-types";
 import { brand } from "@karigo/config";
 import { Address, addressesApi } from "../../src/api/addresses.api";
 import { taxiApi } from "../../src/api/taxi.api";
@@ -40,7 +50,9 @@ const rideAvailabilityNote = "Service availability may vary by area and time.";
 const routeUnavailableMessage = "KariGO Rides is not yet available in this pickup or destination area. Choose a pickup and destination in Kano or Abuja.";
 const intercityUnavailableMessage = "Intercity KariGO Rides are not available yet. Choose pickup and destination within the same city.";
 const staleFareMessage = "Ride fare estimate expired. Please preview and estimate the route again.";
-const cancellableBeforePickup = new Set(["REQUESTED", "DRIVER_ASSIGNED", "ACCEPTED"]);
+const activeRideStatusSet = new Set<string>(activeTaxiTripStatuses);
+const cancellableBeforePickup = new Set<string>(customerCancellableTaxiTripStatuses);
+const duplicateActiveRideMessage = "You already have an active KariGO Ride. View or cancel it before requesting another immediate ride.";
 
 const defaultRideRegion: Region = {
   latitude: rideServiceAreaLabel.toLowerCase().includes("kano") ? serviceAreaCenters.Kano.latitude : serviceAreaCenters.Abuja.latitude,
@@ -184,9 +196,9 @@ function paymentCopy(paymentMethod: string) {
 
 function rideStatusCopy(trip?: TaxiTrip | null) {
   if (!trip) return "Ride request status unavailable.";
-  if (trip.status === "REQUESTED") return "Finding an available Ride Captain.";
-  if (trip.status === "DRIVER_ASSIGNED") return trip.driver ? "Ride Captain assigned." : "Finding an available Ride Captain.";
-  if (trip.status === "ACCEPTED") return trip.driver ? "Your Ride Captain is on the way." : "Finding an available Ride Captain.";
+  if (trip.status === "REQUESTED") return "Connecting you with an available Captain nearby.";
+  if (trip.status === "DRIVER_ASSIGNED") return trip.driver ? "Ride Captain assigned." : "Looking for a Ride Captain.";
+  if (trip.status === "ACCEPTED") return trip.driver ? "Your Ride Captain is on the way." : "Looking for a Ride Captain.";
   if (trip.status === "ARRIVED_PICKUP") return "Your Ride Captain has arrived at pickup.";
   if (trip.status === "STARTED" || trip.status === "ARRIVED_DESTINATION") return "Ride in progress.";
   if (trip.status === "COMPLETED") return "Ride completed.";
@@ -195,8 +207,89 @@ function rideStatusCopy(trip?: TaxiTrip | null) {
   return "Ride status updated.";
 }
 
+function rideTrackingTitle(trip?: TaxiTrip | null) {
+  if (!trip) return "Ride status";
+  if (trip.status === "REQUESTED") return "Looking for a Ride Captain";
+  if (trip.status === "DRIVER_ASSIGNED" || trip.status === "ACCEPTED") return trip.driver ? "Ride Captain assigned" : "Looking for a Ride Captain";
+  if (trip.status === "ARRIVED_PICKUP") return "Captain at pickup";
+  if (trip.status === "STARTED" || trip.status === "ARRIVED_DESTINATION") return "Ride in progress";
+  if (trip.status === "COMPLETED") return "Ride completed";
+  if (trip.status === "EXPIRED") return "Ride request expired";
+  if (trip.status.startsWith("CANCELLED")) return "Ride request cancelled";
+  return "Ride status";
+}
+
+function rideStatusActionCopy(trip?: TaxiTrip | null) {
+  if (!trip) return "";
+  if (trip.status === "EXPIRED") return "No Captain accepted before this request expired.";
+  if (trip.status === "COMPLETED") return "Thanks for riding with KariGO.";
+  if (trip.status.startsWith("CANCELLED")) return trip.cancellationReason || "This ride request is closed.";
+  return rideStatusCopy(trip);
+}
+
+function shortAddress(value?: string | null) {
+  return value?.split(",")[0]?.trim() || "Address pending";
+}
+
+function tripDate(trip: TaxiTrip) {
+  const value = trip.requestedAt || trip.createdAt;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Time pending" : date.toLocaleString();
+}
+
+function activeRideRank(trip: TaxiTrip) {
+  const ranks: Record<string, number> = {
+    ARRIVED_DESTINATION: 6,
+    STARTED: 5,
+    ARRIVED_PICKUP: 4,
+    ACCEPTED: 3,
+    DRIVER_ASSIGNED: 2,
+    REQUESTED: 1
+  };
+  return ranks[trip.status] ?? 0;
+}
+
+function sortActiveTrips(trips: TaxiTrip[]) {
+  return [...trips].sort((a, b) => {
+    const rank = activeRideRank(b) - activeRideRank(a);
+    if (rank !== 0) return rank;
+    return new Date(b.requestedAt || b.createdAt).getTime() - new Date(a.requestedAt || a.createdAt).getTime();
+  });
+}
+
+function mergeTrip(trips: TaxiTrip[], updated: TaxiTrip) {
+  const exists = trips.some((trip) => trip.id === updated.id);
+  const merged = exists ? trips.map((trip) => trip.id === updated.id ? updated : trip) : [updated, ...trips];
+  return [...merged].sort((a, b) => new Date(b.requestedAt || b.createdAt).getTime() - new Date(a.requestedAt || a.createdAt).getTime());
+}
+
+function placeFromTrip(trip: TaxiTrip, field: "pickup" | "destination"): RidePlace {
+  const isPickup = field === "pickup";
+  const latitude = coordinateFromUnknown(isPickup ? trip.pickupLatitude : trip.destinationLatitude);
+  const longitude = coordinateFromUnknown(isPickup ? trip.pickupLongitude : trip.destinationLongitude);
+  const address = isPickup ? trip.pickupAddress : trip.destinationAddress;
+  return {
+    label: isPickup ? "Pickup" : "Destination",
+    address,
+    latitude,
+    longitude,
+    providerPlaceId: latitude !== undefined && longitude !== undefined ? `${latitude.toFixed(6)},${longitude.toFixed(6)}` : null,
+    source: "recent"
+  };
+}
+
+function activeTripFromError(error: unknown): TaxiTrip | null {
+  if (!(error instanceof KariGoApiError)) return null;
+  const details = error.details as { activeTrip?: TaxiTrip } | undefined;
+  return details?.activeTrip?.id ? details.activeTrip : null;
+}
+
 function newPlaceSessionToken() {
   return `kg-rides-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function newRideRequestId() {
+  return `kg-ride-submit-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 export default function TaxiRequest() {
@@ -209,6 +302,9 @@ export default function TaxiRequest() {
   const mainMapRef = useRef<MapView | null>(null);
   const mapPickerRef = useRef<MapView | null>(null);
   const reverseGeocodeCache = useRef(new Map<string, string>());
+  const requestInFlight = useRef(false);
+  const requestAttemptId = useRef<string | null>(null);
+  const pollingInFlight = useRef(false);
   const panelDrag = useRef(new Animated.Value(0)).current;
 
   const [step, setStep] = useState<BookingStep>("HOME");
@@ -277,6 +373,9 @@ export default function TaxiRequest() {
   const categoryOptions = estimate?.rideCategories?.length ? estimate.rideCategories : categories;
   const selectedCategoryDetail = categoryOptions.find((category) => category.id === selectedCategory) ?? categoryOptions[0];
   const canCreateTrip = estimateMatchesRoute(estimate, routePreview, selectedCategory);
+  const activeTrips = useMemo(() => sortActiveTrips(trips.filter((trip) => isActiveTaxiTripStatus(trip.status))), [trips]);
+  const rideHistory = useMemo(() => trips.filter((trip) => isTerminalTaxiTripStatus(trip.status) || !activeRideStatusSet.has(trip.status)), [trips]);
+  const preferredActiveTrip = activeTrips[0] ?? null;
   const activeRideCity = serviceAreaForPlace(pickup) ?? serviceAreaForPlace(destination);
   const rideTitle = activeRideCity ? `KariGO Rides in ${activeRideCity}` : "KariGO Rides";
   const panelHeights = {
@@ -314,6 +413,7 @@ export default function TaxiRequest() {
       setAddresses(saved);
       setCategories(rideCategories);
       setTrips(history);
+      setCreated((current) => current ? history.find((trip) => trip.id === current.id) ?? current : current);
     } catch {
       // Optional saved/history data should never block manual ride booking.
     }
@@ -324,6 +424,45 @@ export default function TaxiRequest() {
   useEffect(() => () => {
     if (mapIdleTimer.current) clearTimeout(mapIdleTimer.current);
   }, []);
+
+  useEffect(() => {
+    if (step !== "TRACKING" || !created || !isActiveTaxiTripStatus(created.status)) return;
+    let appState = AppState.currentState;
+    let cancelled = false;
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    async function refreshActiveTrip() {
+      if (!created || pollingInFlight.current || appState !== "active") return;
+      pollingInFlight.current = true;
+      try {
+        const fresh = await taxiApi.trip(created.id);
+        if (cancelled) return;
+        setCreated(fresh);
+        setTrips((current) => mergeTrip(current, fresh));
+        if (isTerminalTaxiTripStatus(fresh.status) && interval) {
+          clearInterval(interval);
+          interval = null;
+        }
+      } catch {
+        // Keep the current tracking state and allow manual refresh.
+      } finally {
+        pollingInFlight.current = false;
+      }
+    }
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      appState = nextState;
+      if (nextState === "active") void refreshActiveTrip();
+    });
+    interval = setInterval(() => void refreshActiveTrip(), 25_000);
+    void refreshActiveTrip();
+
+    return () => {
+      cancelled = true;
+      subscription.remove();
+      if (interval) clearInterval(interval);
+    };
+  }, [created?.id, created?.status, step]);
 
   useEffect(() => {
     if (!taxiEnabled || autoLocationAttempted || pickup) return;
@@ -582,6 +721,25 @@ export default function TaxiRequest() {
     setError("");
   }
 
+  function openTrip(trip: TaxiTrip) {
+    setCreated(trip);
+    setPickup(placeFromTrip(trip, "pickup"));
+    setDestination(placeFromTrip(trip, "destination"));
+    setStop(null);
+    setRoutePreview(null);
+    setEstimate(null);
+    setMessage("");
+    setError("");
+    setStep("TRACKING");
+    setPanelState("expanded");
+  }
+
+  function openPreferredActiveTrip() {
+    const trip = preferredActiveTrip;
+    if (!trip) return;
+    openTrip(trip);
+  }
+
   function swapRoute() {
     if (!pickup && !destination) return;
     const nextPickup = destination;
@@ -763,6 +921,12 @@ export default function TaxiRequest() {
   }
 
   async function createTrip() {
+    if (requestInFlight.current) return;
+    if (preferredActiveTrip) {
+      openTrip(preferredActiveTrip);
+      setError(duplicateActiveRideMessage);
+      return;
+    }
     if (!pickup || !destination || !routePreview || !estimate || !canCreateTrip) {
       setError(staleFareMessage);
       setStep("ROUTE");
@@ -775,6 +939,8 @@ export default function TaxiRequest() {
       setPanelState("expanded");
       return;
     }
+    requestInFlight.current = true;
+    requestAttemptId.current = requestAttemptId.current ?? newRideRequestId();
     setLoading(true);
     setError("");
     try {
@@ -796,16 +962,28 @@ export default function TaxiRequest() {
         paymentMethod,
         scheduledPickupAt: scheduleForLater ? scheduledPickupAt : undefined,
         pickupInstruction,
-        customerNote: tripNote
+        customerNote: tripNote,
+        clientRequestId: requestAttemptId.current
       });
       setCreated(trip);
+      setTrips((current) => mergeTrip(current, trip));
       setMessage("Ride request received. KariGO will keep this screen updated.");
       setStep("TRACKING");
       setPanelState("expanded");
+      requestAttemptId.current = null;
       await load();
     } catch (err) {
+      const activeTrip = activeTripFromError(err);
+      if (activeTrip) {
+        setTrips((current) => mergeTrip(current, activeTrip));
+        openTrip(activeTrip);
+        setError(duplicateActiveRideMessage);
+        requestAttemptId.current = null;
+        return;
+      }
       setError(friendlyError(err));
     } finally {
+      requestInFlight.current = false;
       setLoading(false);
     }
   }
@@ -815,7 +993,8 @@ export default function TaxiRequest() {
     setError("");
     try {
       const updated = await taxiApi.cancelTrip(tripId, "Customer cancelled ride before pickup");
-      setCreated(updated);
+      setTrips((current) => mergeTrip(current, updated));
+      setCreated((current) => current?.id === updated.id ? updated : current);
       setMessage("Ride request cancelled.");
       await load();
     } catch (err) {
@@ -883,23 +1062,47 @@ export default function TaxiRequest() {
   if (step === "TRACKING") {
     return <Protected><>
       <Stack.Screen options={{ headerShown: false }} />
-      <Screen title={undefined}>
-        <BookingHeader title="Ride status" onBack={() => setStep("HOME")} onClose={() => router.replace("/tabs/home")} />
-        <Message error>{error}</Message>
-        <Message>{message}</Message>
-        {created ? <Card>
-          <Text style={ui.cardTitle}>Ride request received</Text>
-          <Text>Reference: {created.tripReference}</Text>
-          <StatusBadge status={created.status} />
-          <Text style={ui.muted}>{rideStatusCopy(created)}</Text>
-          {created.tripPin ? <Text style={ui.otpCode}>{created.tripPin.slice(0, 3)} {created.tripPin.slice(3)}</Text> : null}
-          <Text style={ui.muted}>Only share this ride PIN with the approved Ride Captain after pickup.</Text>
-          {created.driver ? <Text style={ui.muted}>Ride Captain: {created.driver.fullName} - {created.driver.vehiclePlateNumber ?? "vehicle pending"}</Text> : <Text style={ui.muted}>Finding an available Ride Captain.</Text>}
-          {cancellableBeforePickup.has(created.status) ? <Button title="Cancel ride request" tone="muted" disabled={loading} onPress={() => void cancelTrip(created.id)} /> : null}
-        </Card> : null}
-        <TripHistory trips={trips} onRefresh={() => void load()} loading={loading} />
-        <Button title="Back to Rides home" tone="muted" onPress={() => setStep("HOME")} />
-      </Screen>
+      <View style={styles.fullScreenMap}>
+        <MapView
+          key={created?.id ?? "ride-tracking"}
+          style={StyleSheet.absoluteFill}
+          initialRegion={regionForPlaces(pickup, destination)}
+          showsUserLocation
+          showsMyLocationButton={false}
+        >
+          {hasCoordinate(pickup) ? <Marker coordinate={{ latitude: pickup.latitude, longitude: pickup.longitude }} title="Pickup" description={pickup.address} /> : null}
+          {hasCoordinate(destination) ? <Marker coordinate={{ latitude: destination.latitude, longitude: destination.longitude }} title="Destination" description={destination.address} pinColor={brand.colors.primary} /> : null}
+          {routePoints.length >= 2 ? <Polyline coordinates={routePoints} strokeColor={brand.colors.primary} strokeWidth={5} /> : null}
+        </MapView>
+        <View style={[styles.mapTopBar, { paddingTop: Math.max(insets.top, 18) }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Back to KariGO Rides home" onPress={() => setStep("HOME")} style={styles.roundButton}>
+            <Text style={styles.roundButtonText}>Rides</Text>
+          </Pressable>
+          <View style={styles.mapTitleCard}>
+            <Text style={styles.mapEyebrow}>KariGO Ride</Text>
+            <Text style={styles.mapScreenTitle}>{rideTrackingTitle(created)}</Text>
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close and return to KariGO home" onPress={() => router.replace("/tabs/home")} style={styles.roundButton}>
+            <Text style={styles.roundButtonText}>Close</Text>
+          </Pressable>
+        </View>
+        <View style={[styles.trackingSheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetScroll}>
+            <Message error>{error}</Message>
+            <Message>{message}</Message>
+            {created ? <RideTracking
+              trip={created}
+              loading={loading}
+              onCancel={() => void cancelTrip(created.id)}
+              onRefresh={() => void load()}
+              onBookAnother={resetNewBooking}
+              onBackHome={() => router.replace("/tabs/home")}
+            /> : null}
+            <RideActiveList trips={activeTrips} currentTripId={created?.id} loading={loading} onOpen={openTrip} onCancel={(trip) => void cancelTrip(trip.id)} onRefresh={() => void load()} />
+            <RideHistoryList trips={rideHistory} onOpen={openTrip} />
+          </ScrollView>
+        </View>
+      </View>
     </></Protected>;
   }
 
@@ -937,7 +1140,53 @@ export default function TaxiRequest() {
         <View {...panelResponder.panHandlers} style={styles.sheetHandleWrap}>
           <View style={styles.sheetHandle} />
         </View>
-        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={[styles.sheetScroll, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        {step === "CONFIRM" ? <View style={styles.sheetStatic}>
+          <Message error>{error}</Message>
+          <Message>{message}</Message>
+          {routeError ? <Message error>{routeError}</Message> : null}
+          <RideOptionsPanel
+            pickup={pickup}
+            destination={destination}
+            stop={stop}
+            routePreview={routePreview}
+            categoryOptions={categoryOptions}
+            selectedCategory={selectedCategory}
+            selectedCategoryDetail={selectedCategoryDetail}
+            loading={loading}
+            canContinue={canCreateTrip}
+            scheduleForLater={scheduleForLater}
+            scheduledPickupAt={scheduledPickupAt}
+            bottomInset={insets.bottom}
+            onBack={() => { setStep("ROUTE"); setPanelState("expanded"); }}
+            onCategory={(categoryId) => void estimateFare(categoryId)}
+            onContinue={() => { setStep("DETAILS"); setPanelState("expanded"); }}
+          />
+        </View> : step === "DETAILS" ? <View style={styles.sheetStatic}>
+          <Message error>{error}</Message>
+          <Message>{message}</Message>
+          {routeError ? <Message error>{routeError}</Message> : null}
+          <RideBookingDetails
+            selectedCategory={selectedCategoryDetail}
+            estimate={estimate}
+            paymentMethod={paymentMethod}
+            scheduleForLater={scheduleForLater}
+            scheduledPickupAt={scheduledPickupAt}
+            pickupInstruction={pickupInstruction}
+            tripNote={tripNote}
+            detailsExpanded={detailsExpanded}
+            loading={loading}
+            canCreateTrip={canCreateTrip}
+            activeTripCount={activeTrips.length}
+            bottomInset={insets.bottom}
+            onPaymentMethod={setPaymentMethod}
+            onScheduleToggle={() => setScheduleForLater((value) => !value)}
+            onScheduledPickupAt={setScheduledPickupAt}
+            onPickupInstruction={setPickupInstruction}
+            onTripNote={setTripNote}
+            onDetailsExpanded={() => setDetailsExpanded((value) => !value)}
+            onRequest={() => void createTrip()}
+          />
+        </View> : <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={[styles.sheetScroll, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <Message error>{error}</Message>
           <Message>{message}</Message>
           {routeError ? <Message error>{routeError}</Message> : null}
@@ -945,16 +1194,23 @@ export default function TaxiRequest() {
             rideTitle={rideTitle}
             pickup={pickup}
             locating={locating}
+            activeTrips={activeTrips}
             recentPlaces={recentPlaces}
             savedPlaces={savedPlaces}
+            loading={loading}
             onWhereTo={openDestinationSearch}
             onLater={startScheduledSearch}
             onUseCurrentLocation={() => void useCurrentLocation()}
             onEditPickup={() => { setStep("ROUTE"); setActiveField("pickup"); setPanelState("expanded"); }}
             onSelectDestination={(place) => applyPlace("destination", place, true)}
+            onOpenActive={openPreferredActiveTrip}
+            onOpenTrip={openTrip}
+            onCancelTrip={(trip) => void cancelTrip(trip.id)}
+            onRefresh={() => void load()}
             onCollapse={() => setPanelState((state) => state === "collapsed" ? "half" : "collapsed")}
           /> : null}
           {step === "ROUTE" ? <RideRoutePanel
+            activeTrips={activeTrips}
             activeField={activeField}
             pickup={pickup}
             destination={destination}
@@ -979,40 +1235,7 @@ export default function TaxiRequest() {
             onUseCurrentLocation={() => void useCurrentLocation()}
             onRetry={() => void previewAndEstimateRoute()}
           /> : null}
-          {step === "CONFIRM" ? <RideOptionsPanel
-            pickup={pickup}
-            destination={destination}
-            stop={stop}
-            routePreview={routePreview}
-            categoryOptions={categoryOptions}
-            selectedCategory={selectedCategory}
-            loading={loading}
-            scheduleForLater={scheduleForLater}
-            scheduledPickupAt={scheduledPickupAt}
-            onBack={() => { setStep("ROUTE"); setPanelState("expanded"); }}
-            onCategory={(categoryId) => void estimateFare(categoryId)}
-            onContinue={() => { setStep("DETAILS"); setPanelState("expanded"); }}
-          /> : null}
-          {step === "DETAILS" ? <RideBookingDetails
-            selectedCategory={selectedCategoryDetail}
-            estimate={estimate}
-            paymentMethod={paymentMethod}
-            scheduleForLater={scheduleForLater}
-            scheduledPickupAt={scheduledPickupAt}
-            pickupInstruction={pickupInstruction}
-            tripNote={tripNote}
-            detailsExpanded={detailsExpanded}
-            loading={loading}
-            canCreateTrip={canCreateTrip}
-            onPaymentMethod={setPaymentMethod}
-            onScheduleToggle={() => setScheduleForLater((value) => !value)}
-            onScheduledPickupAt={setScheduledPickupAt}
-            onPickupInstruction={setPickupInstruction}
-            onTripNote={setTripNote}
-            onDetailsExpanded={() => setDetailsExpanded((value) => !value)}
-            onRequest={() => void createTrip()}
-          /> : null}
-        </ScrollView>
+        </ScrollView>}
       </Animated.View>
     </View>
   </></Protected>;
@@ -1030,25 +1253,37 @@ function RideHomePanel({
   rideTitle,
   pickup,
   locating,
+  activeTrips,
   recentPlaces,
   savedPlaces,
+  loading,
   onWhereTo,
   onLater,
   onUseCurrentLocation,
   onEditPickup,
   onSelectDestination,
+  onOpenActive,
+  onOpenTrip,
+  onCancelTrip,
+  onRefresh,
   onCollapse
 }: {
   rideTitle: string;
   pickup: RidePlace | null;
   locating: boolean;
+  activeTrips: TaxiTrip[];
   recentPlaces: RidePlace[];
   savedPlaces: RidePlace[];
+  loading: boolean;
   onWhereTo: () => void;
   onLater: () => void;
   onUseCurrentLocation: () => void;
   onEditPickup: () => void;
   onSelectDestination: (place: RidePlace) => void;
+  onOpenActive: () => void;
+  onOpenTrip: (trip: TaxiTrip) => void;
+  onCancelTrip: (trip: TaxiTrip) => void;
+  onRefresh: () => void;
   onCollapse: () => void;
 }) {
   return <>
@@ -1061,6 +1296,7 @@ function RideHomePanel({
         <Text style={styles.smallPillText}>Map</Text>
       </Pressable>
     </View>
+    <RideActiveBanner trips={activeTrips} onOpen={onOpenActive} />
     <View style={styles.searchRow}>
       <Pressable accessibilityRole="button" accessibilityLabel="Where to?" onPress={onWhereTo} style={styles.whereToControl}>
         <Text style={styles.whereToText}>Where to?</Text>
@@ -1077,12 +1313,14 @@ function RideHomePanel({
         <Text style={ui.muted} numberOfLines={1}>{pickup?.address ?? "Use current location or choose pickup manually."}</Text>
       </View>
     </Pressable>
+    <RideActiveList trips={activeTrips} loading={loading} onOpen={onOpenTrip} onCancel={onCancelTrip} onRefresh={onRefresh} />
     <CompactPlaceSection title="Recent destinations" places={recentPlaces} onSelect={onSelectDestination} />
     <CompactPlaceSection title="Saved places" places={savedPlaces.slice(0, 3)} onSelect={onSelectDestination} />
   </>;
 }
 
 function RideRoutePanel({
+  activeTrips,
   activeField,
   pickup,
   destination,
@@ -1107,6 +1345,7 @@ function RideRoutePanel({
   onUseCurrentLocation,
   onRetry
 }: {
+  activeTrips: TaxiTrip[];
   activeField: PlaceField;
   pickup: RidePlace | null;
   destination: RidePlace | null;
@@ -1144,6 +1383,10 @@ function RideRoutePanel({
         <Text style={styles.smallPillText}>Swap</Text>
       </Pressable> : null}
     </View>
+    {activeTrips.length ? <View style={styles.activeNotice}>
+      <Text style={styles.activeNoticeTitle}>Active ride in progress</Text>
+      <Text style={styles.activeNoticeText}>You can inspect routes, but complete or cancel your active KariGO Ride before requesting another immediate ride.</Text>
+    </View> : null}
     <View style={styles.routeComposer}>
       <RouteComposerRow label="Pickup" active={activeField === "pickup"} value={pickup?.address || pickupText} placeholder="Current location or pickup address" onPress={() => onFieldFocus("pickup")} marker="pickup" />
       {stop ? <RouteComposerRow label="Stop" active={activeField === "stop"} value={stop.address || stopText} placeholder="Selected stop" onPress={() => onFieldFocus("stop")} marker="stop" onRemove={onRemoveStop} /> : null}
@@ -1194,9 +1437,12 @@ function RideOptionsPanel({
   routePreview,
   categoryOptions,
   selectedCategory,
+  selectedCategoryDetail,
   loading,
+  canContinue,
   scheduleForLater,
   scheduledPickupAt,
+  bottomInset,
   onBack,
   onCategory,
   onContinue
@@ -1207,38 +1453,50 @@ function RideOptionsPanel({
   routePreview: TaxiRoutePreview | null;
   categoryOptions: TaxiRideCategory[];
   selectedCategory: string;
+  selectedCategoryDetail?: TaxiRideCategory;
   loading: boolean;
+  canContinue: boolean;
   scheduleForLater: boolean;
   scheduledPickupAt: string;
+  bottomInset: number;
   onBack: () => void;
   onCategory: (categoryId: string) => void;
   onContinue: () => void;
 }) {
-  return <>
-    <View style={styles.sheetHeader}>
-      <View>
-        <Text style={styles.sheetEyebrow}>Route ready</Text>
-        <Text style={styles.sheetTitle}>Choose your ride</Text>
+  const continueLabel = selectedCategoryDetail
+    ? `Continue - ${selectedCategoryDetail.name.replace("KariGO ", "")} ${fareRange(selectedCategoryDetail.fareRangeKobo)}`
+    : "Continue";
+  return <View style={styles.stickyPanel}>
+    <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={[styles.stickyScrollContent, { paddingBottom: 118 + Math.max(bottomInset, 12) }]}>
+      <View style={styles.sheetHeader}>
+        <View>
+          <Text style={styles.sheetEyebrow}>Route ready</Text>
+          <Text style={styles.sheetTitle}>Choose your ride</Text>
+        </View>
+        <Pressable accessibilityRole="button" onPress={onBack} style={styles.smallPill}>
+          <Text style={styles.smallPillText}>Edit</Text>
+        </Pressable>
       </View>
-      <Pressable accessibilityRole="button" onPress={onBack} style={styles.smallPill}>
-        <Text style={styles.smallPillText}>Edit</Text>
-      </Pressable>
+      <View style={styles.routePanel}>
+        <RoutePoint label="Pickup" value={pickup?.address ?? "Pickup pending"} tone="pickup" />
+        {stop ? <RoutePoint label="Stop" value={stop.address} tone="stop" /> : null}
+        <RoutePoint label="Destination" value={destination?.address ?? "Destination pending"} tone="destination" />
+      </View>
+      <View style={styles.metrics}>
+        <Metric label="Distance" value={routePreview?.distanceKm ? `${routePreview.distanceKm} km` : "Pending"} />
+        <Metric label="Duration" value={routePreview?.durationMin ? `${routePreview.durationMin} min` : "Pending"} />
+      </View>
+      {scheduleForLater ? <Text style={styles.scheduleNote}>Scheduled ride: {scheduledPickupAt || "Set pickup time before request."}</Text> : null}
+      {categoryOptions.length === 0 ? <Empty message="No ride category is available in this area yet." /> : categoryOptions.map((category) => (
+        <RideCategoryCard key={category.id} category={category} selected={selectedCategory === category.id} onPress={() => onCategory(category.id)} />
+      ))}
+    </ScrollView>
+    <View style={[styles.stickyActionFooter, { paddingBottom: Math.max(bottomInset, 12) }]}>
+      {selectedCategoryDetail ? <Text style={styles.stickyActionSummary} numberOfLines={1}>{selectedCategoryDetail.name} - {fareRange(selectedCategoryDetail.fareRangeKobo)}</Text> : null}
+      <Button title={loading ? "Updating fare..." : continueLabel} disabled={loading || !canContinue} onPress={onContinue} />
+      {!canContinue ? <Text style={styles.stickyActionHint}>Refresh the route and fare if pickup, destination or ride category changed.</Text> : null}
     </View>
-    <View style={styles.routePanel}>
-      <RoutePoint label="Pickup" value={pickup?.address ?? "Pickup pending"} tone="pickup" />
-      {stop ? <RoutePoint label="Stop" value={stop.address} tone="stop" /> : null}
-      <RoutePoint label="Destination" value={destination?.address ?? "Destination pending"} tone="destination" />
-    </View>
-    <View style={styles.metrics}>
-      <Metric label="Distance" value={routePreview?.distanceKm ? `${routePreview.distanceKm} km` : "Pending"} />
-      <Metric label="Duration" value={routePreview?.durationMin ? `${routePreview.durationMin} min` : "Pending"} />
-    </View>
-    {scheduleForLater ? <Text style={styles.scheduleNote}>Scheduled ride: {scheduledPickupAt || "Set pickup time before request."}</Text> : null}
-    {categoryOptions.length === 0 ? <Empty message="No ride category is available in this area yet." /> : categoryOptions.map((category) => (
-      <RideCategoryCard key={category.id} category={category} selected={selectedCategory === category.id} onPress={() => onCategory(category.id)} />
-    ))}
-    <Button title={loading ? "Updating fare..." : "Continue"} disabled={loading || !routePreview} onPress={onContinue} />
-  </>;
+  </View>;
 }
 
 function RideCategoryCard({ category, selected, onPress }: { category: TaxiRideCategory; selected: boolean; onPress: () => void }) {
@@ -1264,6 +1522,8 @@ function RideBookingDetails({
   detailsExpanded,
   loading,
   canCreateTrip,
+  activeTripCount,
+  bottomInset,
   onPaymentMethod,
   onScheduleToggle,
   onScheduledPickupAt,
@@ -1282,6 +1542,8 @@ function RideBookingDetails({
   detailsExpanded: boolean;
   loading: boolean;
   canCreateTrip: boolean;
+  activeTripCount: number;
+  bottomInset: number;
   onPaymentMethod: (method: string) => void;
   onScheduleToggle: () => void;
   onScheduledPickupAt: (value: string) => void;
@@ -1290,35 +1552,46 @@ function RideBookingDetails({
   onDetailsExpanded: () => void;
   onRequest: () => void;
 }) {
-  return <>
-    <View style={styles.sheetHeader}>
-      <View>
-        <Text style={styles.sheetEyebrow}>Confirm request</Text>
-        <Text style={styles.sheetTitle}>{selectedCategory?.name ?? "Selected ride"}</Text>
+  const requestDisabled = loading || !canCreateTrip || activeTripCount > 0;
+  return <View style={styles.stickyPanel}>
+    <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={[styles.stickyScrollContent, { paddingBottom: 126 + Math.max(bottomInset, 12) }]}>
+      <View style={styles.sheetHeader}>
+        <View>
+          <Text style={styles.sheetEyebrow}>Confirm request</Text>
+          <Text style={styles.sheetTitle}>{selectedCategory?.name ?? "Selected ride"}</Text>
+        </View>
+        <Text style={styles.finalFare}>{money(estimate?.estimatedFareKobo)}</Text>
       </View>
-      <Text style={styles.finalFare}>{money(estimate?.estimatedFareKobo)}</Text>
+      {activeTripCount > 0 ? <View style={styles.activeNotice}>
+        <Text style={styles.activeNoticeTitle}>{activeTripCount === 1 ? "Active ride already open" : `${activeTripCount} active ride requests`}</Text>
+        <Text style={styles.activeNoticeText}>View or cancel the active request before submitting another immediate KariGO Ride.</Text>
+      </View> : null}
+      <View style={styles.paymentGrid}>
+        {["Cash", "Wallet", "Card"].map((option) => (
+          <Pressable key={option} accessibilityRole="button" disabled={option !== "Cash"} onPress={() => onPaymentMethod(option)} style={[styles.paymentOption, paymentMethod === option && styles.paymentOptionActive, option !== "Cash" && styles.paymentOptionDisabled]}>
+            <Text style={styles.paymentTitle}>{option}</Text>
+            <Text style={styles.paymentSubtitle}>{option === "Cash" ? "Available" : "Coming soon"}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={ui.muted}>{paymentCopy(paymentMethod)}</Text>
+      <Button title={scheduleForLater ? "Use immediate ride" : "Schedule for later"} tone="muted" onPress={onScheduleToggle} />
+      {scheduleForLater ? <Field placeholder="Pickup time, e.g. 2026-08-01T18:30:00" value={scheduledPickupAt} onChangeText={onScheduledPickupAt} /> : null}
+      <Pressable accessibilityRole="button" onPress={onDetailsExpanded} style={styles.detailsToggle}>
+        <Text style={styles.detailsToggleText}>{detailsExpanded ? "Hide ride details" : "Add ride details"}</Text>
+      </Pressable>
+      {detailsExpanded ? <>
+        <Field placeholder="Pickup instruction optional" value={pickupInstruction} onChangeText={onPickupInstruction} />
+        <Field placeholder="Trip note optional" value={tripNote} onChangeText={onTripNote} multiline />
+      </> : null}
+    </ScrollView>
+    <View style={[styles.stickyActionFooter, { paddingBottom: Math.max(bottomInset, 12) }]}>
+      <Text style={styles.stickyActionSummary} numberOfLines={1}>{selectedCategory?.name ?? "KariGO Ride"} - {money(estimate?.estimatedFareKobo)}</Text>
+      <Button title={loading ? "Requesting..." : scheduleForLater ? `Schedule ${selectedCategory?.name ?? "ride"}` : `Request ${selectedCategory?.name ?? "ride"}`} disabled={requestDisabled} onPress={onRequest} />
+      {!canCreateTrip ? <Text style={styles.stickyActionHint}>Refresh the route and fare if pickup, destination or ride category changed.</Text> : null}
+      {activeTripCount > 0 ? <Text style={styles.stickyActionHint}>Active request must be completed or cancelled first.</Text> : null}
     </View>
-    <View style={styles.paymentGrid}>
-      {["Cash", "Wallet", "Card"].map((option) => (
-        <Pressable key={option} accessibilityRole="button" disabled={option !== "Cash"} onPress={() => onPaymentMethod(option)} style={[styles.paymentOption, paymentMethod === option && styles.paymentOptionActive, option !== "Cash" && styles.paymentOptionDisabled]}>
-          <Text style={styles.paymentTitle}>{option}</Text>
-          <Text style={styles.paymentSubtitle}>{option === "Cash" ? "Available" : "Coming soon"}</Text>
-        </Pressable>
-      ))}
-    </View>
-    <Text style={ui.muted}>{paymentCopy(paymentMethod)}</Text>
-    <Button title={scheduleForLater ? "Use immediate ride" : "Schedule for later"} tone="muted" onPress={onScheduleToggle} />
-    {scheduleForLater ? <Field placeholder="Pickup time, e.g. 2026-08-01T18:30:00" value={scheduledPickupAt} onChangeText={onScheduledPickupAt} /> : null}
-    <Pressable accessibilityRole="button" onPress={onDetailsExpanded} style={styles.detailsToggle}>
-      <Text style={styles.detailsToggleText}>{detailsExpanded ? "Hide ride details" : "Add ride details"}</Text>
-    </Pressable>
-    {detailsExpanded ? <>
-      <Field placeholder="Pickup instruction optional" value={pickupInstruction} onChangeText={onPickupInstruction} />
-      <Field placeholder="Trip note optional" value={tripNote} onChangeText={onTripNote} multiline />
-    </> : null}
-    <Button title={loading ? "Requesting..." : scheduleForLater ? `Schedule ${selectedCategory?.name ?? "ride"}` : `Request ${selectedCategory?.name ?? "ride"}`} disabled={loading || !canCreateTrip} onPress={onRequest} />
-    {!canCreateTrip ? <Text style={ui.muted}>Refresh the route and fare if pickup, destination or ride category changed.</Text> : null}
-  </>;
+  </View>;
 }
 
 function SuggestionList({ activeField, places, searching, googleAttributionRequired, onSelect }: { activeField: PlaceField; places: RidePlace[]; searching: boolean; googleAttributionRequired: boolean; onSelect: (place: RidePlace) => void }) {
@@ -1367,25 +1640,143 @@ function Metric({ label, value }: { label: string; value: string }) {
   </View>;
 }
 
-function TripHistory({ trips, loading, onRefresh }: { trips: TaxiTrip[]; loading: boolean; onRefresh: () => void }) {
+function tripCategoryLabel(trip: TaxiTrip) {
+  const match = /Ride category:\s*([A-Z_]+)/i.exec(trip.customerNote ?? "");
+  if (!match?.[1]) return "KariGO Ride";
+  const label = match[1].toUpperCase().replaceAll("_", " ");
+  return `KariGO ${label.charAt(0)}${label.slice(1).toLowerCase()}`;
+}
+
+function RideActiveBanner({ trips, onOpen }: { trips: TaxiTrip[]; onOpen: () => void }) {
+  if (!trips.length) return null;
+  const first = trips[0];
+  return <Pressable accessibilityRole="button" accessibilityLabel="View active KariGO Ride status" onPress={onOpen} style={styles.activeBanner}>
+    <View style={styles.activeBannerDot} />
+    <View style={styles.placeBody}>
+      <Text style={styles.activeBannerTitle}>{trips.length === 1 ? "Active KariGO Ride" : `${trips.length} active ride requests`}</Text>
+      <Text style={styles.activeBannerText}>{trips.length === 1 ? rideTrackingTitle(first) : "Review and manage"}</Text>
+    </View>
+    <Text style={styles.activeBannerAction}>View</Text>
+  </Pressable>;
+}
+
+function RideTracking({
+  trip,
+  loading,
+  onCancel,
+  onRefresh,
+  onBookAnother,
+  onBackHome
+}: {
+  trip: TaxiTrip;
+  loading: boolean;
+  onCancel: () => void;
+  onRefresh: () => void;
+  onBookAnother: () => void;
+  onBackHome: () => void;
+}) {
+  const terminal = isTerminalTaxiTripStatus(trip.status);
+  const showCaptain = Boolean(trip.driver && !terminal && trip.status !== "REQUESTED");
+  const showPin = Boolean(trip.tripPin && showCaptain && ["ARRIVED_PICKUP", "STARTED", "ARRIVED_DESTINATION"].includes(trip.status));
+  return <Card>
+    <Text style={ui.cardTitle}>{rideTrackingTitle(trip)}</Text>
+    <Text style={ui.muted}>{rideStatusActionCopy(trip)}</Text>
+    <View style={styles.trackingMeta}>
+      <Text style={styles.tripRef}>{trip.tripReference}</Text>
+      <StatusBadge status={trip.status} />
+    </View>
+    <View style={styles.routePanel}>
+      <RoutePoint label="Pickup" value={trip.pickupAddress} tone="pickup" />
+      <RoutePoint label="Destination" value={trip.destinationAddress} tone="destination" />
+    </View>
+    <View style={styles.metrics}>
+      <Metric label="Ride" value={tripCategoryLabel(trip)} />
+      <Metric label={trip.status === "COMPLETED" ? "Fare" : "Estimate"} value={money(trip.finalFareKobo ?? trip.estimatedFareKobo)} />
+    </View>
+    {showCaptain && trip.driver ? <View style={styles.captainCard}>
+      <Text style={styles.captainTitle}>Ride Captain</Text>
+      <Text style={styles.captainText}>{trip.driver.fullName}</Text>
+      <Text style={ui.muted}>{[trip.driver.vehicleColour, trip.driver.vehicleMake, trip.driver.vehicleModel].filter(Boolean).join(" ") || "Vehicle details pending"}</Text>
+      <Text style={ui.muted}>{trip.driver.vehiclePlateNumber ? `Plate: ${trip.driver.vehiclePlateNumber}` : "Registration pending"}</Text>
+    </View> : null}
+    {showPin && trip.tripPin ? <>
+      <Text style={ui.otpCode}>{trip.tripPin.slice(0, 3)} {trip.tripPin.slice(3)}</Text>
+      <Text style={ui.muted}>Only share this ride PIN with the approved Ride Captain at pickup.</Text>
+    </> : null}
+    {trip.status === "REQUESTED" ? <Text style={styles.requestedCopy}>Connecting you with an available Captain nearby.</Text> : null}
+    {cancellableBeforePickup.has(trip.status) ? <Button title={loading ? "Cancelling..." : "Cancel ride request"} tone="muted" disabled={loading} onPress={onCancel} /> : null}
+    {terminal ? <View style={styles.inlineActions}>
+      <Button title={trip.status === "EXPIRED" ? "Retry ride request" : "Book another ride"} onPress={onBookAnother} />
+      <Button title="Back to KariGO Home" tone="muted" onPress={onBackHome} />
+    </View> : <View style={styles.inlineActions}>
+      <Button title="Refresh status" tone="muted" disabled={loading} onPress={onRefresh} />
+      <Button title="Back to KariGO Home" tone="muted" onPress={onBackHome} />
+    </View>}
+  </Card>;
+}
+
+function RideActiveList({
+  trips,
+  currentTripId,
+  loading,
+  onOpen,
+  onCancel,
+  onRefresh
+}: {
+  trips: TaxiTrip[];
+  currentTripId?: string;
+  loading: boolean;
+  onOpen: (trip: TaxiTrip) => void;
+  onCancel: (trip: TaxiTrip) => void;
+  onRefresh: () => void;
+}) {
   if (!trips.length) return null;
   return <Card>
     <View style={ui.spaceBetween}>
-      <Text style={ui.sectionTitle}>Recent ride requests</Text>
+      <Text style={ui.sectionTitle}>Active ride requests</Text>
       <Button title="Refresh" tone="muted" disabled={loading} onPress={onRefresh} />
     </View>
-    {trips.slice(0, 3).map((trip) => <View key={trip.id} style={styles.tripRow}>
-      <Text style={styles.tripRef}>{trip.tripReference}</Text>
-      <Text style={ui.muted}>{trip.pickupAddress} to {trip.destinationAddress}</Text>
+    {trips.map((trip) => <View key={trip.id} style={styles.tripRow}>
+      <Text style={styles.tripRef}>{trip.tripReference}{trip.id === currentTripId ? " - open" : ""}</Text>
+      <Text style={ui.muted} numberOfLines={1}>{shortAddress(trip.pickupAddress)} to {shortAddress(trip.destinationAddress)}</Text>
+      <Text style={ui.muted}>{tripCategoryLabel(trip)} - {money(trip.estimatedFareKobo)} - {tripDate(trip)}</Text>
       <StatusBadge status={trip.status} />
+      <View style={styles.inlineActions}>
+        <Button title="Open ride" tone="muted" onPress={() => onOpen(trip)} />
+        {cancellableBeforePickup.has(trip.status) ? <Button title="Cancel request" tone="muted" disabled={loading} onPress={() => onCancel(trip)} /> : null}
+      </View>
     </View>)}
   </Card>;
 }
 
+function RideHistoryList({ trips, onOpen }: { trips: TaxiTrip[]; onOpen: (trip: TaxiTrip) => void }) {
+  if (!trips.length) return null;
+  return <Card>
+    <Text style={ui.sectionTitle}>Ride history</Text>
+    {trips.slice(0, 8).map((trip) => <Pressable key={trip.id} accessibilityRole="button" onPress={() => onOpen(trip)} style={styles.tripRow}>
+      <Text style={styles.tripRef}>{trip.tripReference}</Text>
+      <Text style={ui.muted} numberOfLines={1}>{shortAddress(trip.pickupAddress)} to {shortAddress(trip.destinationAddress)}</Text>
+      <Text style={ui.muted}>{money(trip.finalFareKobo ?? trip.estimatedFareKobo)} - {tripDate(trip)}</Text>
+      <StatusBadge status={trip.status} />
+    </Pressable>)}
+  </Card>;
+}
+
 const styles = StyleSheet.create({
+  activeBanner: { alignItems: "center", backgroundColor: "#FEF2F2", borderColor: "#FCA5A5", borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 12, padding: 12 },
+  activeBannerAction: { color: brand.colors.primaryDark, fontWeight: "900" },
+  activeBannerDot: { backgroundColor: brand.colors.primary, borderRadius: 999, height: 12, width: 12 },
+  activeBannerText: { color: brand.colors.muted, fontSize: 12, fontWeight: "800" },
+  activeBannerTitle: { color: brand.colors.charcoal, fontWeight: "900" },
+  activeNotice: { backgroundColor: "#FFF7ED", borderColor: "#FDBA74", borderRadius: 16, borderWidth: 1, gap: 4, padding: 12 },
+  activeNoticeText: { color: "#9A3412", fontSize: 12, fontWeight: "700", lineHeight: 18 },
+  activeNoticeTitle: { color: "#7C2D12", fontWeight: "900" },
   addressInput: { textAlign: "left", writingDirection: "ltr" },
   bookingHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   bottomSheet: { backgroundColor: brand.colors.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, bottom: 0, left: 0, paddingHorizontal: 18, position: "absolute", right: 0, shadowColor: "#111827", shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.16, shadowRadius: 18 },
+  captainCard: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 3, padding: 12 },
+  captainText: { color: brand.colors.charcoal, fontWeight: "900" },
+  captainTitle: { color: brand.colors.primaryDark, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
   categoryBody: { flex: 1, gap: 2 },
   categoryCard: { alignItems: "center", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, flexDirection: "row", gap: 10, minHeight: 74, padding: 10 },
   categoryCardActive: { backgroundColor: "#FEF2F2", borderColor: "#FCA5A5" },
@@ -1457,12 +1848,21 @@ const styles = StyleSheet.create({
   sheetHandleWrap: { alignItems: "center", paddingBottom: 8, paddingTop: 10 },
   sheetHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   sheetScroll: { gap: 12 },
+  sheetStatic: { flex: 1, gap: 10 },
   sheetTitle: { color: brand.colors.charcoal, fontSize: 22, fontWeight: "900", letterSpacing: -0.3 },
   smallPill: { backgroundColor: "#F3F4F6", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   smallPillText: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "900" },
   stopMarker: { backgroundColor: brand.colors.warning },
+  stickyActionFooter: { backgroundColor: brand.colors.white, borderTopColor: brand.colors.border, borderTopWidth: 1, gap: 8, left: 0, paddingHorizontal: 0, paddingTop: 10, position: "absolute", right: 0, bottom: 0 },
+  stickyActionHint: { color: brand.colors.muted, fontSize: 12, fontWeight: "700", textAlign: "center" },
+  stickyActionSummary: { color: brand.colors.charcoal, fontSize: 13, fontWeight: "900", textAlign: "center" },
+  stickyPanel: { flex: 1, position: "relative" },
+  stickyScrollContent: { gap: 12 },
   suggestionBox: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 10, padding: 10 },
   suggestionRow: { alignItems: "center", flexDirection: "row", gap: 10 },
+  requestedCopy: { backgroundColor: "#EFF6FF", borderRadius: 12, color: "#1E40AF", fontWeight: "800", padding: 10 },
+  trackingMeta: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "space-between" },
+  trackingSheet: { backgroundColor: brand.colors.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, bottom: 0, left: 0, maxHeight: "58%", paddingHorizontal: 18, paddingTop: 16, position: "absolute", right: 0, shadowColor: "#111827", shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.16, shadowRadius: 18 },
   tripRef: { color: brand.colors.charcoal, fontWeight: "900" },
   tripRow: { borderTopColor: brand.colors.border, borderTopWidth: 1, gap: 6, paddingTop: 10 },
   whereToControl: { backgroundColor: brand.colors.charcoal, borderRadius: 18, flex: 1, gap: 4, minHeight: 66, padding: 14 },

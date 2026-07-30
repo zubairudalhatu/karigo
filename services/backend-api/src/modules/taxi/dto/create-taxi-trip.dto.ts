@@ -21,4 +21,9 @@ export class CreateTaxiTripDto extends TaxiFareEstimateDto {
   @IsString()
   @MaxLength(240)
   pickupInstruction?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  clientRequestId?: string;
 }

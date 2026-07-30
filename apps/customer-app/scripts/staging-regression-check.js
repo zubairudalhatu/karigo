@@ -180,6 +180,16 @@ assert(taxiRequest.includes("Ride fare estimate expired. Please preview and esti
 assert(taxiRequest.includes("centerPin") && taxiRequest.includes("currentLocationFab"), "Ride map picker must use a center-pin layout with a current-location button.");
 assert(taxiRequest.includes("Powered by Google"), "Ride search predictions must include Google attribution.");
 assert(taxiRequest.includes("rideStatusCopy"), "Ride tracking must use backend-driven status copy.");
+assert(taxiRequest.includes("activeTaxiTripStatuses"), "Ride request flow must use shared active lifecycle status classification.");
+assert(taxiRequest.includes("isTerminalTaxiTripStatus"), "Ride request flow must use shared terminal lifecycle status classification.");
+assert(taxiRequest.includes("Active ride requests"), "Ride request flow must expose a dedicated active ride requests section.");
+assert(taxiRequest.includes("Ride history"), "Ride request flow must separate terminal rides into ride history.");
+assert(taxiRequest.includes("RideActiveBanner"), "Ride Home must show a compact active ride banner.");
+assert(taxiRequest.includes("stickyActionFooter"), "Ride booking panels must keep primary actions in a sticky footer.");
+assert(taxiRequest.includes("Active request must be completed or cancelled first."), "Ride confirmation must block duplicate immediate ride submissions while an active ride exists.");
+assert(taxiRequest.includes("ACTIVE_RIDE_EXISTS") || read("src", "lib", "errors.ts").includes("ACTIVE_RIDE_EXISTS"), "Customer app must handle backend active ride conflicts safely.");
+assert(taxiRequest.includes("AppState.addEventListener"), "Ride tracking must refresh active rides only while the app is foregrounded.");
+assert(taxiRequest.includes("pollingInFlight"), "Ride tracking polling must prevent overlapping refresh requests.");
 assert(taxiRequest.includes("Use current location as pickup"), "Ride request flow must expose current-location pickup selection.");
 assert(taxiRequest.includes("Saved places"), "Ride request flow must expose saved places.");
 assert(taxiRequest.includes("Recent destinations"), "Ride request flow must expose recent destination shortcuts.");
@@ -200,6 +210,8 @@ assert(taxiRequest.includes("taxiApi.cancelTrip"), "Ride request flow must suppo
 assert(!taxiRequest.includes("KariGO Operations assigns") && !taxiRequest.includes("KariGO Operations is assigning"), "Ride request flow must not expose manual assignment copy in normal customer surfaces.");
 assert(!taxiRequest.includes("Driver found"), "Ride request flow must not show driver-found copy before an actual driver is assigned.");
 assert(taxiRequest.includes("Ride request received"), "Ride request flow must show a tracking/status screen after booking.");
+assert(taxiRequest.includes("Ride request cancelled"), "Ride tracking must show cancellation-specific terminal copy.");
+assert(taxiRequest.includes("Looking for a Ride Captain"), "Requested ride tracking must use concise looking-for-Captain copy.");
 assert(!taxiRequest.includes("Pay Now"), "Ride Test Mode must not show a payment action.");
 
 const smeServices = read("app", "sme-services.tsx");

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from "@nestjs/common";
 import { AccountStatus, TaxiApplicationStatus, TaxiDriverProfileStatus, TaxiTripStatus, TaxiVehicleOwnership, TaxiVehicleType, TaxiWaitlistStatus, UserRole } from "@prisma/client";
 import * as bcrypt from "bcrypt";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
@@ -591,6 +591,57 @@ describe("TaxiService", () => {
     }));
   });
 
+  it("rejects a second active immediate Ride request while a REQUESTED trip exists", async () => {
+    enableTaxiStaging();
+    prisma.taxiTrip.findFirst.mockResolvedValueOnce(taxiTrip);
+
+    await expect(service.createCustomerTrip("customer-user", {
+      pickupAddress: "Tarauni, Kano",
+      pickupLatitude: 12.0022,
+      pickupLongitude: 8.592,
+      destinationAddress: "Zoo Road, Kano",
+      destinationLatitude: 12.014,
+      destinationLongitude: 8.541,
+      estimatedDistanceKm: 6.5,
+      estimatedDurationMin: 18,
+      rideCategory: "ECONOMY",
+      clientRequestId: "client-attempt-1"
+    })).rejects.toBeInstanceOf(ConflictException);
+
+    expect(prisma.taxiTrip.create).not.toHaveBeenCalled();
+  });
+
+  it("returns safe active trip details in duplicate Ride conflict responses", async () => {
+    enableTaxiStaging();
+    prisma.taxiTrip.findFirst.mockResolvedValueOnce(taxiTrip);
+
+    try {
+      await service.createCustomerTrip("customer-user", {
+        pickupAddress: "Tarauni, Kano",
+        pickupLatitude: 12.0022,
+        pickupLongitude: 8.592,
+        destinationAddress: "Zoo Road, Kano",
+        destinationLatitude: 12.014,
+        destinationLongitude: 8.541,
+        estimatedDistanceKm: 6.5,
+        estimatedDurationMin: 18,
+        rideCategory: "ECONOMY"
+      });
+      throw new Error("Expected duplicate Ride conflict");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConflictException);
+      const response = (error as ConflictException).getResponse() as { message: string; error_code: string; details: { activeTrip: typeof taxiTrip } };
+      expect(response.error_code).toBe("ACTIVE_RIDE_EXISTS");
+      expect(response.message).toContain("You already have an active KariGO Ride");
+      expect(response.details.activeTrip).toMatchObject({
+        id: taxiTrip.id,
+        tripReference: taxiTrip.tripReference,
+        status: TaxiTripStatus.REQUESTED
+      });
+      expect((response.details.activeTrip as { tripPin?: string }).tripPin).toBeUndefined();
+    }
+  });
+
   it("rejects cross-city Ride trip creation before creating a trip", async () => {
     enableTaxiStaging();
     await expect(service.createCustomerTrip("customer-user", {
@@ -698,5 +749,58 @@ describe("TaxiService", () => {
     prisma.taxiTrip.findFirst.mockResolvedValueOnce(null);
 
     await expect(service.customerTrip("customer-user", "other-trip-id")).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("cancels only the selected owned active Ride trip", async () => {
+    enableTaxiStaging();
+    const selectedTrip = { ...taxiTrip, id: "00000000-0000-0000-0000-00000000e002", tripReference: "KGO-TAXI-TRIP-2026-SELECTED" };
+    prisma.taxiTrip.findFirst.mockResolvedValueOnce(selectedTrip);
+
+    await service.customerCancelTrip("customer-user", selectedTrip.id, { reason: "Changed pickup plan" });
+
+    expect(prisma.taxiTrip.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: selectedTrip.id },
+      data: expect.objectContaining({
+        status: TaxiTripStatus.CANCELLED_BY_CUSTOMER,
+        cancellationReason: "Changed pickup plan",
+        tripPinHash: null
+      })
+    }));
+  });
+
+  it("keeps customer cancellation idempotent for an already cancelled selected trip", async () => {
+    enableTaxiStaging();
+    prisma.taxiTrip.findFirst.mockResolvedValueOnce({
+      ...taxiTrip,
+      status: TaxiTripStatus.CANCELLED_BY_CUSTOMER,
+      cancelledAt: now,
+      tripPinHash: null,
+      cancellationReason: "Changed pickup plan"
+    });
+
+    const result = await service.customerCancelTrip("customer-user", taxiTrip.id, { reason: "Changed pickup plan" });
+
+    expect(prisma.taxiTrip.update).not.toHaveBeenCalled();
+    expect(result.status).toBe(TaxiTripStatus.CANCELLED_BY_CUSTOMER);
+    expect((result as { tripPin?: string }).tripPin).toBeUndefined();
+  });
+
+  it("rejects customer cancellation after the pickup lifecycle point", async () => {
+    enableTaxiStaging();
+    prisma.taxiTrip.findFirst.mockResolvedValueOnce({
+      ...taxiTrip,
+      status: TaxiTripStatus.ARRIVED_PICKUP
+    });
+
+    await expect(service.customerCancelTrip("customer-user", taxiTrip.id, { reason: "Too late" })).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.taxiTrip.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects customer cancellation for another customer's Ride trip", async () => {
+    enableTaxiStaging();
+    prisma.taxiTrip.findFirst.mockResolvedValueOnce(null);
+
+    await expect(service.customerCancelTrip("customer-user", taxiTrip.id, { reason: "Not mine" })).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.taxiTrip.update).not.toHaveBeenCalled();
   });
 });

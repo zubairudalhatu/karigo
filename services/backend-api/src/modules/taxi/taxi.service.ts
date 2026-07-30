@@ -125,11 +125,18 @@ type TaxiDriverProfileForResponse = {
 };
 
 const ACTIVE_TAXI_TRIP_STATUSES: TaxiTripStatus[] = [
+  TaxiTripStatus.REQUESTED,
   TaxiTripStatus.DRIVER_ASSIGNED,
   TaxiTripStatus.ACCEPTED,
   TaxiTripStatus.ARRIVED_PICKUP,
   TaxiTripStatus.STARTED,
   TaxiTripStatus.ARRIVED_DESTINATION
+];
+
+const CUSTOMER_CANCELLABLE_TAXI_TRIP_STATUSES: TaxiTripStatus[] = [
+  TaxiTripStatus.REQUESTED,
+  TaxiTripStatus.DRIVER_ASSIGNED,
+  TaxiTripStatus.ACCEPTED
 ];
 
 const CLOSED_TAXI_TRIP_STATUSES: TaxiTripStatus[] = [
@@ -406,6 +413,21 @@ export class TaxiService {
     const now = new Date();
 
     const trip = await this.prisma.$transaction(async (tx) => {
+      const activeTrip = await tx.taxiTrip.findFirst({
+        where: {
+          customerId: customer.id,
+          status: { in: ACTIVE_TAXI_TRIP_STATUSES }
+        },
+        include: this.tripInclude(),
+        orderBy: [
+          { updatedAt: "desc" },
+          { createdAt: "desc" }
+        ]
+      });
+      if (activeTrip) {
+        this.throwActiveRideConflict(activeTrip);
+      }
+
       const created = await tx.taxiTrip.create({
         data: {
           tripReference,
@@ -439,12 +461,13 @@ export class TaxiService {
             rideCategory: dto.rideCategory?.trim() || "ECONOMY",
             paymentMethod: dto.paymentMethod?.trim() || "Cash",
             scheduledPickupAt: dto.scheduledPickupAt?.trim() || null,
+            clientRequestId: dto.clientRequestId?.trim() || null,
             pricing: estimate.pricing
           } as Prisma.InputJsonValue
         }
       });
       return created;
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     return {
       ...this.formatTrip(trip),
@@ -478,11 +501,16 @@ export class TaxiService {
   async customerCancelTrip(userId: string, tripId: string, dto: TaxiCancelDto) {
     this.assertTaxiStagingEnabled();
     const customer = await this.requireCustomer(userId);
-    const trip = await this.prisma.taxiTrip.findFirst({ where: { id: tripId, customerId: customer.id } });
+    const trip = await this.prisma.taxiTrip.findFirst({
+      where: { id: tripId, customerId: customer.id },
+      include: this.tripInclude()
+    });
     if (!trip) throw new NotFoundException("Ride request not found");
+    if (trip.status === TaxiTripStatus.CANCELLED_BY_CUSTOMER) {
+      return this.formatTrip(trip);
+    }
     if (CLOSED_TAXI_TRIP_STATUSES.includes(trip.status)) throw new BadRequestException("Ride request is already closed");
-    const supportCancelStatuses: TaxiTripStatus[] = [TaxiTripStatus.STARTED, TaxiTripStatus.ARRIVED_DESTINATION];
-    if (supportCancelStatuses.includes(trip.status)) {
+    if (!CUSTOMER_CANCELLABLE_TAXI_TRIP_STATUSES.includes(trip.status)) {
       throw new BadRequestException("Contact support to cancel an active Ride request");
     }
     return this.cancelTrip(trip.id, TaxiTripStatus.CANCELLED_BY_CUSTOMER, userId, TaxiTripActorType.CUSTOMER, dto.reason);
@@ -1086,6 +1114,16 @@ export class TaxiService {
       select: { id: true }
     });
     if (active) throw new ConflictException("Ride Captain already has an active ride request");
+  }
+
+  private throwActiveRideConflict(trip: TaxiTripWithRelations): never {
+    throw new ConflictException({
+      message: "You already have an active KariGO Ride. View or cancel it before requesting another immediate ride.",
+      error_code: "ACTIVE_RIDE_EXISTS",
+      details: {
+        activeTrip: this.formatTrip(trip)
+      }
+    });
   }
 
   private async riderTripTransition(
