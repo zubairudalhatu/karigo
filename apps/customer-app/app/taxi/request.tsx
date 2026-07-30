@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker, Polyline, Region } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { TaxiFareEstimate, TaxiRideCategory, TaxiTrip } from "@karigo/shared-types";
+import { TaxiFareEstimate, TaxiRideCategory, TaxiRoutePreview, TaxiTrip } from "@karigo/shared-types";
 import { brand } from "@karigo/config";
 import { Address, addressesApi } from "../../src/api/addresses.api";
 import { taxiApi } from "../../src/api/taxi.api";
@@ -18,6 +18,8 @@ type PlaceField = "pickup" | "destination";
 interface RidePlace {
   label: string;
   address: string;
+  mainText?: string;
+  secondaryText?: string;
   latitude?: number | null;
   longitude?: number | null;
   providerPlaceId?: string | null;
@@ -25,13 +27,15 @@ interface RidePlace {
   source: "current" | "saved" | "recent" | "manual" | "search" | "map";
 }
 
-const kanoRegion: Region = {
-  latitude: 12.0022,
-  longitude: 8.592,
+const rideServiceAreaLabel = process.env.EXPO_PUBLIC_RIDES_SERVICE_AREA_LABEL || "Abuja";
+const defaultRideRegion: Region = {
+  latitude: rideServiceAreaLabel.toLowerCase().includes("kano") ? 12.0022 : 9.0765,
+  longitude: rideServiceAreaLabel.toLowerCase().includes("kano") ? 8.592 : 7.3986,
   latitudeDelta: 0.08,
   longitudeDelta: 0.08
 };
-const ridePilotNotice = "Controlled pilot";
+const rideAvailabilityCopy = `Live rides in ${rideServiceAreaLabel}`;
+const rideAvailabilityNote = "Service availability may vary by area and time.";
 const cancellableBeforePickup = new Set(["REQUESTED", "DRIVER_ASSIGNED", "ACCEPTED"]);
 
 const money = (kobo?: number | null) => `\u20A6${Math.round(Number(kobo ?? 0) / 100).toLocaleString()}`;
@@ -47,21 +51,9 @@ function placeFromAddress(address: Address): RidePlace {
   };
 }
 
-function distanceKmBetween(a?: Pick<RidePlace, "latitude" | "longitude"> | null, b?: Pick<RidePlace, "latitude" | "longitude"> | null) {
-  if (!a?.latitude || !a.longitude || !b?.latitude || !b.longitude) return undefined;
-  const earthRadiusKm = 6371;
-  const toRadians = (degrees: number) => degrees * Math.PI / 180;
-  const dLat = toRadians(b.latitude - a.latitude);
-  const dLon = toRadians(b.longitude - a.longitude);
-  const lat1 = toRadians(a.latitude);
-  const lat2 = toRadians(b.latitude);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-  return Number((2 * earthRadiusKm * Math.asin(Math.sqrt(h))).toFixed(2));
-}
-
 function regionForPlaces(pickup?: RidePlace | null, destination?: RidePlace | null): Region {
   const points = [pickup, destination].filter((place): place is RidePlace => Boolean(place?.latitude && place.longitude));
-  if (!points.length) return kanoRegion;
+  if (!points.length) return defaultRideRegion;
   if (points.length === 1) {
     return {
       latitude: Number(points[0].latitude),
@@ -92,31 +84,72 @@ async function reverseAddress(latitude: number, longitude: number) {
     .join(", ");
 }
 
-async function geocodePlace(text: string, label: string): Promise<RidePlace> {
-  const query = text.trim();
-  const [result] = await Location.geocodeAsync(`${query}, Nigeria`).catch(() => []);
-  if (!result) return { label, address: query, source: "manual" };
-  const address = await reverseAddress(result.latitude, result.longitude);
-  return {
-    label,
-    address: address || query,
-    latitude: result.latitude,
-    longitude: result.longitude,
-    providerPlaceId: `${result.latitude.toFixed(6)},${result.longitude.toFixed(6)}`,
-    source: "search"
-  };
+function paymentCopy(paymentMethod: string) {
+  if (paymentMethod === "Cash") return "Cash payment is available for supported KariGO Rides.";
+  if (paymentMethod === "Wallet") return "Wallet ride payment is coming soon.";
+  return "Card ride payment is coming soon.";
 }
 
-function paymentCopy(paymentMethod: string) {
-  if (paymentMethod === "Cash") return "Cash is available during the controlled pilot. KariGO Operations coordinates assignment manually.";
-  if (paymentMethod === "Wallet") return "Wallet ride payment is coming soon and unavailable during this pilot.";
-  return "Card ride payment is coming soon and unavailable during this pilot.";
+function newPlaceSessionToken() {
+  return `kg-rides-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function hasCoordinate(place?: RidePlace | null): place is RidePlace & { latitude: number; longitude: number } {
+  return Number.isFinite(place?.latitude) && Number.isFinite(place?.longitude);
+}
+
+function decodePolyline(encoded?: string | null) {
+  if (!encoded) return [];
+  const coordinates: Array<{ latitude: number; longitude: number }> = [];
+  let index = 0;
+  let latitude = 0;
+  let longitude = 0;
+
+  while (index < encoded.length) {
+    let shift = 0;
+    let result = 0;
+    let byte = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20 && index < encoded.length);
+    latitude += (result & 1) ? ~(result >> 1) : (result >> 1);
+
+    shift = 0;
+    result = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20 && index < encoded.length);
+    longitude += (result & 1) ? ~(result >> 1) : (result >> 1);
+
+    coordinates.push({ latitude: latitude / 1e5, longitude: longitude / 1e5 });
+  }
+  return coordinates;
+}
+
+function rideStatusCopy(trip?: TaxiTrip | null) {
+  if (!trip) return "Ride request status unavailable.";
+  if (trip.status === "REQUESTED") return "Finding an available Ride Captain.";
+  if (trip.status === "DRIVER_ASSIGNED") return trip.driver ? "Ride Captain assigned." : "Finding an available Ride Captain.";
+  if (trip.status === "ACCEPTED") return trip.driver ? "Your Ride Captain is on the way." : "Finding an available Ride Captain.";
+  if (trip.status === "ARRIVED_PICKUP") return "Your Ride Captain has arrived at pickup.";
+  if (trip.status === "STARTED" || trip.status === "ARRIVED_DESTINATION") return "Ride in progress.";
+  if (trip.status === "COMPLETED") return "Ride completed.";
+  if (trip.status === "EXPIRED") return "Ride request expired.";
+  if (trip.status.startsWith("CANCELLED")) return "Ride request cancelled.";
+  return "Ride status updated.";
 }
 
 export default function TaxiRequest() {
   const taxiEnabled = ridesControlledPilotEnabled();
   const insets = useSafeAreaInsets();
   const searchToken = useRef(0);
+  const placeSessionToken = useRef(newPlaceSessionToken());
+  const mapIdleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapPickerRef = useRef<MapView | null>(null);
   const [step, setStep] = useState<BookingStep>("HOME");
   const [pickup, setPickup] = useState<RidePlace | null>(null);
   const [destination, setDestination] = useState<RidePlace | null>(null);
@@ -126,8 +159,11 @@ export default function TaxiRequest() {
   const [activeField, setActiveField] = useState<PlaceField>("destination");
   const [suggestions, setSuggestions] = useState<RidePlace[]>([]);
   const [searching, setSearching] = useState(false);
+  const [googleAttributionRequired, setGoogleAttributionRequired] = useState(false);
   const [mapPicking, setMapPicking] = useState<PlaceField | null>(null);
   const [mapPoint, setMapPoint] = useState<RidePlace | null>(null);
+  const [mapRegion, setMapRegion] = useState<Region | null>(null);
+  const [mapMoving, setMapMoving] = useState(false);
   const [pickupInstruction, setPickupInstruction] = useState("");
   const [tripNote, setTripNote] = useState("");
   const [scheduleForLater, setScheduleForLater] = useState(false);
@@ -136,6 +172,8 @@ export default function TaxiRequest() {
   const [selectedCategory, setSelectedCategory] = useState("ECONOMY");
   const [categories, setCategories] = useState<TaxiRideCategory[]>([]);
   const [estimate, setEstimate] = useState<TaxiFareEstimate | null>(null);
+  const [routePreview, setRoutePreview] = useState<TaxiRoutePreview | null>(null);
+  const [routeError, setRouteError] = useState("");
   const [trips, setTrips] = useState<TaxiTrip[]>([]);
   const [created, setCreated] = useState<TaxiTrip | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -162,8 +200,6 @@ export default function TaxiRequest() {
       .slice(0, 4);
   }, [trips]);
 
-  const routeDistanceKm = pickup && destination ? distanceKmBetween(pickup, destination) : undefined;
-  const estimatedDurationMin = routeDistanceKm ? Math.max(8, Math.round(routeDistanceKm * 4)) : undefined;
   const categoryOptions = estimate?.rideCategories?.length ? estimate.rideCategories : categories;
   const selectedCategoryDetail = categoryOptions.find((category) => category.id === selectedCategory) ?? categoryOptions[0];
   const canPreview = pickupText.trim().length > 2 && destinationText.trim().length > 2;
@@ -179,12 +215,6 @@ export default function TaxiRequest() {
       setAddresses(saved);
       setCategories(rideCategories);
       setTrips(history);
-      const defaultPickup = saved.find((address) => address.isDefault) ?? saved[0];
-      if (defaultPickup && !pickup) {
-        const place = placeFromAddress(defaultPickup);
-        setPickup(place);
-        setPickupText(place.address);
-      }
     } catch {
       // Optional saved/history data should never block manual ride booking.
     }
@@ -192,12 +222,17 @@ export default function TaxiRequest() {
 
   useEffect(() => { void load(); }, [taxiEnabled]);
 
+  useEffect(() => () => {
+    if (mapIdleTimer.current) clearTimeout(mapIdleTimer.current);
+  }, []);
+
   useEffect(() => {
     if (step !== "ROUTE") return;
     const query = (activeField === "pickup" ? pickupText : destinationText).trim();
     const token = ++searchToken.current;
     if (query.length < 3) {
       setSuggestions([]);
+      setGoogleAttributionRequired(false);
       setSearching(false);
       return;
     }
@@ -206,20 +241,31 @@ export default function TaxiRequest() {
     const handle = setTimeout(() => {
       void (async () => {
         try {
-          const results = await Location.geocodeAsync(`${query}, Nigeria`);
+          const result = await taxiApi.placesAutocomplete({
+            input: query,
+            sessionToken: placeSessionToken.current,
+            latitude: activeField === "destination" ? pickup?.latitude ?? undefined : undefined,
+            longitude: activeField === "destination" ? pickup?.longitude ?? undefined : undefined,
+            serviceArea: rideServiceAreaLabel,
+            fieldType: activeField
+          });
           if (token !== searchToken.current) return;
-          const mapped = results.slice(0, 5).map((result, index) => ({
-            label: index === 0 ? query : `${query} option ${index + 1}`,
-            address: query,
-            latitude: result.latitude,
-            longitude: result.longitude,
-            providerPlaceId: `${result.latitude.toFixed(6)},${result.longitude.toFixed(6)}`,
-            distanceKm: activeField === "destination" ? distanceKmBetween(pickup, result) : undefined,
+          const mapped = result.predictions.map((prediction) => ({
+            label: prediction.mainText,
+            address: prediction.description,
+            mainText: prediction.mainText,
+            secondaryText: prediction.secondaryText,
+            providerPlaceId: prediction.placeId,
+            distanceKm: prediction.distanceMeters ? Number((prediction.distanceMeters / 1000).toFixed(1)) : undefined,
             source: "search" as const
           }));
+          setGoogleAttributionRequired(result.googleAttributionRequired);
           setSuggestions(mapped);
         } catch {
-          if (token === searchToken.current) setSuggestions([]);
+          if (token === searchToken.current) {
+            setGoogleAttributionRequired(false);
+            setSuggestions([]);
+          }
         } finally {
           if (token === searchToken.current) setSearching(false);
         }
@@ -238,7 +284,57 @@ export default function TaxiRequest() {
       setDestinationText(place.address);
     }
     setSuggestions([]);
+    setGoogleAttributionRequired(false);
     setEstimate(null);
+    setRoutePreview(null);
+    setRouteError("");
+  }
+
+  async function selectPrediction(field: PlaceField, place: RidePlace) {
+    if (!place.providerPlaceId) {
+      setPlace(field, place);
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const detail = await taxiApi.placeDetails(place.providerPlaceId, placeSessionToken.current);
+      setPlace(field, {
+        label: detail.name || place.label,
+        address: detail.address,
+        mainText: detail.name || place.mainText,
+        secondaryText: detail.shortAddress || place.secondaryText,
+        latitude: detail.latitude,
+        longitude: detail.longitude,
+        providerPlaceId: detail.placeId,
+        distanceKm: place.distanceKm,
+        source: "search"
+      });
+      if (field === "pickup") setActiveField("destination");
+    } catch (err) {
+      setError(friendlyError(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function resetNewBooking() {
+    placeSessionToken.current = newPlaceSessionToken();
+    setStep("ROUTE");
+    setPickup(null);
+    setDestination(null);
+    setPickupText("");
+    setDestinationText("");
+    setStopText("");
+    setActiveField("destination");
+    setSuggestions([]);
+    setGoogleAttributionRequired(false);
+    setEstimate(null);
+    setRoutePreview(null);
+    setRouteError("");
+    setCreated(null);
+    setMessage("");
+    setError("");
   }
 
   async function useCurrentLocation() {
@@ -273,14 +369,26 @@ export default function TaxiRequest() {
   async function applyManualRoute() {
     setLoading(true);
     setError("");
+    setRouteError("");
     try {
-      const nextPickup = pickup?.latitude && pickup.longitude ? pickup : await geocodePlace(pickupText, "Pickup");
-      const nextDestination = destination?.latitude && destination.longitude ? destination : await geocodePlace(destinationText, "Destination");
-      setPlace("pickup", nextPickup);
-      setPlace("destination", nextDestination);
+      if (!hasCoordinate(pickup) || !hasCoordinate(destination)) {
+        setRouteError("Select pickup and destination from search results, current location, saved places or the map before preview.");
+        return;
+      }
+      const preview = await taxiApi.routePreview({
+        pickupLatitude: pickup.latitude,
+        pickupLongitude: pickup.longitude,
+        destinationLatitude: destination.latitude,
+        destinationLongitude: destination.longitude,
+        pickupAddress: pickup.address,
+        destinationAddress: destination.address,
+        serviceArea: rideServiceAreaLabel
+      });
+      setRoutePreview(preview);
       setStep("PREVIEW");
     } catch (err) {
-      setError(friendlyError(err));
+      const safeMessage = friendlyError(err) || "Route estimate temporarily unavailable. Please retry.";
+      setRouteError(safeMessage);
     } finally {
       setLoading(false);
     }
@@ -294,18 +402,74 @@ export default function TaxiRequest() {
     setPickupText(nextPickup?.address ?? "");
     setDestinationText(nextDestination?.address ?? "");
     setEstimate(null);
+    setRoutePreview(null);
+    setRouteError("");
   }
 
   function openMapPicker(field: PlaceField) {
+    const initial = regionForPlaces(
+      field === "pickup" ? pickup : null,
+      field === "destination" ? destination : null
+    );
     setMapPicking(field);
     setActiveField(field);
+    setMapRegion(initial);
     setMapPoint((field === "pickup" ? pickup : destination) ?? {
       label: field === "pickup" ? "Pickup" : "Destination",
       address: field === "pickup" ? pickupText || "Move pin to pickup" : destinationText || "Move pin to destination",
-      latitude: regionForPlaces(pickup, destination).latitude,
-      longitude: regionForPlaces(pickup, destination).longitude,
+      latitude: initial.latitude,
+      longitude: initial.longitude,
       source: "map"
     });
+  }
+
+  function handleMapRegionChangeComplete(region: Region) {
+    if (!mapPicking) return;
+    setMapMoving(false);
+    setMapRegion(region);
+    setMapPoint({
+      label: mapPicking === "pickup" ? "Pickup pin" : "Destination pin",
+      address: "Updating selected address...",
+      latitude: region.latitude,
+      longitude: region.longitude,
+      providerPlaceId: `${region.latitude.toFixed(6)},${region.longitude.toFixed(6)}`,
+      source: "map"
+    });
+    if (mapIdleTimer.current) clearTimeout(mapIdleTimer.current);
+    mapIdleTimer.current = setTimeout(() => {
+      void (async () => {
+        const address = await reverseAddress(region.latitude, region.longitude);
+        setMapPoint((current) => current && current.latitude === region.latitude && current.longitude === region.longitude
+          ? { ...current, address: address || "Selected map location" }
+          : current);
+      })();
+    }, 350);
+  }
+
+  async function moveMapToCurrentLocation() {
+    setLocating(true);
+    setMessage("");
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== "granted") {
+        setMessage("Location permission was not granted. You can still move the map manually.");
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const region = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        latitudeDelta: 0.015,
+        longitudeDelta: 0.015
+      };
+      setMapRegion(region);
+      mapPickerRef.current?.animateToRegion(region, 250);
+      handleMapRegionChangeComplete(region);
+    } catch {
+      setMessage("Location is unavailable right now. Move the map manually.");
+    } finally {
+      setLocating(false);
+    }
   }
 
   async function confirmMapPoint() {
@@ -327,6 +491,11 @@ export default function TaxiRequest() {
 
   async function estimateFare(categoryId = selectedCategory) {
     if (!pickup || !destination) return;
+    if (!routePreview) {
+      setRouteError("Route estimate temporarily unavailable. Please retry.");
+      setStep("PREVIEW");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -337,8 +506,8 @@ export default function TaxiRequest() {
         destinationAddress: destination.address,
         destinationLatitude: destination.latitude ?? undefined,
         destinationLongitude: destination.longitude ?? undefined,
-        estimatedDistanceKm: routeDistanceKm,
-        estimatedDurationMin,
+        estimatedDistanceKm: routePreview.distanceKm,
+        estimatedDurationMin: routePreview.durationMin,
         rideCategory: categoryId
       });
       setSelectedCategory(categoryId);
@@ -353,6 +522,11 @@ export default function TaxiRequest() {
 
   async function createTrip() {
     if (!pickup || !destination) return;
+    if (!routePreview) {
+      setRouteError("Route estimate temporarily unavailable. Please retry.");
+      setStep("PREVIEW");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -363,8 +537,8 @@ export default function TaxiRequest() {
         destinationAddress: destination.address,
         destinationLatitude: destination.latitude ?? undefined,
         destinationLongitude: destination.longitude ?? undefined,
-        estimatedDistanceKm: estimate?.estimatedDistanceKm ?? routeDistanceKm,
-        estimatedDurationMin: estimate?.estimatedDurationMin ?? estimatedDurationMin,
+        estimatedDistanceKm: estimate?.estimatedDistanceKm ?? routePreview.distanceKm,
+        estimatedDurationMin: estimate?.estimatedDurationMin ?? routePreview.durationMin,
         rideCategory: selectedCategory,
         paymentMethod,
         scheduledPickupAt: scheduleForLater ? scheduledPickupAt : undefined,
@@ -386,7 +560,7 @@ export default function TaxiRequest() {
     setLoading(true);
     setError("");
     try {
-      await taxiApi.cancelTrip(tripId, "Customer cancelled controlled pilot ride before pickup");
+      await taxiApi.cancelTrip(tripId, "Customer cancelled ride before pickup");
       setCreated(null);
       await load();
       setStep("HOME");
@@ -415,34 +589,32 @@ export default function TaxiRequest() {
   }
 
   if (mapPicking) {
-    const region = mapPoint?.latitude && mapPoint.longitude
+    const region = mapRegion ?? (mapPoint?.latitude && mapPoint.longitude
       ? { latitude: mapPoint.latitude, longitude: mapPoint.longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 }
-      : regionForPlaces(pickup, destination);
+      : regionForPlaces(pickup, destination));
 
     return <Protected><>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.fullScreenMap}>
         <MapView
+          ref={mapPickerRef}
           style={StyleSheet.absoluteFill}
-          initialRegion={region}
+          region={region}
           showsUserLocation
-          onPress={(event) => {
-            const { latitude, longitude } = event.nativeEvent.coordinate;
-            setMapPoint({
-              label: mapPicking === "pickup" ? "Pickup pin" : "Destination pin",
-              address: "Selected map location",
-              latitude,
-              longitude,
-              providerPlaceId: `${latitude.toFixed(6)},${longitude.toFixed(6)}`,
-              source: "map"
-            });
-          }}
-        >
-          {mapPoint?.latitude && mapPoint.longitude ? <Marker coordinate={{ latitude: mapPoint.latitude, longitude: mapPoint.longitude }} title={mapPoint.label} /> : null}
-        </MapView>
+          onRegionChange={() => setMapMoving(true)}
+          onRegionChangeComplete={handleMapRegionChangeComplete}
+        />
+        <View pointerEvents="none" style={styles.centerPin}>
+          <View style={styles.centerPinHead} />
+          <View style={styles.centerPinTail} />
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Use current location on map" onPress={() => void moveMapToCurrentLocation()} style={[styles.currentLocationFab, { bottom: Math.max(insets.bottom, 16) + 182 }]}>
+          <Text style={styles.currentLocationFabText}>{locating ? "..." : "GPS"}</Text>
+        </Pressable>
         <View style={[styles.mapPickerPanel, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <Text style={styles.mapTitle}>{mapPicking === "pickup" ? "Choose pickup on map" : "Choose destination on map"}</Text>
-          <Text style={ui.muted}>{mapPoint?.address ?? "Tap the map to move the pin."}</Text>
+          <Text style={ui.muted}>{mapMoving ? "Move the map until the pin is on the right spot." : mapPoint?.address ?? "Move the map to place the center pin."}</Text>
+          {message ? <Text style={ui.muted}>{message}</Text> : null}
           <View style={styles.inlineActions}>
             <Button title="Cancel" tone="muted" onPress={() => setMapPicking(null)} />
             <Button title={loading ? "Confirming..." : "Confirm location"} disabled={loading || !mapPoint} onPress={() => void confirmMapPoint()} />
@@ -463,9 +635,10 @@ export default function TaxiRequest() {
         <View style={styles.hero}>
           <Text style={styles.heroEyebrow}>KariGO Rides</Text>
           <Text style={styles.heroTitle}>Ready, set, ride.</Text>
-          <Text style={styles.pilotBadge}>{ridePilotNotice}</Text>
+          <Text style={styles.pilotBadge}>{rideAvailabilityCopy}</Text>
+          <Text style={ui.muted}>{rideAvailabilityNote}</Text>
         </View>
-        <Pressable accessibilityRole="button" onPress={() => setStep("ROUTE")} style={styles.destinationControl}>
+        <Pressable accessibilityRole="button" onPress={resetNewBooking} style={styles.destinationControl}>
           <Text style={styles.destinationLabel}>Where are you going?</Text>
           <Text style={styles.destinationHint}>Search, use saved places, or choose a point on the map.</Text>
         </Pressable>
@@ -504,7 +677,8 @@ export default function TaxiRequest() {
             activeField={activeField}
             places={suggestions}
             searching={searching}
-            onSelect={(place) => setPlace(activeField, place)}
+            googleAttributionRequired={googleAttributionRequired}
+            onSelect={(place) => void selectPrediction(activeField, place)}
           />
           <View style={styles.inlineActions}>
             <Button title="Swap" tone="muted" onPress={swapRoute} disabled={!pickup && !destination} />
@@ -516,6 +690,7 @@ export default function TaxiRequest() {
             <Button title="Pickup on map" tone="muted" onPress={() => openMapPicker("pickup")} />
             <Button title="Destination on map" tone="muted" onPress={() => openMapPicker("destination")} />
           </View>
+          <Message error>{routeError}</Message>
           <Button title={loading ? "Resolving route..." : "Preview route"} disabled={loading || !canPreview} onPress={() => void applyManualRoute()} />
         </Card>
         <PlaceSection title="Saved places" places={savedPlaces} onSelect={(place) => setPlace("destination", place)} />
@@ -523,16 +698,16 @@ export default function TaxiRequest() {
       </> : null}
 
       {step === "PREVIEW" ? <>
-        <RoutePreview pickup={pickup} destination={destination} stopText={stopText} distanceKm={routeDistanceKm} durationMin={estimatedDurationMin} />
+        <RoutePreview pickup={pickup} destination={destination} stopText={stopText} routePreview={routePreview} routeError={routeError} />
         <Card>
           <Text style={ui.cardTitle}>Confirm route</Text>
-          <Text style={ui.muted}>KariGO will calculate category fares from the selected route before creating a controlled-pilot request.</Text>
-          <Button title={loading ? "Estimating..." : "Show ride categories and fare"} disabled={loading || !pickup || !destination} onPress={() => void estimateFare()} />
+          <Text style={ui.muted}>KariGO will calculate category fares from the selected road route.</Text>
+          <Button title={loading ? "Estimating..." : "Show ride categories and fare"} disabled={loading || !pickup || !destination || !routePreview} onPress={() => void estimateFare()} />
         </Card>
       </> : null}
 
       {step === "CONFIRM" ? <>
-        <RoutePreview pickup={pickup} destination={destination} stopText={stopText} distanceKm={estimate?.estimatedDistanceKm ?? routeDistanceKm} durationMin={estimate?.estimatedDurationMin ?? estimatedDurationMin} compact />
+        <RoutePreview pickup={pickup} destination={destination} stopText={stopText} routePreview={routePreview} compact />
         <Card>
           <Text style={ui.cardTitle}>Choose ride category</Text>
           {categoryOptions.length === 0 ? <Empty message="No ride category is available in this area yet." /> : categoryOptions.map((category) => (
@@ -566,7 +741,7 @@ export default function TaxiRequest() {
         <Card>
           <Text style={ui.cardTitle}>{selectedCategoryDetail?.name ?? "Selected ride"}</Text>
           <Text style={ui.priceValue}>{money(estimate?.estimatedFareKobo)}</Text>
-          <Text style={ui.muted}>KariGO Operations assigns an approved Ride Captain manually. Ride payment and payout automation remain disabled.</Text>
+          <Text style={ui.muted}>{rideAvailabilityNote}</Text>
           <Button title={loading ? "Requesting..." : scheduleForLater ? `Schedule ${selectedCategoryDetail?.name ?? "ride"}` : `Request ${selectedCategoryDetail?.name ?? "ride"}`} disabled={loading || !estimate} onPress={() => void createTrip()} />
         </Card>
       </> : null}
@@ -576,9 +751,10 @@ export default function TaxiRequest() {
           <Text style={ui.cardTitle}>Ride request received</Text>
           <Text>Reference: {created.tripReference}</Text>
           <StatusBadge status={created.status} />
+          <Text style={ui.muted}>{rideStatusCopy(created)}</Text>
           {created.tripPin ? <Text style={ui.otpCode}>{created.tripPin.slice(0, 3)} {created.tripPin.slice(3)}</Text> : null}
           <Text style={ui.muted}>Only share this ride PIN with the approved Ride Captain after pickup.</Text>
-          {created.driver ? <Text style={ui.muted}>Ride Captain: {created.driver.fullName} - {created.driver.vehiclePlateNumber ?? "vehicle pending"}</Text> : <Text style={ui.muted}>KariGO Operations is assigning an approved Ride Captain.</Text>}
+          {created.driver ? <Text style={ui.muted}>Ride Captain: {created.driver.fullName} - {created.driver.vehiclePlateNumber ?? "vehicle pending"}</Text> : <Text style={ui.muted}>Finding an available Ride Captain.</Text>}
           {cancellableBeforePickup.has(created.status) ? <Button title="Cancel ride request" tone="muted" disabled={loading} onPress={() => void cancelTrip(created.id)} /> : null}
         </Card> : null}
         <Button title="Back to Rides home" tone="muted" onPress={() => setStep("HOME")} />
@@ -610,7 +786,7 @@ function BookingHeader({ step, onBack, onClose }: { step: BookingStep; onBack: (
   </View>;
 }
 
-function SuggestionList({ activeField, places, searching, onSelect }: { activeField: PlaceField; places: RidePlace[]; searching: boolean; onSelect: (place: RidePlace) => void }) {
+function SuggestionList({ activeField, places, searching, googleAttributionRequired, onSelect }: { activeField: PlaceField; places: RidePlace[]; searching: boolean; googleAttributionRequired: boolean; onSelect: (place: RidePlace) => void }) {
   if (searching) return <Text style={ui.muted}>Searching {activeField} suggestions...</Text>;
   if (!places.length) return null;
   return <View style={styles.suggestionBox}>
@@ -618,9 +794,10 @@ function SuggestionList({ activeField, places, searching, onSelect }: { activeFi
       <View style={styles.placeDot}><Text style={styles.placeDotText}>{activeField === "pickup" ? "P" : "D"}</Text></View>
       <View style={styles.placeBody}>
         <Text style={styles.placeTitle}>{place.label}</Text>
-        <Text style={ui.muted}>{place.address}{place.distanceKm ? ` \u2022 ${place.distanceKm} km away` : ""}</Text>
+        <Text style={ui.muted}>{place.secondaryText || place.address}{place.distanceKm ? ` \u2022 ${place.distanceKm} km away` : ""}</Text>
       </View>
     </Pressable>)}
+    {googleAttributionRequired ? <Text style={styles.googleAttribution}>Powered by Google</Text> : null}
   </View>;
 }
 
@@ -638,16 +815,26 @@ function PlaceSection({ title, places, onSelect }: { title: string; places: Ride
   </Card>;
 }
 
-function RoutePreview({ pickup, destination, stopText, distanceKm, durationMin, compact = false }: { pickup: RidePlace | null; destination: RidePlace | null; stopText?: string; distanceKm?: number; durationMin?: number; compact?: boolean }) {
-  const routePoints = [pickup, destination]
-    .filter((place): place is RidePlace => Boolean(place?.latitude && place.longitude))
-    .map((place) => ({ latitude: Number(place.latitude), longitude: Number(place.longitude) }));
+function RoutePreview({ pickup, destination, stopText, routePreview, routeError, compact = false }: { pickup: RidePlace | null; destination: RidePlace | null; stopText?: string; routePreview?: TaxiRoutePreview | null; routeError?: string; compact?: boolean }) {
+  const mapRef = useRef<MapView | null>(null);
+  const routePoints = useMemo(() => decodePolyline(routePreview?.encodedPolyline), [routePreview?.encodedPolyline]);
   const region = regionForPlaces(pickup, destination);
+
+  useEffect(() => {
+    if (routePoints.length < 2) return;
+    const handle = setTimeout(() => {
+      mapRef.current?.fitToCoordinates(routePoints, {
+        animated: false,
+        edgePadding: { top: 48, right: 48, bottom: 48, left: 48 }
+      });
+    }, 150);
+    return () => clearTimeout(handle);
+  }, [routePoints]);
 
   return <Card>
     <Text style={ui.cardTitle}>Route preview</Text>
     <View style={[styles.mapPreview, compact && styles.mapPreviewCompact]}>
-      <MapView style={StyleSheet.absoluteFill} initialRegion={region} region={region} scrollEnabled={!compact} zoomEnabled={!compact} pitchEnabled={false} rotateEnabled={false}>
+      <MapView ref={mapRef} style={StyleSheet.absoluteFill} initialRegion={region} region={routePoints.length ? undefined : region} scrollEnabled={!compact} zoomEnabled={!compact} pitchEnabled={false} rotateEnabled={false}>
         {pickup?.latitude && pickup.longitude ? <Marker coordinate={{ latitude: pickup.latitude, longitude: pickup.longitude }} title="Pickup" /> : null}
         {destination?.latitude && destination.longitude ? <Marker coordinate={{ latitude: destination.latitude, longitude: destination.longitude }} title="Destination" pinColor={brand.colors.primary} /> : null}
         {routePoints.length >= 2 ? <Polyline coordinates={routePoints} strokeColor={brand.colors.primary} strokeWidth={4} /> : null}
@@ -659,9 +846,10 @@ function RoutePreview({ pickup, destination, stopText, distanceKm, durationMin, 
       <RoutePoint label="Destination" value={destination?.address ?? "Destination pending"} tone="destination" />
     </View>
     <View style={styles.metrics}>
-      <Metric label="Distance" value={distanceKm ? `${distanceKm} km` : "Route distance pending"} />
-      <Metric label="Duration" value={durationMin ? `${durationMin} min` : "Route duration pending"} />
+      <Metric label="Distance" value={routePreview?.distanceKm ? `${routePreview.distanceKm} km` : "Route distance pending"} />
+      <Metric label="Duration" value={routePreview?.durationMin ? `${routePreview.durationMin} min` : "Route duration pending"} />
     </View>
+    {!routePreview ? <Text style={ui.muted}>{routeError || "Route estimate temporarily unavailable. Please retry."}</Text> : null}
   </Card>;
 }
 
@@ -698,12 +886,18 @@ const styles = StyleSheet.create({
   inlineActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   suggestionBox: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 10, padding: 10 },
   suggestionRow: { alignItems: "center", flexDirection: "row", gap: 10 },
+  googleAttribution: { alignSelf: "flex-end", color: brand.colors.muted, fontSize: 11, fontWeight: "800" },
   placeRow: { alignItems: "center", flexDirection: "row", gap: 12 },
   placeDot: { alignItems: "center", backgroundColor: "#FEF2F2", borderRadius: 16, height: 34, justifyContent: "center", width: 34 },
   placeDotText: { color: brand.colors.primaryDark, fontWeight: "900" },
   placeBody: { flex: 1 },
   placeTitle: { color: brand.colors.charcoal, fontWeight: "900" },
   fullScreenMap: { backgroundColor: brand.colors.background, flex: 1 },
+  centerPin: { alignItems: "center", left: "50%", marginLeft: -14, marginTop: -34, position: "absolute", top: "50%" },
+  centerPinHead: { backgroundColor: brand.colors.primary, borderColor: brand.colors.white, borderRadius: 18, borderWidth: 4, height: 28, shadowColor: "#111827", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.22, shadowRadius: 10, width: 28 },
+  centerPinTail: { backgroundColor: brand.colors.primary, height: 14, marginTop: -3, transform: [{ rotate: "45deg" }], width: 14 },
+  currentLocationFab: { alignItems: "center", backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 999, borderWidth: 1, height: 50, justifyContent: "center", position: "absolute", right: 18, shadowColor: "#111827", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 10, width: 50 },
+  currentLocationFabText: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "900" },
   mapPickerPanel: { backgroundColor: brand.colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, bottom: 0, gap: 12, left: 0, padding: 18, position: "absolute", right: 0 },
   mapTitle: { color: brand.colors.charcoal, fontSize: 18, fontWeight: "900" },
   mapPreview: { borderRadius: 20, height: 250, overflow: "hidden" },

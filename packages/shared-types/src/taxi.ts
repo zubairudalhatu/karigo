@@ -113,6 +113,68 @@ export interface TaxiFareEstimateInput {
   rideCategory?: string;
 }
 
+export interface TaxiPlaceAutocompleteQuery {
+  input: string;
+  sessionToken?: string;
+  latitude?: number;
+  longitude?: number;
+  serviceArea?: string;
+  fieldType?: "pickup" | "destination";
+}
+
+export interface TaxiPlacePrediction {
+  placeId: string;
+  mainText: string;
+  secondaryText?: string;
+  description: string;
+  distanceMeters?: number;
+  types?: string[];
+}
+
+export interface TaxiPlaceAutocompleteResult {
+  predictions: TaxiPlacePrediction[];
+  googleAttributionRequired: boolean;
+  sessionToken?: string | null;
+}
+
+export interface TaxiPlaceDetails {
+  placeId: string;
+  providerPlaceResource?: string | null;
+  name: string;
+  address: string;
+  shortAddress: string;
+  latitude: number;
+  longitude: number;
+  addressComponents?: Array<{
+    longText?: string;
+    shortText?: string;
+    types?: string[];
+  }>;
+  types?: string[];
+}
+
+export interface TaxiRoutePreviewInput {
+  pickupLatitude: number;
+  pickupLongitude: number;
+  destinationLatitude: number;
+  destinationLongitude: number;
+  pickupAddress?: string;
+  destinationAddress?: string;
+  serviceArea?: string;
+}
+
+export interface TaxiRoutePreview {
+  provider: "google_routes";
+  distanceMeters: number;
+  distanceKm: number;
+  durationSeconds: number;
+  durationMin: number;
+  staticDurationSeconds?: number | null;
+  encodedPolyline: string;
+  routeLabels?: string[];
+  routeEstimateAvailable: true;
+}
+
 export interface TaxiRideCategory {
   id: string;
   name: string;
