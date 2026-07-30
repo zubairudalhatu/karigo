@@ -98,6 +98,14 @@ function hasCoordinate(place?: RidePlace | null): place is RidePlace & { latitud
   return Number.isFinite(place?.latitude) && Number.isFinite(place?.longitude);
 }
 
+function estimateMatchesRoute(estimate: TaxiFareEstimate | null, routePreview: TaxiRoutePreview | null, selectedCategory: string) {
+  if (!estimate || !routePreview) return false;
+  const estimateCategory = estimate.selectedRideCategory?.id ?? selectedCategory;
+  return estimateCategory === selectedCategory &&
+    Math.abs(estimate.estimatedDistanceKm - routePreview.distanceKm) < 0.01 &&
+    estimate.estimatedDurationMin === routePreview.durationMin;
+}
+
 function decodePolyline(encoded?: string | null) {
   if (!encoded) return [];
   const coordinates: Array<{ latitude: number; longitude: number }> = [];
@@ -203,6 +211,7 @@ export default function TaxiRequest() {
   const categoryOptions = estimate?.rideCategories?.length ? estimate.rideCategories : categories;
   const selectedCategoryDetail = categoryOptions.find((category) => category.id === selectedCategory) ?? categoryOptions[0];
   const canPreview = pickupText.trim().length > 2 && destinationText.trim().length > 2;
+  const canCreateTrip = estimateMatchesRoute(estimate, routePreview, selectedCategory);
 
   async function load() {
     if (!taxiEnabled) return;
@@ -285,6 +294,21 @@ export default function TaxiRequest() {
     }
     setSuggestions([]);
     setGoogleAttributionRequired(false);
+    setEstimate(null);
+    setRoutePreview(null);
+    setRouteError("");
+  }
+
+  function handleRouteTextChange(field: PlaceField, value: string) {
+    const trimmed = value.trim();
+    setActiveField(field);
+    if (field === "pickup") {
+      setPickupText(value);
+      setPickup(trimmed ? { label: "Pickup", address: trimmed, source: "manual" } : null);
+    } else {
+      setDestinationText(value);
+      setDestination(trimmed ? { label: "Destination", address: trimmed, source: "manual" } : null);
+    }
     setEstimate(null);
     setRoutePreview(null);
     setRouteError("");
@@ -527,6 +551,11 @@ export default function TaxiRequest() {
       setStep("PREVIEW");
       return;
     }
+    if (!estimateMatchesRoute(estimate, routePreview, selectedCategory)) {
+      setError("Ride fare estimate expired. Please preview and estimate the route again.");
+      setStep("PREVIEW");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -655,22 +684,14 @@ export default function TaxiRequest() {
             placeholder="Pickup address"
             value={pickupText}
             onFocus={() => setActiveField("pickup")}
-            onChangeText={(value) => {
-              setActiveField("pickup");
-              setPickupText(value);
-              setPickup(value.trim() ? { label: "Pickup", address: value.trim(), source: "manual" } : null);
-            }}
+            onChangeText={(value) => handleRouteTextChange("pickup", value)}
             style={styles.addressInput}
           />
           <Field
             placeholder="Destination address"
             value={destinationText}
             onFocus={() => setActiveField("destination")}
-            onChangeText={(value) => {
-              setActiveField("destination");
-              setDestinationText(value);
-              setDestination(value.trim() ? { label: "Destination", address: value.trim(), source: "manual" } : null);
-            }}
+            onChangeText={(value) => handleRouteTextChange("destination", value)}
             style={styles.addressInput}
           />
           <SuggestionList
@@ -742,7 +763,7 @@ export default function TaxiRequest() {
           <Text style={ui.cardTitle}>{selectedCategoryDetail?.name ?? "Selected ride"}</Text>
           <Text style={ui.priceValue}>{money(estimate?.estimatedFareKobo)}</Text>
           <Text style={ui.muted}>{rideAvailabilityNote}</Text>
-          <Button title={loading ? "Requesting..." : scheduleForLater ? `Schedule ${selectedCategoryDetail?.name ?? "ride"}` : `Request ${selectedCategoryDetail?.name ?? "ride"}`} disabled={loading || !estimate} onPress={() => void createTrip()} />
+          <Button title={loading ? "Requesting..." : scheduleForLater ? `Schedule ${selectedCategoryDetail?.name ?? "ride"}` : `Request ${selectedCategoryDetail?.name ?? "ride"}`} disabled={loading || !canCreateTrip} onPress={() => void createTrip()} />
         </Card>
       </> : null}
 

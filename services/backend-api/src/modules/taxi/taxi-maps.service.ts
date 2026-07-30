@@ -47,11 +47,51 @@ type GoogleRouteResponse = {
   }>;
 };
 
+type GoogleRoutingPreference = "TRAFFIC_AWARE" | "TRAFFIC_UNAWARE";
+type RouteDurationSource = "traffic_duration" | "static_duration";
+
+type GoogleErrorPayload = {
+  error?: {
+    code?: number;
+    status?: string;
+    message?: string;
+  };
+};
+
+type GoogleFetchOptions = {
+  operation: "autocomplete" | "place_details" | "route_preview";
+  customerMessage: string;
+  correlationId?: string;
+  serviceArea?: string;
+  timeoutMs?: number;
+};
+
 const ABUJA_CENTER = { latitude: 9.0765, longitude: 7.3986 };
 const KANO_CENTER = { latitude: 12.0022, longitude: 8.592 };
 const GOOGLE_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete";
 const GOOGLE_PLACE_DETAILS_BASE_URL = "https://places.googleapis.com/v1/places";
 const GOOGLE_ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
+const GOOGLE_SEARCH_TIMEOUT_MS = 6_000;
+const DEFAULT_GOOGLE_ROUTES_TIMEOUT_MS = 12_000;
+const MAX_GOOGLE_ROUTES_TIMEOUT_MS = 15_000;
+const MIN_GOOGLE_ROUTES_TIMEOUT_MS = 3_000;
+const ROUTE_UNAVAILABLE_MESSAGE = "Route estimate temporarily unavailable. Please retry.";
+const ROUTE_BUSY_MESSAGE = "Route service is temporarily busy. Please retry.";
+const ROUTE_UNROUTABLE_MESSAGE = "This pickup and destination could not be routed.";
+const RIDE_SEARCH_UNAVAILABLE_MESSAGE = "Ride search is temporarily unavailable. Please try again later.";
+
+class GoogleMapsProviderError extends Error {
+  constructor(
+    public readonly reason: string,
+    public readonly customerMessage: string,
+    public readonly retryable = false,
+    public readonly status?: number,
+    public readonly googleStatus?: string,
+    public readonly googleCode?: number
+  ) {
+    super(reason);
+  }
+}
 
 @Injectable()
 export class TaxiMapsService {
@@ -99,7 +139,10 @@ export class TaxiMapsService {
         ].join(",")
       },
       body: JSON.stringify(body)
-    }, "autocomplete");
+    }, {
+      operation: "autocomplete",
+      customerMessage: RIDE_SEARCH_UNAVAILABLE_MESSAGE
+    });
 
     const predictions = (response.suggestions ?? [])
       .map((suggestion) => suggestion.placePrediction)
@@ -140,7 +183,10 @@ export class TaxiMapsService {
       headers: {
         "X-Goog-FieldMask": "id,displayName,formattedAddress,shortFormattedAddress,location,addressComponents,types"
       }
-    }, "place_details");
+    }, {
+      operation: "place_details",
+      customerMessage: RIDE_SEARCH_UNAVAILABLE_MESSAGE
+    });
 
     if (!response.location || !this.validCoordinate(response.location.latitude, response.location.longitude)) {
       throw new ServiceUnavailableException("Selected place could not be resolved safely. Please choose another result.");
@@ -172,6 +218,35 @@ export class TaxiMapsService {
       throw new BadRequestException("Pickup and destination are too close. Choose a different destination.");
     }
 
+    const correlationId = this.correlationId();
+    try {
+      return await this.computeRoute(dto, "TRAFFIC_AWARE", correlationId);
+    } catch (error) {
+      if (!this.shouldRetryTrafficUnaware(error)) throw this.routeFailure(error);
+
+      const failure = error as GoogleMapsProviderError;
+      this.logger.warn(this.safeLogLine("Google Maps route preview fallback starting", {
+        operation: "route_preview",
+        reason: failure.reason,
+        correlationId,
+        serviceArea: this.safeServiceArea(dto.serviceArea),
+        routingPreference: "TRAFFIC_AWARE"
+      }));
+
+      try {
+        return await this.computeRoute(dto, "TRAFFIC_UNAWARE", correlationId, true);
+      } catch (fallbackError) {
+        throw this.routeFailure(fallbackError);
+      }
+    }
+  }
+
+  private async computeRoute(
+    dto: TaxiRoutePreviewDto,
+    routingPreference: GoogleRoutingPreference,
+    correlationId: string,
+    fallbackApplied = false
+  ) {
     const response = await this.googleFetch<GoogleRouteResponse>(GOOGLE_ROUTES_URL, {
       method: "POST",
       headers: {
@@ -182,51 +257,89 @@ export class TaxiMapsService {
         origin: { location: { latLng: { latitude: dto.pickupLatitude, longitude: dto.pickupLongitude } } },
         destination: { location: { latLng: { latitude: dto.destinationLatitude, longitude: dto.destinationLongitude } } },
         travelMode: "DRIVE",
-        routingPreference: "TRAFFIC_AWARE",
+        routingPreference,
         computeAlternativeRoutes: false,
         polylineQuality: "OVERVIEW",
         polylineEncoding: "ENCODED_POLYLINE",
-        departureTime: new Date().toISOString(),
+        ...this.routeDepartureTime(),
         languageCode: "en",
         units: "METRIC"
       })
-    }, "route_preview");
+    }, {
+      operation: "route_preview",
+      customerMessage: ROUTE_UNAVAILABLE_MESSAGE,
+      correlationId,
+      serviceArea: this.safeServiceArea(dto.serviceArea),
+      timeoutMs: this.routeTimeoutMs()
+    });
 
     const route = response.routes?.[0];
-    const distanceMeters = Number(route?.distanceMeters ?? 0);
-    const durationSeconds = this.durationSeconds(route?.duration);
-    const encodedPolyline = route?.polyline?.encodedPolyline;
-    if (!distanceMeters || !durationSeconds || !encodedPolyline) {
-      throw new ServiceUnavailableException("Route estimate temporarily unavailable. Please retry.");
+    if (!route) {
+      throw this.routeResponseError("empty_routes", false, correlationId, dto.serviceArea, routingPreference);
     }
+
+    const distanceMeters = Number(route?.distanceMeters ?? 0);
+    if (!distanceMeters) {
+      throw this.routeResponseError("missing_distance", false, correlationId, dto.serviceArea, routingPreference);
+    }
+
+    const trafficDurationSeconds = this.durationSeconds(route?.duration);
+    const staticDurationSeconds = this.durationSeconds(route?.staticDuration);
+    const durationSeconds = trafficDurationSeconds ?? staticDurationSeconds;
+    const durationSource: RouteDurationSource = trafficDurationSeconds ? "traffic_duration" : "static_duration";
+    if (!durationSeconds) {
+      throw this.routeResponseError(
+        "missing_duration",
+        routingPreference === "TRAFFIC_AWARE",
+        correlationId,
+        dto.serviceArea,
+        routingPreference
+      );
+    }
+
+    const encodedPolyline = route?.polyline?.encodedPolyline;
+    if (!encodedPolyline) {
+      throw this.routeResponseError("missing_polyline", false, correlationId, dto.serviceArea, routingPreference);
+    }
+
     if (distanceMeters < 50 || durationSeconds < 60 || durationSeconds > 8 * 60 * 60) {
-      throw new ServiceUnavailableException("Route estimate temporarily unavailable. Please retry.");
+      throw this.routeResponseError("unusable_route_metrics", false, correlationId, dto.serviceArea, routingPreference);
     }
 
     return {
       provider: "google_routes",
+      routingPreference,
+      durationSource,
+      fallbackApplied,
       distanceMeters,
       distanceKm: Number((distanceMeters / 1000).toFixed(2)),
       durationSeconds,
       durationMin: Math.max(1, Math.round(durationSeconds / 60)),
-      staticDurationSeconds: this.durationSeconds(route?.staticDuration),
+      staticDurationSeconds,
       encodedPolyline,
       routeLabels: route?.routeLabels ?? [],
       routeEstimateAvailable: true
     };
   }
 
-  private async googleFetch<T>(url: string, init: RequestInit, operation: string): Promise<T> {
+  private async googleFetch<T>(url: string, init: RequestInit, options: GoogleFetchOptions): Promise<T> {
     const apiKey = this.config.get<string>("GOOGLE_MAPS_SERVER_API_KEY", "").trim();
     if (!apiKey) {
-      this.logger.warn(`Google Maps server key missing for ${operation}`);
-      throw new ServiceUnavailableException(operation === "route_preview"
-        ? "Route estimate temporarily unavailable. Please retry."
-        : "Ride search is temporarily unavailable. Please try again later.");
+      this.logger.warn(this.safeLogLine("Google Maps server key missing", {
+        operation: options.operation,
+        reason: "missing_google_maps_server_key",
+        correlationId: options.correlationId,
+        serviceArea: options.serviceArea
+      }));
+      if (options.operation !== "route_preview") {
+        throw new ServiceUnavailableException(options.customerMessage);
+      }
+      throw new GoogleMapsProviderError("missing_google_maps_server_key", options.customerMessage, false);
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6_000);
+    const startedAt = Date.now();
+    const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? GOOGLE_SEARCH_TIMEOUT_MS);
     try {
       const response = await fetch(url, {
         ...init,
@@ -238,19 +351,53 @@ export class TaxiMapsService {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        this.logger.warn(`Google Maps ${operation} failed: status=${response.status} reason=${this.safeGoogleReason(payload)}`);
-        throw new ServiceUnavailableException(operation === "route_preview"
-          ? "Route estimate temporarily unavailable. Please retry."
-          : "Ride search is temporarily unavailable. Please try again later.");
+        const info = this.googleErrorInfo(response.status, payload);
+        this.logger.warn(this.safeLogLine("Google Maps request failed", {
+          operation: options.operation,
+          status: response.status,
+          googleStatus: info.googleStatus,
+          googleCode: info.googleCode,
+          reason: info.reason,
+          providerMessage: info.providerMessage,
+          correlationId: options.correlationId,
+          serviceArea: options.serviceArea,
+          elapsedMs: Date.now() - startedAt
+        }));
+        if (options.operation !== "route_preview") {
+          throw new ServiceUnavailableException(options.customerMessage);
+        }
+        throw new GoogleMapsProviderError(
+          info.reason,
+          this.customerMessageForGoogleFailure(options.operation, info.reason, options.customerMessage),
+          info.retryable,
+          response.status,
+          info.googleStatus,
+          info.googleCode
+        );
       }
       return payload as T;
     } catch (error) {
-      if (error instanceof HttpException) throw error;
+      if (error instanceof GoogleMapsProviderError || error instanceof HttpException) throw error;
       const reason = error instanceof Error ? error.name : "unknown";
-      this.logger.warn(`Google Maps ${operation} unavailable: reason=${reason}`);
-      throw new ServiceUnavailableException(operation === "route_preview"
-        ? "Route estimate temporarily unavailable. Please retry."
-        : "Ride search is temporarily unavailable. Please try again later.");
+      const timedOut = reason === "AbortError";
+      this.logger.warn(this.safeLogLine("Google Maps request unavailable", {
+        operation: options.operation,
+        reason: timedOut ? "timeout" : this.safeToken(reason),
+        correlationId: options.correlationId,
+        serviceArea: options.serviceArea,
+        elapsedMs: Date.now() - startedAt
+      }));
+      if (options.operation !== "route_preview") {
+        throw new ServiceUnavailableException(options.customerMessage);
+      }
+      throw new GoogleMapsProviderError(
+        timedOut ? "timeout" : "provider_unavailable",
+        timedOut && options.operation === "route_preview" ? ROUTE_BUSY_MESSAGE : options.customerMessage,
+        timedOut,
+        undefined,
+        undefined,
+        undefined
+      );
     } finally {
       clearTimeout(timeout);
     }
@@ -307,9 +454,118 @@ export class TaxiMapsService {
     return match ? Math.round(Number(match[1])) : null;
   }
 
-  private safeGoogleReason(payload: unknown) {
-    if (!payload || typeof payload !== "object") return "unknown";
-    const error = (payload as { error?: { status?: string; code?: number } }).error;
-    return [error?.status, error?.code].filter(Boolean).join(":") || "provider_error";
+  private routeDepartureTime(scheduledDepartureTime?: string) {
+    if (!scheduledDepartureTime) return {};
+    const scheduledAt = new Date(scheduledDepartureTime);
+    const minFutureMs = 2 * 60_000;
+    if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() - Date.now() < minFutureMs) return {};
+    return { departureTime: scheduledAt.toISOString() };
+  }
+
+  private routeTimeoutMs() {
+    const configured = this.config.get<string | number>("GOOGLE_ROUTES_TIMEOUT_MS", DEFAULT_GOOGLE_ROUTES_TIMEOUT_MS);
+    const parsed = Number(configured);
+    if (!Number.isFinite(parsed)) return DEFAULT_GOOGLE_ROUTES_TIMEOUT_MS;
+    return Math.min(MAX_GOOGLE_ROUTES_TIMEOUT_MS, Math.max(MIN_GOOGLE_ROUTES_TIMEOUT_MS, Math.round(parsed)));
+  }
+
+  private googleErrorInfo(status: number, payload: unknown) {
+    const error = payload && typeof payload === "object" ? (payload as GoogleErrorPayload).error : undefined;
+    const googleStatus = this.safeToken(error?.status);
+    const googleCode = typeof error?.code === "number" ? error.code : undefined;
+    const providerMessage = this.safeProviderMessage(error?.message);
+    const lowerMessage = providerMessage.toLowerCase();
+    let reason = "provider_error";
+    let retryable = false;
+
+    if (status === 429 || googleStatus === "RESOURCE_EXHAUSTED") reason = "quota_or_rate_limit";
+    else if (googleStatus === "INVALID_ARGUMENT") reason = "invalid_argument";
+    else if (googleStatus === "PERMISSION_DENIED") {
+      if (lowerMessage.includes("api") && ((lowerMessage.includes("not") && lowerMessage.includes("enabled")) || lowerMessage.includes("not been used"))) reason = "routes_api_disabled";
+      else if (lowerMessage.includes("api key") || lowerMessage.includes("referer") || lowerMessage.includes("restriction")) reason = "api_key_restriction";
+      else reason = "permission_denied";
+    } else if (googleStatus === "DEADLINE_EXCEEDED" || status === 408 || status === 504) {
+      reason = "timeout";
+      retryable = true;
+    } else if (status >= 500 || googleStatus === "UNAVAILABLE" || googleStatus === "INTERNAL") {
+      reason = "provider_5xx";
+      retryable = true;
+    }
+
+    return { reason, retryable, googleStatus, googleCode, providerMessage };
+  }
+
+  private customerMessageForGoogleFailure(operation: string, reason: string, fallback: string) {
+    if (operation !== "route_preview") return fallback;
+    if (reason === "invalid_argument") return ROUTE_UNROUTABLE_MESSAGE;
+    if (reason === "timeout" || reason === "provider_5xx") return ROUTE_BUSY_MESSAGE;
+    return ROUTE_UNAVAILABLE_MESSAGE;
+  }
+
+  private routeResponseError(
+    reason: string,
+    retryable: boolean,
+    correlationId: string,
+    serviceArea: string | undefined,
+    routingPreference: GoogleRoutingPreference
+  ) {
+    this.logger.warn(this.safeLogLine("Google Maps route response unusable", {
+      operation: "route_preview",
+      reason,
+      correlationId,
+      serviceArea: this.safeServiceArea(serviceArea),
+      routingPreference
+    }));
+    return new GoogleMapsProviderError(
+      reason,
+      reason === "empty_routes" ? ROUTE_UNROUTABLE_MESSAGE : ROUTE_UNAVAILABLE_MESSAGE,
+      retryable
+    );
+  }
+
+  private shouldRetryTrafficUnaware(error: unknown) {
+    return error instanceof GoogleMapsProviderError && error.retryable;
+  }
+
+  private routeFailure(error: unknown) {
+    if (error instanceof GoogleMapsProviderError) {
+      if (error.reason === "invalid_argument" || error.reason === "empty_routes") {
+        return new BadRequestException(error.customerMessage);
+      }
+      return new ServiceUnavailableException(error.customerMessage);
+    }
+    if (error instanceof HttpException) return error;
+    return new ServiceUnavailableException(ROUTE_UNAVAILABLE_MESSAGE);
+  }
+
+  private correlationId() {
+    return `KGO-ROUTE-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  }
+
+  private safeServiceArea(value?: string) {
+    return this.safeToken(value?.trim() || this.config.get<string>("RIDES_ACTIVE_SERVICE_AREA", "Abuja"));
+  }
+
+  private safeToken(value?: string) {
+    return (value || "")
+      .replace(/[^A-Za-z0-9_-]/g, "_")
+      .slice(0, 80) || undefined;
+  }
+
+  private safeProviderMessage(value?: string) {
+    if (!value) return "";
+    return value
+      .replace(/AIza[0-9A-Za-z_-]+/g, "[redacted-key]")
+      .replace(/[+-]?\d+\.\d{4,}/g, "[redacted-number]")
+      .replace(/\s+/g, " ")
+      .slice(0, 160);
+  }
+
+  private safeLogLine(message: string, values: Record<string, unknown>) {
+    const suffix = Object.entries(values)
+      .filter(([, value]) => value !== undefined && value !== "")
+      .map(([key, value]) => `${key}=${String(value).replace(/\s+/g, "_")}`)
+      .join(" ");
+    return suffix ? `${message}: ${suffix}` : message;
   }
 }

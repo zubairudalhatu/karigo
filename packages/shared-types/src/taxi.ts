@@ -165,6 +165,9 @@ export interface TaxiRoutePreviewInput {
 
 export interface TaxiRoutePreview {
   provider: "google_routes";
+  routingPreference?: "TRAFFIC_AWARE" | "TRAFFIC_UNAWARE";
+  durationSource?: "traffic_duration" | "static_duration";
+  fallbackApplied?: boolean;
   distanceMeters: number;
   distanceKm: number;
   durationSeconds: number;

@@ -169,6 +169,10 @@ assert(taxiRequest.includes("taxiApi.placesAutocomplete"), "Ride request flow mu
 assert(taxiRequest.includes("taxiApi.placeDetails"), "Ride request flow must resolve selected places through the backend Places proxy.");
 assert(taxiRequest.includes("taxiApi.routePreview"), "Ride request flow must preview routes through the backend Routes proxy.");
 assert(taxiRequest.includes("decodePolyline"), "Ride request flow must decode backend Google Routes polylines.");
+assert(taxiRequest.includes("handleRouteTextChange"), "Ride request flow must clear stale route/fare estimates when typed pickup or destination changes.");
+assert(taxiRequest.includes("setRoutePreview(null)") && taxiRequest.includes("setEstimate(null)"), "Ride request flow must clear stale route and fare state after endpoint changes.");
+assert(taxiRequest.includes("estimateMatchesRoute"), "Ride request flow must prevent booking with expired or mismatched route fare estimates.");
+assert(taxiRequest.includes("Ride fare estimate expired. Please preview and estimate the route again."), "Ride request flow must show a safe retry message for stale fare estimates.");
 assert(taxiRequest.includes("centerPin") && taxiRequest.includes("currentLocationFab"), "Ride map picker must use a center-pin layout with a current-location button.");
 assert(taxiRequest.includes("Powered by Google"), "Ride search predictions must include Google attribution.");
 assert(taxiRequest.includes("rideStatusCopy"), "Ride tracking must use backend-driven status copy.");
