@@ -3,7 +3,7 @@ import * as SecureStore from "expo-secure-store";
 
 const TOKEN_KEY = "karigo_customer_access_token";
 const REFRESH_TOKEN_KEY = "karigo_customer_refresh_token";
-const API_BASE_URL = normalizeApiBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL);
+const API_BASE_URL = normalizeApiBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL ?? process.env.EXPO_PUBLIC_API_URL);
 
 export const tokenStore: TokenStore = {
   getToken: () => SecureStore.getItemAsync(TOKEN_KEY),

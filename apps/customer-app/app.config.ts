@@ -18,9 +18,16 @@ const googleMapsAndroidApiKey =
   process.env.GOOGLE_MAPS_ANDROID_API_KEY ??
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY;
 
+const customerRuntimeVersion = "0.1.0";
+const apiBaseUrl =
+  process.env.EXPO_PUBLIC_API_BASE_URL ??
+  process.env.EXPO_PUBLIC_API_URL ??
+  "";
+
 export default ({ config }: { config: Record<string, any> }) => ({
   ...config,
   name: isStaging ? "KariGO Customer Staging" : "KariGO",
+  owner: "zamkah",
   slug: "karigo-customer",
   scheme: isStaging ? "karigo-customer-staging" : "karigo-customer",
   plugins: [
@@ -50,9 +57,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
     ...config.updates,
     url: "https://u.expo.dev/467aa2f6-22b1-4a81-a9d6-c38f3ebe191d"
   },
-  runtimeVersion: {
-    policy: "appVersion"
-  },
+  runtimeVersion: customerRuntimeVersion,
   android: {
     ...config.android,
     config: googleMapsAndroidApiKey
@@ -79,7 +84,11 @@ export default ({ config }: { config: Record<string, any> }) => ({
   extra: {
     ...config.extra,
     router: {},
-    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
+    apiBaseUrl,
+    appEnvironment: process.env.APP_VARIANT ?? "development",
+    updateChannel: isStaging ? "customer-staging" : "customer-production",
+    runtimeVersion: customerRuntimeVersion,
+    task206lVerificationMarker: "Task 206L OTA verification active",
     eas: {
       ...easExtra(config.extra?.eas),
       projectId: "467aa2f6-22b1-4a81-a9d6-c38f3ebe191d"

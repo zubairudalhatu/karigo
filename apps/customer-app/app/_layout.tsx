@@ -3,6 +3,7 @@ import { brand } from "@karigo/config";
 import { AuthProvider } from "../src/contexts/auth-context";
 import { CartProvider } from "../src/contexts/cart-context";
 import { CartNotice, CustomerBottomNav } from "../src/components/customer-navigation";
+import { CustomerOtaUpdateGate } from "../src/components/customer-ota-update-gate";
 
 const headerless = { headerShown: false };
 const backOnly = { headerTitle: "", title: "", headerBackTitle: "Back" };
@@ -42,6 +43,7 @@ export default function RootLayout() {
     <Stack.Screen name="profile" options={headerless} />
     <Stack.Screen name="profile/wallet" options={backOnly} />
     <Stack.Screen name="profile/referrals" options={backOnly} />
+    <Stack.Screen name="profile/app-diagnostics" options={backOnly} />
     <Stack.Screen name="profile/returns-refunds" options={backOnly} />
     <Stack.Screen name="profile/privacy-security" options={backOnly} />
     <Stack.Screen name="profile/change-password" options={backOnly} />
@@ -56,5 +58,5 @@ export default function RootLayout() {
     <Stack.Screen name="sme-services/requests/index" options={backOnly} />
     <Stack.Screen name="sme-services/requests/[id]" options={backOnly} />
     <Stack.Screen name="notifications" options={headerless} />
-  </Stack><CustomerBottomNav /><CartNotice /></></CartProvider></AuthProvider>;
+  </Stack><CustomerOtaUpdateGate /><CustomerBottomNav /><CartNotice /></></CartProvider></AuthProvider>;
 }

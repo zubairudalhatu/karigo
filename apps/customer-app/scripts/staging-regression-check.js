@@ -17,6 +17,11 @@ assert(appConfig.includes("targetSdkVersion: 36"), "Customer app must target And
 assert(appConfig.includes('buildToolsVersion: "36.0.0"'), "Customer app must use Android build tools 36.0.0.");
 assert(appConfig.includes('package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer"'), "Customer app package names must remain stable.");
 assert(appConfig.includes("versionCode: isStaging ? 1 : 13"), "Customer production versionCode must be bumped to 13 for the next Play-ready utility/map AAB.");
+assert(appConfig.includes('owner: "zamkah"'), "Customer app must resolve to the zamkah EAS account.");
+assert(appConfig.includes('const customerRuntimeVersion = "0.1.0"'), "Customer runtime must remain explicit for versionCode 13 OTA compatibility.");
+assert(appConfig.includes("runtimeVersion: customerRuntimeVersion"), "Customer app must not rely on implicit runtime policy for production OTA reliability.");
+assert(appConfig.includes("EXPO_PUBLIC_API_BASE_URL") && appConfig.includes("EXPO_PUBLIC_API_URL"), "Customer app config must support the approved API base env aliases.");
+assert(appConfig.includes("task206lVerificationMarker"), "Customer app config must expose the temporary Task 206L OTA marker.");
 assert(appConfig.includes("GOOGLE_MAPS_ANDROID_API_KEY"), "Customer map builds must read the Android Maps SDK key from environment variables.");
 assert(packageJson.dependencies?.["react-native-maps"] === "1.20.1", "Customer app must include the Expo SDK 53-compatible react-native-maps package.");
 assert(
@@ -27,7 +32,7 @@ assert(
 const layout = read("app", "_layout.tsx");
 ["index", "auth/login", "tabs/home", "orders/index", "support/index", "addresses", "profile", "notifications"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={headerless}`), `Root screen must hide native header: ${route}`));
-["auth/signup", "auth/otp", "auth/forgot-password", "auth/reset-password", "vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "profile/wallet", "profile/referrals", "profile/privacy-security", "profile/change-password", "profile/privacy-policy", "profile/terms", "profile/delete-account", "profile/returns-refunds", "parcel", "sme-services", "sme-services/requests/index", "sme-services/requests/[id]", "vendor/apply", "vendor/application-status", "captain/apply"]
+["auth/signup", "auth/otp", "auth/forgot-password", "auth/reset-password", "vendors/[id]", "catalogue/[category]", "products/[id]", "readiness/[service]", "taxi/waitlist", "taxi/request", "utilities/[service]", "utilities/history", "utilities/transactions/[id]", "cart", "checkout", "orders/[id]", "support/[id]", "addresses/[id]", "profile/wallet", "profile/referrals", "profile/app-diagnostics", "profile/privacy-security", "profile/change-password", "profile/privacy-policy", "profile/terms", "profile/delete-account", "profile/returns-refunds", "parcel", "sme-services", "sme-services/requests/index", "sme-services/requests/[id]", "vendor/apply", "vendor/application-status", "captain/apply"]
   .forEach((route) => assert(layout.includes(`<Stack.Screen name="${route}" options={backOnly}`), `Flow/detail screen must keep back-only header: ${route}`));
 assert(layout.includes('<Stack.Screen name="utilities/index" options={headerless}'), "Utilities hub must hide native header.");
 ["Home", "Vendor", "Cart", "Checkout", "Order details", "Support centre", "Addresses", "Profile", "Send parcel", "Login"]
@@ -49,6 +54,7 @@ assert(ui.includes("productImage"), "Shared UI must include product image stylin
 
 const client = read("src", "api", "client.ts");
 assert(client.includes("expo-secure-store"), "Customer session tokens must use Expo SecureStore.");
+assert(client.includes("EXPO_PUBLIC_API_BASE_URL ?? process.env.EXPO_PUBLIC_API_URL"), "Customer API client must support production OTA API env aliases.");
 assert(client.includes("karigo_customer_refresh_token"), "Customer app must persist refresh tokens separately.");
 assert(client.includes("auth/refresh"), "Customer API client must support session refresh.");
 assert(!client.includes("AsyncStorage"), "Customer auth tokens must not use AsyncStorage.");
@@ -318,6 +324,21 @@ assert(profile.includes("Referral rewards"), "Profile must link to the customer 
 assert(profile.includes("/profile/referrals"), "Profile referral hub item must navigate to the referral screen.");
 assert(profile.includes("View and share your KariGO referral code."), "Profile referral hub item must describe referral code sharing.");
 assert(profile.includes("Tracking only"), "Profile referral hub item must mark referral rewards as tracking-only.");
+assert(profile.includes("App diagnostics"), "Profile must link to the OTA diagnostics screen.");
+assert(profile.includes("/profile/app-diagnostics"), "Profile diagnostics hub item must navigate to the app diagnostics screen.");
+const appDiagnostics = read("app", "profile", "app-diagnostics.tsx");
+const customerUpdates = read("src", "lib", "customer-updates.ts");
+const updateGate = read("src", "components", "customer-ota-update-gate.tsx");
+assert(appDiagnostics.includes("Task 206L OTA verification active"), "Diagnostics screen must show the temporary Task 206L verification marker.");
+assert(appDiagnostics.includes("Check for app update"), "Diagnostics screen must expose a manual update check action.");
+assert(appDiagnostics.includes("Restart to apply downloaded update"), "Diagnostics screen must expose a controlled reload action.");
+assert(appDiagnostics.includes("API host"), "Diagnostics screen must show only the production API hostname.");
+assert(appDiagnostics.includes("does not show API keys, JWTs, refresh tokens"), "Diagnostics screen must state secret/token redaction.");
+assert(customerUpdates.includes("expo-updates"), "Customer update diagnostics must use Expo Updates.");
+assert(customerUpdates.includes("checkForUpdateAsync") && customerUpdates.includes("fetchUpdateAsync") && customerUpdates.includes("reloadAsync"), "Customer update helper must check, download and manually apply compatible OTA updates.");
+assert(customerUpdates.includes("isSensitiveCustomerUpdateRoute"), "Customer update helper must protect active workflows from automatic update handling.");
+assert(customerUpdates.includes("/checkout") && customerUpdates.includes("/profile/wallet") && customerUpdates.includes("/utilities") && customerUpdates.includes("/taxi/request"), "Customer update helper must skip payment, wallet, utilities and Rides active flows.");
+assert(updateGate.includes("checkForCustomerUpdateAtStartup"), "Customer root layout must install the safe startup OTA check gate.");
 assert(profile.includes("Returns and Refunds"), "Profile must link to the returns and refunds support surface.");
 assert(profile.includes("/profile/returns-refunds"), "Profile returns/refunds item must navigate to the safe policy screen.");
 assert(profile.includes("KariGO Plus"), "Profile must reserve a future subscription surface.");

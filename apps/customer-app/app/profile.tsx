@@ -14,6 +14,7 @@ type ProfileRoute =
   | "/orders"
   | "/profile/wallet"
   | "/profile/referrals"
+  | "/profile/app-diagnostics"
   | "/profile/returns-refunds"
   | "/profile/privacy-security"
   | "/addresses"
@@ -43,6 +44,7 @@ const primaryItems: HubItem[] = [
   { title: "Orders", description: "Track active and completed deliveries.", icon: "clipboard", href: "/orders" },
   { title: "KariGO Wallet", description: "View your balance and top up safely.", icon: "credit-card", href: "/profile/wallet", badge: "Flutterwave top-up" },
   { title: "Referral rewards", description: "View and share your KariGO referral code.", icon: "gift", href: "/profile/referrals", badge: "Tracking only" },
+  { title: "App diagnostics", description: "Check app version, update status and safe release details.", icon: "smartphone", href: "/profile/app-diagnostics", badge: "OTA check" },
   { title: "Returns and Refunds", description: "Review how to report issues and request refund review.", icon: "rotate-ccw", href: "/profile/returns-refunds" },
   { title: "Privacy & security", description: "Manage password support, sessions, privacy links and account safety.", icon: "shield", href: "/profile/privacy-security" },
   { title: "Saved addresses", description: "Manage home, office and delivery locations.", icon: "map-pin", href: "/addresses" },
