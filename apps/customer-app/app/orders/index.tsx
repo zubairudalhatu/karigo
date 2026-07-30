@@ -7,6 +7,7 @@ import { taxiApi } from "../../src/api/taxi.api";
 import { KariGoAppTopBar } from "../../src/components/kari-go-app-top-bar";
 import { Button, Card, Empty, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError, money } from "../../src/lib/errors";
+import { formatRideFareKobo, rideStatusLabel } from "../../src/lib/rides-format";
 
 type OrdersTab = "orders" | "rides";
 
@@ -43,14 +44,18 @@ function mergeRide(trips: TaxiTrip[], updated: TaxiTrip) {
   return next.sort((a, b) => new Date(b.requestedAt || b.createdAt).getTime() - new Date(a.requestedAt || a.createdAt).getTime());
 }
 
+function RideStatusBadge({ status }: { status: string }) {
+  return <Text style={styles.rideStatusBadge}>{rideStatusLabel(status)}</Text>;
+}
+
 function RideRow({ trip, active, busy, onCancel, onDetails }: { trip: TaxiTrip; active: boolean; busy: boolean; onCancel: (trip: TaxiTrip) => void; onDetails: (trip: TaxiTrip) => void }) {
   return <Card>
-    <View style={ui.spaceBetween}>
-      <Text style={styles.ref}>{trip.tripReference}</Text>
-      <StatusBadge status={trip.status} />
+    <View style={styles.rideCardHeader}>
+      <Text style={styles.ref} numberOfLines={1}>{trip.tripReference}</Text>
+      <RideStatusBadge status={trip.status} />
     </View>
     <Text style={ui.muted} numberOfLines={1}>{shortAddress(trip.pickupAddress)} to {shortAddress(trip.destinationAddress)}</Text>
-    <Text style={ui.muted}>{rideCategoryLabel(trip)} - {money(trip.finalFareKobo ?? trip.estimatedFareKobo)}</Text>
+    <Text style={ui.muted}>{rideCategoryLabel(trip)} - {formatRideFareKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)}</Text>
     <Text style={ui.muted}>{rideDate(trip)}</Text>
     {active ? <View style={styles.actions}>
       <Button title="View status" tone="muted" onPress={() => router.push(`/taxi/request?tripId=${trip.id}` as never)} />
@@ -69,10 +74,10 @@ function RideDetails({ trip, canBookAnother, onClose, onBookAnother }: { trip: T
       </Pressable>
     </View>
     <Text style={styles.ref}>{trip.tripReference}</Text>
-    <StatusBadge status={trip.status} />
+    <RideStatusBadge status={trip.status} />
     <Text style={ui.muted}>{shortAddress(trip.pickupAddress)} to {shortAddress(trip.destinationAddress)}</Text>
     <Text style={ui.muted}>{rideCategoryLabel(trip)}</Text>
-    <Text style={ui.muted}>Fare: {money(trip.finalFareKobo ?? trip.estimatedFareKobo)}</Text>
+    <Text style={ui.muted}>Fare: {formatRideFareKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)}</Text>
     <Text style={ui.muted}>Payment: {ridePaymentPreference(trip)}</Text>
     <Text style={ui.muted}>Requested: {rideDate(trip)}</Text>
     {closedAt ? <Text style={ui.muted}>Closed: {new Date(closedAt).toLocaleString()}</Text> : null}
@@ -172,6 +177,8 @@ export default function OrderHistory() {
 const styles = StyleSheet.create({
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   link: { color: "#DC2626", fontWeight: "900" },
-  ref: { color: "#111827", fontWeight: "900" },
+  ref: { color: "#111827", flexShrink: 1, fontWeight: "900" },
+  rideCardHeader: { alignItems: "flex-start", gap: 8 },
+  rideStatusBadge: { alignSelf: "flex-start", backgroundColor: "#DBEAFE", borderRadius: 999, color: "#1E40AF", flexShrink: 1, flexWrap: "wrap", fontSize: 12, fontWeight: "800", lineHeight: 16, maxWidth: "100%", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 6 },
   tabRow: { flexDirection: "row", gap: 10 }
 });

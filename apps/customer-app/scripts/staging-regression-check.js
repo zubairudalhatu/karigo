@@ -183,11 +183,20 @@ assert(taxiRequest.includes("setRoutePreview(null)") && taxiRequest.includes("se
 assert(taxiRequest.includes("estimateMatchesRoute"), "Ride request flow must prevent booking with expired or mismatched route fare estimates.");
 assert(taxiRequest.includes("Ride fare estimate expired. Please preview and estimate the route again."), "Ride request flow must show a safe retry message for stale fare estimates.");
 assert(taxiRequest.includes("centerPin") && taxiRequest.includes("currentLocationFab"), "Ride map picker must use a center-pin layout with a current-location button.");
+assert(taxiRequest.includes("initialRegion={region}"), "Ride map picker must avoid a controlled-region feedback loop.");
+assert(taxiRequest.includes("reverseGeocodeDebounceMs") && taxiRequest.includes("mapMovementThresholdMeters"), "Ride map picker must debounce reverse geocoding and ignore tiny coordinate movements.");
+assert(taxiRequest.includes("mapReverseGeocodeRequest") && taxiRequest.includes("lastReverseGeocodedCoordinate"), "Ride map picker must ignore stale reverse-geocode responses.");
+assert(taxiRequest.includes("mapResolvingAddress") && taxiRequest.includes("mapAddressError"), "Ride map picker must separate pending address lookup copy from selected coordinate state.");
+assert(!taxiRequest.includes('address: "Updating selected address..."'), "Ride map picker must not store loading copy as the selected address.");
 assert(taxiRequest.includes("Powered by Google"), "Ride search predictions must include Google attribution.");
 assert(taxiRequest.includes("rideStatusCopy"), "Ride tracking must use backend-driven status copy.");
 assert(taxiRequest.includes("isActiveTaxiTripStatus"), "Ride request flow must use shared active lifecycle status classification.");
 assert(taxiRequest.includes("isTerminalTaxiTripStatus"), "Ride request flow must use shared terminal lifecycle status classification.");
 assert(taxiRequest.includes("reconcileRideEntry"), "Ride request flow must reconcile active trips before showing booking UI.");
+assert(taxiRequest.includes("type RideEntryStatus") && taxiRequest.includes("entryStatus"), "Ride request flow must use an explicit active-ride reconciliation state.");
+assert(taxiRequest.includes("useFocusEffect"), "Ride request flow must reconcile active trips when the route regains focus.");
+assert(taxiRequest.includes("activeRidePendingTracking"), "Ride request flow must block booking UI while active tracking is being restored.");
+assert(taxiRequest.includes("enforceActiveRideTracking"), "Ride request flow must guard stale booking transitions while an active ride exists.");
 assert(taxiRequest.includes("useLocalSearchParams"), "Ride request flow must support direct active-trip links.");
 assert(taxiRequest.includes("Checking active KariGO Rides"), "Ride request entry guard must show a safe loading state while reconciling active trips.");
 assert(taxiRequest.includes("RouteComposerRow label=\"Destination\""), "Destination row must own the active destination TextInput.");
@@ -215,7 +224,10 @@ assert(taxiRequest.includes("stopLatitude") && taxiRequest.includes("stopLongitu
 assert(taxiRequest.includes("Intercity KariGO Rides are not available yet"), "Ride request flow must block cross-city trips locally before backend confirmation.");
 assert(taxiRequest.includes("Kano") && taxiRequest.includes("Abuja") && taxiRequest.includes("routeCityIssue"), "Ride request flow must support Kano and Abuja city detection.");
 assert(taxiRequest.includes("fareRange(category.fareRangeKobo)"), "Ride request flow must show fare ranges for categories.");
-assert(taxiRequest.includes("\\u20A6") && taxiRequest.includes("\\u2013"), "Ride request fares must use compact naira range formatting.");
+const ridesFormat = read("src", "lib", "rides-format.ts");
+assert(ridesFormat.includes("formatRideFareKobo") && ridesFormat.includes("numeric / 100"), "Ride fares must use a shared kobo-to-naira formatter.");
+assert(ridesFormat.includes("\\u20A6") && ridesFormat.includes("\\u2013"), "Ride request fares must use compact naira range formatting.");
+assert(taxiRequest.includes("formatRideFareKobo") && taxiRequest.includes("formatRideFareRangeKobo"), "Ride request screen must use the shared ride fare formatter.");
 assert(taxiRequest.includes("taxiApi.rideCategories"), "Ride request flow must load backend ride categories.");
 assert(taxiRequest.includes("taxiApi.fareEstimate"), "Ride request flow must quote through the backend.");
 assert(taxiRequest.includes("taxiApi.createTrip"), "Ride request flow must create requests through the backend.");
@@ -242,6 +254,9 @@ assert(ordersIndex.includes("/taxi/request?tripId=${trip.id}"), "Active rides in
 assert(ordersIndex.includes("View ride details"), "Terminal ride rows must open a concise details panel.");
 assert(ordersIndex.includes("Payment:"), "Terminal ride details must show payment preference when available.");
 assert(ordersIndex.includes("Book another ride"), "Terminal ride details must support booking another ride when no active ride exists.");
+assert(ordersIndex.includes("formatRideFareKobo"), "Orders -> Rides must use the shared kobo-to-naira formatter.");
+assert(ordersIndex.includes("RideStatusBadge") && ordersIndex.includes("rideStatusLabel"), "Orders -> Rides must use responsive sentence-case ride status badges.");
+assert(ordersIndex.includes("rideCardHeader") && ordersIndex.includes("maxWidth: \"100%\"") && ordersIndex.includes("flexWrap: \"wrap\""), "Orders -> Rides status badges must stay inside cards on small screens.");
 
 const smeServices = read("app", "sme-services.tsx");
 assert(smeServices.includes("SME Services"), "Customer app must include the SME Services request screen.");

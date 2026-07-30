@@ -1,6 +1,6 @@
 import * as Location from "expo-location";
-import { router, Stack, useLocalSearchParams } from "expo-router";
-import { RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { router, Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, AppState, BackHandler, Keyboard, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import MapView, { Marker, Polyline, Region } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,12 +19,14 @@ import { Address, addressesApi } from "../../src/api/addresses.api";
 import { taxiApi } from "../../src/api/taxi.api";
 import { Button, Card, Empty, Field, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError } from "../../src/lib/errors";
+import { formatRideFareKobo, formatRideFareRangeKobo } from "../../src/lib/rides-format";
 import { ridesControlledPilotEnabled } from "../../src/lib/rides-flags";
 
 type BookingStep = "HOME" | "ROUTE" | "CONFIRM" | "DETAILS" | "TRACKING";
 type PlaceField = "pickup" | "destination" | "stop";
 type RidePanelState = "expanded" | "half" | "collapsed";
 type SupportedRideCity = "Abuja" | "Kano";
+type RideEntryStatus = "checking" | "active" | "clear" | "failed";
 
 interface RidePlace {
   label: string;
@@ -51,6 +53,8 @@ const intercityUnavailableMessage = "Intercity KariGO Rides are not available ye
 const staleFareMessage = "Ride fare estimate expired. Please preview and estimate the route again.";
 const cancellableBeforePickup = new Set<string>(customerCancellableTaxiTripStatuses);
 const duplicateActiveRideMessage = "You already have an active KariGO Ride. View or cancel it before requesting another immediate ride.";
+const reverseGeocodeDebounceMs = 550;
+const mapMovementThresholdMeters = 14;
 
 const defaultRideRegion: Region = {
   latitude: rideServiceAreaLabel.toLowerCase().includes("kano") ? serviceAreaCenters.Kano.latitude : serviceAreaCenters.Abuja.latitude,
@@ -59,8 +63,8 @@ const defaultRideRegion: Region = {
   longitudeDelta: 0.08
 };
 
-const money = (kobo?: number | null) => `\u20A6${Math.round(Number(kobo ?? 0) / 100).toLocaleString()}`;
-const fareRange = (range?: { min: number; max: number } | null) => range ? `${money(range.min)}\u2013${money(range.max)}` : "Estimate pending";
+const money = formatRideFareKobo;
+const fareRange = formatRideFareRangeKobo;
 
 function placeFromAddress(address: Address): RidePlace {
   return {
@@ -303,6 +307,8 @@ export default function TaxiRequest() {
   const mapPickerRef = useRef<MapView | null>(null);
   const routeInputRef = useRef<TextInput | null>(null);
   const reverseGeocodeCache = useRef(new Map<string, string>());
+  const mapReverseGeocodeRequest = useRef(0);
+  const lastReverseGeocodedCoordinate = useRef<{ latitude: number; longitude: number } | null>(null);
   const requestInFlight = useRef(false);
   const requestAttemptId = useRef<string | null>(null);
   const pollingInFlight = useRef(false);
@@ -325,6 +331,8 @@ export default function TaxiRequest() {
   const [mapPoint, setMapPoint] = useState<RidePlace | null>(null);
   const [mapRegion, setMapRegion] = useState<Region | null>(null);
   const [mapMoving, setMapMoving] = useState(false);
+  const [mapResolvingAddress, setMapResolvingAddress] = useState(false);
+  const [mapAddressError, setMapAddressError] = useState("");
   const [pickupInstruction, setPickupInstruction] = useState("");
   const [tripNote, setTripNote] = useState("");
   const [scheduleForLater, setScheduleForLater] = useState(false);
@@ -344,7 +352,7 @@ export default function TaxiRequest() {
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [entryChecked, setEntryChecked] = useState(false);
+  const [entryStatus, setEntryStatus] = useState<RideEntryStatus>("checking");
 
   const savedPlaces = useMemo(() => addresses.map(placeFromAddress), [addresses]);
   const recentPlaces = useMemo(() => {
@@ -407,29 +415,41 @@ export default function TaxiRequest() {
 
   async function load() {
     if (!taxiEnabled) return;
-    setEntryChecked(false);
+    if (step !== "TRACKING") setEntryStatus("checking");
     try {
-      const [saved, rideCategories, history] = await Promise.all([
+      const history = await taxiApi.trips();
+      const [saved, rideCategories] = await Promise.all([
         addressesApi.list().catch(() => []),
-        taxiApi.rideCategories(activeRideCity ?? rideServiceAreaLabel).catch(() => []),
-        taxiApi.trips().catch(() => [])
+        taxiApi.rideCategories(activeRideCity ?? rideServiceAreaLabel).catch(() => [])
       ]);
       setAddresses(saved);
       setCategories(rideCategories);
       setTrips(history);
       setCreated((current) => current ? history.find((trip) => trip.id === current.id) ?? current : current);
-      reconcileRideEntry(history);
-    } catch {
-      // Optional saved/history data should never block manual ride booking.
-    } finally {
-      setEntryChecked(true);
+      const preferred = reconcileRideEntry(history);
+      setEntryStatus(preferred ? "active" : "clear");
+    } catch (err) {
+      setEntryStatus("failed");
+      setError(friendlyError(err) || "KariGO Rides could not confirm active ride status. Please retry.");
     }
   }
 
   useEffect(() => { void load(); }, [taxiEnabled, activeRideCity]);
 
+  useFocusEffect(useCallback(() => {
+    void load();
+  }, [taxiEnabled, activeRideCity, tripId, step]));
+
+  useEffect(() => {
+    if (!preferredActiveTrip) return;
+    if (step !== "TRACKING" || created?.id !== preferredActiveTrip.id) {
+      openTrip(preferredActiveTrip);
+    }
+  }, [preferredActiveTrip?.id, created?.id, step]);
+
   useEffect(() => () => {
     if (mapIdleTimer.current) clearTimeout(mapIdleTimer.current);
+    mapReverseGeocodeRequest.current += 1;
   }, []);
 
   useEffect(() => {
@@ -597,7 +617,15 @@ export default function TaxiRequest() {
     setRouteError("");
   }
 
+  function enforceActiveRideTracking() {
+    if (!preferredActiveTrip) return false;
+    openTrip(preferredActiveTrip);
+    setEntryStatus("active");
+    return true;
+  }
+
   function openDestinationSearch() {
+    if (enforceActiveRideTracking()) return;
     setStep("ROUTE");
     setActiveField("destination");
     setPanelState("expanded");
@@ -741,6 +769,7 @@ export default function TaxiRequest() {
   }
 
   function resetNewBooking() {
+    if (enforceActiveRideTracking()) return;
     placeSessionToken.current = newPlaceSessionToken();
     routeToken.current += 1;
     setStep("HOME");
@@ -780,10 +809,11 @@ export default function TaxiRequest() {
     const preferred = requestedTrip && isActiveTaxiTripStatus(requestedTrip.status)
       ? requestedTrip
       : active[0] ?? null;
-    if (!preferred) return;
+    if (!preferred) return null;
     if (step !== "TRACKING" || created?.id !== preferred.id) {
       openTrip(preferred);
     }
+    return preferred;
   }
 
   function swapRoute() {
@@ -810,12 +840,21 @@ export default function TaxiRequest() {
   }
 
   function openMapPicker(field: PlaceField) {
+    if (enforceActiveRideTracking()) return;
     Keyboard.dismiss();
     const currentPlace = field === "pickup" ? pickup : field === "stop" ? stop : destination;
     const initial = currentPlace && hasCoordinate(currentPlace) ? regionForPlaces(currentPlace) : regionForPlaces(pickup, destination, stop);
+    if (mapIdleTimer.current) clearTimeout(mapIdleTimer.current);
+    mapReverseGeocodeRequest.current += 1;
+    lastReverseGeocodedCoordinate.current = currentPlace && hasCoordinate(currentPlace)
+      ? { latitude: currentPlace.latitude, longitude: currentPlace.longitude }
+      : null;
     setMapPicking(field);
     setActiveField(field);
     setMapRegion(initial);
+    setMapMoving(false);
+    setMapResolvingAddress(false);
+    setMapAddressError("");
     setMapPoint(currentPlace ?? {
       label: field === "pickup" ? "Pickup" : field === "stop" ? "Stop" : "Destination",
       address: field === "pickup" ? pickupText || "Move pin to pickup" : field === "stop" ? stopText || "Move pin to stop" : destinationText || "Move pin to destination",
@@ -829,23 +868,38 @@ export default function TaxiRequest() {
     if (!mapPicking) return;
     setMapMoving(false);
     setMapRegion(region);
-    setMapPoint({
+    const nextCoordinate = { latitude: region.latitude, longitude: region.longitude };
+    const previousCoordinate = mapPoint && hasCoordinate(mapPoint)
+      ? { latitude: mapPoint.latitude, longitude: mapPoint.longitude }
+      : lastReverseGeocodedCoordinate.current;
+    const movedMeters = previousCoordinate ? distanceMeters(previousCoordinate, nextCoordinate) : Number.POSITIVE_INFINITY;
+    setMapPoint((current) => ({
       label: mapPicking === "pickup" ? "Pickup pin" : mapPicking === "stop" ? "Stop pin" : "Destination pin",
-      address: "Updating selected address...",
+      address: current?.address && current.address !== "Updating selected address..." ? current.address : "Selected map location",
       latitude: region.latitude,
       longitude: region.longitude,
       providerPlaceId: `${region.latitude.toFixed(6)},${region.longitude.toFixed(6)}`,
       source: mapPicking === "stop" ? "stop" : "map"
-    });
+    }));
+    if (movedMeters < mapMovementThresholdMeters) return;
+    const lastResolved = lastReverseGeocodedCoordinate.current;
+    if (lastResolved && distanceMeters(lastResolved, nextCoordinate) < mapMovementThresholdMeters) return;
     if (mapIdleTimer.current) clearTimeout(mapIdleTimer.current);
+    const requestId = ++mapReverseGeocodeRequest.current;
+    setMapResolvingAddress(true);
+    setMapAddressError("");
     mapIdleTimer.current = setTimeout(() => {
       void (async () => {
         const address = await reverseAddressCached(region.latitude, region.longitude);
-        setMapPoint((current) => current && current.latitude === region.latitude && current.longitude === region.longitude
-          ? { ...current, address: address || "Selected map location" }
+        if (requestId !== mapReverseGeocodeRequest.current) return;
+        lastReverseGeocodedCoordinate.current = nextCoordinate;
+        setMapPoint((current) => current && hasCoordinate(current) && distanceMeters(current, nextCoordinate) < mapMovementThresholdMeters
+          ? { ...current, address: address || current.address || "Selected map location" }
           : current);
+        if (!address) setMapAddressError("Address lookup is temporarily unavailable. You can move the map or confirm this pin.");
+        setMapResolvingAddress(false);
       })();
-    }, 350);
+    }, reverseGeocodeDebounceMs);
   }
 
   async function moveMapToCurrentLocation() {
@@ -871,6 +925,15 @@ export default function TaxiRequest() {
     }
   }
 
+  function closeMapPicker() {
+    if (mapIdleTimer.current) clearTimeout(mapIdleTimer.current);
+    mapReverseGeocodeRequest.current += 1;
+    setMapResolvingAddress(false);
+    setMapAddressError("");
+    setMapMoving(false);
+    setMapPicking(null);
+  }
+
   function confirmMapPoint() {
     if (!mapPicking || !mapPoint || !hasCoordinate(mapPoint)) return;
     applyPlace(mapPicking, {
@@ -878,7 +941,7 @@ export default function TaxiRequest() {
       address: mapPoint.address || "Selected map location",
       source: mapPicking === "stop" ? "stop" : "map"
     }, true);
-    setMapPicking(null);
+    closeMapPicker();
     setPanelState("half");
   }
 
@@ -888,6 +951,7 @@ export default function TaxiRequest() {
     nextStop = stop,
     categoryId = selectedCategory
   ) {
+    if (enforceActiveRideTracking()) return;
     if (!hasCoordinate(nextPickup) || !hasCoordinate(nextDestination)) {
       setRouteError("Choose pickup and destination from search results, saved places, current location or the map.");
       setStep("ROUTE");
@@ -959,6 +1023,7 @@ export default function TaxiRequest() {
   }
 
   async function estimateFare(categoryId = selectedCategory) {
+    if (enforceActiveRideTracking()) return;
     if (!routePreview || !hasCoordinate(pickup) || !hasCoordinate(destination)) {
       setRouteError("Route estimate temporarily unavailable. Please retry.");
       setStep("ROUTE");
@@ -969,8 +1034,7 @@ export default function TaxiRequest() {
 
   async function createTrip() {
     if (requestInFlight.current) return;
-    if (preferredActiveTrip) {
-      openTrip(preferredActiveTrip);
+    if (enforceActiveRideTracking()) {
       setError(duplicateActiveRideMessage);
       return;
     }
@@ -1052,6 +1116,7 @@ export default function TaxiRequest() {
   }
 
   function backOneStep() {
+    if (enforceActiveRideTracking()) return;
     if (step === "ROUTE") setStep("HOME");
     else if (step === "DETAILS") setStep("CONFIRM");
     else if (step === "CONFIRM") setStep("ROUTE");
@@ -1069,8 +1134,22 @@ export default function TaxiRequest() {
     </Screen></Protected>;
   }
 
-  if (!entryChecked && step !== "TRACKING") {
+  const activeRidePendingTracking = Boolean(preferredActiveTrip && (step !== "TRACKING" || created?.id !== preferredActiveTrip.id));
+
+  if ((entryStatus === "checking" || activeRidePendingTracking) && step !== "TRACKING") {
     return <Protected><Loading label="Checking active KariGO Rides..." /></Protected>;
+  }
+
+  if (entryStatus === "failed" && step !== "TRACKING") {
+    return <Protected><Screen title="KariGO Rides">
+      <Card>
+        <Text style={ui.cardTitle}>KariGO Rides could not confirm active ride status</Text>
+        <Text style={ui.pageIntro}>Please retry before opening the booking screen so we do not create a duplicate ride request.</Text>
+      </Card>
+      <Message error>{error}</Message>
+      <Button title="Retry active ride check" onPress={() => void load()} />
+      <Button title="Back to KariGO Home" tone="muted" onPress={() => router.replace("/tabs/home")} />
+    </Screen></Protected>;
   }
 
   if (mapPicking) {
@@ -1085,7 +1164,7 @@ export default function TaxiRequest() {
         <MapView
           ref={mapPickerRef}
           style={StyleSheet.absoluteFill}
-          region={region}
+          initialRegion={region}
           showsUserLocation
           onRegionChange={() => setMapMoving(true)}
           onRegionChangeComplete={handleMapRegionChangeComplete}
@@ -1099,11 +1178,12 @@ export default function TaxiRequest() {
         </Pressable>
         <View style={[styles.mapPickerPanel, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <Text style={styles.mapTitle}>{title}</Text>
-          <Text style={ui.muted}>{mapMoving ? "Move the map until the pin is on the right spot." : mapPoint?.address ?? "Move the map to place the center pin."}</Text>
+          <Text style={ui.muted}>{mapMoving ? "Move the map until the pin is on the right spot." : mapResolvingAddress ? "Updating selected address..." : mapPoint?.address ?? "Move the map to place the center pin."}</Text>
+          {mapAddressError ? <Text style={ui.muted}>{mapAddressError}</Text> : null}
           {message ? <Text style={ui.muted}>{message}</Text> : null}
           <View style={styles.inlineActions}>
-            <Button title="Cancel" tone="muted" onPress={() => setMapPicking(null)} />
-            <Button title={loading ? "Confirming..." : "Confirm location"} disabled={loading || !mapPoint} onPress={confirmMapPoint} />
+            <Button title="Cancel" tone="muted" onPress={closeMapPicker} />
+            <Button title={loading || mapResolvingAddress ? "Confirming..." : "Confirm location"} disabled={loading || mapResolvingAddress || !mapPoint} onPress={confirmMapPoint} />
           </View>
         </View>
       </View>
@@ -1250,7 +1330,7 @@ export default function TaxiRequest() {
             onWhereTo={openDestinationSearch}
             onLater={startScheduledSearch}
             onUseCurrentLocation={() => void useCurrentLocation()}
-            onEditPickup={() => { setStep("ROUTE"); setActiveField("pickup"); setPanelState("expanded"); }}
+            onEditPickup={() => { if (enforceActiveRideTracking()) return; setStep("ROUTE"); setActiveField("pickup"); setPanelState("expanded"); }}
             onSelectDestination={(place) => applyPlace("destination", place, true)}
             onCollapse={() => setPanelState((state) => state === "collapsed" ? "half" : "collapsed")}
           /> : null}
@@ -1273,7 +1353,7 @@ export default function TaxiRequest() {
             onSelectSuggestion={(place) => void selectPrediction(activeField, place)}
             onSelectPlace={(place) => applyPlace(activeField, place, true)}
             onSwap={swapRoute}
-            onAddStop={() => { setActiveField("stop"); setStep("ROUTE"); setPanelState("expanded"); }}
+            onAddStop={() => { if (enforceActiveRideTracking()) return; setActiveField("stop"); setStep("ROUTE"); setPanelState("expanded"); }}
             onRemoveStop={removeStop}
             onMapPick={openMapPicker}
             onUseCurrentLocation={() => void useCurrentLocation()}
