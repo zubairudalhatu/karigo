@@ -242,16 +242,17 @@ If an OTA causes a blocking issue:
 
 ## Task 206L Verification OTA Record
 
-To be filled after publish:
+Published verification OTA:
 
 - EAS project: `@zamkah/karigo-customer`
 - Channel: `customer-production`
 - Branch: `customer-production`
 - Runtime version: `0.1.0`
-- Update group ID: Pending
-- Android update ID: Pending
-- Commit hash: Pending
+- Update group ID: `23d2525b-9439-4da1-bef9-96006c891ac4`
+- Android update ID: `019fb2a7-b4de-7224-a0a4-fd1e44dcc3d4`
+- Commit hash: `35ca3a45b108ef97e962959ec9acee769ce202f6`
 - Publishing environment: `production`
+- EAS CLI used: `20.5.1`
 - Compatible with versionCode 13: Yes, JavaScript/config-only OTA
 
 ## Real-Device Checklist
