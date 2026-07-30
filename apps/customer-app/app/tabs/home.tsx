@@ -1,11 +1,13 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import * as Location from "expo-location";
-import type { ServiceCategory, VendorSummary } from "@karigo/shared-types";
-import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import type { ServiceCategory, TaxiTrip, VendorSummary } from "@karigo/shared-types";
+import { isActiveTaxiTripStatus } from "@karigo/shared-types";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { adsApi, CustomerHomeAd } from "../../src/api/ads.api";
+import { taxiApi } from "../../src/api/taxi.api";
 import { vendorsApi } from "../../src/api/vendors.api";
 import { Button, Card, Empty, Loading, Message, Screen, ui } from "../../src/components/ui";
 import { KariGoAppTopBar } from "../../src/components/kari-go-app-top-bar";
@@ -72,6 +74,14 @@ function cityFromGeocode(place?: Location.LocationGeocodedAddress | null) {
     .find(Boolean) ?? null;
 }
 
+function activeRideTitle(trip: TaxiTrip) {
+  if (trip.status === "REQUESTED") return "Looking for a Captain";
+  if (trip.status === "DRIVER_ASSIGNED" || trip.status === "ACCEPTED") return trip.driver ? "Ride Captain assigned" : "Looking for a Captain";
+  if (trip.status === "ARRIVED_PICKUP") return "Captain at pickup";
+  if (trip.status === "STARTED" || trip.status === "ARRIVED_DESTINATION") return "Ride in progress";
+  return "Active ride";
+}
+
 function VendorSpotlight({ vendor }: { vendor: VendorSummary }) {
   return <Card>
     <View style={styles.vendorHeader}>
@@ -102,6 +112,7 @@ export default function CustomerHome() {
   const [detectedCity, setDetectedCity] = useState<string | null>(null);
   const [locationMessage, setLocationMessage] = useState("");
   const [detectingLocation, setDetectingLocation] = useState(false);
+  const [rides, setRides] = useState<TaxiTrip[]>([]);
 
   useEffect(() => {
     vendorsApi.list()
@@ -119,6 +130,24 @@ export default function CustomerHome() {
   useEffect(() => {
     void detectLaunchCity(false);
   }, []);
+
+  const loadActiveRides = useCallback(() => {
+    if (!user || !ridesPilotEnabled) {
+      setRides([]);
+      return;
+    }
+    taxiApi.trips()
+      .then((items) => setRides(items.filter((trip) => isActiveTaxiTripStatus(trip.status))))
+      .catch(() => setRides([]));
+  }, [user?.id]);
+
+  useEffect(() => {
+    loadActiveRides();
+  }, [loadActiveRides]);
+
+  useFocusEffect(useCallback(() => {
+    loadActiveRides();
+  }, [loadActiveRides]));
 
   async function detectLaunchCity(showFeedback = true) {
     setDetectingLocation(true);
@@ -148,6 +177,7 @@ export default function CustomerHome() {
 
   const featured = useMemo(() => vendors.filter((vendor) => vendor.isOpen).slice(0, 3), [vendors]);
   const homeAd = ads[0];
+  const activeRide = rides[0] ?? null;
   const columns = width >= 380 ? 3 : 2;
   const serviceTileBasis = `${(100 / columns) - 2}%` as const;
 
@@ -203,6 +233,18 @@ export default function CustomerHome() {
         </View>
       </Card>}
 
+      {activeRide ? <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="View active KariGO Ride status"
+        onPress={() => router.push(`/taxi/request?tripId=${activeRide.id}` as never)}
+        style={styles.activeRideCard}
+      >
+        <Text style={styles.activeRideEyebrow}>Active KariGO Ride</Text>
+        <Text style={ui.cardTitle}>{activeRideTitle(activeRide)}</Text>
+        <Text style={ui.muted} numberOfLines={1}>{activeRide.pickupAddress.split(",")[0]} to {activeRide.destinationAddress.split(",")[0]}</Text>
+        <Text style={styles.link}>View status</Text>
+      </Pressable> : null}
+
       <View style={ui.spaceBetween}>
         <Text style={ui.sectionTitle}>What do you need today?</Text>
       </View>
@@ -219,7 +261,7 @@ export default function CustomerHome() {
           </View>
           <Text style={styles.categoryLabel}>{category.label}</Text>
           {category.subtitle ? <Text style={styles.categorySubtitle}>{category.subtitle}</Text> : null}
-          {category.statusLabel ? <Text style={styles.serviceStatus}>{category.statusLabel}</Text> : null}
+          {category.statusLabel || (category.label === "KariGO Rides" && activeRide) ? <Text style={styles.serviceStatus}>{category.label === "KariGO Rides" && activeRide ? "Active ride" : category.statusLabel}</Text> : null}
         </Pressable>)}
       </View>
 
@@ -250,6 +292,8 @@ const styles = StyleSheet.create({
   detectedCityLine: { alignSelf: "flex-start", backgroundColor: "#FEF2F2", borderRadius: 999, color: brand.colors.primaryDark, fontSize: 11, fontWeight: "900", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 5 },
   locationActions: { gap: 8 },
   authActions: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  activeRideCard: { backgroundColor: "#FEF2F2", borderColor: "#FCA5A5", borderRadius: 20, borderWidth: 1, gap: 6, padding: 16 },
+  activeRideEyebrow: { color: brand.colors.primaryDark, fontSize: 11, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" },
   categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
   categoryCard: { alignItems: "center", backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, flexGrow: 1, gap: 6, minHeight: 104, padding: 10 },
   categoryPressed: { borderColor: brand.colors.primary, transform: [{ scale: 0.99 }] },

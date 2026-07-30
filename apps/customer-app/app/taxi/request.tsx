@@ -1,7 +1,7 @@
 import * as Location from "expo-location";
-import { router, Stack } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, AppState, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { router, Stack, useLocalSearchParams } from "expo-router";
+import { RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { Animated, AppState, BackHandler, Keyboard, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import MapView, { Marker, Polyline, Region } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -10,7 +10,6 @@ import {
   TaxiRideCategory,
   TaxiRoutePreview,
   TaxiTrip,
-  activeTaxiTripStatuses,
   customerCancellableTaxiTripStatuses,
   isActiveTaxiTripStatus,
   isTerminalTaxiTripStatus
@@ -18,7 +17,7 @@ import {
 import { brand } from "@karigo/config";
 import { Address, addressesApi } from "../../src/api/addresses.api";
 import { taxiApi } from "../../src/api/taxi.api";
-import { Button, Card, Empty, Field, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
+import { Button, Card, Empty, Field, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError } from "../../src/lib/errors";
 import { ridesControlledPilotEnabled } from "../../src/lib/rides-flags";
 
@@ -50,7 +49,6 @@ const rideAvailabilityNote = "Service availability may vary by area and time.";
 const routeUnavailableMessage = "KariGO Rides is not yet available in this pickup or destination area. Choose a pickup and destination in Kano or Abuja.";
 const intercityUnavailableMessage = "Intercity KariGO Rides are not available yet. Choose pickup and destination within the same city.";
 const staleFareMessage = "Ride fare estimate expired. Please preview and estimate the route again.";
-const activeRideStatusSet = new Set<string>(activeTaxiTripStatuses);
 const cancellableBeforePickup = new Set<string>(customerCancellableTaxiTripStatuses);
 const duplicateActiveRideMessage = "You already have an active KariGO Ride. View or cancel it before requesting another immediate ride.";
 
@@ -221,6 +219,7 @@ function rideTrackingTitle(trip?: TaxiTrip | null) {
 
 function rideStatusActionCopy(trip?: TaxiTrip | null) {
   if (!trip) return "";
+  if (trip.status === "REQUESTED") return "Ride request received.";
   if (trip.status === "EXPIRED") return "No Captain accepted before this request expired.";
   if (trip.status === "COMPLETED") return "Thanks for riding with KariGO.";
   if (trip.status.startsWith("CANCELLED")) return trip.cancellationReason || "This ride request is closed.";
@@ -294,6 +293,7 @@ function newRideRequestId() {
 
 export default function TaxiRequest() {
   const taxiEnabled = ridesControlledPilotEnabled();
+  const { tripId } = useLocalSearchParams<{ tripId?: string }>();
   const insets = useSafeAreaInsets();
   const searchToken = useRef(0);
   const routeToken = useRef(0);
@@ -301,10 +301,12 @@ export default function TaxiRequest() {
   const mapIdleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mainMapRef = useRef<MapView | null>(null);
   const mapPickerRef = useRef<MapView | null>(null);
+  const routeInputRef = useRef<TextInput | null>(null);
   const reverseGeocodeCache = useRef(new Map<string, string>());
   const requestInFlight = useRef(false);
   const requestAttemptId = useRef<string | null>(null);
   const pollingInFlight = useRef(false);
+  const keyboardVisible = useRef(false);
   const panelDrag = useRef(new Animated.Value(0)).current;
 
   const [step, setStep] = useState<BookingStep>("HOME");
@@ -342,6 +344,7 @@ export default function TaxiRequest() {
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [entryChecked, setEntryChecked] = useState(false);
 
   const savedPlaces = useMemo(() => addresses.map(placeFromAddress), [addresses]);
   const recentPlaces = useMemo(() => {
@@ -374,8 +377,8 @@ export default function TaxiRequest() {
   const selectedCategoryDetail = categoryOptions.find((category) => category.id === selectedCategory) ?? categoryOptions[0];
   const canCreateTrip = estimateMatchesRoute(estimate, routePreview, selectedCategory);
   const activeTrips = useMemo(() => sortActiveTrips(trips.filter((trip) => isActiveTaxiTripStatus(trip.status))), [trips]);
-  const rideHistory = useMemo(() => trips.filter((trip) => isTerminalTaxiTripStatus(trip.status) || !activeRideStatusSet.has(trip.status)), [trips]);
   const preferredActiveTrip = activeTrips[0] ?? null;
+  const otherActiveTripCount = created ? activeTrips.filter((trip) => trip.id !== created.id).length : Math.max(0, activeTrips.length - 1);
   const activeRideCity = serviceAreaForPlace(pickup) ?? serviceAreaForPlace(destination);
   const rideTitle = activeRideCity ? `KariGO Rides in ${activeRideCity}` : "KariGO Rides";
   const panelHeights = {
@@ -404,6 +407,7 @@ export default function TaxiRequest() {
 
   async function load() {
     if (!taxiEnabled) return;
+    setEntryChecked(false);
     try {
       const [saved, rideCategories, history] = await Promise.all([
         addressesApi.list().catch(() => []),
@@ -414,8 +418,11 @@ export default function TaxiRequest() {
       setCategories(rideCategories);
       setTrips(history);
       setCreated((current) => current ? history.find((trip) => trip.id === current.id) ?? current : current);
+      reconcileRideEntry(history);
     } catch {
       // Optional saved/history data should never block manual ride booking.
+    } finally {
+      setEntryChecked(true);
     }
   }
 
@@ -424,6 +431,38 @@ export default function TaxiRequest() {
   useEffect(() => () => {
     if (mapIdleTimer.current) clearTimeout(mapIdleTimer.current);
   }, []);
+
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () => {
+      keyboardVisible.current = true;
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      keyboardVisible.current = false;
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (step !== "ROUTE") return;
+    const handle = setTimeout(() => routeInputRef.current?.focus(), 120);
+    return () => clearTimeout(handle);
+  }, [activeField, step]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (step !== "ROUTE") return false;
+      if (keyboardVisible.current) {
+        Keyboard.dismiss();
+        return true;
+      }
+      backOneStep();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [step]);
 
   useEffect(() => {
     if (step !== "TRACKING" || !created || !isActiveTaxiTripStatus(created.status)) return;
@@ -587,6 +626,7 @@ export default function TaxiRequest() {
   }
 
   function applyPlace(field: PlaceField, place: RidePlace, autoPreview = false) {
+    Keyboard.dismiss();
     const resolved = { ...place, address: place.address || place.label };
     const nextPickup = field === "pickup" ? resolved : pickup;
     const nextDestination = field === "destination" ? resolved : destination;
@@ -734,10 +774,16 @@ export default function TaxiRequest() {
     setPanelState("expanded");
   }
 
-  function openPreferredActiveTrip() {
-    const trip = preferredActiveTrip;
-    if (!trip) return;
-    openTrip(trip);
+  function reconcileRideEntry(history: TaxiTrip[]) {
+    const requestedTrip = tripId ? history.find((trip) => trip.id === tripId) : null;
+    const active = sortActiveTrips(history.filter((trip) => isActiveTaxiTripStatus(trip.status)));
+    const preferred = requestedTrip && isActiveTaxiTripStatus(requestedTrip.status)
+      ? requestedTrip
+      : active[0] ?? null;
+    if (!preferred) return;
+    if (step !== "TRACKING" || created?.id !== preferred.id) {
+      openTrip(preferred);
+    }
   }
 
   function swapRoute() {
@@ -764,6 +810,7 @@ export default function TaxiRequest() {
   }
 
   function openMapPicker(field: PlaceField) {
+    Keyboard.dismiss();
     const currentPlace = field === "pickup" ? pickup : field === "stop" ? stop : destination;
     const initial = currentPlace && hasCoordinate(currentPlace) ? regionForPlaces(currentPlace) : regionForPlaces(pickup, destination, stop);
     setMapPicking(field);
@@ -1022,6 +1069,10 @@ export default function TaxiRequest() {
     </Screen></Protected>;
   }
 
+  if (!entryChecked && step !== "TRACKING") {
+    return <Protected><Loading label="Checking active KariGO Rides..." /></Protected>;
+  }
+
   if (mapPicking) {
     const region = mapRegion ?? (mapPoint && hasCoordinate(mapPoint)
       ? { latitude: mapPoint.latitude, longitude: mapPoint.longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 }
@@ -1075,8 +1126,8 @@ export default function TaxiRequest() {
           {routePoints.length >= 2 ? <Polyline coordinates={routePoints} strokeColor={brand.colors.primary} strokeWidth={5} /> : null}
         </MapView>
         <View style={[styles.mapTopBar, { paddingTop: Math.max(insets.top, 18) }]}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Back to KariGO Rides home" onPress={() => setStep("HOME")} style={styles.roundButton}>
-            <Text style={styles.roundButtonText}>Rides</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Return to KariGO home" onPress={() => router.replace("/tabs/home")} style={styles.roundButton}>
+            <Text style={styles.roundButtonText}>Home</Text>
           </Pressable>
           <View style={styles.mapTitleCard}>
             <Text style={styles.mapEyebrow}>KariGO Ride</Text>
@@ -1097,9 +1148,9 @@ export default function TaxiRequest() {
               onRefresh={() => void load()}
               onBookAnother={resetNewBooking}
               onBackHome={() => router.replace("/tabs/home")}
+              onViewAllRides={() => router.push("/orders?tab=rides" as never)}
+              otherActiveCount={otherActiveTripCount}
             /> : null}
-            <RideActiveList trips={activeTrips} currentTripId={created?.id} loading={loading} onOpen={openTrip} onCancel={(trip) => void cancelTrip(trip.id)} onRefresh={() => void load()} />
-            <RideHistoryList trips={rideHistory} onOpen={openTrip} />
           </ScrollView>
         </View>
       </View>
@@ -1194,23 +1245,16 @@ export default function TaxiRequest() {
             rideTitle={rideTitle}
             pickup={pickup}
             locating={locating}
-            activeTrips={activeTrips}
             recentPlaces={recentPlaces}
             savedPlaces={savedPlaces}
-            loading={loading}
             onWhereTo={openDestinationSearch}
             onLater={startScheduledSearch}
             onUseCurrentLocation={() => void useCurrentLocation()}
             onEditPickup={() => { setStep("ROUTE"); setActiveField("pickup"); setPanelState("expanded"); }}
             onSelectDestination={(place) => applyPlace("destination", place, true)}
-            onOpenActive={openPreferredActiveTrip}
-            onOpenTrip={openTrip}
-            onCancelTrip={(trip) => void cancelTrip(trip.id)}
-            onRefresh={() => void load()}
             onCollapse={() => setPanelState((state) => state === "collapsed" ? "half" : "collapsed")}
           /> : null}
           {step === "ROUTE" ? <RideRoutePanel
-            activeTrips={activeTrips}
             activeField={activeField}
             pickup={pickup}
             destination={destination}
@@ -1234,6 +1278,7 @@ export default function TaxiRequest() {
             onMapPick={openMapPicker}
             onUseCurrentLocation={() => void useCurrentLocation()}
             onRetry={() => void previewAndEstimateRoute()}
+            inputRef={routeInputRef}
           /> : null}
         </ScrollView>}
       </Animated.View>
@@ -1253,37 +1298,25 @@ function RideHomePanel({
   rideTitle,
   pickup,
   locating,
-  activeTrips,
   recentPlaces,
   savedPlaces,
-  loading,
   onWhereTo,
   onLater,
   onUseCurrentLocation,
   onEditPickup,
   onSelectDestination,
-  onOpenActive,
-  onOpenTrip,
-  onCancelTrip,
-  onRefresh,
   onCollapse
 }: {
   rideTitle: string;
   pickup: RidePlace | null;
   locating: boolean;
-  activeTrips: TaxiTrip[];
   recentPlaces: RidePlace[];
   savedPlaces: RidePlace[];
-  loading: boolean;
   onWhereTo: () => void;
   onLater: () => void;
   onUseCurrentLocation: () => void;
   onEditPickup: () => void;
   onSelectDestination: (place: RidePlace) => void;
-  onOpenActive: () => void;
-  onOpenTrip: (trip: TaxiTrip) => void;
-  onCancelTrip: (trip: TaxiTrip) => void;
-  onRefresh: () => void;
   onCollapse: () => void;
 }) {
   return <>
@@ -1296,7 +1329,6 @@ function RideHomePanel({
         <Text style={styles.smallPillText}>Map</Text>
       </Pressable>
     </View>
-    <RideActiveBanner trips={activeTrips} onOpen={onOpenActive} />
     <View style={styles.searchRow}>
       <Pressable accessibilityRole="button" accessibilityLabel="Where to?" onPress={onWhereTo} style={styles.whereToControl}>
         <Text style={styles.whereToText}>Where to?</Text>
@@ -1313,14 +1345,12 @@ function RideHomePanel({
         <Text style={ui.muted} numberOfLines={1}>{pickup?.address ?? "Use current location or choose pickup manually."}</Text>
       </View>
     </Pressable>
-    <RideActiveList trips={activeTrips} loading={loading} onOpen={onOpenTrip} onCancel={onCancelTrip} onRefresh={onRefresh} />
     <CompactPlaceSection title="Recent destinations" places={recentPlaces} onSelect={onSelectDestination} />
     <CompactPlaceSection title="Saved places" places={savedPlaces.slice(0, 3)} onSelect={onSelectDestination} />
   </>;
 }
 
 function RideRoutePanel({
-  activeTrips,
   activeField,
   pickup,
   destination,
@@ -1343,9 +1373,9 @@ function RideRoutePanel({
   onRemoveStop,
   onMapPick,
   onUseCurrentLocation,
-  onRetry
+  onRetry,
+  inputRef
 }: {
-  activeTrips: TaxiTrip[];
   activeField: PlaceField;
   pickup: RidePlace | null;
   destination: RidePlace | null;
@@ -1369,6 +1399,7 @@ function RideRoutePanel({
   onMapPick: (field: PlaceField) => void;
   onUseCurrentLocation: () => void;
   onRetry: () => void;
+  inputRef: RefObject<TextInput | null>;
 }) {
   const showRouteTools = Boolean(pickup || destination);
   const mapLabel = activeField === "pickup" ? "Pickup on map" : activeField === "stop" ? "Stop on map" : "Destination on map";
@@ -1383,22 +1414,11 @@ function RideRoutePanel({
         <Text style={styles.smallPillText}>Swap</Text>
       </Pressable> : null}
     </View>
-    {activeTrips.length ? <View style={styles.activeNotice}>
-      <Text style={styles.activeNoticeTitle}>Active ride in progress</Text>
-      <Text style={styles.activeNoticeText}>You can inspect routes, but complete or cancel your active KariGO Ride before requesting another immediate ride.</Text>
-    </View> : null}
     <View style={styles.routeComposer}>
-      <RouteComposerRow label="Pickup" active={activeField === "pickup"} value={pickup?.address || pickupText} placeholder="Current location or pickup address" onPress={() => onFieldFocus("pickup")} marker="pickup" />
-      {stop ? <RouteComposerRow label="Stop" active={activeField === "stop"} value={stop.address || stopText} placeholder="Selected stop" onPress={() => onFieldFocus("stop")} marker="stop" onRemove={onRemoveStop} /> : null}
-      <RouteComposerRow label="Destination" active={activeField === "destination"} value={destination?.address || destinationText} placeholder="Where to?" onPress={() => onFieldFocus("destination")} marker="destination" />
+      <RouteComposerRow label="Pickup" active={activeField === "pickup"} value={pickup?.address || pickupText} inputValue={pickupText} placeholder="Current location or pickup address" onPress={() => onFieldFocus("pickup")} onChangeText={(value) => onFieldChange("pickup", value)} inputRef={activeField === "pickup" ? inputRef : undefined} marker="pickup" />
+      {stop ? <RouteComposerRow label="Stop" active={activeField === "stop"} value={stop.address || stopText} inputValue={stopText} placeholder="Selected stop" onPress={() => onFieldFocus("stop")} onChangeText={(value) => onFieldChange("stop", value)} inputRef={activeField === "stop" ? inputRef : undefined} marker="stop" onRemove={onRemoveStop} /> : null}
+      <RouteComposerRow label="Destination" active={activeField === "destination"} value={destination?.address || destinationText} inputValue={destinationText} placeholder="Where to?" onPress={() => onFieldFocus("destination")} onChangeText={(value) => onFieldChange("destination", value)} inputRef={activeField === "destination" ? inputRef : undefined} marker="destination" />
     </View>
-    <Field
-      placeholder={activeField === "pickup" ? "Search pickup" : activeField === "stop" ? "Search stop" : "Search destination"}
-      value={activeField === "pickup" ? pickupText : activeField === "stop" ? stopText : destinationText}
-      onChangeText={(value) => onFieldChange(activeField, value)}
-      autoFocus
-      style={styles.addressInput}
-    />
     <SuggestionList
       activeField={activeField}
       places={suggestions}
@@ -1417,12 +1437,43 @@ function RideRoutePanel({
   </>;
 }
 
-function RouteComposerRow({ label, value, placeholder, marker, active, onPress, onRemove }: { label: string; value?: string; placeholder: string; marker: "pickup" | "stop" | "destination"; active: boolean; onPress: () => void; onRemove?: () => void }) {
+function RouteComposerRow({
+  label,
+  value,
+  inputValue,
+  placeholder,
+  marker,
+  active,
+  onPress,
+  onChangeText,
+  inputRef,
+  onRemove
+}: {
+  label: string;
+  value?: string;
+  inputValue?: string;
+  placeholder: string;
+  marker: "pickup" | "stop" | "destination";
+  active: boolean;
+  onPress: () => void;
+  onChangeText?: (value: string) => void;
+  inputRef?: RefObject<TextInput | null>;
+  onRemove?: () => void;
+}) {
   return <Pressable accessibilityRole="button" onPress={onPress} style={[styles.routeComposerRow, active && styles.routeComposerRowActive]}>
     <View style={[styles.routeMarker, marker === "pickup" && styles.pickupMarker, marker === "stop" && styles.stopMarker]} />
     <View style={styles.routeText}>
       <Text style={styles.routeLabel}>{label}</Text>
-      <Text style={[styles.routeValue, !value && styles.routePlaceholder]} numberOfLines={1}>{value || placeholder}</Text>
+      {active && onChangeText ? <TextInput
+        ref={inputRef}
+        accessibilityLabel={`${label} search input`}
+        placeholder={placeholder}
+        placeholderTextColor={brand.colors.muted}
+        value={inputValue ?? ""}
+        onChangeText={onChangeText}
+        returnKeyType="search"
+        style={styles.routeInput}
+      /> : <Text style={[styles.routeValue, !value && styles.routePlaceholder]} numberOfLines={1}>{value || placeholder}</Text>}
     </View>
     {onRemove ? <Pressable accessibilityRole="button" accessibilityLabel="Remove stop" onPress={onRemove} style={styles.removeStopButton}>
       <Text style={styles.removeStopText}>Remove</Text>
@@ -1647,26 +1698,15 @@ function tripCategoryLabel(trip: TaxiTrip) {
   return `KariGO ${label.charAt(0)}${label.slice(1).toLowerCase()}`;
 }
 
-function RideActiveBanner({ trips, onOpen }: { trips: TaxiTrip[]; onOpen: () => void }) {
-  if (!trips.length) return null;
-  const first = trips[0];
-  return <Pressable accessibilityRole="button" accessibilityLabel="View active KariGO Ride status" onPress={onOpen} style={styles.activeBanner}>
-    <View style={styles.activeBannerDot} />
-    <View style={styles.placeBody}>
-      <Text style={styles.activeBannerTitle}>{trips.length === 1 ? "Active KariGO Ride" : `${trips.length} active ride requests`}</Text>
-      <Text style={styles.activeBannerText}>{trips.length === 1 ? rideTrackingTitle(first) : "Review and manage"}</Text>
-    </View>
-    <Text style={styles.activeBannerAction}>View</Text>
-  </Pressable>;
-}
-
 function RideTracking({
   trip,
   loading,
   onCancel,
   onRefresh,
   onBookAnother,
-  onBackHome
+  onBackHome,
+  onViewAllRides,
+  otherActiveCount
 }: {
   trip: TaxiTrip;
   loading: boolean;
@@ -1674,6 +1714,8 @@ function RideTracking({
   onRefresh: () => void;
   onBookAnother: () => void;
   onBackHome: () => void;
+  onViewAllRides: () => void;
+  otherActiveCount: number;
 }) {
   const terminal = isTerminalTaxiTripStatus(trip.status);
   const showCaptain = Boolean(trip.driver && !terminal && trip.status !== "REQUESTED");
@@ -1703,75 +1745,70 @@ function RideTracking({
       <Text style={ui.otpCode}>{trip.tripPin.slice(0, 3)} {trip.tripPin.slice(3)}</Text>
       <Text style={ui.muted}>Only share this ride PIN with the approved Ride Captain at pickup.</Text>
     </> : null}
-    {trip.status === "REQUESTED" ? <Text style={styles.requestedCopy}>Connecting you with an available Captain nearby.</Text> : null}
+    {trip.status === "REQUESTED" ? <CaptainSearchProgress /> : null}
+    {otherActiveCount > 0 ? <View style={styles.activeNotice}>
+      <Text style={styles.activeNoticeTitle}>{otherActiveCount} other active ride {otherActiveCount === 1 ? "request" : "requests"}</Text>
+      <Text style={styles.activeNoticeText}>Manage legacy active rides from Orders.</Text>
+    </View> : null}
     {cancellableBeforePickup.has(trip.status) ? <Button title={loading ? "Cancelling..." : "Cancel ride request"} tone="muted" disabled={loading} onPress={onCancel} /> : null}
     {terminal ? <View style={styles.inlineActions}>
       <Button title={trip.status === "EXPIRED" ? "Retry ride request" : "Book another ride"} onPress={onBookAnother} />
       <Button title="Back to KariGO Home" tone="muted" onPress={onBackHome} />
+      <Button title="View all rides" tone="muted" onPress={onViewAllRides} />
     </View> : <View style={styles.inlineActions}>
       <Button title="Refresh status" tone="muted" disabled={loading} onPress={onRefresh} />
       <Button title="Back to KariGO Home" tone="muted" onPress={onBackHome} />
+      <Button title={otherActiveCount > 0 ? "Manage rides" : "View all rides"} tone="muted" onPress={onViewAllRides} />
     </View>}
   </Card>;
 }
 
-function RideActiveList({
-  trips,
-  currentTripId,
-  loading,
-  onOpen,
-  onCancel,
-  onRefresh
-}: {
-  trips: TaxiTrip[];
-  currentTripId?: string;
-  loading: boolean;
-  onOpen: (trip: TaxiTrip) => void;
-  onCancel: (trip: TaxiTrip) => void;
-  onRefresh: () => void;
-}) {
-  if (!trips.length) return null;
-  return <Card>
-    <View style={ui.spaceBetween}>
-      <Text style={ui.sectionTitle}>Active ride requests</Text>
-      <Button title="Refresh" tone="muted" disabled={loading} onPress={onRefresh} />
-    </View>
-    {trips.map((trip) => <View key={trip.id} style={styles.tripRow}>
-      <Text style={styles.tripRef}>{trip.tripReference}{trip.id === currentTripId ? " - open" : ""}</Text>
-      <Text style={ui.muted} numberOfLines={1}>{shortAddress(trip.pickupAddress)} to {shortAddress(trip.destinationAddress)}</Text>
-      <Text style={ui.muted}>{tripCategoryLabel(trip)} - {money(trip.estimatedFareKobo)} - {tripDate(trip)}</Text>
-      <StatusBadge status={trip.status} />
-      <View style={styles.inlineActions}>
-        <Button title="Open ride" tone="muted" onPress={() => onOpen(trip)} />
-        {cancellableBeforePickup.has(trip.status) ? <Button title="Cancel request" tone="muted" disabled={loading} onPress={() => onCancel(trip)} /> : null}
-      </View>
-    </View>)}
-  </Card>;
-}
+function CaptainSearchProgress() {
+  const progress = useRef(new Animated.Value(0)).current;
 
-function RideHistoryList({ trips, onOpen }: { trips: TaxiTrip[]; onOpen: (trip: TaxiTrip) => void }) {
-  if (!trips.length) return null;
-  return <Card>
-    <Text style={ui.sectionTitle}>Ride history</Text>
-    {trips.slice(0, 8).map((trip) => <Pressable key={trip.id} accessibilityRole="button" onPress={() => onOpen(trip)} style={styles.tripRow}>
-      <Text style={styles.tripRef}>{trip.tripReference}</Text>
-      <Text style={ui.muted} numberOfLines={1}>{shortAddress(trip.pickupAddress)} to {shortAddress(trip.destinationAddress)}</Text>
-      <Text style={ui.muted}>{money(trip.finalFareKobo ?? trip.estimatedFareKobo)} - {tripDate(trip)}</Text>
-      <StatusBadge status={trip.status} />
-    </Pressable>)}
-  </Card>;
+  useEffect(() => {
+    let loop: Animated.CompositeAnimation | null = null;
+    function start() {
+      progress.setValue(0);
+      loop = Animated.loop(Animated.timing(progress, {
+        toValue: 1,
+        duration: 1400,
+        useNativeDriver: true
+      }));
+      loop.start();
+    }
+    start();
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        start();
+      } else {
+        loop?.stop();
+      }
+    });
+    return () => {
+      loop?.stop();
+      subscription.remove();
+    };
+  }, [progress]);
+
+  const translateX = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-120, 220]
+  });
+
+  return <View accessibilityLabel="Searching for an available KariGO Ride Captain." style={styles.searchProgressCard}>
+    <Text style={styles.searchProgressTitle}>Looking for a Ride Captain</Text>
+    <Text style={ui.muted}>Connecting you with available Captains nearby.</Text>
+    <View style={styles.searchProgressTrack}>
+      <Animated.View style={[styles.searchProgressBar, { transform: [{ translateX }] }]} />
+    </View>
+  </View>;
 }
 
 const styles = StyleSheet.create({
-  activeBanner: { alignItems: "center", backgroundColor: "#FEF2F2", borderColor: "#FCA5A5", borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 12, padding: 12 },
-  activeBannerAction: { color: brand.colors.primaryDark, fontWeight: "900" },
-  activeBannerDot: { backgroundColor: brand.colors.primary, borderRadius: 999, height: 12, width: 12 },
-  activeBannerText: { color: brand.colors.muted, fontSize: 12, fontWeight: "800" },
-  activeBannerTitle: { color: brand.colors.charcoal, fontWeight: "900" },
   activeNotice: { backgroundColor: "#FFF7ED", borderColor: "#FDBA74", borderRadius: 16, borderWidth: 1, gap: 4, padding: 12 },
   activeNoticeText: { color: "#9A3412", fontSize: 12, fontWeight: "700", lineHeight: 18 },
   activeNoticeTitle: { color: "#7C2D12", fontWeight: "900" },
-  addressInput: { textAlign: "left", writingDirection: "ltr" },
   bookingHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   bottomSheet: { backgroundColor: brand.colors.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, bottom: 0, left: 0, paddingHorizontal: 18, position: "absolute", right: 0, shadowColor: "#111827", shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.16, shadowRadius: 18 },
   captainCard: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 3, padding: 12 },
@@ -1834,6 +1871,7 @@ const styles = StyleSheet.create({
   routeComposer: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, gap: 8, padding: 10 },
   routeComposerRow: { alignItems: "center", borderColor: "transparent", borderRadius: 14, borderWidth: 1, flexDirection: "row", gap: 10, padding: 8 },
   routeComposerRowActive: { backgroundColor: brand.colors.white, borderColor: "#FCA5A5" },
+  routeInput: { color: brand.colors.charcoal, fontSize: 15, fontWeight: "800", minHeight: 28, padding: 0, textAlign: "left", writingDirection: "ltr" },
   routeLabel: { color: brand.colors.muted, fontSize: 12, fontWeight: "800", textTransform: "uppercase" },
   routeMarker: { backgroundColor: brand.colors.charcoal, borderColor: brand.colors.white, borderRadius: 999, borderWidth: 3, height: 18, width: 18 },
   routePanel: { backgroundColor: "#F9FAFB", borderRadius: 18, gap: 10, padding: 12 },
@@ -1843,6 +1881,10 @@ const styles = StyleSheet.create({
   routeValue: { color: brand.colors.charcoal, fontSize: 14, fontWeight: "800", lineHeight: 20 },
   scheduleNote: { backgroundColor: "#EFF6FF", borderRadius: 12, color: "#1E40AF", fontWeight: "800", padding: 10 },
   searchRow: { alignItems: "stretch", flexDirection: "row", gap: 10 },
+  searchProgressBar: { backgroundColor: brand.colors.primary, borderRadius: 999, height: 6, opacity: 0.9, width: 92 },
+  searchProgressCard: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 8, padding: 12 },
+  searchProgressTitle: { color: brand.colors.charcoal, fontWeight: "900" },
+  searchProgressTrack: { backgroundColor: "#FEE2E2", borderRadius: 999, height: 6, overflow: "hidden" },
   sheetEyebrow: { color: brand.colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase" },
   sheetHandle: { backgroundColor: "#D1D5DB", borderRadius: 999, height: 5, width: 46 },
   sheetHandleWrap: { alignItems: "center", paddingBottom: 8, paddingTop: 10 },
@@ -1860,7 +1902,6 @@ const styles = StyleSheet.create({
   stickyScrollContent: { gap: 12 },
   suggestionBox: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 10, padding: 10 },
   suggestionRow: { alignItems: "center", flexDirection: "row", gap: 10 },
-  requestedCopy: { backgroundColor: "#EFF6FF", borderRadius: 12, color: "#1E40AF", fontWeight: "800", padding: 10 },
   trackingMeta: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "space-between" },
   trackingSheet: { backgroundColor: brand.colors.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, bottom: 0, left: 0, maxHeight: "58%", paddingHorizontal: 18, paddingTop: 16, position: "absolute", right: 0, shadowColor: "#111827", shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.16, shadowRadius: 18 },
   tripRef: { color: brand.colors.charcoal, fontWeight: "900" },
