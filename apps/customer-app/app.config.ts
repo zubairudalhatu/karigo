@@ -88,7 +88,6 @@ export default ({ config }: { config: Record<string, any> }) => ({
     appEnvironment: process.env.APP_VARIANT ?? "development",
     updateChannel: isStaging ? "customer-staging" : "customer-production",
     runtimeVersion: customerRuntimeVersion,
-    task206lVerificationMarker: "Task 206L OTA verification active",
     eas: {
       ...easExtra(config.extra?.eas),
       projectId: "467aa2f6-22b1-4a81-a9d6-c38f3ebe191d"

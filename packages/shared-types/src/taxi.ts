@@ -107,6 +107,9 @@ export interface TaxiFareEstimateInput {
   pickupLongitude?: number;
   destinationLatitude?: number;
   destinationLongitude?: number;
+  stopAddress?: string;
+  stopLatitude?: number;
+  stopLongitude?: number;
   estimatedDistanceKm?: number;
   estimatedDurationMin?: number;
   waitingMinutes?: number;
@@ -119,7 +122,7 @@ export interface TaxiPlaceAutocompleteQuery {
   latitude?: number;
   longitude?: number;
   serviceArea?: string;
-  fieldType?: "pickup" | "destination";
+  fieldType?: "pickup" | "destination" | "stop";
 }
 
 export interface TaxiPlacePrediction {
@@ -160,6 +163,9 @@ export interface TaxiRoutePreviewInput {
   destinationLongitude: number;
   pickupAddress?: string;
   destinationAddress?: string;
+  stopLatitude?: number;
+  stopLongitude?: number;
+  stopAddress?: string;
   serviceArea?: string;
 }
 
@@ -168,6 +174,8 @@ export interface TaxiRoutePreview {
   routingPreference?: "TRAFFIC_AWARE" | "TRAFFIC_UNAWARE";
   durationSource?: "traffic_duration" | "static_duration";
   fallbackApplied?: boolean;
+  serviceArea?: "Abuja" | "Kano";
+  activeServiceAreas?: Array<"Abuja" | "Kano">;
   distanceMeters: number;
   distanceKm: number;
   durationSeconds: number;
@@ -264,7 +272,11 @@ export interface TaxiTrip {
   id: string;
   tripReference: string;
   pickupAddress: string;
+  pickupLatitude?: unknown;
+  pickupLongitude?: unknown;
   destinationAddress: string;
+  destinationLatitude?: unknown;
+  destinationLongitude?: unknown;
   estimatedDistanceKm?: unknown;
   estimatedDurationMin?: number | null;
   estimatedFareKobo: number;

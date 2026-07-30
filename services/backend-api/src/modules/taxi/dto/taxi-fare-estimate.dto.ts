@@ -39,6 +39,25 @@ export class TaxiFareEstimateDto {
   destinationLongitude?: number;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(240)
+  stopAddress?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  stopLatitude?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  stopLongitude?: number;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0.1)

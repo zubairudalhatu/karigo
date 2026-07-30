@@ -31,6 +31,6 @@ export class TaxiPlaceAutocompleteQueryDto {
   serviceArea?: string;
 
   @IsOptional()
-  @IsIn(["pickup", "destination"])
-  fieldType?: "pickup" | "destination";
+  @IsIn(["pickup", "destination", "stop"])
+  fieldType?: "pickup" | "destination" | "stop";
 }

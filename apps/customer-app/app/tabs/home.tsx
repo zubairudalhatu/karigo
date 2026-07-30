@@ -14,7 +14,10 @@ import { friendlyError } from "../../src/lib/errors";
 import { ridesControlledPilotEnabled } from "../../src/lib/rides-flags";
 
 const ridesPilotEnabled = ridesControlledPilotEnabled();
-const ridesServiceAreaLabel = process.env.EXPO_PUBLIC_RIDES_SERVICE_AREA_LABEL || "Abuja";
+const ridesServiceAreaLabel =
+  process.env.EXPO_PUBLIC_RIDES_SERVICE_AREAS_LABEL ||
+  process.env.EXPO_PUBLIC_RIDES_SERVICE_AREA_LABEL ||
+  "Kano and Abuja";
 
 const categories: {
   label: string;

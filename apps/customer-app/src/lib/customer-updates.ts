@@ -17,7 +17,6 @@ export type CustomerUpdateDiagnostics = {
   source: "embedded" | "downloaded OTA" | "unknown";
   apiHost: string;
   appEnvironment: string;
-  task206lMarker: string;
   updateAvailable: boolean;
   recentlyDownloaded: boolean;
   lastCheckResult: string;
@@ -112,7 +111,6 @@ export function getCustomerUpdateDiagnostics(): CustomerUpdateDiagnostics {
         : "unknown",
     apiHost: apiHostFromConfig(),
     appEnvironment: safeText(expoExtra.appEnvironment),
-    task206lMarker: safeText(expoExtra.task206lVerificationMarker),
     updateAvailable,
     recentlyDownloaded,
     lastCheckResult,

@@ -188,6 +188,7 @@ describe("TaxiService", () => {
         RIDES_PAYMENT_ENABLED: false,
         TAXI_SERVICE_ENABLED: true,
         TAXI_STAGING_DISPATCH_ENABLED: true,
+        RIDES_ACTIVE_SERVICE_AREAS: "Abuja,Kano",
         RIDE_PER_KM_KOBO: 40000,
         RIDE_CAPTAIN_COMMISSION_PERCENT: 10,
         RIDE_WAITING_CHARGE_KOBO_PER_MINUTE: 500,
@@ -532,13 +533,34 @@ describe("TaxiService", () => {
     ]));
   });
 
+  it("rejects cross-city Ride fare estimates", () => {
+    enableTaxiStaging();
+    expect(() => service.fareEstimate({
+      pickupAddress: "Gwarinpa, Abuja",
+      pickupLatitude: 9.0765,
+      pickupLongitude: 7.3986,
+      destinationAddress: "Tarauni, Kano",
+      destinationLatitude: 12.0022,
+      destinationLongitude: 8.592,
+      estimatedDistanceKm: 420,
+      estimatedDurationMin: 360
+    })).toThrow(BadRequestException);
+  });
+
   it("creates controlled-pilot Ride trips with a unique reference and hashed trip PIN", async () => {
     enableTaxiStaging();
     prisma.taxiTrip.findUnique.mockResolvedValue(null);
 
     const result = await service.createCustomerTrip("customer-user", {
       pickupAddress: "Tarauni, Kano",
+      pickupLatitude: 12.0022,
+      pickupLongitude: 8.592,
       destinationAddress: "Zoo Road, Kano",
+      destinationLatitude: 12.014,
+      destinationLongitude: 8.541,
+      stopAddress: "Bompai, Kano",
+      stopLatitude: 12.019,
+      stopLongitude: 8.56,
       estimatedDistanceKm: 6.5,
       estimatedDurationMin: 18,
       rideCategory: "COMFORT",
@@ -550,6 +572,7 @@ describe("TaxiService", () => {
 
     expect(createCall.data.tripReference).toMatch(/^KGO-TAXI-TRIP-2026-/);
     expect(createCall.data.customerNote).toContain("Ride category: COMFORT");
+    expect(createCall.data.customerNote).toContain("Stop: Bompai, Kano");
     expect(createCall.data.customerNote).toContain("Payment preference: CASH_ON_DELIVERY");
     expect(createCall.data.customerNote).toContain("Pickup instruction: Meet at the main gate");
     expect(result.tripPin).toMatch(/^\d{6}$/);
@@ -566,6 +589,22 @@ describe("TaxiService", () => {
         })
       })
     }));
+  });
+
+  it("rejects cross-city Ride trip creation before creating a trip", async () => {
+    enableTaxiStaging();
+    await expect(service.createCustomerTrip("customer-user", {
+      pickupAddress: "Gwarinpa, Abuja",
+      pickupLatitude: 9.0765,
+      pickupLongitude: 7.3986,
+      destinationAddress: "Tarauni, Kano",
+      destinationLatitude: 12.0022,
+      destinationLongitude: 8.592,
+      estimatedDistanceKm: 420,
+      estimatedDurationMin: 360,
+      rideCategory: "ECONOMY"
+    })).rejects.toThrow(BadRequestException);
+    expect(prisma.taxiTrip.create).not.toHaveBeenCalled();
   });
 
   it("returns only manually assigned active ride trips to approved available Captains", async () => {

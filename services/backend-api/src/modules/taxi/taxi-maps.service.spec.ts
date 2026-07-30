@@ -36,6 +36,7 @@ describe("TaxiMapsService", () => {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       const values: Record<string, unknown> = {
         GOOGLE_MAPS_SERVER_API_KEY: "fake-google-server-key",
+        RIDES_ACTIVE_SERVICE_AREAS: "Abuja,Kano",
         RIDES_ACTIVE_SERVICE_AREA: "Abuja"
       };
       return values[key] ?? fallback;
@@ -141,6 +142,8 @@ describe("TaxiMapsService", () => {
       routingPreference: "TRAFFIC_AWARE",
       durationSource: "traffic_duration",
       fallbackApplied: false,
+      serviceArea: "Abuja",
+      activeServiceAreas: ["Abuja", "Kano"],
       distanceMeters: 12450,
       distanceKm: 12.45,
       durationSeconds: 1820,
@@ -158,6 +161,43 @@ describe("TaxiMapsService", () => {
       units: "METRIC"
     });
     expect(requestBody).not.toHaveProperty("departureTime");
+  });
+
+  it("passes one routed stop as a Google intermediate waypoint", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => routePayload
+    });
+
+    await service.routePreview("customer-1", {
+      ...routeDto,
+      stopLatitude: 9.082,
+      stopLongitude: 7.45,
+      stopAddress: "Wuse 2, Abuja"
+    });
+
+    const requestBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(requestBody.intermediates).toEqual([{
+      location: { latLng: { latitude: 9.082, longitude: 7.45 } }
+    }]);
+  });
+
+  it("rejects cross-city route previews before reaching Google", async () => {
+    await expect(service.routePreview("customer-1", {
+      ...routeDto,
+      destinationLatitude: 12.0022,
+      destinationLongitude: 8.592,
+      destinationAddress: "Kano"
+    })).rejects.toThrow("Intercity KariGO Rides are not available yet.");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects stop text when no resolved stop coordinate is provided", async () => {
+    await expect(service.routePreview("customer-1", {
+      ...routeDto,
+      stopAddress: "Wuse 2, Abuja"
+    })).rejects.toThrow("Choose a valid stop location from search results or the map.");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("prepares departureTime only for valid future scheduled previews", () => {

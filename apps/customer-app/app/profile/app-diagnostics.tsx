@@ -64,7 +64,6 @@ export default function AppDiagnostics() {
 
       <Card>
         <Text style={ui.cardTitle}>App diagnostics</Text>
-        <Text style={styles.marker}>Task 206L OTA verification active</Text>
         <Text style={ui.muted}>Use this screen to confirm whether the installed app is running the embedded bundle or a downloaded OTA update.</Text>
       </Card>
 
@@ -107,7 +106,6 @@ export default function AppDiagnostics() {
 const styles = StyleSheet.create({
   actions: { gap: 10 },
   label: { color: brand.colors.muted, flex: 0.45, fontSize: 13, fontWeight: "800" },
-  marker: { alignSelf: "flex-start", backgroundColor: "#FEF2F2", borderRadius: 999, color: brand.colors.primaryDark, fontSize: 12, fontWeight: "900", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 6 },
   row: { alignItems: "flex-start", borderBottomColor: brand.colors.border, borderBottomWidth: 1, flexDirection: "row", gap: 12, paddingVertical: 9 },
   value: { color: brand.colors.charcoal, flex: 0.55, fontSize: 13, fontWeight: "800", lineHeight: 18 }
 });

@@ -30,6 +30,13 @@ import { TaxiFareEstimateDto } from "./dto/taxi-fare-estimate.dto";
 import { TaxiStartTripDto } from "./dto/taxi-start-trip.dto";
 import { TaxiApplicationStatusQueryDto } from "./dto/taxi-application-status-query.dto";
 import { UpdateTaxiWaitlistStatusDto } from "./dto/update-taxi-waitlist-status.dto";
+import {
+  activeRideServiceAreas,
+  assertSameActiveRideServiceArea,
+  INTERCITY_RIDES_UNAVAILABLE_MESSAGE,
+  rideCityFromText,
+  validRideCoordinate
+} from "./taxi-service-areas";
 
 const TAXI_APPLICATION_LIST_SELECT = {
   id: true,
@@ -913,6 +920,7 @@ export class TaxiService {
   }
 
   private calculateFare(dto: TaxiFareEstimateDto) {
+    this.assertFareServiceArea(dto);
     const distance = Number(dto.estimatedDistanceKm ?? 5);
     const duration = Math.round(Number(dto.estimatedDurationMin ?? Math.max(10, distance * 4)));
     const waitingMinutes = Math.max(0, Math.round(Number(dto.waitingMinutes ?? 0)));
@@ -982,6 +990,7 @@ export class TaxiService {
   private composeTripCustomerNote(dto: CreateTaxiTripDto) {
     return [
       dto.customerNote?.trim(),
+      dto.stopAddress?.trim() ? `Stop: ${dto.stopAddress.trim()}` : null,
       dto.rideCategory?.trim() ? `Ride category: ${dto.rideCategory.trim().toUpperCase()}` : null,
       dto.paymentMethod?.trim() ? `Payment preference: ${dto.paymentMethod.trim()}` : null,
       dto.scheduledPickupAt?.trim() ? `Scheduled pickup: ${dto.scheduledPickupAt.trim()}` : null,
@@ -992,7 +1001,7 @@ export class TaxiService {
   private ridePricingDefaults() {
     const vatTaxKobo = this.config.get<number>("RIDE_VAT_TAX_KOBO", 0);
     return {
-      launchCities: ["Kano", "Abuja"],
+      launchCities: activeRideServiceAreas(this.config).map((area) => area.city),
       perKmKobo: this.config.get<number>("RIDE_PER_KM_KOBO", 40000),
       karigoCommissionPercent: this.config.get<number>("RIDE_CAPTAIN_COMMISSION_PERCENT", 10),
       waitingChargeKoboPerMinute: this.config.get<number>("RIDE_WAITING_CHARGE_KOBO_PER_MINUTE", 500),
@@ -1009,6 +1018,37 @@ export class TaxiService {
 
   private decimalOrUndefined(value?: number) {
     return value === undefined || value === null ? undefined : new Prisma.Decimal(value);
+  }
+
+  private assertFareServiceArea(dto: TaxiFareEstimateDto) {
+    const pickupHasCoordinate = validRideCoordinate(dto.pickupLatitude, dto.pickupLongitude);
+    const destinationHasCoordinate = validRideCoordinate(dto.destinationLatitude, dto.destinationLongitude);
+    const stopHasCoordinate = validRideCoordinate(dto.stopLatitude, dto.stopLongitude);
+    const hasPartialStop = dto.stopLatitude !== undefined || dto.stopLongitude !== undefined || Boolean(dto.stopAddress?.trim());
+
+    if (pickupHasCoordinate && destinationHasCoordinate) {
+      assertSameActiveRideServiceArea(
+        this.config,
+        { latitude: dto.pickupLatitude!, longitude: dto.pickupLongitude! },
+        { latitude: dto.destinationLatitude!, longitude: dto.destinationLongitude! },
+        stopHasCoordinate ? { latitude: dto.stopLatitude!, longitude: dto.stopLongitude! } : null
+      );
+      return;
+    }
+
+    if (hasPartialStop && !stopHasCoordinate) {
+      throw new BadRequestException("Choose a valid stop location from search results or the map.");
+    }
+
+    const pickupCity = rideCityFromText(this.config, dto.pickupAddress);
+    const destinationCity = rideCityFromText(this.config, dto.destinationAddress);
+    const stopCity = rideCityFromText(this.config, dto.stopAddress);
+    if (pickupCity && destinationCity && pickupCity !== destinationCity) {
+      throw new BadRequestException(INTERCITY_RIDES_UNAVAILABLE_MESSAGE);
+    }
+    if (stopCity && pickupCity && stopCity !== pickupCity) {
+      throw new BadRequestException(INTERCITY_RIDES_UNAVAILABLE_MESSAGE);
+    }
   }
 
   private async requireCustomer(userId: string) {

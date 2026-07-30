@@ -3,6 +3,12 @@ import { ConfigService } from "@nestjs/config";
 import { TaxiPlaceAutocompleteQueryDto } from "./dto/taxi-place-autocomplete-query.dto";
 import { TaxiPlaceDetailsQueryDto } from "./dto/taxi-place-details-query.dto";
 import { TaxiRoutePreviewDto } from "./dto/taxi-route-preview.dto";
+import {
+  assertSameActiveRideServiceArea,
+  serviceAreaCenter,
+  serviceAreaMetadata,
+  validRideCoordinate
+} from "./taxi-service-areas";
 
 type LatLng = { latitude: number; longitude: number };
 
@@ -66,8 +72,6 @@ type GoogleFetchOptions = {
   timeoutMs?: number;
 };
 
-const ABUJA_CENTER = { latitude: 9.0765, longitude: 7.3986 };
-const KANO_CENTER = { latitude: 12.0022, longitude: 8.592 };
 const GOOGLE_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete";
 const GOOGLE_PLACE_DETAILS_BASE_URL = "https://places.googleapis.com/v1/places";
 const GOOGLE_ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
@@ -209,6 +213,13 @@ export class TaxiMapsService {
     this.assertRateLimit(userId, "routes-preview", 20, 60_000);
     this.assertCoordinate(dto.pickupLatitude, dto.pickupLongitude, "pickup");
     this.assertCoordinate(dto.destinationLatitude, dto.destinationLongitude, "destination");
+    const stop = this.optionalStopCoordinate(dto);
+    const serviceArea = assertSameActiveRideServiceArea(
+      this.config,
+      { latitude: dto.pickupLatitude, longitude: dto.pickupLongitude },
+      { latitude: dto.destinationLatitude, longitude: dto.destinationLongitude },
+      stop
+    );
 
     const straightLineMeters = this.distanceMeters(
       { latitude: dto.pickupLatitude, longitude: dto.pickupLongitude },
@@ -220,7 +231,7 @@ export class TaxiMapsService {
 
     const correlationId = this.correlationId();
     try {
-      return await this.computeRoute(dto, "TRAFFIC_AWARE", correlationId);
+      return await this.computeRoute(dto, "TRAFFIC_AWARE", correlationId, serviceArea.city);
     } catch (error) {
       if (!this.shouldRetryTrafficUnaware(error)) throw this.routeFailure(error);
 
@@ -234,7 +245,7 @@ export class TaxiMapsService {
       }));
 
       try {
-        return await this.computeRoute(dto, "TRAFFIC_UNAWARE", correlationId, true);
+        return await this.computeRoute(dto, "TRAFFIC_UNAWARE", correlationId, serviceArea.city, true);
       } catch (fallbackError) {
         throw this.routeFailure(fallbackError);
       }
@@ -245,8 +256,10 @@ export class TaxiMapsService {
     dto: TaxiRoutePreviewDto,
     routingPreference: GoogleRoutingPreference,
     correlationId: string,
+    serviceAreaCity: "Abuja" | "Kano",
     fallbackApplied = false
   ) {
+    const stop = this.optionalStopCoordinate(dto);
     const response = await this.googleFetch<GoogleRouteResponse>(GOOGLE_ROUTES_URL, {
       method: "POST",
       headers: {
@@ -256,6 +269,11 @@ export class TaxiMapsService {
       body: JSON.stringify({
         origin: { location: { latLng: { latitude: dto.pickupLatitude, longitude: dto.pickupLongitude } } },
         destination: { location: { latLng: { latitude: dto.destinationLatitude, longitude: dto.destinationLongitude } } },
+        ...(stop ? {
+          intermediates: [{
+            location: { latLng: { latitude: stop.latitude, longitude: stop.longitude } }
+          }]
+        } : {}),
         travelMode: "DRIVE",
         routingPreference,
         computeAlternativeRoutes: false,
@@ -311,6 +329,8 @@ export class TaxiMapsService {
       routingPreference,
       durationSource,
       fallbackApplied,
+      serviceArea: serviceAreaCity,
+      activeServiceAreas: serviceAreaMetadata(this.config).map((area) => area.city),
       distanceMeters,
       distanceKm: Number((distanceMeters / 1000).toFixed(2)),
       durationSeconds,
@@ -422,9 +442,16 @@ export class TaxiMapsService {
   }
 
   private serviceAreaCenter(serviceArea?: string): LatLng {
-    const normalized = serviceArea?.trim().toLowerCase() || this.config.get<string>("RIDES_ACTIVE_SERVICE_AREA", "Abuja").toLowerCase();
-    if (normalized.includes("kano")) return KANO_CENTER;
-    return ABUJA_CENTER;
+    return serviceAreaCenter(this.config, serviceArea);
+  }
+
+  private optionalStopCoordinate(dto: TaxiRoutePreviewDto) {
+    const hasStop = dto.stopLatitude !== undefined || dto.stopLongitude !== undefined || Boolean(dto.stopAddress?.trim());
+    if (!hasStop) return null;
+    if (!validRideCoordinate(dto.stopLatitude, dto.stopLongitude)) {
+      throw new BadRequestException("Choose a valid stop location from search results or the map.");
+    }
+    return { latitude: dto.stopLatitude!, longitude: dto.stopLongitude! };
   }
 
   private assertCoordinate(latitude: number, longitude: number, label: string) {

@@ -21,7 +21,7 @@ assert(appConfig.includes('owner: "zamkah"'), "Customer app must resolve to the 
 assert(appConfig.includes('const customerRuntimeVersion = "0.1.0"'), "Customer runtime must remain explicit for versionCode 13 OTA compatibility.");
 assert(appConfig.includes("runtimeVersion: customerRuntimeVersion"), "Customer app must not rely on implicit runtime policy for production OTA reliability.");
 assert(appConfig.includes("EXPO_PUBLIC_API_BASE_URL") && appConfig.includes("EXPO_PUBLIC_API_URL"), "Customer app config must support the approved API base env aliases.");
-assert(appConfig.includes("task206lVerificationMarker"), "Customer app config must expose the temporary Task 206L OTA marker.");
+assert(!appConfig.includes("task206lVerificationMarker"), "Customer app config must not expose the temporary Task 206L OTA marker after acceptance.");
 assert(appConfig.includes("GOOGLE_MAPS_ANDROID_API_KEY"), "Customer map builds must read the Android Maps SDK key from environment variables.");
 assert(packageJson.dependencies?.["react-native-maps"] === "1.20.1", "Customer app must include the Expo SDK 53-compatible react-native-maps package.");
 assert(
@@ -158,7 +158,11 @@ assert(taxiWaitlist.includes("verified Ride Captains, vehicle checks, fare contr
 assert(taxiWaitlist.includes("taxiApi.joinWaitlist"), "Customer ride waitlist must use the backend readiness endpoint.");
 const taxiRequest = read("app", "taxi", "request.tsx");
 assert(taxiRequest.includes("KariGO Rides"), "Customer app must include the KariGO Rides request screen.");
-assert(taxiRequest.includes("Live rides in ${rideServiceAreaLabel}"), "Ride request flow must show live-city availability copy.");
+assert(taxiRequest.includes("KariGO Rides in ${activeRideCity}"), "Ride request flow must use dynamic city-specific wording.");
+assert(taxiRequest.includes('Text style={styles.whereToText}>Where to?</Text>'), "Ride Home must use a single prominent Where to destination action.");
+assert(taxiRequest.includes("PanResponder.create"), "Ride Home must use a lightweight draggable bottom panel.");
+assert(taxiRequest.includes("panelState") && taxiRequest.includes("\"collapsed\"") && taxiRequest.includes("\"half\"") && taxiRequest.includes("\"expanded\""), "Ride bottom panel must support collapsed, half and expanded states.");
+assert(taxiRequest.includes("getForegroundPermissionsAsync"), "Ride Home must check existing foreground location permission before auto pickup.");
 assert(!taxiRequest.includes("Controlled pilot"), "Ride request flow must not expose repeated controlled-pilot copy.");
 assert(taxiRequest.includes("ridesControlledPilotEnabled"), "Ride request flow must be gated by the shared controlled-pilot flag helper.");
 assert(taxiRequest.includes("react-native-maps"), "Ride request flow must use the native-backed map provider.");
@@ -179,9 +183,13 @@ assert(taxiRequest.includes("rideStatusCopy"), "Ride tracking must use backend-d
 assert(taxiRequest.includes("Use current location as pickup"), "Ride request flow must expose current-location pickup selection.");
 assert(taxiRequest.includes("Saved places"), "Ride request flow must expose saved places.");
 assert(taxiRequest.includes("Recent destinations"), "Ride request flow must expose recent destination shortcuts.");
-assert(taxiRequest.includes("Route preview"), "Ride request flow must include a staged route preview.");
+assert(!taxiRequest.includes("title={loading ? \"Resolving route...\" : \"Preview route\"}"), "Ride Home must not require a separate Preview route button.");
+assert(!taxiRequest.includes("Show ride categories and fare"), "Ride Home must not require a separate Show fare action after route preview.");
 assert(taxiRequest.includes("Pickup on map") && taxiRequest.includes("Destination on map"), "Ride request flow must support choosing pickup/destination on the map.");
-assert(taxiRequest.includes("Choose pickup on map") && taxiRequest.includes("Choose destination on map"), "Ride request flow must provide a full-screen map picker.");
+assert(taxiRequest.includes("Choose pickup on map") && taxiRequest.includes("Choose destination on map") && taxiRequest.includes("Choose stop on map"), "Ride request flow must provide a full-screen map picker.");
+assert(taxiRequest.includes("stopLatitude") && taxiRequest.includes("stopLongitude") && taxiRequest.includes("stopAddress"), "Ride request flow must send a routed stop to backend route/fare endpoints.");
+assert(taxiRequest.includes("Intercity KariGO Rides are not available yet"), "Ride request flow must block cross-city trips locally before backend confirmation.");
+assert(taxiRequest.includes("Kano") && taxiRequest.includes("Abuja") && taxiRequest.includes("routeCityIssue"), "Ride request flow must support Kano and Abuja city detection.");
 assert(taxiRequest.includes("fareRange(category.fareRangeKobo)"), "Ride request flow must show fare ranges for categories.");
 assert(taxiRequest.includes("\\u20A6") && taxiRequest.includes("\\u2013"), "Ride request fares must use compact naira range formatting.");
 assert(taxiRequest.includes("taxiApi.rideCategories"), "Ride request flow must load backend ride categories.");
@@ -333,7 +341,8 @@ assert(profile.includes("/profile/app-diagnostics"), "Profile diagnostics hub it
 const appDiagnostics = read("app", "profile", "app-diagnostics.tsx");
 const customerUpdates = read("src", "lib", "customer-updates.ts");
 const updateGate = read("src", "components", "customer-ota-update-gate.tsx");
-assert(appDiagnostics.includes("Task 206L OTA verification active"), "Diagnostics screen must show the temporary Task 206L verification marker.");
+assert(!appDiagnostics.includes("Task 206L OTA verification active"), "Diagnostics screen must remove the temporary Task 206L verification marker.");
+assert(!customerUpdates.includes("task206lMarker"), "Customer update diagnostics must remove the temporary Task 206L marker field.");
 assert(appDiagnostics.includes("Check for app update"), "Diagnostics screen must expose a manual update check action.");
 assert(appDiagnostics.includes("Restart to apply downloaded update"), "Diagnostics screen must expose a controlled reload action.");
 assert(appDiagnostics.includes("API host"), "Diagnostics screen must show only the production API hostname.");
