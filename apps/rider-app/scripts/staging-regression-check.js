@@ -22,6 +22,8 @@ const applicationScreen = read("app/auth/apply.tsx");
 const forgotPasswordScreen = read("app/auth/forgot-password.tsx");
 const resetPasswordScreen = read("app/auth/reset-password.tsx");
 const applicantOnboardingApi = read("src/api/applicant-onboarding.api.ts");
+const captainAccessApi = read("src/api/captain-access.api.ts");
+const captainApplicationIntent = read("src/lib/captain-application-intent.ts");
 const dashboard = read("app/tabs/dashboard.tsx");
 const jobsIndex = read("app/jobs/index.tsx");
 const jobDetail = read("app/jobs/[id].tsx");
@@ -72,6 +74,7 @@ expect(apiClient.includes("createApiClient"), "Rider app must use the shared API
 expect(authContext.includes("canUseCaptainApp"), "Captain app must use an explicit account eligibility helper.");
 expect(authContext.includes('user.role === "RIDER" || user.role === "CUSTOMER"'), "Captain app must allow Customer accounts for onboarding/status and Rider accounts for approved operations.");
 expect(authContext.includes("cannot use the Captain app"), "Non-customer/non-captain rejection copy must use Captain branding.");
+expect(!authContext.includes("error.status === 401 || error.status === 403"), "Captain auth context must not clear saved sessions for ordinary forbidden responses.");
 expect(authContext.includes("authApi.logout") && authContext.includes("refreshTokenStore"), "Captain logout must clear persisted refresh sessions safely.");
 expect(authContext.includes("refreshWithBiometrics") && authContext.includes("authApi.refresh"), "Captain biometric sign-in must refresh a saved backend session.");
 expect(authContext.includes("setBiometricSignIn"), "Captain auth context must expose biometric setup controls.");
@@ -87,6 +90,7 @@ expect(applicationScreen.includes("Submit Captain application"), "Captain app mu
 expect(applicationScreen.includes("City (Kano or Abuja)") && applicationScreen.includes("State (Kano or FCT)"), "Captain application must guide applicants to Kano/Abuja launch locations.");
 expect(applicationScreen.includes("Create account and send OTP"), "Captain application must start with account creation and OTP for new applicants.");
 expect(applicationScreen.includes("This phone number already has a KariGO account. Sign in with your existing KariGO password to continue your Captain application."), "Captain application must guide existing Customer accounts to sign in instead of duplicating accounts.");
+expect(applicationScreen.includes("saveCaptainApplicationIntent") && captainApplicationIntent.includes("karigo_captain_application_intent"), "Captain app must preserve existing-account application intent across sign-in.");
 expect(applicationScreen.includes("You are signed in with your KariGO account. Complete your Captain application to start onboarding."), "Captain application must support signed-in Customer onboarding.");
 expect(applicationScreen.includes("Verify phone"), "Captain application must verify phone OTP before details.");
 expect(applicationScreen.includes("Create password"), "Captain application must require password creation before details.");
@@ -110,6 +114,7 @@ expect(rootLayout.includes("jobs/[id]"), "Job detail route must keep a configure
 expect(rootLayout.includes("taxi-readiness"), "Ride readiness route must be configured with back-only navigation.");
 expect(rootLayout.includes("auth/apply"), "Captain application route must be registered.");
 expect(rootLayout.includes("auth/forgot-password") && rootLayout.includes("auth/reset-password"), "Captain password reset routes must be registered.");
+expect(rootLayout.includes("captain-access"), "Captain access bootstrap route must be registered.");
 expect(rootLayout.includes("CaptainBottomNav"), "Root layout must mount the Captain bottom navigation.");
 expect(!rootLayout.includes("headerTintColor: brand.colors.primary"), "Rider headers should not use the older red default title styling.");
 
@@ -120,6 +125,7 @@ expect(ui.includes("heroTitle"), "Shared Rider UI must include stronger hero tit
 expect(riderNav.includes("Home") && riderNav.includes("Deliveries") && riderNav.includes("Earnings") && riderNav.includes("Profile"), "Captain bottom nav must expose Home, Deliveries, Earnings and Profile tabs.");
 expect(riderNav.includes("@expo/vector-icons") && riderNav.includes("Feather"), "Captain bottom nav must use proper icons.");
 expect(riderNav.includes("pathname.startsWith(\"/auth\")"), "Rider bottom nav must hide on auth screens.");
+expect(riderNav.includes("pathname.startsWith(\"/captain-access\")"), "Rider bottom nav must hide while access is being resolved.");
 expect(riderNav.includes("pathname.startsWith(\"/taxi-readiness\")"), "Captain bottom nav must hide on Ride readiness flow.");
 expect(captainModes.includes("DELIVERY_CAPTAIN") && captainModes.includes("DRIVER_CAPTAIN"), "Captain mode helper must define delivery and ride modes.");
 expect(captainModes.includes("Ride Captain"), "Captain mode helper must use Ride Captain display copy.");
@@ -128,10 +134,13 @@ expect(captainModes.includes("isTaxiStagingEnabled"), "Ride Captain mode must st
 expect(captainModes.includes("EXPO_PUBLIC_RIDES_SERVICE_ENABLED"), "Ride Captain mode helper must use the new Rides service flag.");
 expect(captainModes.includes("EXPO_PUBLIC_RIDES_CONTROLLED_PILOT_ENABLED"), "Ride Captain mode helper must use the new controlled-pilot flag.");
 expect(captainModes.includes("EXPO_PUBLIC_TAXI_SERVICE_ENABLED") && captainModes.includes("EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED"), "Ride Captain mode helper must preserve legacy Taxi flag aliases.");
-expect(captainModes.includes("Controlled pilot") && captainModes.includes("Review only"), "Ride Captain mode helper must use controlled-pilot public copy.");
+expect(captainModes.includes("Operations active") && captainModes.includes("Review only"), "Ride Captain mode helper must use live-ready public copy.");
 expect(appConfig.includes("karigo-icon.png") && appConfig.includes("karigo-adaptive-icon.png"), "Captain App config must use square icon and adaptive icon assets.");
+expect(captainAccessApi.includes("captain/access") && captainAccessApi.includes("operationalModes"), "Captain app must use the backend access resolver before dashboard operations.");
 expect(dashboard.includes("karigo-logo.png"), "Dashboard must use compact KariGO branding.");
 expect(dashboard.includes("Availability"), "Dashboard must show one clear availability section.");
+expect(dashboard.indexOf("captainAccessApi.resolve") < dashboard.indexOf("riderApi.profile"), "Dashboard must resolve Captain access before calling rider-only operational APIs.");
+expect(dashboard.includes("!access.operationalModes.includes(\"DELIVERY_CAPTAIN\")"), "Dashboard must skip delivery profile/jobs calls for unapproved applicants.");
 expect(dashboard.includes("Loading Captain status"), "Dashboard fallback copy must use Captain branding.");
 expect(dashboard.includes("Only active approved Delivery Captains"), "Dashboard approval copy must use Captain branding.");
 expect(dashboard.includes("Manage your delivery assignments and availability."), "Dashboard must include polished Captain-facing intro copy.");
@@ -178,7 +187,7 @@ expect(!jobDetail.includes('job.orderStatus === "DELIVERED" || job.orderStatus =
 expect(jobDetail.includes("value.replace(/\\D/g, \"\").slice(0, 6)"), "Delivery OTP entry must accept only six digits.");
 expect(jobDetail.includes("Complete delivery") && jobDetail.includes("Delivery completed successfully."), "Job detail must support OTP completion.");
 expect(!jobsIndex.includes("deliveryOtp") && !jobDetail.includes("ordersApi.deliveryOtp"), "Rider app must not retrieve or display the customer delivery OTP.");
-expect(taxiReadiness.includes("KariGO Rides controlled pilot"), "Ride operations screen must present controlled pilot mode when enabled.");
+expect(taxiReadiness.includes("KariGO Rides operations"), "Ride operations screen must present live-ready operations copy when enabled.");
 expect(taxiReadiness.includes("Ride operations will be available after KariGO approves your Captain account."), "Ride operations screen must block unapproved Captains with approved copy.");
 expect(taxiReadiness.includes("City required (Kano or Abuja)") && taxiReadiness.includes("State required (Kano or FCT)"), "Ride readiness must guide applicants to Kano/Abuja launch locations.");
 expect(taxiReadiness.includes("Apply for Ride review"), "Ride review screen must keep the application CTA.");
@@ -202,7 +211,7 @@ expect(taxiReadiness.includes("fare payment and payout automation remain disable
 expect(taxiReadiness.includes("taxiApi.updateAvailability"), "Ride review mode must support controlled availability updates.");
 expect(taxiReadiness.includes("taxiApi.availableTrips"), "Ride review mode must fetch controlled available trips.");
 expect(taxiReadiness.includes("Assigned ride trips"), "Ride operations must show assigned trips only.");
-expect(taxiReadiness.includes("KariGO Operations will assign controlled pilot ride requests manually"), "Ride operations empty state must explain manual assignment.");
+expect(taxiReadiness.includes("KariGO Operations will assign Ride requests when available."), "Ride operations empty state must explain Operations assignment.");
 expect(taxiReadiness.includes("Accept assigned ride"), "Ride operations must accept manually assigned rides only.");
 expect(taxiReadiness.includes("Start trip with PIN"), "Ride review mode must require customer PIN before trip start.");
 expect(taxiReadiness.includes("Complete trip"), "Ride review mode must support completion after destination arrival.");

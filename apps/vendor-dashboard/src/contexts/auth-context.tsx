@@ -17,7 +17,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function isAuthStatus(error: unknown): boolean {
-  return error instanceof KariGoApiError && (error.status === 401 || error.status === 403);
+  return error instanceof KariGoApiError && error.status === 401;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

@@ -104,3 +104,17 @@ export class RidersController {
     return { message: "Rider profile updated", data: await this.ridersService.update(user.id, dto) };
   }
 }
+
+@ApiTags("Captain Access")
+@ApiBearerAuth()
+@Controller("captain")
+@UseGuards(JwtAuthGuard)
+export class CaptainAccessController {
+  constructor(private readonly ridersService: RidersService) {}
+
+  @Get("access")
+  @ApiOperation({ summary: "Resolve safe Captain onboarding and operational access for the authenticated account" })
+  async access(@CurrentUser() user: AuthenticatedUser) {
+    return { message: "Captain access resolved", data: await this.ridersService.resolveCaptainAccess(user.id) };
+  }
+}

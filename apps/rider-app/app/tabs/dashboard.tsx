@@ -1,13 +1,11 @@
 import { Image, StyleSheet, Text, View } from "react-native";
 import { useEffect, useMemo, useState } from "react";
 import { brand } from "@karigo/config";
-import type { TaxiDriverApplicationStatus } from "@karigo/shared-types";
-import { deliveryCaptainApplicationsApi, DeliveryCaptainApplicationStatus } from "../../src/api/delivery-captain-applications.api";
+import { CaptainAccess, captainAccessApi } from "../../src/api/captain-access.api";
 import { riderApi, RiderProfile } from "../../src/api/rider.api";
 import { jobsApi, RiderJob } from "../../src/api/jobs.api";
 import { notificationsApi } from "../../src/api/notifications.api";
-import { taxiApi } from "../../src/api/taxi.api";
-import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
+import { Button, Card, Loading, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 import { requestCaptainForegroundLocation } from "../../src/lib/location";
@@ -50,42 +48,52 @@ function statusChipStyle(profile?: RiderProfile | null) {
   return [styles.statusChip, styles.statusChipOffline];
 }
 
+function hasDeliveryApplication(status: CaptainAccess["deliveryCaptainApplication"] | null): status is Extract<CaptainAccess["deliveryCaptainApplication"], { exists: true }> {
+  return status?.exists === true;
+}
+
+function hasRideApplication(status: CaptainAccess["rideCaptainApplication"] | null): status is Extract<CaptainAccess["rideCaptainApplication"], { exists: true }> {
+  return status?.exists === true;
+}
+
 export default function RiderDashboard() {
   const { user } = useAuth();
+  const [captainAccess, setCaptainAccess] = useState<CaptainAccess | null>(null);
   const [profile, setProfile] = useState<RiderProfile | null>(null);
   const [jobs, setJobs] = useState<RiderJob[]>([]);
   const [unread, setUnread] = useState(0);
-  const [onboardingStatus, setOnboardingStatus] = useState<DeliveryCaptainApplicationStatus | null>(null);
-  const [rideOnboardingStatus, setRideOnboardingStatus] = useState<(TaxiDriverApplicationStatus & { exists?: boolean; nextStep?: string }) | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [onboardingStatus, setOnboardingStatus] = useState<CaptainAccess["deliveryCaptainApplication"] | null>(null);
+  const [rideOnboardingStatus, setRideOnboardingStatus] = useState<CaptainAccess["rideCaptainApplication"] | null>(null);
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   async function load() {
     setLoading(true);
     try {
+      const access = await captainAccessApi.resolve();
+      setCaptainAccess(access);
+      setOnboardingStatus(access.deliveryCaptainApplication);
+      setRideOnboardingStatus(access.rideCaptainApplication);
+
+      if (!access.operationalModes.includes("DELIVERY_CAPTAIN")) {
+        setProfile(null);
+        setJobs([]);
+        setUnread(0);
+        setError("");
+        return;
+      }
+
       const [p, j, n] = await Promise.all([riderApi.profile(), jobsApi.list(), notificationsApi.unreadCount()]);
       setProfile(p);
       setJobs(j);
       setUnread(n.count);
-      setOnboardingStatus(null);
-      setRideOnboardingStatus(null);
       setError("");
     } catch (e) {
-      const [deliveryStatus, rideStatus] = await Promise.allSettled([
-        deliveryCaptainApplicationsApi.statusForCurrentUser(),
-        taxiApi.currentUserApplicationStatus()
-      ]);
-      if (deliveryStatus.status === "rejected" && rideStatus.status === "rejected") {
-        setError(friendlyError(e));
-      } else {
-        setProfile(null);
-        setJobs([]);
-        setUnread(0);
-        setOnboardingStatus(deliveryStatus.status === "fulfilled" ? deliveryStatus.value : null);
-        setRideOnboardingStatus(rideStatus.status === "fulfilled" ? rideStatus.value : null);
-        setError("");
-      }
+      setError(friendlyError(e));
+      setProfile(null);
+      setJobs([]);
+      setUnread(0);
     } finally {
       setLoading(false);
     }
@@ -124,12 +132,21 @@ export default function RiderDashboard() {
   }
 
   const canToggle = !!profile && profile.verificationStatus === "ACTIVE" && profile.availabilityStatus !== "BUSY";
-  const onboardingCopy = onboardingStatus?.exists && onboardingStatus.status !== "REJECTED"
+  const deliveryApplicationExists = hasDeliveryApplication(onboardingStatus);
+  const rideApplicationExists = hasRideApplication(rideOnboardingStatus);
+  const onboardingCopy = deliveryApplicationExists && onboardingStatus.status !== "REJECTED"
     ? "Your Captain application is under review. KariGO will notify you after approval."
     : onboardingStatus?.message;
-  const rideOnboardingCopy = rideOnboardingStatus?.exists && rideOnboardingStatus.status !== "REJECTED"
-    ? "Your Ride Captain application is under review. KariGO Rides assignments remain controlled by Operations after approval."
+  const rideOnboardingCopy = rideApplicationExists && rideOnboardingStatus.status !== "REJECTED"
+    ? "Your Ride Captain application is under review. KariGO Rides access becomes available after approval and Operations activation."
     : rideOnboardingStatus?.message;
+  const hasAnyApplication = deliveryApplicationExists || rideApplicationExists;
+  const hasDeliveryAccess = captainAccess?.operationalModes.includes("DELIVERY_CAPTAIN");
+  const hasRideAccess = captainAccess?.operationalModes.includes("RIDE_CAPTAIN");
+
+  if (loading && !captainAccess) {
+    return <Protected><Loading label="Preparing your KariGO Captain access..." /></Protected>;
+  }
 
   return (
     <Protected><Screen refreshing={loading} onRefresh={load}>
@@ -139,26 +156,38 @@ export default function RiderDashboard() {
           <View style={statusChipStyle(profile)}><Text style={styles.statusChipText}>{availabilityLabel(profile)}</Text></View>
         </View>
         <Text style={styles.kicker}>KariGO Captain</Text>
-        <Text style={styles.title}>Hi, {firstName(profile?.user?.fullName ?? user?.fullName)}</Text>
-        <Text style={styles.heroCopy}>Manage your delivery assignments and availability.</Text>
+        <Text style={styles.title}>Hi, {firstName(profile?.user?.fullName ?? captainAccess?.account.fullName ?? user?.fullName)}</Text>
+        <Text style={styles.heroCopy}>{hasDeliveryAccess ? "Manage your delivery assignments and availability." : "Track your Captain onboarding and approved access."}</Text>
       </View>
       <Message>{message}</Message>
       <Message error>{error}</Message>
 
       {!profile && onboardingStatus ? <Card>
         <Text style={ui.title}>Captain onboarding</Text>
-        {onboardingStatus.exists ? <StatusBadge status={onboardingStatus.status} /> : null}
+        {deliveryApplicationExists ? <StatusBadge status={onboardingStatus.status} /> : null}
         <Text style={ui.muted}>{onboardingCopy}</Text>
         <Text style={ui.muted}>Captain operations will be available after KariGO approves your application.</Text>
-        <NavLink href="/auth/apply" label={onboardingStatus.exists ? "Open Captain application" : "Start Captain application"} />
+        <NavLink href="/auth/apply" label={deliveryApplicationExists ? "Open Captain application" : "Start Captain application"} />
       </Card> : null}
 
       {!profile && rideOnboardingStatus ? <Card>
         <Text style={ui.title}>Ride Captain onboarding</Text>
-        {rideOnboardingStatus.exists ? <StatusBadge status={rideOnboardingStatus.status} /> : null}
+        {rideApplicationExists ? <StatusBadge status={rideOnboardingStatus.status} /> : null}
         <Text style={ui.muted}>{rideOnboardingCopy}</Text>
-        <Text style={ui.muted}>KariGO Rides stays manual-assignment only during controlled pilot.</Text>
-        <NavLink href="/auth/apply" label={rideOnboardingStatus.exists ? "Open Ride Captain application" : "Start Ride Captain application"} />
+        <Text style={ui.muted}>Ride operations are activated by KariGO Operations after approval.</Text>
+        <NavLink href="/auth/apply" label={rideApplicationExists ? "Open Ride Captain application" : "Start Ride Captain application"} />
+      </Card> : null}
+
+      {!profile && hasRideAccess ? <Card>
+        <Text style={ui.title}>Ride operations</Text>
+        <Text style={ui.muted}>Your Ride Captain access is active. Open Ride operations to view assigned Ride requests when Operations activates them.</Text>
+        <NavLink href="/taxi-readiness" label="Open Ride operations" />
+      </Card> : null}
+
+      {!profile && !hasAnyApplication ? <Card>
+        <Text style={ui.title}>Start Captain onboarding</Text>
+        <Text style={ui.muted}>Use your existing KariGO account to apply as a Delivery Captain, Ride Captain, or both.</Text>
+        <NavLink href="/auth/apply" label="Start Captain application" />
       </Card> : null}
 
       {profile ? <>

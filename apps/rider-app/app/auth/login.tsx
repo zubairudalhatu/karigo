@@ -18,7 +18,7 @@ export default function CaptainLogin() {
     setBusy(true); setError("");
     try {
       await login({ phoneNumber, password });
-      router.replace("/tabs/dashboard");
+      router.replace("/captain-access");
     } catch (e) {
       setError(friendlyError(e, "login"));
     } finally {
@@ -31,7 +31,7 @@ export default function CaptainLogin() {
     setError("");
     try {
       await refreshWithBiometrics();
-      router.replace("/tabs/dashboard");
+      router.replace("/captain-access");
     } catch (e) {
       setError(friendlyError(e, "login"));
     } finally {
@@ -40,7 +40,7 @@ export default function CaptainLogin() {
   }
 
   if (loading) return <Loading label="Restoring Captain session..." />;
-  if (user) return <Redirect href="/tabs/dashboard" />;
+  if (user) return <Redirect href="/captain-access" />;
 
   return (
     <Screen>

@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { brand } from "@karigo/config";
+import { CaptainAccess, captainAccessApi } from "../src/api/captain-access.api";
 import { riderApi, RiderProfile } from "../src/api/rider.api";
 import { Button, Card, Field, Loading, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
 import { useAuth } from "../src/contexts/auth-context";
@@ -16,6 +17,7 @@ function initials(name?: string | null) {
 
 export default function Profile() {
   const { biometricAvailable, biometricEnabled, logout, setBiometricSignIn } = useAuth();
+  const [captainAccess, setCaptainAccess] = useState<CaptainAccess | null>(null);
   const [profile, setProfile] = useState<RiderProfile | null>(null);
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
@@ -24,20 +26,33 @@ export default function Profile() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [biometricBusy, setBiometricBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    riderApi.profile()
-      .then((p) => {
+    async function load() {
+      try {
+        const access = await captainAccessApi.resolve();
+        setCaptainAccess(access);
+        if (!access.operationalModes.includes("DELIVERY_CAPTAIN")) {
+          setError("");
+          return;
+        }
+        const p = await riderApi.profile();
         setProfile(p);
         setLat(String(p.currentLatitude ?? ""));
         setLng(String(p.currentLongitude ?? ""));
         setPhotoUrl(p.photoUrl ?? "");
         setPreferredAreas((p.preferredServiceAreas ?? []).join(", "));
-      })
-      .catch((e) => setError(friendlyError(e)));
+      } catch (e) {
+        setError(friendlyError(e));
+      } finally {
+        setLoading(false);
+      }
+    }
+    void load();
   }, []);
 
-  if (!profile && !error) return <Loading />;
+  if (loading) return <Loading label="Preparing Captain profile..." />;
 
   async function saveProfile() {
     if (!profile) return;
@@ -113,7 +128,38 @@ export default function Profile() {
     }
   }
 
-  return <Protected><Screen title="Captain Profile" subtitle="Manage your Captain record, vehicle details and live location."><Message error>{error}</Message><Message>{message}</Message>{profile ? <>
+  return <Protected><Screen title="Captain Profile" subtitle={profile ? "Manage your Captain record, vehicle details and live location." : "Manage your Captain account and onboarding status."}><Message error>{error}</Message><Message>{message}</Message>{!profile && captainAccess ? <>
+    <Card tone="soft">
+      <View style={styles.headerRow}>
+        {captainAccess.account.profilePhotoUrl ? <Image source={{ uri: captainAccess.account.profilePhotoUrl }} style={styles.avatarImage} /> : <View style={styles.avatar}><Text style={styles.avatarText}>{initials(captainAccess.account.fullName).toUpperCase()}</Text></View>}
+        <View style={styles.headerText}>
+          <Text style={ui.heroTitle}>{captainAccess.account.fullName}</Text>
+          <Text style={ui.muted}>{captainAccess.account.phoneNumber}</Text>
+          {captainAccess.account.email ? <Text style={ui.muted}>{captainAccess.account.email}</Text> : null}
+        </View>
+      </View>
+      <Text style={ui.pageIntro}>Captain operations become available after KariGO approves the relevant Captain mode.</Text>
+    </Card>
+    <Card>
+      <Text style={ui.sectionTitle}>Application status</Text>
+      {captainAccess.deliveryCaptainApplication.exists ? <StatusBadge status={captainAccess.deliveryCaptainApplication.status} /> : null}
+      <Text style={ui.muted}>{captainAccess.deliveryCaptainApplication.message}</Text>
+      {captainAccess.rideCaptainApplication.exists ? <StatusBadge status={captainAccess.rideCaptainApplication.status} /> : null}
+      <Text style={ui.muted}>{captainAccess.rideCaptainApplication.message}</Text>
+      <NavLink href="/auth/apply" label="Open Captain application" />
+    </Card>
+    <Card>
+      <Text style={ui.sectionTitle}>Privacy and security</Text>
+      <Text style={ui.muted}>Biometric sign-in refreshes a saved backend session after device fingerprint or face unlock. Password sign-in is required if the saved session is missing or revoked.</Text>
+      <Text style={ui.muted}>Device support: {biometricAvailable ? "Available" : "Set up biometrics in your phone settings first."}</Text>
+      <Button title={biometricBusy ? "Updating..." : biometricEnabled ? "Disable biometric sign-in" : "Enable biometric sign-in"} tone="muted" onPress={toggleBiometricSignIn} disabled={biometricBusy || (!biometricAvailable && !biometricEnabled)} />
+      <View style={styles.legalLinks}>
+        <NavLink href="/legal/privacy" label="Privacy Policy" />
+        <NavLink href="/legal/terms" label="Terms" />
+      </View>
+    </Card>
+    <Button tone="muted" title="Log out" onPress={async () => { await logout(); router.replace("/auth/login"); }} />
+  </> : null}{profile ? <>
     <Card tone="soft">
       <View style={styles.headerRow}>
         {profile.photoUrl ? <Image source={{ uri: profile.photoUrl }} style={styles.avatarImage} /> : <View style={styles.avatar}><Text style={styles.avatarText}>{initials(profile.user?.fullName).toUpperCase()}</Text></View>}

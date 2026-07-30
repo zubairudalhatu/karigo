@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { brand } from "@karigo/config";
+import { captainAccessApi } from "../src/api/captain-access.api";
 import { earningsApi, EarningsSummary } from "../src/api/earnings.api";
 import { Card, Empty, Message, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
 import { friendlyError, money } from "../src/lib/errors";
@@ -13,6 +14,12 @@ export default function Earnings() {
   async function load() {
     setLoading(true);
     try {
+      const access = await captainAccessApi.resolve();
+      if (!access.operationalModes.includes("DELIVERY_CAPTAIN")) {
+        setData(null);
+        setError("Delivery earnings will be available after KariGO approves your Delivery Captain access.");
+        return;
+      }
       setData(await earningsApi.summary());
       setError("");
     } catch (e) {

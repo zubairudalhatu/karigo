@@ -14,7 +14,8 @@ export function requireCollection<T>(value: unknown, label: string): T[] {
 
 export function collectionLoadError(error: unknown, label: string) {
   if (error instanceof KariGoApiError) {
-    if (error.status === 401 || error.status === 403) return "Your session has expired. Please sign in again.";
+    if (error.status === 401) return "Your session has expired. Please sign in again.";
+    if (error.status === 403) return error.message || `You do not have access to ${label}.`;
     if (error.errorCode === "ADMIN_COLLECTION_INVALID_SHAPE") return error.message;
   }
   return `We could not load ${label}. Please retry.`;

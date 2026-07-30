@@ -16,7 +16,7 @@ export function CaptainBottomNav() {
   const { user } = useAuth();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const hidden = !user || pathname === "/" || pathname.startsWith("/auth") || pathname.startsWith("/taxi-readiness");
+  const hidden = !user || pathname === "/" || pathname.startsWith("/auth") || pathname.startsWith("/captain-access") || pathname.startsWith("/taxi-readiness");
   if (hidden) return null;
 
   return <View style={[styles.nav, { paddingBottom: Math.max(insets.bottom, 8) }]}>

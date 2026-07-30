@@ -263,6 +263,6 @@ export async function handleBffRequest(request: NextRequest, pathParts: string[]
   });
   if (refreshed?.accessToken) setSessionCookies(response, refreshed.accessToken, refreshed.refreshToken);
   if (accessFromPayload) setSessionCookies(response, accessFromPayload, refreshFromPayload);
-  if (path === "auth/logout" || backendResponse.status === 401 || backendResponse.status === 403) clearSessionCookies(response);
+  if (path === "auth/logout" || backendResponse.status === 401) clearSessionCookies(response);
   return response;
 }

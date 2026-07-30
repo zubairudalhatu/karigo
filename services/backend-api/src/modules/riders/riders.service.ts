@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { AccountStatus, DeliveryCaptainApplicationStatus, Prisma, RiderStatus, UserRole } from "@prisma/client";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { AccountStatus, DeliveryCaptainApplicationStatus, Prisma, RiderStatus, TaxiApplicationStatus, TaxiDriverProfileStatus, UserRole } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
@@ -54,6 +54,43 @@ const DELIVERY_CAPTAIN_APPLICATION_SELECT = {
   documents: { orderBy: { uploadedAt: "desc" } }
 } satisfies Prisma.DeliveryCaptainApplicationSelect;
 
+const RIDE_CAPTAIN_APPLICATION_SELECT = {
+  id: true,
+  applicationReference: true,
+  applicantUserId: true,
+  fullName: true,
+  phoneNumber: true,
+  email: true,
+  city: true,
+  state: true,
+  status: true,
+  applicantVisibleNote: true,
+  reviewedAt: true,
+  createdAt: true,
+  updatedAt: true
+} satisfies Prisma.TaxiDriverApplicationSelect;
+
+const RIDE_CAPTAIN_PROFILE_SELECT = {
+  id: true,
+  userId: true,
+  applicationId: true,
+  fullName: true,
+  phoneNumber: true,
+  city: true,
+  state: true,
+  vehicleMake: true,
+  vehicleModel: true,
+  vehicleYear: true,
+  vehicleColour: true,
+  vehiclePlateNumber: true,
+  vehicleType: true,
+  status: true,
+  isAvailableForTaxi: true,
+  lastSeenAt: true,
+  createdAt: true,
+  updatedAt: true
+} satisfies Prisma.TaxiDriverProfileSelect;
+
 @Injectable()
 export class RidersService {
   constructor(
@@ -93,6 +130,157 @@ export class RidersService {
         documents: true
       }
     });
+  }
+
+  async resolveCaptainAccess(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        fullName: true,
+        phoneNumber: true,
+        email: true,
+        role: true,
+        accountStatus: true,
+        phoneVerified: true,
+        profilePhotoUrl: true,
+        deletedAt: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+    if (!user || user.deletedAt) throw new NotFoundException("KariGO account not found");
+    if (user.role !== UserRole.CUSTOMER && user.role !== UserRole.RIDER) {
+      throw new ForbiddenException("This KariGO account cannot use Captain onboarding.");
+    }
+
+    const [deliveryProfile, deliveryApplication, rideProfile, rideApplication] = await Promise.all([
+      this.prisma.rider.findUnique({
+        where: { userId: user.id },
+        select: {
+          id: true,
+          riderCode: true,
+          verificationStatus: true,
+          availabilityStatus: true,
+          totalDeliveries: true,
+          deletedAt: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      }),
+      this.prisma.deliveryCaptainApplication.findFirst({
+        where: {
+          OR: [
+            { applicantUserId: user.id },
+            { phoneNumber: user.phoneNumber }
+          ]
+        },
+        select: DELIVERY_CAPTAIN_APPLICATION_SELECT,
+        orderBy: { createdAt: "desc" }
+      }),
+      this.prisma.taxiDriverProfile.findUnique({
+        where: { userId: user.id },
+        select: RIDE_CAPTAIN_PROFILE_SELECT
+      }),
+      this.prisma.taxiDriverApplication.findFirst({
+        where: {
+          OR: [
+            { applicantUserId: user.id },
+            { phoneNumber: user.phoneNumber }
+          ]
+        },
+        select: RIDE_CAPTAIN_APPLICATION_SELECT,
+        orderBy: { createdAt: "desc" }
+      })
+    ]);
+
+    const deliveryOperational = Boolean(
+      deliveryProfile &&
+      !deliveryProfile.deletedAt &&
+      user.accountStatus === AccountStatus.ACTIVE &&
+      deliveryProfile.verificationStatus === RiderStatus.ACTIVE
+    );
+    const rideOperational = Boolean(
+      rideProfile &&
+      user.accountStatus === AccountStatus.ACTIVE &&
+      rideProfile.status === TaxiDriverProfileStatus.ACTIVE_TEST
+    );
+    const operationalModes = [
+      deliveryOperational ? "DELIVERY_CAPTAIN" : null,
+      rideOperational ? "RIDE_CAPTAIN" : null
+    ].filter((mode): mode is string => Boolean(mode));
+
+    const hasApplication = Boolean(deliveryApplication || rideApplication);
+    const nextStep = operationalModes.length
+      ? "OPEN_DASHBOARD"
+      : hasApplication
+        ? "APPLICATION_STATUS"
+        : "START_APPLICATION";
+    const nextRoute = nextStep === "START_APPLICATION" ? "/auth/apply" : "/tabs/dashboard";
+
+    return {
+      account: {
+        id: user.id,
+        fullName: user.fullName,
+        phoneNumber: user.phoneNumber,
+        email: user.email,
+        role: user.role,
+        accountStatus: user.accountStatus,
+        phoneVerified: user.phoneVerified,
+        profilePhotoUrl: user.profilePhotoUrl
+      },
+      supportedOnboardingModes: ["DELIVERY_CAPTAIN", "RIDE_CAPTAIN"],
+      deliveryCaptainApplication: deliveryApplication
+        ? { exists: true, ...this.toPublicDeliveryCaptainApplicationStatus(deliveryApplication) }
+        : {
+          exists: false,
+          nextStep: "SUBMIT_APPLICATION",
+          message: "Complete your Delivery Captain application to start onboarding."
+        },
+      rideCaptainApplication: rideApplication
+        ? { exists: true, ...this.toPublicRideCaptainApplicationStatus(rideApplication) }
+        : {
+          exists: false,
+          nextStep: "SUBMIT_APPLICATION",
+          message: "Complete your Ride Captain application when you want KariGO Rides access reviewed."
+        },
+      deliveryCaptainProfile: deliveryProfile ? {
+        id: deliveryProfile.id,
+        riderCode: deliveryProfile.riderCode,
+        verificationStatus: deliveryProfile.verificationStatus,
+        availabilityStatus: deliveryProfile.availabilityStatus,
+        totalDeliveries: deliveryProfile.totalDeliveries,
+        operationalAccess: deliveryOperational,
+        createdAt: deliveryProfile.createdAt.toISOString(),
+        updatedAt: deliveryProfile.updatedAt.toISOString()
+      } : null,
+      rideCaptainProfile: rideProfile ? {
+        id: rideProfile.id,
+        applicationId: rideProfile.applicationId,
+        fullName: rideProfile.fullName,
+        phoneNumber: rideProfile.phoneNumber,
+        city: rideProfile.city,
+        state: rideProfile.state,
+        vehicle: [rideProfile.vehicleMake, rideProfile.vehicleModel, rideProfile.vehicleYear].filter(Boolean).join(" ") || null,
+        vehicleColour: rideProfile.vehicleColour,
+        vehiclePlateNumber: rideProfile.vehiclePlateNumber,
+        vehicleType: rideProfile.vehicleType,
+        status: rideProfile.status,
+        isAvailableForTaxi: rideProfile.isAvailableForTaxi,
+        operationalAccess: rideOperational,
+        lastSeenAt: rideProfile.lastSeenAt?.toISOString() ?? null,
+        createdAt: rideProfile.createdAt.toISOString(),
+        updatedAt: rideProfile.updatedAt.toISOString()
+      } : null,
+      operationalModes,
+      nextStep,
+      nextRoute,
+      message: operationalModes.length
+        ? "Captain access ready."
+        : hasApplication
+          ? "Your Captain application status is ready."
+          : "Start or continue your KariGO Captain application."
+    };
   }
 
   async createDeliveryCaptainApplication(dto: CreateDeliveryCaptainApplicationDto) {
@@ -339,6 +527,23 @@ export class RidersService {
     };
   }
 
+  private toPublicRideCaptainApplicationStatus(application: Prisma.TaxiDriverApplicationGetPayload<{ select: typeof RIDE_CAPTAIN_APPLICATION_SELECT }>) {
+    return {
+      applicationReference: application.applicationReference,
+      fullName: application.fullName,
+      phoneNumber: application.phoneNumber,
+      status: application.status,
+      applicantVisibleNote: application.applicantVisibleNote,
+      message: this.rideCaptainStatusMessage(application.status, application.applicantVisibleNote),
+      submittedAt: application.createdAt.toISOString(),
+      reviewedAt: application.reviewedAt?.toISOString() ?? null,
+      readinessOnly: true,
+      pilotCity: application.city,
+      launchCities: ["Kano", "Abuja"],
+      operationalAccess: false
+    };
+  }
+
   private toAdminDeliveryCaptainApplication(application: Prisma.DeliveryCaptainApplicationGetPayload<{ select: typeof DELIVERY_CAPTAIN_APPLICATION_SELECT }>) {
     return {
       ...application,
@@ -374,6 +579,19 @@ export class RidersService {
       PROVISIONALLY_APPROVED: "Your application is provisionally approved. Final verification is still required before onboarding.",
       APPROVED: "Your application has been approved. Your linked Captain account can be activated for approved login; dispatch and payouts remain controlled by KariGO.",
       REJECTED: "Your Delivery Captain application was not approved at this time."
+    };
+    return messages[status];
+  }
+
+  private rideCaptainStatusMessage(status: TaxiApplicationStatus, note?: string | null) {
+    if (note) return note;
+    const messages: Record<TaxiApplicationStatus, string> = {
+      SUBMITTED: "Your Ride Captain application has been submitted for review.",
+      UNDER_REVIEW: "Your Ride Captain application is under review.",
+      CHANGES_REQUESTED: "KariGO needs more information before continuing your Ride Captain review.",
+      PROVISIONALLY_APPROVED: "Your Ride Captain application is provisionally approved. Ride operations are activated by KariGO Operations.",
+      APPROVED: "Your Ride Captain application is approved. Ride operations are activated by KariGO Operations.",
+      REJECTED: "Your Ride Captain application was not approved at this time."
     };
     return messages[status];
   }

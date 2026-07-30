@@ -23,9 +23,10 @@ export function friendlyError(error: unknown, context: ErrorContext = "dashboard
       return "KariGO services are temporarily unavailable. Please try again shortly.";
     }
 
-    if (error.status === 401 || error.status === 403) {
+    if (error.status === 401) {
       return "Your session has expired. Please sign in again.";
     }
+    if (error.status === 403) return error.message || "You do not have access to this action.";
 
     if (context === "form") {
       return error.status && error.status >= 500

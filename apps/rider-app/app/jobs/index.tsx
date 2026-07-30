@@ -1,6 +1,7 @@
 import { Link } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Text } from "react-native";
+import { captainAccessApi } from "../../src/api/captain-access.api";
 import { jobsApi, RiderJob } from "../../src/api/jobs.api";
 import { Card, Empty, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError, money } from "../../src/lib/errors";
@@ -13,6 +14,12 @@ export default function Jobs() {
   async function load() {
     setLoading(true);
     try {
+      const access = await captainAccessApi.resolve();
+      if (!access.operationalModes.includes("DELIVERY_CAPTAIN")) {
+        setJobs([]);
+        setError("Delivery assignments will be available after KariGO approves your Delivery Captain access.");
+        return;
+      }
       setJobs(await jobsApi.list());
       setError("");
     } catch (e) {

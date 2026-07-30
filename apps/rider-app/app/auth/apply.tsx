@@ -14,6 +14,7 @@ import {
 import { taxiApi } from "../../src/api/taxi.api";
 import { Button, Card, Field, Message, PasswordField, Screen, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
+import { clearCaptainApplicationIntent, loadCaptainApplicationIntent, saveCaptainApplicationIntent } from "../../src/lib/captain-application-intent";
 import { friendlyError } from "../../src/lib/errors";
 import { normalizeNigerianPhoneNumber } from "../../src/lib/phone";
 
@@ -132,12 +133,15 @@ export default function CaptainApplication() {
 
   useEffect(() => {
     if (!user) return;
-    setForm((current) => ({
-      ...current,
-      fullName: user.fullName || current.fullName || "",
-      phoneNumber: user.phoneNumber || current.phoneNumber || "",
-      email: user.email || current.email || ""
-    }));
+    void loadCaptainApplicationIntent().then((intent) => {
+      setForm((current) => ({
+        ...current,
+        ...(intent ?? {}),
+        fullName: user.fullName || current.fullName || "",
+        phoneNumber: user.phoneNumber || current.phoneNumber || "",
+        email: user.email || current.email || ""
+      }));
+    });
     setStep("APPLICATION");
     setSuccess("You are signed in with your KariGO account. Complete your Captain application to start onboarding.");
   }, [user]);
@@ -172,6 +176,16 @@ export default function CaptainApplication() {
         phoneNumber: normalizeNigerianPhoneNumber(form.phoneNumber),
         email: form.email || undefined
       });
+      if (result.nextStep === "SIGN_IN_REQUIRED") {
+        await saveCaptainApplicationIntent({
+          deliveryCaptainInterest: form.deliveryCaptainInterest,
+          rideCaptainReviewInterest: form.rideCaptainReviewInterest,
+          city: form.city,
+          state: form.state,
+          address: form.address,
+          preferredZone: form.preferredZone
+        });
+      }
       applyAccountResult(result);
     } catch (err) {
       setError(friendlyError(err));
@@ -316,6 +330,7 @@ export default function CaptainApplication() {
       }
 
       setSuccess(`Your ${selectedModes} application has been submitted. KariGO will review your details and contact you with the next steps.`);
+      await clearCaptainApplicationIntent();
       setForm(user ? { ...initialForm, fullName: user.fullName ?? "", phoneNumber: user.phoneNumber ?? "", email: user.email ?? "" } : initialForm);
       setStep(user ? "APPLICATION" : "ACCOUNT");
     } catch (err) {
@@ -355,7 +370,7 @@ export default function CaptainApplication() {
     <Card tone="soft">
       <Image source={require("../../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
       <Text style={ui.sectionTitle}>Account-first Captain onboarding</Text>
-      <Text style={ui.pageIntro}>The same verified account is used after approval. Delivery assignments are the approved active mode; KariGO Rides remains separately controlled.</Text>
+      <Text style={ui.pageIntro}>The same verified account is used after approval. Delivery assignments are the approved active mode; KariGO Rides access becomes available after approval and Operations activation.</Text>
     </Card>
 
     <Card>
@@ -382,7 +397,7 @@ export default function CaptainApplication() {
       <Card>
         <Text style={ui.sectionTitle}>Application mode</Text>
         <ToggleRow label="Delivery Captain" checked={form.deliveryCaptainInterest} onPress={() => setForm({ ...form, deliveryCaptainInterest: !form.deliveryCaptainInterest })} helper="Delivery jobs are the active launch workflow after approval." />
-        <ToggleRow label="Ride Captain" checked={form.rideCaptainReviewInterest} onPress={() => setForm({ ...form, rideCaptainReviewInterest: !form.rideCaptainReviewInterest })} helper="KariGO Rides stays readiness-only until separately approved." />
+        <ToggleRow label="Ride Captain" checked={form.rideCaptainReviewInterest} onPress={() => setForm({ ...form, rideCaptainReviewInterest: !form.rideCaptainReviewInterest })} helper="KariGO Rides access becomes available after approval and Operations activation." />
       </Card>
 
       <Card>

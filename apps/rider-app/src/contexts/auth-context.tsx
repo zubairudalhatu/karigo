@@ -19,7 +19,7 @@ interface AuthValue {
 const AuthContext = createContext<AuthValue | null>(null);
 
 function isAuthStatus(error: unknown) {
-  return error instanceof KariGoApiError && (error.status === 401 || error.status === 403);
+  return error instanceof KariGoApiError && error.status === 401;
 }
 
 function canUseCaptainApp(user: AuthenticatedUser) {

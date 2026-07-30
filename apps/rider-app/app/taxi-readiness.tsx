@@ -10,7 +10,7 @@ import { friendlyError } from "../src/lib/errors";
 
 const vehicleTypes: TaxiVehicleType[] = ["SEDAN", "SUV", "MINI_BUS", "TRICYCLE", "OTHER"];
 const ownershipTypes: TaxiVehicleOwnership[] = ["OWNER", "LEASED", "COMPANY_ASSIGNED", "OTHER"];
-const ridePilotNotice = "KariGO Rides is running in controlled pilot mode. Captains receive only manually assigned ride trips; fare payment and payout automation remain disabled.";
+const ridePilotNotice = "KariGO Rides access is active for approved Ride Captains. Captains receive only Operations-assigned Ride requests; fare payment and payout automation remain disabled.";
 const blockedRideOperationsCopy = "Ride operations will be available after KariGO approves your Captain account.";
 const closedTripStatuses = new Set(["COMPLETED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_DRIVER", "CANCELLED_BY_ADMIN", "EXPIRED"]);
 
@@ -180,7 +180,7 @@ export default function TaxiReadiness() {
       if (action === "start") await taxiApi.startTrip(tripId, tripPin);
       if (action === "arrivedDestination") await taxiApi.arrivedDestination(tripId);
       if (action === "complete") await taxiApi.completeTrip(tripId);
-      if (action === "cancel") await taxiApi.cancelTrip(tripId, "Ride Captain cancelled controlled pilot ride");
+      if (action === "cancel") await taxiApi.cancelTrip(tripId, "Ride Captain cancelled assigned Ride request");
       setTripPin("");
       setMessage("Ride trip updated.");
       setTrips(await taxiApi.availableTrips());
@@ -189,9 +189,9 @@ export default function TaxiReadiness() {
     }
   }
 
-  return <Protected><Screen title={taxiEnabled ? "Ride operations" : "Ride review"} subtitle={taxiEnabled ? "Receive and progress manually assigned KariGO Rides pilot trips." : "Prepare Ride Captain and vehicle verification details before KariGO Rides is enabled in your area."}>
+  return <Protected><Screen title={taxiEnabled ? "Ride operations" : "Ride review"} subtitle={taxiEnabled ? "Receive and progress Operations-assigned KariGO Rides requests." : "Prepare Ride Captain and vehicle verification details before KariGO Rides is enabled in your area."}>
     <Card tone="soft">
-      <Text style={ui.sectionTitle}>{taxiEnabled ? "KariGO Rides controlled pilot" : "KariGO Rides requires operations approval"}</Text>
+      <Text style={ui.sectionTitle}>{taxiEnabled ? "KariGO Rides operations" : "KariGO Rides requires Operations approval"}</Text>
       <Text style={ui.pageIntro}>{taxiEnabled ? ridePilotNotice : "This form helps KariGO prepare Ride Captain onboarding, vehicle checks and safe ride operations. It does not activate ride jobs, fare billing or payment before approval."}</Text>
     </Card>
 
@@ -225,7 +225,7 @@ export default function TaxiReadiness() {
     </Card> : null}
     {taxiEnabled && profile && !trips.length ? <Card>
       <Text style={ui.sectionTitle}>Assigned ride trips</Text>
-      <Text style={ui.muted}>No ride trip is assigned yet. KariGO Operations will assign controlled pilot ride requests manually.</Text>
+      <Text style={ui.muted}>No Ride request is assigned yet. KariGO Operations will assign Ride requests when available.</Text>
     </Card> : null}
 
     {status ? <Card>

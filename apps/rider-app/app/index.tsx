@@ -7,7 +7,7 @@ import { useAuth } from "../src/contexts/auth-context";
 export default function CaptainWelcome() {
   const { user, loading } = useAuth();
   if (loading) return <Loading label="Opening KariGO Captain..." />;
-  if (user) return <Redirect href="/tabs/dashboard" />;
+  if (user) return <Redirect href="/captain-access" />;
 
   return (
     <View style={styles.container}>

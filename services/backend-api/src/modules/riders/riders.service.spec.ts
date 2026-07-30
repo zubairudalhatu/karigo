@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException } from "@nestjs/common";
-import { AccountStatus, DeliveryCaptainApplicationStatus, DeliveryCaptainVehicleType, RiderStatus, UserRole } from "@prisma/client";
+import { AccountStatus, DeliveryCaptainApplicationStatus, DeliveryCaptainVehicleType, RiderStatus, TaxiApplicationStatus, TaxiDriverProfileStatus, UserRole } from "@prisma/client";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -59,6 +59,12 @@ describe("RidersService delivery captain applications", () => {
       create: jest.fn(),
       update: jest.fn()
     },
+    taxiDriverApplication: {
+      findFirst: jest.fn()
+    },
+    taxiDriverProfile: {
+      findUnique: jest.fn()
+    },
     deliveryCaptainApplication: {
       create: jest.fn(),
       findFirst: jest.fn(),
@@ -88,6 +94,9 @@ describe("RidersService delivery captain applications", () => {
       riderDocument: { createMany: jest.fn() }
     }));
     prisma.user.findUnique.mockResolvedValue(deliveryCaptainApplication.applicant);
+    prisma.rider.findUnique.mockResolvedValue(null);
+    prisma.taxiDriverApplication.findFirst.mockResolvedValue(null);
+    prisma.taxiDriverProfile.findUnique.mockResolvedValue(null);
     prisma.deliveryCaptainApplication.findUnique.mockImplementation(async ({ where }: any) =>
       where.applicationReference ? null : deliveryCaptainApplication
     );
@@ -284,6 +293,165 @@ describe("RidersService delivery captain applications", () => {
       exists: false,
       nextStep: "SUBMIT_APPLICATION",
       message: "You are signed in with your KariGO account. Complete your Captain application to start onboarding."
+    });
+  });
+
+  it("resolves an existing Customer account to Captain onboarding without operational access", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: "customer-user",
+      fullName: "Existing Customer",
+      phoneNumber: "+2348030000000",
+      email: "customer@example.test",
+      role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      profilePhotoUrl: null,
+      deletedAt: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    prisma.deliveryCaptainApplication.findFirst.mockResolvedValueOnce(null);
+
+    await expect(service.resolveCaptainAccess("customer-user")).resolves.toMatchObject({
+      account: {
+        id: "customer-user",
+        role: UserRole.CUSTOMER,
+        phoneNumber: "+2348030000000"
+      },
+      deliveryCaptainApplication: {
+        exists: false,
+        nextStep: "SUBMIT_APPLICATION"
+      },
+      rideCaptainApplication: {
+        exists: false,
+        nextStep: "SUBMIT_APPLICATION"
+      },
+      operationalModes: [],
+      nextStep: "START_APPLICATION",
+      nextRoute: "/auth/apply"
+    });
+    expect(prisma.rider.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: "customer-user" }
+    }));
+  });
+
+  it("resolves a pending Customer-linked application without calling it approved", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: "customer-user",
+      fullName: "Existing Customer",
+      phoneNumber: "+2348030000000",
+      email: "customer@example.test",
+      role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      profilePhotoUrl: null,
+      deletedAt: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    prisma.deliveryCaptainApplication.findFirst.mockResolvedValueOnce({
+      ...deliveryCaptainApplication,
+      applicantUserId: "customer-user",
+      applicant: {
+        ...deliveryCaptainApplication.applicant,
+        id: "customer-user",
+        role: UserRole.CUSTOMER,
+        accountStatus: AccountStatus.ACTIVE
+      }
+    });
+    prisma.taxiDriverApplication.findFirst.mockResolvedValueOnce({
+      id: "ride-app-1",
+      applicationReference: "KGO-TAXI-2026-ABC123",
+      applicantUserId: "customer-user",
+      fullName: "Existing Customer",
+      phoneNumber: "+2348030000000",
+      email: "customer@example.test",
+      city: "Kano",
+      state: "Kano",
+      status: TaxiApplicationStatus.SUBMITTED,
+      applicantVisibleNote: null,
+      reviewedAt: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    await expect(service.resolveCaptainAccess("customer-user")).resolves.toMatchObject({
+      deliveryCaptainApplication: {
+        exists: true,
+        applicationReference: deliveryCaptainApplication.applicationReference,
+        status: DeliveryCaptainApplicationStatus.SUBMITTED
+      },
+      rideCaptainApplication: {
+        exists: true,
+        status: TaxiApplicationStatus.SUBMITTED
+      },
+      operationalModes: [],
+      nextStep: "APPLICATION_STATUS",
+      nextRoute: "/tabs/dashboard"
+    });
+  });
+
+  it("resolves approved Delivery and Ride Captain operational profiles safely", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: "rider-user",
+      fullName: "Approved Captain",
+      phoneNumber: "+2348030000000",
+      email: "captain@example.test",
+      role: UserRole.RIDER,
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      profilePhotoUrl: null,
+      deletedAt: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    prisma.rider.findUnique.mockResolvedValueOnce({
+      id: "rider-profile-1",
+      riderCode: "KGO-CAP-123",
+      verificationStatus: RiderStatus.ACTIVE,
+      availabilityStatus: RiderStatus.OFFLINE,
+      totalDeliveries: 8,
+      deletedAt: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    prisma.deliveryCaptainApplication.findFirst.mockResolvedValueOnce({
+      ...deliveryCaptainApplication,
+      status: DeliveryCaptainApplicationStatus.APPROVED
+    });
+    prisma.taxiDriverProfile.findUnique.mockResolvedValueOnce({
+      id: "ride-profile-1",
+      userId: "rider-user",
+      applicationId: "ride-app-1",
+      fullName: "Approved Captain",
+      phoneNumber: "+2348030000000",
+      city: "Kano",
+      state: "Kano",
+      vehicleMake: "Toyota",
+      vehicleModel: "Corolla",
+      vehicleYear: 2018,
+      vehicleColour: "Black",
+      vehiclePlateNumber: "KGO-123AA",
+      vehicleType: "SEDAN",
+      status: TaxiDriverProfileStatus.ACTIVE_TEST,
+      isAvailableForTaxi: true,
+      lastSeenAt: now,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    await expect(service.resolveCaptainAccess("rider-user")).resolves.toMatchObject({
+      deliveryCaptainProfile: {
+        riderCode: "KGO-CAP-123",
+        operationalAccess: true
+      },
+      rideCaptainProfile: {
+        id: "ride-profile-1",
+        operationalAccess: true
+      },
+      operationalModes: ["DELIVERY_CAPTAIN", "RIDE_CAPTAIN"],
+      nextStep: "OPEN_DASHBOARD",
+      nextRoute: "/tabs/dashboard"
     });
   });
 
