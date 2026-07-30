@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import * as Location from "expo-location";
 import type { ServiceCategory, TaxiTrip, VendorSummary } from "@karigo/shared-types";
-import { isActiveTaxiTripStatus } from "@karigo/shared-types";
+import { isActiveTaxiTripStatus, taxiLifecycleForStatus } from "@karigo/shared-types";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
@@ -75,11 +75,7 @@ function cityFromGeocode(place?: Location.LocationGeocodedAddress | null) {
 }
 
 function activeRideTitle(trip: TaxiTrip) {
-  if (trip.status === "REQUESTED") return "Looking for a Captain";
-  if (trip.status === "DRIVER_ASSIGNED" || trip.status === "ACCEPTED") return trip.driver ? "Ride Captain assigned" : "Looking for a Captain";
-  if (trip.status === "ARRIVED_PICKUP") return "Captain at pickup";
-  if (trip.status === "STARTED" || trip.status === "ARRIVED_DESTINATION") return "Ride in progress";
-  return "Active ride";
+  return (trip.lifecycle ?? taxiLifecycleForStatus(trip.status)).customerTitle;
 }
 
 function VendorSpotlight({ vendor }: { vendor: VendorSummary }) {

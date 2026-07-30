@@ -131,6 +131,242 @@ export function isTerminalTaxiTripStatus(status: TaxiTripStatus): boolean {
   return (terminalTaxiTripStatuses as readonly TaxiTripStatus[]).includes(status);
 }
 
+export interface TaxiTripLifecycleDefinition {
+  status: TaxiTripStatus;
+  order: number;
+  active: boolean;
+  terminal: boolean;
+  customerTitle: string;
+  customerCopy: string;
+  captainVisible: boolean;
+  vehicleVisible: boolean;
+  pickupPinVisible: boolean;
+  customerCancellationAllowed: boolean;
+  pollingAllowed: boolean;
+  pollingIntervalMs: number;
+  receiptAvailable: boolean;
+  bookAnotherAllowed: boolean;
+}
+
+export const taxiTripLifecycle: Record<TaxiTripStatus, TaxiTripLifecycleDefinition> = {
+  REQUESTED: {
+    status: "REQUESTED",
+    order: 1,
+    active: true,
+    terminal: false,
+    customerTitle: "Looking for a Ride Captain",
+    customerCopy: "Connecting you with available Captains nearby.",
+    captainVisible: false,
+    vehicleVisible: false,
+    pickupPinVisible: false,
+    customerCancellationAllowed: true,
+    pollingAllowed: true,
+    pollingIntervalMs: 12000,
+    receiptAvailable: false,
+    bookAnotherAllowed: false
+  },
+  DRIVER_ASSIGNED: {
+    status: "DRIVER_ASSIGNED",
+    order: 2,
+    active: true,
+    terminal: false,
+    customerTitle: "Ride Captain assigned",
+    customerCopy: "Your Ride Captain has been assigned and is preparing to accept the request.",
+    captainVisible: true,
+    vehicleVisible: true,
+    pickupPinVisible: false,
+    customerCancellationAllowed: true,
+    pollingAllowed: true,
+    pollingIntervalMs: 8000,
+    receiptAvailable: false,
+    bookAnotherAllowed: false
+  },
+  ACCEPTED: {
+    status: "ACCEPTED",
+    order: 3,
+    active: true,
+    terminal: false,
+    customerTitle: "Your Ride Captain is on the way",
+    customerCopy: "Your Ride Captain accepted the request and is heading to pickup.",
+    captainVisible: true,
+    vehicleVisible: true,
+    pickupPinVisible: false,
+    customerCancellationAllowed: true,
+    pollingAllowed: true,
+    pollingIntervalMs: 7000,
+    receiptAvailable: false,
+    bookAnotherAllowed: false
+  },
+  ARRIVED_PICKUP: {
+    status: "ARRIVED_PICKUP",
+    order: 4,
+    active: true,
+    terminal: false,
+    customerTitle: "Your Ride Captain has arrived",
+    customerCopy: "Meet your approved KariGO Ride Captain at pickup and share the protected PIN only when you are ready to start.",
+    captainVisible: true,
+    vehicleVisible: true,
+    pickupPinVisible: true,
+    customerCancellationAllowed: false,
+    pollingAllowed: true,
+    pollingIntervalMs: 10000,
+    receiptAvailable: false,
+    bookAnotherAllowed: false
+  },
+  STARTED: {
+    status: "STARTED",
+    order: 5,
+    active: true,
+    terminal: false,
+    customerTitle: "Ride in progress",
+    customerCopy: "Your KariGO Ride is in progress.",
+    captainVisible: true,
+    vehicleVisible: true,
+    pickupPinVisible: false,
+    customerCancellationAllowed: false,
+    pollingAllowed: true,
+    pollingIntervalMs: 9000,
+    receiptAvailable: false,
+    bookAnotherAllowed: false
+  },
+  ARRIVED_DESTINATION: {
+    status: "ARRIVED_DESTINATION",
+    order: 6,
+    active: true,
+    terminal: false,
+    customerTitle: "Destination reached",
+    customerCopy: "Your Ride has reached the destination. KariGO will confirm completion once the Captain closes the trip.",
+    captainVisible: true,
+    vehicleVisible: true,
+    pickupPinVisible: false,
+    customerCancellationAllowed: false,
+    pollingAllowed: true,
+    pollingIntervalMs: 10000,
+    receiptAvailable: false,
+    bookAnotherAllowed: false
+  },
+  COMPLETED: {
+    status: "COMPLETED",
+    order: 7,
+    active: false,
+    terminal: true,
+    customerTitle: "Ride completed",
+    customerCopy: "Thanks for riding with KariGO.",
+    captainVisible: true,
+    vehicleVisible: true,
+    pickupPinVisible: false,
+    customerCancellationAllowed: false,
+    pollingAllowed: false,
+    pollingIntervalMs: 0,
+    receiptAvailable: true,
+    bookAnotherAllowed: true
+  },
+  CANCELLED_BY_CUSTOMER: {
+    status: "CANCELLED_BY_CUSTOMER",
+    order: 8,
+    active: false,
+    terminal: true,
+    customerTitle: "Ride request cancelled",
+    customerCopy: "This Ride request was cancelled by the customer.",
+    captainVisible: true,
+    vehicleVisible: true,
+    pickupPinVisible: false,
+    customerCancellationAllowed: false,
+    pollingAllowed: false,
+    pollingIntervalMs: 0,
+    receiptAvailable: true,
+    bookAnotherAllowed: true
+  },
+  CANCELLED_BY_DRIVER: {
+    status: "CANCELLED_BY_DRIVER",
+    order: 8,
+    active: false,
+    terminal: true,
+    customerTitle: "Ride request cancelled",
+    customerCopy: "This Ride request was cancelled by the Ride Captain.",
+    captainVisible: true,
+    vehicleVisible: true,
+    pickupPinVisible: false,
+    customerCancellationAllowed: false,
+    pollingAllowed: false,
+    pollingIntervalMs: 0,
+    receiptAvailable: true,
+    bookAnotherAllowed: true
+  },
+  CANCELLED_BY_ADMIN: {
+    status: "CANCELLED_BY_ADMIN",
+    order: 8,
+    active: false,
+    terminal: true,
+    customerTitle: "Ride request cancelled",
+    customerCopy: "This Ride request was closed by KariGO Operations.",
+    captainVisible: true,
+    vehicleVisible: true,
+    pickupPinVisible: false,
+    customerCancellationAllowed: false,
+    pollingAllowed: false,
+    pollingIntervalMs: 0,
+    receiptAvailable: true,
+    bookAnotherAllowed: true
+  },
+  EXPIRED: {
+    status: "EXPIRED",
+    order: 8,
+    active: false,
+    terminal: true,
+    customerTitle: "Ride request expired",
+    customerCopy: "No Ride Captain accepted before the request expired.",
+    captainVisible: false,
+    vehicleVisible: false,
+    pickupPinVisible: false,
+    customerCancellationAllowed: false,
+    pollingAllowed: false,
+    pollingIntervalMs: 0,
+    receiptAvailable: true,
+    bookAnotherAllowed: true
+  }
+};
+
+export function taxiLifecycleForStatus(status: TaxiTripStatus): TaxiTripLifecycleDefinition {
+  return taxiTripLifecycle[status];
+}
+
+export interface TaxiTripCaptainSummary {
+  id: string;
+  userId?: string | null;
+  displayName: string;
+  profilePhotoUrl?: string | null;
+  verified: boolean;
+  publicRating?: number | null;
+  completedTripCount?: number | null;
+  contactAvailable: boolean;
+  contactPhoneNumber?: string | null;
+  location?: {
+    latitude: unknown;
+    longitude: unknown;
+    lastSeenAt?: string | null;
+    freshness: "fresh" | "stale" | "unavailable";
+  } | null;
+}
+
+export interface TaxiTripVehicleSummary {
+  make?: string | null;
+  model?: string | null;
+  colour?: string | null;
+  registrationNumber?: string | null;
+  category?: TaxiVehicleType | null;
+  seatCapacity?: number | null;
+  photoUrl?: string | null;
+}
+
+export interface TaxiTripTimelineEvent {
+  key: string;
+  label: string;
+  status: TaxiTripStatus;
+  timestamp?: string | null;
+  current?: boolean;
+}
+
 export interface TaxiFareEstimateInput {
   pickupAddress: string;
   destinationAddress: string;
@@ -316,6 +552,22 @@ export interface TaxiTrip {
   status: TaxiTripStatus;
   tripPinLastFour?: string | null;
   tripPin?: string;
+  lifecycle?: TaxiTripLifecycleDefinition;
+  captain?: TaxiTripCaptainSummary | null;
+  vehicle?: TaxiTripVehicleSummary | null;
+  assignmentIncomplete?: boolean;
+  timeline?: TaxiTripTimelineEvent[];
+  lifecycleTimestamps?: {
+    requestedAt?: string | null;
+    assignedAt?: string | null;
+    acceptedAt?: string | null;
+    arrivedAtPickupAt?: string | null;
+    startedAt?: string | null;
+    arrivedAtDestinationAt?: string | null;
+    completedAt?: string | null;
+    cancelledAt?: string | null;
+    expiredAt?: string | null;
+  };
   cancellationReason?: string | null;
   customerNote?: string | null;
   driverNote?: string | null;

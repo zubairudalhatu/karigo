@@ -1,7 +1,7 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { TaxiTrip, customerCancellableTaxiTripStatuses, isActiveTaxiTripStatus, isTerminalTaxiTripStatus } from "@karigo/shared-types";
+import { Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { TaxiTrip, customerCancellableTaxiTripStatuses, isActiveTaxiTripStatus, isTerminalTaxiTripStatus, taxiLifecycleForStatus } from "@karigo/shared-types";
 import { Order, ordersApi } from "../../src/api/orders.api";
 import { taxiApi } from "../../src/api/taxi.api";
 import { KariGoAppTopBar } from "../../src/components/kari-go-app-top-bar";
@@ -38,6 +38,44 @@ function ridePaymentPreference(trip: TaxiTrip) {
   return match?.[1]?.trim() || "Cash";
 }
 
+function lifecycleForTrip(trip: TaxiTrip) {
+  return trip.lifecycle ?? taxiLifecycleForStatus(trip.status);
+}
+
+function captainName(trip: TaxiTrip) {
+  return trip.captain?.displayName ?? trip.driver?.fullName ?? null;
+}
+
+function vehicleDescription(trip: TaxiTrip) {
+  const vehicle = trip.vehicle;
+  if (vehicle) return [vehicle.colour, vehicle.make, vehicle.model].filter(Boolean).join(" ") || "Vehicle details pending";
+  if (trip.driver) return [trip.driver.vehicleColour, trip.driver.vehicleMake, trip.driver.vehicleModel].filter(Boolean).join(" ") || "Vehicle details pending";
+  return null;
+}
+
+function vehicleRegistration(trip: TaxiTrip) {
+  return trip.vehicle?.registrationNumber ?? trip.driver?.vehiclePlateNumber ?? null;
+}
+
+function dateTime(value?: string | null) {
+  if (!value) return "Pending";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Pending" : date.toLocaleString();
+}
+
+function safeRideReceiptShare(trip: TaxiTrip) {
+  return [
+    `KariGO Ride ${trip.tripReference}`,
+    `Status: ${lifecycleForTrip(trip).customerTitle}`,
+    `Pickup: ${trip.pickupAddress}`,
+    `Destination: ${trip.destinationAddress}`,
+    captainName(trip) ? `Captain: ${captainName(trip)}` : null,
+    vehicleDescription(trip) ? `Vehicle: ${vehicleDescription(trip)}` : null,
+    vehicleRegistration(trip) ? `Registration: ${vehicleRegistration(trip)}` : null,
+    `Fare: ${formatRideFareKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)}`
+  ].filter(Boolean).join("\n");
+}
+
 function mergeRide(trips: TaxiTrip[], updated: TaxiTrip) {
   const exists = trips.some((trip) => trip.id === updated.id);
   const next = exists ? trips.map((trip) => trip.id === updated.id ? updated : trip) : [updated, ...trips];
@@ -66,24 +104,63 @@ function RideRow({ trip, active, busy, onCancel, onDetails }: { trip: TaxiTrip; 
 
 function RideDetails({ trip, canBookAnother, onClose, onBookAnother }: { trip: TaxiTrip; canBookAnother: boolean; onClose: () => void; onBookAnother: () => void }) {
   const closedAt = terminalTime(trip);
+  const lifecycle = lifecycleForTrip(trip);
+  const fareLabel = trip.status === "COMPLETED" && trip.finalFareKobo ? "Final fare" : "Estimated fare";
   return <Card>
     <View style={ui.spaceBetween}>
-      <Text style={ui.cardTitle}>Ride details</Text>
+      <Text style={ui.cardTitle}>{lifecycle.receiptAvailable ? "Ride record" : "Ride details"}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Close ride details" onPress={onClose}>
         <Text style={styles.link}>Close</Text>
       </Pressable>
     </View>
     <Text style={styles.ref}>{trip.tripReference}</Text>
     <RideStatusBadge status={trip.status} />
-    <Text style={ui.muted}>{shortAddress(trip.pickupAddress)} to {shortAddress(trip.destinationAddress)}</Text>
-    <Text style={ui.muted}>{rideCategoryLabel(trip)}</Text>
-    <Text style={ui.muted}>Fare: {formatRideFareKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)}</Text>
-    <Text style={ui.muted}>Payment: {ridePaymentPreference(trip)}</Text>
-    <Text style={ui.muted}>Requested: {rideDate(trip)}</Text>
-    {closedAt ? <Text style={ui.muted}>Closed: {new Date(closedAt).toLocaleString()}</Text> : null}
-    {trip.cancellationReason ? <Text style={ui.muted}>Reason: {trip.cancellationReason}</Text> : null}
+    <Text style={ui.muted}>{lifecycle.customerCopy}</Text>
+    <View style={styles.receiptBox}>
+      <ReceiptRow label="Ride" value={rideCategoryLabel(trip)} />
+      <ReceiptRow label="Pickup" value={trip.pickupAddress} />
+      <ReceiptRow label="Destination" value={trip.destinationAddress} />
+      <ReceiptRow label="Distance" value={trip.estimatedDistanceKm ? `${Number(trip.estimatedDistanceKm).toLocaleString()} km` : "Pending"} />
+      <ReceiptRow label="Duration" value={trip.estimatedDurationMin ? `${trip.estimatedDurationMin} min` : "Pending"} />
+      <ReceiptRow label="Captain" value={captainName(trip) ?? "Not assigned"} />
+      <ReceiptRow label="Vehicle" value={vehicleDescription(trip) ?? "Not assigned"} />
+      {vehicleRegistration(trip) ? <ReceiptRow label="Registration" value={vehicleRegistration(trip)!} /> : null}
+      <ReceiptRow label={fareLabel} value={formatRideFareKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)} />
+      <ReceiptRow label="Payment" value={ridePaymentPreference(trip)} />
+      <ReceiptRow label="Requested" value={rideDate(trip)} />
+      {trip.acceptedAt ? <ReceiptRow label="Accepted" value={dateTime(trip.acceptedAt)} /> : null}
+      {trip.arrivedAtPickupAt ? <ReceiptRow label="Pickup arrival" value={dateTime(trip.arrivedAtPickupAt)} /> : null}
+      {trip.startedAt ? <ReceiptRow label="Started" value={dateTime(trip.startedAt)} /> : null}
+      {trip.arrivedAtDestinationAt ? <ReceiptRow label="Destination reached" value={dateTime(trip.arrivedAtDestinationAt)} /> : null}
+      {trip.completedAt ? <ReceiptRow label="Completed" value={dateTime(trip.completedAt)} /> : null}
+      {closedAt ? <ReceiptRow label="Closed" value={dateTime(closedAt)} /> : null}
+      {trip.cancellationReason ? <ReceiptRow label="Reason" value={trip.cancellationReason} /> : null}
+    </View>
+    <RideTimeline trip={trip} />
+    <Button title="Share ride summary" tone="muted" onPress={() => void Share.share({ message: safeRideReceiptShare(trip) })} />
     {isTerminalTaxiTripStatus(trip.status) && canBookAnother ? <Button title="Book another ride" tone="muted" onPress={onBookAnother} /> : null}
   </Card>;
+}
+
+function ReceiptRow({ label, value }: { label: string; value: string }) {
+  return <View style={styles.receiptRow}>
+    <Text style={styles.receiptLabel}>{label}</Text>
+    <Text style={styles.receiptValue}>{value}</Text>
+  </View>;
+}
+
+function RideTimeline({ trip }: { trip: TaxiTrip }) {
+  const items = trip.timeline?.length ? trip.timeline : [{ key: trip.status, label: lifecycleForTrip(trip).customerTitle, timestamp: trip.updatedAt ?? trip.createdAt, current: true }];
+  return <View style={styles.timelineBox}>
+    <Text style={styles.timelineTitle}>Timeline</Text>
+    {items.map((item) => <View key={item.key} style={styles.timelineRow}>
+      <View style={[styles.timelineDot, item.current && styles.timelineDotCurrent]} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.timelineLabel}>{item.label}</Text>
+        <Text style={ui.muted}>{item.timestamp ? dateTime(item.timestamp) : item.current ? "Current status" : "Pending"}</Text>
+      </View>
+    </View>)}
+  </View>;
 }
 
 export default function OrderHistory() {
@@ -177,8 +254,18 @@ export default function OrderHistory() {
 const styles = StyleSheet.create({
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   link: { color: "#DC2626", fontWeight: "900" },
+  receiptBox: { backgroundColor: "#F9FAFB", borderColor: "#E5E7EB", borderRadius: 16, borderWidth: 1, gap: 8, padding: 12 },
+  receiptLabel: { color: "#6B7280", flexShrink: 0, fontSize: 12, fontWeight: "800", width: 96 },
+  receiptRow: { alignItems: "flex-start", borderTopColor: "#E5E7EB", borderTopWidth: 1, flexDirection: "row", flexWrap: "wrap", gap: 8, paddingTop: 8 },
+  receiptValue: { color: "#111827", flex: 1, fontSize: 13, fontWeight: "800", lineHeight: 18, minWidth: 150 },
   ref: { color: "#111827", flexShrink: 1, fontWeight: "900" },
   rideCardHeader: { alignItems: "flex-start", gap: 8 },
   rideStatusBadge: { alignSelf: "flex-start", backgroundColor: "#DBEAFE", borderRadius: 999, color: "#1E40AF", flexShrink: 1, flexWrap: "wrap", fontSize: 12, fontWeight: "800", lineHeight: 16, maxWidth: "100%", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 6 },
-  tabRow: { flexDirection: "row", gap: 10 }
+  tabRow: { flexDirection: "row", gap: 10 },
+  timelineBox: { backgroundColor: "#FFFFFF", borderColor: "#E5E7EB", borderRadius: 16, borderWidth: 1, gap: 10, padding: 12 },
+  timelineDot: { backgroundColor: "#D1D5DB", borderRadius: 999, height: 12, marginTop: 3, width: 12 },
+  timelineDotCurrent: { backgroundColor: "#DC2626" },
+  timelineLabel: { color: "#111827", fontWeight: "900" },
+  timelineRow: { alignItems: "flex-start", flexDirection: "row", gap: 10 },
+  timelineTitle: { color: "#111827", fontSize: 15, fontWeight: "900" }
 });

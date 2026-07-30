@@ -1,5 +1,6 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import type { TaxiTripLifecycleDefinition } from "@karigo/shared-types";
 import {
   AccountStatus,
   Prisma,
@@ -8,11 +9,12 @@ import {
   TaxiDriverProfileStatus,
   TaxiTripActorType,
   TaxiTripStatus,
+  TaxiVehicleType,
   TaxiWaitlistStatus,
   UserRole
 } from "@prisma/client";
 import * as bcrypt from "bcrypt";
-import { randomBytes, randomInt } from "crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
@@ -100,6 +102,7 @@ const TAXI_TRIP_INCLUDE = {
 } satisfies Prisma.TaxiTripInclude;
 
 type TaxiTripWithRelations = Prisma.TaxiTripGetPayload<{ include: typeof TAXI_TRIP_INCLUDE }>;
+type TaxiTripViewer = "customer" | "driver" | "admin" | "internal";
 
 type TaxiDriverProfileForResponse = {
   id: string;
@@ -184,6 +187,8 @@ const RIDE_CATEGORIES = [
 
 @Injectable()
 export class TaxiService {
+  private readonly logger = new Logger(TaxiService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AdminAuditService,
@@ -442,6 +447,7 @@ export class TaxiService {
           estimatedDurationMin: estimate.estimatedDurationMin,
           estimatedFareKobo: estimate.estimatedFareKobo,
           tripPinHash,
+          tripPinEncrypted: this.encryptTripPin(tripPin),
           tripPinLastFour: tripPin.slice(-4),
           customerNote: this.composeTripCustomerNote(dto),
           requestedAt: now
@@ -469,11 +475,7 @@ export class TaxiService {
       return created;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
-    return {
-      ...this.formatTrip(trip),
-      tripPin,
-      testModeNotice: this.testModeNotice()
-    };
+    return this.formatTrip(trip, { viewer: "customer" });
   }
 
   async customerTrips(userId: string) {
@@ -484,7 +486,7 @@ export class TaxiService {
       include: this.tripInclude(),
       orderBy: { createdAt: "desc" }
     });
-    return trips.map((trip) => this.formatTrip(trip));
+    return trips.map((trip) => this.formatTrip(trip, { viewer: "customer" }));
   }
 
   async customerTrip(userId: string, tripId: string) {
@@ -495,7 +497,7 @@ export class TaxiService {
       include: this.tripInclude()
     });
     if (!trip) throw new NotFoundException("Ride request not found");
-    return this.formatTrip(trip);
+    return this.formatTrip(trip, { viewer: "customer" });
   }
 
   async customerCancelTrip(userId: string, tripId: string, dto: TaxiCancelDto) {
@@ -507,13 +509,13 @@ export class TaxiService {
     });
     if (!trip) throw new NotFoundException("Ride request not found");
     if (trip.status === TaxiTripStatus.CANCELLED_BY_CUSTOMER) {
-      return this.formatTrip(trip);
+      return this.formatTrip(trip, { viewer: "customer" });
     }
     if (CLOSED_TAXI_TRIP_STATUSES.includes(trip.status)) throw new BadRequestException("Ride request is already closed");
     if (!CUSTOMER_CANCELLABLE_TAXI_TRIP_STATUSES.includes(trip.status)) {
       throw new BadRequestException("Contact support to cancel an active Ride request");
     }
-    return this.cancelTrip(trip.id, TaxiTripStatus.CANCELLED_BY_CUSTOMER, userId, TaxiTripActorType.CUSTOMER, dto.reason);
+    return this.cancelTrip(trip.id, TaxiTripStatus.CANCELLED_BY_CUSTOMER, userId, TaxiTripActorType.CUSTOMER, dto.reason, "customer");
   }
 
   async riderTaxiProfile(userId: string) {
@@ -555,7 +557,7 @@ export class TaxiService {
       orderBy: { createdAt: "asc" },
       take: 20
     });
-    return trips.map((trip) => this.formatTrip(trip));
+    return trips.map((trip) => this.formatTrip(trip, { viewer: "driver" }));
   }
 
   async acceptTaxiTrip(userId: string, tripId: string) {
@@ -575,7 +577,7 @@ export class TaxiService {
       status: TaxiTripStatus.ACCEPTED,
       acceptedAt: new Date()
     }, userId, TaxiTripActorType.DRIVER, "taxi.trip.accepted", "Ride Captain accepted ride request");
-    return this.formatTrip(updated);
+    return this.formatTrip(updated, { viewer: "driver" });
   }
 
   async riderArrivedPickup(userId: string, tripId: string) {
@@ -591,9 +593,11 @@ export class TaxiService {
     }
     const updated = await this.updateTripWithEvent(trip.id, {
       status: TaxiTripStatus.STARTED,
-      startedAt: new Date()
+      startedAt: new Date(),
+      tripPinHash: null,
+      tripPinEncrypted: null
     }, userId, TaxiTripActorType.DRIVER, "taxi.trip.started", `Ride Captain ${profile.fullName} started ride request`);
-    return this.formatTrip(updated);
+    return this.formatTrip(updated, { viewer: "driver" });
   }
 
   async riderArrivedDestination(userId: string, tripId: string) {
@@ -608,16 +612,17 @@ export class TaxiService {
       status: TaxiTripStatus.COMPLETED,
       completedAt: new Date(),
       finalFareKobo: trip.estimatedFareKobo,
-      tripPinHash: null
+      tripPinHash: null,
+      tripPinEncrypted: null
     }, userId, TaxiTripActorType.DRIVER, "taxi.trip.completed", "Ride request completed");
-    return this.formatTrip(updated);
+    return this.formatTrip(updated, { viewer: "driver" });
   }
 
   async riderCancelTrip(userId: string, tripId: string, dto: TaxiCancelDto) {
     this.assertTaxiStagingEnabled();
     const { trip } = await this.requireDriverTrip(userId, tripId);
     if (CLOSED_TAXI_TRIP_STATUSES.includes(trip.status)) throw new BadRequestException("Ride request is already closed");
-    return this.cancelTrip(trip.id, TaxiTripStatus.CANCELLED_BY_DRIVER, userId, TaxiTripActorType.DRIVER, dto.reason);
+    return this.cancelTrip(trip.id, TaxiTripStatus.CANCELLED_BY_DRIVER, userId, TaxiTripActorType.DRIVER, dto.reason, "driver");
   }
 
   async adminDriverProfiles() {
@@ -699,14 +704,14 @@ export class TaxiService {
       orderBy: { createdAt: "desc" },
       take: 150
     });
-    return trips.map((trip) => this.formatTrip(trip));
+    return trips.map((trip) => this.formatTrip(trip, { viewer: "admin" }));
   }
 
   async adminTrip(tripId: string) {
     this.assertTaxiStagingEnabled();
     const trip = await this.prisma.taxiTrip.findUnique({ where: { id: tripId }, include: this.tripInclude() });
     if (!trip) throw new NotFoundException("Ride request not found");
-    return this.formatTrip(trip);
+    return this.formatTrip(trip, { viewer: "admin" });
   }
 
   async adminAssignDriver(adminUserId: string, tripId: string, dto: AdminAssignTaxiDriverDto) {
@@ -729,7 +734,7 @@ export class TaxiService {
       driverProfileId: profile.id,
       controlledPilot: true
     });
-    return this.formatTrip(updated);
+    return this.formatTrip(updated, { viewer: "admin" });
   }
 
   async adminCancelTrip(adminUserId: string, tripId: string, dto: TaxiCancelDto) {
@@ -737,7 +742,7 @@ export class TaxiService {
     const trip = await this.prisma.taxiTrip.findUnique({ where: { id: tripId } });
     if (!trip) throw new NotFoundException("Ride request not found");
     if (CLOSED_TAXI_TRIP_STATUSES.includes(trip.status)) throw new BadRequestException("Ride request is already closed");
-    const updated = await this.cancelTrip(trip.id, TaxiTripStatus.CANCELLED_BY_ADMIN, adminUserId, TaxiTripActorType.ADMIN, dto.reason);
+    const updated = await this.cancelTrip(trip.id, TaxiTripStatus.CANCELLED_BY_ADMIN, adminUserId, TaxiTripActorType.ADMIN, dto.reason, "admin");
     await this.audit.record(adminUserId, "admin.taxi.trip.cancelled", "TaxiTrip", trip.id, {
       reason: dto.reason,
       controlledPilot: true
@@ -1121,7 +1126,7 @@ export class TaxiService {
       message: "You already have an active KariGO Ride. View or cancel it before requesting another immediate ride.",
       error_code: "ACTIVE_RIDE_EXISTS",
       details: {
-        activeTrip: this.formatTrip(trip)
+        activeTrip: this.formatTrip(trip, { viewer: "customer" })
       }
     });
   }
@@ -1143,17 +1148,18 @@ export class TaxiService {
       ...data,
       status: nextStatus
     }, userId, TaxiTripActorType.DRIVER, eventType, `Ride Captain moved request to ${nextStatus}`);
-    return this.formatTrip(updated);
+    return this.formatTrip(updated, { viewer: "driver" });
   }
 
-  private async cancelTrip(tripId: string, status: TaxiTripStatus, actorId: string, actorType: TaxiTripActorType, reason?: string) {
+  private async cancelTrip(tripId: string, status: TaxiTripStatus, actorId: string, actorType: TaxiTripActorType, reason?: string, viewer: TaxiTripViewer = "internal") {
     const updated = await this.updateTripWithEvent(tripId, {
       status,
       cancellationReason: reason?.trim() || "Ride request cancelled",
       cancelledAt: new Date(),
-      tripPinHash: null
+      tripPinHash: null,
+      tripPinEncrypted: null
     }, actorId, actorType, "taxi.trip.cancelled", reason || "Ride request cancelled");
-    return this.formatTrip(updated);
+    return this.formatTrip(updated, { viewer });
   }
 
   private async updateTripWithEvent(
@@ -1188,7 +1194,28 @@ export class TaxiService {
     return TAXI_TRIP_INCLUDE;
   }
 
-  private formatTrip(trip: TaxiTripWithRelations) {
+  private formatTrip(trip: TaxiTripWithRelations, options: { viewer?: TaxiTripViewer } = {}) {
+    const viewer = options.viewer ?? "internal";
+    const lifecycle = this.lifecycleForStatus(trip.status);
+    const assignmentIncomplete = this.assignmentIncomplete(trip);
+    if (assignmentIncomplete) {
+      this.logger.warn(`Ride assignment incomplete tripId=${trip.id} status=${trip.status}`);
+    }
+    const showPublicCaptain = Boolean(lifecycle.captainVisible && trip.driverProfile && !assignmentIncomplete);
+    const tripPin = viewer === "customer" && lifecycle.pickupPinVisible ? this.decryptTripPin(trip) : undefined;
+    const assignedAt = this.tripEventTime(trip, "taxi.trip.driver_assigned");
+    const lifecycleTimestamps = {
+      requestedAt: trip.requestedAt?.toISOString() ?? null,
+      assignedAt,
+      acceptedAt: trip.acceptedAt?.toISOString() ?? null,
+      arrivedAtPickupAt: trip.arrivedAtPickupAt?.toISOString() ?? null,
+      startedAt: trip.startedAt?.toISOString() ?? null,
+      arrivedAtDestinationAt: trip.arrivedAtDestinationAt?.toISOString() ?? null,
+      completedAt: trip.completedAt?.toISOString() ?? null,
+      cancelledAt: trip.cancelledAt?.toISOString() ?? null,
+      expiredAt: trip.status === TaxiTripStatus.EXPIRED ? trip.updatedAt.toISOString() : null
+    };
+
     return {
       id: trip.id,
       tripReference: trip.tripReference,
@@ -1203,7 +1230,14 @@ export class TaxiService {
       estimatedFareKobo: trip.estimatedFareKobo,
       finalFareKobo: trip.finalFareKobo,
       status: trip.status,
-      tripPinLastFour: trip.tripPinLastFour,
+      tripPinLastFour: viewer === "admin" || lifecycle.pickupPinVisible ? trip.tripPinLastFour : null,
+      ...(tripPin ? { tripPin } : {}),
+      lifecycle,
+      captain: showPublicCaptain && trip.driverProfile ? this.formatCaptainSummary(trip.driverProfile) : null,
+      vehicle: showPublicCaptain && trip.driverProfile ? this.formatVehicleSummary(trip.driverProfile) : null,
+      assignmentIncomplete,
+      lifecycleTimestamps,
+      timeline: this.tripTimeline(trip, lifecycleTimestamps),
       cancellationReason: trip.cancellationReason,
       customerNote: trip.customerNote,
       driverNote: trip.driverNote,
@@ -1233,6 +1267,267 @@ export class TaxiService {
       })),
       testModeNotice: this.testModeNotice()
     };
+  }
+
+  private lifecycleForStatus(status: TaxiTripStatus): TaxiTripLifecycleDefinition {
+    const sharedStatus = status as TaxiTripLifecycleDefinition["status"];
+    const base = {
+      status: sharedStatus,
+      active: ACTIVE_TAXI_TRIP_STATUSES.includes(status),
+      terminal: CLOSED_TAXI_TRIP_STATUSES.includes(status),
+      customerCancellationAllowed: CUSTOMER_CANCELLABLE_TAXI_TRIP_STATUSES.includes(status),
+      bookAnotherAllowed: CLOSED_TAXI_TRIP_STATUSES.includes(status)
+    };
+    const definitions: Record<TaxiTripStatus, Omit<TaxiTripLifecycleDefinition, keyof typeof base> & { status?: never; active?: never; terminal?: never; customerCancellationAllowed?: never; bookAnotherAllowed?: never }> = {
+      REQUESTED: {
+        order: 1,
+        customerTitle: "Looking for a Ride Captain",
+        customerCopy: "Connecting you with available Captains nearby.",
+        captainVisible: false,
+        vehicleVisible: false,
+        pickupPinVisible: false,
+        pollingAllowed: true,
+        pollingIntervalMs: 12000,
+        receiptAvailable: false
+      },
+      DRIVER_ASSIGNED: {
+        order: 2,
+        customerTitle: "Ride Captain assigned",
+        customerCopy: "Your Ride Captain has been assigned and is preparing to accept the request.",
+        captainVisible: true,
+        vehicleVisible: true,
+        pickupPinVisible: false,
+        pollingAllowed: true,
+        pollingIntervalMs: 8000,
+        receiptAvailable: false
+      },
+      ACCEPTED: {
+        order: 3,
+        customerTitle: "Your Ride Captain is on the way",
+        customerCopy: "Your Ride Captain accepted the request and is heading to pickup.",
+        captainVisible: true,
+        vehicleVisible: true,
+        pickupPinVisible: false,
+        pollingAllowed: true,
+        pollingIntervalMs: 7000,
+        receiptAvailable: false
+      },
+      ARRIVED_PICKUP: {
+        order: 4,
+        customerTitle: "Your Ride Captain has arrived",
+        customerCopy: "Meet your approved KariGO Ride Captain at pickup and share the protected PIN only when you are ready to start.",
+        captainVisible: true,
+        vehicleVisible: true,
+        pickupPinVisible: true,
+        pollingAllowed: true,
+        pollingIntervalMs: 10000,
+        receiptAvailable: false
+      },
+      STARTED: {
+        order: 5,
+        customerTitle: "Ride in progress",
+        customerCopy: "Your KariGO Ride is in progress.",
+        captainVisible: true,
+        vehicleVisible: true,
+        pickupPinVisible: false,
+        pollingAllowed: true,
+        pollingIntervalMs: 9000,
+        receiptAvailable: false
+      },
+      ARRIVED_DESTINATION: {
+        order: 6,
+        customerTitle: "Destination reached",
+        customerCopy: "Your Ride has reached the destination. KariGO will confirm completion once the Captain closes the trip.",
+        captainVisible: true,
+        vehicleVisible: true,
+        pickupPinVisible: false,
+        pollingAllowed: true,
+        pollingIntervalMs: 10000,
+        receiptAvailable: false
+      },
+      COMPLETED: {
+        order: 7,
+        customerTitle: "Ride completed",
+        customerCopy: "Thanks for riding with KariGO.",
+        captainVisible: true,
+        vehicleVisible: true,
+        pickupPinVisible: false,
+        pollingAllowed: false,
+        pollingIntervalMs: 0,
+        receiptAvailable: true
+      },
+      CANCELLED_BY_CUSTOMER: {
+        order: 8,
+        customerTitle: "Ride request cancelled",
+        customerCopy: "This Ride request was cancelled by the customer.",
+        captainVisible: true,
+        vehicleVisible: true,
+        pickupPinVisible: false,
+        pollingAllowed: false,
+        pollingIntervalMs: 0,
+        receiptAvailable: true
+      },
+      CANCELLED_BY_DRIVER: {
+        order: 8,
+        customerTitle: "Ride request cancelled",
+        customerCopy: "This Ride request was cancelled by the Ride Captain.",
+        captainVisible: true,
+        vehicleVisible: true,
+        pickupPinVisible: false,
+        pollingAllowed: false,
+        pollingIntervalMs: 0,
+        receiptAvailable: true
+      },
+      CANCELLED_BY_ADMIN: {
+        order: 8,
+        customerTitle: "Ride request cancelled",
+        customerCopy: "This Ride request was closed by KariGO Operations.",
+        captainVisible: true,
+        vehicleVisible: true,
+        pickupPinVisible: false,
+        pollingAllowed: false,
+        pollingIntervalMs: 0,
+        receiptAvailable: true
+      },
+      EXPIRED: {
+        order: 8,
+        customerTitle: "Ride request expired",
+        customerCopy: "No Ride Captain accepted before the request expired.",
+        captainVisible: false,
+        vehicleVisible: false,
+        pickupPinVisible: false,
+        pollingAllowed: false,
+        pollingIntervalMs: 0,
+        receiptAvailable: true
+      }
+    };
+    return { ...base, ...definitions[status] };
+  }
+
+  private assignmentIncomplete(trip: TaxiTripWithRelations) {
+    const statusesRequiringCaptain: TaxiTripStatus[] = [
+      TaxiTripStatus.DRIVER_ASSIGNED,
+      TaxiTripStatus.ACCEPTED,
+      TaxiTripStatus.ARRIVED_PICKUP,
+      TaxiTripStatus.STARTED,
+      TaxiTripStatus.ARRIVED_DESTINATION,
+      TaxiTripStatus.COMPLETED,
+      TaxiTripStatus.CANCELLED_BY_DRIVER
+    ];
+    return statusesRequiringCaptain.includes(trip.status) && !trip.driverProfile;
+  }
+
+  private formatCaptainSummary(profile: TaxiDriverProfileForResponse) {
+    return {
+      id: profile.id,
+      userId: profile.userId,
+      displayName: profile.fullName,
+      profilePhotoUrl: null,
+      verified: profile.status === TaxiDriverProfileStatus.ACTIVE_TEST,
+      publicRating: null,
+      completedTripCount: null,
+      contactAvailable: Boolean(profile.phoneNumber),
+      contactPhoneNumber: profile.phoneNumber || null,
+      location: this.formatCaptainLocation(profile)
+    };
+  }
+
+  private formatVehicleSummary(profile: TaxiDriverProfileForResponse) {
+    return {
+      make: profile.vehicleMake,
+      model: profile.vehicleModel,
+      colour: profile.vehicleColour,
+      registrationNumber: profile.vehiclePlateNumber,
+      category: profile.vehicleType,
+      seatCapacity: this.vehicleSeatCapacity(profile.vehicleType),
+      photoUrl: null
+    };
+  }
+
+  private formatCaptainLocation(profile: TaxiDriverProfileForResponse) {
+    if (!profile.lastKnownLatitude || !profile.lastKnownLongitude || !profile.lastSeenAt) return null;
+    const ageMs = Date.now() - profile.lastSeenAt.getTime();
+    const freshness = ageMs <= 120_000 ? "fresh" : "stale";
+    return {
+      latitude: profile.lastKnownLatitude,
+      longitude: profile.lastKnownLongitude,
+      lastSeenAt: profile.lastSeenAt.toISOString(),
+      freshness
+    };
+  }
+
+  private vehicleSeatCapacity(type: TaxiVehicleType | null) {
+    if (type === TaxiVehicleType.SEDAN) return 4;
+    if (type === TaxiVehicleType.SUV) return 4;
+    if (type === TaxiVehicleType.MINI_BUS) return 10;
+    if (type === TaxiVehicleType.TRICYCLE) return 3;
+    return null;
+  }
+
+  private tripEventTime(trip: TaxiTripWithRelations, eventType: string) {
+    return trip.events.find((event) => event.eventType === eventType)?.createdAt.toISOString() ?? null;
+  }
+
+  private tripTimeline(trip: TaxiTripWithRelations, timestamps: {
+    requestedAt?: string | null;
+    assignedAt?: string | null;
+    acceptedAt?: string | null;
+    arrivedAtPickupAt?: string | null;
+    startedAt?: string | null;
+    arrivedAtDestinationAt?: string | null;
+    completedAt?: string | null;
+    cancelledAt?: string | null;
+    expiredAt?: string | null;
+  }) {
+    const candidates = [
+      { key: "requested", label: "Requested", status: TaxiTripStatus.REQUESTED, timestamp: timestamps.requestedAt },
+      { key: "assigned", label: "Captain assigned", status: TaxiTripStatus.DRIVER_ASSIGNED, timestamp: timestamps.assignedAt },
+      { key: "accepted", label: "Captain accepted", status: TaxiTripStatus.ACCEPTED, timestamp: timestamps.acceptedAt },
+      { key: "arrived_pickup", label: "Captain arrived", status: TaxiTripStatus.ARRIVED_PICKUP, timestamp: timestamps.arrivedAtPickupAt },
+      { key: "started", label: "Ride started", status: TaxiTripStatus.STARTED, timestamp: timestamps.startedAt },
+      { key: "arrived_destination", label: "Destination reached", status: TaxiTripStatus.ARRIVED_DESTINATION, timestamp: timestamps.arrivedAtDestinationAt },
+      { key: "completed", label: "Completed", status: TaxiTripStatus.COMPLETED, timestamp: timestamps.completedAt },
+      { key: "cancelled_customer", label: "Cancelled by customer", status: TaxiTripStatus.CANCELLED_BY_CUSTOMER, timestamp: timestamps.cancelledAt },
+      { key: "cancelled_captain", label: "Cancelled by Ride Captain", status: TaxiTripStatus.CANCELLED_BY_DRIVER, timestamp: timestamps.cancelledAt },
+      { key: "cancelled_admin", label: "Cancelled by KariGO", status: TaxiTripStatus.CANCELLED_BY_ADMIN, timestamp: timestamps.cancelledAt },
+      { key: "expired", label: "Expired", status: TaxiTripStatus.EXPIRED, timestamp: timestamps.expiredAt }
+    ];
+    return candidates
+      .filter((item) => item.timestamp || item.status === trip.status)
+      .map((item) => ({
+        ...item,
+        current: item.status === trip.status
+      }));
+  }
+
+  private encryptTripPin(pin: string) {
+    const iv = randomBytes(12);
+    const cipher = createCipheriv("aes-256-gcm", this.tripPinEncryptionKey(), iv);
+    const encrypted = Buffer.concat([cipher.update(pin, "utf8"), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return `v1:${iv.toString("base64url")}:${tag.toString("base64url")}:${encrypted.toString("base64url")}`;
+  }
+
+  private decryptTripPin(trip: Pick<TaxiTripWithRelations, "id" | "tripPinEncrypted">) {
+    if (!trip.tripPinEncrypted) return undefined;
+    try {
+      const [version, iv, tag, encrypted] = trip.tripPinEncrypted.split(":");
+      if (version !== "v1" || !iv || !tag || !encrypted) return undefined;
+      const decipher = createDecipheriv("aes-256-gcm", this.tripPinEncryptionKey(), Buffer.from(iv, "base64url"));
+      decipher.setAuthTag(Buffer.from(tag, "base64url"));
+      return Buffer.concat([
+        decipher.update(Buffer.from(encrypted, "base64url")),
+        decipher.final()
+      ]).toString("utf8");
+    } catch {
+      this.logger.warn(`Ride PIN decrypt failed tripId=${trip.id}`);
+      return undefined;
+    }
+  }
+
+  private tripPinEncryptionKey() {
+    const secret = this.config.get<string>("RIDE_PIN_ENCRYPTION_SECRET", this.config.get<string>("JWT_SECRET", "karigo-local-ride-pin-secret"));
+    return createHash("sha256").update(secret).digest();
   }
 
   private formatDriverProfile(profile: TaxiDriverProfileForResponse) {

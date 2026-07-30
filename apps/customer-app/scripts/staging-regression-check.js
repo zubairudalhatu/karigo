@@ -213,6 +213,14 @@ assert(taxiRequest.includes("Active request must be completed or cancelled first
 assert(taxiRequest.includes("ACTIVE_RIDE_EXISTS") || read("src", "lib", "errors.ts").includes("ACTIVE_RIDE_EXISTS"), "Customer app must handle backend active ride conflicts safely.");
 assert(taxiRequest.includes("AppState.addEventListener"), "Ride tracking must refresh active rides only while the app is foregrounded.");
 assert(taxiRequest.includes("pollingInFlight"), "Ride tracking polling must prevent overlapping refresh requests.");
+assert(taxiRequest.includes("trackingRequestToken"), "Ride tracking polling must ignore stale status responses.");
+assert(taxiRequest.includes("lifecycleForTrip") && taxiRequest.includes("taxiLifecycleForStatus"), "Ride tracking must use the shared lifecycle contract.");
+assert(taxiRequest.includes("Share.share") && taxiRequest.includes("safeShareRideText"), "Ride tracking must support safe ride sharing.");
+assert(taxiRequest.includes("Share this PIN only with your approved KariGO Ride Captain at pickup."), "Ride tracking must reveal the PIN only with pickup safety copy.");
+assert(taxiRequest.includes("lifecycle.pickupPinVisible"), "Ride tracking must gate pickup PIN display from backend lifecycle state.");
+assert(taxiRequest.includes("CaptainVehicleCard"), "Ride tracking must show verified Captain and vehicle projection after assignment.");
+assert(taxiRequest.includes("SafetyPanel"), "Ride tracking must include a concise supported safety panel.");
+assert(taxiRequest.includes("RideReceipt") && taxiRequest.includes("RideTimeline"), "Ride tracking must include receipt and timeline sections.");
 assert(taxiRequest.includes("Use current location as pickup"), "Ride request flow must expose current-location pickup selection.");
 assert(taxiRequest.includes("Saved places"), "Ride request flow must expose saved places.");
 assert(taxiRequest.includes("Recent destinations"), "Ride request flow must expose recent destination shortcuts.");
@@ -257,6 +265,9 @@ assert(ordersIndex.includes("Book another ride"), "Terminal ride details must su
 assert(ordersIndex.includes("formatRideFareKobo"), "Orders -> Rides must use the shared kobo-to-naira formatter.");
 assert(ordersIndex.includes("RideStatusBadge") && ordersIndex.includes("rideStatusLabel"), "Orders -> Rides must use responsive sentence-case ride status badges.");
 assert(ordersIndex.includes("rideCardHeader") && ordersIndex.includes("maxWidth: \"100%\"") && ordersIndex.includes("flexWrap: \"wrap\""), "Orders -> Rides status badges must stay inside cards on small screens.");
+assert(ordersIndex.includes("Share.share") && ordersIndex.includes("safeRideReceiptShare"), "Orders -> Rides details must share only a safe receipt summary.");
+assert(ordersIndex.includes("RideTimeline") && ordersIndex.includes("receiptBox"), "Orders -> Rides details must show ride timeline and receipt fields.");
+assert(!ordersIndex.includes("tripPin"), "Orders -> Rides must not display or share the protected pickup PIN.");
 
 const smeServices = read("app", "sme-services.tsx");
 assert(smeServices.includes("SME Services"), "Customer app must include the SME Services request screen.");

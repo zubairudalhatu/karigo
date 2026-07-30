@@ -102,6 +102,7 @@ const taxiTrip = {
   finalFareKobo: null,
   status: TaxiTripStatus.REQUESTED,
   tripPinHash: "$2b$10$hash",
+  tripPinEncrypted: null,
   tripPinLastFour: "3456",
   cancellationReason: null,
   customerNote: null,
@@ -547,7 +548,7 @@ describe("TaxiService", () => {
     })).toThrow(BadRequestException);
   });
 
-  it("creates controlled-pilot Ride trips with a unique reference and hashed trip PIN", async () => {
+  it("creates controlled-pilot Ride trips with a unique reference and protected trip PIN", async () => {
     enableTaxiStaging();
     prisma.taxiTrip.findUnique.mockResolvedValue(null);
 
@@ -575,10 +576,10 @@ describe("TaxiService", () => {
     expect(createCall.data.customerNote).toContain("Stop: Bompai, Kano");
     expect(createCall.data.customerNote).toContain("Payment preference: CASH_ON_DELIVERY");
     expect(createCall.data.customerNote).toContain("Pickup instruction: Meet at the main gate");
-    expect(result.tripPin).toMatch(/^\d{6}$/);
-    expect(createCall.data.tripPinHash).not.toBe(result.tripPin);
-    expect(createCall.data.tripPinLastFour).toBe(result.tripPin.slice(-4));
-    expect(await bcrypt.compare(result.tripPin, createCall.data.tripPinHash)).toBe(true);
+    expect((result as { tripPin?: string }).tripPin).toBeUndefined();
+    expect(createCall.data.tripPinHash).toBeTruthy();
+    expect(createCall.data.tripPinEncrypted).toMatch(/^v1:/);
+    expect(createCall.data.tripPinLastFour).toMatch(/^\d{4}$/);
     expect(prisma.taxiTripEvent.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         eventType: "taxi.trip.requested",
@@ -609,6 +610,54 @@ describe("TaxiService", () => {
     })).rejects.toBeInstanceOf(ConflictException);
 
     expect(prisma.taxiTrip.create).not.toHaveBeenCalled();
+  });
+
+  it("reveals the protected pickup PIN only to the owning customer at ARRIVED_PICKUP", async () => {
+    enableTaxiStaging();
+    await service.createCustomerTrip("customer-user", {
+      pickupAddress: "Tarauni, Kano",
+      pickupLatitude: 12.0022,
+      pickupLongitude: 8.592,
+      destinationAddress: "Zoo Road, Kano",
+      destinationLatitude: 12.014,
+      destinationLongitude: 8.541,
+      estimatedDistanceKm: 6.5,
+      estimatedDurationMin: 18,
+      rideCategory: "ECONOMY"
+    });
+    const createCall = prisma.taxiTrip.create.mock.calls[0][0];
+    prisma.taxiTrip.findFirst.mockResolvedValueOnce({
+      ...taxiTrip,
+      status: TaxiTripStatus.ARRIVED_PICKUP,
+      driverProfileId: driverProfile.id,
+      driverProfile,
+      tripPinHash: createCall.data.tripPinHash,
+      tripPinEncrypted: createCall.data.tripPinEncrypted
+    });
+
+    const result = await service.customerTrip("customer-user", taxiTrip.id);
+
+    expect(result.tripPin).toMatch(/^\d{6}$/);
+    expect(await bcrypt.compare(result.tripPin!, createCall.data.tripPinHash)).toBe(true);
+    expect(result.captain).toMatchObject({ displayName: driverProfile.fullName, verified: true });
+    expect(result.vehicle).toMatchObject({ registrationNumber: driverProfile.vehiclePlateNumber });
+  });
+
+  it("does not expose false Captain data when an assigned Ride has no Captain relation", async () => {
+    enableTaxiStaging();
+    prisma.taxiTrip.findFirst.mockResolvedValueOnce({
+      ...taxiTrip,
+      status: TaxiTripStatus.DRIVER_ASSIGNED,
+      driverProfileId: driverProfile.id,
+      driverProfile: null
+    });
+
+    const result = await service.customerTrip("customer-user", taxiTrip.id);
+
+    expect(result.assignmentIncomplete).toBe(true);
+    expect(result.captain).toBeNull();
+    expect(result.vehicle).toBeNull();
+    expect(result.tripPin).toBeUndefined();
   });
 
   it("returns safe active trip details in duplicate Ride conflict responses", async () => {

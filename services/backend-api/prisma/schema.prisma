@@ -686,38 +686,38 @@ model RefreshToken {
 }
 
 model TaxiDriverApplication {
-  id                   String                @id @default(uuid()) @db.Uuid
-  applicationReference String                @unique
-  applicantUserId      String?               @db.Uuid
-  fullName             String
-  phoneNumber          String
-  email                String?
-  city                 String
-  state                String
-  address              String?
-  driverLicenceNumber  String?
-  driverLicenceDocumentUrl String?
-  driverLicenceExpiry  DateTime?
-  vehicleMake          String?
-  vehicleModel         String?
-  vehicleYear          Int?
-  vehicleColour        String?
-  vehiclePlateNumber   String?
-  vehicleType          TaxiVehicleType?
-  vehicleOwnership     TaxiVehicleOwnership?
+  id                            String                @id @default(uuid()) @db.Uuid
+  applicationReference          String                @unique
+  applicantUserId               String?               @db.Uuid
+  fullName                      String
+  phoneNumber                   String
+  email                         String?
+  city                          String
+  state                         String
+  address                       String?
+  driverLicenceNumber           String?
+  driverLicenceDocumentUrl      String?
+  driverLicenceExpiry           DateTime?
+  vehicleMake                   String?
+  vehicleModel                  String?
+  vehicleYear                   Int?
+  vehicleColour                 String?
+  vehiclePlateNumber            String?
+  vehicleType                   TaxiVehicleType?
+  vehicleOwnership              TaxiVehicleOwnership?
   vehicleParticularsDocumentUrl String?
-  insuranceDocumentUrl String?
-  notes                String?
-  status               TaxiApplicationStatus @default(SUBMITTED)
-  adminNote            String?
-  applicantVisibleNote String?
-  reviewedByAdminId    String?               @db.Uuid
-  reviewedAt           DateTime?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  applicant            User?                 @relation("TaxiApplicant", fields: [applicantUserId], references: [id])
-  reviewedByAdmin      User?                 @relation("TaxiReviewedBy", fields: [reviewedByAdminId], references: [id])
-  driverProfile        TaxiDriverProfile?
+  insuranceDocumentUrl          String?
+  notes                         String?
+  status                        TaxiApplicationStatus @default(SUBMITTED)
+  adminNote                     String?
+  applicantVisibleNote          String?
+  reviewedByAdminId             String?               @db.Uuid
+  reviewedAt                    DateTime?
+  createdAt                     DateTime              @default(now())
+  updatedAt                     DateTime              @updatedAt
+  applicant                     User?                 @relation("TaxiApplicant", fields: [applicantUserId], references: [id])
+  reviewedByAdmin               User?                 @relation("TaxiReviewedBy", fields: [reviewedByAdminId], references: [id])
+  driverProfile                 TaxiDriverProfile?
 
   @@index([status, createdAt])
   @@index([phoneNumber])
@@ -847,6 +847,7 @@ model TaxiTrip {
   finalFareKobo          Int?
   status                 TaxiTripStatus     @default(REQUESTED)
   tripPinHash            String?
+  tripPinEncrypted       String?
   tripPinLastFour        String?
   cancellationReason     String?
   customerNote           String?

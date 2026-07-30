@@ -1,7 +1,7 @@
 import * as Location from "expo-location";
 import { router, Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, AppState, BackHandler, Keyboard, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Animated, AppState, BackHandler, Keyboard, Linking, PanResponder, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import MapView, { Marker, Polyline, Region } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -12,7 +12,8 @@ import {
   TaxiTrip,
   customerCancellableTaxiTripStatuses,
   isActiveTaxiTripStatus,
-  isTerminalTaxiTripStatus
+  isTerminalTaxiTripStatus,
+  taxiLifecycleForStatus
 } from "@karigo/shared-types";
 import { brand } from "@karigo/config";
 import { Address, addressesApi } from "../../src/api/addresses.api";
@@ -196,38 +197,82 @@ function paymentCopy(paymentMethod: string) {
   return "Card ride payment is coming soon.";
 }
 
+function lifecycleForTrip(trip: TaxiTrip) {
+  return trip.lifecycle ?? taxiLifecycleForStatus(trip.status);
+}
+
+function captainForTrip(trip: TaxiTrip) {
+  if (trip.captain) return trip.captain;
+  if (!trip.driver || trip.status === "REQUESTED") return null;
+  return {
+    id: trip.driver.id,
+    userId: trip.driver.userId,
+    displayName: trip.driver.fullName,
+    profilePhotoUrl: null,
+    verified: trip.driver.status === "ACTIVE_TEST",
+    publicRating: null,
+    completedTripCount: null,
+    contactAvailable: Boolean(trip.driver.phoneNumber),
+    contactPhoneNumber: trip.driver.phoneNumber ?? null,
+    location: trip.driver.lastKnownLatitude && trip.driver.lastKnownLongitude ? {
+      latitude: trip.driver.lastKnownLatitude,
+      longitude: trip.driver.lastKnownLongitude,
+      lastSeenAt: trip.driver.lastSeenAt,
+      freshness: trip.driver.lastSeenAt && Date.now() - new Date(trip.driver.lastSeenAt).getTime() <= 120_000 ? "fresh" as const : "stale" as const
+    } : null
+  };
+}
+
+function vehicleForTrip(trip: TaxiTrip) {
+  if (trip.vehicle) return trip.vehicle;
+  if (!trip.driver || trip.status === "REQUESTED") return null;
+  return {
+    make: trip.driver.vehicleMake,
+    model: trip.driver.vehicleModel,
+    colour: trip.driver.vehicleColour,
+    registrationNumber: trip.driver.vehiclePlateNumber,
+    category: trip.driver.vehicleType,
+    seatCapacity: trip.driver.vehicleType === "MINI_BUS" ? 10 : trip.driver.vehicleType === "TRICYCLE" ? 3 : trip.driver.vehicleType ? 4 : null,
+    photoUrl: null
+  };
+}
+
 function rideStatusCopy(trip?: TaxiTrip | null) {
   if (!trip) return "Ride request status unavailable.";
-  if (trip.status === "REQUESTED") return "Connecting you with an available Captain nearby.";
-  if (trip.status === "DRIVER_ASSIGNED") return trip.driver ? "Ride Captain assigned." : "Looking for a Ride Captain.";
-  if (trip.status === "ACCEPTED") return trip.driver ? "Your Ride Captain is on the way." : "Looking for a Ride Captain.";
-  if (trip.status === "ARRIVED_PICKUP") return "Your Ride Captain has arrived at pickup.";
-  if (trip.status === "STARTED" || trip.status === "ARRIVED_DESTINATION") return "Ride in progress.";
-  if (trip.status === "COMPLETED") return "Ride completed.";
-  if (trip.status === "EXPIRED") return "Ride request expired.";
-  if (trip.status.startsWith("CANCELLED")) return "Ride request cancelled.";
-  return "Ride status updated.";
+  if (trip.assignmentIncomplete) return "KariGO Operations is confirming the Ride Captain assignment.";
+  return lifecycleForTrip(trip).customerCopy;
 }
 
 function rideTrackingTitle(trip?: TaxiTrip | null) {
   if (!trip) return "Ride status";
-  if (trip.status === "REQUESTED") return "Looking for a Ride Captain";
-  if (trip.status === "DRIVER_ASSIGNED" || trip.status === "ACCEPTED") return trip.driver ? "Ride Captain assigned" : "Looking for a Ride Captain";
-  if (trip.status === "ARRIVED_PICKUP") return "Captain at pickup";
-  if (trip.status === "STARTED" || trip.status === "ARRIVED_DESTINATION") return "Ride in progress";
-  if (trip.status === "COMPLETED") return "Ride completed";
-  if (trip.status === "EXPIRED") return "Ride request expired";
-  if (trip.status.startsWith("CANCELLED")) return "Ride request cancelled";
-  return "Ride status";
+  if (trip.assignmentIncomplete) return "Confirming Ride Captain";
+  return lifecycleForTrip(trip).customerTitle;
 }
 
 function rideStatusActionCopy(trip?: TaxiTrip | null) {
   if (!trip) return "";
-  if (trip.status === "REQUESTED") return "Ride request received.";
-  if (trip.status === "EXPIRED") return "No Captain accepted before this request expired.";
-  if (trip.status === "COMPLETED") return "Thanks for riding with KariGO.";
   if (trip.status.startsWith("CANCELLED")) return trip.cancellationReason || "This ride request is closed.";
   return rideStatusCopy(trip);
+}
+
+function safeShareRideText(trip: TaxiTrip) {
+  const captain = captainForTrip(trip);
+  const vehicle = vehicleForTrip(trip);
+  return [
+    `KariGO Ride ${trip.tripReference}`,
+    `Status: ${rideTrackingTitle(trip)}`,
+    `Pickup: ${trip.pickupAddress}`,
+    `Destination: ${trip.destinationAddress}`,
+    captain ? `Captain: ${captain.displayName}` : null,
+    vehicle ? `Vehicle: ${[vehicle.colour, vehicle.make, vehicle.model].filter(Boolean).join(" ") || "Details pending"}` : null,
+    vehicle?.registrationNumber ? `Registration: ${vehicle.registrationNumber}` : null
+  ].filter(Boolean).join("\n");
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "Pending";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Pending" : date.toLocaleString();
 }
 
 function shortAddress(value?: string | null) {
@@ -312,6 +357,7 @@ export default function TaxiRequest() {
   const requestInFlight = useRef(false);
   const requestAttemptId = useRef<string | null>(null);
   const pollingInFlight = useRef(false);
+  const trackingRequestToken = useRef(0);
   const keyboardVisible = useRef(false);
   const panelDrag = useRef(new Animated.Value(0)).current;
 
@@ -489,15 +535,21 @@ export default function TaxiRequest() {
     let appState = AppState.currentState;
     let cancelled = false;
     let interval: ReturnType<typeof setInterval> | null = null;
+    const currentStatus = created.status;
+    const pollMs = Math.max(5000, lifecycleForTrip(created).pollingIntervalMs || 25_000);
 
     async function refreshActiveTrip() {
       if (!created || pollingInFlight.current || appState !== "active") return;
+      const requestId = ++trackingRequestToken.current;
       pollingInFlight.current = true;
       try {
         const fresh = await taxiApi.trip(created.id);
-        if (cancelled) return;
+        if (cancelled || requestId !== trackingRequestToken.current) return;
         setCreated(fresh);
         setTrips((current) => mergeTrip(current, fresh));
+        if (fresh.status !== currentStatus) {
+          setMessage(`Ride status updated: ${rideTrackingTitle(fresh)}.`);
+        }
         if (isTerminalTaxiTripStatus(fresh.status) && interval) {
           clearInterval(interval);
           interval = null;
@@ -513,11 +565,12 @@ export default function TaxiRequest() {
       appState = nextState;
       if (nextState === "active") void refreshActiveTrip();
     });
-    interval = setInterval(() => void refreshActiveTrip(), 25_000);
+    interval = setInterval(() => void refreshActiveTrip(), pollMs);
     void refreshActiveTrip();
 
     return () => {
       cancelled = true;
+      trackingRequestToken.current += 1;
       subscription.remove();
       if (interval) clearInterval(interval);
     };
@@ -1797,9 +1850,18 @@ function RideTracking({
   onViewAllRides: () => void;
   otherActiveCount: number;
 }) {
+  const lifecycle = lifecycleForTrip(trip);
   const terminal = isTerminalTaxiTripStatus(trip.status);
-  const showCaptain = Boolean(trip.driver && !terminal && trip.status !== "REQUESTED");
-  const showPin = Boolean(trip.tripPin && showCaptain && ["ARRIVED_PICKUP", "STARTED", "ARRIVED_DESTINATION"].includes(trip.status));
+  const captain = lifecycle.captainVisible ? captainForTrip(trip) : null;
+  const vehicle = lifecycle.vehicleVisible ? vehicleForTrip(trip) : null;
+  const showPin = Boolean(trip.tripPin && lifecycle.pickupPinVisible && captain);
+  const canCallCaptain = Boolean(captain?.contactAvailable && captain.contactPhoneNumber && !terminal);
+  const showReceipt = lifecycle.receiptAvailable || terminal;
+  const shareRide = () => void Share.share({ message: safeShareRideText(trip) });
+  const callCaptain = () => {
+    if (!captain?.contactPhoneNumber) return;
+    void Linking.openURL(`tel:${captain.contactPhoneNumber}`);
+  };
   return <Card>
     <Text style={ui.cardTitle}>{rideTrackingTitle(trip)}</Text>
     <Text style={ui.muted}>{rideStatusActionCopy(trip)}</Text>
@@ -1807,6 +1869,10 @@ function RideTracking({
       <Text style={styles.tripRef}>{trip.tripReference}</Text>
       <StatusBadge status={trip.status} />
     </View>
+    {trip.assignmentIncomplete ? <View style={styles.activeNotice}>
+      <Text style={styles.activeNoticeTitle}>Captain assignment incomplete</Text>
+      <Text style={styles.activeNoticeText}>KariGO Operations is confirming the assigned Captain before details are shown.</Text>
+    </View> : null}
     <View style={styles.routePanel}>
       <RoutePoint label="Pickup" value={trip.pickupAddress} tone="pickup" />
       <RoutePoint label="Destination" value={trip.destinationAddress} tone="destination" />
@@ -1815,22 +1881,30 @@ function RideTracking({
       <Metric label="Ride" value={tripCategoryLabel(trip)} />
       <Metric label={trip.status === "COMPLETED" ? "Fare" : "Estimate"} value={money(trip.finalFareKobo ?? trip.estimatedFareKobo)} />
     </View>
-    {showCaptain && trip.driver ? <View style={styles.captainCard}>
-      <Text style={styles.captainTitle}>Ride Captain</Text>
-      <Text style={styles.captainText}>{trip.driver.fullName}</Text>
-      <Text style={ui.muted}>{[trip.driver.vehicleColour, trip.driver.vehicleMake, trip.driver.vehicleModel].filter(Boolean).join(" ") || "Vehicle details pending"}</Text>
-      <Text style={ui.muted}>{trip.driver.vehiclePlateNumber ? `Plate: ${trip.driver.vehiclePlateNumber}` : "Registration pending"}</Text>
-    </View> : null}
+    {captain || vehicle ? <CaptainVehicleCard captain={captain} vehicle={vehicle} status={trip.status} /> : null}
+    {captain && ["DRIVER_ASSIGNED", "ACCEPTED"].includes(trip.status) ? <Text style={ui.muted}>
+      {captain.location?.freshness === "fresh" ? "Captain location is updating." : "Location updating. Captain movement appears only when verified location is available."}
+    </Text> : null}
     {showPin && trip.tripPin ? <>
       <Text style={ui.otpCode}>{trip.tripPin.slice(0, 3)} {trip.tripPin.slice(3)}</Text>
-      <Text style={ui.muted}>Only share this ride PIN with the approved Ride Captain at pickup.</Text>
+      <Text style={styles.pinWarning}>Share this PIN only with your approved KariGO Ride Captain at pickup.</Text>
+    </> : lifecycle.captainVisible && !terminal ? <>
+      <Text style={styles.maskedPin}>••• •••</Text>
+      <Text style={ui.muted}>Your Ride PIN will appear when your approved Captain reaches pickup.</Text>
     </> : null}
     {trip.status === "REQUESTED" ? <CaptainSearchProgress /> : null}
+    <RideTimeline trip={trip} />
+    <SafetyPanel trip={trip} onShare={shareRide} />
+    {showReceipt ? <RideReceipt trip={trip} /> : null}
     {otherActiveCount > 0 ? <View style={styles.activeNotice}>
       <Text style={styles.activeNoticeTitle}>{otherActiveCount} other active ride {otherActiveCount === 1 ? "request" : "requests"}</Text>
       <Text style={styles.activeNoticeText}>Manage legacy active rides from Orders.</Text>
     </View> : null}
-    {cancellableBeforePickup.has(trip.status) ? <Button title={loading ? "Cancelling..." : "Cancel ride request"} tone="muted" disabled={loading} onPress={onCancel} /> : null}
+    {lifecycle.customerCancellationAllowed ? <Button title={loading ? "Cancelling..." : "Cancel ride request"} tone="muted" disabled={loading} onPress={onCancel} /> : null}
+    <View style={styles.inlineActions}>
+      <Button title="Share Ride" tone="muted" onPress={shareRide} />
+      {canCallCaptain ? <Button title="Call Captain" tone="muted" onPress={callCaptain} /> : null}
+    </View>
     {terminal ? <View style={styles.inlineActions}>
       <Button title={trip.status === "EXPIRED" ? "Retry ride request" : "Book another ride"} onPress={onBookAnother} />
       <Button title="Back to KariGO Home" tone="muted" onPress={onBackHome} />
@@ -1841,6 +1915,96 @@ function RideTracking({
       <Button title={otherActiveCount > 0 ? "Manage rides" : "View all rides"} tone="muted" onPress={onViewAllRides} />
     </View>}
   </Card>;
+}
+
+function CaptainVehicleCard({ captain, vehicle, status }: { captain: ReturnType<typeof captainForTrip> | null; vehicle: ReturnType<typeof vehicleForTrip> | null; status: TaxiTrip["status"] }) {
+  return <View style={styles.captainCard}>
+    <Text style={styles.captainTitle}>Ride Captain</Text>
+    {captain ? <>
+      <View style={styles.captainHeader}>
+        <View style={styles.captainAvatar}><Text style={styles.captainAvatarText}>{captain.displayName.slice(0, 1).toUpperCase()}</Text></View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.captainText} numberOfLines={1}>{captain.displayName}</Text>
+          <Text style={ui.muted}>{captain.verified ? "Verified KariGO Ride Captain" : "Verification pending"}</Text>
+        </View>
+      </View>
+      {captain.location ? <Text style={ui.muted}>{captain.location.freshness === "fresh" ? "Captain location recently updated." : "Captain location may be stale."}</Text> : status === "DRIVER_ASSIGNED" || status === "ACCEPTED" ? <Text style={ui.muted}>Location updating.</Text> : null}
+    </> : <Text style={ui.muted}>Captain details will appear after KariGO confirms assignment.</Text>}
+    {vehicle ? <View style={styles.vehiclePanel}>
+      <Text style={styles.vehicleTitle}>Vehicle</Text>
+      <Text style={styles.captainText}>{[vehicle.colour, vehicle.make, vehicle.model].filter(Boolean).join(" ") || "Vehicle details pending"}</Text>
+      <Text style={ui.muted}>{vehicle.registrationNumber ? `Registration: ${vehicle.registrationNumber}` : "Registration pending"}</Text>
+      <Text style={ui.muted}>{vehicle.category ? `${vehicle.category.replaceAll("_", " ")}${vehicle.seatCapacity ? ` · ${vehicle.seatCapacity} seats` : ""}` : "Ride category vehicle"}</Text>
+    </View> : null}
+  </View>;
+}
+
+function RideTimeline({ trip }: { trip: TaxiTrip }) {
+  const items = trip.timeline?.length ? trip.timeline : [{
+    key: trip.status,
+    label: rideTrackingTitle(trip),
+    status: trip.status,
+    timestamp: trip.updatedAt ?? trip.createdAt,
+    current: true
+  }];
+  return <View style={styles.timelineCard}>
+    <Text style={styles.timelineTitle}>Ride timeline</Text>
+    {items.map((item) => <View key={item.key} style={styles.timelineRow}>
+      <View style={[styles.timelineDot, item.current && styles.timelineDotCurrent]} />
+      <View style={styles.timelineBody}>
+        <Text style={styles.timelineLabel}>{item.label}</Text>
+        <Text style={ui.muted}>{item.timestamp ? formatDateTime(item.timestamp) : item.current ? "Current status" : "Pending"}</Text>
+      </View>
+    </View>)}
+  </View>;
+}
+
+function SafetyPanel({ trip, onShare }: { trip: TaxiTrip; onShare: () => void }) {
+  const captain = captainForTrip(trip);
+  const vehicle = vehicleForTrip(trip);
+  return <View style={styles.safetyPanel}>
+    <Text style={styles.safetyTitle}>Safety reminders</Text>
+    <Text style={ui.muted}>Verify the Captain name and vehicle before entering.</Text>
+    {captain ? <Text style={ui.muted}>Captain: {captain.displayName}</Text> : null}
+    {vehicle?.registrationNumber ? <Text style={ui.muted}>Registration: {vehicle.registrationNumber}</Text> : null}
+    <Text style={ui.muted}>{trip.status === "ARRIVED_PICKUP" ? "Share the Ride PIN only at pickup." : "Do not share your Ride PIN before pickup."}</Text>
+    <Button title="Share safe ride details" tone="muted" onPress={onShare} />
+  </View>;
+}
+
+function RideReceipt({ trip }: { trip: TaxiTrip }) {
+  const captain = captainForTrip(trip);
+  const vehicle = vehicleForTrip(trip);
+  const fareLabel = trip.status === "COMPLETED" && trip.finalFareKobo ? "Final fare" : "Estimated fare";
+  return <View style={styles.receiptCard}>
+    <Text style={styles.receiptTitle}>{trip.status === "COMPLETED" ? "Ride receipt" : "Ride record"}</Text>
+    <ReceiptRow label="Reference" value={trip.tripReference} />
+    <ReceiptRow label="Status" value={rideTrackingTitle(trip)} />
+    <ReceiptRow label="Ride" value={tripCategoryLabel(trip)} />
+    <ReceiptRow label="Pickup" value={trip.pickupAddress} />
+    <ReceiptRow label="Destination" value={trip.destinationAddress} />
+    <ReceiptRow label="Distance" value={trip.estimatedDistanceKm ? `${Number(trip.estimatedDistanceKm).toLocaleString()} km` : "Pending"} />
+    <ReceiptRow label="Duration" value={trip.estimatedDurationMin ? `${trip.estimatedDurationMin} min` : "Pending"} />
+    <ReceiptRow label="Captain" value={captain?.displayName ?? "Not assigned"} />
+    <ReceiptRow label="Vehicle" value={vehicle ? [vehicle.colour, vehicle.make, vehicle.model].filter(Boolean).join(" ") || "Pending" : "Not assigned"} />
+    <ReceiptRow label={fareLabel} value={money(trip.finalFareKobo ?? trip.estimatedFareKobo)} />
+    <ReceiptRow label="Payment" value="Cash" />
+    <ReceiptRow label="Requested" value={formatDateTime(trip.requestedAt)} />
+    {trip.acceptedAt ? <ReceiptRow label="Accepted" value={formatDateTime(trip.acceptedAt)} /> : null}
+    {trip.arrivedAtPickupAt ? <ReceiptRow label="Pickup arrival" value={formatDateTime(trip.arrivedAtPickupAt)} /> : null}
+    {trip.startedAt ? <ReceiptRow label="Started" value={formatDateTime(trip.startedAt)} /> : null}
+    {trip.arrivedAtDestinationAt ? <ReceiptRow label="Destination reached" value={formatDateTime(trip.arrivedAtDestinationAt)} /> : null}
+    {trip.completedAt ? <ReceiptRow label="Completed" value={formatDateTime(trip.completedAt)} /> : null}
+    {trip.cancelledAt ? <ReceiptRow label="Closed" value={formatDateTime(trip.cancelledAt)} /> : null}
+    {trip.cancellationReason ? <ReceiptRow label="Reason" value={trip.cancellationReason} /> : null}
+  </View>;
+}
+
+function ReceiptRow({ label, value }: { label: string; value: string }) {
+  return <View style={styles.receiptRow}>
+    <Text style={styles.receiptLabel}>{label}</Text>
+    <Text style={styles.receiptValue}>{value}</Text>
+  </View>;
 }
 
 function CaptainSearchProgress() {
@@ -1892,6 +2056,9 @@ const styles = StyleSheet.create({
   bookingHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   bottomSheet: { backgroundColor: brand.colors.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, bottom: 0, left: 0, paddingHorizontal: 18, position: "absolute", right: 0, shadowColor: "#111827", shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.16, shadowRadius: 18 },
   captainCard: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 3, padding: 12 },
+  captainAvatar: { alignItems: "center", backgroundColor: "#FEF2F2", borderRadius: 999, height: 42, justifyContent: "center", width: 42 },
+  captainAvatarText: { color: brand.colors.primaryDark, fontSize: 18, fontWeight: "900" },
+  captainHeader: { alignItems: "center", flexDirection: "row", gap: 10 },
   captainText: { color: brand.colors.charcoal, fontWeight: "900" },
   captainTitle: { color: brand.colors.primaryDark, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
   categoryBody: { flex: 1, gap: 2 },
@@ -1928,6 +2095,7 @@ const styles = StyleSheet.create({
   mapTitle: { color: brand.colors.charcoal, fontSize: 18, fontWeight: "900" },
   mapTitleCard: { backgroundColor: "rgba(255,255,255,0.94)", borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, flex: 1, paddingHorizontal: 14, paddingVertical: 10 },
   mapTopBar: { alignItems: "center", flexDirection: "row", gap: 10, left: 16, position: "absolute", right: 16, top: 0 },
+  maskedPin: { alignSelf: "flex-start", backgroundColor: "#111827", borderRadius: 16, color: brand.colors.white, fontSize: 22, fontWeight: "900", letterSpacing: 4, overflow: "hidden", paddingHorizontal: 16, paddingVertical: 12 },
   metricCard: { backgroundColor: "#F9FAFB", borderRadius: 16, flex: 1, padding: 12 },
   metricLabel: { color: brand.colors.muted, fontSize: 12, fontWeight: "800" },
   metricValue: { color: brand.colors.charcoal, fontSize: 15, fontWeight: "900" },
@@ -1938,6 +2106,7 @@ const styles = StyleSheet.create({
   paymentOptionDisabled: { opacity: 0.55 },
   paymentSubtitle: { color: brand.colors.muted, fontSize: 11, fontWeight: "800" },
   paymentTitle: { color: brand.colors.charcoal, fontWeight: "900" },
+  pinWarning: { backgroundColor: "#FEF2F2", borderRadius: 14, color: brand.colors.primaryDark, fontWeight: "900", lineHeight: 19, padding: 10 },
   pickupMarker: { backgroundColor: brand.colors.success },
   placeBody: { flex: 1 },
   placeDot: { alignItems: "center", backgroundColor: "#FEF2F2", borderRadius: 16, height: 34, justifyContent: "center", width: 34 },
@@ -1972,6 +2141,13 @@ const styles = StyleSheet.create({
   sheetScroll: { gap: 12 },
   sheetStatic: { flex: 1, gap: 10 },
   sheetTitle: { color: brand.colors.charcoal, fontSize: 22, fontWeight: "900", letterSpacing: -0.3 },
+  receiptCard: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 8, padding: 12 },
+  receiptLabel: { color: brand.colors.muted, flexShrink: 0, fontSize: 12, fontWeight: "800", width: 98 },
+  receiptRow: { alignItems: "flex-start", borderTopColor: "#E5E7EB", borderTopWidth: 1, flexDirection: "row", flexWrap: "wrap", gap: 8, paddingTop: 8 },
+  receiptTitle: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "900" },
+  receiptValue: { color: brand.colors.charcoal, flex: 1, fontSize: 13, fontWeight: "800", lineHeight: 18, minWidth: 150 },
+  safetyPanel: { backgroundColor: "#FFFBEB", borderColor: "#FDE68A", borderRadius: 16, borderWidth: 1, gap: 8, padding: 12 },
+  safetyTitle: { color: "#92400E", fontWeight: "900" },
   smallPill: { backgroundColor: "#F3F4F6", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   smallPillText: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "900" },
   stopMarker: { backgroundColor: brand.colors.warning },
@@ -1982,10 +2158,19 @@ const styles = StyleSheet.create({
   stickyScrollContent: { gap: 12 },
   suggestionBox: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 10, padding: 10 },
   suggestionRow: { alignItems: "center", flexDirection: "row", gap: 10 },
+  timelineBody: { flex: 1, gap: 2 },
+  timelineCard: { backgroundColor: "#FFFFFF", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 10, padding: 12 },
+  timelineDot: { backgroundColor: "#D1D5DB", borderRadius: 999, height: 12, marginTop: 3, width: 12 },
+  timelineDotCurrent: { backgroundColor: brand.colors.primary },
+  timelineLabel: { color: brand.colors.charcoal, fontWeight: "900" },
+  timelineRow: { alignItems: "flex-start", flexDirection: "row", gap: 10 },
+  timelineTitle: { color: brand.colors.charcoal, fontSize: 15, fontWeight: "900" },
   trackingMeta: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "space-between" },
   trackingSheet: { backgroundColor: brand.colors.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, bottom: 0, left: 0, maxHeight: "58%", paddingHorizontal: 18, paddingTop: 16, position: "absolute", right: 0, shadowColor: "#111827", shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.16, shadowRadius: 18 },
   tripRef: { color: brand.colors.charcoal, fontWeight: "900" },
   tripRow: { borderTopColor: brand.colors.border, borderTopWidth: 1, gap: 6, paddingTop: 10 },
+  vehiclePanel: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 14, borderWidth: 1, gap: 3, marginTop: 6, padding: 10 },
+  vehicleTitle: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
   whereToControl: { backgroundColor: brand.colors.charcoal, borderRadius: 18, flex: 1, gap: 4, minHeight: 66, padding: 14 },
   whereToHint: { color: "#D1D5DB", fontWeight: "700" },
   whereToText: { color: brand.colors.white, fontSize: 22, fontWeight: "900" }
