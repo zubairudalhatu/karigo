@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AdminRole, UserRole } from "@prisma/client";
 import { AdminRoles } from "../../common/decorators/admin-roles.decorator";
@@ -9,6 +10,8 @@ import { ApprovedCaptainGuard } from "../../common/guards/approved-captain.guard
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
+import { CaptainUploadFile } from "./captain-upload-storage.service";
+import { CaptainApplicationDocumentUploadDto } from "./dto/captain-application-document-upload.dto";
 import { CreateDeliveryCaptainApplicationDto } from "./dto/create-delivery-captain-application.dto";
 import { DeliveryCaptainApplicationStatusQueryDto } from "./dto/delivery-captain-application-status-query.dto";
 import { ListDeliveryCaptainApplicationsQueryDto } from "./dto/list-delivery-captain-applications-query.dto";
@@ -78,6 +81,15 @@ export class AdminDeliveryCaptainApplicationsController {
     return { message: "Delivery Captain application retrieved", data: await this.ridersService.deliveryCaptainApplicationDetail(applicationId) };
   }
 
+  @Get(":applicationId/documents/:documentId/view")
+  @ApiOperation({ summary: "Create a short-lived secure view URL for a Captain application document" })
+  async documentView(
+    @Param("applicationId", ParseUUIDPipe) applicationId: string,
+    @Param("documentId", ParseUUIDPipe) documentId: string
+  ) {
+    return { message: "Captain document view URL created", data: await this.ridersService.adminCaptainDocumentViewUrl(applicationId, documentId) };
+  }
+
   @Patch(":applicationId/review")
   @ApiOperation({ summary: "Review a Delivery Captain application without activating dispatch or payouts" })
   async review(@CurrentUser() user: AuthenticatedUser, @Param("applicationId", ParseUUIDPipe) applicationId: string, @Body() dto: ReviewDeliveryCaptainApplicationDto) {
@@ -116,5 +128,22 @@ export class CaptainAccessController {
   @ApiOperation({ summary: "Resolve safe Captain onboarding and operational access for the authenticated account" })
   async access(@CurrentUser() user: AuthenticatedUser) {
     return { message: "Captain access resolved", data: await this.ridersService.resolveCaptainAccess(user.id) };
+  }
+
+  @Post("application-documents/uploads")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @ApiOperation({ summary: "Upload a private Captain application document for the authenticated applicant" })
+  async uploadDocument(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CaptainApplicationDocumentUploadDto,
+    @UploadedFile() file?: CaptainUploadFile
+  ) {
+    return { message: "Captain application document uploaded", data: await this.ridersService.uploadCaptainApplicationDocument(user.id, dto.documentType, file) };
+  }
+
+  @Delete("application-documents/:documentId")
+  @ApiOperation({ summary: "Remove an unsubmitted Captain application upload owned by the authenticated applicant" })
+  async removeDocument(@CurrentUser() user: AuthenticatedUser, @Param("documentId", ParseUUIDPipe) documentId: string) {
+    return { message: "Captain application document removed", data: await this.ridersService.removeCaptainApplicationDocument(user.id, documentId) };
   }
 }

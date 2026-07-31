@@ -77,6 +77,7 @@ export type OrderStatus = (typeof orderStatuses)[number];
 
 export * from "./api";
 export * from "./auth";
+export * from "./captain-catalog";
 export * from "./notifications";
 export * from "./orders";
 export * from "./payments";

@@ -1,11 +1,24 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { AccountStatus, DeliveryCaptainApplicationStatus, Prisma, RiderStatus, TaxiApplicationStatus, TaxiDriverProfileStatus, UserRole } from "@prisma/client";
+import {
+  AccountStatus,
+  CaptainApplicationDocumentType,
+  CaptainDocumentUploadStatus,
+  DeliveryCaptainApplicationStatus,
+  Prisma,
+  RiderStatus,
+  TaxiApplicationStatus,
+  TaxiDriverProfileStatus,
+  UserRole
+} from "@prisma/client";
+import { captainServiceAreas } from "@karigo/shared-types";
 import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
+import { resolveCaptainLocation } from "../platform/captain-catalog.validation";
 import { PrismaService } from "../../prisma/prisma.service";
 import { publicUserSelect } from "../users/users.service";
+import { CaptainUploadFile, CaptainUploadStorageService } from "./captain-upload-storage.service";
 import { CreateDeliveryCaptainApplicationDto } from "./dto/create-delivery-captain-application.dto";
 import { DeliveryCaptainApplicationStatusQueryDto } from "./dto/delivery-captain-application-status-query.dto";
 import { ListDeliveryCaptainApplicationsQueryDto } from "./dto/list-delivery-captain-applications-query.dto";
@@ -21,6 +34,10 @@ const DELIVERY_CAPTAIN_APPLICATION_SELECT = {
   email: true,
   city: true,
   state: true,
+  residentialStateCode: true,
+  residentialCityCode: true,
+  operatingAreaIds: true,
+  primaryOperatingAreaId: true,
   address: true,
   preferredZone: true,
   vehicleType: true,
@@ -51,7 +68,8 @@ const DELIVERY_CAPTAIN_APPLICATION_SELECT = {
       rider: { select: { id: true, riderCode: true, verificationStatus: true } }
     }
   },
-  documents: { orderBy: { uploadedAt: "desc" } }
+  documents: { orderBy: { uploadedAt: "desc" } },
+  captainDocuments: { orderBy: { uploadedAt: "desc" } }
 } satisfies Prisma.DeliveryCaptainApplicationSelect;
 
 const RIDE_CAPTAIN_APPLICATION_SELECT = {
@@ -63,6 +81,10 @@ const RIDE_CAPTAIN_APPLICATION_SELECT = {
   email: true,
   city: true,
   state: true,
+  residentialStateCode: true,
+  residentialCityCode: true,
+  operatingAreaIds: true,
+  primaryOperatingAreaId: true,
   status: true,
   applicantVisibleNote: true,
   reviewedAt: true,
@@ -95,6 +117,7 @@ const RIDE_CAPTAIN_PROFILE_SELECT = {
 export class RidersService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly captainUploadStorage: CaptainUploadStorageService,
     private readonly applicationNotifications: ApplicationNotificationsService,
     private readonly audit: AdminAuditService
   ) {}
@@ -283,6 +306,78 @@ export class RidersService {
     };
   }
 
+  async uploadCaptainApplicationDocument(userId: string, documentType: CaptainApplicationDocumentType, file?: CaptainUploadFile) {
+    await this.requireCaptainUploadUser(userId);
+    this.assertCaptainUploadFile(documentType, file);
+
+    const objectKey = this.captainDocumentObjectKey(userId, documentType, file!);
+    await this.captainUploadStorage.putObject(objectKey, file!);
+    const document = await this.prisma.$transaction(async (tx) => {
+      await tx.captainApplicationDocument.updateMany({
+        where: {
+          userId,
+          documentType,
+          uploadStatus: CaptainDocumentUploadStatus.UPLOADED,
+          deliveryApplicationId: null,
+          rideApplicationId: null
+        },
+        data: {
+          uploadStatus: CaptainDocumentUploadStatus.REPLACED,
+          replacedAt: new Date()
+        }
+      });
+      return tx.captainApplicationDocument.create({
+        data: {
+          userId,
+          documentType,
+          objectKey,
+          originalFileName: this.safeOriginalFileName(file!.originalname),
+          mimeType: file!.mimetype,
+          sizeBytes: file!.size,
+          uploadStatus: CaptainDocumentUploadStatus.UPLOADED
+        }
+      });
+    });
+
+    return this.toPublicCaptainDocument(document);
+  }
+
+  async removeCaptainApplicationDocument(userId: string, documentId: string) {
+    const document = await this.prisma.captainApplicationDocument.findFirst({
+      where: {
+        id: documentId,
+        userId,
+        uploadStatus: CaptainDocumentUploadStatus.UPLOADED,
+        deliveryApplicationId: null,
+        rideApplicationId: null
+      }
+    });
+    if (!document) throw new NotFoundException("Captain application upload not found");
+    const updated = await this.prisma.captainApplicationDocument.update({
+      where: { id: document.id },
+      data: { uploadStatus: CaptainDocumentUploadStatus.DELETED, deletedAt: new Date() }
+    });
+    return this.toPublicCaptainDocument(updated);
+  }
+
+  async adminCaptainDocumentViewUrl(applicationId: string, documentId: string) {
+    const document = await this.prisma.captainApplicationDocument.findFirst({
+      where: {
+        id: documentId,
+        deliveryApplicationId: applicationId,
+        uploadStatus: CaptainDocumentUploadStatus.UPLOADED,
+        deletedAt: null
+      }
+    });
+    if (!document) throw new NotFoundException("Captain application document not found");
+    const viewUrl = await this.captainUploadStorage.signedViewUrl(document.objectKey, 300);
+    return {
+      document: this.toAdminCaptainDocument(document),
+      viewUrl,
+      expiresAt: new Date(Date.now() + 300_000).toISOString()
+    };
+  }
+
   async createDeliveryCaptainApplication(dto: CreateDeliveryCaptainApplicationDto) {
     return this.createDeliveryCaptainApplicationRecord(dto);
   }
@@ -295,40 +390,59 @@ export class RidersService {
     if (!dto.declarationAccepted || !dto.privacyAccepted || !dto.contactConsentAccepted) {
       throw new BadRequestException("Application declaration, privacy acknowledgement and contact consent are required");
     }
-    this.assertLaunchLocation(dto);
+    const location = this.resolveCaptainApplicationLocation(dto, Boolean(applicantUserId));
     const phoneNumber = this.normalizePhone(dto.phoneNumber);
     const applicant = await this.requireApplicantAccount(phoneNumber, applicantUserId);
     const duplicate = await this.findActiveDuplicateApplication(applicant.id, phoneNumber);
     if (duplicate) return this.toPublicDeliveryCaptainApplicationStatus(duplicate);
+    const uploadedDocuments = applicantUserId
+      ? await this.requireCaptainDocuments(applicant.id, dto.documentIds, this.requiredDeliveryDocumentTypes(dto.vehicleType))
+      : [];
 
-    const application = await this.prisma.deliveryCaptainApplication.create({
-      data: {
-        applicationReference: await this.nextDeliveryCaptainApplicationReference(),
-        applicant: { connect: { id: applicant.id } },
-        fullName: dto.fullName.trim(),
-        phoneNumber,
-        email: this.optionalText(dto.email)?.toLowerCase(),
-        city: dto.city.trim(),
-        state: dto.state.trim(),
-        address: dto.address.trim(),
-        preferredZone: this.optionalText(dto.preferredZone),
-        vehicleType: dto.vehicleType,
-        vehiclePlateNumber: this.optionalText(dto.vehiclePlateNumber),
-        driverLicenceNumber: this.optionalText(dto.driverLicenceNumber),
-        riderExperience: this.optionalText(dto.riderExperience),
-        profilePhotoUrl: this.optionalText(dto.profilePhotoUrl),
-        guarantorName: dto.guarantorName.trim(),
-        guarantorPhone: this.normalizePhone(dto.guarantorPhone),
-        notes: this.optionalText(dto.notes),
-        documents: dto.documents?.length ? {
-          create: dto.documents.map((document) => ({
-            documentType: document.documentType,
-            documentName: document.documentName,
-            documentUrl: document.documentUrl
-          }))
-        } : undefined
-      },
-      select: DELIVERY_CAPTAIN_APPLICATION_SELECT
+    const application = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.deliveryCaptainApplication.create({
+        data: {
+          applicationReference: await this.nextDeliveryCaptainApplicationReference(),
+          applicant: { connect: { id: applicant.id } },
+          fullName: dto.fullName.trim(),
+          phoneNumber,
+          email: this.optionalText(dto.email)?.toLowerCase(),
+          city: location.city,
+          state: location.state,
+          residentialStateCode: location.residentialStateCode,
+          residentialCityCode: location.residentialCityCode,
+          operatingAreaIds: location.operatingAreaIds,
+          primaryOperatingAreaId: location.primaryOperatingAreaId,
+          address: dto.address.trim(),
+          preferredZone: this.optionalText(dto.preferredZone),
+          vehicleType: dto.vehicleType,
+          vehiclePlateNumber: this.optionalText(dto.vehiclePlateNumber),
+          driverLicenceNumber: this.optionalText(dto.driverLicenceNumber),
+          riderExperience: this.optionalText(dto.riderExperience),
+          profilePhotoUrl: this.optionalText(dto.profilePhotoUrl),
+          guarantorName: dto.guarantorName.trim(),
+          guarantorPhone: this.normalizePhone(dto.guarantorPhone),
+          notes: this.optionalText(dto.notes),
+          documents: !applicantUserId && dto.documents?.length ? {
+            create: dto.documents.map((document) => ({
+              documentType: document.documentType,
+              documentName: document.documentName,
+              documentUrl: document.documentUrl
+            }))
+          } : undefined
+        },
+        select: { id: true }
+      });
+      if (uploadedDocuments.length) {
+        await tx.captainApplicationDocument.updateMany({
+          where: { id: { in: uploadedDocuments.map((document) => document.id) }, userId: applicant.id },
+          data: { deliveryApplicationId: created.id }
+        });
+      }
+      return tx.deliveryCaptainApplication.findUniqueOrThrow({
+        where: { id: created.id },
+        select: DELIVERY_CAPTAIN_APPLICATION_SELECT
+      });
     });
     await Promise.all([
       this.applicationNotifications.deliveryCaptainApplicationSubmitted({
@@ -506,6 +620,174 @@ export class RidersService {
     };
   }
 
+  private resolveCaptainApplicationLocation(dto: CreateDeliveryCaptainApplicationDto, strict: boolean) {
+    const inferredArea = dto.city?.trim().toLowerCase() === "abuja" ? "fct-abuja" : "kano-kano";
+    if (!strict && (!dto.residentialStateCode || !dto.residentialCityCode || !dto.operatingAreaIds?.length || !dto.primaryOperatingAreaId)) {
+      this.assertLaunchLocation(dto);
+      return resolveCaptainLocation({
+        state: dto.state,
+        city: dto.city,
+        operatingAreaIds: [inferredArea],
+        primaryOperatingAreaId: inferredArea
+      });
+    }
+    return resolveCaptainLocation(dto);
+  }
+
+  private requiredDeliveryDocumentTypes(_vehicleType: string): CaptainApplicationDocumentType[] {
+    return [CaptainApplicationDocumentType.PROFILE_PHOTO];
+  }
+
+  private async requireCaptainDocuments(userId: string, documentIds: string[] | undefined, requiredTypes: CaptainApplicationDocumentType[]) {
+    const ids = Array.from(new Set((documentIds ?? []).map((id) => id.trim()).filter(Boolean)));
+    if (!ids.length && requiredTypes.length) {
+      throw new BadRequestException({ message: "Required Captain application documents are missing.", errorCode: `${requiredTypes[0]}_REQUIRED` });
+    }
+    const documents = ids.length ? await this.prisma.captainApplicationDocument.findMany({
+      where: {
+        id: { in: ids },
+        userId,
+        uploadStatus: CaptainDocumentUploadStatus.UPLOADED,
+        deletedAt: null
+      }
+    }) : [];
+    if (documents.length !== ids.length) {
+      throw new BadRequestException({ message: "One or more Captain application documents are incomplete or not owned by this applicant.", errorCode: "DOCUMENT_NOT_OWNED" });
+    }
+    for (const requiredType of requiredTypes) {
+      if (!documents.some((document) => document.documentType === requiredType)) {
+        throw new BadRequestException({ message: "Required Captain application document is missing.", errorCode: `${requiredType}_REQUIRED` });
+      }
+    }
+    return documents;
+  }
+
+  private async requireCaptainUploadUser(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, deletedAt: true }
+    });
+    if (!user || user.deletedAt) throw new NotFoundException("KariGO account not found");
+    if (user.role !== UserRole.CUSTOMER && user.role !== UserRole.RIDER) {
+      throw new ForbiddenException("This KariGO account cannot upload Captain application documents.");
+    }
+  }
+
+  private assertCaptainUploadFile(documentType: CaptainApplicationDocumentType, file?: CaptainUploadFile): asserts file is CaptainUploadFile {
+    if (!file?.buffer?.length) throw new BadRequestException("Choose a valid file before uploading.");
+    const photoTypes = new Set<CaptainApplicationDocumentType>([
+      CaptainApplicationDocumentType.PROFILE_PHOTO,
+      CaptainApplicationDocumentType.VEHICLE_EXTERIOR,
+      CaptainApplicationDocumentType.VEHICLE_INTERIOR
+    ]);
+    const allowedPhotoMimes = ["image/jpeg", "image/png", "image/webp"];
+    const allowedDocumentMimes = ["application/pdf", ...allowedPhotoMimes];
+    const allowed = photoTypes.has(documentType) ? allowedPhotoMimes : allowedDocumentMimes;
+    const maxBytes = photoTypes.has(documentType) ? 8 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (!allowed.includes(file.mimetype)) {
+      throw new BadRequestException("Unsupported file type. Upload a PDF, JPG, PNG or WEBP file as appropriate.");
+    }
+    if (file.size > maxBytes) {
+      throw new BadRequestException(`File is too large. Maximum size is ${Math.round(maxBytes / 1024 / 1024)}MB.`);
+    }
+    const extension = this.safeExtension(file.originalname, file.mimetype);
+    if (!extension) {
+      throw new BadRequestException("File extension does not match the supported upload type.");
+    }
+  }
+
+  private captainDocumentObjectKey(userId: string, documentType: CaptainApplicationDocumentType, file: CaptainUploadFile) {
+    const extension = this.safeExtension(file.originalname, file.mimetype);
+    return `captain-applications/${userId}/${documentType.toLowerCase()}/${randomBytes(16).toString("hex")}${extension}`;
+  }
+
+  private safeExtension(originalName: string, mimeType: string) {
+    const ext = originalName.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
+    const allowedByMime: Record<string, string[]> = {
+      "image/jpeg": ["jpg", "jpeg"],
+      "image/png": ["png"],
+      "image/webp": ["webp"],
+      "application/pdf": ["pdf"]
+    };
+    const allowed = allowedByMime[mimeType] ?? [];
+    if (!allowed.length) return "";
+    if (ext && !allowed.includes(ext)) return "";
+    return `.${ext || allowed[0]}`;
+  }
+
+  private safeOriginalFileName(value: string) {
+    return value.replace(/[^\w.\- ()]/g, "_").slice(0, 180) || "captain-upload";
+  }
+
+  private toPublicCaptainDocument(document: Prisma.CaptainApplicationDocumentGetPayload<Record<string, never>>) {
+    return {
+      id: document.id,
+      documentType: document.documentType,
+      originalFileName: document.originalFileName,
+      mimeType: document.mimeType,
+      sizeBytes: document.sizeBytes,
+      uploadStatus: document.uploadStatus,
+      reviewStatus: document.reviewStatus,
+      uploadedAt: document.uploadedAt.toISOString()
+    };
+  }
+
+  private toAdminCaptainDocument(document: Prisma.CaptainApplicationDocumentGetPayload<Record<string, never>>) {
+    return {
+      ...this.toPublicCaptainDocument(document),
+      required: this.requiredCaptainDocumentTypesForReview().includes(document.documentType),
+      optional: !this.requiredCaptainDocumentTypesForReview().includes(document.documentType),
+      reviewedAt: document.reviewedAt?.toISOString() ?? null,
+      adminNote: document.adminNote
+    };
+  }
+
+  private requiredCaptainDocumentTypesForReview(): CaptainApplicationDocumentType[] {
+    return [
+      CaptainApplicationDocumentType.PROFILE_PHOTO,
+      CaptainApplicationDocumentType.DRIVER_LICENCE,
+      CaptainApplicationDocumentType.VEHICLE_EXTERIOR,
+      CaptainApplicationDocumentType.VEHICLE_INTERIOR,
+      CaptainApplicationDocumentType.VEHICLE_LICENCE
+    ];
+  }
+
+  private operatingAreaSummary(areaId?: string | null) {
+    if (!areaId) return null;
+    const area = captainServiceAreas.find((item) => item.id === areaId);
+    return area ? {
+      id: area.id,
+      stateCode: area.stateCode,
+      stateName: area.stateName,
+      cityCode: area.cityCode,
+      cityName: area.cityName,
+      label: `${area.cityName}, ${area.stateCode === "FCT" ? "FCT" : area.stateName}`
+    } : null;
+  }
+
+  private operatingAreaSummaries(areaIds?: string[] | null) {
+    return (areaIds ?? [])
+      .map((areaId) => this.operatingAreaSummary(areaId))
+      .filter((area): area is NonNullable<ReturnType<RidersService["operatingAreaSummary"]>> => Boolean(area));
+  }
+
+  private locationSummary(cityCode?: string | null, stateCode?: string | null, fallbackCity?: string | null, fallbackState?: string | null) {
+    const area = captainServiceAreas.find((item) => item.cityCode === cityCode && item.stateCode === stateCode);
+    return area ? {
+      stateCode: area.stateCode,
+      stateName: area.stateName,
+      cityCode: area.cityCode,
+      cityName: area.cityName,
+      label: `${area.cityName}, ${area.stateCode === "FCT" ? "FCT" : area.stateName}`
+    } : {
+      stateCode: stateCode ?? null,
+      stateName: fallbackState ?? null,
+      cityCode: cityCode ?? null,
+      cityName: fallbackCity ?? null,
+      label: [fallbackCity, fallbackState].filter(Boolean).join(", ") || null
+    };
+  }
+
   private toPublicDeliveryCaptainApplicationStatus(application: Prisma.DeliveryCaptainApplicationGetPayload<{ select: typeof DELIVERY_CAPTAIN_APPLICATION_SELECT }>) {
     return {
       applicationReference: application.applicationReference,
@@ -518,6 +800,9 @@ export class RidersService {
       reviewedAt: application.reviewedAt?.toISOString() ?? null,
       deliveryOnly: true,
       pilotCity: application.city,
+      residentialLocation: this.locationSummary(application.residentialCityCode, application.residentialStateCode, application.city, application.state),
+      operatingAreas: this.operatingAreaSummaries(application.operatingAreaIds),
+      primaryOperatingArea: this.operatingAreaSummary(application.primaryOperatingAreaId),
       launchCities: ["Kano", "Abuja"],
       createsLogin: Boolean(application.applicantUserId),
       operationalAccess: application.applicant?.rider?.verificationStatus === RiderStatus.ACTIVE,
@@ -557,6 +842,10 @@ export class RidersService {
         createdAt: document.createdAt.toISOString(),
         updatedAt: document.updatedAt.toISOString()
       })),
+      captainDocuments: (application.captainDocuments ?? []).map((document) => this.toAdminCaptainDocument(document)),
+      residentialLocation: this.locationSummary(application.residentialCityCode, application.residentialStateCode, application.city, application.state),
+      operatingAreas: this.operatingAreaSummaries(application.operatingAreaIds),
+      primaryOperatingArea: this.operatingAreaSummary(application.primaryOperatingAreaId),
       deliveryOnly: true,
       applicantAccount: application.applicant ? {
         id: application.applicant.id,

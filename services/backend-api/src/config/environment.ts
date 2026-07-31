@@ -274,9 +274,28 @@ function validatePrismaAccelerateConfig(config: Record<string, unknown>, databas
   };
 }
 
+function validateCaptainUploadsStorage(config: Record<string, unknown>) {
+  const enabled = booleanFlag(config.CAPTAIN_UPLOADS_STORAGE_ENABLED, "CAPTAIN_UPLOADS_STORAGE_ENABLED", false);
+  const requiredKeys = [
+    "CAPTAIN_UPLOADS_STORAGE_REGION",
+    "CAPTAIN_UPLOADS_STORAGE_BUCKET",
+    "CAPTAIN_UPLOADS_STORAGE_ACCESS_KEY_ID",
+    "CAPTAIN_UPLOADS_STORAGE_SECRET_ACCESS_KEY"
+  ];
+  if (enabled) {
+    for (const key of requiredKeys) requireValue(config, key);
+    const endpoint = liveString(config, "CAPTAIN_UPLOADS_STORAGE_ENDPOINT");
+    if (endpoint && !endpoint.startsWith("https://")) {
+      throw new Error("CAPTAIN_UPLOADS_STORAGE_ENDPOINT must use HTTPS");
+    }
+  }
+  return enabled;
+}
+
 export function validateEnvironment(config: Record<string, unknown>): Record<string, unknown> {
   const databaseUrl = requireValue(config, "DATABASE_URL");
   const prismaAccelerate = validatePrismaAccelerateConfig(config, databaseUrl);
+  const captainUploadsStorageEnabled = validateCaptainUploadsStorage(config);
   const appEnvironment = typeof config.APP_ENV === "string" ? config.APP_ENV : "development";
   const otpProvider =
     typeof config.OTP_PROVIDER === "string"
@@ -699,6 +718,7 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     DATABASE_URL: databaseUrl,
     DIRECT_URL: prismaAccelerate.directUrl,
     PRISMA_ACCELERATE_ENABLED: prismaAccelerate.prismaAccelerateEnabled,
+    CAPTAIN_UPLOADS_STORAGE_ENABLED: captainUploadsStorageEnabled,
     JWT_SECRET: requireValue(config, "JWT_SECRET"),
     JWT_EXPIRES_IN_SECONDS: jwtExpirySeconds(config.JWT_EXPIRES_IN),
     OTP_EXPIRY_MINUTES: positiveInteger(config.OTP_EXPIRY_MINUTES, "OTP_EXPIRY_MINUTES", 10),

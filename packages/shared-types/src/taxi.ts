@@ -54,19 +54,27 @@ export interface TaxiDriverApplicationInput {
   email?: string;
   city: string;
   state: string;
+  residentialStateCode?: string;
+  residentialCityCode?: string;
+  operatingAreaIds?: string[];
+  primaryOperatingAreaId?: string;
   address: string;
   driverLicenceNumber: string;
-  driverLicenceDocumentUrl: string;
+  driverLicenceDocumentUrl?: string;
   driverLicenceExpiry: string;
   vehicleMake: string;
+  vehicleCustomMake?: string;
   vehicleModel: string;
+  vehicleCustomModel?: string;
   vehicleYear: number;
   vehicleColour: string;
+  vehicleCustomColour?: string;
   vehiclePlateNumber: string;
   vehicleType: TaxiVehicleType;
   vehicleOwnership: TaxiVehicleOwnership;
-  vehicleParticularsDocumentUrl: string;
+  vehicleParticularsDocumentUrl?: string;
   insuranceDocumentUrl?: string;
+  documentIds?: string[];
   notes?: string;
 }
 

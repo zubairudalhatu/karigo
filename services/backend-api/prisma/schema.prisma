@@ -131,6 +131,23 @@ enum DocumentVerificationStatus {
   REJECTED
 }
 
+enum CaptainApplicationDocumentType {
+  PROFILE_PHOTO
+  DRIVER_LICENCE
+  VEHICLE_EXTERIOR
+  VEHICLE_INTERIOR
+  VEHICLE_LICENCE
+  INSURANCE
+  ROADWORTHINESS
+  GUARANTOR_ID
+}
+
+enum CaptainDocumentUploadStatus {
+  UPLOADED
+  REPLACED
+  DELETED
+}
+
 enum ServiceCategory {
   FOOD
   GROCERY
@@ -629,6 +646,8 @@ model User {
   verifiedVendorApplicationDocuments  VendorApplicationDocument[]          @relation("VendorApplicationDocumentVerifiedBy")
   reviewedVendorOnboardingDocuments   VendorOnboardingDocument[]           @relation("VendorOnboardingDocumentReviewedBy")
   verifiedDeliveryCaptainDocuments    DeliveryCaptainApplicationDocument[] @relation("DeliveryCaptainApplicationDocumentVerifiedBy")
+  captainApplicationDocuments         CaptainApplicationDocument[]         @relation("CaptainApplicationDocumentOwner")
+  reviewedCaptainApplicationDocuments CaptainApplicationDocument[]         @relation("CaptainApplicationDocumentReviewedBy")
   vendorActivationAccounts            VendorAccountActivation[]            @relation("VendorActivationUser")
   createdVendorActivationInvitations  VendorAccountActivation[]            @relation("VendorActivationCreatedBy")
   reviewedAdCampaigns                 AdCampaign[]                         @relation("AdCampaignReviewedBy")
@@ -686,14 +705,18 @@ model RefreshToken {
 }
 
 model TaxiDriverApplication {
-  id                            String                @id @default(uuid()) @db.Uuid
-  applicationReference          String                @unique
-  applicantUserId               String?               @db.Uuid
+  id                            String                       @id @default(uuid()) @db.Uuid
+  applicationReference          String                       @unique
+  applicantUserId               String?                      @db.Uuid
   fullName                      String
   phoneNumber                   String
   email                         String?
   city                          String
   state                         String
+  residentialStateCode          String?
+  residentialCityCode           String?
+  operatingAreaIds              String[]                     @default([])
+  primaryOperatingAreaId        String?
   address                       String?
   driverLicenceNumber           String?
   driverLicenceDocumentUrl      String?
@@ -702,22 +725,26 @@ model TaxiDriverApplication {
   vehicleModel                  String?
   vehicleYear                   Int?
   vehicleColour                 String?
+  vehicleCustomMake             String?
+  vehicleCustomModel            String?
+  vehicleCustomColour           String?
   vehiclePlateNumber            String?
   vehicleType                   TaxiVehicleType?
   vehicleOwnership              TaxiVehicleOwnership?
   vehicleParticularsDocumentUrl String?
   insuranceDocumentUrl          String?
   notes                         String?
-  status                        TaxiApplicationStatus @default(SUBMITTED)
+  status                        TaxiApplicationStatus        @default(SUBMITTED)
   adminNote                     String?
   applicantVisibleNote          String?
-  reviewedByAdminId             String?               @db.Uuid
+  reviewedByAdminId             String?                      @db.Uuid
   reviewedAt                    DateTime?
-  createdAt                     DateTime              @default(now())
-  updatedAt                     DateTime              @updatedAt
-  applicant                     User?                 @relation("TaxiApplicant", fields: [applicantUserId], references: [id])
-  reviewedByAdmin               User?                 @relation("TaxiReviewedBy", fields: [reviewedByAdminId], references: [id])
+  createdAt                     DateTime                     @default(now())
+  updatedAt                     DateTime                     @updatedAt
+  applicant                     User?                        @relation("TaxiApplicant", fields: [applicantUserId], references: [id])
+  reviewedByAdmin               User?                        @relation("TaxiReviewedBy", fields: [reviewedByAdminId], references: [id])
   driverProfile                 TaxiDriverProfile?
+  captainDocuments              CaptainApplicationDocument[] @relation("RideCaptainApplicationDocuments")
 
   @@index([status, createdAt])
   @@index([phoneNumber])
@@ -726,32 +753,37 @@ model TaxiDriverApplication {
 }
 
 model DeliveryCaptainApplication {
-  id                   String                               @id @default(uuid()) @db.Uuid
-  applicationReference String                               @unique
-  applicantUserId      String?                              @db.Uuid
-  fullName             String
-  phoneNumber          String
-  email                String?
-  city                 String
-  state                String
-  address              String
-  preferredZone        String?
-  vehicleType          DeliveryCaptainVehicleType
-  vehiclePlateNumber   String?
-  driverLicenceNumber  String?
-  riderExperience      String?
-  profilePhotoUrl      String?
-  guarantorName        String
-  guarantorPhone       String
-  notes                String?
-  status               DeliveryCaptainApplicationStatus     @default(SUBMITTED)
-  adminNote            String?
-  applicantVisibleNote String?
-  reviewedAt           DateTime?
-  createdAt            DateTime                             @default(now())
-  updatedAt            DateTime                             @updatedAt
-  applicant            User?                                @relation("DeliveryCaptainApplicant", fields: [applicantUserId], references: [id])
-  documents            DeliveryCaptainApplicationDocument[]
+  id                     String                               @id @default(uuid()) @db.Uuid
+  applicationReference   String                               @unique
+  applicantUserId        String?                              @db.Uuid
+  fullName               String
+  phoneNumber            String
+  email                  String?
+  city                   String
+  state                  String
+  residentialStateCode   String?
+  residentialCityCode    String?
+  operatingAreaIds       String[]                             @default([])
+  primaryOperatingAreaId String?
+  address                String
+  preferredZone          String?
+  vehicleType            DeliveryCaptainVehicleType
+  vehiclePlateNumber     String?
+  driverLicenceNumber    String?
+  riderExperience        String?
+  profilePhotoUrl        String?
+  guarantorName          String
+  guarantorPhone         String
+  notes                  String?
+  status                 DeliveryCaptainApplicationStatus     @default(SUBMITTED)
+  adminNote              String?
+  applicantVisibleNote   String?
+  reviewedAt             DateTime?
+  createdAt              DateTime                             @default(now())
+  updatedAt              DateTime                             @updatedAt
+  applicant              User?                                @relation("DeliveryCaptainApplicant", fields: [applicantUserId], references: [id])
+  documents              DeliveryCaptainApplicationDocument[]
+  captainDocuments       CaptainApplicationDocument[]         @relation("DeliveryCaptainApplicationDocuments")
 
   @@index([status, createdAt])
   @@index([applicantUserId])
@@ -778,6 +810,37 @@ model DeliveryCaptainApplicationDocument {
 
   @@index([applicationId, verificationStatus])
   @@map("delivery_captain_application_documents")
+}
+
+model CaptainApplicationDocument {
+  id                    String                         @id @default(uuid()) @db.Uuid
+  userId                String                         @db.Uuid
+  deliveryApplicationId String?                        @db.Uuid
+  rideApplicationId     String?                        @db.Uuid
+  documentType          CaptainApplicationDocumentType
+  objectKey             String                         @unique
+  originalFileName      String
+  mimeType              String
+  sizeBytes             Int
+  uploadStatus          CaptainDocumentUploadStatus    @default(UPLOADED)
+  reviewStatus          DocumentVerificationStatus     @default(PENDING)
+  adminNote             String?
+  uploadedAt            DateTime                       @default(now())
+  replacedAt            DateTime?
+  deletedAt             DateTime?
+  reviewedByAdminId     String?                        @db.Uuid
+  reviewedAt            DateTime?
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+  user                  User                           @relation("CaptainApplicationDocumentOwner", fields: [userId], references: [id])
+  deliveryApplication   DeliveryCaptainApplication?    @relation("DeliveryCaptainApplicationDocuments", fields: [deliveryApplicationId], references: [id])
+  rideApplication       TaxiDriverApplication?         @relation("RideCaptainApplicationDocuments", fields: [rideApplicationId], references: [id])
+  reviewedByAdmin       User?                          @relation("CaptainApplicationDocumentReviewedBy", fields: [reviewedByAdminId], references: [id])
+
+  @@index([userId, documentType, uploadStatus])
+  @@index([deliveryApplicationId, documentType])
+  @@index([rideApplicationId, documentType])
+  @@map("captain_application_documents")
 }
 
 model TaxiWaitlistEntry {

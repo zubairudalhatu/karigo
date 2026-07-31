@@ -3,6 +3,7 @@ import { AccountStatus, DeliveryCaptainApplicationStatus, DeliveryCaptainVehicle
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { CaptainUploadStorageService } from "./captain-upload-storage.service";
 import { RidersService } from "./riders.service";
 
 const now = new Date("2026-07-13T10:00:00.000Z");
@@ -17,6 +18,10 @@ const deliveryCaptainApplication = {
   state: "Kano",
   address: "Tarauni, Kano",
   preferredZone: "Tarauni",
+  residentialStateCode: "KANO",
+  residentialCityCode: "KANO",
+  operatingAreaIds: ["kano-kano"],
+  primaryOperatingAreaId: "kano-kano",
   vehicleType: DeliveryCaptainVehicleType.MOTORCYCLE,
   vehiclePlateNumber: "KGO-123AA",
   driverLicenceNumber: "DRV-123456",
@@ -43,6 +48,29 @@ const deliveryCaptainApplication = {
     rider: null
   },
   documents: [],
+  captainDocuments: [],
+  createdAt: now,
+  updatedAt: now
+};
+
+const uploadedProfilePhoto = {
+  id: "00000000-0000-0000-0000-00000000d001",
+  userId: deliveryCaptainApplication.applicantUserId,
+  deliveryApplicationId: null,
+  rideApplicationId: null,
+  documentType: "PROFILE_PHOTO",
+  objectKey: "captain-applications/user/profile-photo.jpg",
+  originalFileName: "profile-photo.jpg",
+  mimeType: "image/jpeg",
+  sizeBytes: 120000,
+  uploadStatus: "UPLOADED",
+  reviewStatus: "PENDING",
+  adminNote: null,
+  uploadedAt: now,
+  reviewedAt: null,
+  reviewedByAdminId: null,
+  replacedAt: null,
+  deletedAt: null,
   createdAt: now,
   updatedAt: now
 };
@@ -70,8 +98,20 @@ describe("RidersService delivery captain applications", () => {
       findFirst: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
       update: jest.fn()
+    },
+    captainApplicationDocument: {
+      create: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn()
     }
+  };
+  const captainUploadStorage = {
+    putObject: jest.fn(),
+    signedViewUrl: jest.fn()
   };
   const applicationNotifications = {
     deliveryCaptainApplicationSubmitted: jest.fn(),
@@ -81,14 +121,20 @@ describe("RidersService delivery captain applications", () => {
   const audit = { record: jest.fn() };
   const service = new RidersService(
     prisma as unknown as PrismaService,
+    captainUploadStorage as unknown as CaptainUploadStorageService,
     applicationNotifications as unknown as ApplicationNotificationsService,
     audit as unknown as AdminAuditService
   );
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     prisma.$transaction.mockImplementation(async (callback: any) => callback({
-      deliveryCaptainApplication: { update: prisma.deliveryCaptainApplication.update },
+      deliveryCaptainApplication: {
+        create: prisma.deliveryCaptainApplication.create,
+        findUniqueOrThrow: prisma.deliveryCaptainApplication.findUniqueOrThrow,
+        update: prisma.deliveryCaptainApplication.update
+      },
+      captainApplicationDocument: prisma.captainApplicationDocument,
       user: prisma.user,
       rider: prisma.rider,
       riderDocument: { createMany: jest.fn() }
@@ -101,11 +147,13 @@ describe("RidersService delivery captain applications", () => {
       where.applicationReference ? null : deliveryCaptainApplication
     );
     prisma.deliveryCaptainApplication.create.mockResolvedValue(deliveryCaptainApplication);
+    prisma.deliveryCaptainApplication.findUniqueOrThrow.mockResolvedValue(deliveryCaptainApplication);
     prisma.deliveryCaptainApplication.findFirst.mockImplementation(async ({ where }: any) =>
-      where?.OR ? null : deliveryCaptainApplication
+      where?.phoneNumber ? deliveryCaptainApplication : null
     );
     prisma.deliveryCaptainApplication.findMany.mockResolvedValue([deliveryCaptainApplication]);
     prisma.deliveryCaptainApplication.update.mockResolvedValue({ ...deliveryCaptainApplication, status: DeliveryCaptainApplicationStatus.UNDER_REVIEW, reviewedAt: now });
+    prisma.captainApplicationDocument.findMany.mockResolvedValue([]);
     applicationNotifications.deliveryCaptainApplicationSubmitted.mockResolvedValue(undefined);
     applicationNotifications.deliveryCaptainGuarantorListed.mockResolvedValue(undefined);
     applicationNotifications.deliveryCaptainApplicationReviewed.mockResolvedValue(undefined);
@@ -164,6 +212,15 @@ describe("RidersService delivery captain applications", () => {
       city: "Abuja",
       state: "FCT"
     });
+    prisma.deliveryCaptainApplication.findUniqueOrThrow.mockResolvedValueOnce({
+      ...deliveryCaptainApplication,
+      city: "Abuja",
+      state: "FCT",
+      residentialStateCode: "FCT",
+      residentialCityCode: "ABUJA",
+      operatingAreaIds: ["fct-abuja"],
+      primaryOperatingAreaId: "fct-abuja"
+    });
 
     await expect(service.createDeliveryCaptainApplication({
       fullName: "Demo Abuja Captain",
@@ -199,6 +256,20 @@ describe("RidersService delivery captain applications", () => {
         onboardingPasswordSetAt: null
       }
     });
+    prisma.deliveryCaptainApplication.findUniqueOrThrow.mockResolvedValueOnce({
+      ...deliveryCaptainApplication,
+      applicantUserId: "customer-user",
+      applicant: {
+        ...deliveryCaptainApplication.applicant,
+        id: "customer-user",
+        role: UserRole.CUSTOMER,
+        accountStatus: AccountStatus.ACTIVE,
+        onboardingPasswordSetAt: null
+      }
+    });
+    prisma.captainApplicationDocument.findMany.mockResolvedValueOnce([
+      { ...uploadedProfilePhoto, id: "doc-profile", userId: "customer-user" }
+    ]);
 
     const result = await service.createDeliveryCaptainApplicationForUser("customer-user", {
       fullName: "Existing Customer",
@@ -206,6 +277,10 @@ describe("RidersService delivery captain applications", () => {
       email: "customer@example.test",
       city: "Kano",
       state: "Kano",
+      residentialStateCode: "KANO",
+      residentialCityCode: "KANO",
+      operatingAreaIds: ["kano-kano"],
+      primaryOperatingAreaId: "kano-kano",
       address: "Tarauni, Kano",
       preferredZone: "Tarauni",
       vehicleType: DeliveryCaptainVehicleType.MOTORCYCLE,
@@ -213,7 +288,8 @@ describe("RidersService delivery captain applications", () => {
       guarantorPhone: "08030000001",
       declarationAccepted: true,
       privacyAccepted: true,
-      contactConsentAccepted: true
+      contactConsentAccepted: true,
+      documentIds: ["doc-profile"]
     });
 
     expect(prisma.deliveryCaptainApplication.create).toHaveBeenCalledWith(expect.objectContaining({

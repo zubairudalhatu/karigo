@@ -12,6 +12,7 @@ import { HealthModule } from "./modules/health/health.module";
 import { OrdersModule } from "./modules/orders/orders.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
+import { PlatformModule } from "./modules/platform/platform.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { MarketplaceDiscoveryModule } from "./modules/marketplace-discovery/marketplace-discovery.module";
 import { PromoModule } from "./modules/promos/promo.module";
@@ -63,6 +64,7 @@ import { ServiceProviderRequestsModule } from "./modules/service-provider-reques
     OrdersModule,
     NotificationsModule,
     PaymentsModule,
+    PlatformModule,
     VendorDashboardOrdersModule,
     VendorSettlementsModule,
     DispatchModule,

@@ -10,11 +10,35 @@ import {
 } from "@karigo/shared-types";
 import { api } from "./client";
 
+export interface CaptainLocationSummary {
+  stateCode?: string | null;
+  stateName?: string | null;
+  cityCode?: string | null;
+  cityName?: string | null;
+  label?: string | null;
+}
+
+export interface CaptainUploadedApplicationDocument {
+  id: string;
+  documentType: string;
+  originalFileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadStatus: string;
+  reviewStatus: string;
+  uploadedAt: string;
+  required: boolean;
+  optional: boolean;
+}
+
 export interface AdminTaxiDriverApplication extends TaxiDriverApplicationStatus {
   id: string;
   city: string;
   state: string;
   vehicle?: string | null;
+  residentialLocation?: CaptainLocationSummary | null;
+  operatingAreas?: CaptainLocationSummary[];
+  primaryOperatingArea?: CaptainLocationSummary | null;
   vehiclePlateNumber?: string | null;
   vehicleType?: string | null;
   vehicleOwnership?: string | null;
@@ -26,6 +50,7 @@ export interface AdminTaxiDriverApplication extends TaxiDriverApplicationStatus 
     riderProfile?: { id: string; riderCode: string; verificationStatus: string } | null;
   } | null;
   documentEvidence?: Array<{ label: string; url: string }>;
+  captainDocuments?: CaptainUploadedApplicationDocument[];
   createdAt: string;
   updatedAt: string;
 }
@@ -53,6 +78,8 @@ export const taxiApi = {
     return api.get<AdminTaxiDriverApplication[]>(`admin/taxi/driver-applications${query}`);
   },
   driverApplication: (id: string) => api.get<AdminTaxiDriverApplicationDetail>(`admin/taxi/driver-applications/${id}`),
+  driverApplicationDocumentView: (applicationId: string, documentId: string) =>
+    api.get<{ viewUrl: string; expiresAt: string; document: CaptainUploadedApplicationDocument }>(`admin/taxi/driver-applications/${applicationId}/documents/${documentId}/view`),
   reviewDriverApplication: (id: string, body: { status: TaxiApplicationStatus; applicantVisibleNote?: string; adminNote?: string }) =>
     api.patch<AdminTaxiDriverApplicationDetail>(`admin/taxi/driver-applications/${id}/review`, body),
   waitlist: (status?: TaxiWaitlistStatus | "ALL") => {

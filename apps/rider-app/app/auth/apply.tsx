@@ -1,12 +1,27 @@
-import { useEffect, useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { Link } from "expo-router";
-import { TaxiVehicleOwnership, TaxiVehicleType } from "@karigo/shared-types";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { brand } from "@karigo/config";
+import {
+  CaptainServiceArea,
+  VehicleCatalog,
+  VehicleCatalogOption,
+  VehicleMakeOption
+} from "@karigo/shared-types";
+import { Link } from "expo-router";
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
+import { useEffect, useMemo, useState } from "react";
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { TaxiVehicleOwnership, TaxiVehicleType } from "@karigo/shared-types";
 import {
   applicantOnboardingApi,
   ApplicantOnboardingResult
 } from "../../src/api/applicant-onboarding.api";
+import { captainCatalogApi, fallbackServiceAreaCatalog, fallbackVehicleCatalog } from "../../src/api/captain-catalog.api";
+import {
+  CaptainDocumentType,
+  CaptainUploadedDocument,
+  captainDocumentsApi
+} from "../../src/api/captain-documents.api";
 import {
   deliveryCaptainApplicationsApi,
   DeliveryCaptainVehicleType
@@ -19,6 +34,8 @@ import { friendlyError } from "../../src/lib/errors";
 import { normalizeNigerianPhoneNumber } from "../../src/lib/phone";
 
 type AccountStep = "ACCOUNT" | "OTP" | "PASSWORD" | "APPLICATION";
+type SelectorKind = "state" | "city" | "primaryArea" | "make" | "model" | "year" | "colour" | null;
+type UploadStatus = "empty" | "uploading" | "uploaded" | "failed";
 
 const deliveryVehicleOptions: Array<{ label: string; value: DeliveryCaptainVehicleType }> = [
   { label: "Motorcycle", value: "MOTORCYCLE" },
@@ -44,12 +61,32 @@ const ownershipOptions: Array<{ label: string; value: TaxiVehicleOwnership }> = 
   { label: "Other", value: "OTHER" }
 ];
 
+const uploadDefinitions: Array<{
+  type: CaptainDocumentType;
+  title: string;
+  helper: string;
+  imageOnly: boolean;
+  rideRequired?: boolean;
+  alwaysRequired?: boolean;
+}> = [
+  { type: "PROFILE_PHOTO", title: "Profile photo", helper: "Clear recent face photograph. JPG, PNG or WEBP up to 8MB.", imageOnly: true, alwaysRequired: true },
+  { type: "DRIVER_LICENCE", title: "Driver licence image", helper: "Readable licence photograph or scan. Required for Ride Captain.", imageOnly: false, rideRequired: true },
+  { type: "VEHICLE_EXTERIOR", title: "Vehicle exterior photo", helper: "Show the vehicle body and registration plate where possible.", imageOnly: true, rideRequired: true },
+  { type: "VEHICLE_INTERIOR", title: "Vehicle interior photo", helper: "Show the passenger interior clearly.", imageOnly: true, rideRequired: true },
+  { type: "VEHICLE_LICENCE", title: "Vehicle licence / particulars", helper: "PDF or clear image of vehicle licence or particulars.", imageOnly: false, rideRequired: true },
+  { type: "INSURANCE", title: "Insurance document", helper: "Optional PDF or image.", imageOnly: false },
+  { type: "ROADWORTHINESS", title: "Roadworthiness document", helper: "Optional PDF or image.", imageOnly: false },
+  { type: "GUARANTOR_ID", title: "Guarantor ID", helper: "Optional PDF or image.", imageOnly: false }
+];
+
 const initialForm = {
   fullName: "",
   phoneNumber: "",
   email: "",
-  city: "Kano",
-  state: "Kano",
+  residentialStateCode: "KANO",
+  residentialCityCode: "KANO",
+  operatingAreaIds: ["kano-kano"],
+  primaryOperatingAreaId: "kano-kano",
   address: "",
   preferredZone: "",
   deliveryVehicleType: "MOTORCYCLE" as DeliveryCaptainVehicleType,
@@ -59,13 +96,12 @@ const initialForm = {
   licenceNumber: "",
   licenceExpiry: "",
   vehicleMake: "",
+  vehicleCustomMake: "",
   vehicleModel: "",
+  vehicleCustomModel: "",
   vehicleYear: "",
   vehicleColour: "",
-  profilePhotoUrl: "",
-  licenceImageUrl: "",
-  vehicleParticularsUrl: "",
-  insuranceDocumentUrl: "",
+  vehicleCustomColour: "",
   riderExperience: "",
   deliveryCaptainInterest: true,
   rideCaptainReviewInterest: false,
@@ -74,9 +110,12 @@ const initialForm = {
   confirmed: false
 };
 
+type CaptainForm = typeof initialForm;
+type UploadMap = Partial<Record<CaptainDocumentType, { status: UploadStatus; document?: CaptainUploadedDocument; localUri?: string; error?: string }>>;
+
 function ToggleRow({ label, checked, onPress, helper }: { label: string; checked: boolean; onPress: () => void; helper?: string }) {
   return <Pressable accessibilityRole="checkbox" accessibilityState={{ checked }} onPress={onPress} style={styles.toggleRow}>
-    <View style={[styles.checkbox, checked && styles.checkboxChecked]}><Text style={styles.checkboxMark}>{checked ? "OK" : ""}</Text></View>
+    <View style={[styles.checkbox, checked && styles.checkboxChecked]}><Text style={styles.checkboxMark}>{checked ? "Done" : ""}</Text></View>
     <View style={styles.toggleText}>
       <Text style={styles.toggleLabel}>{label}</Text>
       {helper ? <Text style={ui.muted}>{helper}</Text> : null}
@@ -84,32 +123,26 @@ function ToggleRow({ label, checked, onPress, helper }: { label: string; checked
   </Pressable>;
 }
 
-function isSecureImageUrl(value: string) {
-  return !value.trim() || /^https:\/\/.+\.(png|jpe?g|webp)(\?.*)?$/i.test(value.trim());
+function dateLabel(value: string) {
+  if (!value) return "Select expiry date";
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return "Select expiry date";
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
-function isSecureDocumentUrl(value: string) {
-  return !value.trim() || /^https:\/\/.+/i.test(value.trim());
+function isoDate(value: Date) {
+  const year = value.getFullYear();
+  const month = `${value.getMonth() + 1}`.padStart(2, "0");
+  const day = `${value.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
-function documentPayload(form: typeof initialForm) {
-  return [
-    form.licenceImageUrl.trim() ? {
-      documentType: "DRIVER_LICENCE_IMAGE",
-      documentName: "Driver licence image",
-      documentUrl: form.licenceImageUrl.trim()
-    } : null,
-    form.vehicleParticularsUrl.trim() ? {
-      documentType: "VEHICLE_PARTICULARS",
-      documentName: "Vehicle particulars",
-      documentUrl: form.vehicleParticularsUrl.trim()
-    } : null,
-    form.insuranceDocumentUrl.trim() ? {
-      documentType: "INSURANCE_DOCUMENT",
-      documentName: "Insurance document",
-      documentUrl: form.insuranceDocumentUrl.trim()
-    } : null
-  ].filter((document): document is { documentType: string; documentName: string; documentUrl: string } => Boolean(document));
+function dateFromValue(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (year && month && day) return new Date(year, month - 1, day);
+  const nextYear = new Date();
+  nextYear.setFullYear(nextYear.getFullYear() + 2);
+  return nextYear;
 }
 
 function nextStepFor(result: ApplicantOnboardingResult): AccountStep {
@@ -119,9 +152,122 @@ function nextStepFor(result: ApplicantOnboardingResult): AccountStep {
   return "APPLICATION";
 }
 
+function activeAreas(areas: CaptainServiceArea[]) {
+  return areas.filter((area) => area.isActive);
+}
+
+function areaLabel(area?: CaptainServiceArea | null) {
+  return area ? `${area.cityName}, ${area.stateCode === "FCT" ? "FCT" : area.stateName}` : "";
+}
+
+function documentIds(uploads: UploadMap) {
+  return Object.values(uploads)
+    .map((upload) => upload?.document?.id)
+    .filter((id): id is string => Boolean(id));
+}
+
+function uploaded(uploads: UploadMap, type: CaptainDocumentType) {
+  return uploads[type]?.status === "uploaded" && Boolean(uploads[type]?.document?.id);
+}
+
+function ModalSelector({
+  title,
+  visible,
+  options,
+  value,
+  searchable = true,
+  onClose,
+  onSelect
+}: {
+  title: string;
+  visible: boolean;
+  options: VehicleCatalogOption[];
+  value?: string;
+  searchable?: boolean;
+  onClose: () => void;
+  onSelect: (value: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const filtered = options.filter((option) => `${option.label} ${option.value}`.toLowerCase().includes(query.trim().toLowerCase()));
+  useEffect(() => {
+    if (!visible) setQuery("");
+  }, [visible]);
+  return <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+    <View style={styles.modalBackdrop}>
+      <View style={styles.modalCard}>
+        <View style={ui.spaceBetween}>
+          <Text style={ui.sectionTitle}>{title}</Text>
+          <Pressable onPress={onClose}><Text style={styles.modalClose}>Cancel</Text></Pressable>
+        </View>
+        {searchable ? <TextInput value={query} onChangeText={setQuery} placeholder="Search" placeholderTextColor={brand.colors.muted} style={styles.searchInput} /> : null}
+        <ScrollView contentContainerStyle={styles.optionList}>
+          {filtered.map((option) => <Pressable key={option.value} onPress={() => { onSelect(option.value); onClose(); }} style={[styles.optionRow, value === option.value && styles.optionRowActive]}>
+            <Text style={[styles.optionText, value === option.value && styles.optionTextActive]}>{option.label}</Text>
+          </Pressable>)}
+        </ScrollView>
+      </View>
+    </View>
+  </Modal>;
+}
+
+function SelectorField({ label, value, disabled, onPress }: { label: string; value?: string; disabled?: boolean; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onPress={onPress} style={[styles.selectorField, disabled && ui.disabled]}>
+    <Text style={styles.selectorLabel}>{label}</Text>
+    <Text style={styles.selectorValue}>{value || "Select"}</Text>
+  </Pressable>;
+}
+
+function UploadCard({
+  title,
+  helper,
+  required,
+  imageOnly,
+  state,
+  onGallery,
+  onCamera,
+  onFile,
+  onRemove
+}: {
+  title: string;
+  helper: string;
+  required: boolean;
+  imageOnly: boolean;
+  state?: UploadMap[CaptainDocumentType];
+  onGallery: () => void;
+  onCamera: () => void;
+  onFile: () => void;
+  onRemove: () => void;
+}) {
+  const status = state?.status ?? "empty";
+  return <View style={styles.uploadCard}>
+    <View style={ui.spaceBetween}>
+      <View style={styles.uploadTitleWrap}>
+        <Text style={styles.uploadTitle}>{title}</Text>
+        <Text style={[ui.pill, required ? styles.requiredPill : styles.optionalPill]}>{required ? "Mandatory" : "Optional"}</Text>
+      </View>
+      <Text style={styles.uploadStatus}>{status === "uploaded" ? "Uploaded" : status === "uploading" ? "Uploading..." : status === "failed" ? "Retry needed" : "Not selected"}</Text>
+    </View>
+    <Text style={ui.muted}>{helper}</Text>
+    {state?.localUri && imageOnly ? <Image source={{ uri: state.localUri }} style={styles.uploadPreview} /> : null}
+    {state?.document ? <Text style={styles.fileName}>{state.document.originalFileName}</Text> : null}
+    {state?.error ? <Message error>{state.error}</Message> : null}
+    <View style={styles.uploadActions}>
+      <Button title="Choose gallery" tone="muted" disabled={status === "uploading"} onPress={onGallery} />
+      <Button title="Take photo" tone="muted" disabled={status === "uploading"} onPress={onCamera} />
+      {!imageOnly ? <Button title="Choose file" tone="muted" disabled={status === "uploading"} onPress={onFile} /> : null}
+      {state?.document ? <Button title="Remove" tone="danger" disabled={status === "uploading"} onPress={onRemove} /> : null}
+    </View>
+  </View>;
+}
+
 export default function CaptainApplication() {
   const { user } = useAuth();
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState<CaptainForm>(initialForm);
+  const [vehicleCatalog, setVehicleCatalog] = useState<VehicleCatalog>(fallbackVehicleCatalog);
+  const [serviceAreas, setServiceAreas] = useState<CaptainServiceArea[]>(fallbackServiceAreaCatalog.areas);
+  const [uploads, setUploads] = useState<UploadMap>({});
+  const [selector, setSelector] = useState<SelectorKind>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [step, setStep] = useState<AccountStep>("ACCOUNT");
   const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
@@ -130,6 +276,13 @@ export default function CaptainApplication() {
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    void Promise.all([captainCatalogApi.vehicleCatalog(), captainCatalogApi.serviceAreas()]).then(([vehicles, areas]) => {
+      setVehicleCatalog(vehicles);
+      setServiceAreas(areas.areas);
+    });
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -145,6 +298,51 @@ export default function CaptainApplication() {
     setStep("APPLICATION");
     setSuccess("You are signed in with your KariGO account. Complete your Captain application to start onboarding.");
   }, [user]);
+
+  const activeServiceAreas = useMemo(() => activeAreas(serviceAreas), [serviceAreas]);
+  const states = useMemo(() => {
+    const seen = new Set<string>();
+    return activeServiceAreas.filter((area) => {
+      if (seen.has(area.stateCode)) return false;
+      seen.add(area.stateCode);
+      return true;
+    }).map((area) => ({ value: area.stateCode, label: area.stateName }));
+  }, [activeServiceAreas]);
+  const cities = activeServiceAreas
+    .filter((area) => area.stateCode === form.residentialStateCode)
+    .map((area) => ({ value: area.cityCode, label: area.cityName }));
+  const selectedResidentialArea = activeServiceAreas.find((area) => area.stateCode === form.residentialStateCode && area.cityCode === form.residentialCityCode);
+  const selectedOperatingAreas = activeServiceAreas.filter((area) => form.operatingAreaIds.includes(area.id));
+  const selectedMake = vehicleCatalog.makes.find((make) => make.value === form.vehicleMake);
+  const modelOptions = selectedMake?.models ?? [];
+  const yearOptions = vehicleCatalog.years.map((year) => ({ value: `${year}`, label: `${year}` }));
+
+  function updateForm(next: Partial<CaptainForm>) {
+    setForm((current) => ({ ...current, ...next }));
+  }
+
+  function selectState(stateCode: string) {
+    const firstCity = activeServiceAreas.find((area) => area.stateCode === stateCode);
+    updateForm({ residentialStateCode: stateCode, residentialCityCode: firstCity?.cityCode ?? "" });
+  }
+
+  function toggleOperatingArea(areaId: string) {
+    const next = form.operatingAreaIds.includes(areaId)
+      ? form.operatingAreaIds.filter((id) => id !== areaId)
+      : [...form.operatingAreaIds, areaId];
+    updateForm({
+      operatingAreaIds: next,
+      primaryOperatingAreaId: next.includes(form.primaryOperatingAreaId) ? form.primaryOperatingAreaId : next[0] ?? ""
+    });
+  }
+
+  function selectMake(make: string) {
+    updateForm({ vehicleMake: make, vehicleModel: "", vehicleCustomMake: make === "OTHER" ? form.vehicleCustomMake : "", vehicleCustomModel: "" });
+  }
+
+  function selectColour(colour: string) {
+    updateForm({ vehicleColour: colour, vehicleCustomColour: colour === "OTHER" ? form.vehicleCustomColour : "" });
+  }
 
   function applyAccountResult(result: ApplicantOnboardingResult) {
     setForm((current) => ({
@@ -180,8 +378,12 @@ export default function CaptainApplication() {
         await saveCaptainApplicationIntent({
           deliveryCaptainInterest: form.deliveryCaptainInterest,
           rideCaptainReviewInterest: form.rideCaptainReviewInterest,
-          city: form.city,
-          state: form.state,
+          city: selectedResidentialArea?.cityName ?? "Kano",
+          state: selectedResidentialArea?.stateCode === "FCT" ? "FCT" : "Kano",
+          residentialStateCode: form.residentialStateCode,
+          residentialCityCode: form.residentialCityCode,
+          operatingAreaIds: form.operatingAreaIds,
+          primaryOperatingAreaId: form.primaryOperatingAreaId,
           address: form.address,
           preferredZone: form.preferredZone
         });
@@ -246,36 +448,103 @@ export default function CaptainApplication() {
     }
   }
 
+  async function uploadAsset(type: CaptainDocumentType, asset: { uri: string; fileName?: string | null; name?: string | null; mimeType?: string | null }) {
+    setUploads((current) => ({ ...current, [type]: { ...current[type], status: "uploading", localUri: asset.uri, error: "" } }));
+    try {
+      const document = await captainDocumentsApi.upload(type, {
+        uri: asset.uri,
+        name: asset.fileName || asset.name || `${type.toLowerCase()}`,
+        mimeType: asset.mimeType
+      });
+      setUploads((current) => ({ ...current, [type]: { status: "uploaded", document, localUri: asset.uri } }));
+    } catch (err) {
+      setUploads((current) => ({ ...current, [type]: { ...current[type], status: "failed", localUri: asset.uri, error: friendlyError(err) } }));
+    }
+  }
+
+  async function chooseImage(type: CaptainDocumentType, source: "camera" | "gallery") {
+    setError("");
+    const permission = source === "camera"
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError(source === "camera" ? "Camera permission is needed to take this photo." : "Gallery permission is needed to choose this image.");
+      return;
+    }
+    const result = source === "camera"
+      ? await ImagePicker.launchCameraAsync({ allowsEditing: type === "PROFILE_PHOTO", quality: 0.82, mediaTypes: ImagePicker.MediaTypeOptions.Images })
+      : await ImagePicker.launchImageLibraryAsync({ allowsEditing: type === "PROFILE_PHOTO", quality: 0.82, mediaTypes: ImagePicker.MediaTypeOptions.Images });
+    if (result.canceled || !result.assets[0]) return;
+    await uploadAsset(type, result.assets[0]);
+  }
+
+  async function chooseFile(type: CaptainDocumentType) {
+    setError("");
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["application/pdf", "image/jpeg", "image/png", "image/webp"],
+      copyToCacheDirectory: true,
+      multiple: false
+    });
+    if (result.canceled || !result.assets[0]) return;
+    await uploadAsset(type, result.assets[0]);
+  }
+
+  async function removeUpload(type: CaptainDocumentType) {
+    const documentId = uploads[type]?.document?.id;
+    if (!documentId) {
+      setUploads((current) => ({ ...current, [type]: { status: "empty" } }));
+      return;
+    }
+    try {
+      await captainDocumentsApi.remove(documentId);
+      setUploads((current) => ({ ...current, [type]: { status: "empty" } }));
+    } catch (err) {
+      setUploads((current) => ({ ...current, [type]: { ...current[type], status: "failed", error: friendlyError(err) } }));
+    }
+  }
+
+  function validateForm() {
+    if (step !== "APPLICATION") throw new Error("Verify your phone and create your password before submitting the application.");
+    if (!form.confirmed) throw new Error("Please confirm that the information provided is accurate.");
+    if (!form.deliveryCaptainInterest && !form.rideCaptainReviewInterest) throw new Error("Select Delivery Captain, Ride Captain, or both.");
+    if (!form.residentialStateCode) throw new Error("Select Residential State or Territory.");
+    if (!form.residentialCityCode) throw new Error("Select Residential City.");
+    if (!form.operatingAreaIds.length) throw new Error("Select at least one preferred operating area.");
+    if (!form.primaryOperatingAreaId || !form.operatingAreaIds.includes(form.primaryOperatingAreaId)) throw new Error("Select a valid primary operating area.");
+    if (!uploaded(uploads, "PROFILE_PHOTO")) throw new Error("Profile photo is required.");
+    if (form.rideCaptainReviewInterest) {
+      if (!form.licenceNumber.trim()) throw new Error("Driver licence number is required for Ride Captain review.");
+      if (!form.licenceExpiry.trim()) throw new Error("Driver licence expiry date is required.");
+      if (!form.vehicleMake.trim()) throw new Error("Vehicle make is required.");
+      if (form.vehicleMake === "OTHER" && !form.vehicleCustomMake.trim()) throw new Error("Enter the custom vehicle make.");
+      if (!form.vehicleModel.trim()) throw new Error("Vehicle model is required.");
+      if (form.vehicleModel === "OTHER" && !form.vehicleCustomModel.trim()) throw new Error("Enter the custom vehicle model.");
+      if (!form.vehicleYear.trim()) throw new Error("Vehicle year is required.");
+      if (!form.vehicleColour.trim()) throw new Error("Vehicle colour is required.");
+      if (form.vehicleColour === "OTHER" && !form.vehicleCustomColour.trim()) throw new Error("Enter the custom vehicle colour.");
+      if (!form.vehiclePlateNumber.trim()) throw new Error("Vehicle plate number is required.");
+      for (const type of ["DRIVER_LICENCE", "VEHICLE_EXTERIOR", "VEHICLE_INTERIOR", "VEHICLE_LICENCE"] as CaptainDocumentType[]) {
+        if (!uploaded(uploads, type)) throw new Error(`${uploadDefinitions.find((item) => item.type === type)?.title} is required.`);
+      }
+    }
+  }
+
   async function submit() {
     setBusy(true);
     setSuccess("");
     setError("");
     try {
-      if (step !== "APPLICATION") throw new Error("Verify your phone and create your password before submitting the application.");
-      if (!form.confirmed) throw new Error("Please confirm that the information provided is accurate.");
-      if (!form.deliveryCaptainInterest && !form.rideCaptainReviewInterest) throw new Error("Select Delivery Captain, Ride Captain, or both.");
-      if (!isSecureImageUrl(form.profilePhotoUrl)) throw new Error("Profile photo must be a secure image URL ending in PNG, JPG, JPEG or WEBP.");
-      if (![form.licenceImageUrl, form.vehicleParticularsUrl, form.insuranceDocumentUrl].every(isSecureDocumentUrl)) {
-        throw new Error("Document links must be secure HTTPS links.");
-      }
-      if (form.rideCaptainReviewInterest && (!form.licenceImageUrl.trim() || !form.vehicleParticularsUrl.trim())) {
-        throw new Error("Ride Captain review requires licence and vehicle particulars document links.");
-      }
-
+      validateForm();
       const normalizedPhone = normalizeNigerianPhoneNumber(form.phoneNumber);
       const normalizedGuarantorPhone = normalizeNigerianPhoneNumber(form.guarantorPhone);
       const selectedModes = [
         form.deliveryCaptainInterest ? "Delivery Captain" : "",
         form.rideCaptainReviewInterest ? "Ride Captain" : ""
       ].filter(Boolean).join(" and ");
+      const area = selectedResidentialArea ?? activeServiceAreas[0];
+      const ids = documentIds(uploads);
 
       if (form.deliveryCaptainInterest) {
-        const notes = [
-          `Selected mode: ${selectedModes}`,
-          form.rideCaptainReviewInterest ? "Ride Captain readiness application also submitted from Captain app." : "",
-          !form.address.trim() ? "Address not provided in app application; collect during review." : ""
-        ].filter(Boolean).join("\n");
-
         const submitDeliveryApplication = user
           ? deliveryCaptainApplicationsApi.submitForCurrentUser
           : deliveryCaptainApplicationsApi.submit;
@@ -283,19 +552,22 @@ export default function CaptainApplication() {
           fullName: form.fullName,
           phoneNumber: normalizedPhone,
           email: form.email || undefined,
-          city: form.city,
-          state: form.state,
-          address: form.address.trim() || "Not provided in Captain app application; collect during review.",
+          city: area?.cityName ?? "Kano",
+          state: area?.stateCode === "FCT" ? "FCT" : "Kano",
+          residentialStateCode: form.residentialStateCode,
+          residentialCityCode: form.residentialCityCode,
+          operatingAreaIds: form.operatingAreaIds,
+          primaryOperatingAreaId: form.primaryOperatingAreaId,
+          address: form.address.trim(),
           preferredZone: form.preferredZone || undefined,
           vehicleType: form.deliveryVehicleType,
           vehiclePlateNumber: form.vehiclePlateNumber || undefined,
           driverLicenceNumber: form.licenceNumber || undefined,
           riderExperience: form.riderExperience || undefined,
-          profilePhotoUrl: form.profilePhotoUrl || undefined,
-          documents: documentPayload(form),
+          documentIds: ids,
           guarantorName: form.guarantorName,
           guarantorPhone: normalizedGuarantorPhone,
-          notes,
+          notes: `Selected mode: ${selectedModes}`,
           declarationAccepted: form.confirmed,
           privacyAccepted: form.confirmed,
           contactConsentAccepted: form.confirmed
@@ -310,27 +582,33 @@ export default function CaptainApplication() {
           fullName: form.fullName,
           phoneNumber: normalizedPhone,
           email: form.email || undefined,
-          city: form.city,
-          state: form.state,
+          city: area?.cityName ?? "Kano",
+          state: area?.stateCode === "FCT" ? "FCT" : "Kano",
+          residentialStateCode: form.residentialStateCode,
+          residentialCityCode: form.residentialCityCode,
+          operatingAreaIds: form.operatingAreaIds,
+          primaryOperatingAreaId: form.primaryOperatingAreaId,
           address: form.address,
           driverLicenceNumber: form.licenceNumber,
-          driverLicenceDocumentUrl: form.licenceImageUrl,
           driverLicenceExpiry: form.licenceExpiry,
           vehicleMake: form.vehicleMake,
+          vehicleCustomMake: form.vehicleCustomMake || undefined,
           vehicleModel: form.vehicleModel,
+          vehicleCustomModel: form.vehicleCustomModel || undefined,
           vehicleYear: Number(form.vehicleYear),
           vehicleColour: form.vehicleColour,
+          vehicleCustomColour: form.vehicleCustomColour || undefined,
           vehiclePlateNumber: form.vehiclePlateNumber,
           vehicleType: form.rideVehicleType,
           vehicleOwnership: form.vehicleOwnership,
-          vehicleParticularsDocumentUrl: form.vehicleParticularsUrl,
-          insuranceDocumentUrl: form.insuranceDocumentUrl || undefined,
+          documentIds: ids,
           notes: form.riderExperience || undefined
         });
       }
 
       setSuccess(`Your ${selectedModes} application has been submitted. KariGO will review your details and contact you with the next steps.`);
       await clearCaptainApplicationIntent();
+      setUploads({});
       setForm(user ? { ...initialForm, fullName: user.fullName ?? "", phoneNumber: user.phoneNumber ?? "", email: user.email ?? "" } : initialForm);
       setStep(user ? "APPLICATION" : "ACCOUNT");
     } catch (err) {
@@ -343,28 +621,65 @@ export default function CaptainApplication() {
   const canStartAccount = Boolean(form.fullName.trim() && form.phoneNumber.trim());
   const rideFieldsReady = !form.rideCaptainReviewInterest || Boolean(
     form.licenceNumber.trim() &&
-    form.licenceImageUrl.trim() &&
     form.licenceExpiry.trim() &&
     form.vehicleMake.trim() &&
+    (form.vehicleMake !== "OTHER" || form.vehicleCustomMake.trim()) &&
     form.vehicleModel.trim() &&
+    (form.vehicleModel !== "OTHER" || form.vehicleCustomModel.trim()) &&
     form.vehicleYear.trim() &&
     form.vehicleColour.trim() &&
+    (form.vehicleColour !== "OTHER" || form.vehicleCustomColour.trim()) &&
     form.vehiclePlateNumber.trim() &&
-    form.vehicleParticularsUrl.trim()
+    uploaded(uploads, "DRIVER_LICENCE") &&
+    uploaded(uploads, "VEHICLE_EXTERIOR") &&
+    uploaded(uploads, "VEHICLE_INTERIOR") &&
+    uploaded(uploads, "VEHICLE_LICENCE")
   );
   const canSubmit = Boolean(
     step === "APPLICATION" &&
     form.fullName.trim() &&
     form.phoneNumber.trim() &&
-    form.city.trim() &&
-    form.state.trim() &&
+    form.residentialStateCode &&
+    form.residentialCityCode &&
+    form.operatingAreaIds.length &&
+    form.primaryOperatingAreaId &&
     form.address.trim() &&
     form.guarantorName.trim() &&
     form.guarantorPhone.trim() &&
     (form.deliveryCaptainInterest || form.rideCaptainReviewInterest) &&
+    uploaded(uploads, "PROFILE_PHOTO") &&
     rideFieldsReady &&
     form.confirmed
   );
+
+  const selectorOptions =
+    selector === "state" ? states :
+      selector === "city" ? cities :
+        selector === "primaryArea" ? selectedOperatingAreas.map((area) => ({ value: area.id, label: areaLabel(area) })) :
+          selector === "make" ? vehicleCatalog.makes :
+            selector === "model" ? modelOptions :
+              selector === "year" ? yearOptions :
+                selector === "colour" ? vehicleCatalog.colours :
+                  [];
+  const selectorValue =
+    selector === "state" ? form.residentialStateCode :
+      selector === "city" ? form.residentialCityCode :
+        selector === "primaryArea" ? form.primaryOperatingAreaId :
+          selector === "make" ? form.vehicleMake :
+            selector === "model" ? form.vehicleModel :
+              selector === "year" ? form.vehicleYear :
+                selector === "colour" ? form.vehicleColour :
+                  "";
+
+  function onSelectorSelect(value: string) {
+    if (selector === "state") selectState(value);
+    if (selector === "city") updateForm({ residentialCityCode: value });
+    if (selector === "primaryArea") updateForm({ primaryOperatingAreaId: value });
+    if (selector === "make") selectMake(value);
+    if (selector === "model") updateForm({ vehicleModel: value, vehicleCustomModel: value === "OTHER" ? form.vehicleCustomModel : "" });
+    if (selector === "year") updateForm({ vehicleYear: value });
+    if (selector === "colour") selectColour(value);
+  }
 
   return <Screen title="Apply to become a Captain" subtitle="Use your existing KariGO account or create a new Captain applicant account, then submit Delivery Captain or Ride Captain details.">
     <Card tone="soft">
@@ -376,9 +691,9 @@ export default function CaptainApplication() {
     <Card>
       <Text style={ui.sectionTitle}>Step 1: Account and OTP</Text>
       {user ? <Message>You are signed in with your KariGO account. Complete your Captain application to start onboarding.</Message> : null}
-      <Field placeholder="Full name" editable={!user} value={form.fullName} onChangeText={(fullName) => setForm({ ...form, fullName })} />
-      <Field placeholder="Phone number e.g. 080..." editable={!user} keyboardType="phone-pad" value={form.phoneNumber} onChangeText={(phoneNumber) => setForm({ ...form, phoneNumber })} />
-      <Field placeholder="Email optional" editable={!user} keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={(email) => setForm({ ...form, email })} />
+      <Field placeholder="Full name" editable={!user} value={form.fullName} onChangeText={(fullName) => updateForm({ fullName })} />
+      <Field placeholder="Phone number e.g. 080..." editable={!user} keyboardType="phone-pad" value={form.phoneNumber} onChangeText={(phoneNumber) => updateForm({ phoneNumber })} />
+      <Field placeholder="Email optional" editable={!user} keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={(email) => updateForm({ email })} />
       {step === "ACCOUNT" ? <Button title={busy ? "Starting..." : "Create account and send OTP"} disabled={busy || !canStartAccount} onPress={startAccount} /> : null}
       {step === "OTP" ? <>
         <Field placeholder="OTP code" keyboardType="number-pad" value={otp} onChangeText={(value) => setOtp(value.replace(/\D/g, "").slice(0, 8))} />
@@ -396,69 +711,124 @@ export default function CaptainApplication() {
     {step === "APPLICATION" ? <>
       <Card>
         <Text style={ui.sectionTitle}>Application mode</Text>
-        <ToggleRow label="Delivery Captain" checked={form.deliveryCaptainInterest} onPress={() => setForm({ ...form, deliveryCaptainInterest: !form.deliveryCaptainInterest })} helper="Delivery jobs are the active launch workflow after approval." />
-        <ToggleRow label="Ride Captain" checked={form.rideCaptainReviewInterest} onPress={() => setForm({ ...form, rideCaptainReviewInterest: !form.rideCaptainReviewInterest })} helper="KariGO Rides access becomes available after approval and Operations activation." />
+        <ToggleRow label="Delivery Captain" checked={form.deliveryCaptainInterest} onPress={() => updateForm({ deliveryCaptainInterest: !form.deliveryCaptainInterest })} helper="Delivery jobs are the active launch workflow after approval." />
+        <ToggleRow label="Ride Captain" checked={form.rideCaptainReviewInterest} onPress={() => updateForm({ rideCaptainReviewInterest: !form.rideCaptainReviewInterest })} helper="KariGO Rides access becomes available after approval and Operations activation." />
       </Card>
 
       <Card>
         <Text style={ui.sectionTitle}>Personal details</Text>
-        <Field placeholder="City (Kano or Abuja)" value={form.city} onChangeText={(city) => setForm({ ...form, city })} />
-        <Field placeholder="State (Kano or FCT)" value={form.state} onChangeText={(state) => setForm({ ...form, state })} />
-        <Field placeholder="Residential address required" multiline value={form.address} onChangeText={(address) => setForm({ ...form, address })} />
-        <Field placeholder="Preferred launch zone optional" value={form.preferredZone} onChangeText={(preferredZone) => setForm({ ...form, preferredZone })} />
+        <Text style={ui.muted}>Residential location</Text>
+        <SelectorField label="Residential State/Territory" value={states.find((state) => state.value === form.residentialStateCode)?.label} onPress={() => setSelector("state")} />
+        <SelectorField label="Residential City" value={cities.find((city) => city.value === form.residentialCityCode)?.label} disabled={!form.residentialStateCode} onPress={() => setSelector("city")} />
+        <Field placeholder="Residential address required" multiline value={form.address} onChangeText={(address) => updateForm({ address })} />
+        <Field placeholder="Preferred launch zone optional" value={form.preferredZone} onChangeText={(preferredZone) => updateForm({ preferredZone })} />
+        <Text style={ui.sectionTitle}>Preferred operating areas</Text>
+        <Text style={ui.muted}>Choose where you are willing to operate. KariGO Operations still controls final activation.</Text>
+        {activeServiceAreas.map((area) => <ToggleRow key={area.id} label={areaLabel(area)} checked={form.operatingAreaIds.includes(area.id)} onPress={() => toggleOperatingArea(area.id)} />)}
+        <SelectorField label="Primary operating area" value={areaLabel(activeServiceAreas.find((area) => area.id === form.primaryOperatingAreaId))} disabled={!form.operatingAreaIds.length} onPress={() => setSelector("primaryArea")} />
       </Card>
 
       <Card>
-        <Text style={ui.sectionTitle}>Vehicle and documents</Text>
+        <Text style={ui.sectionTitle}>Vehicle classification</Text>
         <Text style={ui.muted}>Delivery vehicle type</Text>
         <View style={styles.chipGrid}>
-          {deliveryVehicleOptions.map((option) => <Pressable key={option.value} accessibilityRole="button" onPress={() => setForm({ ...form, deliveryVehicleType: option.value })} style={[styles.chip, form.deliveryVehicleType === option.value && styles.chipActive]}>
+          {deliveryVehicleOptions.map((option) => <Pressable key={option.value} accessibilityRole="button" onPress={() => updateForm({ deliveryVehicleType: option.value })} style={[styles.chip, form.deliveryVehicleType === option.value && styles.chipActive]}>
             <Text style={[styles.chipText, form.deliveryVehicleType === option.value && styles.chipTextActive]}>{option.label}</Text>
           </Pressable>)}
         </View>
         {form.rideCaptainReviewInterest ? <>
           <Text style={ui.muted}>Ride vehicle type</Text>
           <View style={styles.chipGrid}>
-            {rideVehicleOptions.map((option) => <Pressable key={option.value} accessibilityRole="button" onPress={() => setForm({ ...form, rideVehicleType: option.value })} style={[styles.chip, form.rideVehicleType === option.value && styles.chipActive]}>
+            {rideVehicleOptions.map((option) => <Pressable key={option.value} accessibilityRole="button" onPress={() => updateForm({ rideVehicleType: option.value })} style={[styles.chip, form.rideVehicleType === option.value && styles.chipActive]}>
               <Text style={[styles.chipText, form.rideVehicleType === option.value && styles.chipTextActive]}>{option.label}</Text>
             </Pressable>)}
           </View>
           <Text style={ui.muted}>Vehicle ownership</Text>
           <View style={styles.chipGrid}>
-            {ownershipOptions.map((option) => <Pressable key={option.value} accessibilityRole="button" onPress={() => setForm({ ...form, vehicleOwnership: option.value })} style={[styles.chip, form.vehicleOwnership === option.value && styles.chipActive]}>
+            {ownershipOptions.map((option) => <Pressable key={option.value} accessibilityRole="button" onPress={() => updateForm({ vehicleOwnership: option.value })} style={[styles.chip, form.vehicleOwnership === option.value && styles.chipActive]}>
               <Text style={[styles.chipText, form.vehicleOwnership === option.value && styles.chipTextActive]}>{option.label}</Text>
             </Pressable>)}
           </View>
         </> : null}
-        <Field placeholder="Vehicle plate number required for Ride review" value={form.vehiclePlateNumber} onChangeText={(vehiclePlateNumber) => setForm({ ...form, vehiclePlateNumber })} />
-        <Field placeholder="Driver licence number" value={form.licenceNumber} onChangeText={(licenceNumber) => setForm({ ...form, licenceNumber })} />
+      </Card>
+
+      {form.rideCaptainReviewInterest ? <Card>
+        <Text style={ui.sectionTitle}>Vehicle details</Text>
+        <SelectorField label="Vehicle make" value={(vehicleCatalog.makes.find((make) => make.value === form.vehicleMake) as VehicleMakeOption | undefined)?.label} onPress={() => setSelector("make")} />
+        {form.vehicleMake === "OTHER" ? <Field placeholder="Enter vehicle make" value={form.vehicleCustomMake} onChangeText={(vehicleCustomMake) => updateForm({ vehicleCustomMake })} /> : null}
+        <SelectorField label="Vehicle model" value={modelOptions.find((model) => model.value === form.vehicleModel)?.label} disabled={!form.vehicleMake} onPress={() => setSelector("model")} />
+        {form.vehicleModel === "OTHER" ? <Field placeholder="Enter vehicle model" value={form.vehicleCustomModel} onChangeText={(vehicleCustomModel) => updateForm({ vehicleCustomModel })} /> : null}
+        <SelectorField label="Vehicle year" value={form.vehicleYear} onPress={() => setSelector("year")} />
+        <SelectorField label="Vehicle colour" value={vehicleCatalog.colours.find((colour) => colour.value === form.vehicleColour)?.label} onPress={() => setSelector("colour")} />
+        {form.vehicleColour === "OTHER" ? <Field placeholder="Enter vehicle colour" value={form.vehicleCustomColour} onChangeText={(vehicleCustomColour) => updateForm({ vehicleCustomColour })} /> : null}
+        <Field placeholder="Vehicle plate number" value={form.vehiclePlateNumber} onChangeText={(vehiclePlateNumber) => updateForm({ vehiclePlateNumber })} />
+      </Card> : null}
+
+      <Card>
+        <Text style={ui.sectionTitle}>Driver's licence</Text>
+        <Field placeholder={form.rideCaptainReviewInterest ? "Driver licence number required" : "Driver licence number optional"} value={form.licenceNumber} onChangeText={(licenceNumber) => updateForm({ licenceNumber })} />
         {form.rideCaptainReviewInterest ? <>
-          <Field placeholder="Licence expiry date YYYY-MM-DD" value={form.licenceExpiry} onChangeText={(licenceExpiry) => setForm({ ...form, licenceExpiry })} />
-          <Field placeholder="Vehicle make" value={form.vehicleMake} onChangeText={(vehicleMake) => setForm({ ...form, vehicleMake })} />
-          <Field placeholder="Vehicle model" value={form.vehicleModel} onChangeText={(vehicleModel) => setForm({ ...form, vehicleModel })} />
-          <Field placeholder="Vehicle year" keyboardType="number-pad" value={form.vehicleYear} onChangeText={(vehicleYear) => setForm({ ...form, vehicleYear: vehicleYear.replace(/\D/g, "").slice(0, 4) })} />
-          <Field placeholder="Vehicle colour" value={form.vehicleColour} onChangeText={(vehicleColour) => setForm({ ...form, vehicleColour })} />
+          <SelectorField label="Licence expiry date" value={dateLabel(form.licenceExpiry)} onPress={() => setShowDatePicker(true)} />
+          {showDatePicker ? <DateTimePicker
+            value={dateFromValue(form.licenceExpiry)}
+            mode="date"
+            display="default"
+            minimumDate={new Date()}
+            maximumDate={new Date(new Date().setFullYear(new Date().getFullYear() + 15))}
+            onChange={(_, selectedDate) => {
+              setShowDatePicker(false);
+              if (selectedDate) updateForm({ licenceExpiry: isoDate(selectedDate) });
+            }}
+          /> : null}
         </> : null}
-        <Field placeholder="Delivery experience note optional" multiline value={form.riderExperience} onChangeText={(riderExperience) => setForm({ ...form, riderExperience })} />
-        <Field placeholder="Profile photo URL optional" autoCapitalize="none" value={form.profilePhotoUrl} onChangeText={(profilePhotoUrl) => setForm({ ...form, profilePhotoUrl })} />
-        {isSecureImageUrl(form.profilePhotoUrl) && form.profilePhotoUrl.trim() ? <Image source={{ uri: form.profilePhotoUrl.trim() }} style={styles.preview} /> : null}
-        <Field placeholder={form.rideCaptainReviewInterest ? "Driver licence image HTTPS link required" : "Driver licence image HTTPS link optional"} autoCapitalize="none" value={form.licenceImageUrl} onChangeText={(licenceImageUrl) => setForm({ ...form, licenceImageUrl })} />
-        <Field placeholder={form.rideCaptainReviewInterest ? "Vehicle particulars HTTPS link required" : "Vehicle particulars HTTPS link optional"} autoCapitalize="none" value={form.vehicleParticularsUrl} onChangeText={(vehicleParticularsUrl) => setForm({ ...form, vehicleParticularsUrl })} />
-        <Field placeholder="Insurance document HTTPS link optional" autoCapitalize="none" value={form.insuranceDocumentUrl} onChangeText={(insuranceDocumentUrl) => setForm({ ...form, insuranceDocumentUrl })} />
-        <Text style={ui.muted}>KariGO stores document metadata and secure links for review only. Do not submit passwords, OTPs or payment details.</Text>
+        <Field placeholder="Delivery experience note optional" multiline value={form.riderExperience} onChangeText={(riderExperience) => updateForm({ riderExperience })} />
       </Card>
 
       <Card>
-        <Text style={ui.sectionTitle}>Guarantor</Text>
-        <Field placeholder="Guarantor name" value={form.guarantorName} onChangeText={(guarantorName) => setForm({ ...form, guarantorName })} />
-        <Field placeholder="Guarantor phone e.g. 080..." keyboardType="phone-pad" value={form.guarantorPhone} onChangeText={(guarantorPhone) => setForm({ ...form, guarantorPhone })} />
+        <Text style={ui.sectionTitle}>Required uploads</Text>
+        <Text style={ui.muted}>Upload files from camera, gallery or file picker. Files are stored privately for KariGO review.</Text>
+        {uploadDefinitions.filter((item) => item.alwaysRequired || (form.rideCaptainReviewInterest && item.rideRequired)).map((item) => <UploadCard
+          key={item.type}
+          title={item.title}
+          helper={item.helper}
+          required
+          imageOnly={item.imageOnly}
+          state={uploads[item.type]}
+          onGallery={() => void chooseImage(item.type, "gallery")}
+          onCamera={() => void chooseImage(item.type, "camera")}
+          onFile={() => void chooseFile(item.type)}
+          onRemove={() => void removeUpload(item.type)}
+        />)}
       </Card>
 
       <Card>
+        <Text style={ui.sectionTitle}>Optional uploads</Text>
+        {uploadDefinitions.filter((item) => !item.alwaysRequired && !item.rideRequired).map((item) => <UploadCard
+          key={item.type}
+          title={item.title}
+          helper={item.helper}
+          required={false}
+          imageOnly={item.imageOnly}
+          state={uploads[item.type]}
+          onGallery={() => void chooseImage(item.type, "gallery")}
+          onCamera={() => void chooseImage(item.type, "camera")}
+          onFile={() => void chooseFile(item.type)}
+          onRemove={() => void removeUpload(item.type)}
+        />)}
+      </Card>
+
+      <Card>
+        <Text style={ui.sectionTitle}>Guarantor information</Text>
+        <Field placeholder="Guarantor name" value={form.guarantorName} onChangeText={(guarantorName) => updateForm({ guarantorName })} />
+        <Field placeholder="Guarantor phone e.g. 080..." keyboardType="phone-pad" value={form.guarantorPhone} onChangeText={(guarantorPhone) => updateForm({ guarantorPhone })} />
+      </Card>
+
+      <Card>
+        <Text style={ui.sectionTitle}>Declaration and submission</Text>
         <ToggleRow
           label="I confirm that the information provided is accurate."
           checked={form.confirmed}
-          onPress={() => setForm({ ...form, confirmed: !form.confirmed })}
+          onPress={() => updateForm({ confirmed: !form.confirmed })}
           helper="KariGO may contact me or my guarantor for application review. Do not share OTPs or payment details."
         />
         <Button title={busy ? "Submitting..." : "Submit Captain application"} disabled={busy || !canSubmit} onPress={submit} />
@@ -470,6 +840,25 @@ export default function CaptainApplication() {
       <Message error>{error}</Message>
       <Link href="/auth/login" style={styles.loginLink}>{success.includes("already has a KariGO account") ? "Sign in to continue" : "Already approved? Sign in"}</Link>
     </Card>
+
+    <ModalSelector
+      title={
+        selector === "state" ? "Residential State/Territory" :
+          selector === "city" ? "Residential City" :
+            selector === "primaryArea" ? "Primary operating area" :
+              selector === "make" ? "Vehicle make" :
+                selector === "model" ? "Vehicle model" :
+                  selector === "year" ? "Vehicle year" :
+                    selector === "colour" ? "Vehicle colour" :
+                      "Select"
+      }
+      visible={Boolean(selector)}
+      options={selectorOptions}
+      value={selectorValue}
+      searchable={selector !== "year" && selector !== "city" && selector !== "state" && selector !== "primaryArea"}
+      onClose={() => setSelector(null)}
+      onSelect={onSelectorSelect}
+    />
   </Screen>;
 }
 
@@ -480,12 +869,32 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: "#FEF2F2", borderColor: "#FCA5A5" },
   chipText: { color: brand.colors.muted, fontWeight: "800" },
   chipTextActive: { color: brand.colors.primaryDark },
-  preview: { alignSelf: "flex-start", borderRadius: 18, height: 84, width: 84 },
   toggleRow: { alignItems: "flex-start", flexDirection: "row", gap: 10 },
   checkbox: { alignItems: "center", borderColor: brand.colors.border, borderRadius: 8, borderWidth: 1, height: 26, justifyContent: "center", marginTop: 1, width: 26 },
   checkboxChecked: { backgroundColor: brand.colors.primary, borderColor: brand.colors.primary },
-  checkboxMark: { color: brand.colors.white, fontWeight: "900" },
+  checkboxMark: { color: brand.colors.white, fontSize: 10, fontWeight: "900" },
   toggleText: { flex: 1, gap: 2 },
   toggleLabel: { color: brand.colors.charcoal, fontWeight: "900" },
+  selectorField: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 14, borderWidth: 1, gap: 4, minHeight: 56, padding: 13 },
+  selectorLabel: { color: brand.colors.muted, fontSize: 12, fontWeight: "800" },
+  selectorValue: { color: brand.colors.charcoal, fontSize: 15, fontWeight: "900" },
+  modalBackdrop: { backgroundColor: "rgba(0,0,0,0.38)", flex: 1, justifyContent: "flex-end" },
+  modalCard: { backgroundColor: brand.colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, gap: 12, maxHeight: "78%", padding: 18 },
+  modalClose: { color: brand.colors.primary, fontWeight: "900" },
+  searchInput: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 14, borderWidth: 1, color: brand.colors.charcoal, padding: 12 },
+  optionList: { gap: 8 },
+  optionRow: { borderColor: brand.colors.border, borderRadius: 14, borderWidth: 1, padding: 13 },
+  optionRowActive: { backgroundColor: "#FEF2F2", borderColor: "#FCA5A5" },
+  optionText: { color: brand.colors.charcoal, fontWeight: "800" },
+  optionTextActive: { color: brand.colors.primaryDark },
+  uploadCard: { borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, gap: 10, padding: 12 },
+  uploadTitleWrap: { flex: 1, gap: 6 },
+  uploadTitle: { color: brand.colors.charcoal, fontWeight: "900" },
+  uploadStatus: { color: brand.colors.muted, fontSize: 12, fontWeight: "800" },
+  requiredPill: { backgroundColor: "#FEE2E2", color: "#991B1B" },
+  optionalPill: { backgroundColor: "#F3F4F6", color: brand.colors.muted },
+  uploadPreview: { borderRadius: 14, height: 86, width: 86 },
+  fileName: { color: brand.colors.charcoal, fontSize: 13, fontWeight: "800" },
+  uploadActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   loginLink: { color: brand.colors.primary, fontWeight: "900", paddingVertical: 6, textAlign: "center" }
 });

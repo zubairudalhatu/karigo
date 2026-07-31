@@ -1,6 +1,6 @@
 import { DeliveryCaptainVehicleType } from "@prisma/client";
 import { Transform } from "class-transformer";
-import { IsBoolean, IsEmail, IsEnum, IsIn, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from "class-validator";
+import { IsArray, IsBoolean, IsEmail, IsEnum, IsIn, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from "class-validator";
 import { ApplicationDocumentDto } from "../../../common/dto/application-document.dto";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../../common/utils/phone.util";
 
@@ -40,6 +40,28 @@ export class CreateDeliveryCaptainApplicationDto {
   @MaxLength(80)
   @Transform(trim)
   state!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(24)
+  @Transform(trim)
+  residentialStateCode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(24)
+  @Transform(trim)
+  residentialCityCode?: string;
+
+  @IsOptional()
+  @IsArray()
+  operatingAreaIds?: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  @Transform(trim)
+  primaryOperatingAreaId?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -101,6 +123,10 @@ export class CreateDeliveryCaptainApplicationDto {
 
   @IsOptional()
   documents?: ApplicationDocumentDto[];
+
+  @IsOptional()
+  @IsArray()
+  documentIds?: string[];
 
   @IsBoolean()
   declarationAccepted!: boolean;

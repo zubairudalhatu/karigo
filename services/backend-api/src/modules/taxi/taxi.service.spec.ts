@@ -4,6 +4,7 @@ import * as bcrypt from "bcrypt";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { CaptainUploadStorageService } from "../riders/captain-upload-storage.service";
 import { TaxiService } from "./taxi.service";
 
 const now = new Date("2026-07-10T10:00:00.000Z");
@@ -17,6 +18,10 @@ const application = {
   email: "driver@example.test",
   city: "Kano",
   state: "Kano",
+  residentialStateCode: "KANO",
+  residentialCityCode: "KANO",
+  operatingAreaIds: ["kano-kano"],
+  primaryOperatingAreaId: "kano-kano",
   address: "Nasarawa GRA",
   driverLicenceNumber: "DL-123",
   driverLicenceDocumentUrl: "https://docs.example.test/licence.jpg",
@@ -25,6 +30,9 @@ const application = {
   vehicleModel: "Corolla",
   vehicleYear: 2015,
   vehicleColour: "Black",
+  vehicleCustomMake: null,
+  vehicleCustomModel: null,
+  vehicleCustomColour: null,
   vehiclePlateNumber: "KGO-123AA",
   vehicleType: TaxiVehicleType.SEDAN,
   vehicleOwnership: TaxiVehicleOwnership.OWNER,
@@ -39,8 +47,39 @@ const application = {
   createdAt: now,
   updatedAt: now,
   applicant: null,
-  reviewedByAdmin: null
+  reviewedByAdmin: null,
+  captainDocuments: []
 };
+
+const rideDocument = (id: string, documentType: string) => ({
+  id,
+  userId: "customer-user",
+  deliveryApplicationId: null,
+  rideApplicationId: null,
+  documentType,
+  objectKey: `captain-applications/customer-user/${documentType.toLowerCase()}.jpg`,
+  originalFileName: `${documentType.toLowerCase()}.jpg`,
+  mimeType: "image/jpeg",
+  sizeBytes: 120000,
+  uploadStatus: "UPLOADED",
+  reviewStatus: "PENDING",
+  adminNote: null,
+  uploadedAt: now,
+  reviewedAt: null,
+  reviewedByAdminId: null,
+  replacedAt: null,
+  deletedAt: null,
+  createdAt: now,
+  updatedAt: now
+});
+
+const requiredRideDocuments = [
+  rideDocument("doc-profile", "PROFILE_PHOTO"),
+  rideDocument("doc-licence", "DRIVER_LICENCE"),
+  rideDocument("doc-exterior", "VEHICLE_EXTERIOR"),
+  rideDocument("doc-interior", "VEHICLE_INTERIOR"),
+  rideDocument("doc-vehicle-licence", "VEHICLE_LICENCE")
+];
 
 const waitlistEntry = {
   id: "00000000-0000-0000-0000-00000000b001",
@@ -132,7 +171,14 @@ describe("TaxiService", () => {
       findFirst: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
       update: jest.fn()
+    },
+    captainApplicationDocument: {
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn()
     },
     taxiWaitlistEntry: {
       create: jest.fn(),
@@ -169,6 +215,9 @@ describe("TaxiService", () => {
   };
   const audit = { record: jest.fn() };
   const config = { get: jest.fn((_key: string, fallback?: unknown) => fallback) };
+  const captainUploadStorage = {
+    signedViewUrl: jest.fn()
+  };
   const applicationNotifications = {
     rideWaitlistJoined: jest.fn(),
     rideCaptainApplicationSubmitted: jest.fn()
@@ -177,6 +226,7 @@ describe("TaxiService", () => {
     prisma as unknown as PrismaService,
     audit as unknown as AdminAuditService,
     config as never,
+    captainUploadStorage as unknown as CaptainUploadStorageService,
     applicationNotifications as unknown as ApplicationNotificationsService
   );
 
@@ -200,7 +250,7 @@ describe("TaxiService", () => {
   }
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     prisma.user.findUnique.mockResolvedValue({
       id: "rider-user",
       role: UserRole.RIDER,
@@ -213,11 +263,14 @@ describe("TaxiService", () => {
     prisma.user.update.mockResolvedValue({});
     prisma.taxiDriverApplication.findUnique.mockResolvedValue(null);
     prisma.taxiDriverApplication.create.mockResolvedValue(application);
+    prisma.taxiDriverApplication.findUniqueOrThrow.mockResolvedValue(application);
     prisma.taxiDriverApplication.findFirst.mockImplementation(async ({ where }: any) =>
       where?.OR ? null : application
     );
     prisma.taxiDriverApplication.findMany.mockResolvedValue([application]);
     prisma.taxiDriverApplication.update.mockResolvedValue({ ...application, status: TaxiApplicationStatus.UNDER_REVIEW, reviewedAt: now });
+    prisma.captainApplicationDocument.findMany.mockResolvedValue([]);
+    prisma.captainApplicationDocument.updateMany.mockResolvedValue({ count: 0 });
     prisma.taxiWaitlistEntry.create.mockResolvedValue(waitlistEntry);
     prisma.taxiWaitlistEntry.findMany.mockResolvedValue([waitlistEntry]);
     prisma.taxiWaitlistEntry.findUnique.mockResolvedValue(waitlistEntry);
@@ -350,12 +403,31 @@ describe("TaxiService", () => {
         rider: null
       }
     });
+    prisma.taxiDriverApplication.findUniqueOrThrow.mockResolvedValueOnce({
+      ...application,
+      applicantUserId: "customer-user",
+      applicant: {
+        id: "customer-user",
+        role: UserRole.CUSTOMER,
+        phoneNumber: "+2348030000000",
+        accountStatus: AccountStatus.ACTIVE,
+        deletedAt: null,
+        phoneVerified: true,
+        onboardingPasswordSetAt: null,
+        rider: null
+      }
+    });
+    prisma.captainApplicationDocument.findMany.mockResolvedValueOnce(requiredRideDocuments);
 
     const result = await service.submitDriverApplication({
       fullName: "Existing Customer",
       phoneNumber: "08030000000",
       city: "Kano",
       state: "Kano",
+      residentialStateCode: "KANO",
+      residentialCityCode: "KANO",
+      operatingAreaIds: ["kano-kano"],
+      primaryOperatingAreaId: "kano-kano",
       address: "Nasarawa GRA",
       driverLicenceNumber: "DL-123",
       driverLicenceDocumentUrl: "https://docs.example.test/licence.jpg",
@@ -367,7 +439,8 @@ describe("TaxiService", () => {
       vehiclePlateNumber: "KGO-123AA",
       vehicleType: TaxiVehicleType.SEDAN,
       vehicleOwnership: TaxiVehicleOwnership.OWNER,
-      vehicleParticularsDocumentUrl: "https://docs.example.test/particulars.pdf"
+      vehicleParticularsDocumentUrl: "https://docs.example.test/particulars.pdf",
+      documentIds: requiredRideDocuments.map((document) => document.id)
     }, "customer-user");
 
     expect(prisma.taxiDriverApplication.create).toHaveBeenCalledWith(expect.objectContaining({

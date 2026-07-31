@@ -39,6 +39,7 @@ export default ({ config }: ExpoConfigInput) => {
   return {
     ...config,
     name: isStaging ? "KariGO Captain Staging" : "KariGO Captain",
+    version: "0.1.1",
     slug: "karigo-rider",
     scheme: isStaging ? "karigo-rider-staging" : "karigo-rider",
     plugins: [
@@ -46,6 +47,7 @@ export default ({ config }: ExpoConfigInput) => {
       ["expo-location", {
         locationWhenInUsePermission: "KariGO Captain uses your location only while you are online or on an active delivery so dispatch can coordinate pickups and drop-offs."
       }],
+      "@react-native-community/datetimepicker",
       ["expo-build-properties", androidApi36BuildProperties]
     ],
     icon: "./assets/karigo-icon.png",
@@ -66,7 +68,7 @@ export default ({ config }: ExpoConfigInput) => {
         backgroundColor: "#FFFFFF"
       },
       package: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider",
-      versionCode: isStaging ? 1 : 9
+      versionCode: isStaging ? 1 : 10
     },
     ios: {
       ...config.ios,

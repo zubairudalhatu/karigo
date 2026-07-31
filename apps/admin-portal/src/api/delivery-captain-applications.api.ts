@@ -16,6 +16,27 @@ export interface DeliveryCaptainApplicationDocument {
   verificationStatus: string;
 }
 
+export interface CaptainUploadedApplicationDocument {
+  id: string;
+  documentType: string;
+  originalFileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadStatus: string;
+  reviewStatus: string;
+  uploadedAt: string;
+  required: boolean;
+  optional: boolean;
+}
+
+export interface CaptainLocationSummary {
+  stateCode?: string | null;
+  stateName?: string | null;
+  cityCode?: string | null;
+  cityName?: string | null;
+  label?: string | null;
+}
+
 export interface DeliveryCaptainApplication {
   id: string;
   applicationReference: string;
@@ -24,6 +45,9 @@ export interface DeliveryCaptainApplication {
   email?: string | null;
   city: string;
   state: string;
+  residentialLocation?: CaptainLocationSummary | null;
+  operatingAreas?: CaptainLocationSummary[];
+  primaryOperatingArea?: CaptainLocationSummary | null;
   address: string;
   preferredZone?: string | null;
   vehicleType: string;
@@ -41,6 +65,7 @@ export interface DeliveryCaptainApplication {
   createdAt: string;
   updatedAt: string;
   documents?: DeliveryCaptainApplicationDocument[];
+  captainDocuments?: CaptainUploadedApplicationDocument[];
   applicantAccount?: {
     id: string;
     accountStatus: string;
@@ -58,5 +83,7 @@ export const deliveryCaptainApplicationsApi = {
     return api.get<DeliveryCaptainApplication[]>(`admin/delivery-captain-applications${query}`);
   },
   review: (id: string, body: { status: DeliveryCaptainApplicationStatus; applicantVisibleNote?: string; adminNote?: string }) =>
-    api.patch<DeliveryCaptainApplication>(`admin/delivery-captain-applications/${id}/review`, body)
+    api.patch<DeliveryCaptainApplication>(`admin/delivery-captain-applications/${id}/review`, body),
+  documentView: (applicationId: string, documentId: string) =>
+    api.get<{ viewUrl: string; expiresAt: string; document: CaptainUploadedApplicationDocument }>(`admin/delivery-captain-applications/${applicationId}/documents/${documentId}/view`)
 };

@@ -8,6 +8,10 @@ export interface DeliveryCaptainApplicationInput {
   email?: string;
   city: string;
   state: string;
+  residentialStateCode?: string;
+  residentialCityCode?: string;
+  operatingAreaIds?: string[];
+  primaryOperatingAreaId?: string;
   address: string;
   preferredZone?: string;
   vehicleType: DeliveryCaptainVehicleType;
@@ -20,6 +24,7 @@ export interface DeliveryCaptainApplicationInput {
     documentName?: string;
     documentUrl: string;
   }>;
+  documentIds?: string[];
   guarantorName: string;
   guarantorPhone: string;
   notes?: string;

@@ -44,6 +44,15 @@ export class AdminTaxiController {
     return { message: "Ride Captain application retrieved", data: await this.taxi.driverApplicationDetail(applicationId) };
   }
 
+  @Get("driver-applications/:applicationId/documents/:documentId/view")
+  @ApiOperation({ summary: "Create a short-lived secure view URL for a Ride Captain application document" })
+  async driverApplicationDocumentView(
+    @Param("applicationId", ParseUUIDPipe) applicationId: string,
+    @Param("documentId", ParseUUIDPipe) documentId: string
+  ) {
+    return { message: "Ride Captain document view URL created", data: await this.taxi.adminRideCaptainDocumentViewUrl(applicationId, documentId) };
+  }
+
   @Patch("driver-applications/:applicationId/review")
   @ApiOperation({ summary: "Review a Ride Captain application" })
   async reviewDriverApplication(

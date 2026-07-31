@@ -3,6 +3,8 @@ import { ConfigService } from "@nestjs/config";
 import type { TaxiTripLifecycleDefinition } from "@karigo/shared-types";
 import {
   AccountStatus,
+  CaptainApplicationDocumentType,
+  CaptainDocumentUploadStatus,
   Prisma,
   RiderStatus,
   TaxiApplicationStatus,
@@ -13,12 +15,15 @@ import {
   TaxiWaitlistStatus,
   UserRole
 } from "@prisma/client";
+import { captainServiceAreas } from "@karigo/shared-types";
 import * as bcrypt from "bcrypt";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
 import { PrismaService } from "../../prisma/prisma.service";
+import { assertFutureLicenceDate, resolveCaptainLocation, resolveVehicleDetails } from "../platform/captain-catalog.validation";
+import { CaptainUploadStorageService } from "../riders/captain-upload-storage.service";
 import { AdminAssignTaxiDriverDto } from "./dto/admin-assign-taxi-driver.dto";
 import { UpdateTaxiDriverProfileStatusDto } from "./dto/admin-taxi-profile.dto";
 import { CreateTaxiDriverApplicationDto } from "./dto/create-taxi-driver-application.dto";
@@ -48,10 +53,17 @@ const TAXI_APPLICATION_LIST_SELECT = {
   phoneNumber: true,
   city: true,
   state: true,
+  residentialStateCode: true,
+  residentialCityCode: true,
+  operatingAreaIds: true,
+  primaryOperatingAreaId: true,
   vehicleMake: true,
   vehicleModel: true,
   vehicleYear: true,
   vehicleColour: true,
+  vehicleCustomMake: true,
+  vehicleCustomModel: true,
+  vehicleCustomColour: true,
   vehiclePlateNumber: true,
   driverLicenceDocumentUrl: true,
   vehicleParticularsDocumentUrl: true,
@@ -63,7 +75,8 @@ const TAXI_APPLICATION_LIST_SELECT = {
   applicantVisibleNote: true,
   reviewedAt: true,
   createdAt: true,
-  updatedAt: true
+  updatedAt: true,
+  captainDocuments: { orderBy: { uploadedAt: "desc" } }
 } satisfies Prisma.TaxiDriverApplicationSelect;
 
 const TAXI_APPLICATION_DETAIL_SELECT = {
@@ -193,6 +206,7 @@ export class TaxiService {
     private readonly prisma: PrismaService,
     private readonly audit: AdminAuditService,
     private readonly config: ConfigService,
+    private readonly captainUploadStorage: CaptainUploadStorageService,
     private readonly applicationNotifications: ApplicationNotificationsService
   ) {}
 
@@ -237,31 +251,60 @@ export class TaxiService {
       : await this.requireApplicantAccount(phoneNumber);
     const duplicate = await this.findActiveDuplicateApplication(applicant.id, phoneNumber);
     if (duplicate) return this.formatPublicApplicationStatus(duplicate);
-    const application = await this.prisma.taxiDriverApplication.create({
-      data: {
-        applicationReference: await this.nextApplicationReference(),
-        applicantUserId: applicant.id,
-        fullName: dto.fullName.trim(),
-        phoneNumber,
-        email: dto.email?.trim().toLowerCase(),
-        city: dto.city.trim(),
-        state: dto.state.trim(),
-        address: dto.address?.trim(),
-        driverLicenceNumber: dto.driverLicenceNumber?.trim(),
-        driverLicenceDocumentUrl: dto.driverLicenceDocumentUrl.trim(),
-        driverLicenceExpiry: dto.driverLicenceExpiry ? new Date(dto.driverLicenceExpiry) : undefined,
-        vehicleMake: dto.vehicleMake?.trim(),
-        vehicleModel: dto.vehicleModel?.trim(),
-        vehicleYear: dto.vehicleYear,
-        vehicleColour: dto.vehicleColour?.trim(),
-        vehiclePlateNumber: dto.vehiclePlateNumber?.trim(),
-        vehicleType: dto.vehicleType,
-        vehicleOwnership: dto.vehicleOwnership,
-        vehicleParticularsDocumentUrl: dto.vehicleParticularsDocumentUrl.trim(),
-        insuranceDocumentUrl: dto.insuranceDocumentUrl?.trim(),
-        notes: dto.notes?.trim()
-      },
-      select: TAXI_APPLICATION_DETAIL_SELECT
+    const location = this.resolveRideApplicationLocation(dto, Boolean(applicantUserId));
+    const vehicle = resolveVehicleDetails(dto);
+    const licenceExpiry = assertFutureLicenceDate(dto.driverLicenceExpiry);
+    const uploadedDocuments = applicantUserId
+      ? await this.requireCaptainDocuments(applicant.id, dto.documentIds, this.requiredRideDocumentTypes())
+      : [];
+    if (!applicantUserId && (!dto.driverLicenceDocumentUrl?.trim() || !dto.vehicleParticularsDocumentUrl?.trim())) {
+      throw new BadRequestException("Ride Captain review requires driver licence and vehicle particulars document links.");
+    }
+
+    const application = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.taxiDriverApplication.create({
+        data: {
+          applicationReference: await this.nextApplicationReference(),
+          applicantUserId: applicant.id,
+          fullName: dto.fullName.trim(),
+          phoneNumber,
+          email: dto.email?.trim().toLowerCase(),
+          city: location.city,
+          state: location.state,
+          residentialStateCode: location.residentialStateCode,
+          residentialCityCode: location.residentialCityCode,
+          operatingAreaIds: location.operatingAreaIds,
+          primaryOperatingAreaId: location.primaryOperatingAreaId,
+          address: dto.address?.trim(),
+          driverLicenceNumber: dto.driverLicenceNumber?.trim(),
+          driverLicenceDocumentUrl: dto.driverLicenceDocumentUrl?.trim(),
+          driverLicenceExpiry: licenceExpiry,
+          vehicleMake: vehicle.vehicleMake,
+          vehicleModel: vehicle.vehicleModel,
+          vehicleYear: vehicle.vehicleYear,
+          vehicleColour: vehicle.vehicleColour,
+          vehicleCustomMake: vehicle.vehicleCustomMake,
+          vehicleCustomModel: vehicle.vehicleCustomModel,
+          vehicleCustomColour: vehicle.vehicleCustomColour,
+          vehiclePlateNumber: dto.vehiclePlateNumber?.trim(),
+          vehicleType: dto.vehicleType,
+          vehicleOwnership: dto.vehicleOwnership,
+          vehicleParticularsDocumentUrl: dto.vehicleParticularsDocumentUrl?.trim(),
+          insuranceDocumentUrl: dto.insuranceDocumentUrl?.trim(),
+          notes: dto.notes?.trim()
+        },
+        select: { id: true }
+      });
+      if (uploadedDocuments.length) {
+        await tx.captainApplicationDocument.updateMany({
+          where: { id: { in: uploadedDocuments.map((document) => document.id) }, userId: applicant.id },
+          data: { rideApplicationId: created.id }
+        });
+      }
+      return tx.taxiDriverApplication.findUniqueOrThrow({
+        where: { id: created.id },
+        select: TAXI_APPLICATION_DETAIL_SELECT
+      });
     });
     await this.applicationNotifications.rideCaptainApplicationSubmitted({
       reference: application.applicationReference,
@@ -1571,6 +1614,125 @@ export class TaxiService {
     };
   }
 
+  private resolveRideApplicationLocation(dto: CreateTaxiDriverApplicationDto, strict: boolean) {
+    const inferredArea = dto.city?.trim().toLowerCase() === "abuja" ? "fct-abuja" : "kano-kano";
+    if (!strict && (!dto.residentialStateCode || !dto.residentialCityCode || !dto.operatingAreaIds?.length || !dto.primaryOperatingAreaId)) {
+      return resolveCaptainLocation({
+        state: dto.state,
+        city: dto.city,
+        operatingAreaIds: [inferredArea],
+        primaryOperatingAreaId: inferredArea
+      });
+    }
+    return resolveCaptainLocation(dto);
+  }
+
+  private requiredRideDocumentTypes(): CaptainApplicationDocumentType[] {
+    return [
+      CaptainApplicationDocumentType.PROFILE_PHOTO,
+      CaptainApplicationDocumentType.DRIVER_LICENCE,
+      CaptainApplicationDocumentType.VEHICLE_EXTERIOR,
+      CaptainApplicationDocumentType.VEHICLE_INTERIOR,
+      CaptainApplicationDocumentType.VEHICLE_LICENCE
+    ];
+  }
+
+  private async requireCaptainDocuments(userId: string, documentIds: string[] | undefined, requiredTypes: CaptainApplicationDocumentType[]) {
+    const ids = Array.from(new Set((documentIds ?? []).map((id) => id.trim()).filter(Boolean)));
+    if (!ids.length) {
+      throw new BadRequestException({ message: "Required Ride Captain documents are missing.", errorCode: `${requiredTypes[0]}_REQUIRED` });
+    }
+    const documents = await this.prisma.captainApplicationDocument.findMany({
+      where: {
+        id: { in: ids },
+        userId,
+        uploadStatus: CaptainDocumentUploadStatus.UPLOADED,
+        deletedAt: null
+      }
+    });
+    if (documents.length !== ids.length) {
+      throw new BadRequestException({ message: "One or more Ride Captain documents are incomplete or not owned by this applicant.", errorCode: "DOCUMENT_NOT_OWNED" });
+    }
+    for (const requiredType of requiredTypes) {
+      if (!documents.some((document) => document.documentType === requiredType)) {
+        throw new BadRequestException({ message: "Required Ride Captain document is missing.", errorCode: `${requiredType}_REQUIRED` });
+      }
+    }
+    return documents;
+  }
+
+  async adminRideCaptainDocumentViewUrl(applicationId: string, documentId: string) {
+    const document = await this.prisma.captainApplicationDocument.findFirst({
+      where: {
+        id: documentId,
+        rideApplicationId: applicationId,
+        uploadStatus: CaptainDocumentUploadStatus.UPLOADED,
+        deletedAt: null
+      }
+    });
+    if (!document) throw new NotFoundException("Ride Captain application document not found");
+    const viewUrl = await this.captainUploadStorage.signedViewUrl(document.objectKey, 300);
+    return {
+      document: this.toAdminCaptainDocument(document),
+      viewUrl,
+      expiresAt: new Date(Date.now() + 300_000).toISOString()
+    };
+  }
+
+  private operatingAreaSummary(areaId?: string | null) {
+    if (!areaId) return null;
+    const area = captainServiceAreas.find((item) => item.id === areaId);
+    return area ? {
+      id: area.id,
+      stateCode: area.stateCode,
+      stateName: area.stateName,
+      cityCode: area.cityCode,
+      cityName: area.cityName,
+      label: `${area.cityName}, ${area.stateCode === "FCT" ? "FCT" : area.stateName}`
+    } : null;
+  }
+
+  private operatingAreaSummaries(areaIds?: string[] | null) {
+    return (areaIds ?? [])
+      .map((areaId) => this.operatingAreaSummary(areaId))
+      .filter((area): area is NonNullable<ReturnType<TaxiService["operatingAreaSummary"]>> => Boolean(area));
+  }
+
+  private locationSummary(cityCode?: string | null, stateCode?: string | null, fallbackCity?: string | null, fallbackState?: string | null) {
+    const area = captainServiceAreas.find((item) => item.cityCode === cityCode && item.stateCode === stateCode);
+    return area ? {
+      stateCode: area.stateCode,
+      stateName: area.stateName,
+      cityCode: area.cityCode,
+      cityName: area.cityName,
+      label: `${area.cityName}, ${area.stateCode === "FCT" ? "FCT" : area.stateName}`
+    } : {
+      stateCode: stateCode ?? null,
+      stateName: fallbackState ?? null,
+      cityCode: cityCode ?? null,
+      cityName: fallbackCity ?? null,
+      label: [fallbackCity, fallbackState].filter(Boolean).join(", ") || null
+    };
+  }
+
+  private toAdminCaptainDocument(document: Prisma.CaptainApplicationDocumentGetPayload<Record<string, never>>) {
+    const required = this.requiredRideDocumentTypes().includes(document.documentType);
+    return {
+      id: document.id,
+      documentType: document.documentType,
+      originalFileName: document.originalFileName,
+      mimeType: document.mimeType,
+      sizeBytes: document.sizeBytes,
+      uploadStatus: document.uploadStatus,
+      reviewStatus: document.reviewStatus,
+      uploadedAt: document.uploadedAt.toISOString(),
+      reviewedAt: document.reviewedAt?.toISOString() ?? null,
+      required,
+      optional: !required,
+      adminNote: document.adminNote
+    };
+  }
+
   private adminApplicationList(application: Prisma.TaxiDriverApplicationGetPayload<{ select: typeof TAXI_APPLICATION_LIST_SELECT }>) {
     return {
       ...application,
@@ -1583,6 +1745,10 @@ export class TaxiService {
         riderProfile: application.applicant.rider
       } : null,
       documentEvidence: this.rideDocumentEvidence(application),
+      captainDocuments: (application.captainDocuments ?? []).map((document) => this.toAdminCaptainDocument(document)),
+      residentialLocation: this.locationSummary(application.residentialCityCode, application.residentialStateCode, application.city, application.state),
+      operatingAreas: this.operatingAreaSummaries(application.operatingAreaIds),
+      primaryOperatingArea: this.operatingAreaSummary(application.primaryOperatingAreaId),
       createdAt: application.createdAt.toISOString(),
       updatedAt: application.updatedAt.toISOString(),
       reviewedAt: application.reviewedAt?.toISOString() ?? null,
@@ -1605,6 +1771,10 @@ export class TaxiService {
         riderProfile: application.applicant.rider
       } : null,
       documentEvidence: this.rideDocumentEvidence(application),
+      captainDocuments: (application.captainDocuments ?? []).map((document) => this.toAdminCaptainDocument(document)),
+      residentialLocation: this.locationSummary(application.residentialCityCode, application.residentialStateCode, application.city, application.state),
+      operatingAreas: this.operatingAreaSummaries(application.operatingAreaIds),
+      primaryOperatingArea: this.operatingAreaSummary(application.primaryOperatingAreaId),
       readinessOnly: true,
       launchWarning: "Approval records Ride Captain review status only. Ride dispatch remains controlled by KariGO operations."
     };

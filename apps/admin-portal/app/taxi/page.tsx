@@ -81,6 +81,16 @@ export default function AdminTaxiPage() {
     await load();
   }
 
+  async function openSecureApplicationDocument(application: AdminTaxiDriverApplication, documentId: string) {
+    try {
+      setError("");
+      const result = await taxiApi.driverApplicationDocumentView(application.id, documentId);
+      window.open(result.viewUrl, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    }
+  }
+
   async function createProfile(applicationId: string) {
     if (!window.confirm("Prepare a controlled-pilot Ride Captain profile from this approved application?")) return;
     await taxiApi.createProfileFromApplication(applicationId);
@@ -139,16 +149,31 @@ export default function AdminTaxiPage() {
         {applications.length ? applications.map((application) => <article className="card" key={application.id}>
           <strong>{application.fullName} - {application.applicationReference}</strong>
           <p className="muted">{application.city}, {application.state} - {application.phoneNumber}</p>
+          <div className="notice">
+            <strong>Residential location</strong>
+            <p>{application.residentialLocation?.label || `${application.city}, ${application.state}`}</p>
+            <strong>Operating areas</strong>
+            {application.operatingAreas?.length ? application.operatingAreas.map((area) => <p key={area.label}>{area.label}</p>) : <p className="muted">No operating areas recorded.</p>}
+            <p className="muted">Primary: {application.primaryOperatingArea?.label || "Not recorded"}</p>
+          </div>
           <p>{application.vehicle ?? "Vehicle details pending"} {application.vehiclePlateNumber ? `- ${application.vehiclePlateNumber}` : ""}</p>
           {application.applicantAccount ? <div className="notice">
             <strong>Applicant account</strong>
             <p><Badge>{application.applicantAccount.accountStatus}</Badge> <Badge>{application.applicantAccount.phoneVerified ? "PHONE VERIFIED" : "OTP PENDING"}</Badge> <Badge>{application.applicantAccount.passwordCreated ? "PASSWORD CREATED" : "PASSWORD PENDING"}</Badge></p>
             {application.applicantAccount.riderProfile ? <p className="muted">Captain account: {application.applicantAccount.riderProfile.riderCode} - {application.applicantAccount.riderProfile.verificationStatus}</p> : <p className="muted">Ride operations profile can be prepared after approved account review.</p>}
           </div> : <p className="muted">No account-first applicant is linked to this ride application.</p>}
+          {application.captainDocuments?.length ? <div className="notice">
+            <strong>Secure uploaded documents</strong>
+            {application.captainDocuments.map((document) => <p key={document.id}>
+              <button className="secondary" onClick={() => void openSecureApplicationDocument(application, document.id)}>View secure file</button>{" "}
+              {document.originalFileName} <Badge>{document.required ? "REQUIRED" : "OPTIONAL"}</Badge> <Badge>{document.reviewStatus}</Badge>
+            </p>)}
+          </div> : null}
           {application.documentEvidence?.length ? <div className="notice">
-            <strong>Document evidence</strong>
+            <strong>Legacy document evidence</strong>
             {application.documentEvidence.map((document) => <p key={document.label}><a href={document.url} target="_blank" rel="noreferrer">{document.label}</a></p>)}
-          </div> : <p className="muted">No ride document evidence supplied yet.</p>}
+          </div> : null}
+          {!application.captainDocuments?.length && !application.documentEvidence?.length ? <p className="muted">No ride document evidence supplied yet.</p> : null}
           <p><Badge>{application.status}</Badge></p>
           <div className="filters">
             {reviewStatuses.map((status) => <button className="secondary" key={status} onClick={() => void reviewApplication(application.id, status)}>{status.replaceAll("_", " ")}</button>)}

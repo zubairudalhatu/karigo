@@ -1,0 +1,140 @@
+# Task 207A-R1 — Guided Captain Vehicle, Location and Document Onboarding
+
+## Scope
+
+Task 207A-R1 extends the unified Captain onboarding flow from Task 207A without changing package identity or activating unsupported operations.
+
+- App: KariGO Captain
+- Android package: `com.karigo.rider`
+- App version: `0.1.1`
+- Production Android versionCode: `10`
+- Runtime policy: `appVersion`, so runtime becomes `0.1.1`
+- Delivery Captain: application/onboarding only until Admin approval
+- Ride Captain: readiness/review only unless separately approved for controlled operations
+
+Do not publish this work as an OTA update to the previous `0.1.0` runtime/versionCode `9` build. A fresh Captain AAB is required after backend storage configuration and validation.
+
+## Customer-To-Captain Continuity
+
+The Task 207A unified account behavior remains in place:
+
+- Existing KariGO Customer accounts can sign in to KariGO Captain and continue onboarding.
+- The Captain app does not create duplicate accounts when the phone number already belongs to a Customer.
+- Ordinary `403` responses do not destroy the saved session.
+- Applicant intent is preserved across sign-in using the existing Captain application intent store.
+
+## Guided Location Selection
+
+The Captain application now uses controlled location data instead of free text for launch-state eligibility.
+
+Active operating areas:
+
+- Kano State / Kano
+- Federal Capital Territory / Abuja
+
+Captured fields:
+
+- `residentialStateCode`
+- `residentialCityCode`
+- `operatingAreaIds`
+- `primaryOperatingAreaId`
+
+Residential state/city is a single dependent selection. Preferred operating areas support multi-select, and one selected area must be marked as primary.
+
+## Guided Vehicle Catalog
+
+The backend exposes a public platform catalog for Captain app selectors:
+
+- `GET /api/v1/platform/vehicle-catalog`
+- `GET /api/v1/platform/captain-service-areas`
+
+The vehicle catalog contains:
+
+- supported vehicle makes
+- dependent model options
+- supported vehicle years
+- supported vehicle colours
+- Delivery/Ride vehicle types
+
+The backend remains the final validator for make/model/year/colour combinations. `Other` is supported only when the matching custom field is provided.
+
+## Secure Document Uploads
+
+The Captain app now uploads files instead of asking applicants to paste hosted URLs.
+
+Applicant endpoint:
+
+- `POST /api/v1/captain/application-documents/uploads`
+- `DELETE /api/v1/captain/application-documents/:documentId`
+
+Admin view endpoints:
+
+- `GET /api/v1/admin/delivery-captain-applications/:applicationId/documents/:documentId/view`
+- `GET /api/v1/admin/taxi/driver-applications/:applicationId/documents/:documentId/view`
+
+Admin endpoints return short-lived signed view URLs only. Stored object keys are not returned to public or customer-facing responses.
+
+Supported upload MIME types:
+
+- `image/jpeg`
+- `image/png`
+- `image/webp`
+- `application/pdf`
+
+Current file size limit:
+
+- 10 MB request limit
+- 8 MB image/document validation limit in service logic
+
+Required uploads:
+
+- Delivery Captain: profile photo
+- Ride Captain readiness: profile photo, driver licence image, vehicle exterior photo, vehicle interior photo, vehicle licence/particulars
+
+Optional uploads:
+
+- insurance
+- roadworthiness
+- guarantor ID
+
+## Storage Environment
+
+Backend storage uses environment variables only. Do not commit storage credentials.
+
+Required when `CAPTAIN_UPLOADS_STORAGE_ENABLED=true`:
+
+- `CAPTAIN_UPLOADS_STORAGE_REGION`
+- `CAPTAIN_UPLOADS_STORAGE_BUCKET`
+- `CAPTAIN_UPLOADS_STORAGE_ACCESS_KEY_ID`
+- `CAPTAIN_UPLOADS_STORAGE_SECRET_ACCESS_KEY`
+
+Optional:
+
+- `CAPTAIN_UPLOADS_STORAGE_ENDPOINT`
+- `CAPTAIN_UPLOADS_STORAGE_FORCE_PATH_STYLE`
+
+If `CAPTAIN_UPLOADS_STORAGE_ENDPOINT` is set, it must be HTTPS.
+
+## Migration
+
+The migration adds:
+
+- `CaptainApplicationDocumentType`
+- `CaptainDocumentUploadStatus`
+- secure `CaptainApplicationDocument` records
+- residential and operating-area fields on Delivery Captain and Ride Captain applications
+- custom vehicle fields on Ride Captain applications
+
+Run Prisma migrate deploy during backend deployment.
+
+## Fresh AAB Gate
+
+Do not build or distribute the final Captain AAB until all are true:
+
+- backend migration is applied
+- backend storage env vars are configured in Render/approved secret manager
+- backend build/typecheck/tests pass
+- Admin Portal can view short-lived secure document links
+- Captain Expo Doctor passes
+
+The next Play Internal Testing AAB must be built from app version `0.1.1`, versionCode `10`.

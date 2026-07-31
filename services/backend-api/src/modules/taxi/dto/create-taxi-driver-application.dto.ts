@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsDateString, IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
+import { IsArray, IsDateString, IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
 import { TaxiVehicleOwnership, TaxiVehicleType } from "@prisma/client";
 
 export class CreateTaxiDriverApplicationDto {
@@ -28,6 +28,25 @@ export class CreateTaxiDriverApplicationDto {
   @MaxLength(80)
   state!: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(24)
+  residentialStateCode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(24)
+  residentialCityCode?: string;
+
+  @IsOptional()
+  @IsArray()
+  operatingAreaIds?: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  primaryOperatingAreaId?: string;
+
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
@@ -38,10 +57,10 @@ export class CreateTaxiDriverApplicationDto {
   @MaxLength(80)
   driverLicenceNumber!: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(1000)
-  driverLicenceDocumentUrl!: string;
+  driverLicenceDocumentUrl?: string;
 
   @IsDateString()
   driverLicenceExpiry!: string;
@@ -51,10 +70,20 @@ export class CreateTaxiDriverApplicationDto {
   @MaxLength(80)
   vehicleMake!: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  vehicleCustomMake?: string;
+
   @IsString()
   @IsNotEmpty()
   @MaxLength(80)
   vehicleModel!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  vehicleCustomModel?: string;
 
   @Type(() => Number)
   @IsInt()
@@ -67,6 +96,11 @@ export class CreateTaxiDriverApplicationDto {
   @MaxLength(50)
   vehicleColour!: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  vehicleCustomColour?: string;
+
   @IsString()
   @IsNotEmpty()
   @MaxLength(40)
@@ -78,10 +112,10 @@ export class CreateTaxiDriverApplicationDto {
   @IsEnum(TaxiVehicleOwnership)
   vehicleOwnership!: TaxiVehicleOwnership;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(1000)
-  vehicleParticularsDocumentUrl!: string;
+  vehicleParticularsDocumentUrl?: string;
 
   @IsOptional()
   @IsString()
@@ -92,4 +126,8 @@ export class CreateTaxiDriverApplicationDto {
   @IsString()
   @MaxLength(700)
   notes?: string;
+
+  @IsOptional()
+  @IsArray()
+  documentIds?: string[];
 }
