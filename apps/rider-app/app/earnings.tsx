@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { brand } from "@karigo/config";
+import type { CaptainAccess } from "../src/api/captain-access.api";
 import { captainAccessApi } from "../src/api/captain-access.api";
 import { earningsApi, EarningsSummary } from "../src/api/earnings.api";
-import { Card, Empty, Message, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
+import { Card, Empty, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
 import { friendlyError, money } from "../src/lib/errors";
 
 export default function Earnings() {
   const [data, setData] = useState<EarningsSummary | null>(null);
+  const [access, setAccess] = useState<CaptainAccess | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -15,9 +17,10 @@ export default function Earnings() {
     setLoading(true);
     try {
       const access = await captainAccessApi.resolve();
+      setAccess(access);
       if (!access.operationalModes.includes("DELIVERY_CAPTAIN")) {
         setData(null);
-        setError("Delivery earnings will be available after KariGO approves your Delivery Captain access.");
+        setError("");
         return;
       }
       setData(await earningsApi.summary());
@@ -31,7 +34,15 @@ export default function Earnings() {
 
   useEffect(() => { void load(); }, []);
 
-  return <Protected><Screen title="Earnings" subtitle="Track delivery earnings recorded by KariGO operations." refreshing={loading} onRefresh={load}><Message error>{error}</Message>
+  const deliveryAccessReady = access?.operationalModes.includes("DELIVERY_CAPTAIN") === true;
+
+  return <Protected><Screen title="Earnings" subtitle={deliveryAccessReady ? "Track delivery earnings recorded by KariGO operations." : "Earnings become available after approval."} refreshing={loading} onRefresh={load}><Message error>{error}</Message>
+    {!deliveryAccessReady ? <Card tone="soft">
+      <Text style={ui.sectionTitle}>Earnings locked</Text>
+      <Text style={ui.pageIntro}>Earnings become available after your Captain access is approved and activated.</Text>
+      <NavLink href="/application-status" label="View application status" />
+      <NavLink href="/tabs/dashboard" label="Return home" />
+    </Card> : <>
     <Card tone="soft">
       <Text style={ui.sectionTitle}>Total earnings</Text>
       <Text style={styles.total}>{money(data?.totalEarnings)}</Text>
@@ -47,6 +58,7 @@ export default function Earnings() {
       <Text style={styles.metric}>{money(item.riderPayout)}</Text>
       <Text style={ui.muted}>{new Date(item.order.completedAt ?? item.createdAt).toLocaleString()}</Text>
     </Card>)}
+    </>}
   </Screen></Protected>;
 }
 

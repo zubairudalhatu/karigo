@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from "@nestjs/common";
-import { AccountStatus, TaxiApplicationStatus, TaxiDriverProfileStatus, TaxiTripStatus, TaxiVehicleOwnership, TaxiVehicleType, TaxiWaitlistStatus, UserRole } from "@prisma/client";
+import { AccountStatus, DocumentVerificationStatus, TaxiApplicationStatus, TaxiDriverProfileStatus, TaxiTripStatus, TaxiVehicleOwnership, TaxiVehicleType, TaxiWaitlistStatus, UserRole } from "@prisma/client";
 import * as bcrypt from "bcrypt";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
@@ -64,6 +64,7 @@ const rideDocument = (id: string, documentType: string) => ({
   uploadStatus: "UPLOADED",
   reviewStatus: "PENDING",
   adminNote: null,
+  applicantVisibleNote: null,
   uploadedAt: now,
   reviewedAt: null,
   reviewedByAdminId: null,
@@ -257,6 +258,7 @@ describe("TaxiService", () => {
       accountStatus: AccountStatus.PENDING,
       phoneNumber: "+2348030000000",
       phoneVerified: true,
+      passwordHash: "hashed-password",
       onboardingPasswordSetAt: now,
       deletedAt: null
     });
@@ -386,6 +388,7 @@ describe("TaxiService", () => {
       phoneNumber: "+2348030000000",
       accountStatus: AccountStatus.ACTIVE,
       phoneVerified: true,
+      passwordHash: "customer-password-hash",
       onboardingPasswordSetAt: null,
       deletedAt: null
     });
@@ -399,6 +402,7 @@ describe("TaxiService", () => {
         accountStatus: AccountStatus.ACTIVE,
         deletedAt: null,
         phoneVerified: true,
+        passwordHash: "customer-password-hash",
         onboardingPasswordSetAt: null,
         rider: null
       }
@@ -413,6 +417,7 @@ describe("TaxiService", () => {
         accountStatus: AccountStatus.ACTIVE,
         deletedAt: null,
         phoneVerified: true,
+        passwordHash: "customer-password-hash",
         onboardingPasswordSetAt: null,
         rider: null
       }
@@ -509,6 +514,46 @@ describe("TaxiService", () => {
       readinessOnly: true
     }));
     expect(result.launchWarning).toContain("Ride dispatch remains controlled");
+  });
+
+  it("blocks Ride Captain approval when required secure documents are pending", async () => {
+    prisma.taxiDriverApplication.findUnique.mockResolvedValueOnce({
+      ...application,
+      captainDocuments: requiredRideDocuments
+    });
+
+    await expect(service.reviewDriverApplication(application.id, "admin-user", {
+      status: TaxiApplicationStatus.APPROVED
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.taxiDriverApplication.update).not.toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: TaxiApplicationStatus.APPROVED })
+    }));
+  });
+
+  it("reviews Ride Captain secure documents and records an audit event", async () => {
+    const document = {
+      ...requiredRideDocuments[0],
+      rideApplicationId: application.id,
+      reviewStatus: DocumentVerificationStatus.PENDING
+    };
+    prisma.captainApplicationDocument.findFirst.mockResolvedValueOnce(document);
+    prisma.captainApplicationDocument.update.mockResolvedValueOnce({
+      ...document,
+      reviewStatus: DocumentVerificationStatus.APPROVED,
+      reviewedByAdminId: "admin-user",
+      reviewedAt: now
+    });
+
+    await expect(service.reviewRideCaptainApplicationDocument("admin-user", application.id, document.id, {
+      status: DocumentVerificationStatus.APPROVED
+    })).resolves.toMatchObject({ reviewStatus: DocumentVerificationStatus.APPROVED });
+
+    expect(audit.record).toHaveBeenCalledWith("admin-user", "CAPTAIN_DOCUMENT_APPROVED", "CaptainApplicationDocument", document.id, expect.objectContaining({
+      mode: "RIDE_CAPTAIN",
+      previousStatus: DocumentVerificationStatus.PENDING,
+      newStatus: DocumentVerificationStatus.APPROVED
+    }));
   });
 
   it("updates waitlist status with audit trail only", async () => {

@@ -2,6 +2,18 @@ import { api } from "./client";
 
 export type DeliveryCaptainVehicleType = "MOTORCYCLE" | "BICYCLE" | "TRICYCLE" | "CAR" | "VAN" | "OTHER";
 
+export interface CaptainDocumentReviewSummary {
+  stage: "DOCUMENTS_MISSING" | "DOCUMENTS_RECEIVED" | "DOCUMENTS_UNDER_REVIEW" | "CHANGES_REQUESTED" | "DOCUMENTS_APPROVED";
+  message: string;
+  requiredDocumentTypes: string[];
+  missingRequiredDocumentTypes: string[];
+  pendingRequiredDocumentTypes: string[];
+  changesRequestedRequiredDocumentTypes: string[];
+  rejectedRequiredDocumentTypes: string[];
+  requiredDocumentsApproved: boolean;
+  approvalReviewIncomplete: boolean;
+}
+
 export interface DeliveryCaptainApplicationInput {
   fullName: string;
   phoneNumber: string;
@@ -51,6 +63,7 @@ export interface DeliveryCaptainApplicationStatus {
   nextStep?: string;
   operationalAccess?: boolean;
   applicationAccountRole?: string | null;
+  documentReview?: CaptainDocumentReviewSummary;
 }
 
 export const deliveryCaptainApplicationsApi = {

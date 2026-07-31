@@ -15,6 +15,7 @@ import { CaptainApplicationDocumentUploadDto } from "./dto/captain-application-d
 import { CreateDeliveryCaptainApplicationDto } from "./dto/create-delivery-captain-application.dto";
 import { DeliveryCaptainApplicationStatusQueryDto } from "./dto/delivery-captain-application-status-query.dto";
 import { ListDeliveryCaptainApplicationsQueryDto } from "./dto/list-delivery-captain-applications-query.dto";
+import { ReviewCaptainApplicationDocumentDto } from "./dto/review-captain-application-document.dto";
 import { ReviewDeliveryCaptainApplicationDto } from "./dto/review-delivery-captain-application.dto";
 import { UpdateRiderProfileDto } from "./dto/update-rider-profile.dto";
 import { RidersService } from "./riders.service";
@@ -88,6 +89,23 @@ export class AdminDeliveryCaptainApplicationsController {
     @Param("documentId", ParseUUIDPipe) documentId: string
   ) {
     return { message: "Captain document view URL created", data: await this.ridersService.adminCaptainDocumentViewUrl(applicationId, documentId) };
+  }
+
+  @Patch(":applicationId/documents/required/approve")
+  @ApiOperation({ summary: "Approve all uploaded required Delivery Captain secure documents" })
+  async approveRequiredDocuments(@CurrentUser() user: AuthenticatedUser, @Param("applicationId", ParseUUIDPipe) applicationId: string) {
+    return { message: "Required Delivery Captain documents approved", data: await this.ridersService.approveRequiredDeliveryCaptainDocuments(user.id, applicationId) };
+  }
+
+  @Patch(":applicationId/documents/:documentId/review")
+  @ApiOperation({ summary: "Review a Delivery Captain secure application document" })
+  async reviewDocument(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseUUIDPipe) applicationId: string,
+    @Param("documentId", ParseUUIDPipe) documentId: string,
+    @Body() dto: ReviewCaptainApplicationDocumentDto
+  ) {
+    return { message: "Delivery Captain document reviewed", data: await this.ridersService.reviewDeliveryCaptainApplicationDocument(user.id, applicationId, documentId, dto) };
   }
 
   @Patch(":applicationId/review")

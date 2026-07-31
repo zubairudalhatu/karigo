@@ -6,16 +6,17 @@ import {
   VehicleCatalogOption,
   VehicleMakeOption
 } from "@karigo/shared-types";
-import { Link } from "expo-router";
+import { Link, router, useFocusEffect } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { TaxiVehicleOwnership, TaxiVehicleType } from "@karigo/shared-types";
 import {
   applicantOnboardingApi,
   ApplicantOnboardingResult
 } from "../../src/api/applicant-onboarding.api";
+import { CaptainAccess, captainAccessApi } from "../../src/api/captain-access.api";
 import { captainCatalogApi, fallbackServiceAreaCatalog, fallbackVehicleCatalog } from "../../src/api/captain-catalog.api";
 import {
   CaptainDocumentType,
@@ -27,9 +28,10 @@ import {
   DeliveryCaptainVehicleType
 } from "../../src/api/delivery-captain-applications.api";
 import { taxiApi } from "../../src/api/taxi.api";
-import { Button, Card, Field, Message, PasswordField, Screen, ui } from "../../src/components/ui";
+import { Button, Card, Field, Loading, Message, PasswordField, Screen, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { clearCaptainApplicationIntent, loadCaptainApplicationIntent, saveCaptainApplicationIntent } from "../../src/lib/captain-application-intent";
+import { hasAnyCaptainApplication } from "../../src/lib/captain-application-status";
 import { friendlyError } from "../../src/lib/errors";
 import { normalizeNigerianPhoneNumber } from "../../src/lib/phone";
 
@@ -263,6 +265,8 @@ function UploadCard({
 export default function CaptainApplication() {
   const { user } = useAuth();
   const [form, setForm] = useState<CaptainForm>(initialForm);
+  const [captainAccess, setCaptainAccess] = useState<CaptainAccess | null>(null);
+  const [accessLoading, setAccessLoading] = useState(false);
   const [vehicleCatalog, setVehicleCatalog] = useState<VehicleCatalog>(fallbackVehicleCatalog);
   const [serviceAreas, setServiceAreas] = useState<CaptainServiceArea[]>(fallbackServiceAreaCatalog.areas);
   const [uploads, setUploads] = useState<UploadMap>({});
@@ -276,6 +280,7 @@ export default function CaptainApplication() {
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+  const submittingRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     void Promise.all([captainCatalogApi.vehicleCatalog(), captainCatalogApi.serviceAreas()]).then(([vehicles, areas]) => {
@@ -283,6 +288,33 @@ export default function CaptainApplication() {
       setServiceAreas(areas.areas);
     });
   }, []);
+
+  const resolveApplicationGate = useCallback(async () => {
+    if (!user) {
+      setCaptainAccess(null);
+      return;
+    }
+    setAccessLoading(true);
+    try {
+      const access = await captainAccessApi.resolve();
+      setCaptainAccess(access);
+      if (hasAnyCaptainApplication(access)) {
+        router.replace("/application-status");
+        return;
+      }
+      if (access.nextStep === "OPEN_DASHBOARD") {
+        router.replace("/tabs/dashboard");
+      }
+    } catch (err) {
+      setError(friendlyError(err));
+    } finally {
+      setAccessLoading(false);
+    }
+  }, [user]);
+
+  useFocusEffect(useCallback(() => {
+    void resolveApplicationGate();
+  }, [resolveApplicationGate]));
 
   useEffect(() => {
     if (!user) return;
@@ -529,7 +561,7 @@ export default function CaptainApplication() {
     }
   }
 
-  async function submit() {
+  async function completeSubmission() {
     setBusy(true);
     setSuccess("");
     setError("");
@@ -543,12 +575,13 @@ export default function CaptainApplication() {
       ].filter(Boolean).join(" and ");
       const area = selectedResidentialArea ?? activeServiceAreas[0];
       const ids = documentIds(uploads);
+      const submissions: Promise<unknown>[] = [];
 
       if (form.deliveryCaptainInterest) {
         const submitDeliveryApplication = user
           ? deliveryCaptainApplicationsApi.submitForCurrentUser
           : deliveryCaptainApplicationsApi.submit;
-        await submitDeliveryApplication({
+        submissions.push(submitDeliveryApplication({
           fullName: form.fullName,
           phoneNumber: normalizedPhone,
           email: form.email || undefined,
@@ -571,14 +604,14 @@ export default function CaptainApplication() {
           declarationAccepted: form.confirmed,
           privacyAccepted: form.confirmed,
           contactConsentAccepted: form.confirmed
-        });
+        }));
       }
 
       if (form.rideCaptainReviewInterest) {
         const submitRideApplication = user
           ? taxiApi.submitDriverApplicationForCurrentUser
           : taxiApi.submitDriverApplication;
-        await submitRideApplication({
+        submissions.push(submitRideApplication({
           fullName: form.fullName,
           phoneNumber: normalizedPhone,
           email: form.email || undefined,
@@ -603,18 +636,50 @@ export default function CaptainApplication() {
           vehicleOwnership: form.vehicleOwnership,
           documentIds: ids,
           notes: form.riderExperience || undefined
-        });
+        }));
       }
 
-      setSuccess(`Your ${selectedModes} application has been submitted. KariGO will review your details and contact you with the next steps.`);
+      await Promise.all(submissions);
       await clearCaptainApplicationIntent();
       setUploads({});
+      if (user) {
+        const access = await captainAccessApi.resolve();
+        setCaptainAccess(access);
+        if (hasAnyCaptainApplication(access)) {
+          router.replace({ pathname: "/application-status", params: { submitted: "1" } });
+          return;
+        }
+      }
+      setSuccess(`Your ${selectedModes} application has been submitted. KariGO will review your details and contact you with the next steps.`);
       setForm(user ? { ...initialForm, fullName: user.fullName ?? "", phoneNumber: user.phoneNumber ?? "", email: user.email ?? "" } : initialForm);
       setStep(user ? "APPLICATION" : "ACCOUNT");
     } catch (err) {
+      if (user) {
+        try {
+          const access = await captainAccessApi.resolve();
+          setCaptainAccess(access);
+          if (hasAnyCaptainApplication(access)) {
+            router.replace("/application-status");
+            return;
+          }
+        } catch {
+          // Keep the original submission error visible below.
+        }
+      }
       setError(err instanceof Error ? err.message : friendlyError(err));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function submit() {
+    if (submittingRef.current) return submittingRef.current;
+    const submission = completeSubmission();
+    submittingRef.current = submission;
+    try {
+      await submission;
+    } finally {
+      submittingRef.current = null;
     }
   }
 
@@ -679,6 +744,16 @@ export default function CaptainApplication() {
     if (selector === "model") updateForm({ vehicleModel: value, vehicleCustomModel: value === "OTHER" ? form.vehicleCustomModel : "" });
     if (selector === "year") updateForm({ vehicleYear: value });
     if (selector === "colour") selectColour(value);
+  }
+
+  if (user && !captainAccess) {
+    return <Screen>
+      <Card>
+        <Loading label={accessLoading ? "Checking your Captain application status..." : "Preparing application access..."} />
+        <Message error>{error}</Message>
+        {error ? <Button title="Try again" tone="muted" onPress={() => void resolveApplicationGate()} /> : null}
+      </Card>
+    </Screen>;
   }
 
   return <Screen title="Apply to become a Captain" subtitle="Use your existing KariGO account or create a new Captain applicant account, then submit Delivery Captain or Ride Captain details.">
@@ -831,7 +906,7 @@ export default function CaptainApplication() {
           onPress={() => updateForm({ confirmed: !form.confirmed })}
           helper="KariGO may contact me or my guarantor for application review. Do not share OTPs or payment details."
         />
-        <Button title={busy ? "Submitting..." : "Submit Captain application"} disabled={busy || !canSubmit} onPress={submit} />
+        <Button title={busy ? "Submitting application..." : "Submit Captain application"} disabled={busy || !canSubmit} onPress={submit} />
       </Card>
     </> : null}
 

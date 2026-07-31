@@ -30,6 +30,7 @@ export default function RootLayout() {
         >
           <Stack.Screen name="index" options={hiddenHeader} />
           <Stack.Screen name="captain-access" options={hiddenHeader} />
+          <Stack.Screen name="application-status" options={hiddenHeader} />
           <Stack.Screen name="auth/login" options={hiddenHeader} />
           <Stack.Screen name="auth/apply" options={hiddenHeader} />
           <Stack.Screen name="auth/forgot-password" options={hiddenHeader} />

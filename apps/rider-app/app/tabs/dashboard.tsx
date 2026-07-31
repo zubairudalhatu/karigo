@@ -9,6 +9,12 @@ import { Button, Card, Loading, Message, NavLink, Protected, Screen, StatusBadge
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 import { requestCaptainForegroundLocation } from "../../src/lib/location";
+import {
+  applicantReviewCopy,
+  captainHeroStatus,
+  classifyCaptainApplication,
+  hasSubmittedCaptainApplication
+} from "../../src/lib/captain-application-status";
 
 const ACTIVE_DELIVERY_STATUSES = new Set([
   "RIDER_ASSIGNED",
@@ -25,8 +31,8 @@ function firstName(fullName?: string | null) {
   return name.split(/\s+/)[0] || "Captain";
 }
 
-function availabilityLabel(profile?: RiderProfile | null) {
-  if (!profile) return "Unavailable";
+function availabilityLabel(access?: CaptainAccess | null, profile?: RiderProfile | null) {
+  if (!profile) return captainHeroStatus(access, null);
   if (profile.verificationStatus !== "ACTIVE") return "Unavailable";
   if (profile.availabilityStatus === "BUSY") return "On delivery";
   if (profile.availabilityStatus === "ONLINE") return "Online";
@@ -42,9 +48,10 @@ function availabilityCopy(profile?: RiderProfile | null) {
   return "Go online when dispatch is ready to assign you a delivery.";
 }
 
-function statusChipStyle(profile?: RiderProfile | null) {
+function statusChipStyle(profile?: RiderProfile | null, access?: CaptainAccess | null) {
   if (profile?.availabilityStatus === "ONLINE") return [styles.statusChip, styles.statusChipOnline];
   if (profile?.availabilityStatus === "BUSY") return [styles.statusChip, styles.statusChipBusy];
+  if (!profile && (hasSubmittedCaptainApplication(access?.deliveryCaptainApplication) || hasSubmittedCaptainApplication(access?.rideCaptainApplication))) return [styles.statusChip, styles.statusChipReview];
   return [styles.statusChip, styles.statusChipOffline];
 }
 
@@ -54,6 +61,14 @@ function hasDeliveryApplication(status: CaptainAccess["deliveryCaptainApplicatio
 
 function hasRideApplication(status: CaptainAccess["rideCaptainApplication"] | null): status is Extract<CaptainAccess["rideCaptainApplication"], { exists: true }> {
   return status?.exists === true;
+}
+
+function applicationActionLabel(application: Extract<CaptainAccess["deliveryCaptainApplication"], { exists: true }> | Extract<CaptainAccess["rideCaptainApplication"], { exists: true }>) {
+  const category = classifyCaptainApplication(application.status);
+  if (category === "REVISION_REQUIRED") return "Review requested changes";
+  if (category === "PROVISIONALLY_APPROVED") return "View approval progress";
+  if (category === "APPROVED" || category === "ACTIVATION_PENDING") return "View activation status";
+  return "View application status";
 }
 
 export default function RiderDashboard() {
@@ -134,11 +149,11 @@ export default function RiderDashboard() {
   const canToggle = !!profile && profile.verificationStatus === "ACTIVE" && profile.availabilityStatus !== "BUSY";
   const deliveryApplicationExists = hasDeliveryApplication(onboardingStatus);
   const rideApplicationExists = hasRideApplication(rideOnboardingStatus);
-  const onboardingCopy = deliveryApplicationExists && onboardingStatus.status !== "REJECTED"
-    ? "Your Captain application is under review. KariGO will notify you after approval."
+  const onboardingCopy = deliveryApplicationExists
+    ? applicantReviewCopy(onboardingStatus, "DELIVERY_CAPTAIN")
     : onboardingStatus?.message;
-  const rideOnboardingCopy = rideApplicationExists && rideOnboardingStatus.status !== "REJECTED"
-    ? "Your Ride Captain application is under review. KariGO Rides access becomes available after approval and Operations activation."
+  const rideOnboardingCopy = rideApplicationExists
+    ? applicantReviewCopy(rideOnboardingStatus, "RIDE_CAPTAIN")
     : rideOnboardingStatus?.message;
   const hasAnyApplication = deliveryApplicationExists || rideApplicationExists;
   const hasDeliveryAccess = captainAccess?.operationalModes.includes("DELIVERY_CAPTAIN");
@@ -153,7 +168,7 @@ export default function RiderDashboard() {
       <View style={styles.heroCard}>
         <View style={styles.heroTopRow}>
           <Image source={require("../../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
-          <View style={statusChipStyle(profile)}><Text style={styles.statusChipText}>{availabilityLabel(profile)}</Text></View>
+          <View style={statusChipStyle(profile, captainAccess)}><Text style={styles.statusChipText}>{availabilityLabel(captainAccess, profile)}</Text></View>
         </View>
         <Text style={styles.kicker}>KariGO Captain</Text>
         <Text style={styles.title}>Hi, {firstName(profile?.user?.fullName ?? captainAccess?.account.fullName ?? user?.fullName)}</Text>
@@ -162,25 +177,25 @@ export default function RiderDashboard() {
       <Message>{message}</Message>
       <Message error>{error}</Message>
 
-      {!profile && onboardingStatus ? <Card>
+      {!hasDeliveryAccess && deliveryApplicationExists ? <Card>
         <Text style={ui.title}>Captain onboarding</Text>
-        {deliveryApplicationExists ? <StatusBadge status={onboardingStatus.status} /> : null}
+        <StatusBadge status={onboardingStatus.status} />
         <Text style={ui.muted}>{onboardingCopy}</Text>
         <Text style={ui.muted}>Captain operations will be available after KariGO approves your application.</Text>
-        <NavLink href="/auth/apply" label={deliveryApplicationExists ? "Open Captain application" : "Start Captain application"} />
+        <NavLink href="/application-status" label={applicationActionLabel(onboardingStatus)} />
       </Card> : null}
 
-      {!profile && rideOnboardingStatus ? <Card>
+      {!hasRideAccess && rideApplicationExists ? <Card>
         <Text style={ui.title}>Ride Captain onboarding</Text>
-        {rideApplicationExists ? <StatusBadge status={rideOnboardingStatus.status} /> : null}
+        <StatusBadge status={rideOnboardingStatus.status} />
         <Text style={ui.muted}>{rideOnboardingCopy}</Text>
         <Text style={ui.muted}>Ride operations are activated by KariGO Operations after approval.</Text>
-        <NavLink href="/auth/apply" label={rideApplicationExists ? "Open Ride Captain application" : "Start Ride Captain application"} />
+        <NavLink href="/application-status" label={applicationActionLabel(rideOnboardingStatus)} />
       </Card> : null}
 
-      {!profile && hasRideAccess ? <Card>
+      {hasRideAccess ? <Card>
         <Text style={ui.title}>Ride operations</Text>
-        <Text style={ui.muted}>Your Ride Captain access is active. Open Ride operations to view assigned Ride requests when Operations activates them.</Text>
+        <Text style={ui.muted}>Your KariGO Ride Captain access is active.</Text>
         <NavLink href="/taxi-readiness" label="Open Ride operations" />
       </Card> : null}
 
@@ -239,6 +254,7 @@ const styles = StyleSheet.create({
   statusChipBusy: { backgroundColor: "#FFF7ED" },
   statusChipOffline: { backgroundColor: "#F3F4F6" },
   statusChipOnline: { backgroundColor: "#DCFCE7" },
+  statusChipReview: { backgroundColor: "#DBEAFE" },
   statusChipText: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "900" },
   metric: { color: brand.colors.charcoal, fontSize: 28, fontWeight: "800" },
   summaryGrid: { flexDirection: "row", gap: 12 },

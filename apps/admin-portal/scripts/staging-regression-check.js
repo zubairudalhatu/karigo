@@ -112,6 +112,9 @@ assert(managementApiSource.includes("requireCollection"), "Admin management API 
 const ridersPage = read("app", "riders", "page.tsx");
 assert(ridersPage.includes("Captains"), "Admin Riders page must use Captain-facing operations copy.");
 assert(ridersPage.includes("managementApi.updateRiderLifecycle"), "Admin Captains page must call audited Captain lifecycle endpoint.");
+assert(ridersPage.includes("Activate Delivery Captain"), "Admin Captains page must expose safe activation for eligible pending Delivery Captains.");
+assert(ridersPage.includes("Open Ride application"), "Admin Captains page must expose a mode-aware Ride application action.");
+assert(ridersPage.includes("LOGIN READY"), "Admin Captains page must show login readiness.");
 assert(ridersPage.includes("Suspend Captain"), "Admin Captains page must expose suspension for active Captains.");
 assert(ridersPage.includes("Reactivate Captain"), "Admin Captains page must expose reactivation for suspended Captains.");
 assert(ridersPage.includes("A reason of at least 5 characters is required."), "Admin Captains lifecycle controls must require a meaningful reason.");
@@ -137,12 +140,15 @@ assert(deliveryCaptainApplicationsPage.includes("deliveryCaptainApplicationsApi.
 assert(deliveryCaptainApplicationsPage.includes("Account-first applications show OTP and password readiness"), "Admin Delivery Captain applications page must show account-first readiness context.");
 assert(deliveryCaptainApplicationsPage.includes("Approval does not activate payouts or KariGO Rides access"), "Admin Delivery Captain applications page must state safe limits.");
 assert(deliveryCaptainApplicationsPage.includes("Applicant account"), "Admin Delivery Captain applications page must show linked applicant account status.");
-assert(deliveryCaptainApplicationsPage.includes("PASSWORD CREATED"), "Admin Delivery Captain applications page must show password readiness.");
+assert(deliveryCaptainApplicationsPage.includes("LOGIN READY"), "Admin Delivery Captain applications page must show login readiness.");
 assert(deliveryCaptainApplicationsPage.includes("Guarantor:"), "Admin Delivery Captain applications page must show guarantor verification information.");
 assert(deliveryCaptainApplicationsPage.includes("Applicant-visible note optional"), "Admin Delivery Captain review must support applicant-visible notes.");
 assert(deliveryCaptainApplicationsPage.includes("Internal admin note optional"), "Admin Delivery Captain review must support internal notes.");
 assert(deliveryCaptainApplicationsPage.includes("Secure uploaded documents"), "Admin Delivery Captain applications page must show secure uploaded Captain documents.");
 assert(deliveryCaptainApplicationsPage.includes("View secure file"), "Admin Delivery Captain applications page must open short-lived secure document links.");
+assert(deliveryCaptainApplicationsPage.includes("Approve all required documents"), "Admin Delivery Captain applications page must support bulk required-document review.");
+assert(deliveryCaptainApplicationsPage.includes("Request changes"), "Admin Delivery Captain applications page must support document change requests.");
+assert(deliveryCaptainApplicationsPage.includes("Approval review incomplete"), "Admin Delivery Captain applications page must flag approved applications with unresolved required documents.");
 assert(deliveryCaptainApplicationsPage.includes("Rejecting a Delivery Captain application requires an applicant-visible or internal reason."), "Admin Delivery Captain review must require a rejection reason.");
 assert(deliveryCaptainApplicationsPage.includes("nextStatus === application.status"), "Admin Delivery Captain review must hide duplicate review transitions.");
 assert(deliveryCaptainApplicationsPage.includes("actioning === application.id"), "Admin Delivery Captain review controls must disable while processing.");
@@ -150,9 +156,20 @@ assert(!deliveryCaptainApplicationsPage.includes("Create Test Ride Captain Profi
 const deliveryCaptainApplicationsApi = read("src", "api", "delivery-captain-applications.api.ts");
 assert(deliveryCaptainApplicationsApi.includes("admin/delivery-captain-applications"), "Admin Delivery Captain API must call admin application endpoints.");
 assert(deliveryCaptainApplicationsApi.includes("documents/${documentId}/view"), "Admin Delivery Captain API must call secure document view endpoint.");
+assert(deliveryCaptainApplicationsApi.includes("documents/${documentId}/review"), "Admin Delivery Captain API must call secure document review endpoint.");
+assert(deliveryCaptainApplicationsApi.includes("documents/required/approve"), "Admin Delivery Captain API must expose bulk required-document approval.");
 assert(deliveryCaptainApplicationsApi.includes("applicantAccount"), "Admin Delivery Captain API must type applicant account status.");
 assert(deliveryCaptainApplicationsApi.includes("applicantVisibleNote"), "Admin Delivery Captain API must support applicant-visible review notes.");
 assert(deliveryCaptainApplicationsApi.includes("adminNote"), "Admin Delivery Captain API must support internal review notes.");
+
+const rideOperationsPage = read("app", "taxi", "page.tsx");
+assert(rideOperationsPage.includes("Approve all required documents"), "Ride Operations page must support bulk required-document review.");
+assert(rideOperationsPage.includes("reviewDriverApplicationDocument"), "Ride Operations page must review secure Ride Captain documents.");
+assert(rideOperationsPage.includes("Approval review incomplete"), "Ride Operations page must flag approved applications with unresolved required documents.");
+assert(rideOperationsPage.includes("LOGIN READY"), "Ride Operations page must show login readiness.");
+const rideOperationsApi = read("src", "api", "taxi.api.ts");
+assert(rideOperationsApi.includes("documents/${documentId}/review"), "Ride Operations API must call secure document review endpoint.");
+assert(rideOperationsApi.includes("documents/required/approve"), "Ride Operations API must expose bulk required-document approval.");
 
 const paymentReadinessPage = read("app", "payment-readiness", "page.tsx");
 assert(paymentReadinessPage.includes("Payment Readiness"), "Admin Payment Readiness page must exist.");

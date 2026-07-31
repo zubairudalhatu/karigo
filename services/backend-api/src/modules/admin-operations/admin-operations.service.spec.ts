@@ -1,5 +1,5 @@
 import { BadRequestException } from "@nestjs/common";
-import { AccountStatus, DocumentVerificationStatus, UserRole, VendorActivationInvitationStatus, VendorStatus } from "@prisma/client";
+import { AccountStatus, CaptainApplicationDocumentType, CaptainDocumentUploadStatus, DeliveryCaptainApplicationStatus, DocumentVerificationStatus, RiderStatus, UserRole, VendorActivationInvitationStatus, VendorStatus } from "@prisma/client";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -23,7 +23,7 @@ describe("AdminOperationsService vendor cleanup", () => {
   };
   const prisma = {
     vendor: { findUnique: jest.fn(), findMany: jest.fn(), count: jest.fn(), update: jest.fn() },
-    rider: { findUnique: jest.fn() },
+    rider: { findUnique: jest.fn(), update: jest.fn() },
     user: { findUnique: jest.fn(), update: jest.fn() },
     order: { count: jest.fn() },
     vendorSettlement: { count: jest.fn() },
@@ -309,6 +309,62 @@ describe("AdminOperationsService vendor cleanup", () => {
       previousAvailability: "ONLINE",
       newAvailability: "OFFLINE",
       sessionRevoked: true
+    }));
+  });
+
+  it("activates an eligible pending Delivery Captain with approved required documents", async () => {
+    prisma.rider.findUnique.mockResolvedValueOnce({
+      id: "rider-1",
+      userId: "rider-user-1",
+      riderCode: "KGO-CAP-001",
+      phoneNumber: "+2348012345678",
+      verificationStatus: RiderStatus.PENDING_APPROVAL,
+      availabilityStatus: RiderStatus.OFFLINE,
+      deletedAt: null,
+      user: {
+        id: "rider-user-1",
+        fullName: "Captain One",
+        accountStatus: AccountStatus.ACTIVE,
+        phoneVerified: true,
+        passwordHash: "hashed-password",
+        onboardingPasswordSetAt: null,
+        deletedAt: null,
+        deliveryCaptainApplications: [{
+          id: "delivery-app-1",
+          applicationReference: "KGO-CAPTAIN-2026-ABC123",
+          status: DeliveryCaptainApplicationStatus.APPROVED,
+          captainDocuments: [{
+            id: "doc-profile",
+            documentType: CaptainApplicationDocumentType.PROFILE_PHOTO,
+            uploadStatus: CaptainDocumentUploadStatus.UPLOADED,
+            reviewStatus: DocumentVerificationStatus.APPROVED,
+            deletedAt: null
+          }]
+        }]
+      }
+    });
+    prisma.rider.update.mockResolvedValueOnce({
+      id: "rider-1",
+      riderCode: "KGO-CAP-001",
+      phoneNumber: "+2348012345678",
+      vehicleType: "MOTORCYCLE",
+      availabilityStatus: RiderStatus.OFFLINE,
+      verificationStatus: RiderStatus.ACTIVE,
+      currentLatitude: null,
+      currentLongitude: null,
+      currentLocationUpdatedAt: null,
+      user: { id: "rider-user-1", fullName: "Captain One", accountStatus: AccountStatus.ACTIVE }
+    });
+
+    await service.updateRiderLifecycle("admin-1", "rider-1", "ACTIVATE", "Documents checked");
+
+    expect(prisma.rider.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "rider-1" },
+      data: { verificationStatus: RiderStatus.ACTIVE, availabilityStatus: RiderStatus.OFFLINE }
+    }));
+    expect(audit.record).toHaveBeenCalledWith("admin-1", "DELIVERY_CAPTAIN_ACTIVATED", "Rider", "rider-1", expect.objectContaining({
+      reason: "Documents checked",
+      applicationReference: "KGO-CAPTAIN-2026-ABC123"
     }));
   });
 

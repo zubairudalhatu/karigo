@@ -26,9 +26,24 @@ export interface CaptainUploadedApplicationDocument {
   sizeBytes: number;
   uploadStatus: string;
   reviewStatus: string;
+  applicantVisibleNote?: string | null;
   uploadedAt: string;
+  reviewedAt?: string | null;
   required: boolean;
   optional: boolean;
+  adminNote?: string | null;
+}
+
+export interface CaptainDocumentReviewSummary {
+  stage: "DOCUMENTS_MISSING" | "DOCUMENTS_RECEIVED" | "DOCUMENTS_UNDER_REVIEW" | "CHANGES_REQUESTED" | "DOCUMENTS_APPROVED";
+  message: string;
+  requiredDocumentTypes: string[];
+  missingRequiredDocumentTypes: string[];
+  pendingRequiredDocumentTypes: string[];
+  changesRequestedRequiredDocumentTypes: string[];
+  rejectedRequiredDocumentTypes: string[];
+  requiredDocumentsApproved: boolean;
+  approvalReviewIncomplete: boolean;
 }
 
 export interface AdminTaxiDriverApplication extends TaxiDriverApplicationStatus {
@@ -43,14 +58,19 @@ export interface AdminTaxiDriverApplication extends TaxiDriverApplicationStatus 
   vehicleType?: string | null;
   vehicleOwnership?: string | null;
   applicantAccount?: {
+    userId?: string;
     id: string;
+    accountRole?: string;
     accountStatus: string;
     phoneVerified: boolean;
     passwordCreated: boolean;
+    loginReady?: boolean;
+    deliveryProfileSummary?: { id: string; riderCode: string; verificationStatus: string } | null;
     riderProfile?: { id: string; riderCode: string; verificationStatus: string } | null;
   } | null;
   documentEvidence?: Array<{ label: string; url: string }>;
   captainDocuments?: CaptainUploadedApplicationDocument[];
+  documentReview?: CaptainDocumentReviewSummary;
   createdAt: string;
   updatedAt: string;
 }
@@ -80,6 +100,10 @@ export const taxiApi = {
   driverApplication: (id: string) => api.get<AdminTaxiDriverApplicationDetail>(`admin/taxi/driver-applications/${id}`),
   driverApplicationDocumentView: (applicationId: string, documentId: string) =>
     api.get<{ viewUrl: string; expiresAt: string; document: CaptainUploadedApplicationDocument }>(`admin/taxi/driver-applications/${applicationId}/documents/${documentId}/view`),
+  reviewDriverApplicationDocument: (applicationId: string, documentId: string, body: { status: "APPROVED" | "CHANGES_REQUESTED" | "REJECTED"; applicantVisibleNote?: string; adminNote?: string }) =>
+    api.patch<CaptainUploadedApplicationDocument>(`admin/taxi/driver-applications/${applicationId}/documents/${documentId}/review`, body),
+  approveRequiredDriverApplicationDocuments: (applicationId: string) =>
+    api.patch<AdminTaxiDriverApplicationDetail>(`admin/taxi/driver-applications/${applicationId}/documents/required/approve`, {}),
   reviewDriverApplication: (id: string, body: { status: TaxiApplicationStatus; applicantVisibleNote?: string; adminNote?: string }) =>
     api.patch<AdminTaxiDriverApplicationDetail>(`admin/taxi/driver-applications/${id}/review`, body),
   waitlist: (status?: TaxiWaitlistStatus | "ALL") => {

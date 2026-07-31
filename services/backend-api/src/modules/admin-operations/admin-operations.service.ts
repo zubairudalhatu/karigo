@@ -2,6 +2,9 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { ConfigService } from "@nestjs/config";
 import {
   AccountStatus,
+  CaptainApplicationDocumentType,
+  CaptainDocumentUploadStatus,
+  DeliveryCaptainApplicationStatus,
   CashCollectionStatus,
   DocumentVerificationStatus,
   OrderPaymentMethod,
@@ -11,6 +14,7 @@ import {
   RiderStatus,
   SettlementStatus,
   SupportTicketStatus,
+  TaxiDriverProfileStatus,
   UserRole,
   VendorActivationInvitationStatus,
   VendorStatus
@@ -455,10 +459,69 @@ export class AdminOperationsService {
         currentLatitude: true,
         currentLongitude: true,
         currentLocationUpdatedAt: true,
-        user: { select: { id: true, fullName: true, accountStatus: true } }
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            accountStatus: true,
+            phoneVerified: true,
+            passwordHash: true,
+            onboardingPasswordSetAt: true,
+            deliveryCaptainApplications: {
+              select: { id: true, applicationReference: true, status: true, createdAt: true, updatedAt: true },
+              orderBy: { createdAt: "desc" },
+              take: 1
+            },
+            taxiDriverApplications: {
+              select: { id: true, applicationReference: true, status: true, createdAt: true, updatedAt: true },
+              orderBy: { createdAt: "desc" },
+              take: 1
+            },
+            taxiDriverProfiles: {
+              select: { id: true, applicationId: true, status: true, isAvailableForTaxi: true, updatedAt: true },
+              orderBy: { createdAt: "desc" },
+              take: 1
+            }
+          }
+        }
       },
       orderBy: { createdAt: "desc" }
-    });
+    }).then((riders) => riders.map((rider) => {
+      const passwordCreated = Boolean(rider.user.passwordHash) || Boolean(rider.user.onboardingPasswordSetAt);
+      const latestDeliveryApplication = rider.user.deliveryCaptainApplications[0] ?? null;
+      const latestRideApplication = rider.user.taxiDriverApplications[0] ?? null;
+      const rideProfile = rider.user.taxiDriverProfiles[0] ?? null;
+      return {
+        ...rider,
+        currentLocationUpdatedAt: rider.currentLocationUpdatedAt?.toISOString() ?? null,
+        user: {
+          id: rider.user.id,
+          fullName: rider.user.fullName,
+          accountStatus: rider.user.accountStatus,
+          phoneVerified: rider.user.phoneVerified,
+          passwordCreated,
+          loginReady: rider.user.accountStatus === AccountStatus.ACTIVE && rider.user.phoneVerified && passwordCreated
+        },
+        deliveryApplication: latestDeliveryApplication ? {
+          ...latestDeliveryApplication,
+          createdAt: latestDeliveryApplication.createdAt.toISOString(),
+          updatedAt: latestDeliveryApplication.updatedAt.toISOString()
+        } : null,
+        rideApplication: latestRideApplication ? {
+          ...latestRideApplication,
+          createdAt: latestRideApplication.createdAt.toISOString(),
+          updatedAt: latestRideApplication.updatedAt.toISOString()
+        } : null,
+        rideProfile: rideProfile ? {
+          ...rideProfile,
+          updatedAt: rideProfile.updatedAt.toISOString()
+        } : null,
+        operationalModes: [
+          rider.verificationStatus === RiderStatus.ACTIVE ? "DELIVERY_CAPTAIN" : null,
+          rideProfile?.status === TaxiDriverProfileStatus.ACTIVE_TEST ? "RIDE_CAPTAIN" : null
+        ].filter(Boolean)
+      };
+    }));
   }
 
   auditLogs() {
@@ -725,6 +788,10 @@ export class AdminOperationsService {
       return this.vendorCleanupView(updated);
     }
 
+    if (action !== "REACTIVATE") {
+      throw new BadRequestException("Unsupported vendor lifecycle action.");
+    }
+
     if (vendor.status !== VendorStatus.SUSPENDED) {
       throw new BadRequestException("Only suspended vendors can be reactivated.");
     }
@@ -758,13 +825,89 @@ export class AdminOperationsService {
         verificationStatus: true,
         availabilityStatus: true,
         deletedAt: true,
-        user: { select: { id: true, fullName: true, accountStatus: true, deletedAt: true } }
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            accountStatus: true,
+            phoneVerified: true,
+            passwordHash: true,
+            onboardingPasswordSetAt: true,
+            deletedAt: true,
+            deliveryCaptainApplications: {
+              select: {
+                id: true,
+                applicationReference: true,
+                status: true,
+                captainDocuments: { orderBy: { uploadedAt: "desc" } }
+              },
+              orderBy: { createdAt: "desc" },
+              take: 1
+            }
+          }
+        }
       }
     });
     if (!rider) throw new NotFoundException("Captain not found");
     if (rider.deletedAt || rider.user.deletedAt) throw new BadRequestException("Deleted captains cannot be changed through lifecycle controls.");
 
     const now = new Date();
+    if (action === "ACTIVATE") {
+      if (rider.verificationStatus !== RiderStatus.PENDING_APPROVAL) {
+        throw new BadRequestException("Only pending Delivery Captains can be activated.");
+      }
+      const passwordCreated = Boolean(rider.user.passwordHash) || Boolean(rider.user.onboardingPasswordSetAt);
+      if (rider.user.accountStatus !== AccountStatus.ACTIVE || !rider.user.phoneVerified || !passwordCreated) {
+        throw new BadRequestException("Captain account must be active, phone verified and login ready before activation.");
+      }
+      const application = rider.user.deliveryCaptainApplications[0] ?? null;
+      if (!application || application.status !== DeliveryCaptainApplicationStatus.APPROVED) {
+        throw new BadRequestException("Delivery Captain application must be approved before operational activation.");
+      }
+      const requiredDeliveryDocumentTypes = [CaptainApplicationDocumentType.PROFILE_PHOTO];
+      const requiredDocumentsApproved = requiredDeliveryDocumentTypes.every((documentType) =>
+        application.captainDocuments.some((document) =>
+          document.documentType === documentType &&
+          document.uploadStatus === CaptainDocumentUploadStatus.UPLOADED &&
+          !document.deletedAt &&
+          document.reviewStatus === DocumentVerificationStatus.APPROVED
+        )
+      );
+      if (!requiredDocumentsApproved) {
+        throw new BadRequestException({
+          message: "Required Delivery Captain documents must be approved before activation.",
+          errorCode: "REQUIRED_DOCUMENT_REVIEW_INCOMPLETE",
+          incompleteDocumentTypes: requiredDeliveryDocumentTypes
+        });
+      }
+      const updated = await this.prisma.rider.update({
+        where: { id: rider.id },
+        data: { verificationStatus: RiderStatus.ACTIVE, availabilityStatus: RiderStatus.OFFLINE },
+        select: {
+          id: true,
+          riderCode: true,
+          phoneNumber: true,
+          vehicleType: true,
+          availabilityStatus: true,
+          verificationStatus: true,
+          currentLatitude: true,
+          currentLongitude: true,
+          currentLocationUpdatedAt: true,
+          user: { select: { id: true, fullName: true, accountStatus: true } }
+        }
+      });
+      await this.audit.record(adminUserId, "DELIVERY_CAPTAIN_ACTIVATED", "Rider", rider.id, {
+        reason: safeReason,
+        applicationId: application.id,
+        applicationReference: application.applicationReference,
+        previousStatus: rider.verificationStatus,
+        newStatus: RiderStatus.ACTIVE,
+        previousAvailability: rider.availabilityStatus,
+        newAvailability: RiderStatus.OFFLINE
+      });
+      return updated;
+    }
+
     if (action === "SUSPEND") {
       if (rider.verificationStatus !== RiderStatus.ACTIVE || rider.user.accountStatus !== AccountStatus.ACTIVE) {
         throw new BadRequestException("Only active captains can be suspended.");
@@ -874,6 +1017,10 @@ export class AdminOperationsService {
         sessionRevoked: true
       });
       return updated;
+    }
+
+    if (action !== "REACTIVATE") {
+      throw new BadRequestException("Unsupported customer lifecycle action.");
     }
 
     if (user.accountStatus !== AccountStatus.SUSPENDED) throw new BadRequestException("Only suspended Customer accounts can be reactivated.");

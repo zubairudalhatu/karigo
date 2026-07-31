@@ -24,9 +24,24 @@ export interface CaptainUploadedApplicationDocument {
   sizeBytes: number;
   uploadStatus: string;
   reviewStatus: string;
+  applicantVisibleNote?: string | null;
   uploadedAt: string;
+  reviewedAt?: string | null;
   required: boolean;
   optional: boolean;
+  adminNote?: string | null;
+}
+
+export interface CaptainDocumentReviewSummary {
+  stage: "DOCUMENTS_MISSING" | "DOCUMENTS_RECEIVED" | "DOCUMENTS_UNDER_REVIEW" | "CHANGES_REQUESTED" | "DOCUMENTS_APPROVED";
+  message: string;
+  requiredDocumentTypes: string[];
+  missingRequiredDocumentTypes: string[];
+  pendingRequiredDocumentTypes: string[];
+  changesRequestedRequiredDocumentTypes: string[];
+  rejectedRequiredDocumentTypes: string[];
+  requiredDocumentsApproved: boolean;
+  approvalReviewIncomplete: boolean;
 }
 
 export interface CaptainLocationSummary {
@@ -66,11 +81,16 @@ export interface DeliveryCaptainApplication {
   updatedAt: string;
   documents?: DeliveryCaptainApplicationDocument[];
   captainDocuments?: CaptainUploadedApplicationDocument[];
+  documentReview?: CaptainDocumentReviewSummary;
   applicantAccount?: {
+    userId?: string;
     id: string;
+    accountRole?: string;
     accountStatus: string;
     phoneVerified: boolean;
     passwordCreated: boolean;
+    loginReady?: boolean;
+    deliveryProfileSummary?: { id: string; riderCode: string; verificationStatus: string } | null;
     riderProfile?: { id: string; riderCode: string; verificationStatus: string } | null;
   } | null;
   deliveryOnly: boolean;
@@ -85,5 +105,9 @@ export const deliveryCaptainApplicationsApi = {
   review: (id: string, body: { status: DeliveryCaptainApplicationStatus; applicantVisibleNote?: string; adminNote?: string }) =>
     api.patch<DeliveryCaptainApplication>(`admin/delivery-captain-applications/${id}/review`, body),
   documentView: (applicationId: string, documentId: string) =>
-    api.get<{ viewUrl: string; expiresAt: string; document: CaptainUploadedApplicationDocument }>(`admin/delivery-captain-applications/${applicationId}/documents/${documentId}/view`)
+    api.get<{ viewUrl: string; expiresAt: string; document: CaptainUploadedApplicationDocument }>(`admin/delivery-captain-applications/${applicationId}/documents/${documentId}/view`),
+  reviewDocument: (applicationId: string, documentId: string, body: { status: "APPROVED" | "CHANGES_REQUESTED" | "REJECTED"; applicantVisibleNote?: string; adminNote?: string }) =>
+    api.patch<CaptainUploadedApplicationDocument>(`admin/delivery-captain-applications/${applicationId}/documents/${documentId}/review`, body),
+  approveRequiredDocuments: (applicationId: string) =>
+    api.patch<DeliveryCaptainApplication>(`admin/delivery-captain-applications/${applicationId}/documents/required/approve`, {})
 };

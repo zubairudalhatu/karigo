@@ -1,6 +1,6 @@
 import { IsIn, IsString, MaxLength, MinLength } from "class-validator";
 
-export const ACCOUNT_LIFECYCLE_ACTIONS = ["SUSPEND", "REACTIVATE"] as const;
+export const ACCOUNT_LIFECYCLE_ACTIONS = ["ACTIVATE", "SUSPEND", "REACTIVATE"] as const;
 export type AccountLifecycleAction = typeof ACCOUNT_LIFECYCLE_ACTIONS[number];
 
 export class AccountLifecycleActionDto {

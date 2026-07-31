@@ -4,7 +4,7 @@ import type { RiderProfile } from "./rider.api";
 import type { TaxiDriverApplicationStatus } from "@karigo/shared-types";
 
 export type CaptainOperationalMode = "DELIVERY_CAPTAIN" | "RIDE_CAPTAIN";
-export type CaptainAccessNextStep = "START_APPLICATION" | "APPLICATION_STATUS" | "OPEN_DASHBOARD";
+export type CaptainAccessNextStep = "START_APPLICATION" | "APPLICATION_STATUS" | "ACTIVATION_STATUS" | "OPEN_DASHBOARD";
 
 export interface CaptainAccess {
   account: {
@@ -53,7 +53,7 @@ export interface CaptainAccess {
   } | null;
   operationalModes: CaptainOperationalMode[];
   nextStep: CaptainAccessNextStep;
-  nextRoute: "/auth/apply" | "/tabs/dashboard";
+  nextRoute: "/auth/apply" | "/application-status" | "/tabs/dashboard";
   message: string;
 }
 

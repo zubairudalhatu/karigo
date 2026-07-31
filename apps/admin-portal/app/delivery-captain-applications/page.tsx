@@ -68,6 +68,49 @@ export default function DeliveryCaptainApplicationsPage() {
     }
   }
 
+  async function reviewSecureDocument(application: DeliveryCaptainApplication, documentId: string, status: "APPROVED" | "CHANGES_REQUESTED" | "REJECTED") {
+    const applicantVisibleNote = status === "APPROVED" ? undefined : (window.prompt("Applicant-visible note or requested change") ?? undefined);
+    const adminNote = window.prompt("Internal admin note optional") ?? undefined;
+    if ((status === "CHANGES_REQUESTED" || status === "REJECTED") && !applicantVisibleNote?.trim() && !adminNote?.trim()) {
+      setError("Requesting changes or rejecting a document requires an applicant-visible or internal reason.");
+      return;
+    }
+    if (!window.confirm(`${status.replaceAll("_", " ")} this secure document for ${application.fullName}?`)) return;
+    try {
+      setError("");
+      setMessage("");
+      setActioning(documentId);
+      await deliveryCaptainApplicationsApi.reviewDocument(application.id, documentId, { status, applicantVisibleNote, adminNote });
+      setMessage("Delivery Captain document review saved.");
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    } finally {
+      setActioning("");
+    }
+  }
+
+  async function approveRequiredDocuments(application: DeliveryCaptainApplication) {
+    const requiredCount = application.captainDocuments?.filter((document) => document.required).length ?? 0;
+    if (!requiredCount) {
+      setError("No uploaded required secure documents are available to approve.");
+      return;
+    }
+    if (!window.confirm(`Approve ${requiredCount} uploaded required secure document${requiredCount === 1 ? "" : "s"} for ${application.fullName}? Review each file first.`)) return;
+    try {
+      setError("");
+      setMessage("");
+      setActioning(`${application.id}:required-documents`);
+      await deliveryCaptainApplicationsApi.approveRequiredDocuments(application.id);
+      setMessage("Required Delivery Captain documents approved. Application approval still remains a separate action.");
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    } finally {
+      setActioning("");
+    }
+  }
+
   return <PortalShell>
     <h1>Delivery Captain Applications</h1>
     <p className="muted">Review Kano and Abuja Delivery Captain applications. Account-first applications show OTP and password readiness before approval. Approval does not activate payouts or KariGO Rides access.</p>
@@ -93,16 +136,28 @@ export default function DeliveryCaptainApplicationsPage() {
         {application.driverLicenceNumber ? <p className="muted">Licence: {application.driverLicenceNumber}</p> : null}
         {application.applicantAccount ? <div className="notice">
           <strong>Applicant account</strong>
-          <p><Badge>{application.applicantAccount.accountStatus}</Badge> <Badge>{application.applicantAccount.phoneVerified ? "PHONE VERIFIED" : "OTP PENDING"}</Badge> <Badge>{application.applicantAccount.passwordCreated ? "PASSWORD CREATED" : "PASSWORD PENDING"}</Badge></p>
+          <p><Badge>{application.applicantAccount.accountStatus}</Badge> <Badge>{application.applicantAccount.phoneVerified ? "PHONE VERIFIED" : "OTP PENDING"}</Badge> <Badge>{application.applicantAccount.loginReady ? "LOGIN READY" : "LOGIN SETUP PENDING"}</Badge></p>
           {application.applicantAccount.riderProfile ? <p className="muted">Captain profile: {application.applicantAccount.riderProfile.riderCode} - {application.applicantAccount.riderProfile.verificationStatus}</p> : <p className="muted">Captain profile will be created on approved account activation.</p>}
         </div> : <p className="muted">No account-first applicant is linked to this application.</p>}
         <p>Guarantor: {application.guarantorName} - {application.guarantorPhone}</p>
         {application.riderExperience ? <p className="muted">Experience: {application.riderExperience}</p> : null}
         {application.profilePhotoUrl ? <p><a href={application.profilePhotoUrl} target="_blank" rel="noreferrer">View profile photo</a></p> : null}
-        {application.captainDocuments?.length ? <div className="notice"><strong>Secure uploaded documents</strong>{application.captainDocuments.map((document) => <p key={document.id}>
-          <button className="secondary" onClick={() => void openSecureDocument(application, document.id)}>View secure file</button>{" "}
-          {document.originalFileName} <Badge>{document.required ? "REQUIRED" : "OPTIONAL"}</Badge> <Badge>{document.reviewStatus}</Badge>
-        </p>)}</div> : null}
+        {application.documentReview?.approvalReviewIncomplete && application.status === "APPROVED" ? <div className="warning"><strong>Approval review incomplete</strong><p>Required document review remains pending. Review documents before operational activation.</p></div> : null}
+        {application.documentReview ? <div className="notice"><strong>Document review</strong><p>{application.documentReview.message}</p><Badge>{application.documentReview.stage}</Badge></div> : null}
+        {application.captainDocuments?.length ? <div className="notice"><strong>Secure uploaded documents</strong>{application.captainDocuments.map((document) => <div key={document.id} className="item">
+          <p><strong>{document.documentType.replaceAll("_", " ")}</strong> <Badge>{document.required ? "REQUIRED" : "OPTIONAL"}</Badge> <Badge>{document.reviewStatus}</Badge></p>
+          <p className="muted">{document.originalFileName}</p>
+          {document.applicantVisibleNote ? <p>Applicant note: {document.applicantVisibleNote}</p> : null}
+          {document.adminNote ? <p className="muted">Internal note: {document.adminNote}</p> : null}
+          <div className="filters">
+            <button className="secondary" onClick={() => void openSecureDocument(application, document.id)}>View secure file</button>
+            <button className="secondary" disabled={actioning === document.id || document.reviewStatus === "APPROVED"} onClick={() => void reviewSecureDocument(application, document.id, "APPROVED")}>Approve</button>
+            <button className="secondary" disabled={actioning === document.id || document.reviewStatus === "CHANGES_REQUESTED"} onClick={() => void reviewSecureDocument(application, document.id, "CHANGES_REQUESTED")}>Request changes</button>
+            <button className="secondary" disabled={actioning === document.id || document.reviewStatus === "REJECTED"} onClick={() => void reviewSecureDocument(application, document.id, "REJECTED")}>Reject</button>
+          </div>
+        </div>)}
+          <button disabled={actioning === `${application.id}:required-documents`} onClick={() => void approveRequiredDocuments(application)}>Approve all required documents</button>
+        </div> : null}
         {application.documents?.length ? <div className="notice"><strong>Legacy document links</strong>{application.documents.map((document) => <p key={document.id}><a href={document.documentUrl} target="_blank" rel="noreferrer">{document.documentName || document.documentType}</a> <Badge>{document.verificationStatus}</Badge></p>)}</div> : null}
         {!application.documents?.length && !application.captainDocuments?.length ? <p className="muted">No application documents supplied yet.</p> : null}
         {application.notes ? <p className="muted">Applicant notes: {application.notes}</p> : null}

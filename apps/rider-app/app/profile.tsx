@@ -7,6 +7,11 @@ import { riderApi, RiderProfile } from "../src/api/rider.api";
 import { Button, Card, Field, Loading, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
 import { useAuth } from "../src/contexts/auth-context";
 import { friendlyError } from "../src/lib/errors";
+import {
+  applicantReviewCopy,
+  hasAnyCaptainApplication,
+  hasSubmittedCaptainApplication
+} from "../src/lib/captain-application-status";
 import { captainModes } from "../src/lib/captain-modes";
 import { requestCaptainForegroundLocation } from "../src/lib/location";
 
@@ -142,11 +147,11 @@ export default function Profile() {
     </Card>
     <Card>
       <Text style={ui.sectionTitle}>Application status</Text>
-      {captainAccess.deliveryCaptainApplication.exists ? <StatusBadge status={captainAccess.deliveryCaptainApplication.status} /> : null}
-      <Text style={ui.muted}>{captainAccess.deliveryCaptainApplication.message}</Text>
-      {captainAccess.rideCaptainApplication.exists ? <StatusBadge status={captainAccess.rideCaptainApplication.status} /> : null}
-      <Text style={ui.muted}>{captainAccess.rideCaptainApplication.message}</Text>
-      <NavLink href="/auth/apply" label="Open Captain application" />
+      {hasSubmittedCaptainApplication(captainAccess.deliveryCaptainApplication) ? <StatusBadge status={captainAccess.deliveryCaptainApplication.status} /> : null}
+      <Text style={ui.muted}>{applicantReviewCopy(captainAccess.deliveryCaptainApplication, "DELIVERY_CAPTAIN")}</Text>
+      {hasSubmittedCaptainApplication(captainAccess.rideCaptainApplication) ? <StatusBadge status={captainAccess.rideCaptainApplication.status} /> : null}
+      <Text style={ui.muted}>{applicantReviewCopy(captainAccess.rideCaptainApplication, "RIDE_CAPTAIN")}</Text>
+      <NavLink href={hasAnyCaptainApplication(captainAccess) ? "/application-status" : "/auth/apply"} label={hasAnyCaptainApplication(captainAccess) ? "View application status" : "Start Captain application"} />
     </Card>
     <Card>
       <Text style={ui.sectionTitle}>Privacy and security</Text>

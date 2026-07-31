@@ -12,6 +12,7 @@ import { AdminAssignTaxiDriverDto } from "./dto/admin-assign-taxi-driver.dto";
 import { UpdateTaxiDriverProfileStatusDto } from "./dto/admin-taxi-profile.dto";
 import { ListTaxiDriverApplicationsQueryDto, ListTaxiWaitlistQueryDto } from "./dto/list-taxi-query.dto";
 import { ReviewTaxiDriverApplicationDto } from "./dto/review-taxi-application.dto";
+import { ReviewCaptainApplicationDocumentDto } from "../riders/dto/review-captain-application-document.dto";
 import { TaxiCancelDto } from "./dto/taxi-cancel.dto";
 import { UpdateTaxiWaitlistStatusDto } from "./dto/update-taxi-waitlist-status.dto";
 import { TaxiService } from "./taxi.service";
@@ -51,6 +52,23 @@ export class AdminTaxiController {
     @Param("documentId", ParseUUIDPipe) documentId: string
   ) {
     return { message: "Ride Captain document view URL created", data: await this.taxi.adminRideCaptainDocumentViewUrl(applicationId, documentId) };
+  }
+
+  @Patch("driver-applications/:applicationId/documents/required/approve")
+  @ApiOperation({ summary: "Approve all uploaded required Ride Captain secure documents" })
+  async approveRequiredDriverApplicationDocuments(@CurrentUser() user: AuthenticatedUser, @Param("applicationId", ParseUUIDPipe) applicationId: string) {
+    return { message: "Required Ride Captain documents approved", data: await this.taxi.approveRequiredRideCaptainDocuments(user.id, applicationId) };
+  }
+
+  @Patch("driver-applications/:applicationId/documents/:documentId/review")
+  @ApiOperation({ summary: "Review a Ride Captain secure application document" })
+  async reviewDriverApplicationDocument(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseUUIDPipe) applicationId: string,
+    @Param("documentId", ParseUUIDPipe) documentId: string,
+    @Body() dto: ReviewCaptainApplicationDocumentDto
+  ) {
+    return { message: "Ride Captain document reviewed", data: await this.taxi.reviewRideCaptainApplicationDocument(user.id, applicationId, documentId, dto) };
   }
 
   @Patch("driver-applications/:applicationId/review")

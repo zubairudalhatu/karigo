@@ -14,7 +14,7 @@ export default function CaptainAccessBootstrap() {
     setError("");
     try {
       const access = await captainAccessApi.resolve();
-      router.replace(access.nextRoute);
+      router.replace(access.nextStep === "APPLICATION_STATUS" ? "/application-status" : access.nextRoute);
     } catch (err) {
       setError(friendlyError(err));
     }

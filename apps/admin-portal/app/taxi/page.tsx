@@ -45,6 +45,7 @@ export default function AdminTaxiPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [actioning, setActioning] = useState("");
 
   async function load() {
     setLoading(true);
@@ -74,11 +75,21 @@ export default function AdminTaxiPage() {
   async function reviewApplication(id: string, status: TaxiApplicationStatus) {
     const applicantVisibleNote = window.prompt("Applicant-visible note optional") ?? undefined;
     const adminNote = window.prompt("Internal admin note optional") ?? undefined;
-    await taxiApi.reviewDriverApplication(id, { status, applicantVisibleNote, adminNote });
-    setMessage(status === "APPROVED"
-      ? "Ride application review saved. Prepare or activate a Ride Captain profile before assigning pilot ride requests."
-      : "Ride application review saved. This does not activate automatic dispatch, ride payment or payouts.");
-    await load();
+    if (!window.confirm(`Save ${status.replaceAll("_", " ")} for this Ride Captain application?`)) return;
+    try {
+      setError("");
+      setMessage("");
+      setActioning(id);
+      await taxiApi.reviewDriverApplication(id, { status, applicantVisibleNote, adminNote });
+      setMessage(status === "APPROVED"
+        ? "Ride application review saved. Prepare or activate a Ride Captain profile before assigning pilot ride requests."
+        : "Ride application review saved. This does not activate automatic dispatch, ride payment or payouts.");
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    } finally {
+      setActioning("");
+    }
   }
 
   async function openSecureApplicationDocument(application: AdminTaxiDriverApplication, documentId: string) {
@@ -88,6 +99,49 @@ export default function AdminTaxiPage() {
       window.open(result.viewUrl, "_blank", "noopener,noreferrer");
     } catch (e) {
       setError(friendlyError(e, "form"));
+    }
+  }
+
+  async function reviewSecureApplicationDocument(application: AdminTaxiDriverApplication, documentId: string, status: "APPROVED" | "CHANGES_REQUESTED" | "REJECTED") {
+    const applicantVisibleNote = status === "APPROVED" ? undefined : (window.prompt("Applicant-visible note or requested change") ?? undefined);
+    const adminNote = window.prompt("Internal admin note optional") ?? undefined;
+    if ((status === "CHANGES_REQUESTED" || status === "REJECTED") && !applicantVisibleNote?.trim() && !adminNote?.trim()) {
+      setError("Requesting changes or rejecting a document requires an applicant-visible or internal reason.");
+      return;
+    }
+    if (!window.confirm(`${status.replaceAll("_", " ")} this secure Ride Captain document for ${application.fullName}?`)) return;
+    try {
+      setError("");
+      setMessage("");
+      setActioning(documentId);
+      await taxiApi.reviewDriverApplicationDocument(application.id, documentId, { status, applicantVisibleNote, adminNote });
+      setMessage("Ride Captain document review saved.");
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    } finally {
+      setActioning("");
+    }
+  }
+
+  async function approveRequiredApplicationDocuments(application: AdminTaxiDriverApplication) {
+    const requiredCount = application.captainDocuments?.filter((document) => document.required).length ?? 0;
+    if (!requiredCount) {
+      setError("No uploaded required secure documents are available to approve.");
+      return;
+    }
+    if (!window.confirm(`Approve ${requiredCount} uploaded required secure document${requiredCount === 1 ? "" : "s"} for ${application.fullName}? Review each file first.`)) return;
+    try {
+      setError("");
+      setMessage("");
+      setActioning(`${application.id}:required-documents`);
+      await taxiApi.approveRequiredDriverApplicationDocuments(application.id);
+      setMessage("Required Ride Captain documents approved. Ride profile activation remains a separate action.");
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    } finally {
+      setActioning("");
     }
   }
 
@@ -159,15 +213,26 @@ export default function AdminTaxiPage() {
           <p>{application.vehicle ?? "Vehicle details pending"} {application.vehiclePlateNumber ? `- ${application.vehiclePlateNumber}` : ""}</p>
           {application.applicantAccount ? <div className="notice">
             <strong>Applicant account</strong>
-            <p><Badge>{application.applicantAccount.accountStatus}</Badge> <Badge>{application.applicantAccount.phoneVerified ? "PHONE VERIFIED" : "OTP PENDING"}</Badge> <Badge>{application.applicantAccount.passwordCreated ? "PASSWORD CREATED" : "PASSWORD PENDING"}</Badge></p>
+            <p><Badge>{application.applicantAccount.accountStatus}</Badge> <Badge>{application.applicantAccount.phoneVerified ? "PHONE VERIFIED" : "OTP PENDING"}</Badge> <Badge>{application.applicantAccount.loginReady ? "LOGIN READY" : "LOGIN SETUP PENDING"}</Badge></p>
             {application.applicantAccount.riderProfile ? <p className="muted">Captain account: {application.applicantAccount.riderProfile.riderCode} - {application.applicantAccount.riderProfile.verificationStatus}</p> : <p className="muted">Ride operations profile can be prepared after approved account review.</p>}
           </div> : <p className="muted">No account-first applicant is linked to this ride application.</p>}
+          {application.documentReview?.approvalReviewIncomplete && application.status === "APPROVED" ? <div className="warning"><strong>Approval review incomplete</strong><p>Required document review remains pending. Review documents before Ride profile activation.</p></div> : null}
+          {application.documentReview ? <div className="notice"><strong>Document review</strong><p>{application.documentReview.message}</p><Badge>{application.documentReview.stage}</Badge></div> : null}
           {application.captainDocuments?.length ? <div className="notice">
             <strong>Secure uploaded documents</strong>
-            {application.captainDocuments.map((document) => <p key={document.id}>
-              <button className="secondary" onClick={() => void openSecureApplicationDocument(application, document.id)}>View secure file</button>{" "}
-              {document.originalFileName} <Badge>{document.required ? "REQUIRED" : "OPTIONAL"}</Badge> <Badge>{document.reviewStatus}</Badge>
-            </p>)}
+            {application.captainDocuments.map((document) => <div key={document.id} className="item">
+              <p><strong>{document.documentType.replaceAll("_", " ")}</strong> <Badge>{document.required ? "REQUIRED" : "OPTIONAL"}</Badge> <Badge>{document.reviewStatus}</Badge></p>
+              <p className="muted">{document.originalFileName}</p>
+              {document.applicantVisibleNote ? <p>Applicant note: {document.applicantVisibleNote}</p> : null}
+              {document.adminNote ? <p className="muted">Internal note: {document.adminNote}</p> : null}
+              <div className="filters">
+                <button className="secondary" onClick={() => void openSecureApplicationDocument(application, document.id)}>View secure file</button>
+                <button className="secondary" disabled={actioning === document.id || document.reviewStatus === "APPROVED"} onClick={() => void reviewSecureApplicationDocument(application, document.id, "APPROVED")}>Approve</button>
+                <button className="secondary" disabled={actioning === document.id || document.reviewStatus === "CHANGES_REQUESTED"} onClick={() => void reviewSecureApplicationDocument(application, document.id, "CHANGES_REQUESTED")}>Request changes</button>
+                <button className="secondary" disabled={actioning === document.id || document.reviewStatus === "REJECTED"} onClick={() => void reviewSecureApplicationDocument(application, document.id, "REJECTED")}>Reject</button>
+              </div>
+            </div>)}
+            <button disabled={actioning === `${application.id}:required-documents`} onClick={() => void approveRequiredApplicationDocuments(application)}>Approve all required documents</button>
           </div> : null}
           {application.documentEvidence?.length ? <div className="notice">
             <strong>Legacy document evidence</strong>
@@ -176,7 +241,7 @@ export default function AdminTaxiPage() {
           {!application.captainDocuments?.length && !application.documentEvidence?.length ? <p className="muted">No ride document evidence supplied yet.</p> : null}
           <p><Badge>{application.status}</Badge></p>
           <div className="filters">
-            {reviewStatuses.map((status) => <button className="secondary" key={status} onClick={() => void reviewApplication(application.id, status)}>{status.replaceAll("_", " ")}</button>)}
+            {reviewStatuses.map((status) => <button className="secondary" disabled={actioning === application.id || status === application.status} key={status} onClick={() => void reviewApplication(application.id, status)}>{status.replaceAll("_", " ")}</button>)}
             {["APPROVED", "PROVISIONALLY_APPROVED"].includes(application.status) ? <button onClick={() => void createProfile(application.id)}>Prepare Ride Captain profile</button> : null}
           </div>
         </article>) : <Empty>No ride applications found.</Empty>}

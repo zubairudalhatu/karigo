@@ -181,3 +181,19 @@ Deployment recovery checks:
 6. Confirm `/api/v1/platform/vehicle-catalog` succeeds.
 7. Confirm `/api/v1/platform/captain-service-areas` returns Kano and Abuja.
 8. Confirm there are no `MODULE_NOT_FOUND`, `.ts` source import or workspace source runtime errors.
+
+## Task 207A-R2 Follow-Up
+
+Task 207A-R2 builds on this secure-upload foundation.
+
+It adds:
+
+- a permanent Captain `/application-status` screen;
+- locked editable application forms after submission;
+- correct approved/provisionally-approved/activation-pending copy;
+- Admin document review controls for secure uploads;
+- approval blocking until required documents are approved;
+- `LOGIN READY` projection for existing KariGO accounts with password credentials;
+- separate Delivery/Ride application, document and operational profile lifecycle handling.
+
+See `docs/captain/task207a-r2-post-submission-review-state.md` for the detailed review and activation workflow.

@@ -87,6 +87,17 @@ export interface TaxiDriverApplicationStatus {
   message: string;
   submittedAt: string;
   reviewedAt?: string | null;
+  documentReview?: {
+    stage: "DOCUMENTS_MISSING" | "DOCUMENTS_RECEIVED" | "DOCUMENTS_UNDER_REVIEW" | "CHANGES_REQUESTED" | "DOCUMENTS_APPROVED";
+    message: string;
+    requiredDocumentTypes: string[];
+    missingRequiredDocumentTypes: string[];
+    pendingRequiredDocumentTypes: string[];
+    changesRequestedRequiredDocumentTypes: string[];
+    rejectedRequiredDocumentTypes: string[];
+    requiredDocumentsApproved: boolean;
+    approvalReviewIncomplete: boolean;
+  };
   readinessOnly: true;
 }
 

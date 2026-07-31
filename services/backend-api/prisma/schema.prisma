@@ -128,6 +128,7 @@ enum RiderStatus {
 enum DocumentVerificationStatus {
   PENDING
   APPROVED
+  CHANGES_REQUESTED
   REJECTED
 }
 
@@ -825,6 +826,7 @@ model CaptainApplicationDocument {
   uploadStatus          CaptainDocumentUploadStatus    @default(UPLOADED)
   reviewStatus          DocumentVerificationStatus     @default(PENDING)
   adminNote             String?
+  applicantVisibleNote  String?
   uploadedAt            DateTime                       @default(now())
   replacedAt            DateTime?
   deletedAt             DateTime?

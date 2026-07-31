@@ -155,8 +155,9 @@ expect(dashboard.includes("!access.operationalModes.includes(\"DELIVERY_CAPTAIN\
 expect(dashboard.includes("Loading Captain status"), "Dashboard fallback copy must use Captain branding.");
 expect(dashboard.includes("Only active approved Delivery Captains"), "Dashboard approval copy must use Captain branding.");
 expect(dashboard.includes("Manage your delivery assignments and availability."), "Dashboard must include polished Captain-facing intro copy.");
-expect(dashboard.includes("Captain onboarding") && dashboard.includes("Your Captain application is under review. KariGO will notify you after approval."), "Dashboard must show pending applicant status instead of dispatch tools.");
+expect(dashboard.includes("Captain onboarding") && dashboard.includes("View application status"), "Dashboard must show pending applicant status instead of dispatch tools.");
 expect(dashboard.includes("Captain operations will be available after KariGO approves your application."), "Dashboard must show blocked operations copy for pending applicants.");
+expect(dashboard.includes("View activation status"), "Dashboard must show activation status action for approved inactive applications.");
 expect(!dashboard.includes("Captain modes"), "Dashboard must not repeat Captain modes from Profile.");
 expect(!dashboard.includes("Ride review"), "Dashboard must not repeat Ride Captain readiness from Profile.");
 expect(dashboard.includes("Online") && dashboard.includes("Unavailable") && dashboard.includes("On delivery") && dashboard.includes("Offline"), "Dashboard must expose captain-friendly online/offline states.");
@@ -176,7 +177,7 @@ expect(!dashboard.includes("Apply for Ride review"), "Dashboard must keep Ride r
 expect(!dashboard.includes("Captain tools"), "Dashboard must not repeat the old Captain tools block.");
 expect(riderNav.includes("Deliveries"), "Captain bottom nav must use delivery-focused copy.");
 expect(jobsIndex.includes("Assigned Jobs"), "Jobs screen title must stay clear for dispatch assignments.");
-expect(jobsIndex.includes("No delivery jobs assigned yet. Stay online to receive jobs."), "Jobs list must have a captain-friendly empty state.");
+expect(jobsIndex.includes("No delivery jobs assigned yet. Check again after dispatch assigns a delivery."), "Jobs list must have a captain-friendly empty state.");
 expect(earnings.includes("Wallet withdrawals and payout requests require KariGO operations approval before activation."), "Earnings screen must state withdrawal guardrails.");
 expect(profile.includes("Captain Profile"), "Profile screen must use polished Captain Profile title.");
 expect(profile.includes("Captain tools"), "Profile must use Captain tool branding.");

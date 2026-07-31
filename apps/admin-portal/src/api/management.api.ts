@@ -61,7 +61,11 @@ export interface AdminRiderSummary {
   currentLatitude?: string | null;
   currentLongitude?: string | null;
   currentLocationUpdatedAt?: string | null;
-  user: { id: string; fullName: string; accountStatus: string };
+  user: { id: string; fullName: string; accountStatus: string; phoneVerified?: boolean; passwordCreated?: boolean; loginReady?: boolean };
+  deliveryApplication?: { id: string; applicationReference: string; status: string; createdAt: string; updatedAt: string } | null;
+  rideApplication?: { id: string; applicationReference: string; status: string; createdAt: string; updatedAt: string } | null;
+  rideProfile?: { id: string; applicationId?: string | null; status: string; isAvailableForTaxi: boolean; updatedAt: string } | null;
+  operationalModes?: string[];
 }
 
 export interface VendorOnboardingDocument {
@@ -143,7 +147,7 @@ export const managementApi = {
   reviewVendorOnboardingDocument: (vendorId: string, documentId: string, status: string, adminNote?: string) =>
     api.patch<VendorOnboardingDocument>(`admin/vendors/${vendorId}/onboarding-documents/${documentId}/review`, { status, adminNote }),
   riders: () => api.get<AdminRiderSummary[]>("admin/riders"),
-  updateRiderLifecycle: (riderId: string, action: "SUSPEND" | "REACTIVATE", reason: string) =>
+  updateRiderLifecycle: (riderId: string, action: "ACTIVATE" | "SUSPEND" | "REACTIVATE", reason: string) =>
     api.patch<AdminRiderSummary>(`admin/riders/${riderId}/lifecycle`, { action, reason }),
   updateCustomerLifecycle: (userId: string, action: "SUSPEND" | "REACTIVATE", reason: string) =>
     api.patch<AdminUserSummary>(`admin/users/${userId}/lifecycle`, { action, reason }),

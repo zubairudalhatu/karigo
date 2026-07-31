@@ -3,6 +3,7 @@ import {
   AccountStatus,
   CaptainApplicationDocumentType,
   CaptainDocumentUploadStatus,
+  DocumentVerificationStatus,
   DeliveryCaptainApplicationStatus,
   Prisma,
   RiderStatus,
@@ -22,6 +23,7 @@ import { CaptainUploadFile, CaptainUploadStorageService } from "./captain-upload
 import { CreateDeliveryCaptainApplicationDto } from "./dto/create-delivery-captain-application.dto";
 import { DeliveryCaptainApplicationStatusQueryDto } from "./dto/delivery-captain-application-status-query.dto";
 import { ListDeliveryCaptainApplicationsQueryDto } from "./dto/list-delivery-captain-applications-query.dto";
+import { ReviewCaptainApplicationDocumentDto } from "./dto/review-captain-application-document.dto";
 import { ReviewDeliveryCaptainApplicationDto } from "./dto/review-delivery-captain-application.dto";
 import { UpdateRiderProfileDto } from "./dto/update-rider-profile.dto";
 
@@ -64,6 +66,7 @@ const DELIVERY_CAPTAIN_APPLICATION_SELECT = {
       accountStatus: true,
       deletedAt: true,
       phoneVerified: true,
+      passwordHash: true,
       onboardingPasswordSetAt: true,
       rider: { select: { id: true, riderCode: true, verificationStatus: true } }
     }
@@ -89,7 +92,8 @@ const RIDE_CAPTAIN_APPLICATION_SELECT = {
   applicantVisibleNote: true,
   reviewedAt: true,
   createdAt: true,
-  updatedAt: true
+  updatedAt: true,
+  captainDocuments: { orderBy: { uploadedAt: "desc" } }
 } satisfies Prisma.TaxiDriverApplicationSelect;
 
 const RIDE_CAPTAIN_PROFILE_SELECT = {
@@ -234,12 +238,22 @@ export class RidersService {
     ].filter((mode): mode is string => Boolean(mode));
 
     const hasApplication = Boolean(deliveryApplication || rideApplication);
+    const hasApprovedInactiveApplication = Boolean(
+      (deliveryApplication?.status === DeliveryCaptainApplicationStatus.APPROVED && !deliveryOperational) ||
+      (rideApplication?.status === TaxiApplicationStatus.APPROVED && !rideOperational)
+    );
     const nextStep = operationalModes.length
       ? "OPEN_DASHBOARD"
       : hasApplication
-        ? "APPLICATION_STATUS"
+        ? hasApprovedInactiveApplication
+          ? "ACTIVATION_STATUS"
+          : "APPLICATION_STATUS"
         : "START_APPLICATION";
-    const nextRoute = nextStep === "START_APPLICATION" ? "/auth/apply" : "/tabs/dashboard";
+    const nextRoute = nextStep === "START_APPLICATION"
+      ? "/auth/apply"
+      : nextStep === "OPEN_DASHBOARD"
+        ? "/tabs/dashboard"
+        : "/application-status";
 
     return {
       account: {
@@ -536,6 +550,9 @@ export class RidersService {
     if (dto.status === DeliveryCaptainApplicationStatus.REJECTED && !this.optionalText(dto.adminNote) && !this.optionalText(dto.applicantVisibleNote)) {
       throw new BadRequestException("Rejecting a Delivery Captain application requires an internal or applicant-visible reason.");
     }
+    if (dto.status === DeliveryCaptainApplicationStatus.APPROVED) {
+      this.assertRequiredCaptainDocumentsApproved(current, this.requiredDeliveryDocumentTypes(current.vehicleType));
+    }
     const application = await this.prisma.$transaction(async (tx) => {
       if (dto.status === DeliveryCaptainApplicationStatus.APPROVED && this.applicantReadyForCaptainApproval(current.applicant)) {
         await this.ensureRiderAccountForApplication(tx, current);
@@ -568,6 +585,88 @@ export class RidersService {
       operationalGuardrail: "Review does not activate payouts, ride dispatch, or unrestricted live operations."
     });
     return this.toAdminDeliveryCaptainApplication(application);
+  }
+
+  async reviewDeliveryCaptainApplicationDocument(adminUserId: string, applicationId: string, documentId: string, dto: ReviewCaptainApplicationDocumentDto) {
+    this.assertDocumentReviewInput(dto);
+    const document = await this.prisma.captainApplicationDocument.findFirst({
+      where: {
+        id: documentId,
+        deliveryApplicationId: applicationId,
+        uploadStatus: CaptainDocumentUploadStatus.UPLOADED,
+        deletedAt: null
+      }
+    });
+    if (!document) throw new NotFoundException("Delivery Captain application document not found");
+
+    const updated = await this.prisma.captainApplicationDocument.update({
+      where: { id: document.id },
+      data: {
+        reviewStatus: dto.status,
+        applicantVisibleNote: this.optionalText(dto.applicantVisibleNote),
+        adminNote: this.optionalText(dto.adminNote),
+        reviewedByAdminId: adminUserId,
+        reviewedAt: new Date()
+      }
+    });
+    await this.audit.record(adminUserId, this.documentReviewAuditAction(dto.status), "CaptainApplicationDocument", updated.id, {
+      applicationId,
+      mode: "DELIVERY_CAPTAIN",
+      documentType: updated.documentType,
+      previousStatus: document.reviewStatus,
+      newStatus: updated.reviewStatus,
+      hasApplicantVisibleNote: Boolean(updated.applicantVisibleNote),
+      hasAdminNote: Boolean(updated.adminNote)
+    });
+    return this.toAdminCaptainDocument(updated, this.requiredDeliveryDocumentTypes(""));
+  }
+
+  async approveRequiredDeliveryCaptainDocuments(adminUserId: string, applicationId: string) {
+    const application = await this.prisma.deliveryCaptainApplication.findUnique({
+      where: { id: applicationId },
+      select: DELIVERY_CAPTAIN_APPLICATION_SELECT
+    });
+    if (!application) throw new NotFoundException("Delivery Captain application not found");
+    const requiredTypes = this.requiredDeliveryDocumentTypes(application.vehicleType);
+    const eligibleDocuments = (application.captainDocuments ?? []).filter((document) =>
+      requiredTypes.includes(document.documentType) &&
+      document.uploadStatus === CaptainDocumentUploadStatus.UPLOADED &&
+      !document.deletedAt
+    );
+    const missingRequiredDocumentTypes = requiredTypes.filter((type) => !eligibleDocuments.some((document) => document.documentType === type));
+    if (missingRequiredDocumentTypes.length) {
+      throw new BadRequestException({
+        message: "Required Delivery Captain documents are missing.",
+        errorCode: "REQUIRED_DOCUMENT_REVIEW_INCOMPLETE",
+        incompleteDocumentTypes: missingRequiredDocumentTypes
+      });
+    }
+
+    const updatedApplication = await this.prisma.$transaction(async (tx) => {
+      await tx.captainApplicationDocument.updateMany({
+        where: {
+          id: { in: eligibleDocuments.map((document) => document.id) },
+          deliveryApplicationId: applicationId,
+          uploadStatus: CaptainDocumentUploadStatus.UPLOADED,
+          deletedAt: null
+        },
+        data: {
+          reviewStatus: DocumentVerificationStatus.APPROVED,
+          reviewedByAdminId: adminUserId,
+          reviewedAt: new Date()
+        }
+      });
+      return tx.deliveryCaptainApplication.findUniqueOrThrow({
+        where: { id: applicationId },
+        select: DELIVERY_CAPTAIN_APPLICATION_SELECT
+      });
+    });
+    await this.audit.record(adminUserId, "CAPTAIN_REQUIRED_DOCUMENTS_BULK_APPROVED", "DeliveryCaptainApplication", applicationId, {
+      mode: "DELIVERY_CAPTAIN",
+      requiredDocumentTypes: requiredTypes,
+      documentIds: eligibleDocuments.map((document) => document.id)
+    });
+    return this.toAdminDeliveryCaptainApplication(updatedApplication);
   }
 
   private preferredServiceAreasJson(areas: string[]): Prisma.InputJsonValue {
@@ -723,20 +822,25 @@ export class RidersService {
     return {
       id: document.id,
       documentType: document.documentType,
-      originalFileName: document.originalFileName,
       mimeType: document.mimeType,
       sizeBytes: document.sizeBytes,
       uploadStatus: document.uploadStatus,
       reviewStatus: document.reviewStatus,
+      applicantVisibleNote: document.applicantVisibleNote,
       uploadedAt: document.uploadedAt.toISOString()
     };
   }
 
-  private toAdminCaptainDocument(document: Prisma.CaptainApplicationDocumentGetPayload<Record<string, never>>) {
+  private toAdminCaptainDocument(
+    document: Prisma.CaptainApplicationDocumentGetPayload<Record<string, never>>,
+    requiredTypes: CaptainApplicationDocumentType[] = this.requiredCaptainDocumentTypesForReview()
+  ) {
+    const required = requiredTypes.includes(document.documentType);
     return {
       ...this.toPublicCaptainDocument(document),
-      required: this.requiredCaptainDocumentTypesForReview().includes(document.documentType),
-      optional: !this.requiredCaptainDocumentTypesForReview().includes(document.documentType),
+      originalFileName: document.originalFileName,
+      required,
+      optional: !required,
       reviewedAt: document.reviewedAt?.toISOString() ?? null,
       adminNote: document.adminNote
     };
@@ -750,6 +854,119 @@ export class RidersService {
       CaptainApplicationDocumentType.VEHICLE_INTERIOR,
       CaptainApplicationDocumentType.VEHICLE_LICENCE
     ];
+  }
+
+  private documentReviewSummary(
+    documents: Prisma.CaptainApplicationDocumentGetPayload<Record<string, never>>[] | undefined,
+    requiredTypes: CaptainApplicationDocumentType[]
+  ) {
+    const uploadedDocuments = (documents ?? []).filter((document) => document.uploadStatus === CaptainDocumentUploadStatus.UPLOADED && !document.deletedAt);
+    const missingRequiredDocumentTypes = requiredTypes.filter((type) => !uploadedDocuments.some((document) => document.documentType === type));
+    const pendingRequiredDocumentTypes = requiredTypes.filter((type) =>
+      uploadedDocuments.some((document) => document.documentType === type && document.reviewStatus === DocumentVerificationStatus.PENDING)
+    );
+    const changesRequestedRequiredDocumentTypes = requiredTypes.filter((type) =>
+      uploadedDocuments.some((document) => document.documentType === type && document.reviewStatus === DocumentVerificationStatus.CHANGES_REQUESTED)
+    );
+    const rejectedRequiredDocumentTypes = requiredTypes.filter((type) =>
+      uploadedDocuments.some((document) => document.documentType === type && document.reviewStatus === DocumentVerificationStatus.REJECTED)
+    );
+    const requiredDocumentsApproved = requiredTypes.every((type) =>
+      uploadedDocuments.some((document) => document.documentType === type && document.reviewStatus === DocumentVerificationStatus.APPROVED)
+    );
+    const stage = missingRequiredDocumentTypes.length
+      ? "DOCUMENTS_MISSING"
+      : changesRequestedRequiredDocumentTypes.length || rejectedRequiredDocumentTypes.length
+        ? "CHANGES_REQUESTED"
+        : requiredDocumentsApproved
+          ? "DOCUMENTS_APPROVED"
+          : pendingRequiredDocumentTypes.length
+            ? "DOCUMENTS_UNDER_REVIEW"
+            : "DOCUMENTS_RECEIVED";
+    const messageByStage: Record<string, string> = {
+      DOCUMENTS_MISSING: "Required documents are still missing.",
+      DOCUMENTS_RECEIVED: "Documents have been received and are waiting for KariGO review.",
+      DOCUMENTS_UNDER_REVIEW: "KariGO is reviewing the submitted documents.",
+      CHANGES_REQUESTED: "KariGO has requested updates to one or more required documents.",
+      DOCUMENTS_APPROVED: "Required documents have been approved."
+    };
+
+    return {
+      stage,
+      message: messageByStage[stage],
+      requiredDocumentTypes: requiredTypes,
+      missingRequiredDocumentTypes,
+      pendingRequiredDocumentTypes,
+      changesRequestedRequiredDocumentTypes,
+      rejectedRequiredDocumentTypes,
+      requiredDocumentsApproved,
+      approvalReviewIncomplete: !requiredDocumentsApproved
+    };
+  }
+
+  private assertRequiredCaptainDocumentsApproved(
+    application: Prisma.DeliveryCaptainApplicationGetPayload<{ select: typeof DELIVERY_CAPTAIN_APPLICATION_SELECT }>,
+    requiredTypes: CaptainApplicationDocumentType[]
+  ) {
+    const summary = this.documentReviewSummary(application.captainDocuments, requiredTypes);
+    if (summary.requiredDocumentsApproved) return;
+    const incompleteDocumentTypes = Array.from(new Set([
+      ...summary.missingRequiredDocumentTypes,
+      ...summary.pendingRequiredDocumentTypes,
+      ...summary.changesRequestedRequiredDocumentTypes,
+      ...summary.rejectedRequiredDocumentTypes
+    ]));
+    throw new BadRequestException({
+      message: "Required Captain documents must be reviewed and approved before approving the application.",
+      errorCode: "REQUIRED_DOCUMENT_REVIEW_INCOMPLETE",
+      incompleteDocumentTypes
+    });
+  }
+
+  private assertDocumentReviewInput(dto: ReviewCaptainApplicationDocumentDto) {
+    if (dto.status === DocumentVerificationStatus.PENDING) {
+      throw new BadRequestException("Choose Approved, Changes requested or Rejected for document review.");
+    }
+    const needsReason = dto.status === DocumentVerificationStatus.CHANGES_REQUESTED || dto.status === DocumentVerificationStatus.REJECTED;
+    if (needsReason && !this.optionalText(dto.applicantVisibleNote) && !this.optionalText(dto.adminNote)) {
+      throw new BadRequestException("Requesting changes or rejecting a document requires an applicant-visible or internal reason.");
+    }
+  }
+
+  private documentReviewAuditAction(status: DocumentVerificationStatus) {
+    const actions: Record<DocumentVerificationStatus, string> = {
+      PENDING: "CAPTAIN_DOCUMENT_REVIEW_RESET",
+      APPROVED: "CAPTAIN_DOCUMENT_APPROVED",
+      CHANGES_REQUESTED: "CAPTAIN_DOCUMENT_CHANGES_REQUESTED",
+      REJECTED: "CAPTAIN_DOCUMENT_REJECTED"
+    };
+    return actions[status];
+  }
+
+  private passwordCreated(
+    applicant: Pick<NonNullable<Prisma.DeliveryCaptainApplicationGetPayload<{ select: typeof DELIVERY_CAPTAIN_APPLICATION_SELECT }>["applicant"]>, "passwordHash" | "onboardingPasswordSetAt"> | null | undefined
+  ) {
+    return Boolean(applicant?.passwordHash) || Boolean(applicant?.onboardingPasswordSetAt);
+  }
+
+  private applicantAccountReadiness(
+    applicant: Prisma.DeliveryCaptainApplicationGetPayload<{ select: typeof DELIVERY_CAPTAIN_APPLICATION_SELECT }>["applicant"]
+  ) {
+    if (!applicant) return null;
+    const passwordCreated = this.passwordCreated(applicant);
+    return {
+      userId: applicant.id,
+      id: applicant.id,
+      accountRole: applicant.role,
+      role: applicant.role,
+      accountStatus: applicant.accountStatus,
+      phoneVerified: applicant.phoneVerified,
+      passwordCreated,
+      loginReady: applicant.accountStatus === AccountStatus.ACTIVE && applicant.phoneVerified && passwordCreated,
+      deliveryProfileSummary: applicant.rider,
+      riderProfile: applicant.rider,
+      rideProfileSummary: null
+    };
   }
 
   private operatingAreaSummary(areaId?: string | null) {
@@ -804,6 +1021,7 @@ export class RidersService {
       operatingAreas: this.operatingAreaSummaries(application.operatingAreaIds),
       primaryOperatingArea: this.operatingAreaSummary(application.primaryOperatingAreaId),
       launchCities: ["Kano", "Abuja"],
+      documentReview: this.documentReviewSummary(application.captainDocuments, this.requiredDeliveryDocumentTypes(application.vehicleType)),
       createsLogin: Boolean(application.applicantUserId),
       operationalAccess: application.applicant?.rider?.verificationStatus === RiderStatus.ACTIVE,
       applicationAccountRole: application.applicant?.role ?? null,
@@ -825,6 +1043,7 @@ export class RidersService {
       readinessOnly: true,
       pilotCity: application.city,
       launchCities: ["Kano", "Abuja"],
+      documentReview: this.documentReviewSummary(application.captainDocuments, this.requiredCaptainDocumentTypesForReview()),
       operationalAccess: false
     };
   }
@@ -842,19 +1061,13 @@ export class RidersService {
         createdAt: document.createdAt.toISOString(),
         updatedAt: document.updatedAt.toISOString()
       })),
-      captainDocuments: (application.captainDocuments ?? []).map((document) => this.toAdminCaptainDocument(document)),
+      captainDocuments: (application.captainDocuments ?? []).map((document) => this.toAdminCaptainDocument(document, this.requiredDeliveryDocumentTypes(application.vehicleType))),
+      documentReview: this.documentReviewSummary(application.captainDocuments, this.requiredDeliveryDocumentTypes(application.vehicleType)),
       residentialLocation: this.locationSummary(application.residentialCityCode, application.residentialStateCode, application.city, application.state),
       operatingAreas: this.operatingAreaSummaries(application.operatingAreaIds),
       primaryOperatingArea: this.operatingAreaSummary(application.primaryOperatingAreaId),
       deliveryOnly: true,
-      applicantAccount: application.applicant ? {
-        id: application.applicant.id,
-        role: application.applicant.role,
-        accountStatus: application.applicant.accountStatus,
-        phoneVerified: application.applicant.phoneVerified,
-        passwordCreated: Boolean(application.applicant.onboardingPasswordSetAt),
-        riderProfile: application.applicant.rider
-      } : null,
+      applicantAccount: this.applicantAccountReadiness(application.applicant),
       launchWarning: "Approval activates the linked Captain account for approved login, but dispatch, payouts and KariGO Rides remain controlled separately."
     };
   }
@@ -894,6 +1107,7 @@ export class RidersService {
         phoneNumber: true,
         accountStatus: true,
         phoneVerified: true,
+        passwordHash: true,
         onboardingPasswordSetAt: true,
         deletedAt: true
       }
@@ -919,7 +1133,7 @@ export class RidersService {
     if (!applicant.phoneVerified) {
       throw new BadRequestException("Verify the Captain applicant phone number before submitting the application.");
     }
-    if (!applicant.onboardingPasswordSetAt) {
+    if (!this.passwordCreated(applicant)) {
       throw new BadRequestException("Create the Captain applicant password before submitting the application.");
     }
     return applicant;
@@ -943,8 +1157,9 @@ export class RidersService {
     applicant: Prisma.DeliveryCaptainApplicationGetPayload<{ select: typeof DELIVERY_CAPTAIN_APPLICATION_SELECT }>["applicant"]
   ) {
     if (!applicant || applicant.deletedAt || !applicant.phoneVerified) return false;
+    if (!this.passwordCreated(applicant)) return false;
     if (applicant.role === UserRole.CUSTOMER) return applicant.accountStatus === AccountStatus.ACTIVE;
-    return applicant.role === UserRole.RIDER && Boolean(applicant.onboardingPasswordSetAt);
+    return applicant.role === UserRole.RIDER;
   }
 
   private async ensureRiderAccountForApplication(
@@ -970,7 +1185,7 @@ export class RidersService {
         guarantorName: application.guarantorName,
         guarantorPhone: application.guarantorPhone,
         availabilityStatus: RiderStatus.OFFLINE,
-        verificationStatus: RiderStatus.ACTIVE,
+        verificationStatus: RiderStatus.PENDING_APPROVAL,
         documents: application.documents?.length ? {
           create: application.documents.map((document) => ({
             documentType: document.documentType,

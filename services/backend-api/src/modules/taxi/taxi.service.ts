@@ -5,6 +5,7 @@ import {
   AccountStatus,
   CaptainApplicationDocumentType,
   CaptainDocumentUploadStatus,
+  DocumentVerificationStatus,
   Prisma,
   RiderStatus,
   TaxiApplicationStatus,
@@ -24,6 +25,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { captainServiceAreas } from "../platform/captain-catalog";
 import { assertFutureLicenceDate, resolveCaptainLocation, resolveVehicleDetails } from "../platform/captain-catalog.validation";
 import { CaptainUploadStorageService } from "../riders/captain-upload-storage.service";
+import { ReviewCaptainApplicationDocumentDto } from "../riders/dto/review-captain-application-document.dto";
 import { AdminAssignTaxiDriverDto } from "./dto/admin-assign-taxi-driver.dto";
 import { UpdateTaxiDriverProfileStatusDto } from "./dto/admin-taxi-profile.dto";
 import { CreateTaxiDriverApplicationDto } from "./dto/create-taxi-driver-application.dto";
@@ -70,7 +72,7 @@ const TAXI_APPLICATION_LIST_SELECT = {
   insuranceDocumentUrl: true,
   vehicleType: true,
   vehicleOwnership: true,
-  applicant: { select: { id: true, role: true, phoneNumber: true, accountStatus: true, deletedAt: true, phoneVerified: true, onboardingPasswordSetAt: true, rider: { select: { id: true, riderCode: true, verificationStatus: true } } } },
+  applicant: { select: { id: true, role: true, phoneNumber: true, accountStatus: true, deletedAt: true, phoneVerified: true, passwordHash: true, onboardingPasswordSetAt: true, rider: { select: { id: true, riderCode: true, verificationStatus: true } } } },
   status: true,
   applicantVisibleNote: true,
   reviewedAt: true,
@@ -90,7 +92,7 @@ const TAXI_APPLICATION_DETAIL_SELECT = {
   insuranceDocumentUrl: true,
   notes: true,
   adminNote: true,
-  applicant: { select: { id: true, role: true, phoneNumber: true, accountStatus: true, deletedAt: true, phoneVerified: true, onboardingPasswordSetAt: true, rider: { select: { id: true, riderCode: true, verificationStatus: true } } } },
+  applicant: { select: { id: true, role: true, phoneNumber: true, accountStatus: true, deletedAt: true, phoneVerified: true, passwordHash: true, onboardingPasswordSetAt: true, rider: { select: { id: true, riderCode: true, verificationStatus: true } } } },
   reviewedByAdmin: { select: { id: true, fullName: true, adminRole: true } }
 } satisfies Prisma.TaxiDriverApplicationSelect;
 
@@ -382,6 +384,9 @@ export class TaxiService {
       select: TAXI_APPLICATION_DETAIL_SELECT
     });
     if (!current) throw new NotFoundException("Ride Captain application not found");
+    if (dto.status === TaxiApplicationStatus.APPROVED) {
+      this.assertRequiredRideDocumentsApproved(current);
+    }
     const application = await this.prisma.$transaction(async (tx) => {
       if (dto.status === TaxiApplicationStatus.APPROVED && this.applicantReadyForRideApproval(current.applicant)) {
         await this.ensureRiderProfileForRideApplication(tx, current);
@@ -404,6 +409,88 @@ export class TaxiService {
       readinessOnly: true
     });
     return this.adminApplicationDetail(application);
+  }
+
+  async reviewRideCaptainApplicationDocument(adminUserId: string, applicationId: string, documentId: string, dto: ReviewCaptainApplicationDocumentDto) {
+    this.assertDocumentReviewInput(dto);
+    const document = await this.prisma.captainApplicationDocument.findFirst({
+      where: {
+        id: documentId,
+        rideApplicationId: applicationId,
+        uploadStatus: CaptainDocumentUploadStatus.UPLOADED,
+        deletedAt: null
+      }
+    });
+    if (!document) throw new NotFoundException("Ride Captain application document not found");
+
+    const updated = await this.prisma.captainApplicationDocument.update({
+      where: { id: document.id },
+      data: {
+        reviewStatus: dto.status,
+        applicantVisibleNote: this.optionalText(dto.applicantVisibleNote),
+        adminNote: this.optionalText(dto.adminNote),
+        reviewedByAdminId: adminUserId,
+        reviewedAt: new Date()
+      }
+    });
+    await this.audit.record(adminUserId, this.documentReviewAuditAction(dto.status), "CaptainApplicationDocument", updated.id, {
+      applicationId,
+      mode: "RIDE_CAPTAIN",
+      documentType: updated.documentType,
+      previousStatus: document.reviewStatus,
+      newStatus: updated.reviewStatus,
+      hasApplicantVisibleNote: Boolean(updated.applicantVisibleNote),
+      hasAdminNote: Boolean(updated.adminNote)
+    });
+    return this.toAdminCaptainDocument(updated);
+  }
+
+  async approveRequiredRideCaptainDocuments(adminUserId: string, applicationId: string) {
+    const application = await this.prisma.taxiDriverApplication.findUnique({
+      where: { id: applicationId },
+      select: TAXI_APPLICATION_DETAIL_SELECT
+    });
+    if (!application) throw new NotFoundException("Ride Captain application not found");
+    const requiredTypes = this.requiredRideDocumentTypes();
+    const eligibleDocuments = (application.captainDocuments ?? []).filter((document) =>
+      requiredTypes.includes(document.documentType) &&
+      document.uploadStatus === CaptainDocumentUploadStatus.UPLOADED &&
+      !document.deletedAt
+    );
+    const missingRequiredDocumentTypes = requiredTypes.filter((type) => !eligibleDocuments.some((document) => document.documentType === type));
+    if (missingRequiredDocumentTypes.length) {
+      throw new BadRequestException({
+        message: "Required Ride Captain documents are missing.",
+        errorCode: "REQUIRED_DOCUMENT_REVIEW_INCOMPLETE",
+        incompleteDocumentTypes: missingRequiredDocumentTypes
+      });
+    }
+
+    const updatedApplication = await this.prisma.$transaction(async (tx) => {
+      await tx.captainApplicationDocument.updateMany({
+        where: {
+          id: { in: eligibleDocuments.map((document) => document.id) },
+          rideApplicationId: applicationId,
+          uploadStatus: CaptainDocumentUploadStatus.UPLOADED,
+          deletedAt: null
+        },
+        data: {
+          reviewStatus: DocumentVerificationStatus.APPROVED,
+          reviewedByAdminId: adminUserId,
+          reviewedAt: new Date()
+        }
+      });
+      return tx.taxiDriverApplication.findUniqueOrThrow({
+        where: { id: applicationId },
+        select: TAXI_APPLICATION_DETAIL_SELECT
+      });
+    });
+    await this.audit.record(adminUserId, "CAPTAIN_REQUIRED_DOCUMENTS_BULK_APPROVED", "TaxiDriverApplication", applicationId, {
+      mode: "RIDE_CAPTAIN",
+      requiredDocumentTypes: requiredTypes,
+      documentIds: eligibleDocuments.map((document) => document.id)
+    });
+    return this.adminApplicationDetail(updatedApplication);
   }
 
   async listWaitlist(query: ListTaxiWaitlistQueryDto) {
@@ -680,12 +767,16 @@ export class TaxiService {
 
   async adminCreateDriverProfileFromApplication(adminUserId: string, applicationId: string) {
     this.assertTaxiStagingEnabled();
-    const application = await this.prisma.taxiDriverApplication.findUnique({ where: { id: applicationId } });
+    const application = await this.prisma.taxiDriverApplication.findUnique({
+      where: { id: applicationId },
+      select: TAXI_APPLICATION_DETAIL_SELECT
+    });
     if (!application) throw new NotFoundException("Ride Captain application not found");
     const approvedStatuses: TaxiApplicationStatus[] = [TaxiApplicationStatus.APPROVED, TaxiApplicationStatus.PROVISIONALLY_APPROVED];
     if (!approvedStatuses.includes(application.status)) {
       throw new BadRequestException("Only approved or provisionally approved applications can create a Ride Captain profile");
     }
+    this.assertRequiredRideDocumentsApproved(application);
     const profile = await this.prisma.taxiDriverProfile.upsert({
       where: { applicationId },
       update: {
@@ -716,7 +807,7 @@ export class TaxiService {
       },
       include: { application: true }
     });
-    await this.audit.record(adminUserId, "admin.taxi.driver_profile.created_from_application", "TaxiDriverProfile", profile.id, {
+    await this.audit.record(adminUserId, "RIDE_CAPTAIN_PROFILE_PREPARED", "TaxiDriverProfile", profile.id, {
       applicationId,
       controlledPilot: true
     });
@@ -732,7 +823,12 @@ export class TaxiService {
       data,
       include: { application: true }
     });
-    await this.audit.record(adminUserId, "admin.taxi.driver_profile.status_updated", "TaxiDriverProfile", profile.id, {
+    const action = dto.status === TaxiDriverProfileStatus.ACTIVE_TEST
+      ? "RIDE_CAPTAIN_ACTIVATED"
+      : dto.status === TaxiDriverProfileStatus.SUSPENDED
+        ? "RIDE_CAPTAIN_SUSPENDED"
+        : "admin.taxi.driver_profile.status_updated";
+    await this.audit.record(adminUserId, action, "TaxiDriverProfile", profile.id, {
       status: dto.status,
       note: dto.note,
       controlledPilot: true
@@ -824,6 +920,7 @@ export class TaxiService {
         phoneNumber: true,
         accountStatus: true,
         phoneVerified: true,
+        passwordHash: true,
         onboardingPasswordSetAt: true,
         deletedAt: true
       }
@@ -840,7 +937,7 @@ export class TaxiService {
     if (!applicant.phoneVerified) {
       throw new BadRequestException("Verify the Captain applicant phone number before submitting the Ride Captain application.");
     }
-    if (!applicant.onboardingPasswordSetAt) {
+    if (!this.passwordCreated(applicant)) {
       throw new BadRequestException("Create the Captain applicant password before submitting the Ride Captain application.");
     }
     return applicant;
@@ -855,6 +952,7 @@ export class TaxiService {
         phoneNumber: true,
         accountStatus: true,
         phoneVerified: true,
+        passwordHash: true,
         onboardingPasswordSetAt: true,
         deletedAt: true
       }
@@ -871,7 +969,7 @@ export class TaxiService {
       }
       return applicant;
     }
-    if (applicant.role !== UserRole.RIDER || !applicant.phoneVerified || !applicant.onboardingPasswordSetAt) {
+    if (applicant.role !== UserRole.RIDER || !applicant.phoneVerified || !this.passwordCreated(applicant)) {
       throw new BadRequestException("Captain applicant account is not ready for application submission.");
     }
     return applicant;
@@ -895,8 +993,9 @@ export class TaxiService {
     applicant: Prisma.TaxiDriverApplicationGetPayload<{ select: typeof TAXI_APPLICATION_DETAIL_SELECT }>["applicant"]
   ) {
     if (!applicant || applicant.deletedAt || !applicant.phoneVerified) return false;
+    if (!this.passwordCreated(applicant)) return false;
     if (applicant.role === UserRole.CUSTOMER) return applicant.accountStatus === AccountStatus.ACTIVE;
-    return applicant.role === UserRole.RIDER && Boolean(applicant.onboardingPasswordSetAt);
+    return applicant.role === UserRole.RIDER;
   }
 
   private async ensureRiderProfileForRideApplication(
@@ -1610,6 +1709,7 @@ export class TaxiService {
       message: this.statusMessage(application.status, application.applicantVisibleNote),
       submittedAt: application.createdAt.toISOString(),
       reviewedAt: application.reviewedAt?.toISOString() ?? null,
+      documentReview: this.documentReviewSummary(application.captainDocuments, this.requiredRideDocumentTypes()),
       readinessOnly: true
     };
   }
@@ -1679,6 +1779,123 @@ export class TaxiService {
     };
   }
 
+  private optionalText(value?: string) {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : undefined;
+  }
+
+  private passwordCreated(
+    applicant: Pick<NonNullable<Prisma.TaxiDriverApplicationGetPayload<{ select: typeof TAXI_APPLICATION_DETAIL_SELECT }>["applicant"]>, "passwordHash" | "onboardingPasswordSetAt"> | null | undefined
+  ) {
+    return Boolean(applicant?.passwordHash) || Boolean(applicant?.onboardingPasswordSetAt);
+  }
+
+  private applicantAccountReadiness(
+    applicant: Prisma.TaxiDriverApplicationGetPayload<{ select: typeof TAXI_APPLICATION_DETAIL_SELECT }>["applicant"]
+  ) {
+    if (!applicant) return null;
+    const passwordCreated = this.passwordCreated(applicant);
+    return {
+      userId: applicant.id,
+      id: applicant.id,
+      accountRole: applicant.role,
+      role: applicant.role,
+      accountStatus: applicant.accountStatus,
+      phoneVerified: applicant.phoneVerified,
+      passwordCreated,
+      loginReady: applicant.accountStatus === AccountStatus.ACTIVE && applicant.phoneVerified && passwordCreated,
+      deliveryProfileSummary: applicant.rider,
+      riderProfile: applicant.rider,
+      rideProfileSummary: null
+    };
+  }
+
+  private documentReviewSummary(
+    documents: Prisma.CaptainApplicationDocumentGetPayload<Record<string, never>>[] | undefined,
+    requiredTypes: CaptainApplicationDocumentType[]
+  ) {
+    const uploadedDocuments = (documents ?? []).filter((document) => document.uploadStatus === CaptainDocumentUploadStatus.UPLOADED && !document.deletedAt);
+    const missingRequiredDocumentTypes = requiredTypes.filter((type) => !uploadedDocuments.some((document) => document.documentType === type));
+    const pendingRequiredDocumentTypes = requiredTypes.filter((type) =>
+      uploadedDocuments.some((document) => document.documentType === type && document.reviewStatus === DocumentVerificationStatus.PENDING)
+    );
+    const changesRequestedRequiredDocumentTypes = requiredTypes.filter((type) =>
+      uploadedDocuments.some((document) => document.documentType === type && document.reviewStatus === DocumentVerificationStatus.CHANGES_REQUESTED)
+    );
+    const rejectedRequiredDocumentTypes = requiredTypes.filter((type) =>
+      uploadedDocuments.some((document) => document.documentType === type && document.reviewStatus === DocumentVerificationStatus.REJECTED)
+    );
+    const requiredDocumentsApproved = requiredTypes.every((type) =>
+      uploadedDocuments.some((document) => document.documentType === type && document.reviewStatus === DocumentVerificationStatus.APPROVED)
+    );
+    const stage = missingRequiredDocumentTypes.length
+      ? "DOCUMENTS_MISSING"
+      : changesRequestedRequiredDocumentTypes.length || rejectedRequiredDocumentTypes.length
+        ? "CHANGES_REQUESTED"
+        : requiredDocumentsApproved
+          ? "DOCUMENTS_APPROVED"
+          : pendingRequiredDocumentTypes.length
+            ? "DOCUMENTS_UNDER_REVIEW"
+            : "DOCUMENTS_RECEIVED";
+    const messageByStage: Record<string, string> = {
+      DOCUMENTS_MISSING: "Required documents are still missing.",
+      DOCUMENTS_RECEIVED: "Documents have been received and are waiting for KariGO review.",
+      DOCUMENTS_UNDER_REVIEW: "KariGO is reviewing the submitted documents.",
+      CHANGES_REQUESTED: "KariGO has requested updates to one or more required documents.",
+      DOCUMENTS_APPROVED: "Required documents have been approved."
+    };
+
+    return {
+      stage,
+      message: messageByStage[stage],
+      requiredDocumentTypes: requiredTypes,
+      missingRequiredDocumentTypes,
+      pendingRequiredDocumentTypes,
+      changesRequestedRequiredDocumentTypes,
+      rejectedRequiredDocumentTypes,
+      requiredDocumentsApproved,
+      approvalReviewIncomplete: !requiredDocumentsApproved
+    };
+  }
+
+  private assertRequiredRideDocumentsApproved(
+    application: Prisma.TaxiDriverApplicationGetPayload<{ select: typeof TAXI_APPLICATION_DETAIL_SELECT }>
+  ) {
+    const summary = this.documentReviewSummary(application.captainDocuments, this.requiredRideDocumentTypes());
+    if (summary.requiredDocumentsApproved) return;
+    const incompleteDocumentTypes = Array.from(new Set([
+      ...summary.missingRequiredDocumentTypes,
+      ...summary.pendingRequiredDocumentTypes,
+      ...summary.changesRequestedRequiredDocumentTypes,
+      ...summary.rejectedRequiredDocumentTypes
+    ]));
+    throw new BadRequestException({
+      message: "Required Captain documents must be reviewed and approved before approving the application.",
+      errorCode: "REQUIRED_DOCUMENT_REVIEW_INCOMPLETE",
+      incompleteDocumentTypes
+    });
+  }
+
+  private assertDocumentReviewInput(dto: ReviewCaptainApplicationDocumentDto) {
+    if (dto.status === DocumentVerificationStatus.PENDING) {
+      throw new BadRequestException("Choose Approved, Changes requested or Rejected for document review.");
+    }
+    const needsReason = dto.status === DocumentVerificationStatus.CHANGES_REQUESTED || dto.status === DocumentVerificationStatus.REJECTED;
+    if (needsReason && !this.optionalText(dto.applicantVisibleNote) && !this.optionalText(dto.adminNote)) {
+      throw new BadRequestException("Requesting changes or rejecting a document requires an applicant-visible or internal reason.");
+    }
+  }
+
+  private documentReviewAuditAction(status: DocumentVerificationStatus) {
+    const actions: Record<DocumentVerificationStatus, string> = {
+      PENDING: "CAPTAIN_DOCUMENT_REVIEW_RESET",
+      APPROVED: "CAPTAIN_DOCUMENT_APPROVED",
+      CHANGES_REQUESTED: "CAPTAIN_DOCUMENT_CHANGES_REQUESTED",
+      REJECTED: "CAPTAIN_DOCUMENT_REJECTED"
+    };
+    return actions[status];
+  }
+
   private operatingAreaSummary(areaId?: string | null) {
     if (!areaId) return null;
     const area = captainServiceAreas.find((item) => item.id === areaId);
@@ -1725,6 +1942,7 @@ export class TaxiService {
       sizeBytes: document.sizeBytes,
       uploadStatus: document.uploadStatus,
       reviewStatus: document.reviewStatus,
+      applicantVisibleNote: document.applicantVisibleNote,
       uploadedAt: document.uploadedAt.toISOString(),
       reviewedAt: document.reviewedAt?.toISOString() ?? null,
       required,
@@ -1737,15 +1955,10 @@ export class TaxiService {
     return {
       ...application,
       vehicle: [application.vehicleMake, application.vehicleModel, application.vehicleYear].filter(Boolean).join(" ") || null,
-      applicantAccount: application.applicant ? {
-        id: application.applicant.id,
-        accountStatus: application.applicant.accountStatus,
-        phoneVerified: application.applicant.phoneVerified,
-        passwordCreated: Boolean(application.applicant.onboardingPasswordSetAt),
-        riderProfile: application.applicant.rider
-      } : null,
+      applicantAccount: this.applicantAccountReadiness(application.applicant),
       documentEvidence: this.rideDocumentEvidence(application),
       captainDocuments: (application.captainDocuments ?? []).map((document) => this.toAdminCaptainDocument(document)),
+      documentReview: this.documentReviewSummary(application.captainDocuments, this.requiredRideDocumentTypes()),
       residentialLocation: this.locationSummary(application.residentialCityCode, application.residentialStateCode, application.city, application.state),
       operatingAreas: this.operatingAreaSummaries(application.operatingAreaIds),
       primaryOperatingArea: this.operatingAreaSummary(application.primaryOperatingAreaId),
@@ -1763,15 +1976,10 @@ export class TaxiService {
       createdAt: application.createdAt.toISOString(),
       updatedAt: application.updatedAt.toISOString(),
       reviewedAt: application.reviewedAt?.toISOString() ?? null,
-      applicantAccount: application.applicant ? {
-        id: application.applicant.id,
-        accountStatus: application.applicant.accountStatus,
-        phoneVerified: application.applicant.phoneVerified,
-        passwordCreated: Boolean(application.applicant.onboardingPasswordSetAt),
-        riderProfile: application.applicant.rider
-      } : null,
+      applicantAccount: this.applicantAccountReadiness(application.applicant),
       documentEvidence: this.rideDocumentEvidence(application),
       captainDocuments: (application.captainDocuments ?? []).map((document) => this.toAdminCaptainDocument(document)),
+      documentReview: this.documentReviewSummary(application.captainDocuments, this.requiredRideDocumentTypes()),
       residentialLocation: this.locationSummary(application.residentialCityCode, application.residentialStateCode, application.city, application.state),
       operatingAreas: this.operatingAreaSummaries(application.operatingAreaIds),
       primaryOperatingArea: this.operatingAreaSummary(application.primaryOperatingAreaId),

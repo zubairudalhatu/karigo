@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException } from "@nestjs/common";
-import { AccountStatus, DeliveryCaptainApplicationStatus, DeliveryCaptainVehicleType, RiderStatus, TaxiApplicationStatus, TaxiDriverProfileStatus, UserRole } from "@prisma/client";
+import { AccountStatus, DeliveryCaptainApplicationStatus, DeliveryCaptainVehicleType, DocumentVerificationStatus, RiderStatus, TaxiApplicationStatus, TaxiDriverProfileStatus, UserRole } from "@prisma/client";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -43,6 +43,7 @@ const deliveryCaptainApplication = {
     role: UserRole.RIDER,
     accountStatus: AccountStatus.PENDING,
     phoneVerified: true,
+    passwordHash: "hashed-password",
     onboardingPasswordSetAt: now,
     deletedAt: null,
     rider: null
@@ -66,6 +67,7 @@ const uploadedProfilePhoto = {
   uploadStatus: "UPLOADED",
   reviewStatus: "PENDING",
   adminNote: null,
+  applicantVisibleNote: null,
   uploadedAt: now,
   reviewedAt: null,
   reviewedByAdminId: null,
@@ -326,13 +328,15 @@ describe("RidersService delivery captain applications", () => {
     });
   });
 
-  it("creates an approved rider profile when Admin approves a linked Customer application", async () => {
+  it("creates a pending rider profile when Admin approves a linked Customer application after document review", async () => {
     const customerApplication = {
       ...deliveryCaptainApplication,
+      captainDocuments: [{ ...uploadedProfilePhoto, reviewStatus: "APPROVED" }],
       applicant: {
         ...deliveryCaptainApplication.applicant,
         role: UserRole.CUSTOMER,
         accountStatus: AccountStatus.ACTIVE,
+        passwordHash: "customer-password-hash",
         onboardingPasswordSetAt: null
       }
     };
@@ -350,8 +354,48 @@ describe("RidersService delivery captain applications", () => {
     expect(prisma.rider.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         userId: deliveryCaptainApplication.applicantUserId,
-        verificationStatus: RiderStatus.ACTIVE
+        verificationStatus: RiderStatus.PENDING_APPROVAL
       })
+    }));
+  });
+
+  it("blocks Delivery Captain approval when required secure documents are pending", async () => {
+    prisma.deliveryCaptainApplication.findUnique.mockResolvedValueOnce({
+      ...deliveryCaptainApplication,
+      captainDocuments: [{ ...uploadedProfilePhoto, reviewStatus: DocumentVerificationStatus.PENDING }]
+    });
+
+    await expect(service.reviewDeliveryCaptainApplication("admin-user", deliveryCaptainApplication.id, {
+      status: DeliveryCaptainApplicationStatus.APPROVED
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.deliveryCaptainApplication.update).not.toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: DeliveryCaptainApplicationStatus.APPROVED })
+    }));
+  });
+
+  it("reviews Delivery Captain secure documents and records an audit event", async () => {
+    const document = {
+      ...uploadedProfilePhoto,
+      deliveryApplicationId: deliveryCaptainApplication.id,
+      reviewStatus: DocumentVerificationStatus.PENDING
+    };
+    prisma.captainApplicationDocument.findFirst.mockResolvedValueOnce(document);
+    prisma.captainApplicationDocument.update.mockResolvedValueOnce({
+      ...document,
+      reviewStatus: DocumentVerificationStatus.APPROVED,
+      reviewedByAdminId: "admin-user",
+      reviewedAt: now
+    });
+
+    await expect(service.reviewDeliveryCaptainApplicationDocument("admin-user", deliveryCaptainApplication.id, document.id, {
+      status: DocumentVerificationStatus.APPROVED
+    })).resolves.toMatchObject({ reviewStatus: DocumentVerificationStatus.APPROVED });
+
+    expect(audit.record).toHaveBeenCalledWith("admin-user", "CAPTAIN_DOCUMENT_APPROVED", "CaptainApplicationDocument", document.id, expect.objectContaining({
+      mode: "DELIVERY_CAPTAIN",
+      previousStatus: DocumentVerificationStatus.PENDING,
+      newStatus: DocumentVerificationStatus.APPROVED
     }));
   });
 
@@ -463,7 +507,7 @@ describe("RidersService delivery captain applications", () => {
       },
       operationalModes: [],
       nextStep: "APPLICATION_STATUS",
-      nextRoute: "/tabs/dashboard"
+      nextRoute: "/application-status"
     });
   });
 
