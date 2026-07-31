@@ -138,3 +138,46 @@ Do not build or distribute the final Captain AAB until all are true:
 - Captain Expo Doctor passes
 
 The next Play Internal Testing AAB must be built from app version `0.1.1`, versionCode `10`.
+
+## Production Runtime Module Hotfix
+
+Follow-up Task 207A-R1-H1 fixed a Render startup failure from commit `0c3ffcf`.
+
+Root cause:
+
+- Task 207A-R1 introduced backend runtime imports from `@karigo/shared-types`.
+- `@karigo/shared-types` is currently source-oriented for web/mobile workspaces, with `main` and `types` pointing at `src/index.ts`.
+- The backend compiled successfully, but production Node resolved `@karigo/shared-types` to TypeScript workspace source and failed during `npm run start:prod`.
+
+Selected architecture:
+
+- Backend Captain catalogue runtime values now live in a backend-local compiled module: `services/backend-api/src/modules/platform/captain-catalog.ts`.
+- Mobile apps can continue using `@karigo/shared-types` for source/bundler-friendly fallback catalogue data.
+- Backend imports from `@karigo/shared-types` are type-only only; runtime catalogue imports resolve to compiled backend JavaScript.
+
+Build pipeline change:
+
+- Backend `npm run build` now removes stale `dist` output before `nest build`.
+- `services/backend-api/scripts/verify-render-build.cjs` recursively checks emitted JavaScript for production-unsafe references:
+  - `.ts` runtime require/import targets
+  - `packages/*/src`
+  - source-only KariGO workspace package runtime imports
+- The verifier smoke-loads compiled Captain catalogue, platform catalogue service and validation modules with plain Node.js.
+
+Render guidance:
+
+- Existing Render Start Command remains `npm run start:prod`.
+- `start:prod` remains `node dist/services/backend-api/src/main.js`.
+- No Render Shell step is required.
+- The existing Task 207A-R1 Prisma migration was already applied; this hotfix adds no new migration.
+
+Deployment recovery checks:
+
+1. Deploy the hotfix commit.
+2. Confirm pre-deploy reports no pending migrations.
+3. Confirm `npm run start:prod` starts Nest successfully.
+4. Confirm the service binds to Render port `10000`.
+5. Confirm `/api/v1/health` succeeds.
+6. Confirm `/api/v1/platform/vehicle-catalog` succeeds.
+7. Confirm `/api/v1/platform/captain-service-areas` returns Kano and Abuja.
+8. Confirm there are no `MODULE_NOT_FOUND`, `.ts` source import or workspace source runtime errors.

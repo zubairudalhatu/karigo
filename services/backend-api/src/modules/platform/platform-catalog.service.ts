@@ -4,7 +4,7 @@ import {
   CaptainServiceArea,
   VehicleCatalog,
   vehicleCatalog
-} from "@karigo/shared-types";
+} from "./captain-catalog";
 
 @Injectable()
 export class PlatformCatalogService {

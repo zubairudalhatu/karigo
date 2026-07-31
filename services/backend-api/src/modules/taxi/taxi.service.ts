@@ -15,13 +15,13 @@ import {
   TaxiWaitlistStatus,
   UserRole
 } from "@prisma/client";
-import { captainServiceAreas } from "@karigo/shared-types";
 import * as bcrypt from "bcrypt";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
 import { PrismaService } from "../../prisma/prisma.service";
+import { captainServiceAreas } from "../platform/captain-catalog";
 import { assertFutureLicenceDate, resolveCaptainLocation, resolveVehicleDetails } from "../platform/captain-catalog.validation";
 import { CaptainUploadStorageService } from "../riders/captain-upload-storage.service";
 import { AdminAssignTaxiDriverDto } from "./dto/admin-assign-taxi-driver.dto";

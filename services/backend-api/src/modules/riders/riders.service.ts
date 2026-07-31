@@ -10,11 +10,11 @@ import {
   TaxiDriverProfileStatus,
   UserRole
 } from "@prisma/client";
-import { captainServiceAreas } from "@karigo/shared-types";
 import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
+import { captainServiceAreas } from "../platform/captain-catalog";
 import { resolveCaptainLocation } from "../platform/captain-catalog.validation";
 import { PrismaService } from "../../prisma/prisma.service";
 import { publicUserSelect } from "../users/users.service";

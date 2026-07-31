@@ -3,7 +3,7 @@ import {
   captainServiceAreas,
   vehicleCatalog,
   VehicleCatalogOption
-} from "@karigo/shared-types";
+} from "./captain-catalog";
 
 export interface CaptainLocationInput {
   residentialStateCode?: string;
