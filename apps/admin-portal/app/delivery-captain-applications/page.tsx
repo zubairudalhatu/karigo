@@ -11,10 +11,13 @@ import { friendlyError } from "../../src/lib/errors";
 
 const statusOptions: Array<DeliveryCaptainApplicationStatus | "ALL"> = ["ALL", "SUBMITTED", "UNDER_REVIEW", "CHANGES_REQUESTED", "PROVISIONALLY_APPROVED", "APPROVED", "REJECTED"];
 const reviewStatuses: DeliveryCaptainApplicationStatus[] = ["UNDER_REVIEW", "CHANGES_REQUESTED", "PROVISIONALLY_APPROVED", "APPROVED", "REJECTED"];
+type Tab = "active" | "rejected" | "trash";
 
 export default function DeliveryCaptainApplicationsPage() {
   const [applications, setApplications] = useState<DeliveryCaptainApplication[]>([]);
+  const [trashedApplications, setTrashedApplications] = useState<DeliveryCaptainApplication[]>([]);
   const [status, setStatus] = useState<DeliveryCaptainApplicationStatus | "ALL">("ALL");
+  const [activeTab, setActiveTab] = useState<Tab>("active");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -24,7 +27,13 @@ export default function DeliveryCaptainApplicationsPage() {
     setLoading(true);
     setError("");
     try {
-      setApplications(await deliveryCaptainApplicationsApi.list(status));
+      const requestedStatus = activeTab === "rejected" ? "REJECTED" : status;
+      const [applicationData, trashData] = await Promise.all([
+        deliveryCaptainApplicationsApi.list(requestedStatus),
+        deliveryCaptainApplicationsApi.trash().catch(() => [])
+      ]);
+      setApplications(applicationData);
+      setTrashedApplications(trashData);
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -32,7 +41,7 @@ export default function DeliveryCaptainApplicationsPage() {
     }
   }
 
-  useEffect(() => { void load(); }, [status]);
+  useEffect(() => { void load(); }, [status, activeTab]);
 
   async function review(application: DeliveryCaptainApplication, nextStatus: DeliveryCaptainApplicationStatus) {
     const applicantVisibleNote = window.prompt("Applicant-visible note optional") ?? undefined;
@@ -111,17 +120,67 @@ export default function DeliveryCaptainApplicationsPage() {
     }
   }
 
+  async function moveToTrash(application: DeliveryCaptainApplication) {
+    const reason = window.prompt("Trash reason for this rejected Delivery application") ?? "";
+    if (reason.trim().length < 5) {
+      setError("Moving a rejected Delivery Captain application to Trash requires a clear reason.");
+      return;
+    }
+    if (!window.confirm(`Move ${application.fullName}'s rejected Delivery application to Trash?`)) return;
+    try {
+      setError("");
+      setMessage("");
+      setActioning(`${application.id}:trash`);
+      await deliveryCaptainApplicationsApi.moveToTrash(application.id, reason.trim());
+      setMessage("Rejected Delivery Captain application moved to Trash. The KariGO account was not deleted.");
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    } finally {
+      setActioning("");
+    }
+  }
+
+  async function restoreFromTrash(application: DeliveryCaptainApplication) {
+    const reason = window.prompt("Restore reason") ?? "";
+    if (reason.trim().length < 5) {
+      setError("Restoring a Delivery Captain application requires a clear reason.");
+      return;
+    }
+    if (!window.confirm(`Restore ${application.fullName}'s Delivery application from Trash?`)) return;
+    try {
+      setError("");
+      setMessage("");
+      setActioning(`${application.id}:restore`);
+      await deliveryCaptainApplicationsApi.restore(application.id, reason.trim());
+      setMessage("Delivery Captain application restored from Trash.");
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    } finally {
+      setActioning("");
+    }
+  }
+
   return <PortalShell>
     <h1>Delivery Captain Applications</h1>
     <p className="muted">Review Kano and Abuja Delivery Captain applications. Account-first applications show OTP and password readiness before approval. Approval does not activate payouts or KariGO Rides access.</p>
     {message ? <p className="success">{message}</p> : null}
     <ErrorMessage>{error}</ErrorMessage>
     <div className="filters">
-      <label>Status<select value={status} onChange={(event) => setStatus(event.target.value as DeliveryCaptainApplicationStatus | "ALL")}>{statusOptions.map((option) => <option key={option} value={option}>{option.replaceAll("_", " ")}</option>)}</select></label>
+      {(["active", "rejected", "trash"] as Tab[]).map((tab) => <button key={tab} className={activeTab === tab ? "" : "secondary"} onClick={() => setActiveTab(tab)}>{tab === "active" ? "Applications" : tab === "rejected" ? "Rejected" : "Trash"}</button>)}
+      {activeTab === "active" ? <label>Status<select value={status} onChange={(event) => setStatus(event.target.value as DeliveryCaptainApplicationStatus | "ALL")}>{statusOptions.map((option) => <option key={option} value={option}>{option.replaceAll("_", " ")}</option>)}</select></label> : null}
       <button className="secondary" onClick={() => void load()}>Refresh</button>
     </div>
     {loading ? <Loading /> : <section className="section">
-      {applications.length ? applications.map((application) => <article className="card" key={application.id}>
+      {activeTab === "trash" ? (trashedApplications.length ? trashedApplications.map((application) => <article className="card" key={application.id}>
+        <strong>{application.fullName} - {application.applicationReference}</strong>
+        <p className="muted">{application.city}, {application.state} - rejected application retained for audit.</p>
+        <p><Badge>{application.status}</Badge> <Badge>TRASHED</Badge></p>
+        <p className="muted">Trashed: {application.trashedAt ? new Date(application.trashedAt).toLocaleString() : "Not recorded"}</p>
+        <p>{application.trashReason || "No trash reason recorded."}</p>
+        <button disabled={actioning === `${application.id}:restore`} onClick={() => void restoreFromTrash(application)}>Restore</button>
+      </article>) : <Empty>No rejected Delivery Captain applications in Trash.</Empty>) : applications.length ? applications.map((application) => <article className="card" key={application.id}>
         <strong>{application.fullName} - {application.applicationReference}</strong>
         <p className="muted">{application.city}, {application.state}{application.preferredZone ? ` - ${application.preferredZone}` : ""} - submitted {new Date(application.createdAt).toLocaleString()}</p>
         <div className="notice">
@@ -165,7 +224,10 @@ export default function DeliveryCaptainApplicationsPage() {
         {application.adminNote ? <p className="muted">Internal note: {application.adminNote}</p> : null}
         <p><Badge>{application.status}</Badge> <span className="muted">{application.deliveryOnly ? "Delivery-only review" : "Review"}</span></p>
         <p className="muted">{application.launchWarning}</p>
-        <div className="filters">{reviewStatuses.map((nextStatus) => <button className="secondary" disabled={actioning === application.id || nextStatus === application.status} key={nextStatus} onClick={() => void review(application, nextStatus)}>{nextStatus.replaceAll("_", " ")}</button>)}</div>
+        <div className="filters">
+          {reviewStatuses.map((nextStatus) => <button className="secondary" disabled={actioning === application.id || nextStatus === application.status} key={nextStatus} onClick={() => void review(application, nextStatus)}>{nextStatus.replaceAll("_", " ")}</button>)}
+          {application.status === "REJECTED" ? <button className="secondary" disabled={actioning === `${application.id}:trash`} onClick={() => void moveToTrash(application)}>Move to Trash</button> : null}
+        </div>
       </article>) : <Empty>No Delivery Captain applications found.</Empty>}
     </section>}
   </PortalShell>;

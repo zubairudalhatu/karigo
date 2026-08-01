@@ -104,6 +104,7 @@ function ApplicationSection({ application, mode }: { application: CaptainApplica
       </View>
       <Text style={ui.muted}>{documentReview.message}</Text>
     </View> : null}
+    {mode === "DELIVERY_CAPTAIN" && category === "REVISION_REQUIRED" ? <Button title="Upload requested documents" onPress={() => router.push("/delivery-application-revision")} /> : null}
     <View style={styles.metaGrid}>
       <View style={styles.metaItem}><Text style={styles.metaLabel}>Submitted</Text><Text style={styles.metaValue}>{formatCaptainDate(application.submittedAt)}</Text></View>
       <View style={styles.metaItem}><Text style={styles.metaLabel}>Last update</Text><Text style={styles.metaValue}>{formatCaptainDate(application.reviewedAt ?? application.submittedAt)}</Text></View>

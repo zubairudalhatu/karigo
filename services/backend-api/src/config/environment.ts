@@ -691,22 +691,37 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     "RIDES_SERVICE_ENABLED",
     false
   );
-  const ridesControlledPilotEnabled = booleanAlias(
+  const ridesLegacyControlledPilotEnabled = booleanAlias(
     config,
     ["RIDES_CONTROLLED_PILOT_ENABLED", "TAXI_STAGING_DISPATCH_ENABLED"],
     "RIDES_CONTROLLED_PILOT_ENABLED",
     false
   );
+  const ridesProductionEnabled = booleanFlag(
+    config.RIDES_PRODUCTION_ENABLED,
+    "RIDES_PRODUCTION_ENABLED",
+    ridesLegacyControlledPilotEnabled
+  );
+  const ridesDispatchMode = stringAlias(config, ["RIDES_DISPATCH_MODE"], "MANUAL").toUpperCase();
+  if (!["MANUAL", "ASSISTED", "AUTOMATIC"].includes(ridesDispatchMode)) {
+    throw new Error("RIDES_DISPATCH_MODE must be MANUAL, ASSISTED or AUTOMATIC");
+  }
   const ridesAutoDispatchEnabled = booleanFlag(config.RIDES_AUTO_DISPATCH_ENABLED, "RIDES_AUTO_DISPATCH_ENABLED", false);
   const ridesPaymentEnabled = booleanFlag(config.RIDES_PAYMENT_ENABLED, "RIDES_PAYMENT_ENABLED", false);
-  if (ridesControlledPilotEnabled && !ridesServiceEnabled) {
-    throw new Error("RIDES_CONTROLLED_PILOT_ENABLED=true requires RIDES_SERVICE_ENABLED=true");
+  if (ridesProductionEnabled && !ridesServiceEnabled) {
+    throw new Error("RIDES_PRODUCTION_ENABLED=true requires RIDES_SERVICE_ENABLED=true");
+  }
+  if (ridesProductionEnabled && ridesDispatchMode === "AUTOMATIC") {
+    throw new Error("RIDES_DISPATCH_MODE=AUTOMATIC is reserved for a future approval task");
+  }
+  if (ridesProductionEnabled && ridesAutoDispatchEnabled) {
+    throw new Error("RIDES_AUTO_DISPATCH_ENABLED must remain false while production Ride dispatch is manual");
   }
   if (ridesAutoDispatchEnabled) {
-    throw new Error("RIDES_AUTO_DISPATCH_ENABLED must remain false for controlled pilot");
+    throw new Error("RIDES_AUTO_DISPATCH_ENABLED must remain false");
   }
   if (ridesPaymentEnabled) {
-    throw new Error("RIDES_PAYMENT_ENABLED must remain false for controlled pilot");
+    throw new Error("RIDES_PAYMENT_ENABLED must remain false until Ride payment automation is approved");
   }
 
   return {
@@ -834,11 +849,19 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       : "v20.0",
     PUSH_PROVIDER: pushProvider,
     RIDES_SERVICE_ENABLED: ridesServiceEnabled,
-    RIDES_CONTROLLED_PILOT_ENABLED: ridesControlledPilotEnabled,
+    RIDES_PRODUCTION_ENABLED: ridesProductionEnabled,
+    RIDES_DISPATCH_MODE: ridesDispatchMode,
+    RIDES_ACTIVE_SERVICE_AREAS: typeof config.RIDES_ACTIVE_SERVICE_AREAS === "string" && config.RIDES_ACTIVE_SERVICE_AREAS.trim()
+      ? config.RIDES_ACTIVE_SERVICE_AREAS.trim()
+      : "Abuja,Kano",
+    RIDES_ASSIGNMENT_ACCEPTANCE_SECONDS: positiveInteger(config.RIDES_ASSIGNMENT_ACCEPTANCE_SECONDS, "RIDES_ASSIGNMENT_ACCEPTANCE_SECONDS", 45),
+    RIDES_CAPTAIN_LOCATION_STALE_SECONDS: positiveInteger(config.RIDES_CAPTAIN_LOCATION_STALE_SECONDS, "RIDES_CAPTAIN_LOCATION_STALE_SECONDS", 90),
+    RIDES_REQUEST_EXPIRY_MINUTES: positiveInteger(config.RIDES_REQUEST_EXPIRY_MINUTES, "RIDES_REQUEST_EXPIRY_MINUTES", 10),
+    RIDES_CONTROLLED_PILOT_ENABLED: false,
     RIDES_AUTO_DISPATCH_ENABLED: ridesAutoDispatchEnabled,
     RIDES_PAYMENT_ENABLED: ridesPaymentEnabled,
     TAXI_SERVICE_ENABLED: ridesServiceEnabled,
-    TAXI_STAGING_DISPATCH_ENABLED: ridesControlledPilotEnabled,
+    TAXI_STAGING_DISPATCH_ENABLED: false,
     TAXI_BASE_FARE_KOBO: positiveInteger(config.TAXI_BASE_FARE_KOBO, "TAXI_BASE_FARE_KOBO", 70000),
     TAXI_PER_KM_KOBO: positiveInteger(config.TAXI_PER_KM_KOBO, "TAXI_PER_KM_KOBO", 25000),
     TAXI_PER_MINUTE_KOBO: positiveInteger(config.TAXI_PER_MINUTE_KOBO, "TAXI_PER_MINUTE_KOBO", 4000),

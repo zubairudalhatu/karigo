@@ -16,19 +16,19 @@ export class RiderTaxiController {
   constructor(private readonly taxi: TaxiService) {}
 
   @Get("profile")
-  @ApiOperation({ summary: "Get controlled-pilot Ride Captain profile" })
+  @ApiOperation({ summary: "Get production Ride Captain profile" })
   async profile(@CurrentUser() user: AuthenticatedUser) {
     return { message: "Ride Captain profile retrieved", data: await this.taxi.riderTaxiProfile(user.id) };
   }
 
   @Patch("availability")
-  @ApiOperation({ summary: "Update controlled-pilot Ride Captain availability" })
+  @ApiOperation({ summary: "Update production Ride Captain availability" })
   async availability(@CurrentUser() user: AuthenticatedUser, @Body() dto: TaxiDriverAvailabilityDto) {
     return { message: "Ride Captain availability updated", data: await this.taxi.updateRiderTaxiAvailability(user.id, dto) };
   }
 
   @Get("trips/available")
-  @ApiOperation({ summary: "List assigned controlled-pilot ride trips" })
+  @ApiOperation({ summary: "List assigned KariGO Ride trips" })
   async available(@CurrentUser() user: AuthenticatedUser) {
     return { message: "Assigned ride trips retrieved", data: await this.taxi.availableTaxiTrips(user.id) };
   }
@@ -36,6 +36,11 @@ export class RiderTaxiController {
   @Post("trips/:tripId/accept")
   async accept(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {
     return { message: "Ride trip accepted", data: await this.taxi.acceptTaxiTrip(user.id, tripId) };
+  }
+
+  @Post("trips/:tripId/decline")
+  async decline(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: TaxiCancelDto) {
+    return { message: "Ride assignment declined", data: await this.taxi.declineTaxiTrip(user.id, tripId, dto) };
   }
 
   @Post("trips/:tripId/arrived-pickup")

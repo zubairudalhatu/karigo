@@ -21,7 +21,7 @@ import { taxiApi } from "../../src/api/taxi.api";
 import { Button, Card, Empty, Field, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError } from "../../src/lib/errors";
 import { formatRideFareKobo, formatRideFareRangeKobo } from "../../src/lib/rides-format";
-import { ridesControlledPilotEnabled } from "../../src/lib/rides-flags";
+import { ridesProductionEnabled } from "../../src/lib/rides-flags";
 
 type BookingStep = "HOME" | "ROUTE" | "CONFIRM" | "DETAILS" | "TRACKING";
 type PlaceField = "pickup" | "destination" | "stop";
@@ -209,7 +209,7 @@ function captainForTrip(trip: TaxiTrip) {
     userId: trip.driver.userId,
     displayName: trip.driver.fullName,
     profilePhotoUrl: null,
-    verified: trip.driver.status === "ACTIVE_TEST",
+    verified: trip.driver.status === "ACTIVE",
     publicRating: null,
     completedTripCount: null,
     contactAvailable: Boolean(trip.driver.phoneNumber),
@@ -341,7 +341,7 @@ function newRideRequestId() {
 }
 
 export default function TaxiRequest() {
-  const taxiEnabled = ridesControlledPilotEnabled();
+  const taxiEnabled = ridesProductionEnabled();
   const { tripId } = useLocalSearchParams<{ tripId?: string }>();
   const insets = useSafeAreaInsets();
   const searchToken = useRef(0);

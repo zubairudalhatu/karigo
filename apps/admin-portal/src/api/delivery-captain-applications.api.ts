@@ -77,6 +77,11 @@ export interface DeliveryCaptainApplication {
   applicantVisibleNote?: string | null;
   adminNote?: string | null;
   reviewedAt?: string | null;
+  trashedAt?: string | null;
+  trashedByAdminId?: string | null;
+  trashReason?: string | null;
+  restoredAt?: string | null;
+  restoredByAdminId?: string | null;
   createdAt: string;
   updatedAt: string;
   documents?: DeliveryCaptainApplicationDocument[];
@@ -109,5 +114,10 @@ export const deliveryCaptainApplicationsApi = {
   reviewDocument: (applicationId: string, documentId: string, body: { status: "APPROVED" | "CHANGES_REQUESTED" | "REJECTED"; applicantVisibleNote?: string; adminNote?: string }) =>
     api.patch<CaptainUploadedApplicationDocument>(`admin/delivery-captain-applications/${applicationId}/documents/${documentId}/review`, body),
   approveRequiredDocuments: (applicationId: string) =>
-    api.patch<DeliveryCaptainApplication>(`admin/delivery-captain-applications/${applicationId}/documents/required/approve`, {})
+    api.patch<DeliveryCaptainApplication>(`admin/delivery-captain-applications/${applicationId}/documents/required/approve`, {}),
+  trash: () => api.get<DeliveryCaptainApplication[]>("admin/delivery-captain-applications/trash"),
+  moveToTrash: (applicationId: string, reason: string) =>
+    api.patch<DeliveryCaptainApplication>(`admin/delivery-captain-applications/${applicationId}/trash`, { reason }),
+  restore: (applicationId: string, reason: string) =>
+    api.patch<DeliveryCaptainApplication>(`admin/delivery-captain-applications/${applicationId}/restore`, { reason })
 };

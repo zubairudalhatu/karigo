@@ -3,6 +3,7 @@ import * as Location from "expo-location";
 export type CaptainLocation = {
   latitude: number;
   longitude: number;
+  accuracyMeters?: number | null;
 };
 
 export async function requestCaptainForegroundLocation(): Promise<CaptainLocation> {
@@ -16,6 +17,7 @@ export async function requestCaptainForegroundLocation(): Promise<CaptainLocatio
   });
   return {
     latitude: position.coords.latitude,
-    longitude: position.coords.longitude
+    longitude: position.coords.longitude,
+    accuracyMeters: position.coords.accuracy
   };
 }

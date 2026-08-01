@@ -75,7 +75,7 @@ export class CustomerTaxiController {
   }
 
   @Post("trips/:tripId/cancel")
-  @ApiOperation({ summary: "Cancel my controlled-pilot KariGO Rides trip" })
+  @ApiOperation({ summary: "Cancel my KariGO Rides trip" })
   async cancel(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: TaxiCancelDto) {
     return { message: "KariGO Rides trip cancelled", data: await this.taxi.customerCancelTrip(user.id, tripId, dto) };
   }

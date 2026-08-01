@@ -55,7 +55,8 @@ export interface DeliveryCaptainApplicationStatus {
   submittedAt: string;
   reviewedAt?: string | null;
   deliveryOnly: boolean;
-  pilotCity: string;
+  launchCity?: string;
+  pilotCity?: string;
   createsLogin: boolean;
   activatesDispatch: boolean;
   payoutActivation: boolean;
@@ -64,6 +65,10 @@ export interface DeliveryCaptainApplicationStatus {
   operationalAccess?: boolean;
   applicationAccountRole?: string | null;
   documentReview?: CaptainDocumentReviewSummary;
+  revisionRequired?: boolean;
+  applicantVisibleRevisionNote?: string | null;
+  requestedFields?: string[];
+  requestedDocumentTypes?: string[];
 }
 
 export const deliveryCaptainApplicationsApi = {
@@ -73,5 +78,7 @@ export const deliveryCaptainApplicationsApi = {
     api.post<DeliveryCaptainApplicationStatus>("delivery-captain-applications/me", body),
   status: (phoneNumber: string) =>
     api.get<DeliveryCaptainApplicationStatus>(`delivery-captain-applications/status?phoneNumber=${encodeURIComponent(phoneNumber)}`, { authenticated: false }),
-  statusForCurrentUser: () => api.get<DeliveryCaptainApplicationStatus>("delivery-captain-applications/me")
+  statusForCurrentUser: () => api.get<DeliveryCaptainApplicationStatus>("delivery-captain-applications/me"),
+  submitRevision: (documentIds: string[]) =>
+    api.post<DeliveryCaptainApplicationStatus>("delivery-captain-applications/me/revision", { documentIds })
 };

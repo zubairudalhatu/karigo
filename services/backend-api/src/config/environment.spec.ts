@@ -89,30 +89,34 @@ describe("environment configuration", () => {
     expect(result.WHATSAPP_API_VERSION).toBe("v20.0");
     expect(result.PUSH_PROVIDER).toBe("mock");
     expect(result.RIDES_SERVICE_ENABLED).toBe(false);
+    expect(result.RIDES_PRODUCTION_ENABLED).toBe(false);
     expect(result.RIDES_CONTROLLED_PILOT_ENABLED).toBe(false);
+    expect(result.RIDES_DISPATCH_MODE).toBe("MANUAL");
     expect(result.RIDES_AUTO_DISPATCH_ENABLED).toBe(false);
     expect(result.RIDES_PAYMENT_ENABLED).toBe(false);
     expect(result.TAXI_SERVICE_ENABLED).toBe(false);
     expect(result.TAXI_STAGING_DISPATCH_ENABLED).toBe(false);
   });
 
-  it("enables controlled KariGO Rides pilot with explicit RIDES flags", () => {
+  it("enables production KariGO Rides with explicit RIDES flags", () => {
     const result = validateEnvironment({
       ...baseConfig(),
       APP_ENV: "production",
       RIDES_SERVICE_ENABLED: "true",
-      RIDES_CONTROLLED_PILOT_ENABLED: "true"
+      RIDES_PRODUCTION_ENABLED: "true",
+      RIDES_DISPATCH_MODE: "MANUAL"
     });
 
     expect(result.RIDES_SERVICE_ENABLED).toBe(true);
-    expect(result.RIDES_CONTROLLED_PILOT_ENABLED).toBe(true);
+    expect(result.RIDES_PRODUCTION_ENABLED).toBe(true);
+    expect(result.RIDES_DISPATCH_MODE).toBe("MANUAL");
     expect(result.TAXI_SERVICE_ENABLED).toBe(true);
-    expect(result.TAXI_STAGING_DISPATCH_ENABLED).toBe(true);
+    expect(result.TAXI_STAGING_DISPATCH_ENABLED).toBe(false);
     expect(result.RIDES_AUTO_DISPATCH_ENABLED).toBe(false);
     expect(result.RIDES_PAYMENT_ENABLED).toBe(false);
   });
 
-  it("preserves legacy TAXI aliases for controlled Rides pilot", () => {
+  it("preserves legacy TAXI aliases for compatible Ride activation", () => {
     const result = validateEnvironment({
       ...baseConfig(),
       TAXI_SERVICE_ENABLED: "true",
@@ -120,32 +124,32 @@ describe("environment configuration", () => {
     });
 
     expect(result.RIDES_SERVICE_ENABLED).toBe(true);
-    expect(result.RIDES_CONTROLLED_PILOT_ENABLED).toBe(true);
+    expect(result.RIDES_PRODUCTION_ENABLED).toBe(true);
     expect(result.TAXI_SERVICE_ENABLED).toBe(true);
-    expect(result.TAXI_STAGING_DISPATCH_ENABLED).toBe(true);
+    expect(result.TAXI_STAGING_DISPATCH_ENABLED).toBe(false);
   });
 
-  it("requires the Rides service flag before controlled pilot activation", () => {
+  it("requires the Rides service flag before production activation", () => {
     expect(() => validateEnvironment({
       ...baseConfig(),
-      RIDES_CONTROLLED_PILOT_ENABLED: "true"
-    })).toThrow("RIDES_CONTROLLED_PILOT_ENABLED=true requires RIDES_SERVICE_ENABLED=true");
+      RIDES_PRODUCTION_ENABLED: "true"
+    })).toThrow("RIDES_PRODUCTION_ENABLED=true requires RIDES_SERVICE_ENABLED=true");
   });
 
-  it("keeps Rides auto-dispatch and payment disabled during controlled pilot", () => {
+  it("keeps Rides auto-dispatch and payment disabled for manual production launch", () => {
     expect(() => validateEnvironment({
       ...baseConfig(),
       RIDES_SERVICE_ENABLED: "true",
-      RIDES_CONTROLLED_PILOT_ENABLED: "true",
+      RIDES_PRODUCTION_ENABLED: "true",
       RIDES_AUTO_DISPATCH_ENABLED: "true"
-    })).toThrow("RIDES_AUTO_DISPATCH_ENABLED must remain false for controlled pilot");
+    })).toThrow("RIDES_AUTO_DISPATCH_ENABLED must remain false while production Ride dispatch is manual");
 
     expect(() => validateEnvironment({
       ...baseConfig(),
       RIDES_SERVICE_ENABLED: "true",
-      RIDES_CONTROLLED_PILOT_ENABLED: "true",
+      RIDES_PRODUCTION_ENABLED: "true",
       RIDES_PAYMENT_ENABLED: "true"
-    })).toThrow("RIDES_PAYMENT_ENABLED must remain false for controlled pilot");
+    })).toThrow("RIDES_PAYMENT_ENABLED must remain false until Ride payment automation is approved");
   });
 
   it("converts JWT duration strings to seconds", () => {

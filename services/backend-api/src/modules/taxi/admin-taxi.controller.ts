@@ -13,6 +13,7 @@ import { UpdateTaxiDriverProfileStatusDto } from "./dto/admin-taxi-profile.dto";
 import { ListTaxiDriverApplicationsQueryDto, ListTaxiWaitlistQueryDto } from "./dto/list-taxi-query.dto";
 import { ReviewTaxiDriverApplicationDto } from "./dto/review-taxi-application.dto";
 import { ReviewCaptainApplicationDocumentDto } from "../riders/dto/review-captain-application-document.dto";
+import { CaptainApplicationTrashDto } from "../riders/dto/captain-application-trash.dto";
 import { TaxiCancelDto } from "./dto/taxi-cancel.dto";
 import { UpdateTaxiWaitlistStatusDto } from "./dto/update-taxi-waitlist-status.dto";
 import { TaxiService } from "./taxi.service";
@@ -37,6 +38,12 @@ export class AdminTaxiController {
   @ApiOperation({ summary: "List Ride Captain applications" })
   async driverApplications(@Query() query: ListTaxiDriverApplicationsQueryDto) {
     return { message: "Ride Captain applications retrieved", data: await this.taxi.listDriverApplications(query) };
+  }
+
+  @Get("driver-applications/trash")
+  @ApiOperation({ summary: "List trashed rejected Ride Captain applications" })
+  async driverApplicationsTrash() {
+    return { message: "Trashed Ride Captain applications retrieved", data: await this.taxi.listTrashedRideCaptainApplications() };
   }
 
   @Get("driver-applications/:applicationId")
@@ -81,6 +88,26 @@ export class AdminTaxiController {
     return { message: "Ride Captain application reviewed", data: await this.taxi.reviewDriverApplication(applicationId, user.id, dto) };
   }
 
+  @Patch("driver-applications/:applicationId/trash")
+  @ApiOperation({ summary: "Move a rejected Ride Captain application to Trash" })
+  async trashDriverApplication(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseUUIDPipe) applicationId: string,
+    @Body() dto: CaptainApplicationTrashDto
+  ) {
+    return { message: "Ride Captain application moved to Trash", data: await this.taxi.trashRideCaptainApplication(user.id, applicationId, dto) };
+  }
+
+  @Patch("driver-applications/:applicationId/restore")
+  @ApiOperation({ summary: "Restore a trashed Ride Captain application" })
+  async restoreDriverApplication(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseUUIDPipe) applicationId: string,
+    @Body() dto: CaptainApplicationTrashDto
+  ) {
+    return { message: "Ride Captain application restored", data: await this.taxi.restoreRideCaptainApplication(user.id, applicationId, dto) };
+  }
+
   @Get("waitlist")
   @ApiOperation({ summary: "List customer KariGO Rides waitlist entries" })
   async waitlist(@Query() query: ListTaxiWaitlistQueryDto) {
@@ -104,19 +131,19 @@ export class AdminTaxiController {
   }
 
   @Get("driver-profiles")
-  @ApiOperation({ summary: "List controlled-pilot Ride Captain profiles" })
+  @ApiOperation({ summary: "List production Ride Captain profiles" })
   async driverProfiles() {
     return { message: "Ride Captain profiles retrieved", data: await this.taxi.adminDriverProfiles() };
   }
 
   @Post("driver-profiles/from-application/:applicationId")
-  @ApiOperation({ summary: "Prepare a controlled-pilot Ride Captain profile from an approved application" })
+  @ApiOperation({ summary: "Prepare a production Ride Captain profile from an approved application" })
   async createProfile(@CurrentUser() user: AuthenticatedUser, @Param("applicationId", ParseUUIDPipe) applicationId: string) {
     return { message: "Ride Captain profile prepared", data: await this.taxi.adminCreateDriverProfileFromApplication(user.id, applicationId) };
   }
 
   @Patch("driver-profiles/:profileId/status")
-  @ApiOperation({ summary: "Update controlled-pilot Ride Captain profile status" })
+  @ApiOperation({ summary: "Update production Ride Captain profile status" })
   async updateProfileStatus(
     @CurrentUser() user: AuthenticatedUser,
     @Param("profileId", ParseUUIDPipe) profileId: string,
@@ -126,19 +153,25 @@ export class AdminTaxiController {
   }
 
   @Get("trips")
-  @ApiOperation({ summary: "List controlled-pilot KariGO Rides trips" })
+  @ApiOperation({ summary: "List KariGO Ride trips" })
   async trips() {
     return { message: "KariGO Rides trips retrieved", data: await this.taxi.adminTrips() };
   }
 
   @Get("trips/:tripId")
-  @ApiOperation({ summary: "Get controlled-pilot KariGO Rides trip detail" })
+  @ApiOperation({ summary: "Get KariGO Ride trip detail" })
   async trip(@Param("tripId", ParseUUIDPipe) tripId: string) {
     return { message: "KariGO Rides trip retrieved", data: await this.taxi.adminTrip(tripId) };
   }
 
+  @Get("trips/:tripId/eligible-drivers")
+  @ApiOperation({ summary: "List eligible Ride Captains for manual production dispatch" })
+  async eligibleDrivers(@Param("tripId", ParseUUIDPipe) tripId: string) {
+    return { message: "Eligible Ride Captains retrieved", data: await this.taxi.adminEligibleDrivers(tripId) };
+  }
+
   @Patch("trips/:tripId/assign-driver")
-  @ApiOperation({ summary: "Manually assign a Ride Captain to a controlled-pilot ride" })
+  @ApiOperation({ summary: "Manually assign a Ride Captain to a KariGO Ride" })
   async assignDriver(
     @CurrentUser() user: AuthenticatedUser,
     @Param("tripId", ParseUUIDPipe) tripId: string,
@@ -148,13 +181,13 @@ export class AdminTaxiController {
   }
 
   @Post("trips/:tripId/cancel")
-  @ApiOperation({ summary: "Cancel a controlled-pilot KariGO Rides trip" })
+  @ApiOperation({ summary: "Cancel a KariGO Ride trip" })
   async cancelTrip(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: TaxiCancelDto) {
     return { message: "KariGO Rides trip cancelled", data: await this.taxi.adminCancelTrip(user.id, tripId, dto) };
   }
 
   @Get("summary")
-  @ApiOperation({ summary: "Get controlled-pilot KariGO Rides operations summary" })
+  @ApiOperation({ summary: "Get KariGO Ride operations summary" })
   async summary() {
     return { message: "KariGO Rides summary retrieved", data: await this.taxi.adminSummary() };
   }

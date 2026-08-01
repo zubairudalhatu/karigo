@@ -65,6 +65,18 @@ export interface AdminRiderSummary {
   deliveryApplication?: { id: string; applicationReference: string; status: string; createdAt: string; updatedAt: string } | null;
   rideApplication?: { id: string; applicationReference: string; status: string; createdAt: string; updatedAt: string } | null;
   rideProfile?: { id: string; applicationId?: string | null; status: string; isAvailableForTaxi: boolean; updatedAt: string } | null;
+  workState?: {
+    desiredDeliveryOnline: boolean;
+    desiredRideOnline: boolean;
+    effectiveDeliveryOnline: boolean;
+    effectiveRideOnline: boolean;
+    activeWorkMode?: "DELIVERY" | "RIDE" | null;
+    activeWorkReference?: string | null;
+    lockStage?: string | null;
+    lockedAt?: string | null;
+    lastAvailabilityChangeAt?: string | null;
+    lastLocationAt?: string | null;
+  } | null;
   operationalModes?: string[];
 }
 

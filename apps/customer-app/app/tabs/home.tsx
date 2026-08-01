@@ -13,9 +13,9 @@ import { Button, Card, Empty, Loading, Message, Screen, ui } from "../../src/com
 import { KariGoAppTopBar } from "../../src/components/kari-go-app-top-bar";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
-import { ridesControlledPilotEnabled } from "../../src/lib/rides-flags";
+import { ridesProductionEnabled } from "../../src/lib/rides-flags";
 
-const ridesPilotEnabled = ridesControlledPilotEnabled();
+const ridesEnabled = ridesProductionEnabled();
 const ridesServiceAreaLabel =
   process.env.EXPO_PUBLIC_RIDES_SERVICE_AREAS_LABEL ||
   process.env.EXPO_PUBLIC_RIDES_SERVICE_AREA_LABEL ||
@@ -34,7 +34,7 @@ const categories: {
 }[] = [
   { label: "Food Delivery", icon: "coffee", href: "/catalogue/food", serviceCategory: "FOOD", tone: "#FFF1F2", state: "active" },
   { label: "Groceries", icon: "shopping-bag", href: "/catalogue/groceries", serviceCategory: "GROCERY", tone: "#ECFDF3", state: "active" },
-  { label: "KariGO Rides", icon: "navigation", href: ridesPilotEnabled ? "/taxi/request" : "/readiness/taxi", tone: "#F3F4F6", state: "readiness", statusLabel: ridesPilotEnabled ? `Live in ${ridesServiceAreaLabel}` : "Join waitlist", requiresAuth: ridesPilotEnabled },
+  { label: "KariGO Rides", icon: "navigation", href: ridesEnabled ? "/taxi/request" : "/readiness/taxi", tone: "#F3F4F6", state: "readiness", statusLabel: ridesEnabled ? `Live in ${ridesServiceAreaLabel}` : "Join waitlist", requiresAuth: ridesEnabled },
   { label: "Market Items", icon: "shopping-cart", href: "/catalogue/market-items", serviceCategory: "MARKET", tone: "#EFF6FF", state: "active" },
   {
     label: "Pharmacy",
@@ -128,7 +128,7 @@ export default function CustomerHome() {
   }, []);
 
   const loadActiveRides = useCallback(() => {
-    if (!user || !ridesPilotEnabled) {
+    if (!user || !ridesEnabled) {
       setRides([]);
       return;
     }

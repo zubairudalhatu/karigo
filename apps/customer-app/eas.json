@@ -14,9 +14,8 @@
         "APP_VARIANT": "staging",
         "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1",
         "EXPO_PUBLIC_RIDES_SERVICE_ENABLED": "true",
-        "EXPO_PUBLIC_RIDES_CONTROLLED_PILOT_ENABLED": "true",
-        "EXPO_PUBLIC_TAXI_SERVICE_ENABLED": "true",
-        "EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED": "true"
+        "EXPO_PUBLIC_RIDES_PRODUCTION_ENABLED": "true",
+        "EXPO_PUBLIC_TAXI_SERVICE_ENABLED": "true"
       }
     },
     "customer-staging-ios-simulator": {
@@ -29,9 +28,8 @@
         "APP_VARIANT": "staging",
         "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1",
         "EXPO_PUBLIC_RIDES_SERVICE_ENABLED": "true",
-        "EXPO_PUBLIC_RIDES_CONTROLLED_PILOT_ENABLED": "true",
-        "EXPO_PUBLIC_TAXI_SERVICE_ENABLED": "true",
-        "EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED": "true"
+        "EXPO_PUBLIC_RIDES_PRODUCTION_ENABLED": "true",
+        "EXPO_PUBLIC_TAXI_SERVICE_ENABLED": "true"
       }
     },
     "customer-production": {
@@ -45,9 +43,8 @@
         "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1",
         "EXPO_PUBLIC_PAYMENT_LAUNCH_MODE": "flutterwave_live",
         "EXPO_PUBLIC_RIDES_SERVICE_ENABLED": "true",
-        "EXPO_PUBLIC_RIDES_CONTROLLED_PILOT_ENABLED": "true",
-        "EXPO_PUBLIC_TAXI_SERVICE_ENABLED": "true",
-        "EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED": "true"
+        "EXPO_PUBLIC_RIDES_PRODUCTION_ENABLED": "true",
+        "EXPO_PUBLIC_TAXI_SERVICE_ENABLED": "true"
       }
     }
   },

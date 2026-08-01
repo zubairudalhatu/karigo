@@ -73,6 +73,11 @@ export interface AdminTaxiDriverApplication extends TaxiDriverApplicationStatus 
   documentReview?: CaptainDocumentReviewSummary;
   createdAt: string;
   updatedAt: string;
+  trashedAt?: string | null;
+  trashedByAdminId?: string | null;
+  trashReason?: string | null;
+  restoredAt?: string | null;
+  restoredByAdminId?: string | null;
 }
 
 export interface AdminTaxiDriverApplicationDetail extends AdminTaxiDriverApplication {
@@ -92,11 +97,29 @@ export interface AdminTaxiDriverApplicationDetail extends AdminTaxiDriverApplica
   launchWarning: string;
 }
 
+export interface EligibleRideCaptain {
+  id: string;
+  fullName: string;
+  captainCode: string;
+  vehicle?: string | null;
+  plateNumber?: string | null;
+  operatingArea?: string | null;
+  status: TaxiDriverProfileStatus;
+  online: boolean;
+  lastSeenAt?: string | null;
+  locationFreshness: "fresh" | "stale" | "unavailable";
+  distanceToPickupKm?: number | null;
+  currentAssignment?: { id: string; tripReference: string; status: string } | null;
+  eligible: boolean;
+  ineligibilityReasons: string[];
+}
+
 export const taxiApi = {
   driverApplications: (status?: TaxiApplicationStatus | "ALL") => {
     const query = status && status !== "ALL" ? `?status=${encodeURIComponent(status)}` : "";
     return api.get<AdminTaxiDriverApplication[]>(`admin/taxi/driver-applications${query}`);
   },
+  driverApplicationsTrash: () => api.get<AdminTaxiDriverApplication[]>("admin/taxi/driver-applications/trash"),
   driverApplication: (id: string) => api.get<AdminTaxiDriverApplicationDetail>(`admin/taxi/driver-applications/${id}`),
   driverApplicationDocumentView: (applicationId: string, documentId: string) =>
     api.get<{ viewUrl: string; expiresAt: string; document: CaptainUploadedApplicationDocument }>(`admin/taxi/driver-applications/${applicationId}/documents/${documentId}/view`),
@@ -106,6 +129,10 @@ export const taxiApi = {
     api.patch<AdminTaxiDriverApplicationDetail>(`admin/taxi/driver-applications/${applicationId}/documents/required/approve`, {}),
   reviewDriverApplication: (id: string, body: { status: TaxiApplicationStatus; applicantVisibleNote?: string; adminNote?: string }) =>
     api.patch<AdminTaxiDriverApplicationDetail>(`admin/taxi/driver-applications/${id}/review`, body),
+  trashDriverApplication: (id: string, reason: string) =>
+    api.patch<AdminTaxiDriverApplicationDetail>(`admin/taxi/driver-applications/${id}/trash`, { reason }),
+  restoreDriverApplication: (id: string, reason: string) =>
+    api.patch<AdminTaxiDriverApplicationDetail>(`admin/taxi/driver-applications/${id}/restore`, { reason }),
   waitlist: (status?: TaxiWaitlistStatus | "ALL") => {
     const query = status && status !== "ALL" ? `?status=${encodeURIComponent(status)}` : "";
     return api.get<TaxiWaitlistEntry[]>(`admin/taxi/waitlist${query}`);
@@ -120,6 +147,7 @@ export const taxiApi = {
     api.patch<TaxiDriverProfile>(`admin/taxi/driver-profiles/${profileId}/status`, body),
   trips: () => api.get<TaxiTrip[]>("admin/taxi/trips"),
   trip: (tripId: string) => api.get<TaxiTrip>(`admin/taxi/trips/${tripId}`),
+  eligibleDrivers: (tripId: string) => api.get<EligibleRideCaptain[]>(`admin/taxi/trips/${tripId}/eligible-drivers`),
   assignDriver: (tripId: string, driverProfileId: string) =>
     api.patch<TaxiTrip>(`admin/taxi/trips/${tripId}/assign-driver`, { driverProfileId }),
   cancelTrip: (tripId: string, reason?: string) => api.post<TaxiTrip>(`admin/taxi/trips/${tripId}/cancel`, { reason }),
@@ -131,6 +159,7 @@ export const taxiApi = {
     completedTrips: number;
     cancelledTrips: number;
     pricingDefaults: TaxiRidePricingDefaults;
-    testModeNotice: string;
+    launchNotice?: string;
+    testModeNotice?: string;
   }>("admin/taxi/summary")
 };

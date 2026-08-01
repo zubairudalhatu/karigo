@@ -23,7 +23,7 @@ const revisionStatuses = new Set(["REVISION_REQUIRED", "CHANGES_REQUESTED", "DOC
 const rejectedStatuses = new Set(["REJECTED", "DECLINED", "CANCELLED"]);
 const provisionalStatuses = new Set(["PROVISIONALLY_APPROVED", "CONDITIONALLY_APPROVED"]);
 const approvalStatuses = new Set(["APPROVED"]);
-const activeStatuses = new Set(["ACTIVE", "ACTIVE_TEST", "VERIFIED", "OPERATIONAL"]);
+const activeStatuses = new Set(["ACTIVE", "VERIFIED", "OPERATIONAL"]);
 
 export function normalizeCaptainStatus(status?: string | null) {
   return (status ?? "").trim().replaceAll(" ", "_").replaceAll("-", "_").toUpperCase();

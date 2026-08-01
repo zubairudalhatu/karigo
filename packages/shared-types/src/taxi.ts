@@ -101,7 +101,7 @@ export interface TaxiDriverApplicationStatus {
   readinessOnly: true;
 }
 
-export const taxiDriverProfileStatuses = ["PENDING_ACTIVATION", "ACTIVE_TEST", "SUSPENDED", "DEACTIVATED"] as const;
+export const taxiDriverProfileStatuses = ["PENDING_ACTIVATION", "ACTIVE", "SUSPENDED", "DEACTIVATED"] as const;
 export type TaxiDriverProfileStatus = (typeof taxiDriverProfileStatuses)[number];
 
 export const taxiTripStatuses = [
@@ -173,8 +173,8 @@ export const taxiTripLifecycle: Record<TaxiTripStatus, TaxiTripLifecycleDefiniti
     order: 1,
     active: true,
     terminal: false,
-    customerTitle: "Looking for a Ride Captain",
-    customerCopy: "Connecting you with available Captains nearby.",
+    customerTitle: "Finding a KariGO Captain",
+    customerCopy: "KariGO Operations is finding an available Ride Captain.",
     captainVisible: false,
     vehicleVisible: false,
     pickupPinVisible: false,
@@ -484,7 +484,8 @@ export interface TaxiRideCategory {
     max: number;
   };
   available: boolean;
-  controlledPilotOnly: true;
+  productionEnabled?: boolean;
+  controlledPilotOnly?: boolean;
 }
 
 export interface TaxiFareEstimate {
@@ -511,7 +512,8 @@ export interface TaxiFareEstimate {
     vatTaxConfigured: boolean;
   };
   pricing?: TaxiRidePricingDefaults;
-  testModeNotice: string;
+  launchNotice: string;
+  testModeNotice?: string;
 }
 
 export interface TaxiRidePricingDefaults {
@@ -523,6 +525,8 @@ export interface TaxiRidePricingDefaults {
   vatTaxKobo: number;
   vatTaxConfigured: boolean;
   dispatchEnabled: boolean;
+  dispatchMode?: "MANUAL" | "ASSISTED" | "AUTOMATIC";
+  paymentMode?: "CASH" | "WALLET" | "ONLINE";
 }
 
 export interface TaxiTripInput extends TaxiFareEstimateInput {
@@ -552,7 +556,9 @@ export interface TaxiDriverProfile {
   lastKnownLatitude?: unknown;
   lastKnownLongitude?: unknown;
   lastSeenAt?: string | null;
-  testModeOnly: true;
+  locationFreshness?: "fresh" | "stale" | "unavailable";
+  productionEnabled?: boolean;
+  testModeOnly?: boolean;
 }
 
 export interface TaxiTrip {
@@ -609,5 +615,6 @@ export interface TaxiTrip {
     note?: string | null;
     createdAt: string;
   }>;
-  testModeNotice: string;
+  launchNotice: string;
+  testModeNotice?: string;
 }

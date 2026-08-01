@@ -1,28 +1,28 @@
-import { Type } from "class-transformer";
 import { IsBoolean, IsNumber, IsOptional, Max, Min } from "class-validator";
 
-export class TaxiDriverAvailabilityDto {
+export class UpdateCaptainAvailabilityDto {
+  @IsOptional()
   @IsBoolean()
-  isAvailableForTaxi!: boolean;
+  deliveryOnline?: boolean;
 
   @IsOptional()
-  @Type(() => Number)
+  @IsBoolean()
+  rideOnline?: boolean;
+
+  @IsOptional()
   @IsNumber()
   @Min(-90)
   @Max(90)
   latitude?: number;
 
   @IsOptional()
-  @Type(() => Number)
   @IsNumber()
   @Min(-180)
   @Max(180)
   longitude?: number;
 
   @IsOptional()
-  @Type(() => Number)
   @IsNumber()
   @Min(0)
-  @Max(5000)
   accuracyMeters?: number;
 }

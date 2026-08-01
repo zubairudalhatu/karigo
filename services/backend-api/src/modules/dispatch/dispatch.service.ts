@@ -2,6 +2,8 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import {
   AccountStatus,
   CashCollectionStatus,
+  CaptainWorkLockStage,
+  CaptainWorkMode,
   OrderPaymentMethod,
   OrderStatus,
   PaymentStatus,
@@ -19,6 +21,7 @@ import { UpdateRiderLocationDto } from "./dto/update-rider-location.dto";
 import { DispatchEventsService } from "./dispatch-events.service";
 import { DispatchStatusService } from "./dispatch-status.service";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
+import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
 
 const CLOSED_JOB_STATUSES = [
   OrderStatus.COMPLETED,
@@ -33,7 +36,8 @@ export class DispatchService {
     private readonly prisma: PrismaService,
     private readonly statuses: DispatchStatusService,
     private readonly events: DispatchEventsService,
-    private readonly audit: AdminAuditService
+    private readonly audit: AdminAuditService,
+    private readonly captainWorkState: CaptainWorkStateService
   ) {}
 
   async updateAvailability(userId: string, dto: UpdateRiderAvailabilityDto) {
@@ -49,10 +53,8 @@ export class DispatchService {
     if (rider.availabilityStatus === RiderStatus.BUSY) {
       throw new ConflictException("A rider with an active job cannot change availability");
     }
-    return this.prisma.rider.update({
-      where: { id: rider.id },
-      data: { availabilityStatus: dto.availability }
-    });
+    await this.captainWorkState.updateAvailability(userId, { deliveryOnline: dto.availability === RiderStatus.ONLINE });
+    return this.requireRider(userId);
   }
 
   async updateLocation(userId: string, dto: UpdateRiderLocationDto) {
@@ -61,7 +63,7 @@ export class DispatchService {
     if (!locationUpdateStatuses.includes(rider.availabilityStatus)) {
       throw new BadRequestException("Captains can update live location only while online or on delivery");
     }
-    return this.prisma.rider.update({
+    const updated = await this.prisma.rider.update({
       where: { id: rider.id },
       data: {
         currentLatitude: new Prisma.Decimal(dto.latitude),
@@ -69,6 +71,11 @@ export class DispatchService {
         currentLocationUpdatedAt: new Date()
       }
     });
+    await this.prisma.captainWorkState.updateMany({
+      where: { userId },
+      data: { lastLocationAt: updated.currentLocationUpdatedAt ?? new Date() }
+    });
+    return updated;
   }
 
   async availableRiders() {
@@ -77,7 +84,10 @@ export class DispatchService {
         availabilityStatus: RiderStatus.ONLINE,
         verificationStatus: RiderStatus.ACTIVE,
         deletedAt: null,
-        user: { accountStatus: AccountStatus.ACTIVE }
+        user: {
+          accountStatus: AccountStatus.ACTIVE,
+          captainWorkState: { activeWorkMode: null, desiredDeliveryOnline: true }
+        }
       },
       select: {
         id: true,
@@ -118,6 +128,14 @@ export class DispatchService {
     this.statuses.assertTransition(order.orderStatus, OrderStatus.RIDER_ASSIGNED);
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      await this.captainWorkState.acquireLock(tx, {
+        userId: rider.userId,
+        mode: CaptainWorkMode.DELIVERY,
+        workId: order.id,
+        stage: CaptainWorkLockStage.OFFERED,
+        actorId: adminUserId,
+        reference: order.orderNumber
+      });
       await tx.rider.update({
         where: { id: rider.id },
         data: { availabilityStatus: RiderStatus.BUSY }
@@ -157,11 +175,24 @@ export class DispatchService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (order.riderId) {
-        await tx.rider.update({
-          where: { id: order.riderId },
-          data: { availabilityStatus: RiderStatus.ONLINE }
-        });
+        const previousRider = await tx.rider.findUnique({ where: { id: order.riderId }, select: { userId: true } });
+        if (previousRider) {
+          await this.captainWorkState.releaseLock(tx, {
+            userId: previousRider.userId,
+            mode: CaptainWorkMode.DELIVERY,
+            workId: order.id,
+            actorId: adminUserId
+          });
+        }
       }
+      await this.captainWorkState.acquireLock(tx, {
+        userId: newRider.userId,
+        mode: CaptainWorkMode.DELIVERY,
+        workId: order.id,
+        stage: CaptainWorkLockStage.OFFERED,
+        actorId: adminUserId,
+        reference: order.orderNumber
+      });
       await tx.rider.update({
         where: { id: newRider.id },
         data: { availabilityStatus: RiderStatus.BUSY }
@@ -218,11 +249,7 @@ export class DispatchService {
     this.statuses.assertTransition(order.orderStatus, OrderStatus.READY_FOR_PICKUP);
     const note = `Rider rejected job: ${dto.reason}${dto.details ? ` - ${dto.details}` : ""}`;
     const updated = await this.prisma.$transaction(async (tx) => {
-      await tx.rider.update({
-        where: { id: rider.id },
-        data: { availabilityStatus: RiderStatus.ONLINE }
-      });
-      return tx.order.update({
+      const rejected = await tx.order.update({
         where: { id: order.id },
         data: {
           riderId: null,
@@ -238,6 +265,13 @@ export class DispatchService {
           }
         }
       });
+      await this.captainWorkState.releaseLock(tx, {
+        userId: rider.userId,
+        mode: CaptainWorkMode.DELIVERY,
+        workId: order.id,
+        actorId: userId
+      });
+      return rejected;
     });
     await this.events.emit("rider.job.rejected", updated.id, rider.id);
     return { ...updated, reassignmentRequired: true };
@@ -295,7 +329,7 @@ export class DispatchService {
         where: { id: rider.id },
         data: { availabilityStatus: RiderStatus.ONLINE, totalDeliveries: { increment: 1 } }
       });
-      return tx.order.update({
+      const completed = await tx.order.update({
         where: { id: order.id },
         data: {
           orderStatus: OrderStatus.COMPLETED,
@@ -320,6 +354,13 @@ export class DispatchService {
           }
         }
       });
+      await this.captainWorkState.releaseLock(tx, {
+        userId: rider.userId,
+        mode: CaptainWorkMode.DELIVERY,
+        workId: order.id,
+        actorId: userId
+      });
+      return completed;
     });
     await this.events.emit("order.completed", updated.id, rider.id);
     return updated;
@@ -347,20 +388,29 @@ export class DispatchService {
   private async riderTransition(userId: string, orderId: string, nextStatus: OrderStatus, note: string) {
     const { rider, order } = await this.requireAssignedOrder(userId, orderId);
     this.statuses.assertTransition(order.orderStatus, nextStatus);
-    const updated = await this.prisma.order.update({
-      where: { id: order.id },
-      data: {
-        orderStatus: nextStatus,
-        statusHistory: {
-          create: {
-            previousStatus: order.orderStatus,
-            newStatus: nextStatus,
-            changedByUserId: userId,
-            changedByRole: "RIDER",
-            note
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (nextStatus === OrderStatus.RIDER_ARRIVING_PICKUP) {
+        await this.captainWorkState.transitionLock(tx, rider.userId, CaptainWorkMode.DELIVERY, order.id, CaptainWorkLockStage.ACCEPTED);
+      }
+      const inProgressDeliveryStatuses: OrderStatus[] = [OrderStatus.PICKED_UP, OrderStatus.ON_THE_WAY, OrderStatus.ARRIVED_DESTINATION, OrderStatus.DELIVERED];
+      if (inProgressDeliveryStatuses.includes(nextStatus)) {
+        await this.captainWorkState.transitionLock(tx, rider.userId, CaptainWorkMode.DELIVERY, order.id, CaptainWorkLockStage.IN_PROGRESS);
+      }
+      return tx.order.update({
+        where: { id: order.id },
+        data: {
+          orderStatus: nextStatus,
+          statusHistory: {
+            create: {
+              previousStatus: order.orderStatus,
+              newStatus: nextStatus,
+              changedByUserId: userId,
+              changedByRole: "RIDER",
+              note
+            }
           }
         }
-      }
+      });
     });
     await this.events.emit(this.eventFor(nextStatus), updated.id, rider.id);
     return updated;
@@ -382,7 +432,10 @@ export class DispatchService {
         availabilityStatus: RiderStatus.ONLINE,
         verificationStatus: RiderStatus.ACTIVE,
         deletedAt: null,
-        user: { accountStatus: AccountStatus.ACTIVE }
+        user: {
+          accountStatus: AccountStatus.ACTIVE,
+          captainWorkState: { activeWorkMode: null, desiredDeliveryOnline: true }
+        }
       }
     });
     if (!rider) throw new BadRequestException("Rider is not active and available");

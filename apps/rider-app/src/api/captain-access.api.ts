@@ -5,6 +5,25 @@ import type { TaxiDriverApplicationStatus } from "@karigo/shared-types";
 
 export type CaptainOperationalMode = "DELIVERY_CAPTAIN" | "RIDE_CAPTAIN";
 export type CaptainAccessNextStep = "START_APPLICATION" | "APPLICATION_STATUS" | "ACTIVATION_STATUS" | "OPEN_DASHBOARD";
+export type CaptainWorkMode = "DELIVERY" | "RIDE" | null;
+export type CaptainWorkLockStage = "OFFERED" | "ASSIGNED" | "ACCEPTED" | "IN_PROGRESS" | null;
+
+export interface CaptainWorkState {
+  desiredDeliveryOnline: boolean;
+  desiredRideOnline: boolean;
+  effectiveDeliveryOnline: boolean;
+  effectiveRideOnline: boolean;
+  activeWorkMode: CaptainWorkMode;
+  activeWorkReference?: string | null;
+  activeDeliveryAssignmentId?: string | null;
+  activeRideTripId?: string | null;
+  lockStage: CaptainWorkLockStage;
+  lockedAt?: string | null;
+  lastAvailabilityChangeAt?: string | null;
+  lastLocationAt?: string | null;
+  deliveryEligibility: { eligible: boolean; reason?: string | null };
+  rideEligibility: { eligible: boolean; reason?: string | null };
+}
 
 export interface CaptainAccess {
   account: {
@@ -58,5 +77,13 @@ export interface CaptainAccess {
 }
 
 export const captainAccessApi = {
-  resolve: () => api.get<CaptainAccess>("captain/access")
+  resolve: () => api.get<CaptainAccess>("captain/access"),
+  workState: () => api.get<CaptainWorkState>("captain/work-state"),
+  updateAvailability: (body: {
+    deliveryOnline?: boolean;
+    rideOnline?: boolean;
+    latitude?: number;
+    longitude?: number;
+    accuracyMeters?: number | null;
+  }) => api.patch<CaptainWorkState>("captain/availability", body)
 };

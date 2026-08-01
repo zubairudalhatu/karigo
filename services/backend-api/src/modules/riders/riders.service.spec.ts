@@ -553,7 +553,7 @@ describe("RidersService delivery captain applications", () => {
       vehicleColour: "Black",
       vehiclePlateNumber: "KGO-123AA",
       vehicleType: "SEDAN",
-      status: TaxiDriverProfileStatus.ACTIVE_TEST,
+      status: TaxiDriverProfileStatus.ACTIVE,
       isAvailableForTaxi: true,
       lastSeenAt: now,
       createdAt: now,
@@ -629,7 +629,7 @@ describe("RidersService delivery captain applications", () => {
       deliveryOnly: true
     });
     expect(prisma.deliveryCaptainApplication.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { phoneNumber: "+2348030000000" }
+      where: expect.objectContaining({ phoneNumber: "+2348030000000", trashedAt: null })
     }));
   });
 
@@ -651,7 +651,7 @@ describe("RidersService delivery captain applications", () => {
       })
     ]);
     expect(prisma.deliveryCaptainApplication.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { status: DeliveryCaptainApplicationStatus.SUBMITTED },
+      where: expect.objectContaining({ status: DeliveryCaptainApplicationStatus.SUBMITTED, trashedAt: null }),
       take: 150
     }));
 

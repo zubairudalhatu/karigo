@@ -5,6 +5,8 @@ import {
   AccountStatus,
   CaptainApplicationDocumentType,
   CaptainDocumentUploadStatus,
+  CaptainWorkLockStage,
+  CaptainWorkMode,
   DocumentVerificationStatus,
   Prisma,
   RiderStatus,
@@ -20,11 +22,13 @@ import * as bcrypt from "bcrypt";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
+import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
 import { PrismaService } from "../../prisma/prisma.service";
 import { captainServiceAreas } from "../platform/captain-catalog";
 import { assertFutureLicenceDate, resolveCaptainLocation, resolveVehicleDetails } from "../platform/captain-catalog.validation";
 import { CaptainUploadStorageService } from "../riders/captain-upload-storage.service";
+import { CaptainApplicationTrashDto } from "../riders/dto/captain-application-trash.dto";
 import { ReviewCaptainApplicationDocumentDto } from "../riders/dto/review-captain-application-document.dto";
 import { AdminAssignTaxiDriverDto } from "./dto/admin-assign-taxi-driver.dto";
 import { UpdateTaxiDriverProfileStatusDto } from "./dto/admin-taxi-profile.dto";
@@ -43,6 +47,7 @@ import {
   activeRideServiceAreas,
   assertSameActiveRideServiceArea,
   INTERCITY_RIDES_UNAVAILABLE_MESSAGE,
+  resolveRideServiceArea,
   rideCityFromText,
   validRideCoordinate
 } from "./taxi-service-areas";
@@ -76,6 +81,11 @@ const TAXI_APPLICATION_LIST_SELECT = {
   status: true,
   applicantVisibleNote: true,
   reviewedAt: true,
+  trashedAt: true,
+  trashedByAdminId: true,
+  trashReason: true,
+  restoredAt: true,
+  restoredByAdminId: true,
   createdAt: true,
   updatedAt: true,
   captainDocuments: { orderBy: { uploadedAt: "desc" } }
@@ -157,6 +167,15 @@ const CUSTOMER_CANCELLABLE_TAXI_TRIP_STATUSES: TaxiTripStatus[] = [
   TaxiTripStatus.ACCEPTED
 ];
 
+const CAPTAIN_OFFLINE_ALLOWED_TAXI_TRIP_STATUSES: TaxiTripStatus[] = [
+  TaxiTripStatus.REQUESTED,
+  TaxiTripStatus.COMPLETED,
+  TaxiTripStatus.CANCELLED_BY_ADMIN,
+  TaxiTripStatus.CANCELLED_BY_CUSTOMER,
+  TaxiTripStatus.CANCELLED_BY_DRIVER,
+  TaxiTripStatus.EXPIRED
+];
+
 const CLOSED_TAXI_TRIP_STATUSES: TaxiTripStatus[] = [
   TaxiTripStatus.COMPLETED,
   TaxiTripStatus.CANCELLED_BY_ADMIN,
@@ -209,7 +228,8 @@ export class TaxiService {
     private readonly audit: AdminAuditService,
     private readonly config: ConfigService,
     private readonly captainUploadStorage: CaptainUploadStorageService,
-    private readonly applicationNotifications: ApplicationNotificationsService
+    private readonly applicationNotifications: ApplicationNotificationsService,
+    private readonly captainWorkState: CaptainWorkStateService
   ) {}
 
   async joinWaitlist(dto: CreateTaxiWaitlistDto) {
@@ -320,7 +340,7 @@ export class TaxiService {
   async publicApplicationStatus(query: TaxiApplicationStatusQueryDto) {
     const phoneNumber = this.normalizePhone(query.phoneNumber);
     const application = await this.prisma.taxiDriverApplication.findFirst({
-      where: { phoneNumber },
+      where: { phoneNumber, trashedAt: null },
       select: TAXI_APPLICATION_DETAIL_SELECT,
       orderBy: { createdAt: "desc" }
     });
@@ -337,6 +357,7 @@ export class TaxiService {
 
     const application = await this.prisma.taxiDriverApplication.findFirst({
       where: {
+        trashedAt: null,
         OR: [
           { applicantUserId: user.id },
           { phoneNumber: user.phoneNumber }
@@ -493,6 +514,91 @@ export class TaxiService {
     return this.adminApplicationDetail(updatedApplication);
   }
 
+  async listTrashedRideCaptainApplications() {
+    const applications = await this.prisma.taxiDriverApplication.findMany({
+      where: { trashedAt: { not: null } },
+      select: TAXI_APPLICATION_LIST_SELECT,
+      orderBy: { trashedAt: "desc" },
+      take: 150
+    });
+    return applications.map((application) => this.adminApplicationList(application));
+  }
+
+  async trashRideCaptainApplication(adminUserId: string, applicationId: string, dto: CaptainApplicationTrashDto) {
+    const reason = this.requiredReason(dto.reason, "Moving a rejected Ride Captain application to Trash requires a reason.");
+    const application = await this.prisma.taxiDriverApplication.findUnique({
+      where: { id: applicationId },
+      select: TAXI_APPLICATION_DETAIL_SELECT
+    });
+    if (!application) throw new NotFoundException("Ride Captain application not found");
+    if (application.status !== TaxiApplicationStatus.REJECTED) {
+      throw new BadRequestException("Only rejected Ride Captain applications can be moved to Trash.");
+    }
+    const profile = await this.prisma.taxiDriverProfile.findUnique({
+      where: { applicationId },
+      select: { id: true, status: true }
+    }).catch(() => null);
+    if (profile && profile.status === TaxiDriverProfileStatus.ACTIVE) {
+      throw new BadRequestException("Ride applications linked to an active Ride Captain profile cannot be moved to Trash.");
+    }
+    if (profile) {
+      const operationalTrip = await this.prisma.taxiTrip.findFirst({
+        where: {
+          driverProfileId: profile.id,
+          status: { in: ACTIVE_TAXI_TRIP_STATUSES }
+        },
+        select: { id: true, tripReference: true }
+      });
+      if (operationalTrip) {
+        throw new BadRequestException("Ride applications with unresolved operational Ride records cannot be moved to Trash.");
+      }
+    }
+    const updated = await this.prisma.taxiDriverApplication.update({
+      where: { id: applicationId },
+      data: {
+        trashedAt: new Date(),
+        trashedByAdminId: adminUserId,
+        trashReason: reason,
+        restoredAt: null,
+        restoredByAdminId: null
+      },
+      select: TAXI_APPLICATION_DETAIL_SELECT
+    });
+    await this.audit.record(adminUserId, "RIDE_APPLICATION_TRASHED", "TaxiDriverApplication", applicationId, {
+      reason,
+      previousStatus: application.status,
+      applicationReference: application.applicationReference
+    });
+    return this.adminApplicationDetail(updated);
+  }
+
+  async restoreRideCaptainApplication(adminUserId: string, applicationId: string, dto: CaptainApplicationTrashDto) {
+    const reason = this.requiredReason(dto.reason, "Restoring a Ride Captain application requires a reason.");
+    const application = await this.prisma.taxiDriverApplication.findUnique({
+      where: { id: applicationId },
+      select: TAXI_APPLICATION_DETAIL_SELECT
+    });
+    if (!application) throw new NotFoundException("Ride Captain application not found");
+    if (!application.trashedAt) throw new BadRequestException("Ride Captain application is not in Trash.");
+    const updated = await this.prisma.taxiDriverApplication.update({
+      where: { id: applicationId },
+      data: {
+        trashedAt: null,
+        trashedByAdminId: null,
+        trashReason: null,
+        restoredAt: new Date(),
+        restoredByAdminId: adminUserId
+      },
+      select: TAXI_APPLICATION_DETAIL_SELECT
+    });
+    await this.audit.record(adminUserId, "RIDE_APPLICATION_RESTORED", "TaxiDriverApplication", applicationId, {
+      reason,
+      previousStatus: application.status,
+      applicationReference: application.applicationReference
+    });
+    return this.adminApplicationDetail(updated);
+  }
+
   async listWaitlist(query: ListTaxiWaitlistQueryDto) {
     const entries = await this.prisma.taxiWaitlistEntry.findMany({
       where: this.waitlistWhere(query),
@@ -540,6 +646,7 @@ export class TaxiService {
 
   async createCustomerTrip(userId: string, dto: CreateTaxiTripDto) {
     this.assertTaxiStagingEnabled();
+    await this.expireStaleTrips();
     const customer = await this.requireCustomer(userId);
     const estimate = this.calculateFare(dto);
     const tripPin = randomInt(100000, 1000000).toString();
@@ -580,6 +687,7 @@ export class TaxiService {
           tripPinEncrypted: this.encryptTripPin(tripPin),
           tripPinLastFour: tripPin.slice(-4),
           customerNote: this.composeTripCustomerNote(dto),
+          isTestMode: false,
           requestedAt: now
         },
         include: this.tripInclude()
@@ -592,7 +700,8 @@ export class TaxiService {
           eventType: "taxi.trip.requested",
           note: "Ride request recorded",
           metadata: {
-            isTestMode: true,
+            isTestMode: false,
+            dispatchMode: this.rideDispatchMode(),
             estimatedFareKobo: estimate.estimatedFareKobo,
             rideCategory: dto.rideCategory?.trim() || "ECONOMY",
             paymentMethod: dto.paymentMethod?.trim() || "Cash",
@@ -610,6 +719,7 @@ export class TaxiService {
 
   async customerTrips(userId: string) {
     this.assertTaxiStagingEnabled();
+    await this.expireStaleTrips();
     const customer = await this.requireCustomer(userId);
     const trips = await this.prisma.taxiTrip.findMany({
       where: { customerId: customer.id },
@@ -621,6 +731,7 @@ export class TaxiService {
 
   async customerTrip(userId: string, tripId: string) {
     this.assertTaxiStagingEnabled();
+    await this.expireStaleTrips();
     const customer = await this.requireCustomer(userId);
     const trip = await this.prisma.taxiTrip.findFirst({
       where: { id: tripId, customerId: customer.id },
@@ -661,21 +772,52 @@ export class TaxiService {
   async updateRiderTaxiAvailability(userId: string, dto: TaxiDriverAvailabilityDto) {
     this.assertTaxiStagingEnabled();
     const profile = await this.requireActiveTaxiDriverProfile(userId);
-    const updated = await this.prisma.taxiDriverProfile.update({
+    if (!dto.isAvailableForTaxi) {
+      const activeTrip = await this.prisma.taxiTrip.findFirst({
+        where: {
+          driverProfileId: profile.id,
+          status: { in: ACTIVE_TAXI_TRIP_STATUSES.filter((status) => !CAPTAIN_OFFLINE_ALLOWED_TAXI_TRIP_STATUSES.includes(status)) }
+        },
+        select: { id: true, tripReference: true, status: true }
+      });
+      if (activeTrip) {
+        throw new ConflictException("Ride Captain cannot go offline while an accepted or active Ride is in progress.");
+      }
+    }
+    if (dto.isAvailableForTaxi) {
+      if (!validRideCoordinate(dto.latitude, dto.longitude)) {
+        throw new BadRequestException("Current foreground location is required before going online for KariGO Rides.");
+      }
+      const resolvedArea = resolveRideServiceArea(this.config, dto.latitude, dto.longitude);
+      if (!resolvedArea?.active) {
+        throw new BadRequestException("Your current location is outside active KariGO Ride service areas.");
+      }
+      const profileArea = rideCityFromText(this.config, profile.city, profile.state);
+      if (profileArea && profileArea !== resolvedArea.city) {
+        throw new BadRequestException(`This Ride Captain profile is approved for ${profileArea}. Choose the matching operating area before going online.`);
+      }
+    }
+    await this.captainWorkState.updateAvailability(userId, {
+      rideOnline: dto.isAvailableForTaxi,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+      accuracyMeters: dto.accuracyMeters
+    });
+    const updated = await this.prisma.taxiDriverProfile.findUnique({
       where: { id: profile.id },
-      data: {
-        isAvailableForTaxi: dto.isAvailableForTaxi,
-        lastKnownLatitude: this.decimalOrUndefined(dto.latitude),
-        lastKnownLongitude: this.decimalOrUndefined(dto.longitude),
-        lastSeenAt: new Date()
-      },
       include: { application: true }
+    });
+    if (!updated) throw new NotFoundException("Ride Captain profile not found");
+    await this.audit.record(userId, dto.isAvailableForTaxi ? "RIDE_CAPTAIN_ONLINE" : "RIDE_CAPTAIN_OFFLINE", "TaxiDriverProfile", updated.id, {
+      serviceArea: rideCityFromText(this.config, updated.city, updated.state),
+      hasLocation: validRideCoordinate(dto.latitude, dto.longitude)
     });
     return this.formatDriverProfile(updated);
   }
 
   async availableTaxiTrips(userId: string) {
     this.assertTaxiStagingEnabled();
+    await this.expireStaleTrips();
     const profile = await this.requireActiveTaxiDriverProfile(userId);
     if (!profile.isAvailableForTaxi) return [];
     const trips = await this.prisma.taxiTrip.findMany({
@@ -692,6 +834,7 @@ export class TaxiService {
 
   async acceptTaxiTrip(userId: string, tripId: string) {
     this.assertTaxiStagingEnabled();
+    await this.expireStaleTrips();
     const profile = await this.requireActiveTaxiDriverProfile(userId);
     await this.assertDriverHasNoActiveTrip(profile.id, tripId);
     const trip = await this.prisma.taxiTrip.findUnique({ where: { id: tripId } });
@@ -700,13 +843,51 @@ export class TaxiService {
       throw new BadRequestException("Ride request must be manually assigned by KariGO Operations before it can be accepted");
     }
     if (trip.driverProfileId !== profile.id) throw new ConflictException("Ride request is assigned to another Captain");
+    if (trip.status === TaxiTripStatus.ACCEPTED) {
+      const current = await this.prisma.taxiTrip.findUniqueOrThrow({ where: { id: trip.id }, include: this.tripInclude() });
+      return this.formatTrip(current, { viewer: "driver" });
+    }
     if (trip.status !== TaxiTripStatus.DRIVER_ASSIGNED) {
       throw new BadRequestException("Ride request must be assigned before it can be accepted");
     }
     const updated = await this.updateTripWithEvent(trip.id, {
       status: TaxiTripStatus.ACCEPTED,
       acceptedAt: new Date()
-    }, userId, TaxiTripActorType.DRIVER, "taxi.trip.accepted", "Ride Captain accepted ride request");
+    }, userId, TaxiTripActorType.DRIVER, "taxi.trip.accepted", "Ride Captain accepted ride request", {
+      beforeUpdate: (tx) => this.captainWorkState.transitionLock(tx, userId, CaptainWorkMode.RIDE, trip.id, CaptainWorkLockStage.ACCEPTED)
+    });
+    return this.formatTrip(updated, { viewer: "driver" });
+  }
+
+  async declineTaxiTrip(userId: string, tripId: string, dto: TaxiCancelDto) {
+    this.assertTaxiStagingEnabled();
+    await this.expireStaleTrips();
+    const profile = await this.requireActiveTaxiDriverProfile(userId);
+    const reason = dto.reason?.trim();
+    if (!reason || reason.length < 5) {
+      throw new BadRequestException("Declining a Ride assignment requires a short reason.");
+    }
+    const trip = await this.prisma.taxiTrip.findUnique({ where: { id: tripId } });
+    if (!trip) throw new NotFoundException("Ride request not found");
+    if (trip.driverProfileId !== profile.id) throw new ConflictException("Ride request is assigned to another Captain");
+    if (trip.status !== TaxiTripStatus.DRIVER_ASSIGNED) {
+      throw new BadRequestException("Only a pending assigned Ride can be declined.");
+    }
+    const requestExpiryMs = this.config.get<number>("RIDES_REQUEST_EXPIRY_MINUTES", 10) * 60 * 1000;
+    const expired = Date.now() - trip.requestedAt.getTime() > requestExpiryMs;
+    const updated = await this.updateTripWithEvent(trip.id, {
+      status: expired ? TaxiTripStatus.EXPIRED : TaxiTripStatus.REQUESTED,
+      driverProfile: { disconnect: true },
+      driverNote: `Declined by Ride Captain: ${reason}`,
+      ...(expired ? { cancelledAt: new Date() } : {})
+    }, userId, TaxiTripActorType.DRIVER, expired ? "RIDE_ASSIGNMENT_EXPIRED" : "RIDE_ASSIGNMENT_DECLINED", reason, {
+      afterUpdate: (tx) => this.captainWorkState.releaseLock(tx, {
+        userId,
+        mode: CaptainWorkMode.RIDE,
+        workId: trip.id,
+        actorId: userId
+      })
+    });
     return this.formatTrip(updated, { viewer: "driver" });
   }
 
@@ -726,7 +907,9 @@ export class TaxiService {
       startedAt: new Date(),
       tripPinHash: null,
       tripPinEncrypted: null
-    }, userId, TaxiTripActorType.DRIVER, "taxi.trip.started", `Ride Captain ${profile.fullName} started ride request`);
+    }, userId, TaxiTripActorType.DRIVER, "taxi.trip.started", `Ride Captain ${profile.fullName} started ride request`, {
+      beforeUpdate: (tx) => this.captainWorkState.transitionLock(tx, userId, CaptainWorkMode.RIDE, trip.id, CaptainWorkLockStage.IN_PROGRESS)
+    });
     return this.formatTrip(updated, { viewer: "driver" });
   }
 
@@ -744,7 +927,14 @@ export class TaxiService {
       finalFareKobo: trip.estimatedFareKobo,
       tripPinHash: null,
       tripPinEncrypted: null
-    }, userId, TaxiTripActorType.DRIVER, "taxi.trip.completed", "Ride request completed");
+    }, userId, TaxiTripActorType.DRIVER, "taxi.trip.completed", "Ride request completed", {
+      afterUpdate: (tx) => this.captainWorkState.releaseLock(tx, {
+        userId,
+        mode: CaptainWorkMode.RIDE,
+        workId: trip.id,
+        actorId: userId
+      })
+    });
     return this.formatTrip(updated, { viewer: "driver" });
   }
 
@@ -757,8 +947,9 @@ export class TaxiService {
 
   async adminDriverProfiles() {
     this.assertTaxiStagingEnabled();
+    await this.expireStaleTrips();
     const profiles = await this.prisma.taxiDriverProfile.findMany({
-      include: { application: true },
+      include: { application: true, user: { select: { captainWorkState: true } } },
       orderBy: { createdAt: "desc" },
       take: 150
     });
@@ -809,7 +1000,7 @@ export class TaxiService {
     });
     await this.audit.record(adminUserId, "RIDE_CAPTAIN_PROFILE_PREPARED", "TaxiDriverProfile", profile.id, {
       applicationId,
-      controlledPilot: true
+      productionMode: true
     });
     return this.formatDriverProfile(profile);
   }
@@ -817,13 +1008,13 @@ export class TaxiService {
   async adminUpdateDriverProfileStatus(adminUserId: string, profileId: string, dto: UpdateTaxiDriverProfileStatusDto) {
     this.assertTaxiStagingEnabled();
     const data: Prisma.TaxiDriverProfileUpdateInput = { status: dto.status };
-    if (dto.status !== TaxiDriverProfileStatus.ACTIVE_TEST) data.isAvailableForTaxi = false;
+    if (dto.status !== TaxiDriverProfileStatus.ACTIVE) data.isAvailableForTaxi = false;
     const profile = await this.prisma.taxiDriverProfile.update({
       where: { id: profileId },
       data,
       include: { application: true }
     });
-    const action = dto.status === TaxiDriverProfileStatus.ACTIVE_TEST
+    const action = dto.status === TaxiDriverProfileStatus.ACTIVE
       ? "RIDE_CAPTAIN_ACTIVATED"
       : dto.status === TaxiDriverProfileStatus.SUSPENDED
         ? "RIDE_CAPTAIN_SUSPENDED"
@@ -831,13 +1022,14 @@ export class TaxiService {
     await this.audit.record(adminUserId, action, "TaxiDriverProfile", profile.id, {
       status: dto.status,
       note: dto.note,
-      controlledPilot: true
+      productionMode: true
     });
     return this.formatDriverProfile(profile);
   }
 
   async adminTrips() {
     this.assertTaxiStagingEnabled();
+    await this.expireStaleTrips();
     const trips = await this.prisma.taxiTrip.findMany({
       include: this.tripInclude(),
       orderBy: { createdAt: "desc" },
@@ -848,30 +1040,116 @@ export class TaxiService {
 
   async adminTrip(tripId: string) {
     this.assertTaxiStagingEnabled();
+    await this.expireStaleTrips();
     const trip = await this.prisma.taxiTrip.findUnique({ where: { id: tripId }, include: this.tripInclude() });
     if (!trip) throw new NotFoundException("Ride request not found");
     return this.formatTrip(trip, { viewer: "admin" });
   }
 
+  async adminEligibleDrivers(tripId: string) {
+    this.assertTaxiStagingEnabled();
+    await this.expireStaleTrips();
+    const trip = await this.prisma.taxiTrip.findUnique({ where: { id: tripId }, include: this.tripInclude() });
+    if (!trip) throw new NotFoundException("Ride request not found");
+    if (trip.status !== TaxiTripStatus.REQUESTED) throw new BadRequestException("Only requested Ride requests can show eligible Captains.");
+    const pickupCity = this.tripPickupServiceArea(trip);
+    const profiles = await this.prisma.taxiDriverProfile.findMany({
+      where: {
+        status: TaxiDriverProfileStatus.ACTIVE,
+        isAvailableForTaxi: true,
+        user: {
+          accountStatus: AccountStatus.ACTIVE,
+          phoneVerified: true,
+          deletedAt: null
+        }
+      },
+      include: { application: true, user: { select: { captainWorkState: true } } },
+      orderBy: [{ lastSeenAt: "desc" }, { updatedAt: "asc" }],
+      take: 100
+    });
+    const candidates = [];
+    for (const profile of profiles) {
+      const activeTrip = await this.prisma.taxiTrip.findFirst({
+        where: {
+          driverProfileId: profile.id,
+          status: { in: ACTIVE_TAXI_TRIP_STATUSES }
+        },
+        select: { id: true, tripReference: true, status: true }
+      });
+      const profileCity = rideCityFromText(this.config, profile.city, profile.state);
+      const locationFreshness = this.driverLocationFreshness(profile);
+      const serviceAreaMatch = !pickupCity || !profileCity || pickupCity === profileCity;
+      const workState = profile.user?.captainWorkState;
+      const activeOtherWork = Boolean(workState?.activeWorkMode);
+      const desiredRideOnline = workState?.desiredRideOnline ?? profile.isAvailableForTaxi;
+      const eligible = !activeTrip && !activeOtherWork && desiredRideOnline && serviceAreaMatch && locationFreshness === "fresh";
+      const distanceToPickupKm = this.distanceToPickupKm(profile, trip);
+      candidates.push({
+        id: profile.id,
+        fullName: profile.fullName,
+        captainCode: profile.userId ? profile.id.slice(0, 8).toUpperCase() : profile.phoneNumber.slice(-6),
+        vehicle: [profile.vehicleMake, profile.vehicleModel, profile.vehicleYear].filter(Boolean).join(" ") || null,
+        plateNumber: profile.vehiclePlateNumber,
+        operatingArea: profileCity,
+        status: profile.status,
+        online: profile.isAvailableForTaxi,
+        lastSeenAt: profile.lastSeenAt?.toISOString() ?? null,
+        locationFreshness,
+        distanceToPickupKm,
+        currentAssignment: activeTrip,
+        eligible,
+        ineligibilityReasons: [
+          activeTrip ? "Captain already has an active Ride." : null,
+          activeOtherWork ? `Captain is busy with ${workState?.activeWorkMode === "DELIVERY" ? "Delivery" : "Ride"}.` : null,
+          !desiredRideOnline ? "Captain is not online for Ride assignments." : null,
+          !serviceAreaMatch ? "Captain operating area does not match pickup area." : null,
+          locationFreshness !== "fresh" ? "Captain location is stale or unavailable." : null
+        ].filter(Boolean)
+      });
+    }
+    return candidates.sort((a, b) => Number(b.eligible) - Number(a.eligible) || Number(a.distanceToPickupKm ?? 9999) - Number(b.distanceToPickupKm ?? 9999));
+  }
+
   async adminAssignDriver(adminUserId: string, tripId: string, dto: AdminAssignTaxiDriverDto) {
     this.assertTaxiStagingEnabled();
+    await this.expireStaleTrips();
     const [trip, profile] = await Promise.all([
       this.prisma.taxiTrip.findUnique({ where: { id: tripId } }),
-      this.prisma.taxiDriverProfile.findUnique({ where: { id: dto.driverProfileId } })
+      this.prisma.taxiDriverProfile.findUnique({ where: { id: dto.driverProfileId }, include: { user: true } })
     ]);
     if (!trip) throw new NotFoundException("Ride request not found");
-    if (!profile || profile.status !== TaxiDriverProfileStatus.ACTIVE_TEST || !profile.isAvailableForTaxi) {
+    if (!profile || profile.status !== TaxiDriverProfileStatus.ACTIVE || !profile.isAvailableForTaxi) {
       throw new BadRequestException("Ride Captain profile is not active and available");
+    }
+    if (!profile.user || profile.user.accountStatus !== AccountStatus.ACTIVE || !profile.user.phoneVerified || profile.user.deletedAt) {
+      throw new BadRequestException("Ride Captain account is not active and verified");
+    }
+    if (!this.isCaptainLocationFresh(profile)) {
+      throw new BadRequestException("Ride Captain location is stale or unavailable. Ask the Captain to refresh online status.");
+    }
+    const pickupCity = this.tripPickupServiceArea(trip as TaxiTripWithRelations);
+    const profileCity = rideCityFromText(this.config, profile.city, profile.state);
+    if (pickupCity && profileCity && pickupCity !== profileCity) {
+      throw new BadRequestException("Ride Captain operating area does not match the Ride pickup area.");
     }
     if (trip.status !== TaxiTripStatus.REQUESTED) throw new BadRequestException("Only requested Ride requests can be assigned");
     await this.assertDriverHasNoActiveTrip(profile.id, trip.id);
     const updated = await this.updateTripWithEvent(trip.id, {
       driverProfile: { connect: { id: profile.id } },
       status: TaxiTripStatus.DRIVER_ASSIGNED
-    }, adminUserId, TaxiTripActorType.ADMIN, "taxi.trip.driver_assigned", "Admin assigned Ride Captain");
+    }, adminUserId, TaxiTripActorType.ADMIN, "taxi.trip.driver_assigned", "Admin assigned Ride Captain", {
+      beforeUpdate: (tx) => this.captainWorkState.acquireLock(tx, {
+        userId: profile.user!.id,
+        mode: CaptainWorkMode.RIDE,
+        workId: trip.id,
+        stage: CaptainWorkLockStage.OFFERED,
+        actorId: adminUserId,
+        reference: trip.tripReference
+      })
+    });
     await this.audit.record(adminUserId, "admin.taxi.trip.driver_assigned", "TaxiTrip", trip.id, {
       driverProfileId: profile.id,
-      controlledPilot: true
+      productionMode: true
     });
     return this.formatTrip(updated, { viewer: "admin" });
   }
@@ -884,7 +1162,7 @@ export class TaxiService {
     const updated = await this.cancelTrip(trip.id, TaxiTripStatus.CANCELLED_BY_ADMIN, adminUserId, TaxiTripActorType.ADMIN, dto.reason, "admin");
     await this.audit.record(adminUserId, "admin.taxi.trip.cancelled", "TaxiTrip", trip.id, {
       reason: dto.reason,
-      controlledPilot: true
+      productionMode: true
     });
     return updated;
   }
@@ -893,7 +1171,7 @@ export class TaxiService {
     this.assertTaxiStagingEnabled();
     const [driverProfiles, availableDrivers, requestedTrips, activeTrips, completedTrips, cancelledTrips] = await Promise.all([
       this.prisma.taxiDriverProfile.count(),
-      this.prisma.taxiDriverProfile.count({ where: { status: TaxiDriverProfileStatus.ACTIVE_TEST, isAvailableForTaxi: true } }),
+      this.prisma.taxiDriverProfile.count({ where: { status: TaxiDriverProfileStatus.ACTIVE, isAvailableForTaxi: true } }),
       this.prisma.taxiTrip.count({ where: { status: TaxiTripStatus.REQUESTED } }),
       this.prisma.taxiTrip.count({ where: { status: { in: ACTIVE_TAXI_TRIP_STATUSES } } }),
       this.prisma.taxiTrip.count({ where: { status: TaxiTripStatus.COMPLETED } }),
@@ -907,7 +1185,8 @@ export class TaxiService {
       completedTrips,
       cancelledTrips,
       pricingDefaults: this.ridePricingDefaults(),
-      testModeNotice: this.testModeNotice()
+      launchNotice: this.launchNotice(),
+      testModeNotice: this.launchNotice()
     };
   }
 
@@ -979,6 +1258,7 @@ export class TaxiService {
     return this.prisma.taxiDriverApplication.findFirst({
       where: {
         status: { not: TaxiApplicationStatus.REJECTED },
+        trashedAt: null,
         OR: [
           { applicantUserId },
           { phoneNumber }
@@ -1052,6 +1332,7 @@ export class TaxiService {
 
   private applicationWhere(query: ListTaxiDriverApplicationsQueryDto): Prisma.TaxiDriverApplicationWhereInput {
     return {
+      trashedAt: null,
       ...(query.status ? { status: query.status } : {}),
       ...(query.search ? {
         OR: [
@@ -1083,15 +1364,20 @@ export class TaxiService {
     if (!this.config.get<boolean>("RIDES_SERVICE_ENABLED", this.config.get<boolean>("TAXI_SERVICE_ENABLED", false))) {
       throw new ForbiddenException("KariGO Rides is preparing launch in your area.");
     }
-    if (!this.config.get<boolean>("RIDES_CONTROLLED_PILOT_ENABLED", this.config.get<boolean>("TAXI_STAGING_DISPATCH_ENABLED", false))) {
+    if (!this.config.get<boolean>("RIDES_PRODUCTION_ENABLED", this.config.get<boolean>("RIDES_CONTROLLED_PILOT_ENABLED", this.config.get<boolean>("TAXI_STAGING_DISPATCH_ENABLED", false)))) {
       throw new ForbiddenException("KariGO Rides is preparing launch in your area.");
     }
-    if (this.config.get<boolean>("RIDES_AUTO_DISPATCH_ENABLED", false)) {
-      throw new ForbiddenException("KariGO Rides auto-dispatch is disabled during controlled pilot.");
+    if (this.rideDispatchMode() !== "MANUAL") {
+      throw new ForbiddenException("KariGO Rides automatic matching is not enabled yet.");
     }
     if (this.config.get<boolean>("RIDES_PAYMENT_ENABLED", false)) {
-      throw new ForbiddenException("KariGO Rides payment is disabled during controlled pilot.");
+      throw new ForbiddenException("KariGO Rides online payment automation is not enabled yet.");
     }
+  }
+
+  private rideDispatchMode(): "MANUAL" | "ASSISTED" | "AUTOMATIC" {
+    const value = this.config.get<string>("RIDES_DISPATCH_MODE", "MANUAL").trim().toUpperCase();
+    return value === "ASSISTED" || value === "AUTOMATIC" ? value : "MANUAL";
   }
 
   private calculateFare(dto: TaxiFareEstimateDto) {
@@ -1138,7 +1424,8 @@ export class TaxiService {
         vatTaxConfigured: pricing.vatTaxConfigured
       },
       pricing,
-      testModeNotice: this.testModeNotice()
+      launchNotice: this.launchNotice(),
+      testModeNotice: this.launchNotice()
     };
   }
 
@@ -1158,7 +1445,8 @@ export class TaxiService {
       fareEstimateKobo,
       fareRangeKobo: fareMin && fareMax ? { min: fareMin, max: fareMax } : undefined,
       available: true,
-      controlledPilotOnly: true
+      productionEnabled: true,
+      controlledPilotOnly: false
     };
   }
 
@@ -1183,12 +1471,14 @@ export class TaxiService {
       waitingGraceMinutes: this.config.get<number>("RIDE_WAITING_GRACE_MINUTES", 5),
       vatTaxKobo,
       vatTaxConfigured: vatTaxKobo > 0,
-      dispatchEnabled: this.config.get<boolean>("RIDES_CONTROLLED_PILOT_ENABLED", this.config.get<boolean>("TAXI_STAGING_DISPATCH_ENABLED", false))
+      dispatchEnabled: this.config.get<boolean>("RIDES_PRODUCTION_ENABLED", this.config.get<boolean>("RIDES_CONTROLLED_PILOT_ENABLED", this.config.get<boolean>("TAXI_STAGING_DISPATCH_ENABLED", false))),
+      dispatchMode: this.rideDispatchMode(),
+      paymentMode: "CASH" as const
     };
   }
 
-  private testModeNotice() {
-    return "KariGO Rides is available for controlled pilot testing in selected areas. Manual assignment is required; ride payment and payout automation remain disabled.";
+  private launchNotice() {
+    return "KariGO Rides is live in supported areas. KariGO Operations manually assigns Ride Captains; online Ride payment and payout automation remain disabled until separately approved.";
   }
 
   private decimalOrUndefined(value?: number) {
@@ -1235,10 +1525,45 @@ export class TaxiService {
   private async requireActiveTaxiDriverProfile(userId: string) {
     const profile = await this.prisma.taxiDriverProfile.findUnique({ where: { userId } });
     if (!profile) throw new ForbiddenException("Ride operations will be available after KariGO approves your Captain account.");
-    if (profile.status !== TaxiDriverProfileStatus.ACTIVE_TEST) {
+    if (profile.status !== TaxiDriverProfileStatus.ACTIVE) {
       throw new ForbiddenException("Ride operations will be available after KariGO approves your Captain account.");
     }
     return profile;
+  }
+
+  private driverLocationFreshness(profile: Pick<TaxiDriverProfileForResponse, "lastKnownLatitude" | "lastKnownLongitude" | "lastSeenAt">) {
+    if (!profile.lastSeenAt || profile.lastKnownLatitude === null || profile.lastKnownLongitude === null) return "unavailable" as const;
+    const staleMs = this.config.get<number>("RIDES_CAPTAIN_LOCATION_STALE_SECONDS", 90) * 1000;
+    return Date.now() - profile.lastSeenAt.getTime() <= staleMs ? "fresh" as const : "stale" as const;
+  }
+
+  private isCaptainLocationFresh(profile: Pick<TaxiDriverProfileForResponse, "lastKnownLatitude" | "lastKnownLongitude" | "lastSeenAt">) {
+    return this.driverLocationFreshness(profile) === "fresh";
+  }
+
+  private tripPickupServiceArea(trip: Pick<TaxiTripWithRelations, "pickupAddress" | "pickupLatitude" | "pickupLongitude">) {
+    const lat = trip.pickupLatitude === null ? undefined : Number(trip.pickupLatitude);
+    const lon = trip.pickupLongitude === null ? undefined : Number(trip.pickupLongitude);
+    const coordinateArea = resolveRideServiceArea(this.config, lat, lon);
+    return coordinateArea?.active ? coordinateArea.city : rideCityFromText(this.config, trip.pickupAddress);
+  }
+
+  private distanceToPickupKm(
+    profile: Pick<TaxiDriverProfileForResponse, "lastKnownLatitude" | "lastKnownLongitude">,
+    trip: Pick<TaxiTripWithRelations, "pickupLatitude" | "pickupLongitude">
+  ) {
+    if (profile.lastKnownLatitude === null || profile.lastKnownLongitude === null || trip.pickupLatitude === null || trip.pickupLongitude === null) return null;
+    const distance = this.distanceKm(Number(profile.lastKnownLatitude), Number(profile.lastKnownLongitude), Number(trip.pickupLatitude), Number(trip.pickupLongitude));
+    return Number(distance.toFixed(2));
+  }
+
+  private distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const radiusKm = 6371;
+    const toRadians = (degrees: number) => degrees * Math.PI / 180;
+    const dLat = toRadians(lat2 - lat1);
+    const dLon = toRadians(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+    return 2 * radiusKm * Math.asin(Math.sqrt(a));
   }
 
   private async requireDriverTrip(userId: string, tripId: string) {
@@ -1261,6 +1586,56 @@ export class TaxiService {
       select: { id: true }
     });
     if (active) throw new ConflictException("Ride Captain already has an active ride request");
+  }
+
+  private async expireStaleTrips() {
+    const now = Date.now();
+    const requestCutoff = new Date(now - this.config.get<number>("RIDES_REQUEST_EXPIRY_MINUTES", 10) * 60 * 1000);
+    const assignmentCutoff = new Date(now - this.config.get<number>("RIDES_ASSIGNMENT_ACCEPTANCE_SECONDS", 45) * 1000);
+    const [staleRequests, staleAssignments] = await Promise.all([
+      this.prisma.taxiTrip.findMany({
+        where: { status: TaxiTripStatus.REQUESTED, requestedAt: { lt: requestCutoff } },
+        select: { id: true }
+      }),
+      this.prisma.taxiTrip.findMany({
+        where: { status: TaxiTripStatus.DRIVER_ASSIGNED, updatedAt: { lt: assignmentCutoff } },
+        select: { id: true, requestedAt: true, driverProfile: { select: { userId: true } } }
+      })
+    ]);
+
+    for (const trip of staleRequests) {
+      await this.updateTripWithEvent(trip.id, {
+        status: TaxiTripStatus.EXPIRED,
+        cancellationReason: "No Ride Captain was assigned in time.",
+        cancelledAt: new Date(),
+        tripPinHash: null,
+        tripPinEncrypted: null
+      }, "00000000-0000-0000-0000-000000000000", TaxiTripActorType.SYSTEM, "RIDE_REQUEST_EXPIRED", "Ride request expired before assignment");
+    }
+
+    for (const trip of staleAssignments) {
+      const requestExpired = trip.requestedAt < requestCutoff;
+      await this.updateTripWithEvent(trip.id, {
+        status: requestExpired ? TaxiTripStatus.EXPIRED : TaxiTripStatus.REQUESTED,
+        driverProfile: { disconnect: true },
+        ...(requestExpired ? {
+          cancellationReason: "No Ride Captain accepted in time.",
+          cancelledAt: new Date(),
+          tripPinHash: null,
+          tripPinEncrypted: null
+        } : {})
+      }, "00000000-0000-0000-0000-000000000000", TaxiTripActorType.SYSTEM, "RIDE_ASSIGNMENT_EXPIRED", "Ride Captain assignment expired before acceptance", {
+        afterUpdate: async (tx) => {
+          if (trip.driverProfile?.userId) {
+            await this.captainWorkState.releaseLock(tx, {
+              userId: trip.driverProfile.userId,
+              mode: CaptainWorkMode.RIDE,
+              workId: trip.id
+            });
+          }
+        }
+      });
+    }
   }
 
   private throwActiveRideConflict(trip: TaxiTripWithRelations): never {
@@ -1300,7 +1675,18 @@ export class TaxiService {
       cancelledAt: new Date(),
       tripPinHash: null,
       tripPinEncrypted: null
-    }, actorId, actorType, "taxi.trip.cancelled", reason || "Ride request cancelled");
+    }, actorId, actorType, "taxi.trip.cancelled", reason || "Ride request cancelled", {
+      afterUpdate: async (tx, trip) => {
+        if (trip.driverProfile?.userId) {
+          await this.captainWorkState.releaseLock(tx, {
+            userId: trip.driverProfile.userId,
+            mode: CaptainWorkMode.RIDE,
+            workId: trip.id,
+            actorId
+          });
+        }
+      }
+    });
     return this.formatTrip(updated, { viewer });
   }
 
@@ -1310,9 +1696,14 @@ export class TaxiService {
     actorId: string,
     actorType: TaxiTripActorType,
     eventType: string,
-    note: string
+    note: string,
+    hooks: {
+      beforeUpdate?: (tx: Prisma.TransactionClient) => Promise<void>;
+      afterUpdate?: (tx: Prisma.TransactionClient, updated: TaxiTripWithRelations) => Promise<void>;
+    } = {}
   ) {
     return this.prisma.$transaction(async (tx) => {
+      await hooks.beforeUpdate?.(tx);
       const updated = await tx.taxiTrip.update({
         where: { id: tripId },
         data,
@@ -1325,9 +1716,10 @@ export class TaxiService {
           actorId,
           eventType,
           note,
-          metadata: { isTestMode: true } as Prisma.InputJsonValue
+          metadata: { isTestMode: false, dispatchMode: this.rideDispatchMode() } as Prisma.InputJsonValue
         }
       });
+      await hooks.afterUpdate?.(tx, updated);
       return updated;
     });
   }
@@ -1407,7 +1799,8 @@ export class TaxiService {
         note: event.note,
         createdAt: event.createdAt.toISOString()
       })),
-      testModeNotice: this.testModeNotice()
+      launchNotice: this.launchNotice(),
+      testModeNotice: this.launchNotice()
     };
   }
 
@@ -1565,7 +1958,7 @@ export class TaxiService {
       userId: profile.userId,
       displayName: profile.fullName,
       profilePhotoUrl: null,
-      verified: profile.status === TaxiDriverProfileStatus.ACTIVE_TEST,
+      verified: profile.status === TaxiDriverProfileStatus.ACTIVE,
       publicRating: null,
       completedTripCount: null,
       contactAvailable: Boolean(profile.phoneNumber),
@@ -1692,10 +2085,11 @@ export class TaxiService {
       lastKnownLatitude: profile.lastKnownLatitude,
       lastKnownLongitude: profile.lastKnownLongitude,
       lastSeenAt: profile.lastSeenAt?.toISOString() ?? null,
+      locationFreshness: this.driverLocationFreshness(profile),
       createdAt: profile.createdAt.toISOString(),
       updatedAt: profile.updatedAt.toISOString(),
-      testModeOnly: true,
-      controlledPilotOnly: true
+      productionEnabled: true,
+      testModeOnly: false
     };
   }
 
@@ -1782,6 +2176,12 @@ export class TaxiService {
   private optionalText(value?: string) {
     const trimmed = value?.trim();
     return trimmed ? trimmed : undefined;
+  }
+
+  private requiredReason(value: string | undefined, message: string) {
+    const reason = this.optionalText(value);
+    if (!reason || reason.length < 5) throw new BadRequestException(message);
+    return reason;
   }
 
   private passwordCreated(
@@ -1965,6 +2365,8 @@ export class TaxiService {
       createdAt: application.createdAt.toISOString(),
       updatedAt: application.updatedAt.toISOString(),
       reviewedAt: application.reviewedAt?.toISOString() ?? null,
+      trashedAt: application.trashedAt?.toISOString() ?? null,
+      restoredAt: application.restoredAt?.toISOString() ?? null,
       readinessOnly: true
     };
   }
@@ -1976,6 +2378,8 @@ export class TaxiService {
       createdAt: application.createdAt.toISOString(),
       updatedAt: application.updatedAt.toISOString(),
       reviewedAt: application.reviewedAt?.toISOString() ?? null,
+      trashedAt: application.trashedAt?.toISOString() ?? null,
+      restoredAt: application.restoredAt?.toISOString() ?? null,
       applicantAccount: this.applicantAccountReadiness(application.applicant),
       documentEvidence: this.rideDocumentEvidence(application),
       captainDocuments: (application.captainDocuments ?? []).map((document) => this.toAdminCaptainDocument(document)),
@@ -1984,7 +2388,7 @@ export class TaxiService {
       operatingAreas: this.operatingAreaSummaries(application.operatingAreaIds),
       primaryOperatingArea: this.operatingAreaSummary(application.primaryOperatingAreaId),
       readinessOnly: true,
-      launchWarning: "Approval records Ride Captain review status only. Ride dispatch remains controlled by KariGO operations."
+      launchWarning: "Approval records Ride Captain review status only. Ride operations remain managed by KariGO Operations."
     };
   }
 
@@ -2012,7 +2416,7 @@ export class TaxiService {
       UNDER_REVIEW: "Your Ride Captain application is under review.",
       CHANGES_REQUESTED: "KariGO needs more information before continuing your Ride Captain review.",
       PROVISIONALLY_APPROVED: "Your application is provisionally approved for Ride Captain review. Ride dispatch still requires operations approval.",
-      APPROVED: "Your Ride Captain application is approved for review records. Ride dispatch is still controlled by KariGO operations.",
+      APPROVED: "Your Ride Captain application is approved for review records. Ride operations remain managed by KariGO Operations.",
       REJECTED: "Your Ride Captain application was not approved at this time."
     };
     return messages[status];

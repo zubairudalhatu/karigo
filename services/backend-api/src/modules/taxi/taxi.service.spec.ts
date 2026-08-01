@@ -1,8 +1,9 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from "@nestjs/common";
-import { AccountStatus, DocumentVerificationStatus, TaxiApplicationStatus, TaxiDriverProfileStatus, TaxiTripStatus, TaxiVehicleOwnership, TaxiVehicleType, TaxiWaitlistStatus, UserRole } from "@prisma/client";
+import { AccountStatus, DocumentVerificationStatus, Prisma, TaxiApplicationStatus, TaxiDriverProfileStatus, TaxiTripStatus, TaxiVehicleOwnership, TaxiVehicleType, TaxiWaitlistStatus, UserRole } from "@prisma/client";
 import * as bcrypt from "bcrypt";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
+import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CaptainUploadStorageService } from "../riders/captain-upload-storage.service";
 import { TaxiService } from "./taxi.service";
@@ -115,14 +116,24 @@ const driverProfile = {
   vehicleColour: "Black",
   vehiclePlateNumber: "KGO-123AA",
   vehicleType: TaxiVehicleType.SEDAN,
-  status: TaxiDriverProfileStatus.ACTIVE_TEST,
+  status: TaxiDriverProfileStatus.ACTIVE,
   isAvailableForTaxi: true,
-  lastKnownLatitude: null,
-  lastKnownLongitude: null,
+  lastKnownLatitude: new Prisma.Decimal("12.0022"),
+  lastKnownLongitude: new Prisma.Decimal("8.5920"),
   lastSeenAt: now,
   createdAt: now,
   updatedAt: now,
-  application
+  application,
+  user: {
+    id: "rider-user",
+    accountStatus: AccountStatus.ACTIVE,
+    phoneVerified: true,
+    deletedAt: null,
+    captainWorkState: {
+      activeWorkMode: null,
+      desiredRideOnline: true
+    }
+  }
 };
 
 const taxiTrip = {
@@ -203,6 +214,7 @@ describe("TaxiService", () => {
       findFirst: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
       update: jest.fn()
     },
     taxiTripEvent: {
@@ -223,24 +235,36 @@ describe("TaxiService", () => {
     rideWaitlistJoined: jest.fn(),
     rideCaptainApplicationSubmitted: jest.fn()
   };
+  const captainWorkState = {
+    updateAvailability: jest.fn(),
+    acquireLock: jest.fn(),
+    releaseLock: jest.fn(),
+    transitionLock: jest.fn()
+  };
   const service = new TaxiService(
     prisma as unknown as PrismaService,
     audit as unknown as AdminAuditService,
     config as never,
     captainUploadStorage as unknown as CaptainUploadStorageService,
-    applicationNotifications as unknown as ApplicationNotificationsService
+    applicationNotifications as unknown as ApplicationNotificationsService,
+    captainWorkState as unknown as CaptainWorkStateService
   );
 
   function enableTaxiStaging() {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       const values: Record<string, unknown> = {
         RIDES_SERVICE_ENABLED: true,
-        RIDES_CONTROLLED_PILOT_ENABLED: true,
+        RIDES_PRODUCTION_ENABLED: true,
+        RIDES_DISPATCH_MODE: "MANUAL",
+        RIDES_CONTROLLED_PILOT_ENABLED: false,
         RIDES_AUTO_DISPATCH_ENABLED: false,
         RIDES_PAYMENT_ENABLED: false,
         TAXI_SERVICE_ENABLED: true,
-        TAXI_STAGING_DISPATCH_ENABLED: true,
+        TAXI_STAGING_DISPATCH_ENABLED: false,
         RIDES_ACTIVE_SERVICE_AREAS: "Abuja,Kano",
+        RIDES_ASSIGNMENT_ACCEPTANCE_SECONDS: 45,
+        RIDES_CAPTAIN_LOCATION_STALE_SECONDS: 90,
+        RIDES_REQUEST_EXPIRY_MINUTES: 10,
         RIDE_PER_KM_KOBO: 40000,
         RIDE_CAPTAIN_COMMISSION_PERCENT: 10,
         RIDE_WAITING_CHARGE_KOBO_PER_MINUTE: 500,
@@ -284,8 +308,9 @@ describe("TaxiService", () => {
     prisma.taxiDriverProfile.upsert.mockResolvedValue(driverProfile);
     prisma.taxiDriverProfile.count.mockResolvedValue(1);
     prisma.taxiTrip.findUnique.mockResolvedValue(null);
+    prisma.taxiTrip.findUniqueOrThrow.mockResolvedValue(taxiTrip);
     prisma.taxiTrip.findFirst.mockResolvedValue(null);
-    prisma.taxiTrip.findMany.mockResolvedValue([taxiTrip]);
+    prisma.taxiTrip.findMany.mockResolvedValue([]);
     prisma.taxiTrip.create.mockImplementation(async ({ data }: any) => ({
       ...taxiTrip,
       ...data,
@@ -486,7 +511,7 @@ describe("TaxiService", () => {
       readinessOnly: true
     });
     expect(prisma.taxiDriverApplication.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { phoneNumber: "+2348030000000" }
+      where: expect.objectContaining({ phoneNumber: "+2348030000000", trashedAt: null })
     }));
   });
 
@@ -513,7 +538,7 @@ describe("TaxiService", () => {
     expect(audit.record).toHaveBeenCalledWith("admin-user", "admin.taxi.driver_application_review", "TaxiDriverApplication", application.id, expect.objectContaining({
       readinessOnly: true
     }));
-    expect(result.launchWarning).toContain("Ride dispatch remains controlled");
+    expect(result.launchWarning).toContain("Ride operations remain managed by KariGO Operations");
   });
 
   it("blocks Ride Captain approval when required secure documents are pending", async () => {
@@ -575,12 +600,12 @@ describe("TaxiService", () => {
   it("supports admin status filtering without exposing live dispatch actions", async () => {
     await service.listDriverApplications({ status: TaxiApplicationStatus.SUBMITTED });
     expect(prisma.taxiDriverApplication.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { status: TaxiApplicationStatus.SUBMITTED },
+      where: expect.objectContaining({ status: TaxiApplicationStatus.SUBMITTED, trashedAt: null }),
       take: 150
     }));
   });
 
-  it("blocks Ride trip requests when controlled pilot flags are disabled", async () => {
+  it("blocks Ride trip requests when production Ride flags are disabled", async () => {
     await expect(service.createCustomerTrip("customer-user", {
       pickupAddress: "Tarauni, Kano",
       destinationAddress: "Zoo Road, Kano"
@@ -618,7 +643,7 @@ describe("TaxiService", () => {
         vatTaxConfigured: false
       }
     });
-    expect(result.testModeNotice).toContain("controlled pilot");
+    expect(result.launchNotice).toContain("KariGO Rides is live");
   });
 
   it("returns ride categories and applies the selected category multiplier to fare estimates", () => {
@@ -666,7 +691,7 @@ describe("TaxiService", () => {
     })).toThrow(BadRequestException);
   });
 
-  it("creates controlled-pilot Ride trips with a unique reference and protected trip PIN", async () => {
+  it("creates production Ride trips with a unique reference and protected trip PIN", async () => {
     enableTaxiStaging();
     prisma.taxiTrip.findUnique.mockResolvedValue(null);
 
@@ -827,9 +852,12 @@ describe("TaxiService", () => {
 
   it("returns only manually assigned active ride trips to approved available Captains", async () => {
     enableTaxiStaging();
-    prisma.taxiTrip.findMany.mockResolvedValueOnce([
+    prisma.taxiTrip.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
       { ...taxiTrip, driverProfileId: driverProfile.id, driverProfile, status: TaxiTripStatus.DRIVER_ASSIGNED }
-    ]);
+      ]);
 
     const result = await service.availableTaxiTrips("rider-user");
 
@@ -887,12 +915,13 @@ describe("TaxiService", () => {
     expect(prisma.taxiTrip.update).not.toHaveBeenCalled();
   });
 
-  it("lets admins assign and cancel controlled-pilot Ride trips with audit records", async () => {
+  it("lets admins assign and cancel production Ride trips with audit records", async () => {
     enableTaxiStaging();
     prisma.taxiTrip.findUnique.mockResolvedValueOnce(taxiTrip).mockResolvedValueOnce({ ...taxiTrip, status: TaxiTripStatus.DRIVER_ASSIGNED });
+    prisma.taxiDriverProfile.findUnique.mockResolvedValueOnce({ ...driverProfile, lastSeenAt: new Date() });
 
     await service.adminAssignDriver("admin-user", taxiTrip.id, { driverProfileId: driverProfile.id });
-    await service.adminCancelTrip("admin-user", taxiTrip.id, { reason: "Staging drill complete" });
+    await service.adminCancelTrip("admin-user", taxiTrip.id, { reason: "Operations drill complete" });
 
     expect(prisma.taxiTrip.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
@@ -903,11 +932,11 @@ describe("TaxiService", () => {
     expect(prisma.taxiTrip.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         status: TaxiTripStatus.CANCELLED_BY_ADMIN,
-        cancellationReason: "Staging drill complete"
+        cancellationReason: "Operations drill complete"
       })
     }));
     expect(audit.record).toHaveBeenCalledWith("admin-user", "admin.taxi.trip.driver_assigned", "TaxiTrip", taxiTrip.id, expect.objectContaining({
-      controlledPilot: true
+      productionMode: true
     }));
   });
 

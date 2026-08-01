@@ -10,13 +10,17 @@ import { ApprovedCaptainGuard } from "../../common/guards/approved-captain.guard
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
+import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
 import { CaptainUploadFile } from "./captain-upload-storage.service";
+import { CaptainApplicationTrashDto } from "./dto/captain-application-trash.dto";
 import { CaptainApplicationDocumentUploadDto } from "./dto/captain-application-document-upload.dto";
 import { CreateDeliveryCaptainApplicationDto } from "./dto/create-delivery-captain-application.dto";
 import { DeliveryCaptainApplicationStatusQueryDto } from "./dto/delivery-captain-application-status-query.dto";
 import { ListDeliveryCaptainApplicationsQueryDto } from "./dto/list-delivery-captain-applications-query.dto";
 import { ReviewCaptainApplicationDocumentDto } from "./dto/review-captain-application-document.dto";
 import { ReviewDeliveryCaptainApplicationDto } from "./dto/review-delivery-captain-application.dto";
+import { SubmitDeliveryCaptainRevisionDto } from "./dto/submit-delivery-captain-revision.dto";
+import { UpdateCaptainAvailabilityDto } from "./dto/update-captain-availability.dto";
 import { UpdateRiderProfileDto } from "./dto/update-rider-profile.dto";
 import { RidersService } from "./riders.service";
 
@@ -59,6 +63,14 @@ export class DeliveryCaptainApplicationsController {
   async statusForCurrentUser(@CurrentUser() user: AuthenticatedUser) {
     return { message: "Delivery Captain application status retrieved", data: await this.ridersService.currentUserDeliveryCaptainApplicationStatus(user.id) };
   }
+
+  @Post("me/revision")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Submit requested Delivery Captain revision documents for the authenticated account" })
+  async submitRevision(@CurrentUser() user: AuthenticatedUser, @Body() dto: SubmitDeliveryCaptainRevisionDto) {
+    return { message: "Delivery Captain revision submitted", data: await this.ridersService.submitDeliveryCaptainRevision(user.id, dto) };
+  }
 }
 
 @ApiTags("Admin Delivery Captain Applications")
@@ -74,6 +86,12 @@ export class AdminDeliveryCaptainApplicationsController {
   @ApiOperation({ summary: "List Delivery Captain applications" })
   async list(@Query() query: ListDeliveryCaptainApplicationsQueryDto) {
     return { message: "Delivery Captain applications retrieved", data: await this.ridersService.listDeliveryCaptainApplications(query) };
+  }
+
+  @Get("trash")
+  @ApiOperation({ summary: "List trashed rejected Delivery Captain applications" })
+  async trash() {
+    return { message: "Trashed Delivery Captain applications retrieved", data: await this.ridersService.listTrashedDeliveryCaptainApplications() };
   }
 
   @Get(":applicationId")
@@ -113,6 +131,18 @@ export class AdminDeliveryCaptainApplicationsController {
   async review(@CurrentUser() user: AuthenticatedUser, @Param("applicationId", ParseUUIDPipe) applicationId: string, @Body() dto: ReviewDeliveryCaptainApplicationDto) {
     return { message: "Delivery Captain application reviewed", data: await this.ridersService.reviewDeliveryCaptainApplication(user.id, applicationId, dto) };
   }
+
+  @Patch(":applicationId/trash")
+  @ApiOperation({ summary: "Move a rejected Delivery Captain application to Trash" })
+  async trashApplication(@CurrentUser() user: AuthenticatedUser, @Param("applicationId", ParseUUIDPipe) applicationId: string, @Body() dto: CaptainApplicationTrashDto) {
+    return { message: "Delivery Captain application moved to Trash", data: await this.ridersService.trashDeliveryCaptainApplication(user.id, applicationId, dto) };
+  }
+
+  @Patch(":applicationId/restore")
+  @ApiOperation({ summary: "Restore a trashed Delivery Captain application" })
+  async restoreApplication(@CurrentUser() user: AuthenticatedUser, @Param("applicationId", ParseUUIDPipe) applicationId: string, @Body() dto: CaptainApplicationTrashDto) {
+    return { message: "Delivery Captain application restored", data: await this.ridersService.restoreDeliveryCaptainApplication(user.id, applicationId, dto) };
+  }
 }
 
 @ApiTags("Riders")
@@ -140,12 +170,27 @@ export class RidersController {
 @Controller("captain")
 @UseGuards(JwtAuthGuard)
 export class CaptainAccessController {
-  constructor(private readonly ridersService: RidersService) {}
+  constructor(
+    private readonly ridersService: RidersService,
+    private readonly captainWorkState: CaptainWorkStateService
+  ) {}
 
   @Get("access")
   @ApiOperation({ summary: "Resolve safe Captain onboarding and operational access for the authenticated account" })
   async access(@CurrentUser() user: AuthenticatedUser) {
     return { message: "Captain access resolved", data: await this.ridersService.resolveCaptainAccess(user.id) };
+  }
+
+  @Get("work-state")
+  @ApiOperation({ summary: "Get current Captain delivery/ride availability and active work lock" })
+  async workState(@CurrentUser() user: AuthenticatedUser) {
+    return { message: "Captain work state retrieved", data: await this.captainWorkState.getForUser(user.id) };
+  }
+
+  @Patch("availability")
+  @ApiOperation({ summary: "Update Delivery and Ride availability preferences for the authenticated Captain" })
+  async availability(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateCaptainAvailabilityDto) {
+    return { message: "Captain availability updated", data: await this.captainWorkState.updateAvailability(user.id, dto) };
   }
 
   @Post("application-documents/uploads")

@@ -35,7 +35,7 @@ export class TaxiController {
   @Post("driver-applications/me")
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Submit a Ride Captain readiness application for the authenticated KariGO account" })
+  @ApiOperation({ summary: "Submit a Ride Captain application for the authenticated KariGO account" })
   async submitDriverApplicationForCurrentUser(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateTaxiDriverApplicationDto) {
     return { message: "Ride Captain application submitted", data: await this.taxi.submitDriverApplication(dto, user.id) };
   }
@@ -43,13 +43,13 @@ export class TaxiController {
   @Get("driver-applications/me")
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Check the authenticated user's Ride Captain readiness application status" })
+  @ApiOperation({ summary: "Check the authenticated user's Ride Captain application status" })
   async currentUserDriverApplicationStatus(@CurrentUser() user: AuthenticatedUser) {
     return { message: "Ride Captain application status retrieved", data: await this.taxi.currentUserApplicationStatus(user.id) };
   }
 
   @Post("fare-estimate")
-  @ApiOperation({ summary: "Create a public KariGO Rides fare estimate when controlled pilot is enabled" })
+  @ApiOperation({ summary: "Create a public KariGO Rides fare estimate" })
   async fareEstimate(@Body() dto: TaxiFareEstimateDto) {
     return { message: "KariGO Rides fare estimate calculated", data: this.taxi.fareEstimate(dto) };
   }

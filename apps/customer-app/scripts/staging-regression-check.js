@@ -96,10 +96,9 @@ assert(home.includes("Active KariGO Ride"), "Home must show a compact active Rid
 assert(home.includes("/taxi/request?tripId=${activeRide.id}"), "Home active Ride entry must open the exact active tracking screen.");
 assert(home.includes("Active ride"), "KariGO Rides category must show active-ride state while a ride is active.");
 const ridesFlags = read("src", "lib", "rides-flags.ts");
-assert(ridesFlags.includes("EXPO_PUBLIC_RIDES_SERVICE_ENABLED"), "Ride pilot must use the new public Rides service flag.");
-assert(ridesFlags.includes("EXPO_PUBLIC_RIDES_CONTROLLED_PILOT_ENABLED"), "Ride pilot must use the new public controlled-pilot flag.");
-assert(ridesFlags.includes("EXPO_PUBLIC_TAXI_SERVICE_ENABLED"), "Ride pilot must preserve the legacy Taxi service flag.");
-assert(ridesFlags.includes("EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED"), "Ride pilot must preserve the legacy Taxi staging flag.");
+assert(ridesFlags.includes("EXPO_PUBLIC_RIDES_SERVICE_ENABLED"), "Ride launch must use the public Rides service flag.");
+assert(ridesFlags.includes("EXPO_PUBLIC_RIDES_PRODUCTION_ENABLED"), "Ride launch must use the production Rides flag.");
+assert(ridesFlags.includes("EXPO_PUBLIC_TAXI_SERVICE_ENABLED"), "Ride launch must preserve the legacy Taxi service alias.");
 assert(home.includes("Live in ${ridesServiceAreaLabel}") && home.includes("Join waitlist"), "Ride tile must use live-city/waitlist copy.");
 assert(home.includes("Market Items"), "Home must keep Market Items service category.");
 assert(home.includes("Pharmacy"), "Home must include the compliance-gated Pharmacy category.");
@@ -118,7 +117,7 @@ assert(home.includes("/catalogue/food"), "Food Delivery chip must navigate to fo
 assert(home.includes("/catalogue/groceries"), "Groceries chip must navigate to groceries catalogue.");
 assert(home.includes("/catalogue/market-items"), "Market Items chip must navigate to market-items catalogue.");
 assert(home.includes("/readiness/taxi"), "KariGO Rides must route to a safe readiness screen when disabled.");
-assert(home.includes("/taxi/request"), "Ride request route must only be available behind controlled pilot flags.");
+assert(home.includes("/taxi/request"), "Ride request route must only be available behind production Ride flags.");
 assert(home.includes("EXPO_PUBLIC_PHARMACY_MARKETPLACE_ENABLED"), "Pharmacy must remain readiness-gated by environment.");
 assert(home.includes("/readiness/pharmacy"), "Disabled pharmacy must route to a readiness screen.");
 assert(home.includes("/sme-services"), "SME Services chip must navigate to the service-provider request flow.");
@@ -169,7 +168,7 @@ assert(taxiRequest.includes("PanResponder.create"), "Ride Home must use a lightw
 assert(taxiRequest.includes("panelState") && taxiRequest.includes("\"collapsed\"") && taxiRequest.includes("\"half\"") && taxiRequest.includes("\"expanded\""), "Ride bottom panel must support collapsed, half and expanded states.");
 assert(taxiRequest.includes("getForegroundPermissionsAsync"), "Ride Home must check existing foreground location permission before auto pickup.");
 assert(!taxiRequest.includes("Controlled pilot"), "Ride request flow must not expose repeated controlled-pilot copy.");
-assert(taxiRequest.includes("ridesControlledPilotEnabled"), "Ride request flow must be gated by the shared controlled-pilot flag helper.");
+assert(taxiRequest.includes("ridesProductionEnabled"), "Ride request flow must be gated by the shared production Ride flag helper.");
 assert(taxiRequest.includes("react-native-maps"), "Ride request flow must use the native-backed map provider.");
 assert(taxiRequest.includes("MapView") && taxiRequest.includes("Marker") && taxiRequest.includes("Polyline"), "Ride request flow must render map markers and road route preview.");
 assert(!taxiRequest.includes("Location.geocodeAsync"), "Ride request flow must not use client-side geocoding for search suggestions.");

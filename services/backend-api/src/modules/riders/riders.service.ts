@@ -20,11 +20,13 @@ import { resolveCaptainLocation } from "../platform/captain-catalog.validation";
 import { PrismaService } from "../../prisma/prisma.service";
 import { publicUserSelect } from "../users/users.service";
 import { CaptainUploadFile, CaptainUploadStorageService } from "./captain-upload-storage.service";
+import { CaptainApplicationTrashDto } from "./dto/captain-application-trash.dto";
 import { CreateDeliveryCaptainApplicationDto } from "./dto/create-delivery-captain-application.dto";
 import { DeliveryCaptainApplicationStatusQueryDto } from "./dto/delivery-captain-application-status-query.dto";
 import { ListDeliveryCaptainApplicationsQueryDto } from "./dto/list-delivery-captain-applications-query.dto";
 import { ReviewCaptainApplicationDocumentDto } from "./dto/review-captain-application-document.dto";
 import { ReviewDeliveryCaptainApplicationDto } from "./dto/review-delivery-captain-application.dto";
+import { SubmitDeliveryCaptainRevisionDto } from "./dto/submit-delivery-captain-revision.dto";
 import { UpdateRiderProfileDto } from "./dto/update-rider-profile.dto";
 
 const DELIVERY_CAPTAIN_APPLICATION_SELECT = {
@@ -54,6 +56,11 @@ const DELIVERY_CAPTAIN_APPLICATION_SELECT = {
   adminNote: true,
   applicantVisibleNote: true,
   reviewedAt: true,
+  trashedAt: true,
+  trashedByAdminId: true,
+  trashReason: true,
+  restoredAt: true,
+  restoredByAdminId: true,
   createdAt: true,
   updatedAt: true,
   applicant: {
@@ -91,6 +98,11 @@ const RIDE_CAPTAIN_APPLICATION_SELECT = {
   status: true,
   applicantVisibleNote: true,
   reviewedAt: true,
+  trashedAt: true,
+  trashedByAdminId: true,
+  trashReason: true,
+  restoredAt: true,
+  restoredByAdminId: true,
   createdAt: true,
   updatedAt: true,
   captainDocuments: { orderBy: { uploadedAt: "desc" } }
@@ -112,6 +124,8 @@ const RIDE_CAPTAIN_PROFILE_SELECT = {
   vehicleType: true,
   status: true,
   isAvailableForTaxi: true,
+  lastKnownLatitude: true,
+  lastKnownLongitude: true,
   lastSeenAt: true,
   createdAt: true,
   updatedAt: true
@@ -197,6 +211,7 @@ export class RidersService {
       }),
       this.prisma.deliveryCaptainApplication.findFirst({
         where: {
+          trashedAt: null,
           OR: [
             { applicantUserId: user.id },
             { phoneNumber: user.phoneNumber }
@@ -211,6 +226,7 @@ export class RidersService {
       }),
       this.prisma.taxiDriverApplication.findFirst({
         where: {
+          trashedAt: null,
           OR: [
             { applicantUserId: user.id },
             { phoneNumber: user.phoneNumber }
@@ -230,7 +246,7 @@ export class RidersService {
     const rideOperational = Boolean(
       rideProfile &&
       user.accountStatus === AccountStatus.ACTIVE &&
-      rideProfile.status === TaxiDriverProfileStatus.ACTIVE_TEST
+      rideProfile.status === TaxiDriverProfileStatus.ACTIVE
     );
     const operationalModes = [
       deliveryOperational ? "DELIVERY_CAPTAIN" : null,
@@ -305,6 +321,8 @@ export class RidersService {
         status: rideProfile.status,
         isAvailableForTaxi: rideProfile.isAvailableForTaxi,
         operationalAccess: rideOperational,
+        lastKnownLatitude: rideProfile.lastKnownLatitude,
+        lastKnownLongitude: rideProfile.lastKnownLongitude,
         lastSeenAt: rideProfile.lastSeenAt?.toISOString() ?? null,
         createdAt: rideProfile.createdAt.toISOString(),
         updatedAt: rideProfile.updatedAt.toISOString()
@@ -479,7 +497,7 @@ export class RidersService {
   async deliveryCaptainApplicationStatus(query: DeliveryCaptainApplicationStatusQueryDto) {
     const phoneNumber = this.normalizePhone(query.phoneNumber);
     const application = await this.prisma.deliveryCaptainApplication.findFirst({
-      where: { phoneNumber },
+      where: { phoneNumber, trashedAt: null },
       select: DELIVERY_CAPTAIN_APPLICATION_SELECT,
       orderBy: { createdAt: "desc" }
     });
@@ -498,6 +516,7 @@ export class RidersService {
 
     const application = await this.prisma.deliveryCaptainApplication.findFirst({
       where: {
+        trashedAt: null,
         OR: [
           { applicantUserId: user.id },
           { phoneNumber: user.phoneNumber }
@@ -519,6 +538,66 @@ export class RidersService {
       activatesDispatch: false,
       payoutActivation: false
     };
+  }
+
+  async submitDeliveryCaptainRevision(userId: string, dto: SubmitDeliveryCaptainRevisionDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, phoneNumber: true, accountStatus: true, phoneVerified: true, deletedAt: true }
+    });
+    if (!user || user.deletedAt) throw new NotFoundException("KariGO account not found");
+    if (user.accountStatus !== AccountStatus.ACTIVE || !user.phoneVerified) {
+      throw new BadRequestException("Verify your KariGO account before submitting Delivery Captain revision documents.");
+    }
+    const application = await this.prisma.deliveryCaptainApplication.findFirst({
+      where: {
+        trashedAt: null,
+        status: DeliveryCaptainApplicationStatus.CHANGES_REQUESTED,
+        OR: [
+          { applicantUserId: user.id },
+          { phoneNumber: user.phoneNumber }
+        ]
+      },
+      select: DELIVERY_CAPTAIN_APPLICATION_SELECT,
+      orderBy: { createdAt: "desc" }
+    });
+    if (!application) throw new NotFoundException("No Delivery Captain revision request is open for this account.");
+    const requiredTypes = this.requiredDeliveryDocumentTypes(application.vehicleType);
+    const uploadedDocuments = await this.requireCaptainDocuments(user.id, dto.documentIds, requiredTypes);
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.captainApplicationDocument.updateMany({
+        where: {
+          id: { in: uploadedDocuments.map((document) => document.id) },
+          userId: user.id,
+          deliveryApplicationId: null,
+          uploadStatus: CaptainDocumentUploadStatus.UPLOADED,
+          deletedAt: null
+        },
+        data: { deliveryApplicationId: application.id }
+      });
+      return tx.deliveryCaptainApplication.update({
+        where: { id: application.id },
+        data: {
+          applicantUserId: application.applicantUserId ?? user.id,
+          status: DeliveryCaptainApplicationStatus.UNDER_REVIEW,
+          applicantVisibleNote: "Your requested Delivery Captain documents have been submitted. KariGO will review the updates.",
+          reviewedAt: new Date()
+        },
+        select: DELIVERY_CAPTAIN_APPLICATION_SELECT
+      });
+    });
+    await this.audit.record(user.id, "DELIVERY_APPLICATION_REVISION_SUBMITTED", "DeliveryCaptainApplication", updated.id, {
+      applicationReference: updated.applicationReference,
+      documentIds: uploadedDocuments.map((document) => document.id),
+      preservedApplicationReference: true
+    });
+    if (!application.applicantUserId) {
+      await this.audit.record(user.id, "LEGACY_CAPTAIN_APPLICATION_LINKED", "DeliveryCaptainApplication", updated.id, {
+        applicationReference: updated.applicationReference,
+        linkage: "authenticated_phone_match"
+      });
+    }
+    return { exists: true, ...this.toPublicDeliveryCaptainApplicationStatus(updated) };
   }
 
   async listDeliveryCaptainApplications(query: ListDeliveryCaptainApplicationsQueryDto) {
@@ -669,6 +748,72 @@ export class RidersService {
     return this.toAdminDeliveryCaptainApplication(updatedApplication);
   }
 
+  async listTrashedDeliveryCaptainApplications() {
+    const applications = await this.prisma.deliveryCaptainApplication.findMany({
+      where: { trashedAt: { not: null } },
+      select: DELIVERY_CAPTAIN_APPLICATION_SELECT,
+      orderBy: { trashedAt: "desc" },
+      take: 150
+    });
+    return applications.map((application) => this.toAdminDeliveryCaptainApplication(application));
+  }
+
+  async trashDeliveryCaptainApplication(adminUserId: string, applicationId: string, dto: CaptainApplicationTrashDto) {
+    const reason = this.requiredReason(dto.reason, "Moving a rejected Delivery Captain application to Trash requires a reason.");
+    const application = await this.prisma.deliveryCaptainApplication.findUnique({
+      where: { id: applicationId },
+      select: DELIVERY_CAPTAIN_APPLICATION_SELECT
+    });
+    if (!application) throw new NotFoundException("Delivery Captain application not found");
+    if (application.status !== DeliveryCaptainApplicationStatus.REJECTED) {
+      throw new BadRequestException("Only rejected Delivery Captain applications can be moved to Trash.");
+    }
+    const updated = await this.prisma.deliveryCaptainApplication.update({
+      where: { id: applicationId },
+      data: {
+        trashedAt: new Date(),
+        trashedByAdminId: adminUserId,
+        trashReason: reason,
+        restoredAt: null,
+        restoredByAdminId: null
+      },
+      select: DELIVERY_CAPTAIN_APPLICATION_SELECT
+    });
+    await this.audit.record(adminUserId, "DELIVERY_APPLICATION_TRASHED", "DeliveryCaptainApplication", applicationId, {
+      reason,
+      previousStatus: application.status,
+      applicationReference: application.applicationReference
+    });
+    return this.toAdminDeliveryCaptainApplication(updated);
+  }
+
+  async restoreDeliveryCaptainApplication(adminUserId: string, applicationId: string, dto: CaptainApplicationTrashDto) {
+    const reason = this.requiredReason(dto.reason, "Restoring a Delivery Captain application requires a reason.");
+    const application = await this.prisma.deliveryCaptainApplication.findUnique({
+      where: { id: applicationId },
+      select: DELIVERY_CAPTAIN_APPLICATION_SELECT
+    });
+    if (!application) throw new NotFoundException("Delivery Captain application not found");
+    if (!application.trashedAt) throw new BadRequestException("Delivery Captain application is not in Trash.");
+    const updated = await this.prisma.deliveryCaptainApplication.update({
+      where: { id: applicationId },
+      data: {
+        trashedAt: null,
+        trashedByAdminId: null,
+        trashReason: null,
+        restoredAt: new Date(),
+        restoredByAdminId: adminUserId
+      },
+      select: DELIVERY_CAPTAIN_APPLICATION_SELECT
+    });
+    await this.audit.record(adminUserId, "DELIVERY_APPLICATION_RESTORED", "DeliveryCaptainApplication", applicationId, {
+      reason,
+      previousStatus: application.status,
+      applicationReference: application.applicationReference
+    });
+    return this.toAdminDeliveryCaptainApplication(updated);
+  }
+
   private preferredServiceAreasJson(areas: string[]): Prisma.InputJsonValue {
     return areas
       .map((area) => area.trim())
@@ -694,6 +839,12 @@ export class RidersService {
     return trimmed ? trimmed : undefined;
   }
 
+  private requiredReason(value: string | undefined, message: string) {
+    const reason = this.optionalText(value);
+    if (!reason || reason.length < 5) throw new BadRequestException(message);
+    return reason;
+  }
+
   private assertLaunchLocation(dto: Pick<CreateDeliveryCaptainApplicationDto, "city" | "state">) {
     const city = dto.city.trim().toLowerCase();
     const state = dto.state.trim().toLowerCase();
@@ -705,6 +856,7 @@ export class RidersService {
 
   private deliveryCaptainApplicationWhere(query: ListDeliveryCaptainApplicationsQueryDto): Prisma.DeliveryCaptainApplicationWhereInput {
     return {
+      trashedAt: null,
       ...(query.status ? { status: query.status } : {}),
       ...(query.search ? {
         OR: [
@@ -1006,6 +1158,15 @@ export class RidersService {
   }
 
   private toPublicDeliveryCaptainApplicationStatus(application: Prisma.DeliveryCaptainApplicationGetPayload<{ select: typeof DELIVERY_CAPTAIN_APPLICATION_SELECT }>) {
+    const documentReview = this.documentReviewSummary(application.captainDocuments, this.requiredDeliveryDocumentTypes(application.vehicleType));
+    const requestedDocumentTypes = Array.from(new Set([
+      ...documentReview.missingRequiredDocumentTypes,
+      ...documentReview.changesRequestedRequiredDocumentTypes,
+      ...documentReview.rejectedRequiredDocumentTypes
+    ]));
+    const revisionRequired = application.status === DeliveryCaptainApplicationStatus.CHANGES_REQUESTED ||
+      documentReview.stage === "DOCUMENTS_MISSING" ||
+      documentReview.stage === "CHANGES_REQUESTED";
     return {
       applicationReference: application.applicationReference,
       fullName: application.fullName,
@@ -1016,12 +1177,19 @@ export class RidersService {
       submittedAt: application.createdAt.toISOString(),
       reviewedAt: application.reviewedAt?.toISOString() ?? null,
       deliveryOnly: true,
+      launchCity: application.city,
       pilotCity: application.city,
       residentialLocation: this.locationSummary(application.residentialCityCode, application.residentialStateCode, application.city, application.state),
       operatingAreas: this.operatingAreaSummaries(application.operatingAreaIds),
       primaryOperatingArea: this.operatingAreaSummary(application.primaryOperatingAreaId),
       launchCities: ["Kano", "Abuja"],
-      documentReview: this.documentReviewSummary(application.captainDocuments, this.requiredDeliveryDocumentTypes(application.vehicleType)),
+      documentReview,
+      revisionRequired,
+      applicantVisibleRevisionNote: revisionRequired
+        ? application.applicantVisibleNote || "Upload the required Delivery Captain documents."
+        : null,
+      requestedFields: [],
+      requestedDocumentTypes,
       createsLogin: Boolean(application.applicantUserId),
       operationalAccess: application.applicant?.rider?.verificationStatus === RiderStatus.ACTIVE,
       applicationAccountRole: application.applicant?.role ?? null,
@@ -1041,7 +1209,7 @@ export class RidersService {
       submittedAt: application.createdAt.toISOString(),
       reviewedAt: application.reviewedAt?.toISOString() ?? null,
       readinessOnly: true,
-      pilotCity: application.city,
+      launchCity: application.city,
       launchCities: ["Kano", "Abuja"],
       documentReview: this.documentReviewSummary(application.captainDocuments, this.requiredCaptainDocumentTypesForReview()),
       operationalAccess: false
@@ -1052,6 +1220,8 @@ export class RidersService {
     return {
       ...application,
       reviewedAt: application.reviewedAt?.toISOString() ?? null,
+      trashedAt: application.trashedAt?.toISOString() ?? null,
+      restoredAt: application.restoredAt?.toISOString() ?? null,
       createdAt: application.createdAt.toISOString(),
       updatedAt: application.updatedAt.toISOString(),
       documents: (application.documents ?? []).map((document) => ({
@@ -1143,6 +1313,7 @@ export class RidersService {
     return this.prisma.deliveryCaptainApplication.findFirst({
       where: {
         status: { not: DeliveryCaptainApplicationStatus.REJECTED },
+        trashedAt: null,
         OR: [
           { applicantUserId },
           { phoneNumber }

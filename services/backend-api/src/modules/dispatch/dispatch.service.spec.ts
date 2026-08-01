@@ -8,6 +8,7 @@ import {
   SettlementStatus
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
 import { RiderJobRejectionReason } from "./dto/reject-rider-job.dto";
 import { RiderAvailability } from "./dto/update-rider-availability.dto";
 import { DispatchEventsService } from "./dispatch-events.service";
@@ -27,15 +28,23 @@ describe("DispatchService", () => {
     rider: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn() },
     order: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn() },
     riderEarning: { findMany: jest.fn() },
+    captainWorkState: { updateMany: jest.fn() },
     $transaction: jest.fn((callback) => callback(tx))
   };
   const events = { emit: jest.fn() };
   const audit = { record: jest.fn() };
+  const captainWorkState = {
+    updateAvailability: jest.fn(),
+    acquireLock: jest.fn(),
+    releaseLock: jest.fn(),
+    transitionLock: jest.fn()
+  };
   const service = new DispatchService(
     prisma as unknown as PrismaService,
     new DispatchStatusService(),
     events as unknown as DispatchEventsService,
-    audit as never
+    audit as never,
+    captainWorkState as unknown as CaptainWorkStateService
   );
 
   beforeEach(() => jest.clearAllMocks());

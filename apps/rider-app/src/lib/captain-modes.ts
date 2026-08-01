@@ -12,16 +12,19 @@ export type CaptainMode = {
   href?: string;
 };
 
-export function isTaxiStagingEnabled() {
+export function ridesProductionEnabled() {
   const serviceEnabled =
     process.env.EXPO_PUBLIC_RIDES_SERVICE_ENABLED === "true" ||
     process.env.EXPO_PUBLIC_TAXI_SERVICE_ENABLED === "true";
-  const pilotEnabled =
+  const productionEnabled =
+    process.env.EXPO_PUBLIC_RIDES_PRODUCTION_ENABLED === "true" ||
     process.env.EXPO_PUBLIC_RIDES_CONTROLLED_PILOT_ENABLED === "true" ||
     process.env.EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED === "true";
 
-  return serviceEnabled && pilotEnabled;
+  return serviceEnabled && productionEnabled;
 }
+
+export const isTaxiStagingEnabled = ridesProductionEnabled;
 
 export function deliveryCaptainMode(profile?: RiderProfile | null): CaptainMode {
   const active = profile?.verificationStatus === "ACTIVE";
@@ -36,20 +39,20 @@ export function deliveryCaptainMode(profile?: RiderProfile | null): CaptainMode 
   };
 }
 
-export function driverCaptainMode(taxiStagingEnabled = isTaxiStagingEnabled()): CaptainMode {
+export function driverCaptainMode(rideOperationsEnabled = ridesProductionEnabled()): CaptainMode {
   return {
     key: "DRIVER_CAPTAIN",
     label: "Ride Captain",
-    status: taxiStagingEnabled ? "ACTIVE" : "DISABLED",
-    badge: taxiStagingEnabled ? "Operations active" : "Review only",
-    description: taxiStagingEnabled
+    status: rideOperationsEnabled ? "ACTIVE" : "DISABLED",
+    badge: rideOperationsEnabled ? "Operations active" : "Review only",
+    description: rideOperationsEnabled
       ? "Receive and progress KariGO Rides requests assigned by Operations after approval."
       : "Submit ride and vehicle details while KariGO Rides access awaits approval.",
-    ctaLabel: taxiStagingEnabled ? "Ride operations" : "Ride review",
+    ctaLabel: rideOperationsEnabled ? "Ride operations" : "Ride review",
     href: "/taxi-readiness"
   };
 }
 
-export function captainModes(profile?: RiderProfile | null, taxiStagingEnabled = isTaxiStagingEnabled()) {
-  return [deliveryCaptainMode(profile), driverCaptainMode(taxiStagingEnabled)];
+export function captainModes(profile?: RiderProfile | null, rideOperationsEnabled = ridesProductionEnabled()) {
+  return [deliveryCaptainMode(profile), driverCaptainMode(rideOperationsEnabled)];
 }

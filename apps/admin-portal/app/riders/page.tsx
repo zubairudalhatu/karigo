@@ -6,6 +6,17 @@ import { AdminRiderSummary, managementApi } from "../../src/api/management.api";
 import { Badge, Empty, ErrorMessage, PortalShell } from "../../src/components/portal";
 import { friendlyError } from "../../src/lib/errors";
 
+function captainAvailabilityLabel(rider: AdminRiderSummary) {
+  const state = rider.workState;
+  if (!state) return "Availability not initialized";
+  if (state.activeWorkMode === "DELIVERY") return "Busy with Delivery";
+  if (state.activeWorkMode === "RIDE") return "Busy with Ride";
+  if (state.effectiveDeliveryOnline && state.effectiveRideOnline) return "Online for Delivery and Ride";
+  if (state.effectiveDeliveryOnline) return "Online for Delivery";
+  if (state.effectiveRideOnline) return "Online for Ride";
+  return "Offline";
+}
+
 export default function RidersPage() {
   const [riders, setRiders] = useState<AdminRiderSummary[]>([]);
   const [error, setError] = useState("");
@@ -72,6 +83,17 @@ export default function RidersPage() {
           <p>Ride application: {rider.rideApplication ? <><Badge>{rider.rideApplication.status}</Badge> {rider.rideApplication.applicationReference}</> : <span className="muted">No Ride application linked.</span>}</p>
           <p>Ride profile: {rider.rideProfile ? <><Badge>{rider.rideProfile.status}</Badge> {rider.rideProfile.isAvailableForTaxi ? "Available" : "Offline"}</> : <span className="muted">No Ride profile prepared.</span>}</p>
           <p className="muted">Operational modes: {rider.operationalModes?.length ? rider.operationalModes.join(", ") : "None active"}</p>
+        </div>
+        <div className="notice">
+          <strong>Availability</strong>
+          <p><Badge>{captainAvailabilityLabel(rider)}</Badge></p>
+          {rider.workState ? <>
+            <p>Desired: Delivery {rider.workState.desiredDeliveryOnline ? "online" : "offline"}; Ride {rider.workState.desiredRideOnline ? "online" : "offline"}.</p>
+            <p>Effective: Delivery {rider.workState.effectiveDeliveryOnline ? "online" : "offline"}; Ride {rider.workState.effectiveRideOnline ? "online" : "offline"}.</p>
+            {rider.workState.activeWorkMode ? <p className="muted">Active work: {rider.workState.activeWorkMode} {rider.workState.lockStage ? `- ${rider.workState.lockStage}` : ""}{rider.workState.activeWorkReference ? ` - ${rider.workState.activeWorkReference}` : ""}</p> : null}
+            <p className="muted">Last availability change: {rider.workState.lastAvailabilityChangeAt ? new Date(rider.workState.lastAvailabilityChangeAt).toLocaleString() : "Not recorded"}</p>
+            <p className="muted">Last location update: {rider.workState.lastLocationAt ? new Date(rider.workState.lastLocationAt).toLocaleString() : rider.currentLocationUpdatedAt ? new Date(rider.currentLocationUpdatedAt).toLocaleString() : "Not recorded"}</p>
+          </> : <p className="muted">Work-state record will be created when the Captain next opens availability.</p>}
         </div>
         {rider.verificationStatus === "ACTIVE" ? <p className="notice">Suspending this Captain blocks app operational access and assignment acceptance. Existing delivery history remains available for operations review.</p> : null}
         {rider.verificationStatus === "PENDING_APPROVAL" && rider.deliveryApplication?.status !== "APPROVED" ? <p className="notice">Review the Delivery Captain application before operational activation can be considered.</p> : null}

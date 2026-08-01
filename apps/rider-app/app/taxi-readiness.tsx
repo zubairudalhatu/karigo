@@ -6,10 +6,11 @@ import { riderApi } from "../src/api/rider.api";
 import { taxiApi } from "../src/api/taxi.api";
 import { Button, Card, Field, Message, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
 import { useAuth } from "../src/contexts/auth-context";
-import { isTaxiStagingEnabled } from "../src/lib/captain-modes";
+import { ridesProductionEnabled } from "../src/lib/captain-modes";
 import { friendlyError } from "../src/lib/errors";
+import { requestCaptainForegroundLocation } from "../src/lib/location";
 
-const ridePilotNotice = "KariGO Rides access is active for approved Ride Captains. Captains receive only Operations-assigned Ride requests; fare payment and payout automation remain disabled.";
+const rideOperationsNotice = "KariGO Rides access is active for approved Ride Captains. Captains receive only Operations-assigned Ride requests; online Ride payment and payout automation remain disabled.";
 const blockedRideOperationsCopy = "Ride operations will be available after KariGO approves your Captain account.";
 const closedTripStatuses = new Set(["COMPLETED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_DRIVER", "CANCELLED_BY_ADMIN", "EXPIRED"]);
 
@@ -21,9 +22,10 @@ export default function TaxiReadiness() {
   const [profile, setProfile] = useState<TaxiDriverProfile | null>(null);
   const [trips, setTrips] = useState<TaxiTrip[]>([]);
   const [tripPin, setTripPin] = useState("");
+  const [declineReason, setDeclineReason] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const taxiEnabled = isTaxiStagingEnabled();
+  const taxiEnabled = ridesProductionEnabled();
 
   async function loadTaxiMode() {
     if (!taxiEnabled) return;
@@ -53,25 +55,32 @@ export default function TaxiReadiness() {
   async function toggleTaxiAvailability() {
     if (!profile) return;
     try {
-      const updated = await taxiApi.updateAvailability({ isAvailableForTaxi: !profile.isAvailableForTaxi });
+      const next = !profile.isAvailableForTaxi;
+      const location = next ? await requestCaptainForegroundLocation() : null;
+      const updated = await taxiApi.updateAvailability({
+        isAvailableForTaxi: next,
+        ...(location ? location : {})
+      });
       setProfile(updated);
-      setMessage(updated.isAvailableForTaxi ? "Ride operations availability enabled." : "Ride operations availability disabled.");
+      setMessage(updated.isAvailableForTaxi ? "Ride availability enabled and your live location was shared with KariGO Operations." : "Ride availability disabled.");
       setTrips(await taxiApi.availableTrips());
     } catch (e) {
       setError(friendlyError(e));
     }
   }
 
-  async function updateTrip(tripId: string, action: "accept" | "arrivedPickup" | "start" | "arrivedDestination" | "complete" | "cancel") {
+  async function updateTrip(tripId: string, action: "accept" | "decline" | "arrivedPickup" | "start" | "arrivedDestination" | "complete" | "cancel") {
     try {
       setError("");
       if (action === "accept") await taxiApi.acceptTrip(tripId);
+      if (action === "decline") await taxiApi.declineTrip(tripId, declineReason.trim());
       if (action === "arrivedPickup") await taxiApi.arrivedPickup(tripId);
       if (action === "start") await taxiApi.startTrip(tripId, tripPin);
       if (action === "arrivedDestination") await taxiApi.arrivedDestination(tripId);
       if (action === "complete") await taxiApi.completeTrip(tripId);
       if (action === "cancel") await taxiApi.cancelTrip(tripId, "Ride Captain cancelled assigned Ride request");
       setTripPin("");
+      setDeclineReason("");
       setMessage("Ride trip updated.");
       setTrips(await taxiApi.availableTrips());
     } catch (e) {
@@ -82,12 +91,12 @@ export default function TaxiReadiness() {
   return <Protected><Screen title={taxiEnabled ? "Ride operations" : "Ride review"} subtitle={taxiEnabled ? "Receive and progress Operations-assigned KariGO Rides requests." : "Prepare Ride Captain and vehicle verification details before KariGO Rides is enabled in your area."}>
     <Card tone="soft">
       <Text style={ui.sectionTitle}>{taxiEnabled ? "KariGO Rides operations" : "KariGO Rides requires Operations approval"}</Text>
-      <Text style={ui.pageIntro}>{taxiEnabled ? ridePilotNotice : "This form helps KariGO prepare Ride Captain onboarding, vehicle checks and safe ride operations. It does not activate ride jobs, fare billing or payment before approval."}</Text>
+      <Text style={ui.pageIntro}>{taxiEnabled ? rideOperationsNotice : "This form helps KariGO prepare Ride Captain onboarding, vehicle checks and safe ride operations. It does not activate ride jobs, fare billing or payment before approval."}</Text>
     </Card>
 
     {taxiEnabled ? <Card>
       <Text style={ui.sectionTitle}>Ride operations</Text>
-      <Text style={ui.muted}>{ridePilotNotice}</Text>
+      <Text style={ui.muted}>{rideOperationsNotice}</Text>
       {profile ? <>
         <StatusBadge status={profile.status} />
         <Text style={ui.muted}>{profile.isAvailableForTaxi ? "Online for manually assigned ride trips" : "Offline for ride trips"}</Text>
@@ -102,7 +111,11 @@ export default function TaxiReadiness() {
         <Text>{trip.pickupAddress} to {trip.destinationAddress}</Text>
         <Text>{money(trip.estimatedFareKobo)}</Text>
         <StatusBadge status={trip.status} />
-        {trip.status === "DRIVER_ASSIGNED" ? <Button title="Accept assigned ride" onPress={() => updateTrip(trip.id, "accept")} /> : null}
+        {trip.status === "DRIVER_ASSIGNED" ? <>
+          <Button title="Accept assigned ride" onPress={() => updateTrip(trip.id, "accept")} />
+          <Field placeholder="Reason if declining" value={declineReason} onChangeText={setDeclineReason} />
+          <Button title="Decline assignment" tone="danger" disabled={declineReason.trim().length < 5} onPress={() => updateTrip(trip.id, "decline")} />
+        </> : null}
         {trip.status === "ACCEPTED" ? <Button title="Arrived at pickup" tone="muted" onPress={() => updateTrip(trip.id, "arrivedPickup")} /> : null}
         {trip.status === "ARRIVED_PICKUP" ? <>
           <Field placeholder="Customer trip PIN" value={tripPin} onChangeText={(value) => setTripPin(value.replace(/\D/g, "").slice(0, 6))} keyboardType="number-pad" />

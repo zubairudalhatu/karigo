@@ -481,7 +481,8 @@ export class AdminOperationsService {
               select: { id: true, applicationId: true, status: true, isAvailableForTaxi: true, updatedAt: true },
               orderBy: { createdAt: "desc" },
               take: 1
-            }
+            },
+            captainWorkState: true
           }
         }
       },
@@ -516,9 +517,25 @@ export class AdminOperationsService {
           ...rideProfile,
           updatedAt: rideProfile.updatedAt.toISOString()
         } : null,
+        workState: rider.user.captainWorkState ? {
+          desiredDeliveryOnline: rider.user.captainWorkState.desiredDeliveryOnline,
+          desiredRideOnline: rider.user.captainWorkState.desiredRideOnline,
+          effectiveDeliveryOnline: rider.user.captainWorkState.desiredDeliveryOnline && !rider.user.captainWorkState.activeWorkMode && rider.verificationStatus === RiderStatus.ACTIVE,
+          effectiveRideOnline: rider.user.captainWorkState.desiredRideOnline && !rider.user.captainWorkState.activeWorkMode && rideProfile?.status === TaxiDriverProfileStatus.ACTIVE,
+          activeWorkMode: rider.user.captainWorkState.activeWorkMode,
+          activeDeliveryAssignmentId: rider.user.captainWorkState.activeDeliveryAssignmentId,
+          activeRideTripId: rider.user.captainWorkState.activeRideTripId,
+          activeWorkReference: rider.user.captainWorkState.activeWorkMode === "DELIVERY"
+            ? rider.user.captainWorkState.activeDeliveryAssignmentId
+            : rider.user.captainWorkState.activeRideTripId,
+          lockStage: rider.user.captainWorkState.lockStage,
+          lockedAt: rider.user.captainWorkState.lockedAt?.toISOString() ?? null,
+          lastAvailabilityChangeAt: rider.user.captainWorkState.lastAvailabilityChangeAt?.toISOString() ?? null,
+          lastLocationAt: rider.user.captainWorkState.lastLocationAt?.toISOString() ?? null
+        } : null,
         operationalModes: [
           rider.verificationStatus === RiderStatus.ACTIVE ? "DELIVERY_CAPTAIN" : null,
-          rideProfile?.status === TaxiDriverProfileStatus.ACTIVE_TEST ? "RIDE_CAPTAIN" : null
+          rideProfile?.status === TaxiDriverProfileStatus.ACTIVE ? "RIDE_CAPTAIN" : null
         ].filter(Boolean)
       };
     }));

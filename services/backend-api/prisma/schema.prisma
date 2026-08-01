@@ -125,6 +125,18 @@ enum RiderStatus {
   BUSY
 }
 
+enum CaptainWorkMode {
+  DELIVERY
+  RIDE
+}
+
+enum CaptainWorkLockStage {
+  OFFERED
+  ASSIGNED
+  ACCEPTED
+  IN_PROGRESS
+}
+
 enum DocumentVerificationStatus {
   PENDING
   APPROVED
@@ -572,7 +584,7 @@ enum DeliveryCaptainVehicleType {
 
 enum TaxiDriverProfileStatus {
   PENDING_ACTIVATION
-  ACTIVE_TEST
+  ACTIVE
   SUSPENDED
   DEACTIVATED
 }
@@ -652,8 +664,31 @@ model User {
   vendorActivationAccounts            VendorAccountActivation[]            @relation("VendorActivationUser")
   createdVendorActivationInvitations  VendorAccountActivation[]            @relation("VendorActivationCreatedBy")
   reviewedAdCampaigns                 AdCampaign[]                         @relation("AdCampaignReviewedBy")
+  captainWorkState                    CaptainWorkState?
 
   @@map("users")
+}
+
+model CaptainWorkState {
+  id                         String                @id @default(uuid()) @db.Uuid
+  userId                     String                @unique @db.Uuid
+  desiredDeliveryOnline      Boolean               @default(false)
+  desiredRideOnline          Boolean               @default(false)
+  activeWorkMode             CaptainWorkMode?
+  activeDeliveryAssignmentId String?               @db.Uuid
+  activeRideTripId           String?               @db.Uuid
+  lockStage                  CaptainWorkLockStage?
+  lockedAt                   DateTime?
+  lastAvailabilityChangeAt   DateTime?
+  lastLocationAt             DateTime?
+  version                    Int                   @default(0)
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+  user                       User                  @relation(fields: [userId], references: [id])
+
+  @@index([activeWorkMode, lockStage])
+  @@index([desiredDeliveryOnline, desiredRideOnline])
+  @@map("captain_work_states")
 }
 
 model UserLoginActivity {
@@ -740,6 +775,11 @@ model TaxiDriverApplication {
   applicantVisibleNote          String?
   reviewedByAdminId             String?                      @db.Uuid
   reviewedAt                    DateTime?
+  trashedAt                     DateTime?
+  trashedByAdminId              String?                      @db.Uuid
+  trashReason                   String?
+  restoredAt                    DateTime?
+  restoredByAdminId             String?                      @db.Uuid
   createdAt                     DateTime                     @default(now())
   updatedAt                     DateTime                     @updatedAt
   applicant                     User?                        @relation("TaxiApplicant", fields: [applicantUserId], references: [id])
@@ -748,6 +788,7 @@ model TaxiDriverApplication {
   captainDocuments              CaptainApplicationDocument[] @relation("RideCaptainApplicationDocuments")
 
   @@index([status, createdAt])
+  @@index([status, trashedAt, createdAt])
   @@index([phoneNumber])
   @@index([city, state])
   @@map("taxi_driver_applications")
@@ -780,6 +821,11 @@ model DeliveryCaptainApplication {
   adminNote              String?
   applicantVisibleNote   String?
   reviewedAt             DateTime?
+  trashedAt              DateTime?
+  trashedByAdminId       String?                              @db.Uuid
+  trashReason            String?
+  restoredAt             DateTime?
+  restoredByAdminId      String?                              @db.Uuid
   createdAt              DateTime                             @default(now())
   updatedAt              DateTime                             @updatedAt
   applicant              User?                                @relation("DeliveryCaptainApplicant", fields: [applicantUserId], references: [id])
@@ -787,6 +833,7 @@ model DeliveryCaptainApplication {
   captainDocuments       CaptainApplicationDocument[]         @relation("DeliveryCaptainApplicationDocuments")
 
   @@index([status, createdAt])
+  @@index([status, trashedAt, createdAt])
   @@index([applicantUserId])
   @@index([phoneNumber])
   @@index([city, state])
@@ -917,7 +964,7 @@ model TaxiTrip {
   cancellationReason     String?
   customerNote           String?
   driverNote             String?
-  isTestMode             Boolean            @default(true)
+  isTestMode             Boolean            @default(false)
   requestedAt            DateTime           @default(now())
   acceptedAt             DateTime?
   arrivedAtPickupAt      DateTime?
