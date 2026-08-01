@@ -5,7 +5,8 @@ Use this checklist after every staging deployment and before any controlled laun
 ## Backend on Render
 
 - [ ] Pull latest `main`.
-- [ ] Confirm build command includes dependency install, Prisma generate, migration deploy and backend build.
+- [ ] Confirm build command includes dependency install, Prisma generate and backend build.
+- [ ] Confirm Pre-Deploy command runs Prisma migrate deploy exactly once.
 - [ ] Run `npx prisma migrate deploy`.
 - [ ] Confirm migration status is clean.
 - [ ] Run staging seed only when approved.
@@ -17,13 +18,19 @@ Use this checklist after every staging deployment and before any controlled laun
 Recommended build command:
 
 ```text
-npm ci && npx prisma generate && npx prisma migrate deploy && npm run build
+npm ci && npx prisma generate && npm run build
+```
+
+Recommended Pre-Deploy command:
+
+```text
+npx prisma migrate deploy
 ```
 
 Recommended start command:
 
 ```text
-node dist/main
+npm run start:prod
 ```
 
 ## Web Portals and Website

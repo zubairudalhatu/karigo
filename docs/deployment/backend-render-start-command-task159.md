@@ -67,7 +67,8 @@ services/backend-api
 use:
 
 ```text
-Build Command: npm ci && npx prisma generate && npx prisma migrate deploy && npm run build
+Build Command: npm ci && npx prisma generate && npm run build
+Pre-Deploy Command: npx prisma migrate deploy
 Start Command: npm run start:prod
 ```
 

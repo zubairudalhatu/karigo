@@ -4,14 +4,16 @@
 
 Use these commands for the KariGO backend service on Render:
 
-- Build Command: `npm ci && npx prisma generate --schema services/backend-api/prisma/schema.prisma && npx prisma migrate deploy --schema services/backend-api/prisma/schema.prisma && npm run build --workspace @karigo/backend-api`
+- Build Command: `npm ci && npx prisma generate --schema services/backend-api/prisma/schema.prisma && npm run build --workspace @karigo/backend-api`
+- Pre-Deploy Command: `npx prisma migrate deploy --schema services/backend-api/prisma/schema.prisma`
 - Preferred Start Command: `cd services/backend-api && npm run start:prod`
 - Compatibility Start Command: `node services/backend-api/dist/main`
 
 If Render runs from `services/backend-api` as the service root instead of the monorepo
 root, use:
 
-- Build Command: `npm ci && npx prisma generate && npx prisma migrate deploy && npm run build`
+- Build Command: `npm ci && npx prisma generate && npm run build`
+- Pre-Deploy Command: `npx prisma migrate deploy`
 - Preferred Start Command: `npm run start:prod`
 - Compatibility Start Command: `node dist/main`
 
@@ -53,6 +55,13 @@ Use Node.js 22 for staging and production. The monorepo includes:
 
 - `.node-version` with `22`
 - root `package.json` engines set to `22.x`
+
+## Migration Placement
+
+Run Prisma migrations once through Render's Pre-Deploy Command or an approved
+one-off migration job. Do not include `npx prisma migrate deploy` inside the
+Build Command when a Pre-Deploy Command is also configured; otherwise the same
+deployment can attempt migrations twice.
 
 ## Security And Providers
 

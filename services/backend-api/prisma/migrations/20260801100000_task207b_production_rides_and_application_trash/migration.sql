@@ -2,10 +2,6 @@
 
 ALTER TYPE "TaxiDriverProfileStatus" ADD VALUE IF NOT EXISTS 'ACTIVE';
 
-UPDATE "taxi_driver_profiles"
-SET "status" = 'ACTIVE'
-WHERE "status" = 'ACTIVE_TEST';
-
 ALTER TABLE "taxi_trips"
   ALTER COLUMN "isTestMode" SET DEFAULT false;
 

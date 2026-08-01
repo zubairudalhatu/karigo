@@ -53,7 +53,8 @@ node dist/services/backend-api/src/main.js
 If Render uses `services/backend-api` as the service root directory, use:
 
 ```text
-Build Command: npm ci && npx prisma generate && npx prisma migrate deploy && npm run build
+Build Command: npm ci && npx prisma generate && npm run build
+Pre-Deploy Command: npx prisma migrate deploy
 Start Command: npm run start:prod
 ```
 
