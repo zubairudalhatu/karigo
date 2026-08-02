@@ -692,4 +692,15 @@ describe("AuthService", () => {
       data: expect.objectContaining({ revokedAt: expect.any(Date), replacedBy: "refresh-token-id" })
     }));
   });
+
+  it("returns a safe error code when refresh token is invalid", async () => {
+    prisma.refreshToken.findUnique.mockResolvedValue(null);
+
+    await expect(service.refreshSession({ refreshToken: "invalid-refresh-token-value" })).rejects.toMatchObject({
+      response: expect.objectContaining({
+        message: "Your session has expired. Please sign in again.",
+        error_code: "REFRESH_TOKEN_INVALID"
+      })
+    });
+  });
 });

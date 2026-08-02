@@ -6,7 +6,7 @@ import { Card, LoadingState, PrimaryButton, Screen, TextField } from "../../src/
 import { useAuth } from "../../src/contexts/auth-context";
 
 export default function LoginScreen() {
-  const { loading, login, user } = useAuth();
+  const { loading, login, resetSavedLogin, sessionMessage, sessionRepairRequired, user } = useAuth();
   const router = useRouter();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
@@ -24,6 +24,18 @@ export default function LoginScreen() {
       await login({ phoneNumber, password });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Partner sign in failed. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function resetLocalSession() {
+    setError(null);
+    setSubmitting(true);
+    try {
+      await resetSavedLogin();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Saved login could not be reset. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -57,7 +69,9 @@ export default function LoginScreen() {
             <Text style={styles.passwordToggleText}>{passwordVisible ? "Hide" : "Show"}</Text>
           </Pressable>
         </View>
+        {sessionMessage ? <Text style={styles.sessionMessage}>{sessionMessage}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        {sessionRepairRequired ? <PrimaryButton label="Reset saved login" onPress={resetLocalSession} variant="secondary" /> : null}
         <PrimaryButton
           disabled={submitting || !phoneNumber.trim() || !password}
           label={submitting ? "Signing in..." : "Sign in"}
@@ -108,6 +122,11 @@ const styles = StyleSheet.create({
   error: {
     color: brand.colors.primary,
     fontWeight: "800"
+  },
+  sessionMessage: {
+    color: brand.colors.muted,
+    fontSize: 13,
+    lineHeight: 18
   },
   note: {
     color: brand.colors.muted,

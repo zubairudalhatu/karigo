@@ -29,8 +29,8 @@ export const authApi = {
     api.post<RequestPasswordResetResult>("auth/password-reset/request", body, { authenticated: false }),
   confirmPasswordReset: (body: ConfirmPasswordResetRequest) =>
     api.post<{ passwordReset: boolean }>("auth/password-reset/confirm", body, { authenticated: false }),
-  verifyOtp: (body: VerifyOtpRequest) => api.post<LoginResult>("auth/verify-otp", body, { authenticated: false }),
-  login: (body: LoginRequest) => api.post<LoginResponse>("auth/login", body, { authenticated: false }),
+  verifyOtp: (body: VerifyOtpRequest) => api.post<LoginResult>("auth/verify-otp", body, { authenticated: false, retryOnNetworkFailure: true }),
+  login: (body: LoginRequest) => api.post<LoginResponse>("auth/login", body, { authenticated: false, retryOnNetworkFailure: true }),
   changePassword: (body: ChangePasswordRequest) => api.post<{ passwordChanged: boolean }>("auth/change-password", body),
   refresh: (body: RefreshSessionRequest) => api.post<LoginResult>("auth/refresh", body, { authenticated: false }),
   logout: (body: LogoutRequest) => api.post<{ loggedOut: boolean }>("auth/logout", body),

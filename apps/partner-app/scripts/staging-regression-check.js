@@ -97,9 +97,11 @@ expect(
   "partner-production must point at the production Render API."
 );
 
-expect(apiClient.includes("karigo_partner_access_token"), "Partner app must use partner-specific access token key.");
-expect(apiClient.includes("karigo_partner_refresh_token"), "Partner app must use partner-specific refresh token key.");
+expect(apiClient.includes("karigo_partner_session_v2"), "Partner app must persist access/refresh tokens in the v2 session envelope.");
+expect(apiClient.includes("LEGACY_REFRESH_TOKEN_KEY"), "Partner app must keep legacy refresh token migration support.");
 expect(apiClient.includes("refreshAuth"), "Partner app must support refresh sessions.");
+expect(apiClient.includes("refresh_joined_existing"), "Partner app must use a single-flight refresh guard.");
+expect(apiClient.includes("validateMobileApiBaseUrl"), "Partner API client must validate production API base URL safety.");
 expect(authContext.includes("canUsePartnerApp(currentUser)"), "Partner app must authorize compatible accounts after authentication.");
 expect(authContext.includes('user.role === "VENDOR" || user.role === "CUSTOMER"'), "Partner app must accept approved Partner accounts and recognised Customer accounts.");
 expect(authContext.includes("cannot access Partner onboarding"), "Role rejection copy must use Partner onboarding branding.");

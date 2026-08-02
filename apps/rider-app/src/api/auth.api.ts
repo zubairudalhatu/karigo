@@ -2,7 +2,7 @@ import type { AuthenticatedUser, ConfirmPasswordResetRequest, LoginRequest, Logi
 import { api } from "./client";
 
 export const authApi = {
-  login: (body: LoginRequest) => api.post<LoginResult>("auth/login", body, { authenticated: false }),
+  login: (body: LoginRequest) => api.post<LoginResult>("auth/login", body, { authenticated: false, retryOnNetworkFailure: true }),
   refresh: (body: RefreshSessionRequest) => api.post<LoginResult>("auth/refresh", body, { authenticated: false }),
   requestPasswordReset: (body: RequestPasswordResetRequest) =>
     api.post<RequestPasswordResetResult>("auth/password-reset/request", body, { authenticated: false }),

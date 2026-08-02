@@ -68,8 +68,11 @@ expect(appConfig.includes("versionCode: isStaging ? 1 : 10"), "Captain productio
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-build-properties"), "Captain app base config must include build-properties.");
 expect(JSON.stringify(appJson.expo.plugins).includes('"targetSdkVersion":36'), "Captain app base config must target Android API 36.");
 
-expect(apiClient.includes("karigo_rider_access_token"), "Captain token storage key must be app-specific.");
+expect(apiClient.includes("karigo_captain_session_v2"), "Captain app must persist access/refresh tokens in the v2 session envelope.");
+expect(apiClient.includes("LEGACY_TOKEN_KEY"), "Captain app must keep legacy rider token migration support.");
 expect(apiClient.includes("refreshAuth"), "Captain app must refresh sessions when access tokens expire.");
+expect(apiClient.includes("refresh_joined_existing"), "Captain API client must use a single-flight refresh guard.");
+expect(apiClient.includes("validateMobileApiBaseUrl"), "Captain API client must validate production API base URL safety.");
 expect(authContext.includes("canUseCaptainApp"), "Captain app must use explicit account eligibility.");
 expect(authContext.includes('user.role === "RIDER" || user.role === "CUSTOMER"'), "Captain app must allow Customer accounts for application/status and Rider accounts for approved operations.");
 expect(authContext.includes("refreshWithBiometrics") && authContext.includes("authApi.refresh"), "Captain biometric sign-in must refresh a saved backend session.");

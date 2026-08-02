@@ -55,8 +55,11 @@ assert(ui.includes("productImage"), "Shared UI must include product image stylin
 const client = read("src", "api", "client.ts");
 assert(client.includes("expo-secure-store"), "Customer session tokens must use Expo SecureStore.");
 assert(client.includes("EXPO_PUBLIC_API_BASE_URL ?? process.env.EXPO_PUBLIC_API_URL"), "Customer API client must support production OTA API env aliases.");
-assert(client.includes("karigo_customer_refresh_token"), "Customer app must persist refresh tokens separately.");
+assert(client.includes("karigo_customer_session_v2"), "Customer app must persist access/refresh tokens in the v2 session envelope.");
+assert(client.includes("LEGACY_REFRESH_TOKEN_KEY"), "Customer app must migrate legacy refresh token storage safely.");
 assert(client.includes("auth/refresh"), "Customer API client must support session refresh.");
+assert(client.includes("refresh_joined_existing"), "Customer API client must use a single-flight refresh guard.");
+assert(client.includes("validateMobileApiBaseUrl"), "Customer API client must validate production API base URL safety.");
 assert(!client.includes("AsyncStorage"), "Customer auth tokens must not use AsyncStorage.");
 assert(packageJson.dependencies?.["expo-local-authentication"] === "~16.0.5", "Customer app must use the Expo SDK 53-compatible expo-local-authentication package.");
 assert(ui.includes("paddingBottom: 112"), "Customer screens must leave room for bottom navigation.");

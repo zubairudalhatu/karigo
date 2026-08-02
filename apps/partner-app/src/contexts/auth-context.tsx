@@ -1,14 +1,27 @@
+import {
+  ApiNetworkError,
+  ApiParseError,
+  ApiTimeoutError,
+  SessionCorruptionError,
+  SessionPersistenceError,
+  SessionTemporarilyUnavailableError,
+  StaleAuthOperationError,
+  logMobileAuthDiagnostic
+} from "@karigo/config";
 import type { AuthenticatedUser, LoginRequest } from "@karigo/shared-types";
 import { KariGoApiError } from "@karigo/shared-types";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { authApi } from "../api/auth.api";
-import { onUnauthorized, refreshTokenStore, tokenStore } from "../api/client";
+import { authSessionStore, onUnauthorized, refreshTokenStore } from "../api/client";
 import { normalizeNigerianPhoneNumber } from "../lib/phone";
 
 interface AuthContextValue {
   user: AuthenticatedUser | null;
   loading: boolean;
+  sessionMessage: string;
+  sessionRepairRequired: boolean;
   login(body: LoginRequest): Promise<void>;
+  resetSavedLogin(): Promise<void>;
   logout(): Promise<void>;
 }
 
@@ -18,6 +31,19 @@ function isAuthStatus(error: unknown): boolean {
   return error instanceof KariGoApiError && error.status === 401;
 }
 
+function isTemporarySessionFailure(error: unknown): boolean {
+  return error instanceof ApiNetworkError ||
+    error instanceof ApiTimeoutError ||
+    error instanceof ApiParseError ||
+    error instanceof SessionTemporarilyUnavailableError ||
+    (error instanceof KariGoApiError && (
+      error.status === 429 ||
+      error.status === 502 ||
+      error.status === 503 ||
+      error.status === 504
+    ));
+}
+
 function canUsePartnerApp(user: AuthenticatedUser): boolean {
   return user.role === "VENDOR" || user.role === "CUSTOMER";
 }
@@ -25,36 +51,60 @@ function canUsePartnerApp(user: AuthenticatedUser): boolean {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionMessage, setSessionMessage] = useState("");
+  const [sessionRepairRequired, setSessionRepairRequired] = useState(false);
 
   useEffect(() => {
-    const off = onUnauthorized(() => setUser(null));
+    const off = onUnauthorized((meta) => {
+      if (!authSessionStore.isCurrent(meta?.generation)) {
+        return;
+      }
+      setUser(null);
+      setSessionMessage("Your session has expired. Please sign in again.");
+    });
     let active = true;
 
     async function bootstrap() {
-      const token = await tokenStore.getToken();
-      const refreshToken = await refreshTokenStore.getToken();
-      if (!token && !refreshToken) {
-        if (active) setLoading(false);
-        return;
-      }
-
+      const generation = authSessionStore.beginOperation();
       try {
+        const session = await authSessionStore.readSession();
+        if (!session) {
+          if (active && authSessionStore.isCurrent(generation)) setLoading(false);
+          return;
+        }
+
         const currentUser = await authApi.me();
-        if (!active) return;
+        if (!active || !authSessionStore.isCurrent(generation)) return;
 
         if (canUsePartnerApp(currentUser)) {
           setUser(currentUser);
+          setSessionMessage("");
+          setSessionRepairRequired(false);
         } else {
-          await tokenStore.clearToken?.();
+          await authSessionStore.clearSession(generation);
           setUser(null);
+          setSessionMessage("This KariGO account cannot access Partner onboarding.");
         }
       } catch (error) {
-        if (isAuthStatus(error)) {
-          await tokenStore.clearToken?.();
-          if (active) setUser(null);
+        if (!active || !authSessionStore.isCurrent(generation)) {
+          return;
+        }
+        if (error instanceof SessionCorruptionError) {
+          setUser(null);
+          setSessionRepairRequired(true);
+          setSessionMessage("Your saved Partner login could not be read safely. Reset saved login, then sign in again.");
+          logMobileAuthDiagnostic("partner", "bootstrap_session_repair_required", { generation });
+        } else if (isAuthStatus(error)) {
+          await authSessionStore.clearSession(generation);
+          setUser(null);
+          setSessionMessage("Your session has expired. Please sign in again.");
+          logMobileAuthDiagnostic("partner", "bootstrap_session_expired", { generation });
+        } else if (isTemporarySessionFailure(error)) {
+          setSessionMessage("KariGO Partner could not reconnect right now. Your saved login was kept, so please try again shortly.");
+          logMobileAuthDiagnostic("partner", "bootstrap_temporary_failure", { generation });
         }
       } finally {
-        if (active) setLoading(false);
+        if (active && authSessionStore.isCurrent(generation)) setLoading(false);
       }
     }
 
@@ -66,35 +116,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  async function saveSession(accessToken: string, refreshToken: string | undefined, nextUser: AuthenticatedUser, generation: number) {
+    if (!accessToken) {
+      throw new SessionPersistenceError("Login response did not include an access token.");
+    }
+    if (!refreshToken) {
+      throw new SessionPersistenceError("Login response did not include a refresh token.");
+    }
+    if (!canUsePartnerApp(nextUser)) {
+      throw new Error("This KariGO account cannot access Partner onboarding. Contact KariGO support if this looks wrong.");
+    }
+    await authSessionStore.persistTokenPair(accessToken, refreshToken, generation);
+    if (!authSessionStore.isCurrent(generation)) {
+      throw new StaleAuthOperationError();
+    }
+    setSessionRepairRequired(false);
+    setSessionMessage("");
+    setUser(nextUser);
+  }
+
   return (
     <AuthContext.Provider
       value={{
         user,
         loading,
+        sessionMessage,
+        sessionRepairRequired,
         login: async (body) => {
+          const generation = authSessionStore.beginNewSession();
           const result = await authApi.login({
             ...body,
             phoneNumber: normalizeNigerianPhoneNumber(body.phoneNumber)
           });
-
-          if (!result.accessToken) {
-            throw new Error("Login response did not include an access token.");
-          }
-
-          if (!canUsePartnerApp(result.user)) {
-            throw new Error("This KariGO account cannot access Partner onboarding. Contact KariGO support if this looks wrong.");
-          }
-
-          await tokenStore.setToken?.(result.accessToken);
-          if (result.refreshToken) await refreshTokenStore.setToken(result.refreshToken);
-          setUser(result.user);
+          await saveSession(result.accessToken, result.refreshToken, result.user, generation);
+        },
+        resetSavedLogin: async () => {
+          await authSessionStore.resetSavedLogin();
+          setUser(null);
+          setSessionRepairRequired(false);
+          setSessionMessage("Saved login reset. Please sign in again.");
         },
         logout: async () => {
           const refreshToken = await refreshTokenStore.getToken();
+          const generation = authSessionStore.beginNewSession();
           if (refreshToken) {
             await authApi.logout({ refreshToken }).catch(() => undefined);
           }
-          await tokenStore.clearToken?.();
+          await authSessionStore.clearSession(generation);
           setUser(null);
         }
       }}

@@ -496,7 +496,10 @@ export class AuthService {
       existing.user.deletedAt ||
       existing.user.accountStatus !== AccountStatus.ACTIVE
     ) {
-      throw new UnauthorizedException("Your session has expired. Please sign in again.");
+      throw new UnauthorizedException({
+        message: "Your session has expired. Please sign in again.",
+        error_code: "REFRESH_TOKEN_INVALID"
+      });
     }
 
     const session = await this.issueSession(existing.user.id, existing.user.role);

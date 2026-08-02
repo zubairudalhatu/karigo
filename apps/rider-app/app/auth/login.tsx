@@ -7,7 +7,17 @@ import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 
 export default function CaptainLogin() {
-  const { biometricAvailable, biometricEnabled, login, loading, refreshWithBiometrics, user } = useAuth();
+  const {
+    biometricAvailable,
+    biometricEnabled,
+    login,
+    loading,
+    refreshWithBiometrics,
+    resetSavedLogin,
+    sessionMessage,
+    sessionRepairRequired,
+    user
+  } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -39,6 +49,18 @@ export default function CaptainLogin() {
     }
   }
 
+  async function resetLocalSession() {
+    setBusy(true);
+    setError("");
+    try {
+      await resetSavedLogin();
+    } catch (e) {
+      setError(friendlyError(e, "login"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) return <Loading label="Restoring Captain session..." />;
   if (user) return <Redirect href="/captain-access" />;
 
@@ -49,7 +71,9 @@ export default function CaptainLogin() {
       <Text style={styles.copy}>This account can continue Captain onboarding. Sign in to proceed.</Text>
       <Field placeholder="+234..." keyboardType="phone-pad" value={phoneNumber} onChangeText={setPhoneNumber} />
       <PasswordField placeholder="Password" visible={passwordVisible} onToggleVisible={() => setPasswordVisible((visible) => !visible)} value={password} onChangeText={setPassword} />
+      <Message>{sessionMessage}</Message>
       <Message error>{error}</Message>
+      {sessionRepairRequired ? <Button title="Reset saved login" tone="muted" disabled={busy} onPress={resetLocalSession} /> : null}
       <Button title={busy ? "Signing in..." : "Sign in"} disabled={busy || !phoneNumber || !password} onPress={submit} />
       {biometricEnabled ? <Button title="Sign in with biometrics" tone="muted" disabled={busy || !biometricAvailable} onPress={biometricSignIn} /> : null}
       <Link href="/auth/forgot-password" style={styles.forgotLink}>Forgot password?</Link>

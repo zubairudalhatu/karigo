@@ -6,7 +6,15 @@ import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 
 export default function CustomerLogin() {
-  const { biometricAvailable, biometricEnabled, login, refreshWithBiometrics, sessionMessage } = useAuth();
+  const {
+    biometricAvailable,
+    biometricEnabled,
+    login,
+    refreshWithBiometrics,
+    resetSavedLogin,
+    sessionMessage,
+    sessionRepairRequired
+  } = useAuth();
   const [phoneNumber, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -46,12 +54,25 @@ export default function CustomerLogin() {
     }
   }
 
+  async function resetLocalSession() {
+    setBusy(true);
+    setError("");
+    try {
+      await resetSavedLogin();
+    } catch (e) {
+      setError(friendlyError(e, "login"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return <Screen title="Customer login">
     <Text style={ui.muted}>Sign in to order, track deliveries and get support. If your phone is registered but not verified, KariGO will send a new OTP.</Text>
     <Field placeholder="+234..." value={phoneNumber} onChangeText={setPhone} keyboardType="phone-pad" autoCapitalize="none" />
     <PasswordField placeholder="Password" value={password} onChangeText={setPassword} visible={passwordVisible} onToggleVisible={() => setPasswordVisible((current) => !current)} />
     <Message>{sessionMessage}</Message>
     <Message error>{error}</Message>
+    {sessionRepairRequired ? <Button title="Reset saved login" tone="muted" onPress={resetLocalSession} disabled={busy} /> : null}
     <Button title={busy ? "Signing in..." : "Sign in"} onPress={submit} disabled={busy || !phoneNumber || !password} />
     {biometricEnabled ? <Button title="Sign in with biometrics" tone="muted" onPress={biometricSignIn} disabled={busy || !biometricAvailable} /> : null}
     <NavLink href="/auth/forgot-password" label="Forgot password?" />
