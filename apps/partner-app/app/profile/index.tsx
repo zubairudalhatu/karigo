@@ -66,6 +66,14 @@ function ProfileContent() {
           {canContinue ? <PrimaryButton label={partnerState.state === "correction_required" ? "Update requested information" : "Continue application"} onPress={() => router.push("/register")} /> : null}
           <PrimaryButton label="Back to Partner home" onPress={() => router.replace("/")} variant="secondary" />
         </Card>
+        <Card>
+          <Text style={styles.sectionTitle}>Privacy, support and account controls</Text>
+          <MutedText>Review KariGO policies, contact Support, or request closure of Partner business access.</MutedText>
+          <PrimaryButton label="Privacy Policy" onPress={() => router.push("/legal/privacy")} variant="secondary" />
+          <PrimaryButton label="Terms of Service" onPress={() => router.push("/legal/terms")} variant="secondary" />
+          <PrimaryButton label="Support" onPress={() => router.push("/support")} variant="secondary" />
+          <PrimaryButton label="Delete my KariGO Partner business access" onPress={() => router.push("/profile/delete-account")} variant="secondary" />
+        </Card>
         <PrimaryButton label="Log out" onPress={() => void logout()} variant="secondary" />
       </Screen>
     );
@@ -107,10 +115,18 @@ function ProfileContent() {
       <Card>
         <Text style={styles.sectionTitle}>Settlement readiness</Text>
         <MutedText>
-          View earnings and maintain payout account details for future manual settlement review. This does not trigger automated payouts.
+          View earnings and maintain payout account details for manual settlement review.
         </MutedText>
         <PrimaryButton label="View earnings" onPress={() => router.push("/earnings")} variant="secondary" />
         <PrimaryButton label="Payout account" onPress={() => router.push("/payout")} variant="secondary" />
+      </Card>
+      <Card>
+        <Text style={styles.sectionTitle}>Privacy, support and account controls</Text>
+        <MutedText>Review KariGO policies, get support, or request safe closure of Partner business access.</MutedText>
+        <PrimaryButton label="Privacy Policy" onPress={() => router.push("/legal/privacy")} variant="secondary" />
+        <PrimaryButton label="Terms of Service" onPress={() => router.push("/legal/terms")} variant="secondary" />
+        <PrimaryButton label="Support" onPress={() => router.push("/support")} variant="secondary" />
+        <PrimaryButton label="Delete my KariGO Partner business access" onPress={() => router.push("/profile/delete-account")} variant="secondary" />
       </Card>
       <PrimaryButton label="Log out" onPress={() => void logout()} variant="secondary" />
     </Screen>

@@ -44,6 +44,10 @@ export default function RootLayout() {
           <Stack.Screen name="documents/index" options={headerless} />
           <Stack.Screen name="profile/index" options={headerless} />
           <Stack.Screen name="profile/edit" options={backOnly} />
+          <Stack.Screen name="profile/delete-account" options={backOnly} />
+          <Stack.Screen name="legal/privacy" options={backOnly} />
+          <Stack.Screen name="legal/terms" options={backOnly} />
+          <Stack.Screen name="support" options={backOnly} />
           <Stack.Screen name="+not-found" options={backOnly} />
         </Stack>
         <PartnerBottomNav />

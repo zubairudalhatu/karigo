@@ -22,6 +22,7 @@
     "db:seed": "npm run seed --workspace @karigo/backend-api",
     "db:studio": "npm run prisma:studio --workspace @karigo/backend-api",
     "db:validate": "npm run prisma:validate --workspace @karigo/backend-api",
+    "audit:production-copy": "node scripts/production-copy-audit.cjs",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },

@@ -57,7 +57,7 @@ describe("AccountActivationEmailService", () => {
         RESEND_REPLY_TO: "support@example.test",
         RESEND_BASE_URL: "https://api.resend.com",
         KARIGO_EMAIL_LOGO_URL: "https://www.karigo.com.ng/karigo-logo.png",
-        KARIGO_PILOT_EMAIL_LABEL: "Kano and Abuja launch onboarding"
+        KARIGO_PILOT_EMAIL_LABEL: "Kano and Abuja service areas"
       }[key] ?? fallback))
     };
     jest.spyOn(global, "fetch").mockResolvedValue({

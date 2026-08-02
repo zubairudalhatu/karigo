@@ -14,8 +14,8 @@ export function isDemoPartnerProfile(profile: PartnerProfile | null) {
 export function partnerProfileWarning(profile: PartnerProfile | null) {
   if (isDemoPartnerProfile(profile)) {
     return {
-      title: "Demo or test partner record",
-      body: "This profile looks like a demo/test record. Keep it out of live order handling unless KariGO Admin confirms it is safe for production use."
+      title: "Partner record requires confirmation",
+      body: "This profile requires KariGO Admin confirmation before it can handle live orders or customer service requests."
     };
   }
 

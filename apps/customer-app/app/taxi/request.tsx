@@ -193,8 +193,8 @@ function estimateMatchesRoute(estimate: TaxiFareEstimate | null, routePreview: T
 
 function paymentCopy(paymentMethod: string) {
   if (paymentMethod === "Cash") return "Cash payment is available for supported KariGO Rides.";
-  if (paymentMethod === "Wallet") return "Wallet ride payment is coming soon.";
-  return "Card ride payment is coming soon.";
+  if (paymentMethod === "Wallet") return "Wallet ride payment is not available for this ride.";
+  return "Card ride payment is not available for this ride.";
 }
 
 function lifecycleForTrip(trip: TaxiTrip) {
@@ -1754,7 +1754,7 @@ function RideBookingDetails({
         {["Cash", "Wallet", "Card"].map((option) => (
           <Pressable key={option} accessibilityRole="button" disabled={option !== "Cash"} onPress={() => onPaymentMethod(option)} style={[styles.paymentOption, paymentMethod === option && styles.paymentOptionActive, option !== "Cash" && styles.paymentOptionDisabled]}>
             <Text style={styles.paymentTitle}>{option}</Text>
-            <Text style={styles.paymentSubtitle}>{option === "Cash" ? "Available" : "Coming soon"}</Text>
+            <Text style={styles.paymentSubtitle}>{option === "Cash" ? "Available" : "Unavailable"}</Text>
           </Pressable>
         ))}
       </View>

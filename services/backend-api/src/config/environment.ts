@@ -818,7 +818,7 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     KARIGO_EMAIL_LOGO_URL: karigoEmailLogoUrl,
     KARIGO_PILOT_EMAIL_LABEL: typeof config.KARIGO_PILOT_EMAIL_LABEL === "string" && config.KARIGO_PILOT_EMAIL_LABEL.trim()
       ? config.KARIGO_PILOT_EMAIL_LABEL.trim()
-      : "Kano and Abuja launch onboarding",
+      : "Kano and Abuja service areas",
     CUSTOMER_APP_DEEP_LINK_BASE: customerAppDeepLinkBase,
     CUSTOMER_APP_WALLET_TOP_UP_RETURN_URL: customerAppWalletTopUpReturnUrl,
     CUSTOMER_WEB_PAYMENT_FALLBACK_URL: customerWebPaymentFallbackUrl,

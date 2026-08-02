@@ -574,7 +574,7 @@ assert(utilityFlow.includes("walletDebitReference") && utilityFlow.includes("wal
 assert(!utilityFlow.includes("Pay Now"), "Utility flow must not use Pay Now wording.");
 assert(utilityFlow.includes("utilitiesStatusNote"), "Utility flow must render backend-controlled provider safety copy.");
 assert(utilityFlow.includes("Your request is being processed. KariGO will confirm once the provider completes fulfilment."), "Utility flow must include provider-backed pending copy.");
-assert(utilityFlow.includes("This request is running in controlled provider test mode."), "Utility flow must include controlled test-mode receipt copy.");
+assert(utilityFlow.includes("This request is queued for KariGO provider verification."), "Utility flow must include provider-verification receipt copy.");
 assert(utilityFlow.includes("utilitiesApi.quote"), "Utility flow must quote through backend.");
 assert(utilityFlow.includes("utilitiesApi.create"), "Utility flow must create through the backend utility transaction endpoint.");
 const utilityReceipt = read("app", "utilities", "transactions", "[id].tsx");
@@ -592,7 +592,7 @@ assert(utilityReceipt.includes("setTransaction(cancelled)"), "Utility receipt mu
 assert(utilityReceipt.includes("Cancellation is available only before provider fulfilment becomes irreversible"), "Utility receipt must explain cancellation eligibility.");
 assert(utilityReceipt.includes("This utility request was cancelled before fulfilment."), "Utility receipt must show cancellation copy.");
 assert(utilityReceipt.includes("walletDebitReference") && utilityReceipt.includes("walletReversalReference"), "Utility receipt detail must show wallet debit and reversal references.");
-assert(utilityReceipt.includes("This request is running in controlled provider test mode."), "Utility receipt must keep controlled test-mode copy.");
+assert(utilityReceipt.includes("This request is queued for KariGO provider verification."), "Utility receipt must keep provider-verification copy.");
 assert(utilityReceipt.includes("Your request is being processed. KariGO will confirm once the provider completes fulfilment."), "Utility receipt must keep provider-backed pending copy.");
 
 const checkout = read("app", "checkout.tsx");
@@ -618,7 +618,7 @@ assert(checkout.includes("Pay with Flutterwave"), "Checkout must show Flutterwav
 assert(!checkout.includes("Pay with Squad"), "Checkout must hide Squad customer checkout.");
 assert(!checkout.includes("Pay from Wallet"), "Checkout must hide wallet order payment.");
 assert(checkout.includes('paymentProvider: "flutterwave"'), "Flutterwave checkout must send the Flutterwave provider to the backend.");
-assert(paymentStatus.includes("Mock Payment is for staging fallback"), "Payment copy must state mock is staging fallback only.");
+assert(paymentStatus.includes("Internal payment checks are not for public checkout"), "Payment copy must state internal payment checks are not public checkout.");
 assert(paymentStatus.includes("Flutterwave is KariGO's approved online payment provider"), "Payment copy must include Flutterwave launch wording.");
 assert(paymentStatus.includes("isFlutterwaveLivePaymentConfig"), "Customer checkout must recognize backend-confirmed Flutterwave live mode.");
 assert(paymentStatus.includes("flutterwaveCustomerCheckoutEnabled"), "Customer payment config must include the Flutterwave customer checkout flag.");
@@ -636,8 +636,8 @@ assert(errors.includes("FLUTTERWAVE_CHECKOUT_LINK_MISSING") && errors.includes("
 assert(paymentStatus.includes("Complete the ${providerLabel} checkout page"), "Checkout must show provider-specific authorization guidance.");
 assert(paymentStatus.includes("KariGO will only mark the order paid after backend verification."), "Payment copy must state backend verification is required.");
 assert(paymentStatus.includes("Payment could not be verified yet."), "Payment failures must have a clear retry-oriented message.");
-assert(paymentStatus.includes("paymentInitializationFailureMessage"), "Payment initialization failures must have a provider-specific retry/mock fallback message.");
-assert(paymentStatus.includes("You can select Mock payment"), "Sandbox provider startup failures must guide testers back to mock payment.");
+assert(paymentStatus.includes("paymentInitializationFailureMessage"), "Payment initialization failures must have a provider-specific safe fallback message.");
+assert(paymentStatus.includes("Please choose another available payment method"), "Provider startup failures must guide customers to another available payment method.");
 assert(paymentStatus.includes("Pay on Delivery is available for supported KariGO orders while online payment is temporarily unavailable."), "Payment copy must keep Pay on Delivery fallback posture.");
 assert(!checkout.includes("Verify payment status"), "Checkout must keep electronic verification on the order detail screen.");
 assert(!checkout.includes("paymentInitializationFailureMessage"), "Checkout must keep provider initialization copy on the order detail retry flow.");

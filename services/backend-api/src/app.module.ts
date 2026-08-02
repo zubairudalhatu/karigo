@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { validateEnvironment } from "./config/environment";
 import { DomainModule } from "./domain/domain.module";
+import { AccountDeletionModule } from "./modules/account-deletion/account-deletion.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { AddressesModule } from "./modules/addresses/addresses.module";
 import { AdsModule } from "./modules/ads/ads.module";
@@ -71,7 +72,8 @@ import { ServiceProviderRequestsModule } from "./modules/service-provider-reques
     SupportModule,
     TaxiModule,
     AdminOperationsModule,
-    DomainModule
+    DomainModule,
+    AccountDeletionModule
   ]
 })
 export class AppModule {}

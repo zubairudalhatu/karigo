@@ -31,18 +31,20 @@ describe("EmailService and templates", () => {
     expect(rendered.htmlBody).toContain("&lt;script&gt;");
   });
 
-  it("renders the account activation email with an HTTPS logo and pilot footer copy", () => {
+  it("renders the account activation email with an HTTPS logo and production service-area copy", () => {
     const rendered = emailTemplates["account-activated"].render({
       recipientName: "Amina",
       message: "Your KariGO account is now active.",
       logoUrl: "https://www.karigo.com.ng/karigo-logo.png",
       supportContact: "support@karigo.com.ng",
-      pilotLabel: "Kano and Abuja launch onboarding"
+      pilotLabel: "Kano and Abuja service areas"
     });
 
     expect(rendered.subject).toBe("Your KariGO account is active");
     expect(rendered.htmlBody).toContain("https://www.karigo.com.ng/karigo-logo.png");
-    expect(rendered.htmlBody).toContain("Kano and Abuja launch onboarding");
+    expect(rendered.htmlBody).toContain("Kano and Abuja service areas");
+    expect(rendered.htmlBody).toContain("Your KariGO account is active. You can now sign in and use services available in your location.");
+    expect(rendered.htmlBody).toContain("KariGO services are currently available in selected locations in Kano and Abuja.");
     expect(rendered.htmlBody).toContain("This is an account activation notification, not a marketing email.");
     expect(rendered.textBody).toContain("Use only approved KariGO payment instructions shown in the app");
   });

@@ -285,7 +285,7 @@ export default function Profile() {
 
         <Card>
           <Text style={ui.cardTitle}>Need help?</Text>
-          <Text style={ui.muted}>Support remains the safest place for account, refund and delivery questions during launch.</Text>
+          <Text style={ui.muted}>Support is available for account, refund, delivery and service questions.</Text>
           <View style={styles.actionRow}>
             <Button title="Open support centre" tone="muted" onPress={() => router.push("/support")} />
             <Button title="Log out" tone="muted" onPress={async () => { await logout(); router.replace("/auth/login"); }} />

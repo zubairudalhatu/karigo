@@ -61,7 +61,7 @@ export default function AdminUtilitiesPage() {
     if (!window.confirm("Update this utility transaction status for operations review?")) return;
     try {
       setSelected(await utilitiesApi.updateStatus(selected.id, status, note));
-      setMessage("Utility transaction status updated for staging review.");
+      setMessage("Utility transaction status updated for operations review.");
       setNote("");
       await load();
     } catch (e) {
@@ -137,7 +137,7 @@ export default function AdminUtilitiesPage() {
         <h2>Transaction detail</h2>
         {selected ? <>
           <p><strong>{selected.reference}</strong></p>
-          <p className="muted">{selected.testMode ? "Controlled provider test-mode transaction." : "Provider-backed utility transaction."}</p>
+          <p className="muted">{selected.testMode ? "Provider verification transaction." : "Provider-backed utility transaction."}</p>
           <div className="item"><span>Customer</span><strong>{selected.customer.fullName}</strong></div>
           <div className="item"><span>Service</span><strong>{label(selected.serviceType)}</strong></div>
           <div className="item"><span>Provider</span><strong>{selected.provider.name}</strong></div>
@@ -158,7 +158,7 @@ export default function AdminUtilitiesPage() {
           {selected.providerSafeNote ? <p className="warning">{selected.providerSafeNote}</p> : null}
           {selected.customerNote ? <p className="muted">{selected.customerNote}</p> : null}
           {selected.failureReason ? <p className="error">{selected.failureReason}</p> : null}
-          <textarea placeholder="Staging override note" value={note} onChange={(event) => setNote(event.target.value)} />
+          <textarea placeholder="Operations override note" value={note} onChange={(event) => setNote(event.target.value)} />
           <div className="actions">
             <button className="secondary" onClick={verifyProviderStatus} disabled={verifying || terminalStatuses.includes(selected.status)}>{verifying ? "Checking..." : "Verify provider status"}</button>
             <button onClick={() => overrideStatus("SUCCESSFUL")}>Mark successful</button>

@@ -33,6 +33,32 @@ enum AccountStatus {
   BLOCKED
 }
 
+enum AccountDeletionAccountType {
+  CUSTOMER
+  CAPTAIN
+  PARTNER
+  COMPLETE_ACCOUNT
+}
+
+enum AccountDeletionStatus {
+  REQUESTED
+  BLOCKED
+  IN_REVIEW
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+enum AccountDeletionBlockedReasonCode {
+  ACTIVE_ORDER_EXISTS
+  ACTIVE_DELIVERY_EXISTS
+  ACTIVE_RIDE_EXISTS
+  OPEN_PARTNER_ORDER_EXISTS
+  PENDING_SETTLEMENT_EXISTS
+  PENDING_EARNING_EXISTS
+  ACCOUNT_SCOPE_INVALID
+}
+
 enum LoginActivityOutcome {
   SUCCESS
   FAILED
@@ -661,12 +687,41 @@ model User {
   verifiedDeliveryCaptainDocuments    DeliveryCaptainApplicationDocument[] @relation("DeliveryCaptainApplicationDocumentVerifiedBy")
   captainApplicationDocuments         CaptainApplicationDocument[]         @relation("CaptainApplicationDocumentOwner")
   reviewedCaptainApplicationDocuments CaptainApplicationDocument[]         @relation("CaptainApplicationDocumentReviewedBy")
+  accountDeletionRequests             AccountDeletionRequest[]             @relation("AccountDeletionRequestUser")
+  reviewedAccountDeletionRequests     AccountDeletionRequest[]             @relation("AccountDeletionRequestReviewedBy")
   vendorActivationAccounts            VendorAccountActivation[]            @relation("VendorActivationUser")
   createdVendorActivationInvitations  VendorAccountActivation[]            @relation("VendorActivationCreatedBy")
   reviewedAdCampaigns                 AdCampaign[]                         @relation("AdCampaignReviewedBy")
   captainWorkState                    CaptainWorkState?
 
   @@map("users")
+}
+
+model AccountDeletionRequest {
+  id                  String                            @id @default(uuid()) @db.Uuid
+  requestReference    String                            @unique
+  userId              String                            @db.Uuid
+  accountType         AccountDeletionAccountType
+  status              AccountDeletionStatus             @default(REQUESTED)
+  reason              String?
+  requestedAt         DateTime                          @default(now())
+  confirmedAt         DateTime?
+  processingStartedAt DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  blockedReasonCode   AccountDeletionBlockedReasonCode?
+  blockerSummary      Json?
+  adminNote           String?
+  adminReviewedById   String?                           @db.Uuid
+  adminReviewedAt     DateTime?
+  createdAt           DateTime                          @default(now())
+  updatedAt           DateTime                          @updatedAt
+  user                User                              @relation("AccountDeletionRequestUser", fields: [userId], references: [id])
+  adminReviewedBy     User?                             @relation("AccountDeletionRequestReviewedBy", fields: [adminReviewedById], references: [id])
+
+  @@index([userId, accountType, status])
+  @@index([status, requestedAt])
+  @@map("account_deletion_requests")
 }
 
 model CaptainWorkState {

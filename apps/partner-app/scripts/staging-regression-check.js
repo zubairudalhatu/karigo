@@ -212,7 +212,7 @@ expect(profileEdit.includes("Logo URL") && profileEdit.includes("Cover image URL
 expect(profileEdit.includes('pickAndUploadImage(kind)') && profileEdit.includes("Upload logo") && profileEdit.includes("Upload cover image"), "Profile edit must support controlled mobile logo and cover uploads.");
 expect(labels.includes("Pay on Delivery") && labels.includes("formatLabel") && labels.includes("statusTone"), "Partner app must format raw enum labels safely.");
 expect(labels.includes("Pending verification") && labels.includes("Verified"), "Partner app must format payout account statuses safely.");
-expect(partnerProfile.includes("Demo or test partner record") && partnerProfile.includes("Partner profile is closed or inactive"), "Partner profile helper must handle demo and closed profiles.");
+expect(partnerProfile.includes("Partner record requires confirmation") && partnerProfile.includes("Partner profile is closed or inactive"), "Partner profile helper must handle flagged and closed profiles.");
 
 if (failures.length) {
   console.error("Partner app regression check failed:");

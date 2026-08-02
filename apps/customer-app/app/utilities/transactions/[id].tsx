@@ -29,7 +29,7 @@ function receiptMessage(transaction: UtilityTransactionSummary) {
     return "Your request is being processed. KariGO will confirm once the provider completes fulfilment.";
   }
   return transaction.testMode
-    ? "This request is running in controlled provider test mode."
+    ? "This request is queued for KariGO provider verification."
     : "Your request is being processed. KariGO will confirm once the provider completes fulfilment.";
 }
 

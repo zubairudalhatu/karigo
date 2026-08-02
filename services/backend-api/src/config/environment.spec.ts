@@ -42,7 +42,7 @@ describe("environment configuration", () => {
     expect(result.ACCOUNT_ACTIVATION_EMAIL_PROVIDER).toBe("mock");
     expect(result.RESEND_BASE_URL).toBe("https://api.resend.com");
     expect(result.KARIGO_EMAIL_LOGO_URL).toBe("");
-    expect(result.KARIGO_PILOT_EMAIL_LABEL).toBe("Kano and Abuja launch onboarding");
+    expect(result.KARIGO_PILOT_EMAIL_LABEL).toBe("Kano and Abuja service areas");
     expect(result.CUSTOMER_APP_DEEP_LINK_BASE).toBe("karigo-customer:///profile/wallet");
     expect(result.CUSTOMER_APP_WALLET_TOP_UP_RETURN_URL).toBe("karigo-customer:///profile/wallet");
     expect(result.CUSTOMER_WEB_PAYMENT_FALLBACK_URL).toBe("https://www.karigo.com.ng/payment/flutterwave/return");

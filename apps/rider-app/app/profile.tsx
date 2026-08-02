@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, Linking, StyleSheet, Text, View } from "react-native";
 import { brand } from "@karigo/config";
 import { captainVehicleTypes } from "@karigo/shared-types";
 import type { CaptainAccess, CaptainWorkState } from "../src/api/captain-access.api";
@@ -186,12 +186,14 @@ export default function Profile() {
       <View style={styles.legalLinks}>
         <NavLink href="/legal/privacy" label="Privacy Policy" />
         <NavLink href="/legal/terms" label="Terms" />
+        <NavLink href="/account-deletion" label="Deactivate my Captain access" />
       </View>
     </Card>
 
     <Card>
       <Text style={ui.sectionTitle}>Support</Text>
       <Text style={ui.muted}>For account, assignment or document issues, contact KariGO Operations through the approved support channel shared with your Captain account.</Text>
+      <Button title="Open Support" tone="muted" onPress={() => Linking.openURL("https://www.karigo.com.ng/contact")} />
     </Card>
 
     <Button tone="muted" title="Log out" onPress={async () => { await logout(); router.replace("/auth/login"); }} />

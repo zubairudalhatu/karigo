@@ -14,10 +14,10 @@ const flutterwaveLiveLaunchMode =
   productionPaymentLaunchMode;
 
 const paymentProviderLabels: Record<CustomerTestPaymentProvider, string> = {
-  mock: "Mock Payment",
-  paystack: "Paystack Test Mode",
-  monnify: "Monnify Sandbox",
-  squad: "Squad Sandbox",
+  mock: "Internal Payment Check",
+  paystack: "Paystack",
+  monnify: "Monnify",
+  squad: "Squad",
   flutterwave: "Flutterwave"
 };
 
@@ -32,23 +32,23 @@ export type CustomerPaymentProviderOption = {
 const stagingPaymentProviderOptions: CustomerPaymentProviderOption[] = [
   {
     value: "mock",
-    title: "Mock Payment",
-    description: "Instant staging fallback for internal testing only."
+    title: "Internal Payment Check",
+    description: "Internal fallback for non-public checkout verification."
   },
   ...(squadSandboxCheckoutEnabled ? [{
     value: "squad" as CustomerTestPaymentProvider,
-    title: "Squad Sandbox",
-    description: "Deferred for customer checkout unless a separate Squad reopening task enables it."
+    title: "Squad",
+    description: "Unavailable for public customer checkout unless separately enabled."
   }] : []),
   {
     value: "monnify",
-    title: "Monnify Sandbox",
-    description: "Pending provider approval; remains available only for controlled sandbox tests when configured."
+    title: "Monnify",
+    description: "Pending provider approval for public customer checkout."
   },
   {
     value: "paystack",
-    title: "Paystack Test Mode",
-    description: "Pending provider approval; remains available only for controlled test-mode checks when configured."
+    title: "Paystack",
+    description: "Pending provider approval for public customer checkout."
   }
 ];
 
@@ -96,7 +96,7 @@ export const fallbackCustomerPaymentConfig: PublicPaymentConfig = flutterwaveLiv
       livePaymentsEnabled: false,
       activeProvider: "mock",
       customerSelectableProviders: stagingPaymentProviderOptions.map((option) => option.value),
-      launchProviderLabel: "Staging payment providers",
+      launchProviderLabel: "Internal payment providers",
       mockPaymentVisible: true,
       flutterwaveCustomerCheckoutEnabled: false,
       flutterwaveReady: false,
@@ -174,7 +174,7 @@ export function paymentSafetyNoteForConfig(config: PublicPaymentConfig = fallbac
   if (config.livePaymentsEnabled) {
     return "Pay on Delivery is available for supported KariGO orders while online payment is temporarily unavailable.";
   }
-  return "Mock Payment is for staging fallback. Squad is deferred for customer checkout; Monnify and Paystack remain pending approval and are for controlled sandbox/test checks only. Wallet top-up is controlled by backend config; wallet order payment, automatic refunds and payout automation remain disabled until separately approved.";
+  return "Internal payment checks are not for public checkout. Squad is unavailable for customer checkout; Monnify and Paystack remain pending provider approval. Wallet top-up is controlled by backend config; wallet order payment, automatic refunds and payout automation remain disabled until separately approved.";
 }
 
 export const paymentSafetyNote = paymentSafetyNoteForConfig();
@@ -182,7 +182,7 @@ export const paymentSafetyNote = paymentSafetyNoteForConfig();
 export function paymentProviderSelectionTitleForConfig(config: PublicPaymentConfig = fallbackCustomerPaymentConfig): string {
   if (isFlutterwaveLivePaymentConfig(config)) return "Payment provider";
   if (config.livePaymentsEnabled) return "Online payment unavailable";
-  return "Test payment provider";
+  return "Internal payment provider";
 }
 
 export const paymentProviderSelectionTitle = paymentProviderSelectionTitleForConfig();
@@ -194,7 +194,7 @@ export function paymentProviderSelectionBodyForConfig(config: PublicPaymentConfi
   if (config.livePaymentsEnabled) {
     return "Pay on Delivery is the active customer checkout method right now.";
   }
-  return "Choose how to verify this staging checkout. Mock payment remains the safe pilot fallback.";
+  return "Choose a configured payment method for this checkout.";
 }
 
 export const paymentProviderSelectionBody = paymentProviderSelectionBodyForConfig();
@@ -206,7 +206,7 @@ export function paymentProviderSensitiveDataNoteForConfig(config: PublicPaymentC
   if (config.livePaymentsEnabled) {
     return "Do not enter card or bank details in KariGO while online payment is unavailable.";
   }
-  return "Do not use live card, bank or account details during sandbox tests.";
+  return "Use only payment details approved by KariGO for the selected checkout method.";
 }
 
 export const paymentProviderSensitiveDataNote = paymentProviderSensitiveDataNoteForConfig();
@@ -251,7 +251,7 @@ export function paymentStatusView(status?: string): PaymentStatusView {
       return {
         title: "Awaiting payment",
         body: "Complete payment before the order moves to the vendor and dispatch workflow.",
-        actionHint: flutterwaveLiveLaunchMode ? "Continue with Flutterwave when you are ready." : "Use mock payment or an approved sandbox payment provider only."
+        actionHint: flutterwaveLiveLaunchMode ? "Continue with Flutterwave when you are ready." : "Choose an approved payment method when you are ready."
       };
   }
 }
@@ -268,7 +268,7 @@ export function paymentStatusViewForConfig(
         ? "Continue with Flutterwave when you are ready."
         : config.livePaymentsEnabled
           ? "Pay on Delivery is active for new supported KariGO orders."
-          : "Use mock payment or an approved sandbox payment provider only."
+          : "Choose an approved payment method when you are ready."
     };
   }
   return view;
@@ -286,7 +286,7 @@ export function paymentAuthorizationOpenedMessage(
   providerLabel: string,
   config: PublicPaymentConfig = fallbackCustomerPaymentConfig
 ): string {
-  const checkoutType = isFlutterwaveLivePaymentConfig(config) ? "payment checkout" : "sandbox checkout";
+      const checkoutType = "payment checkout";
   return `${providerLabel} opened. Return to KariGO and tap Verify payment after completing the ${checkoutType}.`;
 }
 
@@ -303,13 +303,13 @@ export function paymentInitializationFailureMessage(
   const isLiveFlutterwave = isFlutterwaveLivePaymentConfig(config);
   const defaultFailure = isLiveFlutterwave
     ? "The payment provider could not be started safely."
-    : "The sandbox provider could not be started safely.";
+    : "The payment provider could not be started safely.";
   const safeMessage = /^internal server error$/i.test(normalizedMessage)
     ? defaultFailure
     : normalizedMessage || defaultFailure;
   const fallback = isLiveFlutterwave
     ? "Please use Pay on Delivery."
-    : "You can select Mock payment to continue staging checkout while provider configuration is reviewed.";
+    : "Please choose another available payment method while provider configuration is reviewed.";
   return isLiveFlutterwave
     ? `Flutterwave payment could not be started. ${safeMessage} ${fallback}`
     : `${providerLabel} could not be started. ${safeMessage} ${fallback}`;
