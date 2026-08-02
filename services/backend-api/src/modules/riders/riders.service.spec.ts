@@ -511,6 +511,88 @@ describe("RidersService delivery captain applications", () => {
     });
   });
 
+  it("resolves approved applications as pending activation until operational profiles are active", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: "customer-user",
+      fullName: "Existing Customer",
+      phoneNumber: "+2348030000000",
+      email: "customer@example.test",
+      role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      profilePhotoUrl: null,
+      deletedAt: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    prisma.rider.findUnique.mockResolvedValueOnce({
+      id: "rider-profile-1",
+      riderCode: "KGO-CAP-123",
+      phoneNumber: "+2348030000000",
+      photoUrl: null,
+      vehicleType: "MOTORCYCLE",
+      plateNumber: "KGO-123AA",
+      licenseNumber: "DRV-123456",
+      currentLatitude: null,
+      currentLongitude: null,
+      currentLocationUpdatedAt: null,
+      preferredServiceAreas: ["kano-kano"],
+      verificationStatus: RiderStatus.PENDING_APPROVAL,
+      availabilityStatus: RiderStatus.OFFLINE,
+      totalDeliveries: 0,
+      deletedAt: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    prisma.deliveryCaptainApplication.findFirst.mockResolvedValueOnce({
+      ...deliveryCaptainApplication,
+      applicantUserId: "customer-user",
+      status: DeliveryCaptainApplicationStatus.APPROVED,
+      captainDocuments: [{ ...uploadedProfilePhoto, reviewStatus: DocumentVerificationStatus.APPROVED }]
+    });
+    prisma.taxiDriverApplication.findFirst.mockResolvedValueOnce({
+      id: "ride-app-1",
+      applicationReference: "KGO-RIDE-2026-ABC123",
+      applicantUserId: "customer-user",
+      fullName: "Existing Customer",
+      phoneNumber: "+2348030000000",
+      email: "customer@example.test",
+      city: "Kano",
+      state: "Kano",
+      residentialStateCode: "KANO",
+      residentialCityCode: "KANO",
+      operatingAreaIds: ["kano-kano"],
+      primaryOperatingAreaId: "kano-kano",
+      status: TaxiApplicationStatus.APPROVED,
+      applicantVisibleNote: null,
+      reviewedAt: now,
+      trashedAt: null,
+      trashedByAdminId: null,
+      trashReason: null,
+      restoredAt: null,
+      restoredByAdminId: null,
+      captainDocuments: [{ ...uploadedProfilePhoto, reviewStatus: DocumentVerificationStatus.APPROVED }],
+      createdAt: now,
+      updatedAt: now
+    });
+
+    await expect(service.resolveCaptainAccess("customer-user")).resolves.toMatchObject({
+      deliveryCaptainApplication: {
+        exists: true,
+        status: DeliveryCaptainApplicationStatus.APPROVED,
+        operationalAccess: false
+      },
+      rideCaptainApplication: {
+        exists: true,
+        status: TaxiApplicationStatus.APPROVED,
+        operationalAccess: false
+      },
+      operationalModes: [],
+      nextStep: "ACTIVATION_STATUS",
+      nextRoute: "/application-status"
+    });
+  });
+
   it("resolves approved Delivery and Ride Captain operational profiles safely", async () => {
     prisma.user.findUnique.mockResolvedValueOnce({
       id: "rider-user",
@@ -528,6 +610,15 @@ describe("RidersService delivery captain applications", () => {
     prisma.rider.findUnique.mockResolvedValueOnce({
       id: "rider-profile-1",
       riderCode: "KGO-CAP-123",
+      phoneNumber: "+2348030000000",
+      photoUrl: null,
+      vehicleType: "MOTORCYCLE",
+      plateNumber: "KGO-123AA",
+      licenseNumber: "DRV-123456",
+      currentLatitude: "12.0022000",
+      currentLongitude: "8.5920000",
+      currentLocationUpdatedAt: now,
+      preferredServiceAreas: ["kano-kano"],
       verificationStatus: RiderStatus.ACTIVE,
       availabilityStatus: RiderStatus.OFFLINE,
       totalDeliveries: 8,
@@ -539,6 +630,31 @@ describe("RidersService delivery captain applications", () => {
       ...deliveryCaptainApplication,
       status: DeliveryCaptainApplicationStatus.APPROVED
     });
+    prisma.taxiDriverApplication.findFirst.mockResolvedValueOnce({
+      id: "ride-app-1",
+      applicationReference: "KGO-RIDE-2026-ABC123",
+      applicantUserId: "rider-user",
+      fullName: "Approved Captain",
+      phoneNumber: "+2348030000000",
+      email: "captain@example.test",
+      city: "Kano",
+      state: "Kano",
+      residentialStateCode: null,
+      residentialCityCode: null,
+      operatingAreaIds: [],
+      primaryOperatingAreaId: null,
+      status: TaxiApplicationStatus.APPROVED,
+      applicantVisibleNote: null,
+      reviewedAt: now,
+      trashedAt: null,
+      trashedByAdminId: null,
+      trashReason: null,
+      restoredAt: null,
+      restoredByAdminId: null,
+      captainDocuments: [{ ...uploadedProfilePhoto, reviewStatus: DocumentVerificationStatus.APPROVED }],
+      createdAt: now,
+      updatedAt: now
+    });
     prisma.taxiDriverProfile.findUnique.mockResolvedValueOnce({
       id: "ride-profile-1",
       userId: "rider-user",
@@ -547,10 +663,10 @@ describe("RidersService delivery captain applications", () => {
       phoneNumber: "+2348030000000",
       city: "Kano",
       state: "Kano",
-      vehicleMake: "Toyota",
-      vehicleModel: "Corolla",
+      vehicleMake: "MERCEDES_BENZ",
+      vehicleModel: "C_CLASS",
       vehicleYear: 2018,
-      vehicleColour: "Black",
+      vehicleColour: "PEARL_WHITE",
       vehiclePlateNumber: "KGO-123AA",
       vehicleType: "SEDAN",
       status: TaxiDriverProfileStatus.ACTIVE,
@@ -563,11 +679,30 @@ describe("RidersService delivery captain applications", () => {
     await expect(service.resolveCaptainAccess("rider-user")).resolves.toMatchObject({
       deliveryCaptainProfile: {
         riderCode: "KGO-CAP-123",
-        operationalAccess: true
+        operationalAccess: true,
+        preferredServiceAreas: ["kano-kano"]
       },
       rideCaptainProfile: {
         id: "ride-profile-1",
-        operationalAccess: true
+        operationalAccess: true,
+        vehicle: "Mercedes-Benz C-Class 2018",
+        vehicleMakeLabel: "Mercedes-Benz",
+        vehicleModelLabel: "C-Class",
+        vehicleColourLabel: "Pearl White",
+        vehicleTypeLabel: "Sedan"
+      },
+      deliveryCaptainApplication: {
+        currentProfileLocation: {
+          source: "CURRENT_PROFILE",
+          primaryOperatingArea: { label: "Kano, Kano State" }
+        }
+      },
+      rideCaptainApplication: {
+        operationalAccess: true,
+        currentProfileLocation: {
+          source: "CURRENT_PROFILE",
+          residentialLocation: { label: "Kano, Kano State" }
+        }
       },
       operationalModes: ["DELIVERY_CAPTAIN", "RIDE_CAPTAIN"],
       nextStep: "OPEN_DASHBOARD",

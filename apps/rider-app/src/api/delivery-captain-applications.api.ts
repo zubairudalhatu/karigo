@@ -14,6 +14,31 @@ export interface CaptainDocumentReviewSummary {
   approvalReviewIncomplete: boolean;
 }
 
+export interface CaptainLocationSummary {
+  stateCode?: string | null;
+  stateName?: string | null;
+  cityCode?: string | null;
+  cityName?: string | null;
+  label?: string | null;
+}
+
+export interface CaptainOperatingAreaSummary {
+  id?: string | null;
+  stateCode?: string | null;
+  stateName?: string | null;
+  cityCode?: string | null;
+  cityName?: string | null;
+  label?: string | null;
+}
+
+export interface CaptainCurrentProfileLocation {
+  source: "CURRENT_PROFILE";
+  sourceLabel: string;
+  residentialLocation?: CaptainLocationSummary | null;
+  operatingAreas: CaptainOperatingAreaSummary[];
+  primaryOperatingArea?: CaptainOperatingAreaSummary | null;
+}
+
 export interface DeliveryCaptainApplicationInput {
   fullName: string;
   phoneNumber: string;
@@ -57,6 +82,10 @@ export interface DeliveryCaptainApplicationStatus {
   deliveryOnly: boolean;
   launchCity?: string;
   pilotCity?: string;
+  residentialLocation?: CaptainLocationSummary | null;
+  operatingAreas?: CaptainOperatingAreaSummary[];
+  primaryOperatingArea?: CaptainOperatingAreaSummary | null;
+  currentProfileLocation?: CaptainCurrentProfileLocation | null;
   createsLogin: boolean;
   activatesDispatch: boolean;
   payoutActivation: boolean;

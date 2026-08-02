@@ -1,5 +1,10 @@
 import { api } from "./client";
-import type { DeliveryCaptainApplicationStatus } from "./delivery-captain-applications.api";
+import type {
+  CaptainCurrentProfileLocation,
+  CaptainLocationSummary,
+  CaptainOperatingAreaSummary,
+  DeliveryCaptainApplicationStatus
+} from "./delivery-captain-applications.api";
 import type { RiderProfile } from "./rider.api";
 import type { TaxiDriverApplicationStatus } from "@karigo/shared-types";
 
@@ -57,6 +62,15 @@ export interface CaptainAccess {
     message: string;
   };
   deliveryCaptainProfile: (Pick<RiderProfile, "id" | "riderCode" | "verificationStatus" | "availabilityStatus" | "totalDeliveries"> & {
+    phoneNumber?: string | null;
+    photoUrl?: string | null;
+    vehicleType?: string | null;
+    plateNumber?: string | null;
+    licenseNumber?: string | null;
+    currentLatitude?: string | number | null;
+    currentLongitude?: string | number | null;
+    currentLocationUpdatedAt?: string | null;
+    preferredServiceAreas?: string[] | null;
     operationalAccess: boolean;
     createdAt: string;
     updatedAt: string;
@@ -69,9 +83,15 @@ export interface CaptainAccess {
     city: string;
     state: string;
     vehicle?: string | null;
+    vehicleMake?: string | null;
+    vehicleMakeLabel?: string | null;
+    vehicleModel?: string | null;
+    vehicleModelLabel?: string | null;
     vehicleColour?: string | null;
+    vehicleColourLabel?: string | null;
     vehiclePlateNumber?: string | null;
     vehicleType?: string | null;
+    vehicleTypeLabel?: string | null;
     status: string;
     isAvailableForTaxi: boolean;
     operationalAccess: boolean;
@@ -86,6 +106,14 @@ export interface CaptainAccess {
   nextRoute: "/auth/apply" | "/application-status" | "/tabs/dashboard";
   message: string;
 }
+
+export type CaptainApplicationWithLocation = {
+  residentialLocation?: CaptainLocationSummary | null;
+  operatingAreas?: CaptainOperatingAreaSummary[];
+  primaryOperatingArea?: CaptainOperatingAreaSummary | null;
+  currentProfileLocation?: CaptainCurrentProfileLocation | null;
+  pilotCity?: string | null;
+};
 
 export const captainAccessApi = {
   resolve: () => api.get<CaptainAccess>("captain/access"),

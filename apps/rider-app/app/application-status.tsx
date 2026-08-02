@@ -2,7 +2,7 @@ import { brand } from "@karigo/config";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import type { CaptainAccess } from "../src/api/captain-access.api";
+import type { CaptainAccess, CaptainApplicationWithLocation } from "../src/api/captain-access.api";
 import { captainAccessApi } from "../src/api/captain-access.api";
 import { Button, Card, Loading, Message, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
 import {
@@ -25,27 +25,37 @@ function firstName(fullName?: string | null) {
   return fullName?.trim().split(/\s+/)[0] || "Captain";
 }
 
+function cleanText(value?: string | null) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
 function locationLabel(application: Extract<CaptainApplicationSummary, { exists: true }>) {
-  const anyApplication = application as typeof application & {
-    residentialLocation?: { label?: string | null } | null;
-    operatingAreas?: Array<{ label?: string | null }>;
-    primaryOperatingArea?: { label?: string | null } | null;
-    pilotCity?: string | null;
-  };
+  const anyApplication = application as typeof application & CaptainApplicationWithLocation;
+  const originalResidential = cleanText(anyApplication.residentialLocation?.label) ?? cleanText(anyApplication.pilotCity ?? null);
+  const originalAreas = cleanText(anyApplication.operatingAreas?.map((area) => cleanText(area.label)).filter(Boolean).join(", ") ?? null);
+  const originalPrimaryArea = cleanText(anyApplication.primaryOperatingArea?.label);
+  const profileLocation = anyApplication.currentProfileLocation;
+  const profileResidential = cleanText(profileLocation?.residentialLocation?.label ?? null);
+  const profileAreas = cleanText(profileLocation?.operatingAreas?.map((area) => cleanText(area.label)).filter(Boolean).join(", ") ?? null);
+  const profilePrimaryArea = cleanText(profileLocation?.primaryOperatingArea?.label ?? null);
+  const usedProjection = Boolean(profileLocation && (!originalResidential || !originalAreas || !originalPrimaryArea));
   return {
-    residential: anyApplication.residentialLocation?.label || anyApplication.pilotCity || "Not provided",
-    operatingAreas: anyApplication.operatingAreas?.map((area) => area.label).filter(Boolean).join(", ") || "Not provided",
-    primaryArea: anyApplication.primaryOperatingArea?.label || "Not provided"
+    residential: originalResidential ?? profileResidential,
+    operatingAreas: originalAreas ?? profileAreas,
+    primaryArea: originalPrimaryArea ?? profilePrimaryArea,
+    sourceLabel: usedProjection ? profileLocation?.sourceLabel ?? "Current Captain profile" : "Original application"
   };
 }
 
-function timelineFor(category: ReturnType<typeof classifyCaptainApplication>) {
+function timelineFor(category: ReturnType<typeof classifyCaptainApplication>, active: boolean) {
   const steps = [
     { key: "submitted", title: "Application submitted" },
     { key: "review", title: "Document review" },
     { key: "approval", title: "KariGO approval" },
-    { key: "activation", title: "Operations activation" }
+    { key: "activation", title: active ? "Operations activated" : "Operations activation" }
   ];
+  if (active) return steps.map((step) => ({ ...step, state: "Done" }));
   const currentIndex = category === "SUBMITTED" ? 1
       : category === "UNDER_REVIEW" || category === "REVISION_REQUIRED" ? 1
       : category === "PROVISIONALLY_APPROVED" ? 2
@@ -114,13 +124,16 @@ function ApplicationSection({ application, mode, projection }: { application: Ca
     <View style={styles.metaGrid}>
       <View style={styles.metaItem}><Text style={styles.metaLabel}>Submitted</Text><Text style={styles.metaValue}>{formatCaptainDate(application.submittedAt)}</Text></View>
       <View style={styles.metaItem}><Text style={styles.metaLabel}>Last update</Text><Text style={styles.metaValue}>{formatCaptainDate(application.reviewedAt ?? application.submittedAt)}</Text></View>
-      <View style={styles.metaItem}><Text style={styles.metaLabel}>Residential location</Text><Text style={styles.metaValue}>{location.residential}</Text></View>
-      <View style={styles.metaItem}><Text style={styles.metaLabel}>Primary area</Text><Text style={styles.metaValue}>{location.primaryArea}</Text></View>
+      {location.residential ? <View style={styles.metaItem}><Text style={styles.metaLabel}>Residential location</Text><Text style={styles.metaValue}>{location.residential}</Text></View> : null}
+      {location.primaryArea ? <View style={styles.metaItem}><Text style={styles.metaLabel}>Primary area</Text><Text style={styles.metaValue}>{location.primaryArea}</Text></View> : null}
     </View>
-    <Text style={styles.metaLabel}>Selected operating areas</Text>
-    <Text style={ui.muted}>{location.operatingAreas}</Text>
+    {location.operatingAreas ? <>
+      <Text style={styles.metaLabel}>Selected operating areas</Text>
+      <Text style={ui.muted}>{location.operatingAreas}</Text>
+    </> : null}
+    {location.residential || location.primaryArea || location.operatingAreas ? <Text style={styles.sourceNote}>Location source: {location.sourceLabel}</Text> : null}
     <View style={styles.timeline}>
-      {timelineFor(category).map((step) => <View key={step.key} style={styles.timelineRow}>
+      {timelineFor(category, projection.active).map((step) => <View key={step.key} style={styles.timelineRow}>
         <Text style={[styles.timelineBadge, step.state === "Done" && styles.timelineDone, step.state === "Current" && styles.timelineCurrent, step.state === "Paused" && styles.timelinePaused]}>{step.state}</Text>
         <Text style={styles.timelineText}>{step.title}</Text>
       </View>)}
@@ -221,6 +234,7 @@ const styles = StyleSheet.create({
   metaItem: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 14, borderWidth: 1, gap: 2, padding: 10 },
   metaLabel: { color: brand.colors.muted, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
   metaValue: { color: brand.colors.charcoal, fontWeight: "900" },
+  sourceNote: { color: brand.colors.muted, fontSize: 12, fontWeight: "800" },
   timeline: { gap: 8, marginTop: 4 },
   timelineRow: { alignItems: "center", flexDirection: "row", gap: 10 },
   timelineBadge: { backgroundColor: "#F3F4F6", borderRadius: 999, color: brand.colors.muted, fontSize: 11, fontWeight: "900", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 5, width: 74 },

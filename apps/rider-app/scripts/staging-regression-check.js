@@ -23,6 +23,7 @@ const applicationScreen = read("app/auth/apply.tsx");
 const forgotPasswordScreen = read("app/auth/forgot-password.tsx");
 const resetPasswordScreen = read("app/auth/reset-password.tsx");
 const dashboard = read("app/tabs/dashboard.tsx");
+const applicationStatus = read("app/application-status.tsx");
 const notifications = read("app/notifications.tsx");
 const jobsIndex = read("app/jobs/index.tsx");
 const jobDetail = read("app/jobs/[id].tsx");
@@ -49,6 +50,7 @@ expect(packageJson.dependencies?.["expo-updates"] === "~0.28.18", "Captain app m
 expect(packageJson.dependencies?.["expo-location"] === "~18.1.6", "Captain app must use Expo SDK 53-compatible location support.");
 expect(packageJson.dependencies?.["expo-local-authentication"] === "~16.0.5", "Captain app must use Expo SDK 53-compatible local authentication.");
 expect(packageJson.dependencies?.["expo-build-properties"] === "~0.14.8", "Captain app must use Expo build-properties for API 36 readiness.");
+expect(packageJson.dependencies?.["react-native-maps"] === "1.20.1", "Captain app must include the native map dependency for the operational Home map.");
 expect(packageJson.scripts?.["audit:production-copy"] === "node scripts/production-copy-audit.js", "Captain app must expose the production copy audit.");
 
 expect(stagingProfile?.distribution === "internal", "rider-staging must use internal distribution.");
@@ -63,6 +65,7 @@ expect(appConfig.includes("https://u.expo.dev/${riderEasProjectId}"), "Captain E
 expect(appConfig.includes('policy: "appVersion"'), "Captain runtimeVersion must use appVersion policy.");
 expect(appConfig.includes("compileSdkVersion: 36"), "Captain app must compile against Android API 36.");
 expect(appConfig.includes("targetSdkVersion: 36"), "Captain app must target Android API 36.");
+expect(appConfig.includes("GOOGLE_MAPS_ANDROID_API_KEY") && appConfig.includes("googleMaps"), "Captain app must pass the Android Google Maps API key through Expo config when available.");
 expect(appConfig.includes('version: "0.1.1"'), "Captain app version must remain 0.1.1 for this release line.");
 expect(appConfig.includes("versionCode: isStaging ? 1 : 10"), "Captain production versionCode must remain 10 until the next AAB bump.");
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-build-properties"), "Captain app base config must include build-properties.");
@@ -113,10 +116,13 @@ expect(locationHelper.includes("requestForegroundPermissionsAsync") && locationH
 
 expect(dashboard.includes("projectCaptainOperationalState"), "Home must use state-aware Captain projection.");
 expect(dashboard.includes("karigo-logo.png"), "Home must use compact KariGO branding.");
+expect(dashboard.includes("react-native-maps") && dashboard.includes("MapView") && dashboard.includes("Marker"), "Home must mount the native Google map, not a placeholder panel.");
 expect(dashboard.includes('accessibilityLabel="Notifications"'), "Home header must include an accessible notification bell.");
 expect(dashboard.includes("unread > 99 ? \"99+\" : unread"), "Home unread badge must cap at 99+.");
 expect(dashboard.includes("AppState.addEventListener"), "Home must refresh unread count on foreground.");
 expect(dashboard.includes("Live map"), "Home must show the live map card.");
+expect(dashboard.includes("vehicleMarker") && dashboard.includes("mapFooter"), "Home map must show a Captain position marker and compact service-area footer.");
+expect(dashboard.includes("Location unavailable"), "Home map must include a safe unavailable state.");
 expect(dashboard.includes("Refresh GPS"), "Home must include a recoverable location refresh action.");
 expect(dashboard.includes("Availability"), "Home must show mode availability controls.");
 expect(dashboard.includes("Current work"), "Home must show current assignment state.");
@@ -130,6 +136,7 @@ expect(!dashboard.includes("Assigned deliveries"), "Home must not contain the de
 expect(!dashboard.includes("Today's assigned") && !dashboard.includes("assigned deliveries"), "Home must not contain Delivery-only Today stats.");
 expect(!dashboard.includes("Completed deliveries"), "Home must not contain Delivery-only Completed stats.");
 expect(!dashboard.includes("Ride Operations promotional"), "Home must not contain promotional Ride cards.");
+expect(!dashboard.includes("Update manual coordinates"), "Home must not expose manual coordinate entry.");
 [
   "Manage your delivery assignments and availability",
   "Today assigned deliveries",
@@ -145,6 +152,11 @@ expect(!dashboard.includes("Ride Operations promotional"), "Home must not contai
   "Update manual coordinates"
 ].forEach((value) => expect(!dashboard.includes(value), `Operational Home must not contain legacy text: ${value}`));
 
+expect(applicationStatus.includes("timelineFor(category, projection.active)"), "Application status timeline must use operational activation state.");
+expect(applicationStatus.includes("Operations activated"), "Application status timeline must show completed operations activation for active modes.");
+expect(applicationStatus.includes("Current Captain profile"), "Application status must label projected active profile location data.");
+expect(!applicationStatus.includes("residentialLocation?.label || anyApplication.pilotCity || \"Not provided\""), "Application status must not show legacy Not provided location fallbacks.");
+
 expect(notifications.includes("Mark all read"), "Notifications screen must support mark-all-read.");
 expect(notifications.includes("notificationsApi.markRead"), "Notifications screen must mark individual notifications read.");
 expect(notifications.includes("notificationsApi.markAllRead"), "Notifications screen must persist mark-all-read.");
@@ -155,9 +167,10 @@ expect(notificationsApi.includes("notifications/unread-count"), "Notifications A
 expect(notificationsApi.includes("read-all") && notificationsApi.includes("/read"), "Notifications API must support read persistence.");
 
 expect(jobsIndex.includes("Delivery activation pending"), "Deliveries tab must show compact pending state for inactive Delivery mode.");
+expect(jobsIndex.includes('Screen title="Deliveries"'), "Deliveries tab heading must be Deliveries.");
 expect(jobsIndex.includes("Today assigned") && jobsIndex.includes("Completed") && jobsIndex.includes("Cancelled") && jobsIndex.includes("Delivery earnings"), "Deliveries tab must own Delivery summary stats.");
 expect(jobsIndex.includes("Active delivery"), "Deliveries tab must own active Delivery workflow.");
-expect(jobsIndex.includes("Assigned deliveries"), "Deliveries tab must own Delivery queue.");
+expect(jobsIndex.includes("Assigned jobs"), "Deliveries tab must keep assigned jobs as a section.");
 expect(jobsIndex.includes("Delivery history"), "Deliveries tab must own Delivery history.");
 expect(jobDetail.includes("Accept job") && jobDetail.includes("Reject job"), "Delivery detail must support accept/reject actions.");
 expect(jobDetail.includes("Complete delivery") && jobDetail.includes("Delivery completed successfully."), "Delivery detail must support OTP completion.");
@@ -171,6 +184,7 @@ expect(!earnings.includes("Earnings locked"), "Earnings must not be locked when 
 expect(!earnings.includes("Track delivery earnings") && !earnings.includes("Completed delivery earnings"), "Earnings must not use Delivery-only copy.");
 
 expect(profile.includes("Captain access"), "Profile must show independent mode summary.");
+expect(profile.includes("captainVehicleTypes"), "Profile must humanise vehicle catalogue values.");
 expect(profile.includes("Notifications") && profile.includes("unread"), "Profile must include compact Notifications entry.");
 expect(profile.includes("setBiometricSignIn") && profile.includes("Privacy Policy") && profile.includes("Terms"), "Profile must include biometric controls and legal links.");
 expect(profile.includes("/notifications"), "Profile notifications row must link to Notifications.");

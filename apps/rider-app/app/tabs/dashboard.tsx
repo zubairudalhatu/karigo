@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { AppState, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useEffect, useMemo, useState } from "react";
+import MapView, { Marker, Region } from "react-native-maps";
 import { brand } from "@karigo/config";
 import type { CaptainAccess, CaptainWorkState } from "../../src/api/captain-access.api";
 import { captainAccessApi } from "../../src/api/captain-access.api";
@@ -75,22 +76,63 @@ function modeStatusStyle(label: string) {
   return styles.modeOffline;
 }
 
+function coordinateNumber(value?: string | number | null) {
+  if (value === undefined || value === null || value === "") return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function hasValidCoordinate(latitude: number | null, longitude: number | null) {
+  return latitude !== null &&
+    longitude !== null &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180;
+}
+
+function timestampValue(value?: string | null) {
+  if (!value) return 0;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
 function locationSummary(access: CaptainAccess | null, profile: RiderProfile | null) {
-  const deliveryLat = profile?.currentLatitude;
-  const deliveryLng = profile?.currentLongitude;
+  const deliveryLat = coordinateNumber(profile?.currentLatitude);
+  const deliveryLng = coordinateNumber(profile?.currentLongitude);
   const rideProfile = access?.rideCaptainProfile;
-  const rideLat = rideProfile?.lastKnownLatitude;
-  const rideLng = rideProfile?.lastKnownLongitude;
+  const rideLat = coordinateNumber(rideProfile?.lastKnownLatitude);
+  const rideLng = coordinateNumber(rideProfile?.lastKnownLongitude);
   const rideLocation = rideProfile?.city && rideProfile.state ? `${rideProfile.city}, ${rideProfile.state}` : rideProfile?.city ?? null;
   const deliveryAreas = profile?.preferredServiceAreas?.length ? profile.preferredServiceAreas.join(", ") : null;
+  const candidates = [
+    hasValidCoordinate(deliveryLat, deliveryLng) ? {
+      coordinate: { latitude: deliveryLat!, longitude: deliveryLng! },
+      lastSeen: profile?.currentLocationUpdatedAt ?? null,
+      source: "Delivery GPS"
+    } : null,
+    hasValidCoordinate(rideLat, rideLng) ? {
+      coordinate: { latitude: rideLat!, longitude: rideLng! },
+      lastSeen: rideProfile?.lastSeenAt ?? null,
+      source: "Ride GPS"
+    } : null
+  ].filter((candidate): candidate is { coordinate: { latitude: number; longitude: number }; lastSeen: string | null; source: string } => Boolean(candidate))
+    .sort((a, b) => timestampValue(b.lastSeen) - timestampValue(a.lastSeen));
+
   return {
-    coordinates: deliveryLat && deliveryLng
-      ? `${Number(deliveryLat).toFixed(5)}, ${Number(deliveryLng).toFixed(5)}`
-      : rideLat && rideLng
-        ? `${Number(rideLat).toFixed(5)}, ${Number(rideLng).toFixed(5)}`
-        : null,
+    coordinate: candidates[0]?.coordinate ?? null,
+    source: candidates[0]?.source ?? null,
     area: deliveryAreas ?? rideLocation ?? "Kano / Abuja service areas",
-    lastSeen: profile?.currentLocationUpdatedAt ?? access?.rideCaptainProfile?.lastSeenAt ?? null
+    lastSeen: candidates[0]?.lastSeen ?? profile?.currentLocationUpdatedAt ?? access?.rideCaptainProfile?.lastSeenAt ?? null
+  };
+}
+
+function mapRegion(coordinate: { latitude: number; longitude: number } | null): Region | null {
+  if (!coordinate) return null;
+  return {
+    ...coordinate,
+    latitudeDelta: 0.015,
+    longitudeDelta: 0.015
   };
 }
 
@@ -155,6 +197,7 @@ export default function RiderDashboard() {
   const projection = useMemo(() => projectCaptainOperationalState(captainAccess, workState), [captainAccess, workState]);
   const activeJob = useMemo(() => jobs.find((job) => ACTIVE_DELIVERY_STATUSES.has(job.orderStatus)), [jobs]);
   const mapState = locationSummary(captainAccess, profile);
+  const currentMapRegion = mapRegion(mapState.coordinate);
 
   async function toggleDelivery() {
     if (!workState || !projection.delivery.active) return;
@@ -248,17 +291,36 @@ export default function RiderDashboard() {
         <Card>
           <View style={ui.spaceBetween}>
             <Text style={ui.title}>Live map</Text>
-            <StatusBadge status={projection.overallStatus} />
           </View>
-          <View style={styles.mapPanel}>
+          {currentMapRegion ? <View style={styles.mapShell}>
+            <MapView
+              accessibilityLabel="Captain live location map"
+              initialRegion={currentMapRegion}
+              region={currentMapRegion}
+              scrollEnabled={false}
+              pitchEnabled={false}
+              rotateEnabled={false}
+              style={styles.map}
+            >
+              <Marker coordinate={mapState.coordinate!} title="KariGO Captain" description={mapState.source ?? "Captain position"}>
+                <View style={styles.vehicleMarker}>
+                  <Feather name="navigation" size={18} color={brand.colors.white} />
+                </View>
+              </Marker>
+            </MapView>
+            <View style={styles.mapFooter}>
+              <Text style={styles.mapFooterTitle}>{workState?.activeWorkMode ? activeWork : projection.overallStatus === "Offline" ? "Offline location view" : "Live location ready"}</Text>
+              <Text style={styles.mapFooterText}>Service area: {mapState.area}</Text>
+              <Text style={styles.mapFooterText}>{mapState.lastSeen ? `Last update: ${new Date(mapState.lastSeen).toLocaleString()}` : "Location updates when you go online."}</Text>
+            </View>
+          </View> : <View style={styles.mapUnavailable}>
             <View style={styles.mapPin}><Feather name="map-pin" size={24} color={brand.colors.primary} /></View>
             <View style={styles.mapCopy}>
-              <Text style={styles.mapTitle}>{workState?.activeWorkMode ? activeWork : projection.overallStatus === "Offline" ? "Offline location view" : "Live location ready"}</Text>
-              <Text style={ui.muted}>{mapState.coordinates ? `Last position ${mapState.coordinates}` : "Current position appears after device GPS updates."}</Text>
+              <Text style={styles.mapTitle}>Location unavailable</Text>
+              <Text style={ui.muted}>Enable location permission and refresh GPS to show your live Captain position.</Text>
               <Text style={ui.muted}>Service area: {mapState.area}</Text>
-              <Text style={ui.muted}>{mapState.lastSeen ? `Last update: ${new Date(mapState.lastSeen).toLocaleString()}` : "Location is requested only when you go online."}</Text>
             </View>
-          </View>
+          </View>}
           <Button title="Refresh GPS" tone="muted" disabled={!workState || Boolean(workState.activeWorkMode)} onPress={refreshGps} />
         </Card>
 
@@ -358,10 +420,16 @@ const styles = StyleSheet.create({
   modePending: { backgroundColor: "#FEF3C7", color: "#92400E" },
   modeBusy: { backgroundColor: "#DBEAFE", color: "#1E40AF" },
   reason: { color: brand.colors.muted, fontSize: 12, fontWeight: "700" },
-  mapPanel: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 12, padding: 14 },
+  mapShell: { borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, minHeight: 260, overflow: "hidden" },
+  map: { height: 260, width: "100%" },
+  mapFooter: { backgroundColor: "rgba(17, 17, 17, 0.82)", bottom: 0, left: 0, padding: 12, position: "absolute", right: 0 },
+  mapFooterTitle: { color: brand.colors.white, fontSize: 14, fontWeight: "900" },
+  mapFooterText: { color: "#F3F4F6", fontSize: 12, fontWeight: "700", lineHeight: 17 },
+  mapUnavailable: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 12, padding: 14 },
   mapPin: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, height: 36, justifyContent: "center", width: 36 },
   mapCopy: { flex: 1, gap: 4 },
   mapTitle: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "900" },
+  vehicleMarker: { alignItems: "center", backgroundColor: brand.colors.primary, borderColor: brand.colors.white, borderRadius: 999, borderWidth: 3, height: 38, justifyContent: "center", shadowColor: "#111827", shadowOpacity: 0.22, shadowRadius: 8, width: 38 },
   jobRef: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "800" },
   emptyTitle: { color: brand.colors.charcoal, fontSize: 18, fontWeight: "900" },
   applicationLine: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" }

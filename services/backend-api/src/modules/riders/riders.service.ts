@@ -15,7 +15,7 @@ import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
-import { captainServiceAreas } from "../platform/captain-catalog";
+import { captainServiceAreas, captainVehicleTypes, vehicleColours, vehicleMakes } from "../platform/captain-catalog";
 import { resolveCaptainLocation } from "../platform/captain-catalog.validation";
 import { PrismaService } from "../../prisma/prisma.service";
 import { publicUserSelect } from "../users/users.service";
@@ -204,6 +204,15 @@ export class RidersService {
           verificationStatus: true,
           availabilityStatus: true,
           totalDeliveries: true,
+          phoneNumber: true,
+          photoUrl: true,
+          vehicleType: true,
+          plateNumber: true,
+          licenseNumber: true,
+          currentLatitude: true,
+          currentLongitude: true,
+          currentLocationUpdatedAt: true,
+          preferredServiceAreas: true,
           deletedAt: true,
           createdAt: true,
           updatedAt: true
@@ -271,6 +280,16 @@ export class RidersService {
         ? "/tabs/dashboard"
         : "/application-status";
 
+    const deliveryCurrentProfileLocation = deliveryOperational && deliveryProfile
+      ? this.currentDeliveryCaptainProfileLocation(deliveryProfile)
+      : null;
+    const rideCurrentProfileLocation = rideOperational && rideProfile
+      ? this.currentRideCaptainProfileLocation(rideProfile)
+      : null;
+    const rideVehicleMakeLabel = this.vehicleMakeLabel(rideProfile?.vehicleMake);
+    const rideVehicleModelLabel = this.vehicleModelLabel(rideProfile?.vehicleMake, rideProfile?.vehicleModel);
+    const rideVehicleColourLabel = this.vehicleColourLabel(rideProfile?.vehicleColour);
+
     return {
       account: {
         id: user.id,
@@ -284,14 +303,24 @@ export class RidersService {
       },
       supportedOnboardingModes: ["DELIVERY_CAPTAIN", "RIDE_CAPTAIN"],
       deliveryCaptainApplication: deliveryApplication
-        ? { exists: true, ...this.toPublicDeliveryCaptainApplicationStatus(deliveryApplication) }
+        ? {
+          exists: true,
+          ...this.toPublicDeliveryCaptainApplicationStatus(deliveryApplication),
+          operationalAccess: deliveryOperational,
+          currentProfileLocation: deliveryCurrentProfileLocation
+        }
         : {
           exists: false,
           nextStep: "SUBMIT_APPLICATION",
           message: "Complete your Delivery Captain application to start onboarding."
         },
       rideCaptainApplication: rideApplication
-        ? { exists: true, ...this.toPublicRideCaptainApplicationStatus(rideApplication) }
+        ? {
+          exists: true,
+          ...this.toPublicRideCaptainApplicationStatus(rideApplication),
+          operationalAccess: rideOperational,
+          currentProfileLocation: rideCurrentProfileLocation
+        }
         : {
           exists: false,
           nextStep: "SUBMIT_APPLICATION",
@@ -300,9 +329,18 @@ export class RidersService {
       deliveryCaptainProfile: deliveryProfile ? {
         id: deliveryProfile.id,
         riderCode: deliveryProfile.riderCode,
+        phoneNumber: deliveryProfile.phoneNumber,
+        photoUrl: deliveryProfile.photoUrl,
+        vehicleType: deliveryProfile.vehicleType,
+        plateNumber: deliveryProfile.plateNumber,
+        licenseNumber: deliveryProfile.licenseNumber,
         verificationStatus: deliveryProfile.verificationStatus,
         availabilityStatus: deliveryProfile.availabilityStatus,
         totalDeliveries: deliveryProfile.totalDeliveries,
+        currentLatitude: deliveryProfile.currentLatitude,
+        currentLongitude: deliveryProfile.currentLongitude,
+        currentLocationUpdatedAt: deliveryProfile.currentLocationUpdatedAt?.toISOString() ?? null,
+        preferredServiceAreas: this.preferredServiceAreaValues(deliveryProfile.preferredServiceAreas),
         operationalAccess: deliveryOperational,
         createdAt: deliveryProfile.createdAt.toISOString(),
         updatedAt: deliveryProfile.updatedAt.toISOString()
@@ -314,10 +352,16 @@ export class RidersService {
         phoneNumber: rideProfile.phoneNumber,
         city: rideProfile.city,
         state: rideProfile.state,
-        vehicle: [rideProfile.vehicleMake, rideProfile.vehicleModel, rideProfile.vehicleYear].filter(Boolean).join(" ") || null,
+        vehicle: [rideVehicleMakeLabel, rideVehicleModelLabel, rideProfile.vehicleYear].filter(Boolean).join(" ") || null,
+        vehicleMake: rideProfile.vehicleMake,
+        vehicleMakeLabel: rideVehicleMakeLabel,
+        vehicleModel: rideProfile.vehicleModel,
+        vehicleModelLabel: rideVehicleModelLabel,
         vehicleColour: rideProfile.vehicleColour,
+        vehicleColourLabel: rideVehicleColourLabel,
         vehiclePlateNumber: rideProfile.vehiclePlateNumber,
         vehicleType: rideProfile.vehicleType,
+        vehicleTypeLabel: this.vehicleTypeLabel(rideProfile.vehicleType),
         status: rideProfile.status,
         isAvailableForTaxi: rideProfile.isAvailableForTaxi,
         operationalAccess: rideOperational,
@@ -1140,8 +1184,127 @@ export class RidersService {
       .filter((area): area is NonNullable<ReturnType<RidersService["operatingAreaSummary"]>> => Boolean(area));
   }
 
+  private preferredServiceAreaValues(value: Prisma.JsonValue | null | undefined) {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .filter(Boolean);
+  }
+
+  private profileAreaSummaries(values?: string[] | null) {
+    return (values ?? [])
+      .map((value) => {
+        const catalogArea = this.operatingAreaSummary(value);
+        return catalogArea ?? {
+          id: value,
+          label: value
+        };
+      })
+      .filter((area) => Boolean(area.label));
+  }
+
+  private currentDeliveryCaptainProfileLocation(profile: { preferredServiceAreas?: Prisma.JsonValue | null }) {
+    const operatingAreas = this.profileAreaSummaries(this.preferredServiceAreaValues(profile.preferredServiceAreas));
+    return {
+      source: "CURRENT_PROFILE",
+      sourceLabel: "Current Captain profile",
+      residentialLocation: null,
+      operatingAreas,
+      primaryOperatingArea: operatingAreas[0] ?? null
+    };
+  }
+
+  private currentRideCaptainProfileLocation(profile: Pick<
+    Prisma.TaxiDriverProfileGetPayload<{ select: typeof RIDE_CAPTAIN_PROFILE_SELECT }>,
+    "city" | "state"
+  >) {
+    const residentialLocation = this.locationSummary(null, null, profile.city, profile.state);
+    const operatingArea = residentialLocation.label ? {
+      id: null,
+      label: residentialLocation.label
+    } : null;
+    return {
+      source: "CURRENT_PROFILE",
+      sourceLabel: "Current Captain profile",
+      residentialLocation,
+      operatingAreas: operatingArea ? [operatingArea] : [],
+      primaryOperatingArea: operatingArea
+    };
+  }
+
+  private normalizeCatalogValue(value?: string | null) {
+    return (value ?? "")
+      .trim()
+      .toUpperCase()
+      .replace(/&/g, "AND")
+      .replace(/[^A-Z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  }
+
+  private humanizeCatalogValue(value?: string | null) {
+    const normalized = this.normalizeCatalogValue(value);
+    if (!normalized) return null;
+    return normalized
+      .split("_")
+      .filter(Boolean)
+      .map((part) => {
+        if (part.length === 1) return part;
+        if (part === "AND") return "and";
+        return `${part[0]}${part.slice(1).toLowerCase()}`;
+      })
+      .join(" ")
+      .replace(/\bBenz\b/, "Benz")
+      .replace(/\bClass\b/, "Class");
+  }
+
+  private vehicleMakeLabel(value?: string | null, customValue?: string | null) {
+    if (this.normalizeCatalogValue(value) === "OTHER" && customValue?.trim()) return customValue.trim();
+    const normalized = this.normalizeCatalogValue(value);
+    return vehicleMakes.find((make) =>
+      this.normalizeCatalogValue(make.value) === normalized ||
+      this.normalizeCatalogValue(make.label) === normalized
+    )?.label ?? this.humanizeCatalogValue(value);
+  }
+
+  private vehicleModelLabel(makeValue?: string | null, modelValue?: string | null, customValue?: string | null) {
+    if (this.normalizeCatalogValue(modelValue) === "OTHER" && customValue?.trim()) return customValue.trim();
+    const normalizedMake = this.normalizeCatalogValue(makeValue);
+    const normalizedModel = this.normalizeCatalogValue(modelValue);
+    const make = vehicleMakes.find((item) =>
+      this.normalizeCatalogValue(item.value) === normalizedMake ||
+      this.normalizeCatalogValue(item.label) === normalizedMake
+    );
+    return make?.models.find((model) =>
+      this.normalizeCatalogValue(model.value) === normalizedModel ||
+      this.normalizeCatalogValue(model.label) === normalizedModel
+    )?.label ?? this.humanizeCatalogValue(modelValue);
+  }
+
+  private vehicleColourLabel(value?: string | null, customValue?: string | null) {
+    if (this.normalizeCatalogValue(value) === "OTHER" && customValue?.trim()) return customValue.trim();
+    const normalized = this.normalizeCatalogValue(value);
+    return vehicleColours.find((colour) =>
+      this.normalizeCatalogValue(colour.value) === normalized ||
+      this.normalizeCatalogValue(colour.label) === normalized
+    )?.label ?? this.humanizeCatalogValue(value);
+  }
+
+  private vehicleTypeLabel(value?: string | null) {
+    const normalized = this.normalizeCatalogValue(value);
+    return captainVehicleTypes.find((type) =>
+      this.normalizeCatalogValue(type.value) === normalized ||
+      this.normalizeCatalogValue(type.label) === normalized
+    )?.label ?? this.humanizeCatalogValue(value);
+  }
+
   private locationSummary(cityCode?: string | null, stateCode?: string | null, fallbackCity?: string | null, fallbackState?: string | null) {
-    const area = captainServiceAreas.find((item) => item.cityCode === cityCode && item.stateCode === stateCode);
+    const normalize = (value?: string | null) => this.normalizeCatalogValue(value);
+    const area = captainServiceAreas.find((item) =>
+      (cityCode && stateCode && item.cityCode === cityCode && item.stateCode === stateCode) ||
+      (normalize(fallbackCity) && normalize(fallbackState) &&
+        (normalize(item.cityName) === normalize(fallbackCity) || item.cityCode === normalize(fallbackCity)) &&
+        (normalize(item.stateName) === normalize(fallbackState) || item.stateCode === normalize(fallbackState) || normalize(fallbackState).includes(item.stateCode)))
+    );
     return area ? {
       stateCode: area.stateCode,
       stateName: area.stateName,
@@ -1210,6 +1373,10 @@ export class RidersService {
       reviewedAt: application.reviewedAt?.toISOString() ?? null,
       readinessOnly: true,
       launchCity: application.city,
+      pilotCity: application.city,
+      residentialLocation: this.locationSummary(application.residentialCityCode, application.residentialStateCode, application.city, application.state),
+      operatingAreas: this.operatingAreaSummaries(application.operatingAreaIds),
+      primaryOperatingArea: this.operatingAreaSummary(application.primaryOperatingAreaId),
       launchCities: ["Kano", "Abuja"],
       documentReview: this.documentReviewSummary(application.captainDocuments, this.requiredCaptainDocumentTypesForReview()),
       operationalAccess: false

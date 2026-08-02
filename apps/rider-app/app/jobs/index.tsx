@@ -90,7 +90,7 @@ export default function Jobs() {
   const deliveryStatus = deliveryModeStatus(workState, deliveryAccessReady);
   const deliveryEarnings = amountTotal(earnings?.completedJobs ?? []);
 
-  return <Protected><Screen title="Assigned Jobs" subtitle={deliveryAccessReady ? "Review delivery jobs assigned by dispatch." : "Delivery activation pending."} refreshing={loading} onRefresh={load}><Message error>{error}</Message>
+  return <Protected><Screen title="Deliveries" subtitle={deliveryAccessReady ? "Assigned jobs, active delivery and delivery history." : "Delivery activation pending."} refreshing={loading} onRefresh={load}><Message error>{error}</Message>
     {!deliveryAccessReady ? <Card tone="soft">
       <Text style={ui.sectionTitle}>Delivery activation pending</Text>
       <Text style={ui.pageIntro}>KariGO Operations will notify you when Delivery access is activated.</Text>
@@ -119,7 +119,7 @@ export default function Jobs() {
         <NavLink href={`/jobs/${activeJob.id}`} label="Open active delivery" />
       </> : <Text style={ui.muted}>No active delivery.</Text>}
     </Card>
-    <Text style={ui.sectionTitle}>Assigned deliveries</Text>
+    <Text style={ui.sectionTitle}>Assigned jobs</Text>
     {openJobs.length === 0 ? <Empty message="No delivery jobs assigned yet. Check again after dispatch assigns a delivery." /> : openJobs.map((job) =>
       <Link key={job.id} href={`/jobs/${job.id}` as never} asChild><Pressable><Card>
         <Text style={ui.title}>{job.orderNumber}</Text><StatusBadge status={job.orderStatus} />

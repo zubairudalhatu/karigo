@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { brand } from "@karigo/config";
+import { captainVehicleTypes } from "@karigo/shared-types";
 import type { CaptainAccess, CaptainWorkState } from "../src/api/captain-access.api";
 import { captainAccessApi } from "../src/api/captain-access.api";
 import { notificationsApi } from "../src/api/notifications.api";
@@ -33,6 +34,17 @@ function InfoRow({ label, value }: { label: string; value?: string | number | nu
 
 function areaList(values?: string[] | null) {
   return values?.filter(Boolean).join("\n") || null;
+}
+
+function catalogLabel(value?: string | null) {
+  const normalized = value?.trim().toUpperCase();
+  if (!normalized) return null;
+  return captainVehicleTypes.find((option) => option.value === normalized || option.label.toUpperCase() === normalized)?.label ??
+    normalized
+      .split("_")
+      .filter(Boolean)
+      .map((part) => part.length <= 3 ? part : `${part[0]}${part.slice(1).toLowerCase()}`)
+      .join(" ");
 }
 
 export default function Profile() {
@@ -133,9 +145,10 @@ export default function Profile() {
     <Card>
       <Text style={ui.sectionTitle}>Vehicle information</Text>
       <InfoRow label="Ride vehicle" value={rideProfile?.vehicle} />
-      <InfoRow label="Ride vehicle type" value={rideProfile?.vehicleType} />
+      <InfoRow label="Ride vehicle type" value={rideProfile?.vehicleTypeLabel ?? catalogLabel(rideProfile?.vehicleType)} />
+      <InfoRow label="Ride colour" value={rideProfile?.vehicleColourLabel ?? rideProfile?.vehicleColour} />
       <InfoRow label="Ride plate number" value={rideProfile?.vehiclePlateNumber} />
-      <InfoRow label="Delivery vehicle" value={profile?.vehicleType} />
+      <InfoRow label="Delivery vehicle" value={catalogLabel(profile?.vehicleType)} />
       <InfoRow label="Delivery plate number" value={profile?.plateNumber} />
       <InfoRow label="Driver licence" value={profile?.licenseNumber} />
       {!rideProfile?.vehicle && !profile?.vehicleType ? <Text style={ui.muted}>Vehicle details will appear after KariGO links an approved Captain profile.</Text> : null}

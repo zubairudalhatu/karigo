@@ -26,6 +26,10 @@ const androidApi36BuildProperties = {
   }
 };
 
+const googleMapsAndroidApiKey =
+  process.env.GOOGLE_MAPS_ANDROID_API_KEY ??
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY;
+
 export default ({ config }: ExpoConfigInput) => {
   const extra = objectValue(config.extra);
   const existingEas = objectValue(extra.eas);
@@ -62,6 +66,15 @@ export default ({ config }: ExpoConfigInput) => {
     },
     android: {
       ...config.android,
+      config: googleMapsAndroidApiKey
+        ? {
+          ...(objectValue(config.android?.config)),
+          googleMaps: {
+            ...(objectValue(objectValue(config.android?.config).googleMaps)),
+            apiKey: googleMapsAndroidApiKey
+          }
+        }
+        : config.android?.config,
       adaptiveIcon: {
         ...(objectValue(config.android?.adaptiveIcon)),
         foregroundImage: "./assets/karigo-adaptive-icon.png",
