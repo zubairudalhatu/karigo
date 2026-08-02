@@ -9,7 +9,9 @@ import {
   PaymentStatus,
   Prisma,
   RiderStatus,
-  SettlementStatus
+  SettlementStatus,
+  TaxiDriverProfileStatus,
+  TaxiTripStatus
 } from "@prisma/client";
 import { randomInt } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -367,21 +369,85 @@ export class DispatchService {
   }
 
   async earnings(userId: string) {
-    const rider = await this.requireRider(userId);
-    const records = await this.prisma.riderEarning.findMany({
-      where: { riderId: rider.id },
-      include: { order: { select: { orderNumber: true, completedAt: true } } },
-      orderBy: { createdAt: "desc" }
-    });
+    const [rider, rideProfile] = await Promise.all([
+      this.prisma.rider.findUnique({
+        where: { userId },
+        include: { user: { select: { accountStatus: true } } }
+      }),
+      this.prisma.taxiDriverProfile.findUnique({
+        where: { userId },
+        select: { id: true, status: true }
+      })
+    ]);
+    const deliveryActive = Boolean(
+      rider &&
+      rider.user.accountStatus === AccountStatus.ACTIVE &&
+      rider.verificationStatus === RiderStatus.ACTIVE
+    );
+    const rideActive = Boolean(rideProfile?.status === TaxiDriverProfileStatus.ACTIVE);
+    if (!deliveryActive && !rideActive) throw new NotFoundException("Captain earning profile not found");
+
+    const [records, rideRecords] = await Promise.all([
+      rider
+        ? this.prisma.riderEarning.findMany({
+            where: { riderId: rider.id },
+            include: { order: { select: { orderNumber: true, completedAt: true } } },
+            orderBy: { createdAt: "desc" }
+          })
+        : Promise.resolve([]),
+      rideProfile
+        ? this.prisma.taxiTrip.findMany({
+            where: { driverProfileId: rideProfile.id, status: TaxiTripStatus.COMPLETED },
+            select: {
+              id: true,
+              tripReference: true,
+              finalFareKobo: true,
+              estimatedFareKobo: true,
+              completedAt: true,
+              createdAt: true,
+              status: true
+            },
+            orderBy: { completedAt: "desc" }
+          })
+        : Promise.resolve([])
+    ]);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfToday.getDate() - startOfToday.getDay());
     const sum = (statuses?: SettlementStatus[]) =>
       records
         .filter((record) => !statuses || statuses.includes(record.payoutStatus))
         .reduce((total, record) => total.add(record.riderPayout), new Prisma.Decimal(0));
+    const rideAmount = (fareKobo?: number | null) => new Prisma.Decimal(fareKobo ?? 0).div(100);
+    const rideTotal = rideRecords.reduce((total, trip) => total.add(rideAmount(trip.finalFareKobo ?? trip.estimatedFareKobo)), new Prisma.Decimal(0));
+    const recordDate = (value?: Date | null) => value ?? new Date(0);
+    const deliveryToday = records.filter((record) => recordDate(record.order.completedAt ?? record.createdAt) >= startOfToday);
+    const deliveryThisWeek = records.filter((record) => recordDate(record.order.completedAt ?? record.createdAt) >= startOfWeek);
+    const ridesToday = rideRecords.filter((trip) => recordDate(trip.completedAt ?? trip.createdAt) >= startOfToday);
+    const ridesThisWeek = rideRecords.filter((trip) => recordDate(trip.completedAt ?? trip.createdAt) >= startOfWeek);
+    const sumDeliveryRecords = (items: typeof records) => items.reduce((total, record) => total.add(record.riderPayout), new Prisma.Decimal(0));
+    const sumRideRecords = (items: typeof rideRecords) => items.reduce((total, trip) => total.add(rideAmount(trip.finalFareKobo ?? trip.estimatedFareKobo)), new Prisma.Decimal(0));
     return {
-      totalEarnings: sum(),
+      totalEarnings: sum().add(rideTotal),
+      todayEarnings: sumDeliveryRecords(deliveryToday).add(sumRideRecords(ridesToday)),
+      thisWeekEarnings: sumDeliveryRecords(deliveryThisWeek).add(sumRideRecords(ridesThisWeek)),
       pendingEarnings: sum([SettlementStatus.PENDING, SettlementStatus.PROCESSING]),
       paidEarnings: sum([SettlementStatus.PAID]),
-      completedJobs: records
+      completedDeliveriesCount: records.length,
+      completedRidesCount: rideRecords.length,
+      completedJobs: records,
+      completedRides: rideRecords.map((trip) => ({
+        id: trip.id,
+        tripReference: trip.tripReference,
+        riderPayout: rideAmount(trip.finalFareKobo ?? trip.estimatedFareKobo),
+        payoutStatus: "RECORDED",
+        createdAt: (trip.completedAt ?? trip.createdAt).toISOString(),
+        trip: {
+          tripReference: trip.tripReference,
+          completedAt: trip.completedAt?.toISOString() ?? null
+        }
+      }))
     };
   }
 

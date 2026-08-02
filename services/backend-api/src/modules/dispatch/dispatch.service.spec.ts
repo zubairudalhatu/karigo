@@ -5,7 +5,9 @@ import {
   PaymentStatus,
   Prisma,
   RiderStatus,
-  SettlementStatus
+  SettlementStatus,
+  TaxiDriverProfileStatus,
+  TaxiTripStatus
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
@@ -26,6 +28,8 @@ describe("DispatchService", () => {
   };
   const prisma = {
     rider: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn() },
+    taxiDriverProfile: { findUnique: jest.fn() },
+    taxiTrip: { findMany: jest.fn() },
     order: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn() },
     riderEarning: { findMany: jest.fn() },
     captainWorkState: { updateMany: jest.fn() },
@@ -201,5 +205,52 @@ describe("DispatchService", () => {
     expect(prisma.order.findFirst).toHaveBeenCalledWith(expect.objectContaining({
       select: expect.not.objectContaining({ deliveryOtp: true })
     }));
+  });
+
+  it("returns zero earnings for a Ride-active Captain while Delivery activation is pending", async () => {
+    prisma.rider.findUnique.mockResolvedValue(null);
+    prisma.taxiDriverProfile.findUnique.mockResolvedValue({
+      id: "ride-profile-1",
+      status: TaxiDriverProfileStatus.ACTIVE
+    });
+    prisma.taxiTrip.findMany.mockResolvedValue([]);
+
+    const summary = await service.earnings("ride-user-1");
+
+    expect(prisma.riderEarning.findMany).not.toHaveBeenCalled();
+    expect(prisma.taxiTrip.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { driverProfileId: "ride-profile-1", status: TaxiTripStatus.COMPLETED }
+    }));
+    expect(summary.completedRidesCount).toBe(0);
+    expect(summary.completedDeliveriesCount).toBe(0);
+    expect(String(summary.totalEarnings)).toBe("0");
+  });
+
+  it("includes completed Ride records in the combined earnings summary", async () => {
+    const completedAt = new Date();
+    prisma.rider.findUnique.mockResolvedValue(null);
+    prisma.taxiDriverProfile.findUnique.mockResolvedValue({
+      id: "ride-profile-1",
+      status: TaxiDriverProfileStatus.ACTIVE
+    });
+    prisma.taxiTrip.findMany.mockResolvedValue([{
+      id: "trip-1",
+      tripReference: "KGO-RIDE-1",
+      finalFareKobo: 350000,
+      estimatedFareKobo: 330000,
+      completedAt,
+      createdAt: completedAt,
+      status: TaxiTripStatus.COMPLETED
+    }]);
+
+    const summary = await service.earnings("ride-user-1");
+
+    expect(summary.completedRidesCount).toBe(1);
+    expect(summary.completedRides[0]).toMatchObject({
+      id: "trip-1",
+      tripReference: "KGO-RIDE-1",
+      payoutStatus: "RECORDED"
+    });
+    expect(String(summary.totalEarnings)).toBe("3500");
   });
 });

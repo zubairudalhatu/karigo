@@ -759,8 +759,8 @@ export default function CaptainApplication() {
   return <Screen title="Apply to become a Captain" subtitle="Use your existing KariGO account or create a new Captain applicant account, then submit Delivery Captain or Ride Captain details.">
     <Card tone="soft">
       <Image source={require("../../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
-      <Text style={ui.sectionTitle}>Account-first Captain onboarding</Text>
-      <Text style={ui.pageIntro}>The same verified account is used after approval. Delivery assignments are the approved active mode; KariGO Rides access becomes available after approval and Operations activation.</Text>
+      <Text style={ui.sectionTitle}>Captain application</Text>
+      <Text style={ui.pageIntro}>Use one verified KariGO account for Delivery Captain and Ride Captain access. KariGO Operations activates each mode separately after review.</Text>
     </Card>
 
     <Card>
@@ -786,8 +786,8 @@ export default function CaptainApplication() {
     {step === "APPLICATION" ? <>
       <Card>
         <Text style={ui.sectionTitle}>Application mode</Text>
-        <ToggleRow label="Delivery Captain" checked={form.deliveryCaptainInterest} onPress={() => updateForm({ deliveryCaptainInterest: !form.deliveryCaptainInterest })} helper="Delivery jobs are the active launch workflow after approval." />
-        <ToggleRow label="Ride Captain" checked={form.rideCaptainReviewInterest} onPress={() => updateForm({ rideCaptainReviewInterest: !form.rideCaptainReviewInterest })} helper="KariGO Rides access becomes available after approval and Operations activation." />
+        <ToggleRow label="Delivery Captain" checked={form.deliveryCaptainInterest} onPress={() => updateForm({ deliveryCaptainInterest: !form.deliveryCaptainInterest })} helper="Delivery work starts after KariGO Operations activates this mode." />
+        <ToggleRow label="Ride Captain" checked={form.rideCaptainReviewInterest} onPress={() => updateForm({ rideCaptainReviewInterest: !form.rideCaptainReviewInterest })} helper="Ride work starts after KariGO Operations activates this mode." />
       </Card>
 
       <Card>

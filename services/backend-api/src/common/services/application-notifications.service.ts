@@ -36,6 +36,7 @@ type ApplicationNotificationType =
   | "vendor_application_reviewed"
   | "delivery_captain_application_reviewed"
   | "ride_captain_application_received"
+  | "ride_captain_application_reviewed"
   | "ride_waitlist_joined"
   | "order_created";
 
@@ -55,11 +56,16 @@ export class ApplicationNotificationsService {
   }
 
   async deliveryCaptainApplicationSubmitted(input: ApplicationNotificationInput): Promise<void> {
-    const message = `KariGO has received your Delivery Captain application ${input.reference} for Kano and Abuja launch onboarding review. This does not activate dispatch or payouts. We will contact you with next steps.`;
+    const message = `KariGO has received your Delivery Captain application ${input.reference}. We will review your details and contact you with the next step.`;
     await this.sendApplicantNotification("delivery_captain_application_received", input, {
       subject: "KariGO Delivery Captain application received",
       heading: "Your Delivery Captain application has been received",
-      message
+      message,
+      summaryRows: [
+        { label: "Reference", value: input.reference },
+        { label: "Application status", value: "Submitted" },
+        { label: "Delivery access", value: "Under review" }
+      ]
     });
   }
 
@@ -83,13 +89,27 @@ export class ApplicationNotificationsService {
   }
 
   async deliveryCaptainApplicationReviewed(input: ApplicationReviewNotificationInput): Promise<void> {
-    const statusText = this.statusText(input.status);
-    const noteText = input.note ? ` Note from KariGO: ${input.note}` : "";
-    const message = `KariGO Delivery Captain application ${input.reference} has been updated to ${statusText}.${noteText} This does not activate dispatch, Ride access or payouts.`;
+    const review = this.captainReviewContent(input, "Delivery");
     await this.sendApplicantNotification("delivery_captain_application_reviewed", input, {
       subject: "KariGO Delivery Captain application update",
-      heading: "Your Delivery Captain application has been updated",
-      message
+      heading: review.heading,
+      message: review.message,
+      smsMessage: review.smsMessage,
+      summaryRows: review.summaryRows
+    });
+  }
+
+  async rideCaptainApplicationReviewed(input: ApplicationReviewNotificationInput): Promise<void> {
+    const review = this.captainReviewContent(input, "Ride");
+    await this.sendApplicantNotification("ride_captain_application_reviewed", input, {
+      subject: "KariGO Ride Captain application update",
+      heading: review.heading,
+      message: review.message,
+      smsMessage: review.smsMessage,
+      summaryRows: review.summaryRows
+    }, {
+      emailEnabled: this.rideApplicationEmailEnabled(),
+      smsEnabled: this.rideApplicationSmsEnabled()
     });
   }
 
@@ -111,11 +131,16 @@ export class ApplicationNotificationsService {
   }
 
   async rideCaptainApplicationSubmitted(input: ApplicationNotificationInput): Promise<void> {
-    const message = `KariGO has received your Ride Captain readiness application ${input.reference}. KariGO Rides remains readiness-only and live ride dispatch is not active. We will contact you with next steps.`;
+    const message = `KariGO has received your Ride Captain application ${input.reference}. We will review your details and contact you with the next step.`;
     await this.sendApplicantNotification("ride_captain_application_received", input, {
-      subject: "KariGO Ride Captain readiness application received",
-      heading: "Your Ride Captain readiness application has been received",
-      message
+      subject: "KariGO Ride Captain application received",
+      heading: "Your Ride Captain application has been received",
+      message,
+      summaryRows: [
+        { label: "Reference", value: input.reference },
+        { label: "Application status", value: "Submitted" },
+        { label: "Ride access", value: "Under review" }
+      ]
     }, {
       emailEnabled: this.rideApplicationEmailEnabled(),
       smsEnabled: this.rideApplicationSmsEnabled()
@@ -123,7 +148,7 @@ export class ApplicationNotificationsService {
   }
 
   async rideWaitlistJoined(input: ApplicationNotificationInput): Promise<void> {
-    const message = `KariGO has received your Ride waitlist request ${input.reference}. KariGO Rides is not live yet. We will contact you when readiness testing expands in your area.`;
+    const message = `KariGO has received your Ride waitlist request ${input.reference}. We will contact you when Ride availability expands in your area.`;
     await this.sendApplicantNotification("ride_waitlist_joined", input, {
       subject: "KariGO Ride waitlist request received",
       heading: "Your Ride waitlist request has been received",
@@ -149,7 +174,14 @@ export class ApplicationNotificationsService {
   private async sendApplicantNotification(
     type: ApplicationNotificationType,
     input: ApplicationNotificationInput,
-    content: { subject: string; heading: string; message: string; emailMessage?: string; smsMessage?: string },
+    content: {
+      subject: string;
+      heading: string;
+      message: string;
+      emailMessage?: string;
+      smsMessage?: string;
+      summaryRows?: Array<{ label: string; value: string }>;
+    },
     options?: { emailEnabled?: boolean; smsEnabled?: boolean }
   ): Promise<void> {
     const smsEnabled = options?.smsEnabled ?? this.smsEnabled();
@@ -165,7 +197,8 @@ export class ApplicationNotificationsService {
         subject: content.subject,
         heading: content.heading,
         message: content.emailMessage ?? content.message,
-        reference: input.reference
+        reference: input.reference,
+        summaryRows: content.summaryRows
       }, emailEnabled, activeEmailProvider),
       this.sendApplicationSms(input.phoneNumber, content.smsMessage ?? content.message, this.typeLabel(type), smsEnabled, activeSmsProvider)
     ]);
@@ -188,6 +221,7 @@ export class ApplicationNotificationsService {
     heading: string;
     message: string;
     reference: string;
+    summaryRows?: Array<{ label: string; value: string }>;
   }, enabled = this.emailEnabled(), provider: "mock" | "resend" = this.emailProvider(enabled)): Promise<ChannelResult> {
     if (!enabled) return { accepted: false, provider: "disabled", reason: "disabled" };
     if (!input.to) return { accepted: false, provider: "disabled", reason: "missing_recipient" };
@@ -234,6 +268,7 @@ export class ApplicationNotificationsService {
     heading: string;
     message: string;
     reference: string;
+    summaryRows?: Array<{ label: string; value: string }>;
   }): Promise<ChannelResult> {
     const apiKey = this.config.get<string>("RESEND_API_KEY");
     const from = this.config.get<string>("RESEND_FROM_EMAIL") ?? this.config.get<string>("EMAIL_FROM");
@@ -302,19 +337,67 @@ export class ApplicationNotificationsService {
     };
   }
 
-  private renderEmail(input: { recipientName: string; subject: string; heading: string; message: string; reference: string }) {
+  private captainReviewContent(input: ApplicationReviewNotificationInput, mode: "Delivery" | "Ride") {
+    const normalizedStatus = input.status.trim().replaceAll(" ", "_").replaceAll("-", "_").toUpperCase();
+    const accessLabel = `${mode} access`;
+    const activationLabel = mode === "Ride" ? "Ride activation" : "Delivery Captain activation";
+    const noteText = input.note ? ` Note from KariGO: ${input.note}` : "";
+    if (normalizedStatus === "APPROVED" || normalizedStatus === "ACTIVATION_PENDING") {
+      const message = `Your ${mode} Captain application has been approved. KariGO Operations is completing your ${activationLabel}. We will notify you when you can go online for ${mode} assignments.${noteText}`;
+      return {
+        heading: `Your ${mode} Captain application has been approved`,
+        message,
+        smsMessage: message,
+        summaryRows: [
+          { label: "Reference", value: input.reference },
+          { label: "Application status", value: "Approved" },
+          { label: accessLabel, value: "Activation pending" }
+        ]
+      };
+    }
+    if (normalizedStatus === "ACTIVE" || normalizedStatus === "OPERATIONAL") {
+      const message = `Your KariGO ${mode} Captain access is active. Open the KariGO Captain app to go online for ${mode} assignments.${noteText}`;
+      return {
+        heading: `Your ${mode} Captain access is active`,
+        message,
+        smsMessage: message,
+        summaryRows: [
+          { label: "Reference", value: input.reference },
+          { label: "Application status", value: "Approved" },
+          { label: accessLabel, value: "Active" }
+        ]
+      };
+    }
+    const statusText = this.statusText(input.status);
+    const message = `KariGO ${mode} Captain application ${input.reference} has been updated to ${statusText}.${noteText}`;
+    return {
+      heading: `Your ${mode} Captain application has been updated`,
+      message,
+      smsMessage: message,
+      summaryRows: [
+        { label: "Reference", value: input.reference },
+        { label: "Application status", value: this.displayStatus(input.status) },
+        { label: accessLabel, value: normalizedStatus === "REJECTED" ? "Not active" : "Pending" }
+      ]
+    };
+  }
+
+  private renderEmail(input: { recipientName: string; subject: string; heading: string; message: string; reference: string; summaryRows?: Array<{ label: string; value: string }> }) {
     const recipientName = this.escapeHtml(input.recipientName);
     const heading = this.escapeHtml(input.heading);
     const message = this.escapeHtml(input.message);
-    const reference = this.escapeHtml(input.reference);
     const supportContact = this.escapeHtml(this.config.get<string>("EMAIL_REPLY_TO", "KariGO Support"));
-    const pilotLabel = this.escapeHtml(this.config.get<string>("KARIGO_PILOT_EMAIL_LABEL", "Kano and Abuja launch onboarding"));
     const logoUrl = this.httpsUrl(this.config.get<string>("KARIGO_EMAIL_LOGO_URL")) ? this.escapeHtml(this.config.get<string>("KARIGO_EMAIL_LOGO_URL")) : "";
     const logoMarkup = logoUrl
       ? `<img src="${logoUrl}" width="142" alt="KariGO" style="display:block;width:142px;max-width:142px;height:auto;border:0;outline:none;text-decoration:none" />`
       : `<div style="font-size:30px;line-height:1;font-weight:800;letter-spacing:-0.5px;color:#E31E24">KariGO</div>`;
-    const htmlBody = `<!doctype html><html><body style="margin:0;background:#F4F5F7;font-family:Arial,Helvetica,sans-serif;color:#242424"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#F4F5F7;padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #E6E8EC"><tr><td style="background:#242424;padding:24px 26px">${logoMarkup}</td></tr><tr><td style="padding:30px 28px"><p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#5B5F68">Hello ${recipientName},</p><h1 style="margin:0 0 14px;font-size:26px;line-height:1.2;color:#171717">${heading}</h1><p style="font-size:16px;line-height:1.7;color:#373A40">${message}</p><p style="background:#FFF5F5;border:1px solid #FFD6D8;border-radius:14px;padding:14px 16px;font-size:14px;line-height:1.6"><strong style="color:#E31E24">Reference:</strong> ${reference}<br /><strong style="color:#E31E24">Pilot:</strong> ${pilotLabel}</p><p style="font-size:14px;line-height:1.65;color:#5B5F68">This is an application confirmation message, not a marketing email. KariGO will never ask you to share OTPs, card details or payment secrets by email.</p></td></tr><tr><td style="background:#171717;padding:18px 28px;color:#ffffff;font-size:12px;line-height:1.6">Support: ${supportContact}<br />KariGO Express Limited</td></tr></table></td></tr></table></body></html>`;
-    const textBody = `KariGO\n\nHello ${input.recipientName},\n\n${input.heading}\n\n${input.message}\n\nReference: ${input.reference}\nPilot: ${this.config.get<string>("KARIGO_PILOT_EMAIL_LABEL", "Kano and Abuja launch onboarding")}\n\nThis is an application confirmation message, not a marketing email. KariGO will never ask you to share OTPs, card details or payment secrets by email.\n\nSupport: ${this.config.get<string>("EMAIL_REPLY_TO", "KariGO Support")}\nKariGO Express Limited`;
+    const rows = input.summaryRows?.length ? input.summaryRows : [{ label: "Reference", value: input.reference }];
+    const rowHtml = rows
+      .map((row) => `<strong style="color:#E31E24">${this.escapeHtml(row.label)}:</strong> ${this.escapeHtml(row.value)}`)
+      .join("<br />");
+    const rowText = rows.map((row) => `${row.label}: ${row.value}`).join("\n");
+    const htmlBody = `<!doctype html><html><body style="margin:0;background:#F4F5F7;font-family:Arial,Helvetica,sans-serif;color:#242424"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#F4F5F7;padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #E6E8EC"><tr><td style="background:#242424;padding:24px 26px">${logoMarkup}</td></tr><tr><td style="padding:30px 28px"><p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#5B5F68">Hello ${recipientName},</p><h1 style="margin:0 0 14px;font-size:24px;line-height:1.25;color:#171717">${heading}</h1><p style="font-size:16px;line-height:1.7;color:#373A40">${message}</p><p style="background:#FFF5F5;border:1px solid #FFD6D8;border-radius:14px;padding:14px 16px;font-size:14px;line-height:1.6">${rowHtml}</p><p style="font-size:14px;line-height:1.65;color:#5B5F68">This is an application confirmation message, not a marketing email. KariGO will never ask you to share OTPs, card details or payment secrets by email.</p></td></tr><tr><td style="background:#171717;padding:18px 28px;color:#ffffff;font-size:12px;line-height:1.6">Support: ${supportContact}<br />KariGO Express Limited</td></tr></table></td></tr></table></body></html>`;
+    const textBody = `KariGO\n\nHello ${input.recipientName},\n\n${input.heading}\n\n${input.message}\n\n${rowText}\n\nThis is an application confirmation message, not a marketing email. KariGO will never ask you to share OTPs, card details or payment secrets by email.\n\nSupport: ${this.config.get<string>("EMAIL_REPLY_TO", "KariGO Support")}\nKariGO Express Limited`;
     return { subject: input.subject, htmlBody, textBody };
   }
 
@@ -456,6 +539,7 @@ export class ApplicationNotificationsService {
       vendor_application_reviewed: "vendor applicant review",
       delivery_captain_application_reviewed: "Delivery Captain applicant review",
       ride_captain_application_received: "Ride Captain applicant",
+      ride_captain_application_reviewed: "Ride Captain applicant review",
       ride_waitlist_joined: "Ride waitlist",
       order_created: "order customer"
     };
@@ -464,6 +548,10 @@ export class ApplicationNotificationsService {
 
   private statusText(status: string) {
     return status.toLowerCase().replaceAll("_", " ");
+  }
+
+  private displayStatus(status: string) {
+    return status.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
   private providerReference(payload: Record<string, unknown>, keys: string[]) {

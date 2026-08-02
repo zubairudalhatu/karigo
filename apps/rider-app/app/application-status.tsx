@@ -18,6 +18,7 @@ import {
   hasSubmittedCaptainApplication,
   overallReviewState
 } from "../src/lib/captain-application-status";
+import { CaptainModeProjection, projectCaptainOperationalState } from "../src/lib/captain-operational-state";
 import { friendlyError } from "../src/lib/errors";
 
 function firstName(fullName?: string | null) {
@@ -32,9 +33,9 @@ function locationLabel(application: Extract<CaptainApplicationSummary, { exists:
     pilotCity?: string | null;
   };
   return {
-    residential: anyApplication.residentialLocation?.label || anyApplication.pilotCity || "Not available",
-    operatingAreas: anyApplication.operatingAreas?.map((area) => area.label).filter(Boolean).join(", ") || "Not available",
-    primaryArea: anyApplication.primaryOperatingArea?.label || "Not available"
+    residential: anyApplication.residentialLocation?.label || anyApplication.pilotCity || "Not provided",
+    operatingAreas: anyApplication.operatingAreas?.map((area) => area.label).filter(Boolean).join(", ") || "Not provided",
+    primaryArea: anyApplication.primaryOperatingArea?.label || "Not provided"
   };
 }
 
@@ -77,7 +78,7 @@ function documentStageLabel(stage?: string | null) {
   }
 }
 
-function ApplicationSection({ application, mode }: { application: CaptainApplicationSummary; mode: CaptainApplicationMode }) {
+function ApplicationSection({ application, mode, projection }: { application: CaptainApplicationSummary; mode: CaptainApplicationMode; projection: CaptainModeProjection }) {
   if (!hasSubmittedCaptainApplication(application)) {
     return <Card>
       <Text style={ui.sectionTitle}>{applicationModeLabel(mode)} application</Text>
@@ -95,7 +96,12 @@ function ApplicationSection({ application, mode }: { application: CaptainApplica
       <StatusBadge status={applicationStatusLabel(application)} />
     </View>
     <Text style={styles.reference}>{application.applicationReference}</Text>
-    <Text style={ui.muted}>{applicantReviewCopy(application, mode)}</Text>
+    <View style={styles.stageGrid}>
+      <View style={styles.stageItem}><Text style={styles.metaLabel}>Application</Text><Text style={styles.metaValue}>{projection.applicationLabel}</Text></View>
+      <View style={styles.stageItem}><Text style={styles.metaLabel}>Documents</Text><Text style={styles.metaValue}>{projection.documentsLabel}</Text></View>
+      <View style={styles.stageItem}><Text style={styles.metaLabel}>Operations</Text><Text style={styles.metaValue}>{projection.operationsLabel}</Text></View>
+    </View>
+    <Text style={ui.muted}>{projection.active ? `Your ${applicationModeLabel(mode)} access is active.` : applicantReviewCopy(application, mode)}</Text>
     {application.applicantVisibleNote ? <Message>{application.applicantVisibleNote}</Message> : null}
     {documentReview ? <View style={styles.documentReview}>
       <View style={ui.spaceBetween}>
@@ -156,11 +162,13 @@ export default function ApplicationStatus() {
 
   const overall = overallReviewState(access);
   const overallLabel = categoryLabel(overall);
+  const projection = projectCaptainOperationalState(access);
+  const headerLabel = projection.hasAnyActiveMode ? "Captain access active" : overallLabel;
 
   return <Protected>
     <Screen
       title="Application status"
-      subtitle="Track your KariGO Captain review without reopening the registration form."
+      subtitle="Review your KariGO Captain access, documents and application history."
       refreshing={refreshing}
       onRefresh={() => void load(true)}
     >
@@ -176,8 +184,9 @@ export default function ApplicationStatus() {
       <Card tone="soft">
         <Text style={styles.kicker}>KariGO Captain</Text>
         <Text style={ui.heroTitle}>Hi, {firstName(access?.account.fullName)}</Text>
-        <View style={styles.badgeRow}><StatusBadge status={overallLabel} /></View>
-        <Text style={ui.pageIntro}>Your information and documents have been submitted successfully. KariGO is reviewing your application and will notify you when a decision is available.</Text>
+        <View style={styles.badgeRow}><StatusBadge status={projection.hasAnyActiveMode ? "Active" : overallLabel} /></View>
+        <Text style={styles.overallTitle}>{headerLabel}</Text>
+        <Text style={ui.pageIntro}>{projection.overallMessage}</Text>
         {lastChecked ? <Text style={ui.muted}>Last checked {lastChecked.toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" })}</Text> : null}
       </Card>
 
@@ -185,8 +194,8 @@ export default function ApplicationStatus() {
       <Button title={refreshing ? "Refreshing..." : "Refresh status"} tone="muted" disabled={refreshing} onPress={() => void load(true)} />
 
       {access ? <>
-        <ApplicationSection application={access.deliveryCaptainApplication} mode="DELIVERY_CAPTAIN" />
-        <ApplicationSection application={access.rideCaptainApplication} mode="RIDE_CAPTAIN" />
+        <ApplicationSection application={access.deliveryCaptainApplication} mode="DELIVERY_CAPTAIN" projection={projection.delivery} />
+        <ApplicationSection application={access.rideCaptainApplication} mode="RIDE_CAPTAIN" projection={projection.ride} />
       </> : null}
 
       <Card>
@@ -203,8 +212,11 @@ const styles = StyleSheet.create({
   successTitle: { color: brand.colors.charcoal, fontSize: 27, fontWeight: "900", letterSpacing: -0.3 },
   kicker: { color: brand.colors.primary, fontSize: 12, fontWeight: "900", letterSpacing: 1.2, textTransform: "uppercase" },
   badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  overallTitle: { color: brand.colors.charcoal, fontSize: 18, fontWeight: "900" },
   reference: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "900" },
   metaGrid: { gap: 8 },
+  stageGrid: { gap: 8 },
+  stageItem: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 14, borderWidth: 1, gap: 2, padding: 10 },
   documentReview: { backgroundColor: "#FFF7ED", borderColor: "#FED7AA", borderRadius: 14, borderWidth: 1, gap: 6, padding: 10 },
   metaItem: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 14, borderWidth: 1, gap: 2, padding: 10 },
   metaLabel: { color: brand.colors.muted, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },

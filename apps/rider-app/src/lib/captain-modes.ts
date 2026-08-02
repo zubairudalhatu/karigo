@@ -35,7 +35,7 @@ export function deliveryCaptainMode(profile?: RiderProfile | null): CaptainMode 
     badge: active ? "Approved" : "Pending approval",
     description: active
       ? "Handle KariGO delivery assignments, pickup milestones and customer handoff."
-      : "Delivery jobs unlock after KariGO approves this Captain account."
+      : "Delivery assignments start after KariGO Operations activates this mode."
   };
 }
 
@@ -44,10 +44,10 @@ export function driverCaptainMode(rideOperationsEnabled = ridesProductionEnabled
     key: "DRIVER_CAPTAIN",
     label: "Ride Captain",
     status: rideOperationsEnabled ? "ACTIVE" : "DISABLED",
-    badge: rideOperationsEnabled ? "Operations active" : "Review only",
+    badge: rideOperationsEnabled ? "Operations active" : "Activation pending",
     description: rideOperationsEnabled
-      ? "Receive and progress KariGO Rides requests assigned by Operations after approval."
-      : "Submit ride and vehicle details while KariGO Rides access awaits approval.",
+      ? "Receive and progress KariGO Ride requests assigned by Operations."
+      : "Submit ride and vehicle details for KariGO Operations review.",
     ctaLabel: rideOperationsEnabled ? "Ride operations" : "Ride review",
     href: "/taxi-readiness"
   };

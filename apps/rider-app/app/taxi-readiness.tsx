@@ -10,8 +10,8 @@ import { ridesProductionEnabled } from "../src/lib/captain-modes";
 import { friendlyError } from "../src/lib/errors";
 import { requestCaptainForegroundLocation } from "../src/lib/location";
 
-const rideOperationsNotice = "KariGO Rides access is active for approved Ride Captains. Captains receive only Operations-assigned Ride requests; online Ride payment and payout automation remain disabled.";
-const blockedRideOperationsCopy = "Ride operations will be available after KariGO approves your Captain account.";
+const rideOperationsNotice = "Manage current availability and assigned Ride requests.";
+const blockedRideOperationsCopy = "Ride Captain activation is pending.";
 const closedTripStatuses = new Set(["COMPLETED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_DRIVER", "CANCELLED_BY_ADMIN", "EXPIRED"]);
 
 const money = (kobo?: number | null) => `NGN ${Math.round(Number(kobo ?? 0) / 100).toLocaleString()}`;
@@ -88,18 +88,17 @@ export default function TaxiReadiness() {
     }
   }
 
-  return <Protected><Screen title={taxiEnabled ? "Ride operations" : "Ride review"} subtitle={taxiEnabled ? "Receive and progress Operations-assigned KariGO Rides requests." : "Prepare Ride Captain and vehicle verification details before KariGO Rides is enabled in your area."}>
+  return <Protected><Screen title={taxiEnabled ? "Ride operations" : "Ride review"} subtitle={taxiEnabled ? "Receive and progress Operations-assigned KariGO Rides requests." : "Prepare Ride Captain and vehicle verification details before Ride activation is approved for your account."}>
     <Card tone="soft">
-      <Text style={ui.sectionTitle}>{taxiEnabled ? "KariGO Rides operations" : "KariGO Rides requires Operations approval"}</Text>
-      <Text style={ui.pageIntro}>{taxiEnabled ? rideOperationsNotice : "This form helps KariGO prepare Ride Captain onboarding, vehicle checks and safe ride operations. It does not activate ride jobs, fare billing or payment before approval."}</Text>
+      <Text style={ui.sectionTitle}>{taxiEnabled ? "Ride workspace" : "Ride review"}</Text>
+      <Text style={ui.pageIntro}>{taxiEnabled ? rideOperationsNotice : "Complete Ride Captain details for KariGO review."}</Text>
     </Card>
 
     {taxiEnabled ? <Card>
-      <Text style={ui.sectionTitle}>Ride operations</Text>
-      <Text style={ui.muted}>{rideOperationsNotice}</Text>
+      <Text style={ui.sectionTitle}>Availability</Text>
       {profile ? <>
         <StatusBadge status={profile.status} />
-        <Text style={ui.muted}>{profile.isAvailableForTaxi ? "Online for manually assigned ride trips" : "Offline for ride trips"}</Text>
+        <Text style={ui.muted}>{profile.isAvailableForTaxi ? "Online for Ride assignments" : "Go online to become available for Ride assignments."}</Text>
         <Button title={profile.isAvailableForTaxi ? "Go offline for Rides" : "Go online for Rides"} onPress={toggleTaxiAvailability} />
       </> : <Text style={ui.muted}>{blockedRideOperationsCopy}</Text>}
     </Card> : null}
@@ -127,8 +126,8 @@ export default function TaxiReadiness() {
       </Card>)}
     </Card> : null}
     {taxiEnabled && profile && !trips.length ? <Card>
-      <Text style={ui.sectionTitle}>Assigned ride trips</Text>
-      <Text style={ui.muted}>No Ride request is assigned yet. KariGO Operations will assign Ride requests when available.</Text>
+      <Text style={ui.sectionTitle}>No active Ride</Text>
+      <Text style={ui.muted}>Go online to become available for Ride assignments.</Text>
     </Card> : null}
 
     {status ? <Card>

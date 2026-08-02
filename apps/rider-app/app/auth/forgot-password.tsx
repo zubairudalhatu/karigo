@@ -32,7 +32,7 @@ export default function CaptainForgotPasswordScreen() {
   }
 
   return <Screen title="Reset password">
-    <Text style={ui.pageIntro}>Use the phone number on your KariGO account. If eligible, KariGO will send an OTP so you can set a new password and continue Captain onboarding.</Text>
+    <Text style={ui.pageIntro}>Use the phone number on your KariGO account. If eligible, KariGO will send an OTP so you can set a new password and continue using KariGO Captain.</Text>
     <Field placeholder="080..." value={phoneNumber} onChangeText={setPhoneNumber} keyboardType="phone-pad" autoCapitalize="none" />
     <Message error>{error}</Message>
     <Button title={busy ? "Sending OTP..." : "Send reset OTP"} onPress={submit} disabled={busy || !phoneNumber.trim()} />

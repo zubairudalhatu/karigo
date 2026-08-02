@@ -61,8 +61,7 @@ describe("ApplicationNotificationsService", () => {
         TERMII_API_KEY: "termii-test-key-not-real",
         TERMII_SENDER_ID: "KariGO",
         TERMII_BASE_URL: "https://api.ng.termii.com",
-        EMAIL_REPLY_TO: "support@example.test",
-        KARIGO_PILOT_EMAIL_LABEL: "Kano and Abuja launch onboarding"
+        EMAIL_REPLY_TO: "support@example.test"
       }[key] ?? fallback))
     } as unknown as ConfigService);
 
@@ -89,7 +88,9 @@ describe("ApplicationNotificationsService", () => {
     );
     const smsBody = JSON.parse((fetch as jest.Mock).mock.calls[1][1].body);
     expect(smsBody.api_key).toBe("termii-test-key-not-real");
-    expect(smsBody.sms).toContain("does not activate dispatch or payouts");
+    expect(smsBody.sms).toContain("KariGO has received your Delivery Captain application");
+    expect(smsBody.sms).toContain("We will review your details and contact you with the next step.");
+    expect(smsBody.sms).not.toContain("does not activate dispatch");
   });
 
   it("uses current Render application notification flags without requiring the legacy master flag", async () => {
@@ -203,7 +204,8 @@ describe("ApplicationNotificationsService", () => {
 
     expect(fetch).toHaveBeenCalledTimes(2);
     const smsBody = JSON.parse((fetch as jest.Mock).mock.calls[1][1].body);
-    expect(smsBody.sms).toContain("KariGO Rides remains readiness-only");
+    expect(smsBody.sms).toContain("KariGO has received your Ride Captain application");
+    expect(smsBody.sms).toContain("We will review your details and contact you with the next step.");
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Application notification decision type=ride_captain_application_received"));
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("smsProvider=termii emailProvider=resend result=sent"));
   });
@@ -234,7 +236,122 @@ describe("ApplicationNotificationsService", () => {
 
     expect(fetch).toHaveBeenCalledTimes(2);
     const smsBody = JSON.parse((fetch as jest.Mock).mock.calls[1][1].body);
-    expect(smsBody.sms).toContain("KariGO Rides is not live yet");
+    expect(smsBody.sms).toContain("KariGO has received your Ride waitlist request");
+    expect(smsBody.sms).toContain("Ride availability expands in your area");
+  });
+
+  it("renders state-aware Delivery Captain approval email without legacy launch copy", async () => {
+    jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "email-approval-1" }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ message_id: "sms-approval-1" }) } as Response);
+    const service = new ApplicationNotificationsService({
+      get: jest.fn((key: string, fallback: unknown) => ({
+        APPLICATION_EMAIL_NOTIFICATIONS_ENABLED: true,
+        APPLICATION_SMS_NOTIFICATIONS_ENABLED: true,
+        RESEND_API_KEY: "resend-test-key-not-real",
+        RESEND_FROM_EMAIL: "no-reply@example.test",
+        RESEND_BASE_URL: "https://api.resend.com",
+        TERMII_API_KEY: "termii-test-key-not-real",
+        TERMII_SENDER_ID: "KariGO",
+        TERMII_BASE_URL: "https://api.ng.termii.com",
+        EMAIL_REPLY_TO: "support@example.test"
+      }[key] ?? fallback))
+    } as unknown as ConfigService);
+
+    await service.deliveryCaptainApplicationReviewed({
+      reference: "KGO-CAPTAIN-2026-ABC123",
+      recipientName: "Demo Captain",
+      phoneNumber: "+2348030000000",
+      email: "captain@example.test",
+      status: "APPROVED"
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const emailBody = JSON.parse((fetch as jest.Mock).mock.calls[0][1].body);
+    const smsBody = JSON.parse((fetch as jest.Mock).mock.calls[1][1].body);
+    expect(emailBody.html).toContain("Application status");
+    expect(emailBody.html).toContain("Delivery access");
+    expect(emailBody.html).toContain("Activation pending");
+    expect(emailBody.text).toContain("Your Delivery Captain application has been approved.");
+    expect(smsBody.sms).toContain("Your Delivery Captain application has been approved.");
+    const combined = `${emailBody.html}\n${emailBody.text}\n${smsBody.sms}`;
+    expect(combined).not.toContain("Pilot:");
+    expect(combined).not.toContain("Controlled Early Access");
+    expect(combined).not.toContain("does not activate dispatch");
+    expect(combined).not.toContain("under review after approval");
+  });
+
+  it("renders state-aware operational access email without legacy launch copy", async () => {
+    jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "email-ride-active-1" }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ message_id: "sms-ride-active-1" }) } as Response);
+    const service = new ApplicationNotificationsService({
+      get: jest.fn((key: string, fallback: unknown) => ({
+        APPLICATION_EMAIL_NOTIFICATIONS_ENABLED: true,
+        APPLICATION_SMS_NOTIFICATIONS_ENABLED: true,
+        RESEND_API_KEY: "resend-test-key-not-real",
+        RESEND_FROM_EMAIL: "no-reply@example.test",
+        RESEND_BASE_URL: "https://api.resend.com",
+        TERMII_API_KEY: "termii-test-key-not-real",
+        TERMII_SENDER_ID: "KariGO",
+        TERMII_BASE_URL: "https://api.ng.termii.com",
+        EMAIL_REPLY_TO: "support@example.test"
+      }[key] ?? fallback))
+    } as unknown as ConfigService);
+
+    await service.deliveryCaptainApplicationReviewed({
+      reference: "KGO-RIDE-2026-ABC123",
+      recipientName: "Ride Captain",
+      phoneNumber: "+2348030000000",
+      email: "ride@example.test",
+      status: "ACTIVE"
+    });
+
+    const emailBody = JSON.parse((fetch as jest.Mock).mock.calls[0][1].body);
+    const combined = `${emailBody.html}\n${emailBody.text}`;
+    expect(combined).toContain("Your KariGO Delivery Captain access is active.");
+    expect(combined).toContain("Delivery access");
+    expect(combined).toContain("Active");
+    expect(combined).not.toContain("Controlled Early Access");
+    expect(combined).not.toContain("staging dispatch");
+  });
+
+  it("renders state-aware Ride Captain approval email without legacy launch copy", async () => {
+    jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "email-ride-approval-1" }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ message_id: "sms-ride-approval-1" }) } as Response);
+    const service = new ApplicationNotificationsService({
+      get: jest.fn((key: string, fallback: unknown) => ({
+        RIDE_APPLICATION_EMAIL_NOTIFICATIONS_ENABLED: true,
+        RIDE_APPLICATION_SMS_NOTIFICATIONS_ENABLED: true,
+        RESEND_API_KEY: "resend-test-key-not-real",
+        RESEND_FROM_EMAIL: "no-reply@example.test",
+        RESEND_BASE_URL: "https://api.resend.com",
+        TERMII_API_KEY: "termii-test-key-not-real",
+        TERMII_SENDER_ID: "KariGO",
+        TERMII_BASE_URL: "https://api.ng.termii.com",
+        EMAIL_REPLY_TO: "support@example.test"
+      }[key] ?? fallback))
+    } as unknown as ConfigService);
+
+    await service.rideCaptainApplicationReviewed({
+      reference: "KGO-RIDE-2026-ABC123",
+      recipientName: "Ride Captain",
+      phoneNumber: "+2348030000000",
+      email: "ride@example.test",
+      status: "APPROVED"
+    });
+
+    const emailBody = JSON.parse((fetch as jest.Mock).mock.calls[0][1].body);
+    const smsBody = JSON.parse((fetch as jest.Mock).mock.calls[1][1].body);
+    const combined = `${emailBody.html}\n${emailBody.text}\n${smsBody.sms}`;
+    expect(combined).toContain("Your Ride Captain application has been approved.");
+    expect(combined).toContain("KariGO Operations is completing your Ride activation.");
+    expect(combined).toContain("Ride access");
+    expect(combined).toContain("Activation pending");
+    expect(combined).not.toContain("Controlled Early Access");
+    expect(combined).not.toContain("not live yet");
+    expect(combined).not.toContain("staging dispatch");
   });
 
   it("sends order-created transactional notifications only when order flags are enabled", async () => {

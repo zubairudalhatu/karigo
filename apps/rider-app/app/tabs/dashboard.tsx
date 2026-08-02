@@ -1,4 +1,6 @@
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { AppState, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useEffect, useMemo, useState } from "react";
 import { brand } from "@karigo/config";
 import { CaptainAccess, CaptainWorkState, captainAccessApi } from "../../src/api/captain-access.api";
@@ -11,10 +13,10 @@ import { friendlyError } from "../../src/lib/errors";
 import { requestCaptainForegroundLocation } from "../../src/lib/location";
 import {
   applicantReviewCopy,
-  captainHeroStatus,
   classifyCaptainApplication,
   hasSubmittedCaptainApplication
 } from "../../src/lib/captain-application-status";
+import { CaptainModeProjection, projectCaptainOperationalState } from "../../src/lib/captain-operational-state";
 
 const ACTIVE_DELIVERY_STATUSES = new Set([
   "RIDER_ASSIGNED",
@@ -31,27 +33,11 @@ function firstName(fullName?: string | null) {
   return name.split(/\s+/)[0] || "Captain";
 }
 
-function availabilityLabel(access?: CaptainAccess | null, profile?: RiderProfile | null) {
-  if (!profile) return captainHeroStatus(access, null);
-  if (profile.verificationStatus !== "ACTIVE") return "Unavailable";
-  if (profile.availabilityStatus === "BUSY") return "On delivery";
-  if (profile.availabilityStatus === "ONLINE") return "Online";
-  if (profile.availabilityStatus === "OFFLINE") return "Offline";
-  return "Unavailable";
-}
-
-function availabilityCopy(profile?: RiderProfile | null) {
-  if (!profile) return "Loading Captain status...";
-  if (profile.verificationStatus !== "ACTIVE") return "Only active approved Delivery Captains can go online for delivery assignments.";
-  if (profile.availabilityStatus === "BUSY") return "You are currently assigned to an active delivery. Finish it before changing availability.";
-  if (profile.availabilityStatus === "ONLINE") return "You are ready for KariGO delivery assignments.";
-  return "Go online when dispatch is ready to assign you a delivery.";
-}
-
-function statusChipStyle(profile?: RiderProfile | null, access?: CaptainAccess | null) {
-  if (profile?.availabilityStatus === "ONLINE") return [styles.statusChip, styles.statusChipOnline];
-  if (profile?.availabilityStatus === "BUSY") return [styles.statusChip, styles.statusChipBusy];
-  if (!profile && (hasSubmittedCaptainApplication(access?.deliveryCaptainApplication) || hasSubmittedCaptainApplication(access?.rideCaptainApplication))) return [styles.statusChip, styles.statusChipReview];
+function statusChipStyle(status: string) {
+  const normalized = status.toLowerCase();
+  if (normalized.includes("online")) return [styles.statusChip, styles.statusChipOnline];
+  if (normalized.includes("busy")) return [styles.statusChip, styles.statusChipBusy];
+  if (normalized.includes("pending") || normalized.includes("review")) return [styles.statusChip, styles.statusChipPending];
   return [styles.statusChip, styles.statusChipOffline];
 }
 
@@ -66,30 +52,44 @@ function hasRideApplication(status: CaptainAccess["rideCaptainApplication"] | nu
 function applicationActionLabel(application: Extract<CaptainAccess["deliveryCaptainApplication"], { exists: true }> | Extract<CaptainAccess["rideCaptainApplication"], { exists: true }>) {
   const category = classifyCaptainApplication(application.status);
   if (category === "REVISION_REQUIRED") return "Review requested changes";
-  if (category === "PROVISIONALLY_APPROVED") return "View approval progress";
   if (category === "APPROVED" || category === "ACTIVATION_PENDING") return "View activation status";
   return "View application status";
 }
 
-function modeStatus(workState: CaptainWorkState | null, mode: "DELIVERY" | "RIDE") {
+function modeStatus(workState: CaptainWorkState | null, mode: "DELIVERY" | "RIDE", projection: CaptainModeProjection) {
+  if (!projection.active) return projection.operationsLabel;
   if (!workState) return "Checking";
   if (workState.activeWorkMode === mode) return "Busy";
   if (workState.activeWorkMode && workState.activeWorkMode !== mode) return "Paused";
-  const effective = mode === "DELIVERY" ? workState.effectiveDeliveryOnline : workState.effectiveRideOnline;
-  const desired = mode === "DELIVERY" ? workState.desiredDeliveryOnline : workState.desiredRideOnline;
-  if (effective) return "Online";
-  if (desired) return "Pending";
+  if (projection.effectiveOnline) return "Online";
+  if (projection.desiredOnline) return "Pending";
   return "Offline";
 }
 
-function overallAvailability(workState: CaptainWorkState | null) {
-  if (!workState) return "Checking availability";
-  if (workState.activeWorkMode === "DELIVERY") return "Busy with Delivery";
-  if (workState.activeWorkMode === "RIDE") return "Busy with Ride";
-  if (workState.effectiveDeliveryOnline && workState.effectiveRideOnline) return "Online for Delivery and Ride";
-  if (workState.effectiveDeliveryOnline) return "Online for Delivery";
-  if (workState.effectiveRideOnline) return "Online for Ride";
-  return "Offline";
+function modeStatusStyle(label: string) {
+  const normalized = label.toLowerCase();
+  if (normalized === "online" || normalized === "active") return styles.modeOnline;
+  if (normalized.includes("pending")) return styles.modePending;
+  if (normalized === "busy") return styles.modeBusy;
+  return styles.modeOffline;
+}
+
+function locationSummary(access: CaptainAccess | null, profile: RiderProfile | null) {
+  const deliveryLat = profile?.currentLatitude;
+  const deliveryLng = profile?.currentLongitude;
+  const rideProfile = access?.rideCaptainProfile;
+  const rideLocation = rideProfile?.city && rideProfile.state ? `${rideProfile.city}, ${rideProfile.state}` : rideProfile?.city ?? null;
+  const deliveryAreas = profile?.preferredServiceAreas?.length ? profile.preferredServiceAreas.join(", ") : null;
+  return {
+    coordinates: deliveryLat && deliveryLng ? `${Number(deliveryLat).toFixed(5)}, ${Number(deliveryLng).toFixed(5)}` : null,
+    area: deliveryAreas ?? rideLocation ?? "Kano / Abuja service areas",
+    lastSeen: profile?.currentLocationUpdatedAt ?? access?.rideCaptainProfile?.lastSeenAt ?? null
+  };
+}
+
+function activeWorkTitle(workState: CaptainWorkState | null) {
+  if (!workState?.activeWorkMode) return null;
+  return workState.activeWorkMode === "DELIVERY" ? "Active Delivery assignment" : "Active Ride assignment";
 }
 
 export default function RiderDashboard() {
@@ -112,23 +112,20 @@ export default function RiderDashboard() {
         captainAccessApi.resolve(),
         captainAccessApi.workState().catch(() => null)
       ]);
+      const projection = projectCaptainOperationalState(access, state);
       setCaptainAccess(access);
       setWorkState(state);
       setOnboardingStatus(access.deliveryCaptainApplication);
       setRideOnboardingStatus(access.rideCaptainApplication);
 
-      if (!access.operationalModes.includes("DELIVERY_CAPTAIN")) {
-        setProfile(null);
-        setJobs([]);
-        setUnread(0);
-        setError("");
-        return;
-      }
-
-      const [p, j, n] = await Promise.all([riderApi.profile(), jobsApi.list(), notificationsApi.unreadCount()]);
-      setProfile(p);
-      setJobs(j);
-      setUnread(n.count);
+      const [deliveryProfile, deliveryJobs, notificationCount] = await Promise.all([
+        projection.hasActiveDeliveryMode ? riderApi.profile().catch(() => null) : Promise.resolve(null),
+        projection.hasActiveDeliveryMode ? jobsApi.list().catch(() => []) : Promise.resolve([]),
+        projection.hasAnyActiveMode ? notificationsApi.unreadCount().catch(() => ({ count: 0 })) : Promise.resolve({ count: 0 })
+      ]);
+      setProfile(deliveryProfile);
+      setJobs(deliveryJobs);
+      setUnread(notificationCount.count);
       setError("");
     } catch (e) {
       setError(friendlyError(e));
@@ -141,30 +138,29 @@ export default function RiderDashboard() {
   }
 
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void load();
+    });
+    return () => subscription.remove();
+  }, []);
 
-  const todayJobs = useMemo(() => {
-    const today = new Date().toDateString();
-    return jobs.filter((job) => new Date(job.updatedAt ?? job.createdAt).toDateString() === today);
-  }, [jobs]);
+  const projection = useMemo(() => projectCaptainOperationalState(captainAccess, workState), [captainAccess, workState]);
   const activeJob = useMemo(() => jobs.find((job) => ACTIVE_DELIVERY_STATUSES.has(job.orderStatus)), [jobs]);
+  const mapState = locationSummary(captainAccess, profile);
 
-  async function toggle() {
-    if (!profile || !workState) return;
+  async function toggleDelivery() {
+    if (!workState || !projection.delivery.active) return;
     try {
       const next = !workState.desiredDeliveryOnline;
-      let currentLocation: Awaited<ReturnType<typeof requestCaptainForegroundLocation>> | null = null;
-      if (next) {
-        currentLocation = await requestCaptainForegroundLocation();
-      }
+      const currentLocation = next ? await requestCaptainForegroundLocation() : null;
       const updated = await captainAccessApi.updateAvailability({
         deliveryOnline: next,
         ...(currentLocation ? currentLocation : {})
       });
       setWorkState(updated);
-      setProfile(await riderApi.profile());
-      setMessage(next
-        ? "Delivery availability is online. KariGO Dispatch can offer delivery assignments."
-        : "Delivery availability is offline.");
+      setProfile(projection.delivery.active ? await riderApi.profile().catch(() => null) : null);
+      setMessage(next ? "Delivery availability is online." : "Delivery availability is offline.");
       setError("");
     } catch (e) {
       setError(friendlyError(e));
@@ -173,7 +169,7 @@ export default function RiderDashboard() {
   }
 
   async function toggleRide() {
-    if (!workState) return;
+    if (!workState || !projection.ride.active) return;
     try {
       const next = !workState.desiredRideOnline;
       const currentLocation = next ? await requestCaptainForegroundLocation() : null;
@@ -182,9 +178,7 @@ export default function RiderDashboard() {
         ...(currentLocation ? currentLocation : {})
       });
       setWorkState(updated);
-      setMessage(next
-        ? "Ride availability is online. KariGO Operations can assign Ride requests."
-        : "Ride availability is offline.");
+      setMessage(next ? "Ride availability is online." : "Ride availability is offline.");
       setError("");
     } catch (e) {
       setError(friendlyError(e));
@@ -194,18 +188,11 @@ export default function RiderDashboard() {
 
   const deliveryApplicationExists = hasDeliveryApplication(onboardingStatus);
   const rideApplicationExists = hasRideApplication(rideOnboardingStatus);
-  const onboardingCopy = deliveryApplicationExists
-    ? applicantReviewCopy(onboardingStatus, "DELIVERY_CAPTAIN")
-    : onboardingStatus?.message;
-  const rideOnboardingCopy = rideApplicationExists
-    ? applicantReviewCopy(rideOnboardingStatus, "RIDE_CAPTAIN")
-    : rideOnboardingStatus?.message;
   const hasAnyApplication = deliveryApplicationExists || rideApplicationExists;
-  const hasDeliveryAccess = captainAccess?.operationalModes.includes("DELIVERY_CAPTAIN");
-  const hasRideAccess = captainAccess?.operationalModes.includes("RIDE_CAPTAIN");
   const canToggle = !!workState && !workState.activeWorkMode;
-  const canToggleDelivery = !!workState && canToggle && !!profile && workState.deliveryEligibility.eligible;
-  const canToggleRide = !!workState && canToggle && !!hasRideAccess && workState.rideEligibility.eligible;
+  const canToggleDelivery = !!workState && canToggle && projection.delivery.active && workState.deliveryEligibility.eligible;
+  const canToggleRide = !!workState && canToggle && projection.ride.active && workState.rideEligibility.eligible;
+  const activeWork = activeWorkTitle(workState);
 
   if (loading && !captainAccess) {
     return <Protected><Loading label="Preparing your KariGO Captain access..." /></Protected>;
@@ -216,96 +203,104 @@ export default function RiderDashboard() {
       <View style={styles.heroCard}>
         <View style={styles.heroTopRow}>
           <Image source={require("../../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
-          <View style={statusChipStyle(profile, captainAccess)}><Text style={styles.statusChipText}>{workState ? overallAvailability(workState) : availabilityLabel(captainAccess, profile)}</Text></View>
+          <View style={styles.headerActions}>
+            <View style={statusChipStyle(projection.overallStatus)}><Text style={styles.statusChipText}>{projection.overallStatus}</Text></View>
+            <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={() => router.push("/notifications")} style={styles.notificationBell}>
+              <Feather name="bell" size={20} color={brand.colors.charcoal} />
+              {unread > 0 ? <View style={styles.unreadBadge}><Text style={styles.unreadText}>{unread > 99 ? "99+" : unread}</Text></View> : null}
+            </Pressable>
+          </View>
         </View>
         <Text style={styles.kicker}>KariGO Captain</Text>
         <Text style={styles.title}>Hi, {firstName(profile?.user?.fullName ?? captainAccess?.account.fullName ?? user?.fullName)}</Text>
-        <Text style={styles.heroCopy}>{hasDeliveryAccess ? "Manage your delivery assignments and availability." : "Track your Captain onboarding and approved access."}</Text>
+        <Text style={styles.heroCopy}>{projection.hasAnyActiveMode ? "Ready when you are." : "Check your Captain access and next step."}</Text>
       </View>
       <Message>{message}</Message>
       <Message error>{error}</Message>
 
-      {!hasDeliveryAccess && deliveryApplicationExists ? <Card>
-        <Text style={ui.title}>Captain onboarding</Text>
-        <StatusBadge status={onboardingStatus.status} />
-        <Text style={ui.muted}>{onboardingCopy}</Text>
-        <Text style={ui.muted}>Captain operations will be available after KariGO approves your application.</Text>
-        <NavLink href="/application-status" label={applicationActionLabel(onboardingStatus)} />
-      </Card> : null}
-
-      {!hasRideAccess && rideApplicationExists ? <Card>
-        <Text style={ui.title}>Ride Captain onboarding</Text>
-        <StatusBadge status={rideOnboardingStatus.status} />
-        <Text style={ui.muted}>{rideOnboardingCopy}</Text>
-        <Text style={ui.muted}>Ride operations are activated by KariGO Operations after approval.</Text>
-        <NavLink href="/application-status" label={applicationActionLabel(rideOnboardingStatus)} />
-      </Card> : null}
-
-      {hasRideAccess ? <Card>
-        <Text style={ui.title}>Ride operations</Text>
-        <Text style={ui.muted}>Your KariGO Ride Captain access is active.</Text>
-        <NavLink href="/taxi-readiness" label="Open Ride operations" />
-      </Card> : null}
-
-      {workState ? <Card>
-        <Text style={ui.title}>Availability</Text>
-        <Text style={ui.muted}>
-          {workState.activeWorkMode
-            ? `${workState.activeWorkMode === "DELIVERY" ? "Ride" : "Delivery"} assignments are paused while your active ${workState.activeWorkMode === "DELIVERY" ? "Delivery assignment" : "Ride"} is open.`
-            : "Choose Delivery, Ride, or both. KariGO pauses the other service automatically when one assignment is active."}
-        </Text>
-        <View style={styles.modeRow}>
-          <View style={styles.modeCopy}>
-            <Text style={styles.modeTitle}>Delivery</Text>
-            <Text style={ui.muted}>{modeStatus(workState, "DELIVERY")}</Text>
-            {!workState.deliveryEligibility.eligible ? <Text style={styles.reason}>{workState.deliveryEligibility.reason}</Text> : null}
+      {projection.hasAnyActiveMode ? <>
+        <Card>
+          <View style={ui.spaceBetween}>
+            <Text style={ui.title}>Captain map</Text>
+            <StatusBadge status={projection.overallStatus} />
           </View>
-          <Button title={workState.desiredDeliveryOnline ? "Go offline" : "Go online"} disabled={!canToggleDelivery} onPress={toggle} />
-        </View>
-        <View style={styles.modeRow}>
-          <View style={styles.modeCopy}>
-            <Text style={styles.modeTitle}>Ride</Text>
-            <Text style={ui.muted}>{modeStatus(workState, "RIDE")}</Text>
-            {!workState.rideEligibility.eligible ? <Text style={styles.reason}>{workState.rideEligibility.reason}</Text> : null}
+          <View style={styles.mapPanel}>
+            <View style={styles.mapPin}><Feather name="map-pin" size={24} color={brand.colors.primary} /></View>
+            <View style={styles.mapCopy}>
+              <Text style={styles.mapTitle}>{workState?.activeWorkMode ? activeWork : projection.overallStatus === "Offline" ? "Offline location view" : "Live location ready"}</Text>
+              <Text style={ui.muted}>{mapState.coordinates ? `Last position ${mapState.coordinates}` : "Current position appears after device GPS updates."}</Text>
+              <Text style={ui.muted}>Service area: {mapState.area}</Text>
+              <Text style={ui.muted}>{mapState.lastSeen ? `Last update: ${new Date(mapState.lastSeen).toLocaleString()}` : "Location is requested only when you go online."}</Text>
+            </View>
           </View>
-          <Button title={workState.desiredRideOnline ? "Go offline" : "Go online"} disabled={!canToggleRide} onPress={toggleRide} />
-        </View>
-        {workState.lastLocationAt ? <Text style={ui.muted}>Last location update: {new Date(workState.lastLocationAt).toLocaleString()}</Text> : <Text style={ui.muted}>Location is requested when you go online.</Text>}
-      </Card> : null}
+        </Card>
 
-      {!profile && !hasAnyApplication ? <Card>
-        <Text style={ui.title}>Start Captain onboarding</Text>
-        <Text style={ui.muted}>Use your existing KariGO account to apply as a Delivery Captain, Ride Captain, or both.</Text>
-        <NavLink href="/auth/apply" label="Start Captain application" />
-      </Card> : null}
+        <Card>
+          <Text style={ui.title}>Availability</Text>
+          <Text style={ui.muted}>
+            {workState?.activeWorkMode
+              ? `Availability is paused while your ${workState.activeWorkMode === "DELIVERY" ? "Delivery assignment" : "Ride assignment"} is active.`
+              : "Choose where you want to work today."}
+          </Text>
+          <View style={styles.modeRow}>
+            <View style={styles.modeCopy}>
+              <Text style={styles.modeTitle}>Delivery</Text>
+              <Text style={[styles.modeBadge, modeStatusStyle(modeStatus(workState, "DELIVERY", projection.delivery))]}>{modeStatus(workState, "DELIVERY", projection.delivery)}</Text>
+              {!projection.delivery.eligible ? <Text style={styles.reason}>{projection.delivery.eligibilityReason ?? "Delivery Captain activation is pending."}</Text> : null}
+            </View>
+            <Button title={workState?.desiredDeliveryOnline ? "Go offline" : "Go online"} disabled={!canToggleDelivery} onPress={toggleDelivery} />
+          </View>
+          <View style={styles.modeRow}>
+            <View style={styles.modeCopy}>
+              <Text style={styles.modeTitle}>Ride</Text>
+              <Text style={[styles.modeBadge, modeStatusStyle(modeStatus(workState, "RIDE", projection.ride))]}>{modeStatus(workState, "RIDE", projection.ride)}</Text>
+              {!projection.ride.eligible ? <Text style={styles.reason}>{projection.ride.eligibilityReason ?? "Ride Captain activation is pending."}</Text> : null}
+            </View>
+            <Button title={workState?.desiredRideOnline ? "Go offline" : "Go online"} disabled={!canToggleRide} onPress={toggleRide} />
+          </View>
+        </Card>
 
-      {profile ? <>
-      <View style={styles.summaryGrid}>
-        <Card><Text style={ui.muted}>Today</Text><Text style={styles.metric}>{todayJobs.length}</Text><Text style={ui.muted}>assigned deliveries</Text></Card>
-        <Card><Text style={ui.muted}>Completed</Text><Text style={styles.metric}>{profile?.totalDeliveries ?? 0}</Text><Text style={ui.muted}>deliveries</Text></Card>
-      </View>
+        <Card>
+          <Text style={ui.title}>Current work</Text>
+          {activeJob ? <>
+            <Text style={styles.jobRef}>{activeJob.orderNumber}</Text>
+            <StatusBadge status={activeJob.orderStatus} />
+            <NavLink href={`/jobs/${activeJob.id}`} label="Open active delivery" />
+          </> : workState?.activeRideTripId ? <>
+            <Text style={styles.jobRef}>{workState.activeWorkReference ?? workState.activeRideTripId}</Text>
+            <StatusBadge status="Busy with Ride" />
+            <NavLink href="/taxi-readiness" label="Open active Ride" />
+          </> : <>
+            <Text style={styles.emptyTitle}>{projection.effectiveDeliveryOnline || projection.effectiveRideOnline ? "Waiting for assignment" : "No active assignment"}</Text>
+            <Text style={ui.muted}>You will see a new Ride or Delivery assignment here when KariGO Operations assigns one.</Text>
+          </>}
+        </Card>
 
-      <Card>
-        <Text style={ui.title}>Active delivery</Text>
-        {activeJob ? <>
-          <Text style={styles.jobRef}>{activeJob.orderNumber}</Text>
-          <StatusBadge status={activeJob.orderStatus} />
-          <NavLink href={`/jobs/${activeJob.id}`} label="Open active delivery" />
-        </> : <Text style={ui.muted}>No active delivery right now. Stay available when dispatch is ready.</Text>}
-      </Card>
-
-      <Card>
-        <Text style={ui.title}>Assigned deliveries</Text>
-        <Text style={styles.metric}>{jobs.length}</Text>
-        <NavLink href="/jobs" label="View assigned deliveries" />
-      </Card>
-
-      <Card>
-        <Text style={ui.title}>Notifications</Text>
-        <Text style={ui.muted}>{unread ? `${unread} unread update${unread === 1 ? "" : "s"}.` : "No unread updates."}</Text>
-        <NavLink href="/notifications" label="Open notifications" />
-      </Card>
-      </> : null}
+      </> : <>
+        {hasAnyApplication ? <Card tone="soft">
+          <Text style={ui.title}>{projection.hasApprovedPendingActivation ? "Activation pending" : projection.hasRevisionRequired ? "Changes requested" : "Application status"}</Text>
+          <Text style={ui.pageIntro}>{projection.overallMessage}</Text>
+          {deliveryApplicationExists ? <>
+            <View style={styles.applicationLine}>
+              <Text style={styles.modeTitle}>Delivery Captain</Text>
+              <StatusBadge status={projection.delivery.operationsLabel} />
+            </View>
+            <Text style={ui.muted}>{applicantReviewCopy(onboardingStatus, "DELIVERY_CAPTAIN")}</Text>
+          </> : null}
+          {rideApplicationExists ? <>
+            <View style={styles.applicationLine}>
+              <Text style={styles.modeTitle}>Ride Captain</Text>
+              <StatusBadge status={projection.ride.operationsLabel} />
+            </View>
+            <Text style={ui.muted}>{applicantReviewCopy(rideOnboardingStatus, "RIDE_CAPTAIN")}</Text>
+          </> : null}
+          <NavLink href="/application-status" label={deliveryApplicationExists ? applicationActionLabel(onboardingStatus) : rideApplicationExists ? applicationActionLabel(rideOnboardingStatus) : "View application status"} />
+        </Card> : <Card>
+          <Text style={ui.title}>Apply to become a Captain</Text>
+          <Text style={ui.muted}>Use your existing KariGO account to apply as a Delivery Captain, Ride Captain, or both.</Text>
+          <NavLink href="/auth/apply" label="Start Captain application" />
+        </Card>}
+      </>}
     </Screen></Protected>
   );
 }
@@ -313,21 +308,34 @@ export default function RiderDashboard() {
 const styles = StyleSheet.create({
   heroCard: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 24, borderWidth: 1, gap: 10, overflow: "hidden", padding: 18 },
   heroTopRow: { alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" },
+  headerActions: { alignItems: "center", flexDirection: "row", gap: 8 },
+  notificationBell: { alignItems: "center", backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, height: 44, justifyContent: "center", minWidth: 44 },
+  unreadBadge: { alignItems: "center", backgroundColor: brand.colors.primary, borderRadius: 999, minWidth: 20, paddingHorizontal: 5, paddingVertical: 2, position: "absolute", right: -4, top: -4 },
+  unreadText: { color: brand.colors.white, fontSize: 10, fontWeight: "900" },
   kicker: { color: brand.colors.primary, fontSize: 12, fontWeight: "900", letterSpacing: 1.4, textTransform: "uppercase" },
   title: { color: brand.colors.charcoal, fontSize: 28, fontWeight: "900", letterSpacing: -0.4 },
   heroCopy: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "800", lineHeight: 22 },
   logo: { flexShrink: 1, height: 38, maxWidth: 150, width: 128 },
   statusChip: { borderRadius: 999, flexShrink: 1, paddingHorizontal: 12, paddingVertical: 7 },
-  statusChipBusy: { backgroundColor: "#FFF7ED" },
+  statusChipBusy: { backgroundColor: "#FEF3C7" },
   statusChipOffline: { backgroundColor: "#F3F4F6" },
   statusChipOnline: { backgroundColor: "#DCFCE7" },
-  statusChipReview: { backgroundColor: "#DBEAFE" },
+  statusChipPending: { backgroundColor: "#FFF7ED" },
   statusChipText: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "900" },
-  metric: { color: brand.colors.charcoal, fontSize: 28, fontWeight: "800" },
-  modeCopy: { flex: 1, gap: 4 },
+  modeCopy: { flex: 1, gap: 5 },
   modeRow: { alignItems: "center", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, flexDirection: "row", gap: 12, justifyContent: "space-between", padding: 12 },
   modeTitle: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "900" },
+  modeBadge: { alignSelf: "flex-start", borderRadius: 999, fontSize: 12, fontWeight: "900", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 5 },
+  modeOnline: { backgroundColor: "#DCFCE7", color: "#166534" },
+  modeOffline: { backgroundColor: "#F3F4F6", color: brand.colors.muted },
+  modePending: { backgroundColor: "#FEF3C7", color: "#92400E" },
+  modeBusy: { backgroundColor: "#DBEAFE", color: "#1E40AF" },
   reason: { color: brand.colors.muted, fontSize: 12, fontWeight: "700" },
-  summaryGrid: { flexDirection: "row", gap: 12 },
-  jobRef: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "800" }
+  mapPanel: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 12, padding: 14 },
+  mapPin: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, height: 36, justifyContent: "center", width: 36 },
+  mapCopy: { flex: 1, gap: 4 },
+  mapTitle: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "900" },
+  jobRef: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "800" },
+  emptyTitle: { color: brand.colors.charcoal, fontSize: 18, fontWeight: "900" },
+  applicationLine: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" }
 });

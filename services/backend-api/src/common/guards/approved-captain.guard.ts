@@ -1,5 +1,5 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from "@nestjs/common";
-import { AccountStatus, RiderStatus } from "@prisma/client";
+import { AccountStatus, RiderStatus, TaxiDriverProfileStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 
@@ -14,22 +14,40 @@ export class ApprovedCaptainGuard implements CanActivate {
       throw new ForbiddenException("Captain operations will be available after KariGO approves your application.");
     }
 
-    const rider = await this.prisma.rider.findUnique({
-      where: { userId },
-      select: {
-        deletedAt: true,
-        verificationStatus: true,
-        user: { select: { accountStatus: true, deletedAt: true } }
-      }
-    });
+    const [rider, rideProfile] = await Promise.all([
+      this.prisma.rider.findUnique({
+        where: { userId },
+        select: {
+          deletedAt: true,
+          verificationStatus: true,
+          user: { select: { accountStatus: true, deletedAt: true } }
+        }
+      }),
+      this.prisma.taxiDriverProfile.findUnique({
+        where: { userId },
+        select: {
+          status: true,
+          user: { select: { accountStatus: true, deletedAt: true } }
+        }
+      })
+    ]);
 
-    if (
-      !rider ||
-      rider.deletedAt ||
-      rider.user.deletedAt ||
-      rider.user.accountStatus !== AccountStatus.ACTIVE ||
-      rider.verificationStatus !== RiderStatus.ACTIVE
-    ) {
+    const deliveryActive = Boolean(
+      rider &&
+      !rider.deletedAt &&
+      !rider.user.deletedAt &&
+      rider.user.accountStatus === AccountStatus.ACTIVE &&
+      rider.verificationStatus === RiderStatus.ACTIVE
+    );
+    const rideActive = Boolean(
+      rideProfile &&
+      rideProfile.user &&
+      !rideProfile.user.deletedAt &&
+      rideProfile.user.accountStatus === AccountStatus.ACTIVE &&
+      rideProfile.status === TaxiDriverProfileStatus.ACTIVE
+    );
+
+    if (!deliveryActive && !rideActive) {
       throw new ForbiddenException("Captain operations will be available after KariGO approves your application.");
     }
 

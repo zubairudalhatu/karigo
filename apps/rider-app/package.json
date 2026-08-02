@@ -8,7 +8,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "typecheck": "tsc --noEmit",
-    "test:regression": "node scripts/staging-regression-check.js"
+    "test:regression": "node scripts/staging-regression-check.js",
+    "audit:production-copy": "node scripts/production-copy-audit.js"
   },
   "dependencies": {
     "@karigo/config": "*",

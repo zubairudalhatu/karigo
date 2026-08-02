@@ -9,7 +9,7 @@ export default function CaptainTermsScreen() {
       <Card>
         <Text style={ui.sectionTitle}>Captain terms summary</Text>
         <Text style={ui.pageIntro}>Use KariGO Captain only with your approved account, accurate vehicle/profile details and safe delivery conduct.</Text>
-        <Text style={ui.muted}>Ride features, payout automation and wallet withdrawals remain disabled until separately approved.</Text>
+        <Text style={ui.muted}>Payout automation and wallet withdrawals require separate KariGO Operations approval.</Text>
       </Card>
       <Card>
         <Text style={ui.sectionTitle}>Full terms</Text>

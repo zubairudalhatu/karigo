@@ -647,7 +647,7 @@ describe("RidersService delivery captain applications", () => {
           phoneVerified: true,
           passwordCreated: true
         }),
-        launchWarning: expect.stringContaining("Approval activates the linked Captain account")
+        launchWarning: expect.stringContaining("Operational activation is managed separately by KariGO Operations")
       })
     ]);
     expect(prisma.deliveryCaptainApplication.findMany).toHaveBeenCalledWith(expect.objectContaining({

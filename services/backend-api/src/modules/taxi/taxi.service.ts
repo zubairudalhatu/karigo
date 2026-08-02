@@ -429,6 +429,14 @@ export class TaxiService {
       applicantVisibleNote: dto.applicantVisibleNote,
       readinessOnly: true
     });
+    await this.applicationNotifications.rideCaptainApplicationReviewed({
+      reference: application.applicationReference,
+      recipientName: application.fullName,
+      phoneNumber: application.phoneNumber,
+      email: application.email,
+      status: application.status,
+      note: application.applicantVisibleNote
+    });
     return this.adminApplicationDetail(application);
   }
 
@@ -2388,7 +2396,7 @@ export class TaxiService {
       operatingAreas: this.operatingAreaSummaries(application.operatingAreaIds),
       primaryOperatingArea: this.operatingAreaSummary(application.primaryOperatingAreaId),
       readinessOnly: true,
-      launchWarning: "Approval records Ride Captain review status only. Ride operations remain managed by KariGO Operations."
+      launchWarning: "Approval records the Ride Captain application decision. Operational activation is managed separately by KariGO Operations."
     };
   }
 
@@ -2415,8 +2423,8 @@ export class TaxiService {
       SUBMITTED: "Your Ride Captain application has been submitted for review.",
       UNDER_REVIEW: "Your Ride Captain application is under review.",
       CHANGES_REQUESTED: "KariGO needs more information before continuing your Ride Captain review.",
-      PROVISIONALLY_APPROVED: "Your application is provisionally approved for Ride Captain review. Ride dispatch still requires operations approval.",
-      APPROVED: "Your Ride Captain application is approved for review records. Ride operations remain managed by KariGO Operations.",
+      PROVISIONALLY_APPROVED: "Your Ride Captain application is provisionally approved. Final verification is still required.",
+      APPROVED: "Your Ride Captain application has been approved. KariGO Operations is completing your Ride Captain activation.",
       REJECTED: "Your Ride Captain application was not approved at this time."
     };
     return messages[status];

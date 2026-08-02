@@ -128,6 +128,7 @@ export function applicantReviewCopy(application?: CaptainApplicationSummary | nu
     return `Complete your ${applicationModeLabel(mode)} application when you are ready.`;
   }
   const modeLabel = applicationModeLabel(mode);
+  const activationLabel = mode === "RIDE_CAPTAIN" ? "Ride activation" : `${modeLabel} activation`;
   const category = classifyCaptainApplication(application.status);
   if (category === "REVISION_REQUIRED") {
     return application.applicantVisibleNote || `KariGO needs an update before your ${modeLabel} application can continue.`;
@@ -136,7 +137,7 @@ export function applicantReviewCopy(application?: CaptainApplicationSummary | nu
     return application.applicantVisibleNote || `Your ${modeLabel} application was not approved.`;
   }
   if (category === "APPROVED") {
-    return `Your ${modeLabel} application has been approved. KariGO Operations is completing your Captain activation.`;
+    return `Your ${modeLabel} application has been approved. KariGO Operations is completing your ${activationLabel}.`;
   }
   if (category === "PROVISIONALLY_APPROVED") {
     return `Your ${modeLabel} application passed initial review. Final checks remain.`;
@@ -169,8 +170,8 @@ export function overallReviewState(access?: CaptainAccess | null) {
 }
 
 export function formatCaptainDate(value?: string | null) {
-  if (!value) return "Not available";
+  if (!value) return "Not provided";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Not available";
+  if (Number.isNaN(date.getTime())) return "Not provided";
   return date.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
 }

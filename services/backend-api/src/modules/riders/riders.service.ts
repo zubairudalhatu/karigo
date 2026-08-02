@@ -850,7 +850,7 @@ export class RidersService {
     const state = dto.state.trim().toLowerCase();
     const supported = (city === "kano" && state === "kano") || (city === "abuja" && state === "fct");
     if (!supported) {
-      throw new BadRequestException("KariGO Delivery Captain applications are currently open for Kano and Abuja launch onboarding.");
+      throw new BadRequestException("KariGO Delivery Captain applications are currently open for Kano and Abuja.");
     }
   }
 
@@ -1238,7 +1238,7 @@ export class RidersService {
       primaryOperatingArea: this.operatingAreaSummary(application.primaryOperatingAreaId),
       deliveryOnly: true,
       applicantAccount: this.applicantAccountReadiness(application.applicant),
-      launchWarning: "Approval activates the linked Captain account for approved login, but dispatch, payouts and KariGO Rides remain controlled separately."
+      launchWarning: "Approval records the Delivery Captain application decision. Operational activation is managed separately by KariGO Operations."
     };
   }
 
@@ -1248,8 +1248,8 @@ export class RidersService {
       SUBMITTED: "Your Delivery Captain application has been submitted for KariGO review.",
       UNDER_REVIEW: "Your Delivery Captain application is under review.",
       CHANGES_REQUESTED: "KariGO needs more information before continuing your Delivery Captain review.",
-      PROVISIONALLY_APPROVED: "Your application is provisionally approved. Final verification is still required before onboarding.",
-      APPROVED: "Your application has been approved. Your linked Captain account can be activated for approved login; dispatch and payouts remain controlled by KariGO.",
+      PROVISIONALLY_APPROVED: "Your Delivery Captain application is provisionally approved. Final verification is still required.",
+      APPROVED: "Your Delivery Captain application has been approved. KariGO Operations is completing your Delivery Captain activation.",
       REJECTED: "Your Delivery Captain application was not approved at this time."
     };
     return messages[status];
@@ -1261,8 +1261,8 @@ export class RidersService {
       SUBMITTED: "Your Ride Captain application has been submitted for review.",
       UNDER_REVIEW: "Your Ride Captain application is under review.",
       CHANGES_REQUESTED: "KariGO needs more information before continuing your Ride Captain review.",
-      PROVISIONALLY_APPROVED: "Your Ride Captain application is provisionally approved. Ride operations are activated by KariGO Operations.",
-      APPROVED: "Your Ride Captain application is approved. Ride operations are activated by KariGO Operations.",
+      PROVISIONALLY_APPROVED: "Your Ride Captain application is provisionally approved. Final verification is still required.",
+      APPROVED: "Your Ride Captain application has been approved. KariGO Operations is completing your Ride Captain activation.",
       REJECTED: "Your Ride Captain application was not approved at this time."
     };
     return messages[status];

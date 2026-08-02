@@ -233,7 +233,8 @@ describe("TaxiService", () => {
   };
   const applicationNotifications = {
     rideWaitlistJoined: jest.fn(),
-    rideCaptainApplicationSubmitted: jest.fn()
+    rideCaptainApplicationSubmitted: jest.fn(),
+    rideCaptainApplicationReviewed: jest.fn()
   };
   const captainWorkState = {
     updateAvailability: jest.fn(),
@@ -332,6 +333,7 @@ describe("TaxiService", () => {
     config.get.mockImplementation((_key: string, fallback?: unknown) => fallback);
     applicationNotifications.rideWaitlistJoined.mockResolvedValue(undefined);
     applicationNotifications.rideCaptainApplicationSubmitted.mockResolvedValue(undefined);
+    applicationNotifications.rideCaptainApplicationReviewed.mockResolvedValue(undefined);
   });
 
   it("creates a customer taxi waitlist entry with normalized Nigerian phone number", async () => {
@@ -522,6 +524,14 @@ describe("TaxiService", () => {
 
   it("lets admins review driver applications with audit metadata", async () => {
     prisma.taxiDriverApplication.findUnique.mockResolvedValue(application);
+    prisma.taxiDriverApplication.update.mockResolvedValueOnce({
+      ...application,
+      status: TaxiApplicationStatus.UNDER_REVIEW,
+      applicantVisibleNote: "We are reviewing your Ride Captain application.",
+      adminNote: "Licence check pending.",
+      reviewedByAdminId: "admin-user",
+      reviewedAt: now
+    });
     const result = await service.reviewDriverApplication(application.id, "admin-user", {
       status: TaxiApplicationStatus.UNDER_REVIEW,
       applicantVisibleNote: "We are reviewing your Ride Captain application.",
@@ -538,7 +548,15 @@ describe("TaxiService", () => {
     expect(audit.record).toHaveBeenCalledWith("admin-user", "admin.taxi.driver_application_review", "TaxiDriverApplication", application.id, expect.objectContaining({
       readinessOnly: true
     }));
-    expect(result.launchWarning).toContain("Ride operations remain managed by KariGO Operations");
+    expect(applicationNotifications.rideCaptainApplicationReviewed).toHaveBeenCalledWith({
+      reference: application.applicationReference,
+      recipientName: application.fullName,
+      phoneNumber: application.phoneNumber,
+      email: application.email,
+      status: TaxiApplicationStatus.UNDER_REVIEW,
+      note: "We are reviewing your Ride Captain application."
+    });
+    expect(result.launchWarning).toContain("Operational activation is managed separately by KariGO Operations");
   });
 
   it("blocks Ride Captain approval when required secure documents are pending", async () => {
