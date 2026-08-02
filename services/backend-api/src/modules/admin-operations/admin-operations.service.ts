@@ -4,6 +4,7 @@ import {
   AccountStatus,
   CaptainApplicationDocumentType,
   CaptainDocumentUploadStatus,
+  CaptainWorkMode,
   DeliveryCaptainApplicationStatus,
   CashCollectionStatus,
   DocumentVerificationStatus,
@@ -28,6 +29,17 @@ import { ListAdminOrdersQueryDto } from "./dto/list-admin-orders-query.dto";
 import { ReportDateRangeDto } from "./dto/report-date-range.dto";
 
 const CLOSED_ORDERS = [OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.FAILED, OrderStatus.REFUNDED];
+type AdminCaptainAvailabilityReasonCode =
+  | "AVAILABLE"
+  | "APPLICATION_NOT_APPROVED"
+  | "ACTIVATION_PENDING"
+  | "PROFILE_INACTIVE"
+  | "LOCATION_STALE"
+  | "ACTIVE_DELIVERY_LOCK"
+  | "ACTIVE_RIDE_LOCK"
+  | "SUSPENDED";
+type AdminCaptainAvailabilityEligibility = { eligible: boolean; reasonCode: AdminCaptainAvailabilityReasonCode; reason: string | null };
+
 const VENDOR_CLEANUP_SELECT = {
   id: true,
   userId: true,
@@ -492,6 +504,14 @@ export class AdminOperationsService {
       const latestDeliveryApplication = rider.user.deliveryCaptainApplications[0] ?? null;
       const latestRideApplication = rider.user.taxiDriverApplications[0] ?? null;
       const rideProfile = rider.user.taxiDriverProfiles[0] ?? null;
+      const baseDeliveryEligibility = this.adminDeliveryEligibility(rider.user, rider.verificationStatus);
+      const baseRideEligibility = this.adminRideEligibility(rider.user, rideProfile?.status ?? null);
+      const deliveryEligibility = rider.user.captainWorkState
+        ? this.adminModeEligibilityWithState(baseDeliveryEligibility, rider.user.captainWorkState, CaptainWorkMode.DELIVERY)
+        : baseDeliveryEligibility;
+      const rideEligibility = rider.user.captainWorkState
+        ? this.adminModeEligibilityWithState(baseRideEligibility, rider.user.captainWorkState, CaptainWorkMode.RIDE)
+        : baseRideEligibility;
       return {
         ...rider,
         currentLocationUpdatedAt: rider.currentLocationUpdatedAt?.toISOString() ?? null,
@@ -520,8 +540,8 @@ export class AdminOperationsService {
         workState: rider.user.captainWorkState ? {
           desiredDeliveryOnline: rider.user.captainWorkState.desiredDeliveryOnline,
           desiredRideOnline: rider.user.captainWorkState.desiredRideOnline,
-          effectiveDeliveryOnline: rider.user.captainWorkState.desiredDeliveryOnline && !rider.user.captainWorkState.activeWorkMode && rider.verificationStatus === RiderStatus.ACTIVE,
-          effectiveRideOnline: rider.user.captainWorkState.desiredRideOnline && !rider.user.captainWorkState.activeWorkMode && rideProfile?.status === TaxiDriverProfileStatus.ACTIVE,
+          effectiveDeliveryOnline: rider.user.captainWorkState.desiredDeliveryOnline && !rider.user.captainWorkState.activeWorkMode && deliveryEligibility.eligible,
+          effectiveRideOnline: rider.user.captainWorkState.desiredRideOnline && !rider.user.captainWorkState.activeWorkMode && rideEligibility.eligible,
           activeWorkMode: rider.user.captainWorkState.activeWorkMode,
           activeDeliveryAssignmentId: rider.user.captainWorkState.activeDeliveryAssignmentId,
           activeRideTripId: rider.user.captainWorkState.activeRideTripId,
@@ -531,7 +551,9 @@ export class AdminOperationsService {
           lockStage: rider.user.captainWorkState.lockStage,
           lockedAt: rider.user.captainWorkState.lockedAt?.toISOString() ?? null,
           lastAvailabilityChangeAt: rider.user.captainWorkState.lastAvailabilityChangeAt?.toISOString() ?? null,
-          lastLocationAt: rider.user.captainWorkState.lastLocationAt?.toISOString() ?? null
+          lastLocationAt: rider.user.captainWorkState.lastLocationAt?.toISOString() ?? null,
+          deliveryEligibility,
+          rideEligibility
         } : null,
         operationalModes: [
           rider.verificationStatus === RiderStatus.ACTIVE ? "DELIVERY_CAPTAIN" : null,
@@ -539,6 +561,72 @@ export class AdminOperationsService {
         ].filter(Boolean)
       };
     }));
+  }
+
+  private adminDeliveryEligibility(
+    user: { accountStatus: AccountStatus; phoneVerified: boolean | null },
+    verificationStatus: RiderStatus
+  ): AdminCaptainAvailabilityEligibility {
+    if (user.accountStatus !== AccountStatus.ACTIVE || !user.phoneVerified) {
+      return { eligible: false, reasonCode: "SUSPENDED", reason: "Captain account is not active and phone-verified." };
+    }
+    if (verificationStatus === RiderStatus.ACTIVE) return { eligible: true, reasonCode: "AVAILABLE", reason: null };
+    if (verificationStatus === RiderStatus.PENDING_APPROVAL) {
+      return { eligible: false, reasonCode: "ACTIVATION_PENDING", reason: "Delivery Captain activation is pending." };
+    }
+    return { eligible: false, reasonCode: "PROFILE_INACTIVE", reason: "Delivery Captain profile is not active." };
+  }
+
+  private adminRideEligibility(
+    user: { accountStatus: AccountStatus; phoneVerified: boolean | null },
+    profileStatus?: TaxiDriverProfileStatus | null
+  ): AdminCaptainAvailabilityEligibility {
+    if (!profileStatus) {
+      return { eligible: false, reasonCode: "APPLICATION_NOT_APPROVED", reason: "Ride Captain profile is not prepared." };
+    }
+    if (user.accountStatus !== AccountStatus.ACTIVE || !user.phoneVerified) {
+      return { eligible: false, reasonCode: "SUSPENDED", reason: "Captain account is not active and phone-verified." };
+    }
+    if (profileStatus === TaxiDriverProfileStatus.ACTIVE) return { eligible: true, reasonCode: "AVAILABLE", reason: null };
+    if (profileStatus === TaxiDriverProfileStatus.PENDING_ACTIVATION) {
+      return { eligible: false, reasonCode: "ACTIVATION_PENDING", reason: "Ride Captain activation is pending." };
+    }
+    return { eligible: false, reasonCode: "PROFILE_INACTIVE", reason: "Ride Captain profile is not active." };
+  }
+
+  private adminModeEligibilityWithState(
+    eligibility: AdminCaptainAvailabilityEligibility,
+    state: {
+      activeWorkMode: CaptainWorkMode | null;
+      desiredDeliveryOnline: boolean;
+      desiredRideOnline: boolean;
+      lastLocationAt: Date | null;
+    },
+    mode: CaptainWorkMode
+  ): AdminCaptainAvailabilityEligibility {
+    if (!eligibility.eligible) return eligibility;
+    if (state.activeWorkMode && state.activeWorkMode !== mode) {
+      return state.activeWorkMode === CaptainWorkMode.DELIVERY
+        ? { eligible: false, reasonCode: "ACTIVE_DELIVERY_LOCK", reason: "Paused while a Delivery assignment is active." }
+        : { eligible: false, reasonCode: "ACTIVE_RIDE_LOCK", reason: "Paused while a Ride assignment is active." };
+    }
+    if (this.adminCaptainLocationIsStale(state, mode)) {
+      return { eligible: false, reasonCode: "LOCATION_STALE", reason: "Update device GPS before going online." };
+    }
+    return eligibility;
+  }
+
+  private adminCaptainLocationIsStale(
+    state: { activeWorkMode: CaptainWorkMode | null; desiredDeliveryOnline: boolean; desiredRideOnline: boolean; lastLocationAt: Date | null },
+    mode: CaptainWorkMode
+  ) {
+    if (state.activeWorkMode) return false;
+    const desiredOnline = mode === CaptainWorkMode.DELIVERY ? state.desiredDeliveryOnline : state.desiredRideOnline;
+    if (!desiredOnline) return false;
+    if (!state.lastLocationAt) return true;
+    const seconds = Number(process.env.CAPTAIN_LOCATION_STALE_SECONDS ?? process.env.RIDES_CAPTAIN_LOCATION_STALE_SECONDS ?? 90);
+    const staleMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 90_000;
+    return Date.now() - state.lastLocationAt.getTime() > staleMs;
   }
 
   auditLogs() {

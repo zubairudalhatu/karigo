@@ -76,6 +76,8 @@ export interface AdminRiderSummary {
     lockedAt?: string | null;
     lastAvailabilityChangeAt?: string | null;
     lastLocationAt?: string | null;
+    deliveryEligibility?: { eligible: boolean; reasonCode?: string; reason?: string | null };
+    rideEligibility?: { eligible: boolean; reasonCode?: string; reason?: string | null };
   } | null;
   operationalModes?: string[];
 }

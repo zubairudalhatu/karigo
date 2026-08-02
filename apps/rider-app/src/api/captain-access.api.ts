@@ -7,6 +7,15 @@ export type CaptainOperationalMode = "DELIVERY_CAPTAIN" | "RIDE_CAPTAIN";
 export type CaptainAccessNextStep = "START_APPLICATION" | "APPLICATION_STATUS" | "ACTIVATION_STATUS" | "OPEN_DASHBOARD";
 export type CaptainWorkMode = "DELIVERY" | "RIDE" | null;
 export type CaptainWorkLockStage = "OFFERED" | "ASSIGNED" | "ACCEPTED" | "IN_PROGRESS" | null;
+export type CaptainAvailabilityReasonCode =
+  | "AVAILABLE"
+  | "APPLICATION_NOT_APPROVED"
+  | "ACTIVATION_PENDING"
+  | "PROFILE_INACTIVE"
+  | "LOCATION_STALE"
+  | "ACTIVE_DELIVERY_LOCK"
+  | "ACTIVE_RIDE_LOCK"
+  | "SUSPENDED";
 
 export interface CaptainWorkState {
   desiredDeliveryOnline: boolean;
@@ -21,8 +30,8 @@ export interface CaptainWorkState {
   lockedAt?: string | null;
   lastAvailabilityChangeAt?: string | null;
   lastLocationAt?: string | null;
-  deliveryEligibility: { eligible: boolean; reason?: string | null };
-  rideEligibility: { eligible: boolean; reason?: string | null };
+  deliveryEligibility: { eligible: boolean; reasonCode?: CaptainAvailabilityReasonCode; reason?: string | null };
+  rideEligibility: { eligible: boolean; reasonCode?: CaptainAvailabilityReasonCode; reason?: string | null };
 }
 
 export interface CaptainAccess {
@@ -66,6 +75,8 @@ export interface CaptainAccess {
     status: string;
     isAvailableForTaxi: boolean;
     operationalAccess: boolean;
+    lastKnownLatitude?: string | number | null;
+    lastKnownLongitude?: string | number | null;
     lastSeenAt?: string | null;
     createdAt: string;
     updatedAt: string;

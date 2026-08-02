@@ -112,6 +112,8 @@ assert(managementApiSource.includes("requireCollection"), "Admin management API 
 const ridersPage = read("app", "riders", "page.tsx");
 assert(ridersPage.includes("Captains"), "Admin Riders page must use Captain-facing operations copy.");
 assert(ridersPage.includes("managementApi.updateRiderLifecycle"), "Admin Captains page must call audited Captain lifecycle endpoint.");
+assert(ridersPage.includes("deliveryOperationLabel") && ridersPage.includes("rideOperationLabel"), "Admin Captains page must show mode-aware operational labels.");
+assert(ridersPage.includes("Delivery reason:") && ridersPage.includes("Ride reason:"), "Admin Captains page must show safe Captain availability reason notes.");
 assert(ridersPage.includes("Activate Delivery Captain"), "Admin Captains page must expose safe activation for eligible pending Delivery Captains.");
 assert(ridersPage.includes("Open Ride application"), "Admin Captains page must expose a mode-aware Ride application action.");
 assert(ridersPage.includes("LOGIN READY"), "Admin Captains page must show login readiness.");

@@ -32,7 +32,14 @@ const prohibited = [
   /readiness-only/i,
   /launch onboarding/i,
   /launch workflow/i,
-  /launch readiness/i
+  /launch readiness/i,
+  /Manage your delivery assignments and availability/i,
+  /Profile photo URL optional/i,
+  /Device upload is not enabled in this build/i,
+  /Preferred areas, comma-separated/i,
+  /Update manual coordinates/i,
+  /Track your Captain onboarding/i,
+  /28 unread updates/i
 ];
 
 function filesIn(target) {

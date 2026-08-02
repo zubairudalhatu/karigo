@@ -32,7 +32,7 @@ export function deliveryCaptainMode(profile?: RiderProfile | null): CaptainMode 
     key: "DELIVERY_CAPTAIN",
     label: "Delivery Captain",
     status: active ? "ACTIVE" : "PENDING_APPROVAL",
-    badge: active ? "Approved" : "Pending approval",
+    badge: active ? "Operations active" : "Pending approval",
     description: active
       ? "Handle KariGO delivery assignments, pickup milestones and customer handoff."
       : "Delivery assignments start after KariGO Operations activates this mode."

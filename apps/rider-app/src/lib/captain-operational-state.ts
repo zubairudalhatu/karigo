@@ -1,4 +1,4 @@
-import type { CaptainAccess, CaptainWorkState } from "../api/captain-access.api";
+import type { CaptainAccess, CaptainAvailabilityReasonCode, CaptainWorkState } from "../api/captain-access.api";
 import {
   CaptainApplicationCategory,
   CaptainApplicationSummary,
@@ -23,6 +23,7 @@ export interface CaptainModeProjection {
   desiredOnline: boolean;
   effectiveOnline: boolean;
   eligible: boolean;
+  eligibilityReasonCode?: CaptainAvailabilityReasonCode;
   eligibilityReason?: string | null;
 }
 
@@ -76,8 +77,8 @@ function documentsLabel(application?: CaptainApplicationSummary | null) {
 }
 
 function operationLabel(active: boolean, category: CaptainApplicationCategory) {
-  if (active) return "Active";
-  if (category === "APPROVED" || category === "ACTIVATION_PENDING") return "Activation pending";
+  if (active) return "Operations active";
+  if (category === "APPROVED" || category === "ACTIVATION_PENDING") return "Approved - activation pending";
   if (category === "REVISION_REQUIRED") return "Changes requested";
   if (pendingCategories.has(category)) return "Under review";
   if (category === "REJECTED") return "Rejected";
@@ -110,6 +111,7 @@ function modeProjection(
     desiredOnline: isDelivery ? Boolean(workState?.desiredDeliveryOnline) : Boolean(workState?.desiredRideOnline),
     effectiveOnline: isDelivery ? Boolean(workState?.effectiveDeliveryOnline) : Boolean(workState?.effectiveRideOnline),
     eligible: isDelivery ? Boolean(workState?.deliveryEligibility.eligible) : Boolean(workState?.rideEligibility.eligible),
+    eligibilityReasonCode: isDelivery ? workState?.deliveryEligibility.reasonCode : workState?.rideEligibility.reasonCode,
     eligibilityReason: isDelivery ? workState?.deliveryEligibility.reason : workState?.rideEligibility.reason
   };
 }

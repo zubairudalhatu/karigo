@@ -3,7 +3,8 @@ import { router } from "expo-router";
 import { AppState, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useEffect, useMemo, useState } from "react";
 import { brand } from "@karigo/config";
-import { CaptainAccess, CaptainWorkState, captainAccessApi } from "../../src/api/captain-access.api";
+import type { CaptainAccess, CaptainWorkState } from "../../src/api/captain-access.api";
+import { captainAccessApi } from "../../src/api/captain-access.api";
 import { riderApi, RiderProfile } from "../../src/api/rider.api";
 import { jobsApi, RiderJob } from "../../src/api/jobs.api";
 import { notificationsApi } from "../../src/api/notifications.api";
@@ -78,10 +79,16 @@ function locationSummary(access: CaptainAccess | null, profile: RiderProfile | n
   const deliveryLat = profile?.currentLatitude;
   const deliveryLng = profile?.currentLongitude;
   const rideProfile = access?.rideCaptainProfile;
+  const rideLat = rideProfile?.lastKnownLatitude;
+  const rideLng = rideProfile?.lastKnownLongitude;
   const rideLocation = rideProfile?.city && rideProfile.state ? `${rideProfile.city}, ${rideProfile.state}` : rideProfile?.city ?? null;
   const deliveryAreas = profile?.preferredServiceAreas?.length ? profile.preferredServiceAreas.join(", ") : null;
   return {
-    coordinates: deliveryLat && deliveryLng ? `${Number(deliveryLat).toFixed(5)}, ${Number(deliveryLng).toFixed(5)}` : null,
+    coordinates: deliveryLat && deliveryLng
+      ? `${Number(deliveryLat).toFixed(5)}, ${Number(deliveryLng).toFixed(5)}`
+      : rideLat && rideLng
+        ? `${Number(rideLat).toFixed(5)}, ${Number(rideLng).toFixed(5)}`
+        : null,
     area: deliveryAreas ?? rideLocation ?? "Kano / Abuja service areas",
     lastSeen: profile?.currentLocationUpdatedAt ?? access?.rideCaptainProfile?.lastSeenAt ?? null
   };
@@ -89,7 +96,7 @@ function locationSummary(access: CaptainAccess | null, profile: RiderProfile | n
 
 function activeWorkTitle(workState: CaptainWorkState | null) {
   if (!workState?.activeWorkMode) return null;
-  return workState.activeWorkMode === "DELIVERY" ? "Active Delivery assignment" : "Active Ride assignment";
+  return workState.activeWorkMode === "DELIVERY" ? "Delivery assignment in progress" : "Ride assignment in progress";
 }
 
 export default function RiderDashboard() {
@@ -186,6 +193,25 @@ export default function RiderDashboard() {
     }
   }
 
+  async function refreshGps() {
+    if (!workState || workState.activeWorkMode) return;
+    try {
+      const currentLocation = await requestCaptainForegroundLocation();
+      const updated = await captainAccessApi.updateAvailability({
+        deliveryOnline: workState.desiredDeliveryOnline,
+        rideOnline: workState.desiredRideOnline,
+        ...currentLocation
+      });
+      setWorkState(updated);
+      setProfile(projection.delivery.active ? await riderApi.profile().catch(() => null) : null);
+      setMessage("Location refreshed.");
+      setError("");
+    } catch (e) {
+      setError(friendlyError(e));
+      setMessage("");
+    }
+  }
+
   const deliveryApplicationExists = hasDeliveryApplication(onboardingStatus);
   const rideApplicationExists = hasRideApplication(rideOnboardingStatus);
   const hasAnyApplication = deliveryApplicationExists || rideApplicationExists;
@@ -221,7 +247,7 @@ export default function RiderDashboard() {
       {projection.hasAnyActiveMode ? <>
         <Card>
           <View style={ui.spaceBetween}>
-            <Text style={ui.title}>Captain map</Text>
+            <Text style={ui.title}>Live map</Text>
             <StatusBadge status={projection.overallStatus} />
           </View>
           <View style={styles.mapPanel}>
@@ -233,6 +259,7 @@ export default function RiderDashboard() {
               <Text style={ui.muted}>{mapState.lastSeen ? `Last update: ${new Date(mapState.lastSeen).toLocaleString()}` : "Location is requested only when you go online."}</Text>
             </View>
           </View>
+          <Button title="Refresh GPS" tone="muted" disabled={!workState || Boolean(workState.activeWorkMode)} onPress={refreshGps} />
         </Card>
 
         <Card>
@@ -265,7 +292,7 @@ export default function RiderDashboard() {
           {activeJob ? <>
             <Text style={styles.jobRef}>{activeJob.orderNumber}</Text>
             <StatusBadge status={activeJob.orderStatus} />
-            <NavLink href={`/jobs/${activeJob.id}`} label="Open active delivery" />
+            <NavLink href={`/jobs/${activeJob.id}`} label="Open delivery assignment" />
           </> : workState?.activeRideTripId ? <>
             <Text style={styles.jobRef}>{workState.activeWorkReference ?? workState.activeRideTripId}</Text>
             <StatusBadge status="Busy with Ride" />

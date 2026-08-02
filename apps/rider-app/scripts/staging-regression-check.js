@@ -15,6 +15,7 @@ const appJson = readJson("app.json");
 const easJson = readJson("eas.json");
 const appConfig = read("app.config.ts");
 const rootLayout = read("app/_layout.tsx");
+const captainAccessBootstrap = read("app/captain-access.tsx");
 const apiClient = read("src/api/client.ts");
 const authContext = read("src/contexts/auth-context.tsx");
 const loginScreen = read("app/auth/login.tsx");
@@ -92,6 +93,8 @@ expect(deliveryCaptainApplicationsApi.includes("delivery-captain-applications"),
 expect(rootLayout.includes("notifications"), "Notifications route must be registered.");
 expect(rootLayout.includes("taxi-readiness"), "Ride operations route must be configured.");
 expect(rootLayout.includes("CaptainBottomNav"), "Root layout must mount the Captain bottom navigation.");
+expect(rootLayout.includes('Stack.Screen name="tabs/dashboard"'), "Root layout must register the operational Home route.");
+expect(captainAccessBootstrap.includes("router.replace(access.nextStep === \"APPLICATION_STATUS\" ? \"/application-status\" : access.nextRoute)"), "Captain access bootstrap must route operational Captains through backend nextRoute.");
 expect(riderNav.includes("Home") && riderNav.includes("Deliveries") && riderNav.includes("Earnings") && riderNav.includes("Profile"), "Captain bottom nav must expose Home, Deliveries, Earnings and Profile.");
 expect(riderNav.includes("@expo/vector-icons") && riderNav.includes("Feather"), "Captain bottom nav must use proper icons.");
 expect(riderNav.includes("pathname.startsWith(\"/auth\")"), "Captain bottom nav must hide on auth screens.");
@@ -101,6 +104,8 @@ expect(captainModes.includes("Operations active") && captainModes.includes("Acti
 expect(operationalState.includes("hasAnyActiveMode = delivery.active || ride.active"), "Operational state must unlock the app when any Captain mode is active.");
 expect(operationalState.includes("Activation pending"), "Operational state must expose activation-pending labels.");
 expect(captainAccessApi.includes("captain/access") && captainAccessApi.includes("operationalModes"), "Captain app must use backend access resolver.");
+expect(captainAccessApi.includes("captain/work-state") && captainAccessApi.includes("CaptainAvailabilityReasonCode"), "Captain app must consume the authoritative Captain work-state contract.");
+expect(!captainAccessApi.includes("AsyncStorage") && !operationalState.includes("AsyncStorage"), "Captain access/work-state must not use a stale persisted projection cache.");
 expect(locationHelper.includes("requestForegroundPermissionsAsync") && locationHelper.includes("getCurrentPositionAsync"), "Captain location helper must capture current device position.");
 
 expect(dashboard.includes("projectCaptainOperationalState"), "Home must use state-aware Captain projection.");
@@ -108,17 +113,34 @@ expect(dashboard.includes("karigo-logo.png"), "Home must use compact KariGO bran
 expect(dashboard.includes('accessibilityLabel="Notifications"'), "Home header must include an accessible notification bell.");
 expect(dashboard.includes("unread > 99 ? \"99+\" : unread"), "Home unread badge must cap at 99+.");
 expect(dashboard.includes("AppState.addEventListener"), "Home must refresh unread count on foreground.");
-expect(dashboard.includes("Captain map"), "Home must show the map card.");
+expect(dashboard.includes("Live map"), "Home must show the live map card.");
+expect(dashboard.includes("Refresh GPS"), "Home must include a recoverable location refresh action.");
 expect(dashboard.includes("Availability"), "Home must show mode availability controls.");
 expect(dashboard.includes("Current work"), "Home must show current assignment state.");
 expect(dashboard.includes("No active assignment") && dashboard.includes("Waiting for assignment"), "Home must show clean assignment empty states.");
 expect(dashboard.includes("captainAccessApi.updateAvailability"), "Home must update dual-mode availability through backend work-state.");
 expect(dashboard.includes("Delivery") && dashboard.includes("Ride"), "Home must show independent Delivery and Ride controls.");
+expect(dashboard.includes("projection.delivery.active") && dashboard.includes("projection.ride.active"), "Home must render modes from operational activation, not application approval only.");
+expect(dashboard.includes("workState.activeWorkMode") && dashboard.includes("paused while"), "Home must show active-work locks across modes.");
 expect(!dashboard.includes("<Text style={ui.title}>Notifications"), "Home must not contain a large Notifications card.");
 expect(!dashboard.includes("Assigned deliveries"), "Home must not contain the delivery queue.");
 expect(!dashboard.includes("Today's assigned") && !dashboard.includes("assigned deliveries"), "Home must not contain Delivery-only Today stats.");
 expect(!dashboard.includes("Completed deliveries"), "Home must not contain Delivery-only Completed stats.");
 expect(!dashboard.includes("Ride Operations promotional"), "Home must not contain promotional Ride cards.");
+[
+  "Manage your delivery assignments and availability",
+  "Today assigned deliveries",
+  "Completed deliveries",
+  "Active delivery",
+  "Assigned deliveries",
+  "28 unread updates",
+  "Open notifications",
+  "Track your Captain onboarding",
+  "Profile photo URL optional",
+  "Device upload is not enabled in this build",
+  "Preferred areas, comma-separated",
+  "Update manual coordinates"
+].forEach((value) => expect(!dashboard.includes(value), `Operational Home must not contain legacy text: ${value}`));
 
 expect(notifications.includes("Mark all read"), "Notifications screen must support mark-all-read.");
 expect(notifications.includes("notificationsApi.markRead"), "Notifications screen must mark individual notifications read.");
@@ -130,7 +152,7 @@ expect(notificationsApi.includes("notifications/unread-count"), "Notifications A
 expect(notificationsApi.includes("read-all") && notificationsApi.includes("/read"), "Notifications API must support read persistence.");
 
 expect(jobsIndex.includes("Delivery activation pending"), "Deliveries tab must show compact pending state for inactive Delivery mode.");
-expect(jobsIndex.includes("Today assigned") && jobsIndex.includes("Completed") && jobsIndex.includes("Cancelled"), "Deliveries tab must own Delivery summary stats.");
+expect(jobsIndex.includes("Today assigned") && jobsIndex.includes("Completed") && jobsIndex.includes("Cancelled") && jobsIndex.includes("Delivery earnings"), "Deliveries tab must own Delivery summary stats.");
 expect(jobsIndex.includes("Active delivery"), "Deliveries tab must own active Delivery workflow.");
 expect(jobsIndex.includes("Assigned deliveries"), "Deliveries tab must own Delivery queue.");
 expect(jobsIndex.includes("Delivery history"), "Deliveries tab must own Delivery history.");
@@ -138,14 +160,27 @@ expect(jobDetail.includes("Accept job") && jobDetail.includes("Reject job"), "De
 expect(jobDetail.includes("Complete delivery") && jobDetail.includes("Delivery completed successfully."), "Delivery detail must support OTP completion.");
 
 expect(earnings.includes("projectCaptainOperationalState"), "Earnings must use state-aware Captain projection.");
-expect(earnings.includes("Completed Rides") && earnings.includes("Completed Deliveries"), "Earnings must show combined Ride and Delivery records.");
+expect(earnings.includes("Track your KariGO Captain earnings."), "Earnings subtitle must use production Captain copy.");
+expect(earnings.includes("Total earnings") && earnings.includes("Pending payout") && earnings.includes("Paid") && earnings.includes("Ride earnings") && earnings.includes("Delivery earnings"), "Earnings must show combined Ride and Delivery totals.");
 expect(earnings.includes("Your earnings will appear here after you complete a Ride or Delivery."), "Earnings must have a clean zero state.");
+expect(earnings.includes("Earnings history"), "Earnings must present a combined history list.");
 expect(!earnings.includes("Earnings locked"), "Earnings must not be locked when any Captain mode is active.");
+expect(!earnings.includes("Track delivery earnings") && !earnings.includes("Completed delivery earnings"), "Earnings must not use Delivery-only copy.");
 
 expect(profile.includes("Captain access"), "Profile must show independent mode summary.");
 expect(profile.includes("Notifications") && profile.includes("unread"), "Profile must include compact Notifications entry.");
 expect(profile.includes("setBiometricSignIn") && profile.includes("Privacy Policy") && profile.includes("Terms"), "Profile must include biometric controls and legal links.");
 expect(profile.includes("/notifications"), "Profile notifications row must link to Notifications.");
+[
+  "Profile photo URL optional",
+  "Device upload is not enabled in this build",
+  "Preferred areas, comma-separated",
+  "manual latitude",
+  "manual longitude",
+  "Update manual coordinates",
+  "Assigned deliveries",
+  "Open Notifications"
+].forEach((value) => expect(!profile.includes(value), `Profile must not contain legacy field or duplicate nav text: ${value}`));
 
 expect(taxiReadiness.includes("Ride workspace"), "Ride screen must use Ride workspace copy.");
 expect(taxiReadiness.includes("Ride Captain activation is pending."), "Ride screen must show compact activation pending copy.");

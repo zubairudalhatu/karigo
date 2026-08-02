@@ -17,6 +17,25 @@ function captainAvailabilityLabel(rider: AdminRiderSummary) {
   return "Offline";
 }
 
+function applicationOperationLabel(status?: string | null) {
+  if (!status) return "Not active";
+  if (status === "APPROVED") return "Approved - activation pending";
+  if (status === "CHANGES_REQUESTED") return "Revision required";
+  if (status === "REJECTED") return "Rejected";
+  if (status === "SUBMITTED" || status === "UNDER_REVIEW" || status === "PROVISIONALLY_APPROVED") return "Under review";
+  return status.replaceAll("_", " ");
+}
+
+function deliveryOperationLabel(rider: AdminRiderSummary) {
+  if (rider.verificationStatus === "ACTIVE") return "Operations active";
+  return applicationOperationLabel(rider.deliveryApplication?.status);
+}
+
+function rideOperationLabel(rider: AdminRiderSummary) {
+  if (rider.rideProfile?.status === "ACTIVE") return "Operations active";
+  return applicationOperationLabel(rider.rideApplication?.status ?? rider.rideProfile?.status);
+}
+
 export default function RidersPage() {
   const [riders, setRiders] = useState<AdminRiderSummary[]>([]);
   const [error, setError] = useState("");
@@ -79,9 +98,9 @@ export default function RidersPage() {
         <div className="notice">
           <strong>Captain modes</strong>
           <p>Delivery application: {rider.deliveryApplication ? <><Badge>{rider.deliveryApplication.status}</Badge> {rider.deliveryApplication.applicationReference}</> : <span className="muted">No Delivery application linked.</span>}</p>
-          <p>Delivery profile: <Badge>{rider.verificationStatus}</Badge></p>
+          <p>Delivery profile: <Badge>{deliveryOperationLabel(rider)}</Badge> <span className="muted">Profile status: {rider.verificationStatus}</span></p>
           <p>Ride application: {rider.rideApplication ? <><Badge>{rider.rideApplication.status}</Badge> {rider.rideApplication.applicationReference}</> : <span className="muted">No Ride application linked.</span>}</p>
-          <p>Ride profile: {rider.rideProfile ? <><Badge>{rider.rideProfile.status}</Badge> {rider.rideProfile.isAvailableForTaxi ? "Available" : "Offline"}</> : <span className="muted">No Ride profile prepared.</span>}</p>
+          <p>Ride profile: <Badge>{rideOperationLabel(rider)}</Badge> {rider.rideProfile ? <span className="muted">Profile status: {rider.rideProfile.status}; {rider.rideProfile.isAvailableForTaxi ? "available" : "offline"}</span> : <span className="muted">No Ride profile prepared.</span>}</p>
           <p className="muted">Operational modes: {rider.operationalModes?.length ? rider.operationalModes.join(", ") : "None active"}</p>
         </div>
         <div className="notice">
@@ -90,6 +109,8 @@ export default function RidersPage() {
           {rider.workState ? <>
             <p>Desired: Delivery {rider.workState.desiredDeliveryOnline ? "online" : "offline"}; Ride {rider.workState.desiredRideOnline ? "online" : "offline"}.</p>
             <p>Effective: Delivery {rider.workState.effectiveDeliveryOnline ? "online" : "offline"}; Ride {rider.workState.effectiveRideOnline ? "online" : "offline"}.</p>
+            {rider.workState.deliveryEligibility?.reason ? <p className="muted">Delivery reason: {rider.workState.deliveryEligibility.reasonCode} - {rider.workState.deliveryEligibility.reason}</p> : null}
+            {rider.workState.rideEligibility?.reason ? <p className="muted">Ride reason: {rider.workState.rideEligibility.reasonCode} - {rider.workState.rideEligibility.reason}</p> : null}
             {rider.workState.activeWorkMode ? <p className="muted">Active work: {rider.workState.activeWorkMode} {rider.workState.lockStage ? `- ${rider.workState.lockStage}` : ""}{rider.workState.activeWorkReference ? ` - ${rider.workState.activeWorkReference}` : ""}</p> : null}
             <p className="muted">Last availability change: {rider.workState.lastAvailabilityChangeAt ? new Date(rider.workState.lastAvailabilityChangeAt).toLocaleString() : "Not recorded"}</p>
             <p className="muted">Last location update: {rider.workState.lastLocationAt ? new Date(rider.workState.lastLocationAt).toLocaleString() : rider.currentLocationUpdatedAt ? new Date(rider.currentLocationUpdatedAt).toLocaleString() : "Not recorded"}</p>
