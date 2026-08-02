@@ -66,8 +66,8 @@ expect(appConfig.includes('policy: "appVersion"'), "Captain runtimeVersion must 
 expect(appConfig.includes("compileSdkVersion: 36"), "Captain app must compile against Android API 36.");
 expect(appConfig.includes("targetSdkVersion: 36"), "Captain app must target Android API 36.");
 expect(appConfig.includes("GOOGLE_MAPS_ANDROID_API_KEY") && appConfig.includes("googleMaps"), "Captain app must pass the Android Google Maps API key through Expo config when available.");
-expect(appConfig.includes('version: "0.1.1"'), "Captain app version must remain 0.1.1 for this release line.");
-expect(appConfig.includes("versionCode: isStaging ? 1 : 10"), "Captain production versionCode must remain 10 until the next AAB bump.");
+expect(appConfig.includes('version: "0.1.2"'), "Captain app version must be 0.1.2 for the native-map release line.");
+expect(appConfig.includes("versionCode: isStaging ? 1 : 11"), "Captain production versionCode must be 11 for the native-map AAB.");
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-build-properties"), "Captain app base config must include build-properties.");
 expect(JSON.stringify(appJson.expo.plugins).includes('"targetSdkVersion":36'), "Captain app base config must target Android API 36.");
 

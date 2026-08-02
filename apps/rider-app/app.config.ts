@@ -43,7 +43,7 @@ export default ({ config }: ExpoConfigInput) => {
   return {
     ...config,
     name: isStaging ? "KariGO Captain Staging" : "KariGO Captain",
-    version: "0.1.1",
+    version: "0.1.2",
     slug: "karigo-rider",
     scheme: isStaging ? "karigo-rider-staging" : "karigo-rider",
     plugins: [
@@ -81,7 +81,7 @@ export default ({ config }: ExpoConfigInput) => {
         backgroundColor: "#FFFFFF"
       },
       package: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider",
-      versionCode: isStaging ? 1 : 10
+      versionCode: isStaging ? 1 : 11
     },
     ios: {
       ...config.ios,
