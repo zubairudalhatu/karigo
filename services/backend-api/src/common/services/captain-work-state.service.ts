@@ -71,7 +71,11 @@ export class CaptainWorkStateService {
     const user = await this.loadUser(userId);
     const state = await this.ensureState(this.prisma, userId, user);
     if (state.activeWorkMode) {
-      throw this.busyConflict(state, "Availability cannot be changed while an assignment is active.");
+      const locationOnly = dto.deliveryOnline === undefined && dto.rideOnline === undefined && this.hasValidLocation(dto);
+      if (!locationOnly) {
+        throw this.busyConflict(state, "Availability cannot be changed while an assignment is active.");
+      }
+      return this.updateLocationOnly(userId, user, dto);
     }
 
     const deliveryEligibility = this.deliveryEligibility(user);
@@ -139,6 +143,44 @@ export class CaptainWorkStateService {
       });
     }
 
+    return this.getForUser(userId);
+  }
+
+  private async updateLocationOnly(userId: string, user: WorkStateUser, dto: CaptainAvailabilityUpdate) {
+    if (!this.hasValidLocation(dto)) {
+      throw new BadRequestException("Valid Captain location is required.");
+    }
+    await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      await tx.captainWorkState.update({
+        where: { userId },
+        data: {
+          lastLocationAt: now,
+          version: { increment: 1 }
+        }
+      });
+      if (user.rider) {
+        await tx.rider.update({
+          where: { id: user.rider.id },
+          data: {
+            currentLatitude: new Prisma.Decimal(dto.latitude),
+            currentLongitude: new Prisma.Decimal(dto.longitude),
+            currentLocationUpdatedAt: now
+          }
+        });
+      }
+      const rideProfile = user.taxiDriverProfiles[0];
+      if (rideProfile) {
+        await tx.taxiDriverProfile.update({
+          where: { id: rideProfile.id },
+          data: {
+            lastKnownLatitude: new Prisma.Decimal(dto.latitude),
+            lastKnownLongitude: new Prisma.Decimal(dto.longitude),
+            lastSeenAt: now
+          }
+        });
+      }
+    });
     return this.getForUser(userId);
   }
 

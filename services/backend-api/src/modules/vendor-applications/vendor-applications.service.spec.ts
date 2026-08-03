@@ -82,6 +82,10 @@ describe("VendorApplicationsService", () => {
       findFirst: jest.fn(),
       findMany: jest.fn()
     },
+    partnerOnboardingDraft: {
+      upsert: jest.fn(),
+      update: jest.fn()
+    },
     order: { count: jest.fn() },
     vendorSettlement: { count: jest.fn() },
     vendorPayoutAccount: { count: jest.fn() },
@@ -104,6 +108,28 @@ describe("VendorApplicationsService", () => {
     prisma.vendorApplication.findFirst.mockResolvedValue(null);
     prisma.vendorApplication.findMany.mockResolvedValue([]);
     prisma.vendorApplication.create.mockResolvedValue(vendorApplication);
+    prisma.partnerOnboardingDraft.upsert.mockResolvedValue({
+      id: "00000000-0000-0000-0000-00000000pod1",
+      userId: "customer-user-1",
+      applicationId: null,
+      onboardingStage: "START",
+      accountType: null,
+      draftData: null,
+      submittedAt: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    prisma.partnerOnboardingDraft.update.mockResolvedValue({
+      id: "00000000-0000-0000-0000-00000000pod1",
+      userId: "customer-user-1",
+      applicationId: vendorApplication.id,
+      onboardingStage: "SUBMITTED",
+      accountType: null,
+      draftData: null,
+      submittedAt: now,
+      createdAt: now,
+      updatedAt: now
+    });
     prisma.order.count.mockResolvedValue(0);
     prisma.vendorSettlement.count.mockResolvedValue(0);
     prisma.vendorPayoutAccount.count.mockResolvedValue(0);
@@ -260,6 +286,175 @@ describe("VendorApplicationsService", () => {
         reference: vendorApplication.reference,
         status: VendorApplicationStatus.SUBMITTED
       }
+    });
+  });
+
+  it("ensures a Partner onboarding draft for an existing Customer account without duplicating the user", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: "customer-user-1",
+      fullName: "Existing Customer",
+      phoneNumber: "+2348030000000",
+      email: "customer@example.test",
+      role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      deletedAt: null,
+      vendor: null
+    });
+    prisma.vendorApplication.findFirst.mockResolvedValueOnce(null);
+
+    const result = await service.ensurePartnerApplicant("customer-user-1");
+
+    expect(prisma.partnerOnboardingDraft.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: "customer-user-1" },
+      create: expect.objectContaining({ userId: "customer-user-1", onboardingStage: "START" })
+    }));
+    expect(result).toMatchObject({
+      partnerApplicantId: "customer-user-1",
+      onboardingStage: "START",
+      canSubmit: true,
+      nextRoute: "/register"
+    });
+  });
+
+  it("ensures a Partner onboarding draft for an existing Captain account without duplicating the user", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: "captain-user-1",
+      fullName: "Existing Captain",
+      phoneNumber: "+2348030000000",
+      email: "captain@example.test",
+      role: UserRole.RIDER,
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      deletedAt: null,
+      vendor: null
+    });
+    prisma.vendorApplication.findFirst.mockResolvedValueOnce(null);
+    prisma.partnerOnboardingDraft.upsert.mockResolvedValueOnce({
+      id: "00000000-0000-0000-0000-00000000pod2",
+      userId: "captain-user-1",
+      applicationId: null,
+      onboardingStage: "START",
+      accountType: null,
+      draftData: null,
+      submittedAt: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const result = await service.ensurePartnerApplicant("captain-user-1");
+
+    expect(result).toMatchObject({
+      partnerApplicantId: "captain-user-1",
+      account: { role: UserRole.RIDER },
+      nextRoute: "/register"
+    });
+  });
+
+  it("submits an authenticated Partner application by resolving the applicant from the signed-in user", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: "customer-user-1",
+      fullName: "Existing Customer",
+      phoneNumber: "+2348030000000",
+      email: "customer@example.test",
+      role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      deletedAt: null,
+      vendor: null
+    });
+    const tx = {
+      partnerOnboardingDraft: {
+        upsert: jest.fn().mockResolvedValue({
+          id: "00000000-0000-0000-0000-00000000pod1",
+          userId: "customer-user-1",
+          applicationId: null,
+          onboardingStage: "REVIEW",
+          accountType: null,
+          draftData: null,
+          submittedAt: null,
+          createdAt: now,
+          updatedAt: now
+        }),
+        update: jest.fn()
+      },
+      vendorApplication: {
+        findUnique: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({
+          ...vendorApplication,
+          applicantUserId: "customer-user-1",
+          applicant: {
+            ...vendorApplication.applicant,
+            id: "customer-user-1",
+            role: UserRole.CUSTOMER,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        })
+      }
+    };
+    prisma.$transaction.mockImplementationOnce(async (callback: any) => callback(tx));
+
+    const result = await service.submitForCurrentUser("customer-user-1", baseDto);
+
+    expect(tx.vendorApplication.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        applicant: { connect: { id: "customer-user-1" } },
+        status: VendorApplicationStatus.SUBMITTED
+      })
+    }));
+    expect(tx.partnerOnboardingDraft.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: "customer-user-1" },
+      data: expect.objectContaining({ onboardingStage: "SUBMITTED" })
+    }));
+    expect(result).toMatchObject({ alreadySubmitted: false, status: VendorApplicationStatus.SUBMITTED });
+  });
+
+  it("returns the existing application for duplicate authenticated submission retries", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: "customer-user-1",
+      fullName: "Existing Customer",
+      phoneNumber: "+2348030000000",
+      email: "customer@example.test",
+      role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE,
+      phoneVerified: true,
+      deletedAt: null,
+      vendor: null
+    });
+    const tx = {
+      partnerOnboardingDraft: {
+        upsert: jest.fn().mockResolvedValue({
+          id: "00000000-0000-0000-0000-00000000pod1",
+          userId: "customer-user-1",
+          applicationId: vendorApplication.id,
+          onboardingStage: "SUBMITTED",
+          accountType: null,
+          draftData: null,
+          submittedAt: now,
+          createdAt: now,
+          updatedAt: now
+        }),
+        update: jest.fn()
+      },
+      vendorApplication: {
+        findUnique: jest.fn().mockResolvedValue({
+          ...vendorApplication,
+          applicantUserId: "customer-user-1"
+        }),
+        findFirst: jest.fn(),
+        create: jest.fn()
+      }
+    };
+    prisma.$transaction.mockImplementationOnce(async (callback: any) => callback(tx));
+
+    const result = await service.submitForCurrentUser("customer-user-1", baseDto);
+
+    expect(tx.vendorApplication.create).not.toHaveBeenCalled();
+    expect(applicationNotifications.vendorApplicationSubmitted).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      alreadySubmitted: true,
+      message: "Your Partner application has already been submitted."
     });
   });
 

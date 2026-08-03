@@ -31,6 +31,20 @@ function isAuthStatus(error: unknown): boolean {
   return error instanceof KariGoApiError && error.status === 401;
 }
 
+function isDefinitiveAuthFailure(error: unknown): boolean {
+  if (!(error instanceof KariGoApiError) || error.status !== 401) return false;
+  const code = error.errorCode.toUpperCase();
+  return code === "API_REQUEST_FAILED" ||
+    code.includes("TOKEN_INVALID") ||
+    code.includes("TOKEN_EXPIRED") ||
+    code.includes("TOKEN_REVOKED") ||
+    code.includes("REFRESH_TOKEN_INVALID") ||
+    code.includes("REFRESH_TOKEN_EXPIRED") ||
+    code.includes("REFRESH_TOKEN_REVOKED") ||
+    code.includes("ACCOUNT_DISABLED") ||
+    code.includes("USER_DISABLED");
+}
+
 function isTemporarySessionFailure(error: unknown): boolean {
   return error instanceof ApiNetworkError ||
     error instanceof ApiTimeoutError ||
@@ -45,7 +59,7 @@ function isTemporarySessionFailure(error: unknown): boolean {
 }
 
 function canUsePartnerApp(user: AuthenticatedUser): boolean {
-  return user.role === "VENDOR" || user.role === "CUSTOMER";
+  return user.role === "VENDOR" || user.role === "CUSTOMER" || user.role === "RIDER";
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -94,11 +108,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSessionRepairRequired(true);
           setSessionMessage("Your saved Partner login could not be read safely. Reset saved login, then sign in again.");
           logMobileAuthDiagnostic("partner", "bootstrap_session_repair_required", { generation });
-        } else if (isAuthStatus(error)) {
+        } else if (isDefinitiveAuthFailure(error)) {
           await authSessionStore.clearSession(generation);
           setUser(null);
           setSessionMessage("Your session has expired. Please sign in again.");
           logMobileAuthDiagnostic("partner", "bootstrap_session_expired", { generation });
+        } else if (isAuthStatus(error)) {
+          setSessionMessage("KariGO Partner could not confirm your saved login right now. Your saved login was kept.");
+          logMobileAuthDiagnostic("partner", "bootstrap_auth_status_preserved", { generation });
         } else if (isTemporarySessionFailure(error)) {
           setSessionMessage("KariGO Partner could not reconnect right now. Your saved login was kept, so please try again shortly.");
           logMobileAuthDiagnostic("partner", "bootstrap_temporary_failure", { generation });

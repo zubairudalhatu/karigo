@@ -64,6 +64,19 @@ function refreshFailureIsDefinitive(status: number, errorCode?: string): boolean
     normalizedCode.includes("USER_DISABLED");
 }
 
+function unauthorizedFailureIsDefinitive(errorCode?: string): boolean {
+  if (!errorCode) return true;
+  const normalizedCode = errorCode.toUpperCase();
+  return normalizedCode.includes("TOKEN_INVALID") ||
+    normalizedCode.includes("TOKEN_EXPIRED") ||
+    normalizedCode.includes("TOKEN_REVOKED") ||
+    normalizedCode.includes("REFRESH_TOKEN_INVALID") ||
+    normalizedCode.includes("REFRESH_TOKEN_EXPIRED") ||
+    normalizedCode.includes("REFRESH_TOKEN_REVOKED") ||
+    normalizedCode.includes("ACCOUNT_DISABLED") ||
+    normalizedCode.includes("USER_DISABLED");
+}
+
 async function fetchRefreshSession(refreshToken: string): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DEFAULT_AUTH_API_TIMEOUT_MS);
@@ -169,6 +182,14 @@ export const api = createApiClient({
   getSessionGeneration: authSessionStore.currentGeneration,
   refreshAuth,
   onUnauthorized: async (status, meta) => {
+    if (!unauthorizedFailureIsDefinitive(meta?.errorCode)) {
+      logMobileAuthDiagnostic("partner", "unauthorized_non_definitive_preserved", {
+        status,
+        generation: meta?.generation,
+        errorCode: meta?.errorCode
+      });
+      return;
+    }
     await authSessionStore.clearSession(meta?.generation);
     if (authSessionStore.isCurrent(meta?.generation)) {
       logMobileAuthDiagnostic("partner", "unauthorized_session_cleared", {

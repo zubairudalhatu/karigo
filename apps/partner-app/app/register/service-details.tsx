@@ -1,10 +1,33 @@
 import { useRouter } from "expo-router";
+import { useState } from "react";
+import { Text } from "react-native";
+import { registrationApi } from "../../src/api/registration.api";
 import { Card, Hero, MutedText, PrimaryButton, Screen, TextField } from "../../src/components/ui";
 import { usePartnerRegistration } from "../../src/contexts/partner-registration-context";
+import { brand } from "@karigo/config";
 
 export default function RegisterServiceDetailsScreen() {
   const router = useRouter();
   const { registration, updateRegistration } = usePartnerRegistration();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function continueNext() {
+    setSaving(true);
+    setError(null);
+    try {
+      await registrationApi.savePartnerDraft({
+        onboardingStage: "DOCUMENTS",
+        accountType: registration.accountType,
+        draftData: registration
+      });
+      router.push("/register/documents");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Partner readiness details could not be saved.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <Screen>
@@ -25,7 +48,8 @@ export default function RegisterServiceDetailsScreen() {
           onChangeText={(existingDelivery) => updateRegistration({ existingDelivery })}
         />
         <MutedText>These details support review only. They do not activate payouts, live service dispatch or unrestricted marketplace visibility.</MutedText>
-        <PrimaryButton label="Continue" onPress={() => router.push("/register/documents")} />
+        {error ? <Text style={{ color: brand.colors.primary, fontWeight: "800" }}>{error}</Text> : null}
+        <PrimaryButton label={saving ? "Saving..." : "Continue"} onPress={() => void continueNext()} disabled={saving} />
       </Card>
     </Screen>
   );

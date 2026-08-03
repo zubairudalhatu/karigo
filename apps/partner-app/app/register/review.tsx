@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { registrationApi, VendorApplicationInput } from "../../src/api/registration.api";
 import { Card, Hero, MutedText, PrimaryButton, Screen } from "../../src/components/ui";
+import { useAuth } from "../../src/contexts/auth-context";
 import { usePartnerRegistration } from "../../src/contexts/partner-registration-context";
 import { formatLabel } from "../../src/lib/labels";
 
@@ -16,11 +17,23 @@ function consentText(value: boolean) {
 
 export default function RegisterReviewScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { registration, updateRegistration } = usePartnerRegistration();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = registration.declarationAccepted && registration.privacyAccepted && registration.contactConsentAccepted;
+  const missingRequirements = [
+    !registration.businessName.trim() ? "Complete your Business Name before submitting." : "",
+    registration.businessDescription.trim().length < 8 ? "Complete your Business Description before submitting." : "",
+    !registration.businessAddress.trim() ? "Complete your Business Address before submitting." : "",
+    !registration.businessPhoneNumber.trim() ? "Complete your Business Phone before submitting." : "",
+    !registration.businessEmail.trim() ? "Complete your Business Email before submitting." : "",
+    !registration.contactFullName.trim() ? "Complete your Contact Full Name before submitting." : "",
+    !registration.declarationAccepted ? "Accept the business details declaration before submitting." : "",
+    !registration.privacyAccepted ? "Accept the KariGO review acknowledgement before submitting." : "",
+    !registration.contactConsentAccepted ? "Accept contact consent before submitting." : ""
+  ].filter(Boolean);
+  const canSubmit = missingRequirements.length === 0;
 
   async function submit() {
     setSubmitting(true);
@@ -64,9 +77,20 @@ export default function RegisterReviewScreen() {
         privacyAccepted: registration.privacyAccepted,
         contactConsentAccepted: registration.contactConsentAccepted
       };
-      const application = await registrationApi.submitVendorApplication(payload);
+      await registrationApi.savePartnerDraft({
+        onboardingStage: "REVIEW",
+        accountType: registration.accountType,
+        draftData: registration
+      }).catch(() => undefined);
+      const application = user
+        ? await registrationApi.submitCurrentUserVendorApplication(payload)
+        : await registrationApi.submitVendorApplication(payload);
       updateRegistration({ applicationReference: application.reference });
-      router.replace("/register/success");
+      if (user || application.alreadySubmitted) {
+        router.replace("/");
+      } else {
+        router.replace("/register/success");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Partner application could not be submitted.");
     } finally {
@@ -78,6 +102,10 @@ export default function RegisterReviewScreen() {
     <Screen>
       <Hero eyebrow="Review" title="Review and submit" subtitle="Check your details before sending this application to KariGO Operations." />
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {missingRequirements.length ? <Card>
+        <Text style={styles.title}>Before you submit</Text>
+        {missingRequirements.map((requirement) => <MutedText key={requirement}>{requirement}</MutedText>)}
+      </Card> : null}
       <Card>
         <Text style={styles.title}>{registration.businessName || "Business name pending"}</Text>
         <MutedText>{formatLabel(registration.businessCategory)} - {registration.city}, {registration.state}</MutedText>

@@ -1,9 +1,35 @@
-import { brand } from "@karigo/config";
+import { ApiNetworkError, ApiTimeoutError, SessionTemporarilyUnavailableError, brand } from "@karigo/config";
+import { KariGoApiError } from "@karigo/shared-types";
 import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Card, LoadingState, PrimaryButton, Screen, TextField } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
+
+function partnerLoginErrorMessage(error: unknown) {
+  if (error instanceof ApiNetworkError) {
+    return "No internet connection. Check your network and try again.";
+  }
+  if (error instanceof ApiTimeoutError) {
+    return "The sign-in request timed out. Please try again.";
+  }
+  if (error instanceof SessionTemporarilyUnavailableError) {
+    return "KariGO Partner is temporarily unavailable. Your saved login was kept.";
+  }
+  if (error instanceof KariGoApiError) {
+    if (error.status === 401 || error.status === 400) {
+      return "Invalid phone number or password.";
+    }
+    if (error.status === 429) {
+      return "Too many sign-in attempts. Please wait a moment and try again.";
+    }
+    if (error.status && error.status >= 500) {
+      return "Server temporarily unavailable. Please try again shortly.";
+    }
+    return error.message;
+  }
+  return error instanceof Error ? error.message : "Partner sign in failed. Please try again.";
+}
 
 export default function LoginScreen() {
   const { loading, login, resetSavedLogin, sessionMessage, sessionRepairRequired, user } = useAuth();
@@ -23,7 +49,7 @@ export default function LoginScreen() {
     try {
       await login({ phoneNumber, password });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Partner sign in failed. Please try again.");
+      setError(partnerLoginErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -71,7 +97,7 @@ export default function LoginScreen() {
         </View>
         {sessionMessage ? <Text style={styles.sessionMessage}>{sessionMessage}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {sessionRepairRequired ? <PrimaryButton label="Reset saved login" onPress={resetLocalSession} variant="secondary" /> : null}
+        <PrimaryButton label={sessionRepairRequired ? "Reset saved login" : "Reset saved login on this device"} onPress={resetLocalSession} variant="secondary" />
         <PrimaryButton
           disabled={submitting || !phoneNumber.trim() || !password}
           label={submitting ? "Signing in..." : "Sign in"}

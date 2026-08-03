@@ -9,6 +9,7 @@ import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { CreateVendorApplicationDto } from "./dto/create-vendor-application.dto";
+import { PartnerOnboardingDraftDto } from "./dto/partner-onboarding-draft.dto";
 import { ReviewVendorApplicationDto } from "./dto/review-vendor-application.dto";
 import { VendorApplicationPermanentDeleteDto, VendorApplicationRestoreDto, VendorApplicationTrashDto } from "./dto/vendor-application-cleanup.dto";
 import { VendorApplicationStatusQueryDto } from "./dto/vendor-application-status-query.dto";
@@ -39,6 +40,30 @@ export class PublicVendorApplicationsController {
   @ApiOperation({ summary: "Get authenticated Partner onboarding state for the central KariGO account" })
   async currentUserStatus(@CurrentUser() user: AuthenticatedUser) {
     return { message: "Partner onboarding state retrieved", data: await this.vendorApplicationsService.currentUserPartnerStatus(user.id) };
+  }
+
+  @Post("me/ensure")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Ensure authenticated Partner onboarding draft for the central KariGO account" })
+  async ensureCurrentUserApplicant(@CurrentUser() user: AuthenticatedUser) {
+    return { message: "Partner onboarding draft ensured", data: await this.vendorApplicationsService.ensurePartnerApplicant(user.id) };
+  }
+
+  @Patch("me/draft")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Persist authenticated Partner onboarding draft progress" })
+  async saveCurrentUserDraft(@CurrentUser() user: AuthenticatedUser, @Body() dto: PartnerOnboardingDraftDto) {
+    return { message: "Partner onboarding draft saved", data: await this.vendorApplicationsService.savePartnerOnboardingDraft(user.id, dto) };
+  }
+
+  @Post("me/submit")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Submit authenticated Partner application for the central KariGO account" })
+  async submitCurrentUserApplication(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateVendorApplicationDto) {
+    return { message: "Partner application submitted", data: await this.vendorApplicationsService.submitForCurrentUser(user.id, dto) };
   }
 }
 

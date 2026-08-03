@@ -54,9 +54,49 @@ export interface VendorApplicationStatus {
   submittedAt: string;
   reviewedAt?: string | null;
   message: string;
+  alreadySubmitted?: boolean;
+}
+
+export type PartnerOnboardingStage = "START" | "ACCOUNT_TYPE" | "BUSINESS" | "OPERATIONS" | "DOCUMENTS" | "REVIEW" | "SUBMITTED";
+
+export interface PartnerOnboardingDraftInput {
+  onboardingStage?: PartnerOnboardingStage;
+  accountType?: string;
+  draftData?: unknown;
+}
+
+export interface PartnerOnboardingResult {
+  authenticated: boolean;
+  userId: string;
+  partnerApplicantId: string;
+  partnerProfileId?: string | null;
+  applicationId?: string | null;
+  applicationReference?: string | null;
+  applicationStatus?: string | null;
+  state: string;
+  onboardingStage: PartnerOnboardingStage | string;
+  canEdit: boolean;
+  canSubmit: boolean;
+  nextRoute: string;
+  message: string;
+  draft?: {
+    onboardingStage: PartnerOnboardingStage | string;
+    accountType?: string | null;
+    draftData?: unknown;
+    applicationId?: string | null;
+    submittedAt?: string | null;
+    updatedAt: string;
+  } | null;
+  application?: VendorApplicationStatus | null;
 }
 
 export const registrationApi = {
+  ensurePartnerOnboarding: () =>
+    api.post<PartnerOnboardingResult>("vendor-applications/me/ensure"),
+  savePartnerDraft: (body: PartnerOnboardingDraftInput) =>
+    api.patch<PartnerOnboardingResult>("vendor-applications/me/draft", body),
+  submitCurrentUserVendorApplication: (body: VendorApplicationInput) =>
+    api.post<VendorApplicationStatus>("vendor-applications/me/submit", body),
   submitVendorApplication: (body: VendorApplicationInput) =>
     api.post<VendorApplicationStatus>("vendor-applications", body, { authenticated: false }),
   applicationStatus: (params: { reference?: string; phoneNumber?: string }) => {

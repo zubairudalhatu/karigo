@@ -90,6 +90,7 @@ const initialRegistration: PartnerRegistrationState = {
 interface RegistrationContextValue {
   registration: PartnerRegistrationState;
   updateRegistration(patch: Partial<PartnerRegistrationState>): void;
+  hydrateRegistration(nextState: Partial<PartnerRegistrationState>): void;
   resetRegistration(): void;
 }
 
@@ -103,6 +104,7 @@ export function PartnerRegistrationProvider({ children }: { children: ReactNode 
       value={{
         registration,
         updateRegistration: (patch) => setRegistration((current) => ({ ...current, ...patch })),
+        hydrateRegistration: (nextState) => setRegistration((current) => ({ ...current, ...nextState })),
         resetRegistration: () => setRegistration(initialRegistration)
       }}
     >

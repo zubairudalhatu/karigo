@@ -7,6 +7,7 @@ import { ApplicationNotificationsService } from "../../common/services/applicati
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateVendorApplicationDto } from "./dto/create-vendor-application.dto";
+import { PartnerOnboardingDraftDto } from "./dto/partner-onboarding-draft.dto";
 import { ReviewVendorApplicationDto } from "./dto/review-vendor-application.dto";
 import { VendorApplicationStatusQueryDto } from "./dto/vendor-application-status-query.dto";
 
@@ -86,6 +87,20 @@ const APPLICATION_SELECT = {
     }
   }
 } satisfies Prisma.VendorApplicationSelect;
+
+const PARTNER_DRAFT_SELECT = {
+  id: true,
+  userId: true,
+  applicationId: true,
+  onboardingStage: true,
+  accountType: true,
+  draftData: true,
+  submittedAt: true,
+  createdAt: true,
+  updatedAt: true
+} satisfies Prisma.PartnerOnboardingDraftSelect;
+
+type SelectedVendorApplication = Prisma.VendorApplicationGetPayload<{ select: typeof APPLICATION_SELECT }>;
 
 @Injectable()
 export class VendorApplicationsService {
@@ -207,7 +222,8 @@ export class VendorApplicationsService {
             status: true,
             deletedAt: true
           }
-        }
+        },
+        partnerOnboardingDraft: { select: PARTNER_DRAFT_SELECT }
       }
     });
     if (!user || user.deletedAt) throw new NotFoundException("KariGO account not found");
@@ -220,6 +236,8 @@ export class VendorApplicationsService {
         authenticated: true,
         state: "restricted",
         account: this.partnerAccountSummary(user),
+        onboardingStage: user.partnerOnboardingDraft?.onboardingStage ?? null,
+        nextRoute: "/",
         message: "This KariGO account is restricted. Contact KariGO support before continuing Partner onboarding."
       };
     }
@@ -230,6 +248,8 @@ export class VendorApplicationsService {
         state: user.vendor.status === VendorStatus.SUSPENDED || user.vendor.status === VendorStatus.CLOSED ? "restricted" : "approved",
         account: this.partnerAccountSummary(user),
         partnerProfile: user.vendor,
+        onboardingStage: user.partnerOnboardingDraft?.onboardingStage ?? "SUBMITTED",
+        nextRoute: "/",
         message: user.vendor.status === VendorStatus.SUSPENDED || user.vendor.status === VendorStatus.CLOSED
           ? "This Partner profile is restricted. Contact KariGO support for help."
           : "Approved Partner profile found. Open the Partner Workspace."
@@ -256,6 +276,8 @@ export class VendorApplicationsService {
         account: this.partnerAccountSummary(user),
         application: this.toPublicStatus(application),
         correctionNote: application.reviews[0]?.notes ?? null,
+        onboardingStage: user.partnerOnboardingDraft?.onboardingStage ?? "SUBMITTED",
+        nextRoute: "/",
         message: this.statusMessage(application.status)
       };
     }
@@ -264,7 +286,147 @@ export class VendorApplicationsService {
       authenticated: true,
       state: "application_not_started",
       account: this.partnerAccountSummary(user),
+      onboardingStage: user.partnerOnboardingDraft?.onboardingStage ?? "START",
+      nextRoute: this.nextRouteForStage(user.partnerOnboardingDraft?.onboardingStage ?? "START"),
+      draft: user.partnerOnboardingDraft ? this.toPartnerDraftPublic(user.partnerOnboardingDraft) : null,
       message: "Your KariGO account has been recognised. Continue to create your Partner profile."
+    };
+  }
+
+  async ensurePartnerApplicant(userId: string) {
+    const user = await this.loadPartnerOnboardingUser(userId);
+    this.assertPartnerOnboardingAccount(user);
+
+    const application = await this.findCurrentUserApplication(this.prisma, user);
+    const stage = application ? "SUBMITTED" : "START";
+    const draft = await this.prisma.partnerOnboardingDraft.upsert({
+      where: { userId },
+      update: {
+        ...(application ? { applicationId: application.id, onboardingStage: "SUBMITTED", submittedAt: application.submittedAt } : {})
+      },
+      create: {
+        userId,
+        ...(application ? { applicationId: application.id, onboardingStage: "SUBMITTED", submittedAt: application.submittedAt } : { onboardingStage: stage })
+      },
+      select: PARTNER_DRAFT_SELECT
+    });
+
+    return this.toPartnerOnboardingResult(user, draft, application);
+  }
+
+  async savePartnerOnboardingDraft(userId: string, dto: PartnerOnboardingDraftDto) {
+    const user = await this.loadPartnerOnboardingUser(userId);
+    this.assertPartnerOnboardingAccount(user);
+    const application = await this.findCurrentUserApplication(this.prisma, user);
+    const requestedStage = dto.onboardingStage ?? (application ? "SUBMITTED" : "START");
+    const stage = application && requestedStage !== "SUBMITTED" ? "SUBMITTED" : requestedStage;
+
+    const draft = await this.prisma.partnerOnboardingDraft.upsert({
+      where: { userId },
+      update: {
+        onboardingStage: stage,
+        ...(dto.accountType !== undefined ? { accountType: dto.accountType } : {}),
+        ...(dto.draftData !== undefined ? { draftData: this.json(dto.draftData) } : {}),
+        ...(application ? { applicationId: application.id, submittedAt: application.submittedAt } : {})
+      },
+      create: {
+        userId,
+        onboardingStage: stage,
+        accountType: dto.accountType,
+        draftData: this.json(dto.draftData),
+        ...(application ? { applicationId: application.id, submittedAt: application.submittedAt } : {})
+      },
+      select: PARTNER_DRAFT_SELECT
+    });
+
+    return this.toPartnerOnboardingResult(user, draft, application);
+  }
+
+  async submitForCurrentUser(userId: string, dto: CreateVendorApplicationDto) {
+    if (!dto.declarationAccepted || !dto.privacyAccepted || !dto.contactConsentAccepted) {
+      throw new BadRequestException("Application declaration, privacy acknowledgement and contact consent are required");
+    }
+    this.assertLaunchLocation(dto);
+
+    const user = await this.loadPartnerOnboardingUser(userId);
+    this.assertPartnerOnboardingAccount(user);
+    const businessPhoneNumber = this.normalizePhone(dto.businessPhoneNumber);
+    const contactPhoneNumber = this.normalizePhone(dto.contactPhoneNumber || user.phoneNumber);
+    const reference = await this.nextReference();
+
+    const { application, createdForNotification } = await this.prisma.$transaction(async (tx): Promise<{
+      application: SelectedVendorApplication;
+      createdForNotification: SelectedVendorApplication | null;
+    }> => {
+      const draft = await tx.partnerOnboardingDraft.upsert({
+        where: { userId },
+        update: {
+          onboardingStage: "REVIEW",
+          accountType: dto.businessType ?? dto.catalogueCategory,
+          draftData: this.json(this.safeDraftDataFromApplicationDto(dto))
+        },
+        create: {
+          userId,
+          onboardingStage: "REVIEW",
+          accountType: dto.businessType ?? dto.catalogueCategory,
+          draftData: this.json(this.safeDraftDataFromApplicationDto(dto))
+        },
+        select: PARTNER_DRAFT_SELECT
+      });
+
+      if (draft.applicationId) {
+        const existingByDraft = await tx.vendorApplication.findUnique({
+          where: { id: draft.applicationId },
+          select: APPLICATION_SELECT
+        });
+        if (existingByDraft && !existingByDraft.deletedAt) {
+          return { application: existingByDraft, createdForNotification: null };
+        }
+      }
+
+      const existing = await this.findCurrentUserApplication(tx, user, contactPhoneNumber, dto.contactEmail);
+      if (existing) {
+        await tx.partnerOnboardingDraft.update({
+          where: { userId },
+          data: {
+            applicationId: existing.id,
+            onboardingStage: "SUBMITTED",
+            submittedAt: existing.submittedAt
+          }
+        });
+        return { application: existing, createdForNotification: null };
+      }
+
+      const created = await tx.vendorApplication.create({
+        data: this.vendorApplicationCreateData(dto, user.id, businessPhoneNumber, contactPhoneNumber, reference),
+        select: APPLICATION_SELECT
+      });
+      await tx.partnerOnboardingDraft.update({
+        where: { userId },
+        data: {
+          applicationId: created.id,
+          onboardingStage: "SUBMITTED",
+          submittedAt: created.submittedAt
+        }
+      });
+      return { application: created, createdForNotification: created };
+    });
+
+    if (createdForNotification) {
+      await this.applicationNotifications.vendorApplicationSubmitted({
+        reference: createdForNotification.reference,
+        recipientName: createdForNotification.contactFullName,
+        phoneNumber: createdForNotification.contactPhoneNumber,
+        email: createdForNotification.contactEmail
+      });
+    }
+
+    return {
+      ...this.toPublicStatus(application),
+      alreadySubmitted: !createdForNotification,
+      message: createdForNotification
+        ? this.statusMessage(application.status)
+        : "Your Partner application has already been submitted."
     };
   }
 
@@ -576,6 +738,190 @@ export class VendorApplicationsService {
     return value === undefined ? undefined : value as Prisma.InputJsonValue;
   }
 
+  private async loadPartnerOnboardingUser(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        fullName: true,
+        phoneNumber: true,
+        email: true,
+        role: true,
+        accountStatus: true,
+        phoneVerified: true,
+        deletedAt: true,
+        vendor: {
+          select: {
+            id: true,
+            businessName: true,
+            status: true,
+            deletedAt: true
+          }
+        }
+      }
+    });
+    if (!user || user.deletedAt) throw new NotFoundException("KariGO account not found");
+    return user;
+  }
+
+  private assertPartnerOnboardingAccount(user: Awaited<ReturnType<VendorApplicationsService["loadPartnerOnboardingUser"]>>) {
+    const allowedRoles: UserRole[] = [UserRole.CUSTOMER, UserRole.RIDER, UserRole.VENDOR];
+    if (!allowedRoles.includes(user.role)) {
+      throw new BadRequestException("This KariGO account cannot continue Partner onboarding.");
+    }
+    if (user.accountStatus !== AccountStatus.ACTIVE || !user.phoneVerified) {
+      throw new BadRequestException("Sign in with an active verified KariGO account before continuing Partner onboarding.");
+    }
+  }
+
+  private async findCurrentUserApplication(
+    tx: Prisma.TransactionClient | PrismaService,
+    user: Pick<Awaited<ReturnType<VendorApplicationsService["loadPartnerOnboardingUser"]>>, "id" | "phoneNumber" | "email">,
+    contactPhoneNumber?: string,
+    contactEmail?: string
+  ) {
+    return tx.vendorApplication.findFirst({
+      where: {
+        deletedAt: null,
+        status: { notIn: [VendorApplicationStatus.REJECTED, VendorApplicationStatus.WITHDRAWN] },
+        OR: [
+          { applicantUserId: user.id },
+          { contactPhoneNumber: contactPhoneNumber ?? user.phoneNumber },
+          { businessPhoneNumber: contactPhoneNumber ?? user.phoneNumber },
+          ...(user.email ? [
+            { contactEmail: { equals: user.email, mode: "insensitive" as const } },
+            { businessEmail: { equals: user.email, mode: "insensitive" as const } }
+          ] : []),
+          ...(contactEmail ? [
+            { contactEmail: { equals: contactEmail, mode: "insensitive" as const } },
+            { businessEmail: { equals: contactEmail, mode: "insensitive" as const } }
+          ] : [])
+        ]
+      },
+      select: APPLICATION_SELECT,
+      orderBy: { createdAt: "desc" }
+    });
+  }
+
+  private vendorApplicationCreateData(
+    dto: CreateVendorApplicationDto,
+    applicantUserId: string,
+    businessPhoneNumber: string,
+    contactPhoneNumber: string,
+    reference: string
+  ): Prisma.VendorApplicationCreateInput {
+    return {
+      applicant: { connect: { id: applicantUserId } },
+      businessCategory: dto.businessCategory,
+      businessName: dto.businessName,
+      tradingName: dto.tradingName,
+      businessType: dto.businessType,
+      businessDescription: dto.businessDescription,
+      businessAddress: dto.businessAddress,
+      state: dto.state,
+      city: dto.city,
+      area: dto.area,
+      serviceAreas: this.json(dto.serviceAreas),
+      operatingHours: dto.operatingHours,
+      businessPhoneNumber,
+      businessEmail: dto.businessEmail,
+      websiteOrSocialLink: dto.websiteOrSocialLink,
+      contactFullName: dto.contactFullName,
+      contactRole: dto.contactRole,
+      contactPhoneNumber,
+      contactEmail: dto.contactEmail,
+      preferredContactMethod: dto.preferredContactMethod,
+      deliveryReadiness: dto.deliveryReadiness,
+      deliveryPreference: dto.deliveryPreference,
+      averagePreparationTime: dto.averagePreparationTime,
+      numberOfStaff: dto.numberOfStaff,
+      catalogueCategory: dto.catalogueCategory,
+      estimatedCatalogueSize: dto.estimatedCatalogueSize,
+      existingDelivery: dto.existingDelivery,
+      brandAssets: this.json(dto.brandAssets),
+      documentPlaceholders: this.json(dto.documentPlaceholders),
+      documents: dto.documents?.length ? {
+        create: dto.documents.map((document) => ({
+          documentType: document.documentType,
+          documentName: document.documentName,
+          documentUrl: document.documentUrl
+        }))
+      } : undefined,
+      declarationAccepted: dto.declarationAccepted,
+      privacyAccepted: dto.privacyAccepted,
+      contactConsentAccepted: dto.contactConsentAccepted,
+      reference,
+      status: VendorApplicationStatus.SUBMITTED,
+      statusHistory: {
+        create: {
+          toStatus: VendorApplicationStatus.SUBMITTED,
+          note: "Partner application submitted"
+        }
+      }
+    };
+  }
+
+  private safeDraftDataFromApplicationDto(dto: CreateVendorApplicationDto) {
+    const { documents, ...safe } = dto;
+    return {
+      ...safe,
+      hasDocuments: Boolean(documents?.length)
+    };
+  }
+
+  private toPartnerDraftPublic(draft: Prisma.PartnerOnboardingDraftGetPayload<{ select: typeof PARTNER_DRAFT_SELECT }>) {
+    return {
+      id: draft.id,
+      onboardingStage: draft.onboardingStage,
+      accountType: draft.accountType,
+      draftData: draft.draftData ?? null,
+      applicationId: draft.applicationId,
+      submittedAt: draft.submittedAt?.toISOString() ?? null,
+      updatedAt: draft.updatedAt.toISOString()
+    };
+  }
+
+  private toPartnerOnboardingResult(
+    user: Awaited<ReturnType<VendorApplicationsService["loadPartnerOnboardingUser"]>>,
+    draft: Prisma.PartnerOnboardingDraftGetPayload<{ select: typeof PARTNER_DRAFT_SELECT }>,
+    application?: Prisma.VendorApplicationGetPayload<{ select: typeof APPLICATION_SELECT }> | null
+  ) {
+    const applicationState = application ? this.partnerApplicationState(application.status) : "application_in_progress";
+    const canEdit = !application || application.status === VendorApplicationStatus.DRAFT || application.status === VendorApplicationStatus.CHANGES_REQUESTED;
+    return {
+      authenticated: true,
+      userId: user.id,
+      partnerApplicantId: user.id,
+      partnerProfileId: user.vendor && !user.vendor.deletedAt ? user.vendor.id : application?.vendorId ?? null,
+      applicationId: application?.id ?? draft.applicationId ?? null,
+      applicationReference: application?.reference ?? null,
+      applicationStatus: application?.status ?? null,
+      state: user.vendor && !user.vendor.deletedAt ? "approved" : applicationState,
+      onboardingStage: application ? "SUBMITTED" : draft.onboardingStage,
+      canEdit,
+      canSubmit: canEdit,
+      nextRoute: application ? "/" : this.nextRouteForStage(draft.onboardingStage),
+      account: this.partnerAccountSummary(user),
+      partnerProfile: user.vendor && !user.vendor.deletedAt ? user.vendor : null,
+      application: application ? this.toPublicStatus(application) : null,
+      draft: this.toPartnerDraftPublic(draft),
+      message: application ? this.statusMessage(application.status) : "Continue Partner onboarding with your KariGO account."
+    };
+  }
+
+  private nextRouteForStage(stage: string) {
+    const routes: Record<string, string> = {
+      START: "/register",
+      ACCOUNT_TYPE: "/register/account-type",
+      BUSINESS: "/register/business",
+      OPERATIONS: "/register/service-details",
+      DOCUMENTS: "/register/documents",
+      REVIEW: "/register/review",
+      SUBMITTED: "/"
+    };
+    return routes[stage] ?? "/register";
+  }
+
   private async ensureVendorAccountForApplication(
     tx: Prisma.TransactionClient,
     application: Prisma.VendorApplicationGetPayload<{ select: typeof APPLICATION_SELECT }>,
@@ -711,9 +1057,9 @@ export class VendorApplicationsService {
       }
     });
     if (!applicant || applicant.deletedAt) {
-      throw new BadRequestException("Create a Vendor applicant account before submitting the application.");
+      throw new BadRequestException("Sign in with your KariGO account before submitting a Partner application.");
     }
-    if (applicant.role === UserRole.CUSTOMER) {
+    if (applicant.role === UserRole.CUSTOMER || applicant.role === UserRole.RIDER) {
       if (!applicant.phoneVerified || applicant.accountStatus !== AccountStatus.ACTIVE) {
         throw new BadRequestException("Sign in with an active verified KariGO account before continuing Partner onboarding.");
       }

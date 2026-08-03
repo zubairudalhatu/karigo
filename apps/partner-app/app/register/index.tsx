@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { authApi } from "../../src/api/auth.api";
+import { registrationApi } from "../../src/api/registration.api";
 import { Card, Hero, MutedText, PrimaryButton, Screen, TextField } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { usePartnerRegistration } from "../../src/contexts/partner-registration-context";
@@ -11,7 +12,7 @@ import { normalizeNigerianPhoneNumber } from "../../src/lib/phone";
 export default function RegisterStartScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { registration, updateRegistration } = usePartnerRegistration();
+  const { registration, hydrateRegistration, updateRegistration } = usePartnerRegistration();
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +49,13 @@ export default function RegisterStartScreen() {
     setMessage(null);
     try {
       if (user) {
+        const ensured = await registrationApi.ensurePartnerOnboarding();
+        const draftData = ensured.draft?.draftData as Partial<typeof registration> | undefined;
+        if (draftData) {
+          hydrateRegistration(draftData);
+        }
         updateRegistration({
+          ...(draftData ?? {}),
           fullName: visibleFullName.trim(),
           phoneNumber: normalizedPhone,
           businessPhoneNumber: normalizedPhone,
@@ -58,7 +65,12 @@ export default function RegisterStartScreen() {
           contactEmail: visibleEmail.trim(),
           contactFullName: visibleFullName.trim()
         });
-        router.push("/register/account-type");
+        if (ensured.applicationStatus || ensured.onboardingStage === "SUBMITTED") {
+          setMessage(ensured.message || "Your Partner application has already been submitted.");
+          router.replace("/");
+          return;
+        }
+        router.push(ensured.nextRoute && ensured.nextRoute !== "/register" ? ensured.nextRoute as never : "/register/account-type");
         return;
       }
 

@@ -1,6 +1,8 @@
 import { brand } from "@karigo/config";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { registrationApi } from "../../src/api/registration.api";
 import { Card, Hero, MutedText, PrimaryButton, Screen, TextField } from "../../src/components/ui";
 import { usePartnerRegistration } from "../../src/contexts/partner-registration-context";
 
@@ -18,6 +20,25 @@ function CheckRow({ label, value, onPress }: { label: string; value: boolean; on
 export default function RegisterDocumentsScreen() {
   const router = useRouter();
   const { registration, updateRegistration } = usePartnerRegistration();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function continueNext() {
+    setSaving(true);
+    setError(null);
+    try {
+      await registrationApi.savePartnerDraft({
+        onboardingStage: "REVIEW",
+        accountType: registration.accountType,
+        draftData: registration
+      });
+      router.push("/register/review");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Partner document readiness could not be saved.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <Screen>
@@ -44,7 +65,8 @@ export default function RegisterDocumentsScreen() {
           onPress={() => updateRegistration({ serviceEvidenceReady: !registration.serviceEvidenceReady })}
         />
         <MutedText>Do not upload or share passwords, OTPs, card details or unrelated private records. KariGO will request only necessary onboarding evidence.</MutedText>
-        <PrimaryButton label="Review application" onPress={() => router.push("/register/review")} />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <PrimaryButton label={saving ? "Saving..." : "Review application"} onPress={() => void continueNext()} disabled={saving} />
       </Card>
     </Screen>
   );
@@ -78,6 +100,10 @@ const styles = StyleSheet.create({
     flex: 1,
     color: brand.colors.charcoal,
     fontSize: 14,
+    fontWeight: "800"
+  },
+  error: {
+    color: brand.colors.primary,
     fontWeight: "800"
   }
 });

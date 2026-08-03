@@ -1,6 +1,8 @@
 import { brand } from "@karigo/config";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { registrationApi } from "../../src/api/registration.api";
 import type { PartnerAccountType } from "../../src/contexts/partner-registration-context";
 import { Card, Hero, MutedText, PrimaryButton, Screen } from "../../src/components/ui";
 import { usePartnerRegistration } from "../../src/contexts/partner-registration-context";
@@ -39,6 +41,25 @@ const accountTypes: Array<{
 export default function RegisterAccountTypeScreen() {
   const router = useRouter();
   const { registration, updateRegistration } = usePartnerRegistration();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function continueNext() {
+    setSaving(true);
+    setError(null);
+    try {
+      await registrationApi.savePartnerDraft({
+        onboardingStage: "BUSINESS",
+        accountType: registration.accountType,
+        draftData: registration
+      });
+      router.push("/register/business");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Partner onboarding progress could not be saved.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <Screen>
@@ -66,7 +87,8 @@ export default function RegisterAccountTypeScreen() {
           </Pressable>
         );
       })}
-      <PrimaryButton label="Continue" onPress={() => router.push("/register/business")} />
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <PrimaryButton label={saving ? "Saving..." : "Continue"} onPress={() => void continueNext()} disabled={saving} />
     </Screen>
   );
 }
@@ -99,5 +121,9 @@ const styles = StyleSheet.create({
     borderColor: brand.colors.primary,
     backgroundColor: "#FEF2F2",
     color: brand.colors.primary
+  },
+  error: {
+    color: brand.colors.primary,
+    fontWeight: "800"
   }
 });

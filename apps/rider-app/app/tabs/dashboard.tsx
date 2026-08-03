@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { AppState, Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import MapView, { Marker, Region } from "react-native-maps";
 import { brand } from "@karigo/config";
 import type { CaptainAccess, CaptainWorkState } from "../../src/api/captain-access.api";
@@ -12,7 +12,7 @@ import { notificationsApi } from "../../src/api/notifications.api";
 import { Button, Card, Loading, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
-import { requestCaptainForegroundLocation } from "../../src/lib/location";
+import { CaptainLocation, distanceMeters, requestCaptainForegroundLocation, watchCaptainForegroundLocation } from "../../src/lib/location";
 import {
   applicantReviewCopy,
   classifyCaptainApplication,
@@ -97,7 +97,7 @@ function timestampValue(value?: string | null) {
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
-function locationSummary(access: CaptainAccess | null, profile: RiderProfile | null) {
+function locationSummary(access: CaptainAccess | null, profile: RiderProfile | null, deviceLocation: { location: CaptainLocation; seenAt: string } | null) {
   const deliveryLat = coordinateNumber(profile?.currentLatitude);
   const deliveryLng = coordinateNumber(profile?.currentLongitude);
   const rideProfile = access?.rideCaptainProfile;
@@ -106,6 +106,11 @@ function locationSummary(access: CaptainAccess | null, profile: RiderProfile | n
   const rideLocation = rideProfile?.city && rideProfile.state ? `${rideProfile.city}, ${rideProfile.state}` : rideProfile?.city ?? null;
   const deliveryAreas = profile?.preferredServiceAreas?.length ? profile.preferredServiceAreas.join(", ") : null;
   const candidates = [
+    deviceLocation ? {
+      coordinate: { latitude: deviceLocation.location.latitude, longitude: deviceLocation.location.longitude },
+      lastSeen: deviceLocation.seenAt,
+      source: "Device GPS"
+    } : null,
     hasValidCoordinate(deliveryLat, deliveryLng) ? {
       coordinate: { latitude: deliveryLat!, longitude: deliveryLng! },
       lastSeen: profile?.currentLocationUpdatedAt ?? null,
@@ -153,6 +158,12 @@ export default function RiderDashboard() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [deviceLocation, setDeviceLocation] = useState<{ location: CaptainLocation; seenAt: string } | null>(null);
+  const watcherRef = useRef<{ remove: () => void } | null>(null);
+  const uploadInFlightRef = useRef(false);
+  const lastUploadedLocationRef = useRef<{ location: CaptainLocation; uploadedAt: number } | null>(null);
+  const latestWorkStateRef = useRef<CaptainWorkState | null>(null);
+  const latestProjectionRef = useRef<ReturnType<typeof projectCaptainOperationalState> | null>(null);
 
   async function load() {
     setLoading(true);
@@ -196,18 +207,136 @@ export default function RiderDashboard() {
 
   const projection = useMemo(() => projectCaptainOperationalState(captainAccess, workState), [captainAccess, workState]);
   const activeJob = useMemo(() => jobs.find((job) => ACTIVE_DELIVERY_STATUSES.has(job.orderStatus)), [jobs]);
-  const mapState = locationSummary(captainAccess, profile);
+  const mapState = locationSummary(captainAccess, profile, deviceLocation);
   const currentMapRegion = mapRegion(mapState.coordinate);
+  const operationalLocationRequired = Boolean(
+    projection.effectiveDeliveryOnline ||
+    projection.effectiveRideOnline ||
+    workState?.activeWorkMode
+  );
+  const strongLocationAccuracy = Boolean(workState?.activeWorkMode);
+
+  useEffect(() => {
+    latestWorkStateRef.current = workState;
+    latestProjectionRef.current = projection;
+  }, [projection, workState]);
+
+  function backendLocationAgeMs() {
+    const timestamp = latestWorkStateRef.current?.lastLocationAt ?? mapState.lastSeen;
+    if (!timestamp) return Number.POSITIVE_INFINITY;
+    const parsed = new Date(timestamp).getTime();
+    return Number.isFinite(parsed) ? Date.now() - parsed : Number.POSITIVE_INFINITY;
+  }
+
+  function storedLocationIsStale() {
+    return backendLocationAgeMs() > 55_000 || !mapState.coordinate;
+  }
+
+  async function uploadCaptainLocation(location: CaptainLocation, options: { force?: boolean } = {}) {
+    const currentWorkState = latestWorkStateRef.current;
+    if (!currentWorkState || uploadInFlightRef.current) return;
+    const now = Date.now();
+    const previous = lastUploadedLocationRef.current;
+    const movedMeters = previous ? distanceMeters(previous.location, location) : Number.POSITIVE_INFINITY;
+    const uploadAgeMs = previous ? now - previous.uploadedAt : Number.POSITIVE_INFINITY;
+    if (!options.force && movedMeters < 12 && uploadAgeMs < 45_000 && !storedLocationIsStale()) {
+      setDeviceLocation({ location, seenAt: new Date(now).toISOString() });
+      return;
+    }
+
+    uploadInFlightRef.current = true;
+    try {
+      const updated = await captainAccessApi.updateAvailability({
+        ...(currentWorkState.activeWorkMode ? {} : {
+          deliveryOnline: currentWorkState.desiredDeliveryOnline,
+          rideOnline: currentWorkState.desiredRideOnline
+        }),
+        ...location
+      });
+      lastUploadedLocationRef.current = { location, uploadedAt: now };
+      setDeviceLocation({ location, seenAt: new Date(now).toISOString() });
+      setWorkState(updated);
+      if (latestProjectionRef.current?.delivery.active) {
+        setProfile(await riderApi.profile().catch(() => null));
+      }
+    } finally {
+      uploadInFlightRef.current = false;
+    }
+  }
+
+  async function refreshGps(options: { silent?: boolean; force?: boolean } = {}) {
+    if (!latestWorkStateRef.current) return;
+    try {
+      const currentLocation = await requestCaptainForegroundLocation(strongLocationAccuracy);
+      await uploadCaptainLocation(currentLocation, { force: options.force ?? true });
+      if (!options.silent) setMessage("Location refreshed.");
+      setError("");
+    } catch (e) {
+      if (!options.silent) setError(friendlyError(e));
+      if (!options.silent) setMessage("");
+    }
+  }
+
+  useEffect(() => {
+    if (!projection.hasAnyActiveMode) return;
+    if (storedLocationIsStale()) {
+      void refreshGps({ silent: true, force: true });
+    }
+  }, [projection.hasAnyActiveMode]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active" && operationalLocationRequired) {
+        void refreshGps({ silent: true, force: storedLocationIsStale() });
+      }
+    });
+    return () => subscription.remove();
+  }, [operationalLocationRequired]);
+
+  useEffect(() => {
+    if (!operationalLocationRequired) {
+      watcherRef.current?.remove();
+      watcherRef.current = null;
+      return;
+    }
+
+    let cancelled = false;
+    if (!watcherRef.current) {
+      watchCaptainForegroundLocation((location) => {
+        void uploadCaptainLocation(location);
+      }, strongLocationAccuracy)
+        .then((subscription) => {
+          if (cancelled) {
+            subscription.remove();
+            return;
+          }
+          watcherRef.current = subscription;
+        })
+        .catch((e) => {
+          setError(friendlyError(e));
+        });
+    }
+
+    return () => {
+      cancelled = true;
+      watcherRef.current?.remove();
+      watcherRef.current = null;
+    };
+  }, [operationalLocationRequired, strongLocationAccuracy]);
 
   async function toggleDelivery() {
     if (!workState || !projection.delivery.active) return;
     try {
       const next = !workState.desiredDeliveryOnline;
-      const currentLocation = next ? await requestCaptainForegroundLocation() : null;
+      const currentLocation = next ? await requestCaptainForegroundLocation(strongLocationAccuracy) : null;
       const updated = await captainAccessApi.updateAvailability({
         deliveryOnline: next,
         ...(currentLocation ? currentLocation : {})
       });
+      if (currentLocation) {
+        lastUploadedLocationRef.current = { location: currentLocation, uploadedAt: Date.now() };
+        setDeviceLocation({ location: currentLocation, seenAt: new Date().toISOString() });
+      }
       setWorkState(updated);
       setProfile(projection.delivery.active ? await riderApi.profile().catch(() => null) : null);
       setMessage(next ? "Delivery availability is online." : "Delivery availability is offline.");
@@ -222,32 +351,17 @@ export default function RiderDashboard() {
     if (!workState || !projection.ride.active) return;
     try {
       const next = !workState.desiredRideOnline;
-      const currentLocation = next ? await requestCaptainForegroundLocation() : null;
+      const currentLocation = next ? await requestCaptainForegroundLocation(strongLocationAccuracy) : null;
       const updated = await captainAccessApi.updateAvailability({
         rideOnline: next,
         ...(currentLocation ? currentLocation : {})
       });
+      if (currentLocation) {
+        lastUploadedLocationRef.current = { location: currentLocation, uploadedAt: Date.now() };
+        setDeviceLocation({ location: currentLocation, seenAt: new Date().toISOString() });
+      }
       setWorkState(updated);
       setMessage(next ? "Ride availability is online." : "Ride availability is offline.");
-      setError("");
-    } catch (e) {
-      setError(friendlyError(e));
-      setMessage("");
-    }
-  }
-
-  async function refreshGps() {
-    if (!workState || workState.activeWorkMode) return;
-    try {
-      const currentLocation = await requestCaptainForegroundLocation();
-      const updated = await captainAccessApi.updateAvailability({
-        deliveryOnline: workState.desiredDeliveryOnline,
-        rideOnline: workState.desiredRideOnline,
-        ...currentLocation
-      });
-      setWorkState(updated);
-      setProfile(projection.delivery.active ? await riderApi.profile().catch(() => null) : null);
-      setMessage("Location refreshed.");
       setError("");
     } catch (e) {
       setError(friendlyError(e));
@@ -259,8 +373,10 @@ export default function RiderDashboard() {
   const rideApplicationExists = hasRideApplication(rideOnboardingStatus);
   const hasAnyApplication = deliveryApplicationExists || rideApplicationExists;
   const canToggle = !!workState && !workState.activeWorkMode;
-  const canToggleDelivery = !!workState && canToggle && projection.delivery.active && workState.deliveryEligibility.eligible;
-  const canToggleRide = !!workState && canToggle && projection.ride.active && workState.rideEligibility.eligible;
+  const deliveryCanRefreshStaleLocation = workState?.deliveryEligibility.reasonCode === "LOCATION_STALE";
+  const rideCanRefreshStaleLocation = workState?.rideEligibility.reasonCode === "LOCATION_STALE";
+  const canToggleDelivery = !!workState && canToggle && projection.delivery.active && (workState.deliveryEligibility.eligible || deliveryCanRefreshStaleLocation);
+  const canToggleRide = !!workState && canToggle && projection.ride.active && (workState.rideEligibility.eligible || rideCanRefreshStaleLocation);
   const activeWork = activeWorkTitle(workState);
 
   if (loading && !captainAccess) {
@@ -321,7 +437,7 @@ export default function RiderDashboard() {
               <Text style={ui.muted}>Service area: {mapState.area}</Text>
             </View>
           </View>}
-          <Button title="Refresh GPS" tone="muted" disabled={!workState || Boolean(workState.activeWorkMode)} onPress={refreshGps} />
+          <Button title="Refresh GPS" tone="muted" disabled={!workState} onPress={() => void refreshGps()} />
         </Card>
 
         <Card>

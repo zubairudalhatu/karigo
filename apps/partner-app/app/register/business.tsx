@@ -1,6 +1,8 @@
 import { brand } from "@karigo/config";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { registrationApi } from "../../src/api/registration.api";
 import { Card, Hero, PrimaryButton, Screen, TextField } from "../../src/components/ui";
 import { usePartnerRegistration } from "../../src/contexts/partner-registration-context";
 import type { VendorApplicationCategory } from "../../src/api/registration.api";
@@ -20,12 +22,31 @@ function stateForCity(city: "Kano" | "Abuja") {
 export default function RegisterBusinessScreen() {
   const router = useRouter();
   const { registration, updateRegistration } = usePartnerRegistration();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const ready = registration.businessName.trim() &&
     registration.businessDescription.trim().length >= 8 &&
     registration.businessAddress.trim() &&
     registration.businessPhoneNumber.trim() &&
     registration.businessEmail.trim() &&
     registration.contactFullName.trim();
+
+  async function continueNext() {
+    setSaving(true);
+    setError(null);
+    try {
+      await registrationApi.savePartnerDraft({
+        onboardingStage: "OPERATIONS",
+        accountType: registration.accountType,
+        draftData: registration
+      });
+      router.push("/register/service-details");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Partner business details could not be saved.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <Screen>
@@ -76,7 +97,8 @@ export default function RegisterBusinessScreen() {
         <TextField label="Website or social link optional" autoCapitalize="none" value={registration.websiteOrSocialLink} onChangeText={(websiteOrSocialLink) => updateRegistration({ websiteOrSocialLink })} />
         <TextField label="Contact full name" value={registration.contactFullName} onChangeText={(contactFullName) => updateRegistration({ contactFullName })} />
         <TextField label="Contact role" value={registration.contactRole} onChangeText={(contactRole) => updateRegistration({ contactRole })} />
-        <PrimaryButton label="Continue" onPress={() => router.push("/register/service-details")} disabled={!ready} />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <PrimaryButton label={saving ? "Saving..." : "Continue"} onPress={() => void continueNext()} disabled={!ready || saving} />
       </Card>
     </Screen>
   );
@@ -125,5 +147,9 @@ const styles = StyleSheet.create({
   },
   cityTextActive: {
     color: brand.colors.primary
+  },
+  error: {
+    color: brand.colors.primary,
+    fontWeight: "800"
   }
 });
