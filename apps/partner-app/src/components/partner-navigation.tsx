@@ -27,20 +27,27 @@ export function PartnerBottomNav() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [approved, setApproved] = useState(false);
+  const [capabilities, setCapabilities] = useState<{ canManageProducts: boolean; canManageServices: boolean } | null>(null);
 
   useEffect(() => {
     let active = true;
     if (!user || pathname.startsWith("/auth") || pathname.startsWith("/register")) {
       setApproved(false);
+      setCapabilities(null);
       return;
     }
 
-    partnerApi.onboardingState()
-      .then((state) => {
-        if (active) setApproved(state.state === "approved");
+    Promise.all([partnerApi.onboardingState(), partnerApi.capabilities()])
+      .then(([state, nextCapabilities]) => {
+        if (!active) return;
+        setApproved(state.state === "approved" && nextCapabilities.canAccessWorkspace);
+        setCapabilities(nextCapabilities);
       })
       .catch(() => {
-        if (active) setApproved(false);
+        if (active) {
+          setApproved(false);
+          setCapabilities(null);
+        }
       });
 
     return () => {
@@ -53,7 +60,11 @@ export function PartnerBottomNav() {
 
   return (
     <View style={[styles.wrap, { bottom: Math.max(insets.bottom, 12) }]}>
-      {tabs.map((tab) => {
+      {tabs.filter((tab) => {
+        if (tab.path === "/products") return capabilities?.canManageProducts;
+        if (tab.path === "/services") return capabilities?.canManageServices;
+        return true;
+      }).map((tab) => {
         const active = isActive(pathname, tab.path);
         return (
           <Pressable

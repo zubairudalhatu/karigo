@@ -1,5 +1,5 @@
 import { brand } from "@karigo/config";
-import { KariGoApiError, ProductSummary, VendorServiceSummary } from "@karigo/shared-types";
+import { KariGoApiError, PartnerCapabilities, ProductSummary, VendorServiceSummary } from "@karigo/shared-types";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Image, Linking, RefreshControl, StyleSheet, Text, View } from "react-native";
@@ -16,6 +16,7 @@ interface DashboardState {
   products: ProductSummary[];
   services: VendorServiceSummary[];
   documents: PartnerOnboardingDocument[];
+  capabilities: PartnerCapabilities | null;
 }
 
 const initialState: DashboardState = {
@@ -23,13 +24,14 @@ const initialState: DashboardState = {
   orders: [],
   products: [],
   services: [],
-  documents: []
+  documents: [],
+  capabilities: null
 };
 
-function partnerType(products: ProductSummary[], services: VendorServiceSummary[]) {
-  if (products.length > 0 && services.length > 0) return "Both";
-  if (services.length > 0) return "Service Provider";
-  if (products.length > 0) return "Product Seller";
+function partnerTypeLabel(partnerType?: PartnerCapabilities["partnerType"]) {
+  if (partnerType === "BOTH") return "Product Seller and Service Provider";
+  if (partnerType === "SERVICE_PROVIDER") return "Service Provider";
+  if (partnerType === "PRODUCT_SELLER") return "Product Seller";
   return "Partner account";
 }
 
@@ -64,14 +66,15 @@ function DashboardContent() {
         return;
       }
 
+      const capabilities = await partnerApi.capabilities();
       const [profile, orders, products, services, documents] = await Promise.all([
         partnerApi.profile(),
         partnerApi.orders().catch(() => []),
-        partnerApi.products().catch(() => []),
-        partnerApi.services().catch(() => []),
+        capabilities.canManageProducts ? partnerApi.products().catch(() => []) : Promise.resolve([]),
+        capabilities.canManageServices ? partnerApi.services().catch(() => []) : Promise.resolve([]),
         partnerApi.documents().catch(() => [])
       ]);
-      setData({ profile, orders, products, services, documents });
+      setData({ profile, orders, products, services, documents, capabilities });
     } catch (err) {
       if (isMissingProfile(err)) {
         setMissingProfile(true);
@@ -150,8 +153,9 @@ function DashboardContent() {
   }
 
   const activeOrders = data.orders.filter((order) => !["DELIVERED", "CANCELLED", "REJECTED"].includes(order.orderStatus));
-  const documentPending = data.documents.filter((document) => document.verificationStatus !== "APPROVED").length;
   const profileWarning = partnerProfileWarning(data.profile);
+  const canManageProducts = data.capabilities?.canManageProducts ?? false;
+  const canManageServices = data.capabilities?.canManageServices ?? false;
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}>
@@ -169,7 +173,7 @@ function DashboardContent() {
       <Card>
         <Text style={styles.businessName}>{data.profile?.businessName ?? "Partner profile"}</Text>
         <MutedText>
-          {data.profile?.city ?? "City pending"}, {data.profile?.state ?? "State pending"} - {partnerType(data.products, data.services)}
+          {data.profile?.city ?? "City pending"}, {data.profile?.state ?? "State pending"} - {partnerTypeLabel(data.capabilities?.partnerType)}
         </MutedText>
       </Card>
 
@@ -202,26 +206,16 @@ function DashboardContent() {
 
       <View style={styles.statsRow}>
         <StatCard label="Active orders" value={activeOrders.length} />
-        <StatCard label="Products" value={data.products.length} />
-        <StatCard label="Services" value={data.services.length} />
+        {canManageProducts ? <StatCard label="Products" value={data.products.length} /> : null}
+        {canManageServices ? <StatCard label="Services" value={data.services.length} /> : null}
       </View>
 
       <Card>
         <Text style={styles.cardTitle}>Operations shortcuts</Text>
-        <PrimaryButton label="Add product" onPress={() => router.push("/products/new")} />
+        {canManageProducts ? <PrimaryButton label="Add product" onPress={() => router.push("/products/new")} /> : null}
+        {canManageServices ? <PrimaryButton label="Add service" onPress={() => router.push("/services/new")} /> : null}
+        <PrimaryButton label="View orders" onPress={() => router.push("/orders")} variant="secondary" />
         <PrimaryButton label="View earnings and settlements" onPress={() => router.push("/earnings")} variant="secondary" />
-        <PrimaryButton label="Edit partner profile" onPress={() => router.push("/profile/edit")} variant="secondary" />
-      </Card>
-
-      <Card>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Onboarding readiness</Text>
-          <Badge label={documentPending > 0 ? "Needs review" : "Ready check"} tone={documentPending > 0 ? "warning" : "info"} />
-        </View>
-        <MutedText>
-          Upload onboarding documents from your phone and track KariGO review status from the Partner App.
-        </MutedText>
-        <PrimaryButton label="View documents" onPress={() => router.push("/documents")} variant="secondary" />
       </Card>
 
       {activeOrders[0] ? (

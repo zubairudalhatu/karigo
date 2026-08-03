@@ -44,7 +44,8 @@ export class VendorsService {
         category: true,
         branches: { orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }] },
         teamMembers: { orderBy: { createdAt: "desc" }, take: 20 },
-        onboardingDocuments: { orderBy: { uploadedAt: "desc" } }
+        onboardingDocuments: { orderBy: { uploadedAt: "desc" } },
+        sourceApplication: { select: { reference: true, tradingName: true } }
       }
     });
 
@@ -64,7 +65,8 @@ export class VendorsService {
         user: { select: publicUserSelect },
         category: true,
         branches: { orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }] },
-        teamMembers: { orderBy: { createdAt: "desc" }, take: 20 }
+        teamMembers: { orderBy: { createdAt: "desc" }, take: 20 },
+        sourceApplication: { select: { reference: true, tradingName: true } }
       }
     });
     await this.logVendorAudit(vendor.id, userId, "vendor.profile.updated", "Vendor", vendor.id, {
@@ -233,10 +235,16 @@ export class VendorsService {
 
   async onboardingDocuments(userId: string) {
     const vendor = await this.requireVendorForUser(userId);
-    return this.prisma.vendorOnboardingDocument.findMany({
+    const [documents, application] = await Promise.all([this.prisma.vendorOnboardingDocument.findMany({
       where: { vendorId: vendor.id },
       orderBy: { uploadedAt: "desc" }
-    });
+    }), this.prisma.vendorApplication.findUnique({ where: { vendorId: vendor.id }, select: { reference: true } })]);
+    return documents.map((document) => ({
+      ...document,
+      applicationType: "PARTNER",
+      applicationReference: application?.reference ?? null,
+      roleScope: "PARTNER"
+    }));
   }
 
   async uploadOnboardingDocument(userId: string, dto: ApplicationDocumentDto) {

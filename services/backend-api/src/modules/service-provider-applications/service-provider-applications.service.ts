@@ -3,6 +3,7 @@ import { Prisma, ServiceProviderApplicationStatus, ServiceProviderStatus, Servic
 import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { resolvePartnerCapabilities } from "../vendors/partner-capabilities";
 import { ApproveCreateServiceProviderDto } from "./dto/approve-create-service-provider.dto";
 import { CreateServiceProviderApplicationDto } from "./dto/create-service-provider-application.dto";
 import { ListServiceProviderApplicationsQueryDto } from "./dto/list-service-provider-applications-query.dto";
@@ -108,14 +109,115 @@ export class ServiceProviderApplicationsService {
       } : {})
     };
 
-    const applications = await this.prisma.serviceProviderApplication.findMany({
-      where,
-      select: APPLICATION_SELECT,
-      orderBy: { submittedAt: "desc" },
-      take: 200
+    const [applications, partnerApplications] = await Promise.all([
+      this.prisma.serviceProviderApplication.findMany({
+        where,
+        select: APPLICATION_SELECT,
+        orderBy: { submittedAt: "desc" },
+        take: 200
+      }),
+      this.prisma.vendorApplication.findMany({
+        where: {
+          deletedAt: null,
+          ...(query.city ? { city: { contains: query.city, mode: "insensitive" as const } } : {}),
+          ...(query.search ? {
+            OR: [
+              { reference: { contains: query.search, mode: "insensitive" as const } },
+              { businessName: { contains: query.search, mode: "insensitive" as const } },
+              { contactFullName: { contains: query.search, mode: "insensitive" as const } },
+              { businessPhoneNumber: { contains: query.search } },
+              { businessEmail: { contains: query.search, mode: "insensitive" as const } }
+            ]
+          } : {})
+        },
+        select: {
+          id: true,
+          reference: true,
+          businessName: true,
+          businessCategory: true,
+          businessType: true,
+          catalogueCategory: true,
+          contactFullName: true,
+          businessPhoneNumber: true,
+          businessEmail: true,
+          businessAddress: true,
+          city: true,
+          state: true,
+          serviceAreas: true,
+          businessDescription: true,
+          operatingHours: true,
+          status: true,
+          submittedAt: true,
+          reviewedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          vendorId: true,
+          documents: { select: { verificationStatus: true } }
+        },
+        orderBy: { submittedAt: "desc" },
+        take: 200
+      })
+    ]);
+
+    const mappedPartners = partnerApplications.flatMap((application) => {
+      const capabilities = resolvePartnerCapabilities(null, application);
+      if (capabilities.partnerType !== "SERVICE_PROVIDER" && capabilities.partnerType !== "BOTH") return [];
+      const status = application.status === "UNDER_REVIEW"
+        ? ServiceProviderApplicationStatus.UNDER_REVIEW
+        : application.status === "CHANGES_REQUESTED"
+          ? ServiceProviderApplicationStatus.CHANGES_REQUESTED
+          : application.status === "APPROVED" || application.status === "PROVISIONALLY_APPROVED"
+            ? ServiceProviderApplicationStatus.APPROVED
+            : application.status === "REJECTED"
+              ? ServiceProviderApplicationStatus.REJECTED
+              : ServiceProviderApplicationStatus.SUBMITTED;
+      if (query.status && status !== query.status) return [];
+      if (query.serviceType && query.serviceType !== ServiceProviderType.OTHER) return [];
+      const documentStatuses = application.documents.map((document) => document.verificationStatus);
+      const documentReviewStatus = documentStatuses.length === 0
+        ? "NOT_SUBMITTED"
+        : documentStatuses.every((documentStatus) => documentStatus === "APPROVED")
+          ? "APPROVED"
+          : documentStatuses.some((documentStatus) => documentStatus === "REJECTED")
+            ? "REJECTED"
+            : "PENDING_REVIEW";
+      return [{
+        id: `partner:${application.id}`,
+        applicationReference: application.reference,
+        fullName: application.contactFullName,
+        businessName: application.businessName,
+        serviceType: ServiceProviderType.OTHER,
+        phoneNumber: application.businessPhoneNumber,
+        email: application.businessEmail,
+        city: application.city,
+        state: application.state,
+        serviceAreas: Array.isArray(application.serviceAreas) ? application.serviceAreas.filter((area): area is string => typeof area === "string") : [],
+        address: application.businessAddress,
+        experienceSummary: application.businessDescription,
+        toolsOrEquipment: null,
+        availability: application.operatingHours,
+        identificationType: null,
+        status,
+        reviewNote: null,
+        submittedAt: application.submittedAt.toISOString(),
+        reviewedAt: application.reviewedAt?.toISOString() ?? null,
+        createdAt: application.createdAt.toISOString(),
+        updatedAt: application.updatedAt.toISOString(),
+        reviewedByAdmin: null,
+        convertedProvider: null,
+        sourceType: "UNIFIED_PARTNER_APPLICATION",
+        partnerType: capabilities.partnerType,
+        capabilityLabel: capabilities.partnerType === "BOTH" ? "Product Seller and Service Provider" : "Service Provider",
+        vendorApplicationId: application.id,
+        documentReviewStatus,
+        vendorId: application.vendorId
+      }];
     });
 
-    return applications.map((application) => this.toAdminList(application));
+    return [
+      ...applications.map((application) => ({ ...this.toAdminList(application), sourceType: "LEGACY_PROVIDER_APPLICATION" })),
+      ...mappedPartners
+    ].sort((left, right) => new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime());
   }
 
   async adminDetail(applicationId: string) {

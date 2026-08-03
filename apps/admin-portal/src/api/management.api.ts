@@ -27,11 +27,18 @@ export interface AdminVendor {
   id: string;
   businessName: string;
   businessCategory: string;
+  tradingName?: string | null;
+  partnerType?: "PRODUCT_SELLER" | "SERVICE_PROVIDER" | "BOTH" | null;
+  capabilityLabel?: string;
+  applicationReference?: string | null;
   city: string;
   state: string;
   status: string;
   isOpen: boolean;
   totalOrders: number;
+  productCount?: number;
+  serviceCount?: number;
+  activeOrderCount?: number;
   deletedAt?: string | null;
   inTrash: boolean;
   user: { accountStatus: string; deletedAt?: string | null };
@@ -91,6 +98,9 @@ export interface VendorOnboardingDocument {
   adminNote?: string | null;
   uploadedAt: string;
   reviewedAt?: string | null;
+  applicationType?: "PARTNER";
+  applicationReference?: string | null;
+  roleScope?: "PARTNER";
 }
 
 export interface AdminAuditLog {

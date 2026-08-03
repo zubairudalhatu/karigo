@@ -11,8 +11,10 @@ const reviewStatuses = ["UNDER_REVIEW", "CHANGES_REQUESTED", "PROVISIONALLY_APPR
 const trashReasons = ["duplicate", "test account", "created in error", "rejected onboarding", "inactive/closed", "other"];
 
 function partnerTypeLabel(application: VendorApplication) {
-  if (application.businessCategory === "SME_SERVICES") return "Service Provider";
-  return "Product Seller / Marketplace Vendor";
+  const source = [application.businessType, application.catalogueCategory, application.businessCategory].filter(Boolean).join(" ").toUpperCase().replaceAll("_", " ");
+  if (source.includes("BOTH") || (source.includes("PRODUCT") && source.includes("SERVICE"))) return "Product Seller and Service Provider";
+  if (application.businessCategory === "SME_SERVICES" || source.includes("SERVICE PROVIDER")) return "Service Provider";
+  return "Product Seller";
 }
 
 export default function VendorApplicationsPage() {

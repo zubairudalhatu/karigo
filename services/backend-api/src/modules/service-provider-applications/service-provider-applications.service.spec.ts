@@ -45,6 +45,9 @@ describe("ServiceProviderApplicationsService", () => {
       create: jest.fn(),
       findUnique: jest.fn()
     },
+    vendorApplication: {
+      findMany: jest.fn()
+    },
     $transaction: jest.fn()
   };
   const audit = { record: jest.fn() };
@@ -58,6 +61,7 @@ describe("ServiceProviderApplicationsService", () => {
     audit.record.mockResolvedValue({});
     prisma.serviceProviderApplication.findUnique.mockResolvedValue(null);
     prisma.serviceProvider.findUnique.mockResolvedValue(null);
+    prisma.vendorApplication.findMany.mockResolvedValue([]);
     prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => Promise<unknown>) => callback(prisma));
   });
 
@@ -142,6 +146,46 @@ describe("ServiceProviderApplicationsService", () => {
       take: 200
     }));
     expect(result[0]).not.toHaveProperty("identificationNumber");
+  });
+
+  it("includes unified mixed Partner applications in the service-provider review list", async () => {
+    prisma.serviceProviderApplication.findMany.mockResolvedValue([]);
+    prisma.vendorApplication.findMany.mockResolvedValue([{
+      id: "00000000-0000-0000-0000-000000000999",
+      reference: "KGO-VAP-BOTH-001",
+      businessName: "Zamkah Technologies",
+      businessCategory: "SME_SERVICES",
+      businessType: "BOTH",
+      catalogueCategory: "SME_SERVICES",
+      contactFullName: "Zamkah Partner",
+      businessPhoneNumber: "+2348011112222",
+      businessEmail: "partner@example.test",
+      businessAddress: "Kano",
+      city: "Kano",
+      state: "Kano",
+      serviceAreas: ["Kano"],
+      businessDescription: "Products and services",
+      operatingHours: "Daily",
+      status: "APPROVED",
+      submittedAt: now,
+      reviewedAt: now,
+      createdAt: now,
+      updatedAt: now,
+      vendorId: "00000000-0000-0000-0000-000000000998",
+      documents: [{ verificationStatus: "APPROVED" }]
+    }]);
+
+    const result = await service.adminList({});
+
+    expect(result).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        applicationReference: "KGO-VAP-BOTH-001",
+        sourceType: "UNIFIED_PARTNER_APPLICATION",
+        partnerType: "BOTH",
+        capabilityLabel: "Product Seller and Service Provider",
+        documentReviewStatus: "APPROVED"
+      })
+    ]));
   });
 
   it("updates admin review status and records an audit entry", async () => {

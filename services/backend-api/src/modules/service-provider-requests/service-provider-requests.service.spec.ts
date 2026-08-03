@@ -147,6 +147,7 @@ describe("ServiceProviderRequestsService admin operations", () => {
       findMany: jest.fn(),
       count: jest.fn()
     },
+    vendor: { findMany: jest.fn() },
     smeServicesPilotReadinessItem: {
       upsert: jest.fn(),
       findMany: jest.fn(),
@@ -175,6 +176,7 @@ describe("ServiceProviderRequestsService admin operations", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     audit.record.mockResolvedValue({});
+    prisma.vendor.findMany.mockResolvedValue([]);
   });
 
   it("returns the expanded SME Services catalogue with safe coordination copy", () => {
@@ -373,14 +375,14 @@ describe("ServiceProviderRequestsService admin operations", () => {
 
     const result = await service.adminReport();
 
-    expect(result.title).toBe("KariGO SME Services Pilot Operations Report");
-    expect(result.filename).toMatch(/^karigo-sme-services-pilot-report-\d{8}T\d{6}Z\.md$/);
+    expect(result.title).toBe("KariGO SME Services Operations Report");
+    expect(result.filename).toMatch(/^karigo-sme-services-operations-report-\d{8}T\d{6}Z\.md$/);
     expect(result.format).toBe("markdown");
     expect(result.mimeType).toBe("text/markdown");
-    expect(result.markdown).toContain("# KariGO SME Services Pilot Operations Report");
+    expect(result.markdown).toContain("# KariGO SME Services Operations Report");
     expect(result.markdown).toContain("- Active customer requests: 6");
     expect(result.markdown).toContain("- Live dispatch: Disabled");
-    expect(result.markdown).toContain("internal pilot monitoring and management review only");
+    expect(result.markdown).toContain("internal operations monitoring and management review only");
     expect(result.markdown).not.toContain("+234");
     expect(result.markdown).not.toContain("provider@karigo.local");
     expect(result.markdown).not.toContain("Internal admin");
@@ -557,10 +559,10 @@ describe("ServiceProviderRequestsService admin operations", () => {
       customNote: "Please wait for manual confirmation before accepting any pilot request."
     });
 
-    expect(result.preview.subject).toBe("KariGO SME Services provider pilot invitation");
+    expect(result.preview.subject).toBe("KariGO SME Services provider invitation");
     expect(result.preview.messageText).toContain("Hello Demo Plumber");
     expect(result.preview.messageText).toContain("plumbing providers in Nasarawa GRA from 20 July 2026");
-    expect(result.preview.messageText).toContain("does not create provider app login");
+    expect(result.preview.messageText).toContain("does not create automated dispatch");
     expect(result.preview.messageText).toContain("Please wait for manual confirmation");
     expect(result.preview.copyInstructions).toContain("does not send SMS, email, WhatsApp, push or in-app messages");
     expect(result.preview.messageText).not.toContain("{{");
@@ -844,6 +846,46 @@ describe("ServiceProviderRequestsService admin operations", () => {
     }));
     expect(result.summary).toMatchObject({ total: 1, approved: 1 });
     expect(result.items[0]).toMatchObject({ providerCode: "KGO-SP-001", fullName: "Demo Plumber" });
+  });
+
+  it("includes one unified BOTH Partner in SME provider operations without creating a duplicate provider", async () => {
+    prisma.serviceProvider.findMany.mockResolvedValue([]);
+    prisma.serviceProvider.count.mockResolvedValue(0);
+    prisma.vendor.findMany.mockResolvedValue([{
+      id: "00000000-0000-0000-0000-000000000888",
+      businessName: "Zamkah Technologies",
+      businessCategory: "SME_SERVICES",
+      phoneNumber: "+2348011112222",
+      email: "partner@example.test",
+      city: "Kano",
+      state: "Kano",
+      status: "ACTIVE",
+      isOpen: true,
+      createdAt: now,
+      updatedAt: now,
+      sourceApplication: {
+        reference: "KGO-VAP-BOTH-001",
+        contactFullName: "Zamkah Partner",
+        serviceAreas: ["Kano"],
+        businessCategory: "SME_SERVICES",
+        businessType: "BOTH",
+        catalogueCategory: "SME_SERVICES",
+        status: "APPROVED"
+      },
+      user: { accountStatus: "ACTIVE", deletedAt: null },
+      services: [{ serviceType: ServiceProviderType.PRINTING, status: "ACTIVE", isAvailable: true }]
+    }]);
+
+    const result = await service.adminListProviders({});
+
+    expect(result.summary).toMatchObject({ total: 1, approved: 1 });
+    expect(result.items).toEqual([expect.objectContaining({
+      id: "partner:00000000-0000-0000-0000-000000000888",
+      sourceType: "UNIFIED_PARTNER",
+      partnerType: "BOTH",
+      capabilityLabel: "Product Seller and Service Provider"
+    })]);
+    expect(prisma.serviceProvider.create).not.toHaveBeenCalled();
   });
 
   it("creates provider records without provider login, payout or dispatch records", async () => {

@@ -5,6 +5,7 @@ export interface AuthenticatedUser {
   fullName: string;
   phoneNumber: string;
   email?: string | null;
+  profilePhotoUrl?: string | null;
   role: UserRole;
 }
 

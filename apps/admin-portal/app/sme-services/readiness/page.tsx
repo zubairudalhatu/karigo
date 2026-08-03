@@ -11,6 +11,10 @@ function date(value?: string | null) {
   return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
+function readinessLabel(status: SmeServicesPilotReadiness["status"]) {
+  return status === "READY_FOR_INTERNAL_PILOT" ? "Operations ready" : "Not ready";
+}
+
 export default function SmeServicesPilotReadinessPage() {
   const [readiness, setReadiness] = useState<SmeServicesPilotReadiness | null>(null);
   const [items, setItems] = useState<SmeServicesPilotReadinessItem[]>([]);
@@ -51,7 +55,7 @@ export default function SmeServicesPilotReadinessPage() {
       })));
       setReadiness(data);
       setItems(data.items);
-      setMessage("SME Services pilot readiness checklist saved.");
+      setMessage("SME Services operations readiness checklist saved.");
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -62,12 +66,12 @@ export default function SmeServicesPilotReadinessPage() {
   useEffect(() => { void load(); }, []);
 
   return <PortalShell>
-    <h1>SME Services pilot readiness</h1>
-    <p className="muted">Internal checklist before inviting real pilot customers and service providers. Completing this checklist does not activate live dispatch, payments, payouts, provider login, provider app access, public provider contact exposure or medical booking.</p>
+    <h1>SME Services operations readiness</h1>
+    <p className="muted">Internal checklist for reviewing service operations readiness. Completing this checklist does not activate automatic dispatch, payments, payouts, provider login, public provider contact exposure or medical booking.</p>
     <div className="top-actions">
       <Link className="button-link" href="/sme-services/summary">Operations summary</Link>
       <Link className="button-link secondary" href="/sme-services/launch-control">Launch control</Link>
-      <Link className="button-link secondary" href="/sme-services/participants">Pilot participants</Link>
+      <Link className="button-link secondary" href="/sme-services/participants">SME participants</Link>
       <Link className="button-link secondary" href="/sme-services/invitation-templates">Invitation templates</Link>
       <Link className="button-link secondary" href="/sme-services">Customer requests</Link>
       <button className="secondary" onClick={() => void load()}>Refresh</button>
@@ -77,7 +81,7 @@ export default function SmeServicesPilotReadinessPage() {
     <ErrorMessage>{error}</ErrorMessage>
     {loading ? <Loading /> : readiness ? <>
       <section className="grid">
-        <article className="card"><span className="muted">Pilot status</span><p><Badge>{readiness.status}</Badge></p></article>
+        <article className="card"><span className="muted">Operations status</span><p><Badge>{readinessLabel(readiness.status)}</Badge></p></article>
         <article className="card"><span className="muted">Required completed</span><p className="metric">{readiness.requiredCompleted}/{readiness.requiredTotal}</p></article>
         <article className="card"><span className="muted">Approved providers</span><p className="metric">{readiness.systemSnapshot.approvedProviders}</p></article>
         <article className="card"><span className="muted">Pending applications</span><p className="metric">{readiness.systemSnapshot.pendingProviderApplications}</p></article>

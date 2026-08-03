@@ -8,7 +8,7 @@ import { friendlyError } from "../../../src/lib/errors";
 
 const decisionLabels: Record<SmeServicesPilotDecisionStatus, string> = {
   NOT_REVIEWED: "Not reviewed",
-  GO_INTERNAL_PILOT: "Go for internal pilot",
+  GO_INTERNAL_PILOT: "Operations approved",
   CONDITIONAL_GO: "Conditional go",
   NO_GO: "No-go",
   DEFERRED: "Deferred"
@@ -17,6 +17,10 @@ const decisionLabels: Record<SmeServicesPilotDecisionStatus, string> = {
 function date(value?: string | null) {
   if (!value) return "Not recorded";
   return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function readinessLabel(status: SmeServicesPilotLaunchControl["readiness"]["status"]) {
+  return status === "READY_FOR_INTERNAL_PILOT" ? "Operations ready" : "Not ready";
 }
 
 export default function SmeServicesPilotLaunchControlPage() {
@@ -64,7 +68,7 @@ export default function SmeServicesPilotLaunchControlPage() {
         blockers
       });
       setControl(data);
-      setMessage("SME Services pilot launch decision has been recorded.");
+      setMessage("SME Services operations decision has been recorded.");
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -76,11 +80,11 @@ export default function SmeServicesPilotLaunchControlPage() {
 
   return <PortalShell>
     <h1>SME Services launch control</h1>
-    <p className="muted">Internal Go/No-Go decision record after the SME Services Pilot Readiness Checklist review. Recording a decision does not activate live dispatch, payments, payouts, provider login, provider app access, push notifications, medical booking or public provider contact sharing.</p>
+    <p className="muted">Internal Go/No-Go decision record after the SME Services Operations Readiness review. Recording a decision does not activate automatic dispatch, payments, payouts, provider login, push notifications, medical booking or public provider contact sharing.</p>
     <div className="top-actions">
-      <Link className="button-link" href="/sme-services/readiness">Pilot readiness</Link>
+      <Link className="button-link" href="/sme-services/readiness">Operations readiness</Link>
       <Link className="button-link secondary" href="/sme-services/summary">Operations summary</Link>
-      <Link className="button-link secondary" href="/sme-services/participants">Pilot participants</Link>
+      <Link className="button-link secondary" href="/sme-services/participants">SME participants</Link>
       <Link className="button-link secondary" href="/sme-services/invitation-templates">Invitation templates</Link>
       <Link className="button-link secondary" href="/sme-services">Customer requests</Link>
       <button className="secondary" onClick={() => void load()}>Refresh</button>
@@ -90,7 +94,7 @@ export default function SmeServicesPilotLaunchControlPage() {
     {loading ? <Loading /> : control ? <>
       <section className="grid">
         <article className="card"><span className="muted">Current decision</span><p><Badge>{decisionLabels[control.status]}</Badge></p></article>
-        <article className="card"><span className="muted">Readiness status</span><p><Badge>{control.readiness.status}</Badge></p></article>
+        <article className="card"><span className="muted">Readiness status</span><p><Badge>{readinessLabel(control.readiness.status)}</Badge></p></article>
         <article className="card"><span className="muted">Required completed</span><p className="metric">{control.readiness.requiredCompleted}/{control.readiness.requiredTotal}</p></article>
         <article className="card"><span className="muted">Approved providers</span><p className="metric">{control.readiness.systemSnapshot.approvedProviders}</p></article>
       </section>
@@ -105,7 +109,7 @@ export default function SmeServicesPilotLaunchControlPage() {
             {control.latestDecision.conditions ? <p><strong>Conditions:</strong> {control.latestDecision.conditions}</p> : null}
             {control.latestDecision.blockers ? <p><strong>Blockers:</strong> {control.latestDecision.blockers}</p> : null}
             <p className="muted">Recorded {date(control.latestDecision.recordedAt)} with readiness snapshot {control.latestDecision.requiredCompletedSnapshot}/{control.latestDecision.requiredTotalSnapshot} required items complete.</p>
-          </> : <Empty>No pilot launch decision has been recorded yet.</Empty>}
+          </> : <Empty>No operations launch decision has been recorded yet.</Empty>}
         </article>
 
         <article className="card">
@@ -126,10 +130,10 @@ export default function SmeServicesPilotLaunchControlPage() {
               {options.map((option) => <option key={option} value={option}>{decisionLabels[option]}</option>)}
             </select>
           </label>
-          {goBlocked ? <p className="error">Go for internal pilot requires the readiness checklist status to be READY_FOR_INTERNAL_PILOT. Record Conditional go, No-go, or Deferred until required items are complete.</p> : null}
-          <label>Decision title<input value={decisionTitle} onChange={(event) => setDecisionTitle(event.target.value)} placeholder="Example: Conditional approval for controlled internal pilot" /></label>
+          {goBlocked ? <p className="error">Operations approval requires the readiness checklist to be complete. Record Conditional go, No-go, or Deferred until required items are complete.</p> : null}
+          <label>Decision title<input value={decisionTitle} onChange={(event) => setDecisionTitle(event.target.value)} placeholder="Example: Conditional approval for service operations" /></label>
           <label>Decision summary<textarea value={decisionSummary} onChange={(event) => setDecisionSummary(event.target.value)} placeholder="Summarise the management decision. Do not enter credentials, OTPs, payment secrets, provider private contact details or medical details." /></label>
-          <label>Conditions<textarea value={conditions} onChange={(event) => setConditions(event.target.value)} placeholder="Optional conditions before pilot invitations begin." /></label>
+          <label>Conditions<textarea value={conditions} onChange={(event) => setConditions(event.target.value)} placeholder="Optional conditions before participant invitations begin." /></label>
           <label>Blockers<textarea value={blockers} onChange={(event) => setBlockers(event.target.value)} placeholder="Optional blockers or reasons for no-go/defer." /></label>
           <button disabled={saving || goBlocked}>{saving ? "Recording..." : "Record decision"}</button>
         </form>

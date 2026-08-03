@@ -6,9 +6,9 @@ import { VendorsService } from "./vendors.service";
 describe("VendorsService public listing", () => {
   const prisma = {
     user: { findUnique: jest.fn() },
-    vendorApplication: { findFirst: jest.fn() },
+    vendorApplication: { findFirst: jest.fn(), findUnique: jest.fn() },
     vendor: { findMany: jest.fn(), findFirst: jest.fn() },
-    vendorOnboardingDocument: { create: jest.fn() },
+    vendorOnboardingDocument: { create: jest.fn(), findMany: jest.fn() },
     vendorService: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     vendorAuditLog: { create: jest.fn() }
   };
@@ -94,6 +94,31 @@ describe("VendorsService public listing", () => {
         action: "vendor.onboarding_document.uploaded"
       })
     }));
+  });
+
+  it("returns onboarding documents scoped to the Partner application", async () => {
+    prisma.vendor.findFirst.mockResolvedValue(activeMixedVendor());
+    prisma.vendorOnboardingDocument.findMany.mockResolvedValue([{
+      id: "partner-doc-1",
+      vendorId: "vendor-1",
+      documentType: "CAC_CERTIFICATE",
+      verificationStatus: "APPROVED",
+      uploadedAt: new Date("2026-08-01T10:00:00.000Z")
+    }]);
+    prisma.vendorApplication.findUnique.mockResolvedValue({ reference: "KGO-PARTNER-2026-001" });
+
+    await expect(serviceUnderTest().onboardingDocuments("vendor-user-1")).resolves.toEqual([
+      expect.objectContaining({
+        id: "partner-doc-1",
+        applicationType: "PARTNER",
+        applicationReference: "KGO-PARTNER-2026-001",
+        roleScope: "PARTNER"
+      })
+    ]);
+    expect(prisma.vendorOnboardingDocument.findMany).toHaveBeenCalledWith({
+      where: { vendorId: "vendor-1" },
+      orderBy: { uploadedAt: "desc" }
+    });
   });
 
   it("creates vendor-owned service catalogue entries", async () => {

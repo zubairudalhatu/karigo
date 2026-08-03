@@ -76,7 +76,7 @@ function ServicesContent() {
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}>
       <Hero eyebrow="Service Provider" title="Services" subtitle="Service catalogue visibility for approved SME service providers and mixed partners." />
       {canManageServices ? <PrimaryButton label="Add service" onPress={() => router.push("/services/new")} /> : null}
-      {error ? <MutedText>{error}</MutedText> : null}
+      {error ? <Card><MutedText>{error}</MutedText><PrimaryButton label="Retry" onPress={() => void load()} variant="secondary" /></Card> : null}
       {message ? <MutedText>{message}</MutedText> : null}
       {!canManageServices ? (
         <EmptyState

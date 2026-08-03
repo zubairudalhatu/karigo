@@ -56,6 +56,8 @@ describe("AdminOperationsService vendor cleanup", () => {
     createdAt: new Date("2026-07-15T00:00:00.000Z"),
     updatedAt: new Date("2026-07-15T00:00:00.000Z"),
     user: { accountStatus: AccountStatus.ACTIVE, deletedAt: null, role: UserRole.VENDOR, fullName: "Vendor Owner", phoneNumber: "+2348012345678", email: "vendor@example.test" },
+    sourceApplication: null,
+    _count: { products: 0, services: 0, orders: 0 },
     onboardingDocuments: []
   };
 

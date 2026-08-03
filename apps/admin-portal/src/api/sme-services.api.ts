@@ -91,6 +91,12 @@ export interface SmeProvider {
   verificationNote?: string | null;
   createdAt: string;
   updatedAt: string;
+  sourceType?: "LEGACY_PROVIDER" | "UNIFIED_PARTNER";
+  partnerId?: string;
+  partnerType?: "PRODUCT_SELLER" | "SERVICE_PROVIDER" | "BOTH";
+  capabilityLabel?: string;
+  isOpen?: boolean;
+  serviceCount?: number;
 }
 
 export interface SmeProviderApplication {
@@ -118,6 +124,11 @@ export interface SmeProviderApplication {
   updatedAt: string;
   reviewedByAdmin?: { id: string; fullName: string; email?: string | null } | null;
   convertedProvider?: Pick<SmeProvider, "id" | "providerCode" | "fullName" | "serviceType" | "status" | "readinessOnly"> | null;
+  sourceType?: "LEGACY_PROVIDER_APPLICATION" | "UNIFIED_PARTNER_APPLICATION";
+  partnerType?: "SERVICE_PROVIDER" | "BOTH";
+  capabilityLabel?: string;
+  vendorApplicationId?: string;
+  documentReviewStatus?: string;
 }
 
 export interface SmeProvidersListResponse {

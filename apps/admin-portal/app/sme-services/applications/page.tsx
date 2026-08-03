@@ -3,14 +3,25 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ServiceProviderApplicationStatus, ServiceProviderType, SmeProviderApplication, smeServicesApi } from "../../../src/api/sme-services.api";
-import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../../src/components/portal";
+import { Badge, Empty, Loading, PortalShell } from "../../../src/components/portal";
 import { friendlyError } from "../../../src/lib/errors";
 
 const statuses: Array<"" | ServiceProviderApplicationStatus> = ["", "SUBMITTED", "UNDER_REVIEW", "CHANGES_REQUESTED", "APPROVED", "REJECTED", "CONVERTED_TO_PROVIDER"];
 const serviceTypes: Array<"" | ServiceProviderType> = ["", "PAINTER", "PLUMBER", "MECHANIC", "ELECTRICIAN", "CLEANER", "CARPENTER", "AC_TECHNICIAN", "GENERATOR_REPAIR", "APPLIANCE_REPAIR", "FUMIGATION", "WELDER", "TILER", "CCTV_TECHNICIAN", "MOVING_HELP", "PRINTING", "CAR_HIRE", "LAUNDRY", "LESSON_TEACHER", "LEGAL_PRACTITIONER", "RENT_A_CAR", "HEALTH_PROFESSIONAL", "OTHER"];
 
 function date(value: string) {
-  return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "Date unavailable" : new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(parsed);
+}
+
+function label(value?: string | null, fallback = "Not set") {
+  return value ? value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()) : fallback;
+}
+
+function capabilityLabel(application: SmeProviderApplication) {
+  if (application.capabilityLabel) return application.capabilityLabel;
+  if (application.partnerType === "BOTH") return "Product Seller and Service Provider";
+  return label(application.serviceType, "Service Provider");
 }
 
 function queryString(status: string, serviceType: string, search: string, city: string) {
@@ -34,9 +45,10 @@ export default function SmeProviderApplicationsPage() {
   const q = useMemo(() => queryString(status, serviceType, search, city), [status, serviceType, search, city]);
   const summary = useMemo(() => ({
     total: data.length,
-    submitted: data.filter((item) => item.status === "SUBMITTED").length,
-    underReview: data.filter((item) => item.status === "UNDER_REVIEW").length,
-    converted: data.filter((item) => item.status === "CONVERTED_TO_PROVIDER").length
+    pending: data.filter((item) => item.status === "SUBMITTED" || item.status === "UNDER_REVIEW").length,
+    approved: data.filter((item) => item.status === "APPROVED" || item.status === "CONVERTED_TO_PROVIDER").length,
+    rejected: data.filter((item) => item.status === "REJECTED").length,
+    revisionRequired: data.filter((item) => item.status === "CHANGES_REQUESTED").length
   }), [data]);
 
   async function load() {
@@ -54,8 +66,8 @@ export default function SmeProviderApplicationsPage() {
   useEffect(() => { void load(); }, [q]);
 
   return <PortalShell>
-    <h1>SME Provider Applications</h1>
-    <p className="muted">Review public SME Services provider applications. Approval creates an internal provider record only; it does not activate live dispatch, payment collection, payout automation, provider login or medical booking.</p>
+    <h1>Partner service applications</h1>
+    <p className="muted">Review unified Partner and legacy service-provider applications. Approval remains an operations decision and does not activate automatic dispatch, payment collection, payouts or regulated medical booking.</p>
     <div className="top-actions">
       <Link className="button-link secondary" href="/sme-services/summary">Operations summary</Link>
       <Link className="button-link" href="/sme-services/providers">Provider directory</Link>
@@ -63,9 +75,10 @@ export default function SmeProviderApplicationsPage() {
     </div>
     <div className="grid">
       <article className="card"><span className="muted">Applications</span><p className="metric">{summary.total}</p></article>
-      <article className="card"><span className="muted">Submitted</span><p className="metric">{summary.submitted}</p></article>
-      <article className="card"><span className="muted">Under review</span><p className="metric">{summary.underReview}</p></article>
-      <article className="card"><span className="muted">Converted</span><p className="metric">{summary.converted}</p></article>
+      <article className="card"><span className="muted">Pending review</span><p className="metric">{summary.pending}</p></article>
+      <article className="card"><span className="muted">Approved</span><p className="metric">{summary.approved}</p></article>
+      <article className="card"><span className="muted">Rejected</span><p className="metric">{summary.rejected}</p></article>
+      <article className="card"><span className="muted">Revision required</span><p className="metric">{summary.revisionRequired}</p></article>
     </div>
     <div className="filters section">
       <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search reference, applicant, phone or email" />
@@ -78,15 +91,19 @@ export default function SmeProviderApplicationsPage() {
       </select>
       <button className="secondary" onClick={() => void load()}>Refresh</button>
     </div>
-    <ErrorMessage>{error}</ErrorMessage>
-    {loading ? <Loading /> : <section className="section">
-      {data.length ? data.map((application) => <Link className="card" href={`/sme-services/applications/${application.id}`} key={application.id}>
-        <strong>{application.applicationReference} - {application.fullName}</strong>
-        <p><Badge>{application.status}</Badge> {application.serviceType === "HEALTH_PROFESSIONAL" ? <Badge>Readiness Only</Badge> : null}</p>
-        <p>{application.businessName || "Independent provider"} - {application.serviceType.replaceAll("_", " ")}</p>
-        <p className="muted">{application.city}, {application.state} - {application.phoneNumber}</p>
-        <p className="muted">Submitted {date(application.submittedAt)}</p>
-      </Link>) : <Empty>No SME Services provider applications found.</Empty>}
-    </section>}
+    {error ? <div className="empty" role="alert"><strong>Partner service applications could not be loaded</strong><span>{error}</span><button className="secondary" onClick={() => void load()}>Retry</button></div> : null}
+    {loading ? <Loading /> : !error ? <section className="section">
+      {data.length ? data.map((application) => {
+        const href = application.sourceType === "UNIFIED_PARTNER_APPLICATION" ? "/vendor-applications" : `/sme-services/applications/${application.id}`;
+        return <article className="card" key={application.id}>
+          <strong>{application.applicationReference || "Reference unavailable"} - {application.fullName || application.businessName || "Applicant"}</strong>
+          <p><Badge>{application.status || "UNKNOWN"}</Badge> {application.serviceType === "HEALTH_PROFESSIONAL" ? <Badge>Readiness Only</Badge> : null}</p>
+          <p>{application.businessName || "Independent provider"} - {capabilityLabel(application)}</p>
+          <p className="muted">{application.city || "City not set"}, {application.state || "State not set"}</p>
+          <p className="muted">Document review: {label(application.documentReviewStatus, "Not recorded")} · Submitted {date(application.submittedAt)}</p>
+          <Link className="button-link secondary" href={href}>{application.sourceType === "UNIFIED_PARTNER_APPLICATION" ? "Open in Partner Applications" : "Review application"}</Link>
+        </article>;
+      }) : <Empty>No Partner service applications found.</Empty>}
+    </section> : null}
   </PortalShell>;
 }

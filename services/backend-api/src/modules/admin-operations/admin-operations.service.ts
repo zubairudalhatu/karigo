@@ -24,6 +24,7 @@ import { createHash, randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { resolvePartnerCapabilities } from "../vendors/partner-capabilities";
 import { AccountLifecycleAction } from "./dto/account-lifecycle-action.dto";
 import { ListAdminOrdersQueryDto } from "./dto/list-admin-orders-query.dto";
 import { ReportDateRangeDto } from "./dto/report-date-range.dto";
@@ -54,6 +55,23 @@ const VENDOR_CLEANUP_SELECT = {
   createdAt: true,
   updatedAt: true,
   user: { select: { accountStatus: true, deletedAt: true } },
+  sourceApplication: {
+    select: {
+      reference: true,
+      tradingName: true,
+      businessCategory: true,
+      businessType: true,
+      catalogueCategory: true,
+      status: true
+    }
+  },
+  _count: {
+    select: {
+      products: { where: { deletedAt: null } },
+      services: { where: { deletedAt: null, status: { not: "ARCHIVED" } } },
+      orders: { where: { orderStatus: { notIn: CLOSED_ORDERS } } }
+    }
+  },
   onboardingDocuments: {
     orderBy: { uploadedAt: "desc" },
     take: 20,
@@ -1159,8 +1177,26 @@ export class AdminOperationsService {
   }
 
   private vendorCleanupView(vendor: Prisma.VendorGetPayload<{ select: typeof VENDOR_CLEANUP_SELECT }>) {
+    const capabilities = resolvePartnerCapabilities(vendor);
     return {
       ...vendor,
+      partnerType: capabilities.partnerType,
+      capabilityLabel: capabilities.partnerType === "BOTH"
+        ? "Product Seller and Service Provider"
+        : capabilities.partnerType === "SERVICE_PROVIDER"
+          ? "Service Provider"
+          : "Product Seller",
+      tradingName: vendor.sourceApplication?.tradingName ?? null,
+      applicationReference: vendor.sourceApplication?.reference ?? null,
+      productCount: vendor._count.products,
+      serviceCount: vendor._count.services,
+      activeOrderCount: vendor._count.orders,
+      onboardingDocuments: vendor.onboardingDocuments.map((document) => ({
+        ...document,
+        applicationType: "PARTNER",
+        applicationReference: vendor.sourceApplication?.reference ?? null,
+        roleScope: "PARTNER"
+      })),
       inTrash: Boolean(vendor.deletedAt),
       user: {
         ...vendor.user,

@@ -1,7 +1,8 @@
 import { brand } from "@karigo/config";
+import type { PartnerCapabilities } from "@karigo/shared-types";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { RefreshControl, StyleSheet, Text, View } from "react-native";
+import { Image, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { partnerApi, PartnerOnboardingState, PartnerProfile } from "../../src/api/partner.api";
 import { AuthGate } from "../../src/components/auth-gate";
 import { Badge, Card, Hero, LoadingState, MutedText, PrimaryButton, Screen } from "../../src/components/ui";
@@ -13,10 +14,12 @@ function ProfileContent() {
   const { logout, user } = useAuth();
   const router = useRouter();
   const [profile, setProfile] = useState<PartnerProfile | null>(null);
+  const [capabilities, setCapabilities] = useState<PartnerCapabilities | null>(null);
   const [partnerState, setPartnerState] = useState<PartnerOnboardingState | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [photoFailed, setPhotoFailed] = useState(false);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
@@ -29,7 +32,9 @@ function ProfileContent() {
         setProfile(null);
         return;
       }
-      setProfile(await partnerApi.profile());
+      const [nextProfile, nextCapabilities] = await Promise.all([partnerApi.profile(), partnerApi.capabilities()]);
+      setProfile(nextProfile);
+      setCapabilities(nextCapabilities);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Partner profile could not be loaded.");
     } finally {
@@ -85,12 +90,17 @@ function ProfileContent() {
       {error ? <MutedText>{error}</MutedText> : null}
       <Card>
         <View style={styles.row}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user?.fullName?.slice(0, 1).toUpperCase() || "P"}</Text>
-          </View>
+          {user?.profilePhotoUrl && /^https:\/\//i.test(user.profilePhotoUrl) && !photoFailed ? (
+            <Image source={{ uri: user.profilePhotoUrl }} style={styles.avatarImage} accessibilityLabel={`${user.fullName} profile photo`} onError={() => setPhotoFailed(true)} />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{user?.fullName?.slice(0, 1).toUpperCase() || "P"}</Text>
+            </View>
+          )}
           <View style={styles.profileText}>
             <Text style={styles.name}>{user?.fullName ?? "Partner user"}</Text>
             <MutedText>{user?.phoneNumber ?? "Phone pending"}</MutedText>
+            {user?.email ? <MutedText>{user.email}</MutedText> : null}
           </View>
           <Badge label={formatLabel(profile?.status, "Profile")} tone={statusTone(profile?.status)} />
         </View>
@@ -106,11 +116,15 @@ function ProfileContent() {
       ) : null}
       <Card>
         <Text style={styles.sectionTitle}>{profile?.businessName ?? "Business profile pending"}</Text>
+        {profile?.sourceApplication?.tradingName ? <MutedText>Trading as {profile.sourceApplication.tradingName}</MutedText> : null}
+        <MutedText>{capabilities?.partnerType === "BOTH" ? "Product Seller and Service Provider" : formatLabel(capabilities?.partnerType, "Partner")}</MutedText>
         <MutedText>{profile?.address ?? "Address pending"}</MutedText>
         <MutedText>{profile?.city ?? "City pending"}, {profile?.state ?? "State pending"}</MutedText>
         <MutedText>{profile?.description ?? "Description can be maintained from Partner Workspace."}</MutedText>
         <Badge label={profile?.isOpen ? "Online" : "Offline"} tone={profile?.isOpen ? "success" : "warning"} />
         {profile ? <PrimaryButton label="Edit partner profile" onPress={() => router.push("/profile/edit")} /> : null}
+        <PrimaryButton label="Application and documents" onPress={() => router.push("/documents")} variant="secondary" />
+        {profile?.sourceApplication?.reference ? <MutedText>Application: {profile.sourceApplication.reference}</MutedText> : null}
       </Card>
       <Card>
         <Text style={styles.sectionTitle}>Settlement readiness</Text>
@@ -159,6 +173,12 @@ const styles = StyleSheet.create({
     color: brand.colors.white,
     fontSize: 20,
     fontWeight: "900"
+  },
+  avatarImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 999,
+    backgroundColor: brand.colors.border
   },
   profileText: {
     flex: 1

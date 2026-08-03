@@ -10,6 +10,13 @@ function vendorLocation(vendor: AdminVendor) {
   return `${vendor.city}, ${vendor.state}`;
 }
 
+function capabilityLabel(vendor: AdminVendor) {
+  if (vendor.capabilityLabel) return vendor.capabilityLabel;
+  if (vendor.partnerType === "BOTH") return "Product Seller and Service Provider";
+  if (vendor.partnerType === "SERVICE_PROVIDER") return "Service Provider";
+  return "Product Seller";
+}
+
 function safetySummary(vendor: AdminVendor) {
   const safety = vendor.cleanupSafety;
   if (!safety) return "Safety check not loaded.";
@@ -171,7 +178,7 @@ export default function VendorsPage() {
 
   return <PortalShell>
     <h1>Vendors</h1>
-    <p className="muted">Clean up staging and pilot test Partner Accounts safely. Move accounts to Trash first; permanent deletion requires typing DELETE and is allowed only when the backend confirms there are no protected operational records.</p>
+    <p className="muted">Manage Partner Accounts safely. Move duplicate or test records to Trash first; permanent deletion requires typing DELETE and is allowed only when the backend confirms there are no protected operational records.</p>
     <p className="success">{message}</p>
     <ErrorMessage>{error}</ErrorMessage>
     <div className="actions"><button className="secondary" onClick={() => void load()}>{loading ? "Refreshing..." : "Refresh"}</button></div>
@@ -180,16 +187,18 @@ export default function VendorsPage() {
       <h2>Active vendors</h2>
       {loading ? <Loading /> : loadError ? <div className="empty" role="alert"><strong>Vendors could not be loaded</strong><span>{loadError}</span><button className="secondary" onClick={() => void load()}>Retry</button></div> : vendors.length ? vendors.map((vendor) => <article className="card" key={vendor.id}>
         <strong>{vendor.businessName}</strong>
-        <p className="muted">{vendor.businessCategory} - {vendorLocation(vendor)}</p>
-        <p><Badge>{vendor.status}</Badge> <Badge>{vendor.user.accountStatus}</Badge></p>
-        <p className="muted">Orders recorded: {vendor.totalOrders} - Open now: {vendor.isOpen ? "Yes" : "No"}</p>
+        {vendor.tradingName ? <p>{vendor.tradingName}</p> : null}
+        <p className="muted">{capabilityLabel(vendor)} · {vendorLocation(vendor)}</p>
+        <p><Badge>Account: {vendor.status}</Badge> <Badge>Availability: {vendor.isOpen ? "Online" : "Offline"}</Badge></p>
+        <p className="muted">Products: {vendor.productCount ?? 0} · Services: {vendor.serviceCount ?? 0} · Active orders: {vendor.activeOrderCount ?? vendor.totalOrders}</p>
+        {vendor.applicationReference ? <p className="muted">Application: {vendor.applicationReference}</p> : null}
         {vendor.status === "ACTIVE" ? <p className="notice">Suspending this partner blocks workspace access, product/service updates and new order acceptance. Outstanding operational history is preserved for audit and settlement review.</p> : null}
         <p className="muted">{trashSafetySummary(vendor)}</p>
         <p className="muted">{documentSummary(vendor)}</p>
         {vendor.onboardingDocuments?.length ? <div className="notice">
           <strong>Onboarding documents</strong>
           {vendor.onboardingDocuments.map((document) => <div className="list-row" key={document.id}>
-            <span><a href={document.documentUrl} target="_blank" rel="noreferrer">{document.documentName || document.documentType}</a> <Badge>{document.verificationStatus}</Badge></span>
+            <span><a href={document.documentUrl} target="_blank" rel="noreferrer">{document.documentName || document.documentType}</a> <Badge>{document.verificationStatus}</Badge> <span className="muted">Partner document{document.applicationReference ? ` · ${document.applicationReference}` : ""}</span></span>
             <span className="actions">
               <button className="secondary" onClick={() => void reviewDocument(vendor, document.id, "APPROVED")}>Approve</button>
               <button className="secondary" onClick={() => void reviewDocument(vendor, document.id, "REJECTED")}>Reject</button>

@@ -5,13 +5,17 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode } from "react";
 import { useAuth } from "../contexts/auth-context";
 
-const nav = [["Dashboard", "/"], ["Orders", "/orders"], ["Dispatch", "/dispatch"], ["Users", "/users"], ["Account Deletion", "/account-deletion-requests"], ["Vendors", "/vendors"], ["Vendor Applications", "/vendor-applications"], ["Delivery Captain Applications", "/delivery-captain-applications"], ["Audit Logs", "/audit-logs"], ["Login Activity", "/login-activity"], ["Developer Settings", "/settings"], ["Payment Readiness", "/payment-readiness"], ["SME Services Summary", "/sme-services/summary"], ["SME Pilot Readiness", "/sme-services/readiness"], ["SME Launch Control", "/sme-services/launch-control"], ["SME Pilot Participants", "/sme-services/participants"], ["SME Invitation Templates", "/sme-services/invitation-templates"], ["SME Services", "/sme-services"], ["SME Provider Applications", "/sme-services/applications"], ["SME Providers", "/sme-services/providers"], ["Wallets", "/wallets"], ["Referrals", "/referrals"], ["Ads", "/ads"], ["Payout Accounts", "/payout-accounts"], ["Captains", "/riders"], ["Ride Operations", "/taxi"], ["Settlements", "/settlements"], ["Utilities", "/utilities"], ["Support", "/support"], ["Promotions", "/promotions"], ["Reports", "/reports"], ["Notifications", "/notifications"]];
+const nav = [["Dashboard", "/"], ["Orders", "/orders"], ["Dispatch", "/dispatch"], ["Users", "/users"], ["Account Deletion", "/account-deletion-requests"], ["Vendors", "/vendors"], ["Partner Applications", "/vendor-applications"], ["Delivery Captain Applications", "/delivery-captain-applications"], ["Audit Logs", "/audit-logs"], ["Login Activity", "/login-activity"], ["Developer Settings", "/settings"], ["Payment Readiness", "/payment-readiness"], ["SME Services Summary", "/sme-services/summary"], ["SME Operations Readiness", "/sme-services/readiness"], ["SME Operations Control", "/sme-services/launch-control"], ["SME Participants", "/sme-services/participants"], ["SME Invitation Templates", "/sme-services/invitation-templates"], ["SME Services", "/sme-services"], ["Partner Service Applications", "/sme-services/applications"], ["Service Providers", "/sme-services/providers"], ["Wallets", "/wallets"], ["Referrals", "/referrals"], ["Ads", "/ads"], ["Payout Accounts", "/payout-accounts"], ["Captains", "/riders"], ["Ride Operations", "/taxi"], ["Settlements", "/settlements"], ["Utilities", "/utilities"], ["Support", "/support"], ["Promotions", "/promotions"], ["Reports", "/reports"], ["Notifications", "/notifications"]];
 const statusLabel = (value: ReactNode) => typeof value === "string" ? value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()) : value;
 
 export function PortalShell({ children }: { children: ReactNode }) {
   const { user, loading, logout } = useAuth();
   const path = usePathname();
   const router = useRouter();
+  const activeHref = nav
+    .map(([, href]) => href)
+    .filter((href) => href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`))
+    .sort((left, right) => right.length - left.length)[0];
   if (loading) return <Loading />;
   if (!user) {
     if (typeof window !== "undefined" && path !== "/login") router.replace("/login");
@@ -22,7 +26,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
       <Image src="/karigo-logo.png" alt="KariGO Admin Portal" width={300} height={300} priority />
       <p className="sidebar-label">Operations control centre</p>
       <nav className="nav" aria-label="Admin portal navigation">{nav.map(([label, href]) => {
-        const active = href === "/" ? path === href : path.startsWith(href);
+        const active = href === activeHref;
         return <a key={href} href={href} aria-current={active ? "page" : undefined}>{label}</a>;
       })}</nav>
     </aside>

@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, ServiceProviderApplicationStatus, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType, SmeServicesPilotDecisionStatus, SmeServicesPilotParticipantStatus, SmeServicesPilotParticipantType } from "@prisma/client";
+import { Prisma, ServiceProviderApplicationStatus, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType, SmeServicesPilotDecisionStatus, SmeServicesPilotParticipantStatus, SmeServicesPilotParticipantType, VendorStatus } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { resolvePartnerCapabilities } from "../vendors/partner-capabilities";
 import { AssignServiceProviderDto } from "./dto/assign-service-provider.dto";
 import { CreateServiceProviderReviewDto } from "./dto/create-service-provider-review.dto";
 import { CreateServiceProviderDto } from "./dto/create-service-provider.dto";
@@ -63,8 +64,8 @@ const PILOT_READINESS_ITEMS = [
   {
     key: "pilot_scope_confirmed",
     category: "Operations",
-    label: "Pilot scope confirmed",
-    description: "Pilot zones, invited customer group, supported service categories and internal owners are agreed.",
+    label: "Operations scope confirmed",
+    description: "Operations zones, invited customer group, supported service categories and internal owners are agreed.",
     sortOrder: 10,
     isRequired: true
   },
@@ -72,7 +73,7 @@ const PILOT_READINESS_ITEMS = [
     key: "provider_review_queue_clear",
     category: "Providers",
     label: "Provider application review queue checked",
-    description: "Provider applications have been reviewed, rejected, or moved into the correct onboarding status before pilot invitations.",
+    description: "Provider applications have been reviewed, rejected, or moved into the correct onboarding status before participant invitations.",
     sortOrder: 20,
     isRequired: true
   },
@@ -112,15 +113,15 @@ const PILOT_READINESS_ITEMS = [
     key: "support_escalation_ready",
     category: "Support",
     label: "Support escalation route ready",
-    description: "Support and operations owners know how to escalate SME Services pilot issues, disputes, cancellations and safety concerns.",
+    description: "Support and operations owners know how to escalate SME Services issues, disputes, cancellations and safety concerns.",
     sortOrder: 70,
     isRequired: true
   },
   {
     key: "pilot_report_export_ready",
     category: "Management",
-    label: "Pilot report export ready",
-    description: "Admin can generate the SME Services pilot report for internal management review without exposing sensitive contact details.",
+    label: "Operations report export ready",
+    description: "Admin can generate the SME Services operations report for internal management review without exposing sensitive contact details.",
     sortOrder: 80,
     isRequired: true
   },
@@ -136,7 +137,7 @@ const PILOT_READINESS_ITEMS = [
     key: "manual_coordination_script_ready",
     category: "Operations",
     label: "Manual coordination script ready",
-    description: "Operations has a simple call/message script for coordinating the customer and provider during the internal pilot.",
+    description: "Operations has a simple call/message script for coordinating the customer and provider.",
     sortOrder: 100,
     isRequired: false
   }
@@ -145,18 +146,18 @@ const PILOT_READINESS_ITEMS = [
 const PILOT_INVITATION_TEMPLATES = [
   {
     key: "customer_pilot_invitation",
-    audience: "Pilot customer",
-    title: "Customer pilot invitation",
-    subject: "KariGO SME Services controlled pilot invitation",
-    description: "Manual invitation text for selected customers joining the controlled SME Services pilot.",
+    audience: "Customer",
+    title: "Customer invitation",
+    subject: "KariGO SME Services invitation",
+    description: "Manual invitation text for selected customers joining SME Services operations.",
     suggestedChannels: ["Phone follow-up", "WhatsApp manual copy", "Email manual copy"],
     requiredVariables: ["recipientName", "pilotZone", "pilotDate", "supportContact"],
     bodyTemplate: [
       "Hello {{recipientName}},",
       "",
-      "KariGO is preparing a controlled SME Services pilot in {{pilotZone}} from {{pilotDate}}. You are invited to help test how customers request trusted service providers through KariGO.",
+      "KariGO is coordinating SME Services in {{pilotZone}} from {{pilotDate}}. You are invited to request trusted service providers through KariGO.",
       "",
-      "Participation is optional and KariGO operations will coordinate every pilot request manually. Live payments, automatic provider dispatch and public provider contact sharing are not active for this pilot.",
+      "Participation is optional and KariGO operations will coordinate requests manually. Automatic provider dispatch and public provider contact sharing are not enabled.",
       "",
       "If you have questions, please contact {{supportContact}}.",
       "",
@@ -166,19 +167,19 @@ const PILOT_INVITATION_TEMPLATES = [
   {
     key: "service_provider_pilot_invitation",
     audience: "Service provider",
-    title: "Service provider pilot invitation",
-    subject: "KariGO SME Services provider pilot invitation",
+    title: "Service provider invitation",
+    subject: "KariGO SME Services provider invitation",
     description: "Manual invitation text for approved non-readiness-only SME service providers.",
     suggestedChannels: ["Phone follow-up", "WhatsApp manual copy", "Email manual copy"],
     requiredVariables: ["recipientName", "pilotZone", "serviceFocus", "pilotDate", "supportContact"],
     bodyTemplate: [
       "Hello {{recipientName}},",
       "",
-      "KariGO is preparing a controlled SME Services pilot for {{serviceFocus}} providers in {{pilotZone}} from {{pilotDate}}.",
+      "KariGO is coordinating SME Services for {{serviceFocus}} providers in {{pilotZone}} from {{pilotDate}}.",
       "",
-      "This is a manual operations pilot only. It does not create provider app login, automated dispatch, payout automation, live payment collection or public customer access to your private contact details.",
+      "This is a manual operations workflow. It does not create automated dispatch, payout automation or public customer access to your private contact details.",
       "",
-      "KariGO operations will contact you manually if a suitable pilot request needs review.",
+      "KariGO operations will contact you manually if a suitable request needs review.",
       "",
       "For questions, please contact {{supportContact}}.",
       "",
@@ -189,16 +190,16 @@ const PILOT_INVITATION_TEMPLATES = [
     key: "internal_observer_briefing",
     audience: "Internal observer",
     title: "Internal observer briefing",
-    subject: "KariGO SME Services pilot observer briefing",
-    description: "Manual briefing text for management or internal observers monitoring the controlled pilot.",
+    subject: "KariGO SME Services observer briefing",
+    description: "Manual briefing text for management or internal observers monitoring operations.",
     suggestedChannels: ["Email manual copy", "Internal note", "Meeting agenda"],
     requiredVariables: ["recipientName", "pilotZone", "pilotDate", "supportContact"],
     bodyTemplate: [
       "Hello {{recipientName}},",
       "",
-      "You are listed as an internal observer for the KariGO SME Services controlled pilot in {{pilotZone}} from {{pilotDate}}.",
+      "You are listed as an internal observer for KariGO SME Services operations in {{pilotZone}} from {{pilotDate}}.",
       "",
-      "Your role is to observe pilot readiness, request handling, customer experience, provider coordination and support follow-up. This observer role does not activate live dispatch, payment collection, provider payout, provider login or medical booking.",
+      "Your role is to observe operations readiness, request handling, customer experience, provider coordination and support follow-up. This observer role does not activate automatic dispatch, payment collection, provider payout or medical booking.",
       "",
       "Please share observations with {{supportContact}}.",
       "",
@@ -209,14 +210,14 @@ const PILOT_INVITATION_TEMPLATES = [
     key: "operations_staff_briefing",
     audience: "Operations staff",
     title: "Operations staff briefing",
-    subject: "KariGO SME Services pilot operations briefing",
-    description: "Manual briefing text for operations staff coordinating pilot requests and providers.",
+    subject: "KariGO SME Services operations briefing",
+    description: "Manual briefing text for operations staff coordinating requests and providers.",
     suggestedChannels: ["Internal note", "Email manual copy", "Team briefing"],
     requiredVariables: ["recipientName", "pilotZone", "pilotDate", "supportContact"],
     bodyTemplate: [
       "Hello {{recipientName}},",
       "",
-      "You are assigned to support KariGO SME Services pilot operations in {{pilotZone}} from {{pilotDate}}.",
+      "You are assigned to support KariGO SME Services operations in {{pilotZone}} from {{pilotDate}}.",
       "",
       "Please coordinate requests manually, keep provider contact details private, avoid making payment promises, and record operational notes in the Admin Portal. Do not treat any health professional readiness record as live medical booking.",
       "",
@@ -229,16 +230,16 @@ const PILOT_INVITATION_TEMPLATES = [
     key: "support_staff_briefing",
     audience: "Support staff",
     title: "Support staff briefing",
-    subject: "KariGO SME Services pilot support briefing",
-    description: "Manual briefing text for support staff handling SME Services pilot questions and issues.",
+    subject: "KariGO SME Services support briefing",
+    description: "Manual briefing text for support staff handling SME Services questions and issues.",
     suggestedChannels: ["Internal note", "Email manual copy", "Team briefing"],
     requiredVariables: ["recipientName", "pilotZone", "pilotDate", "supportContact"],
     bodyTemplate: [
       "Hello {{recipientName}},",
       "",
-      "You are assigned to support KariGO SME Services pilot participants in {{pilotZone}} from {{pilotDate}}.",
+      "You are assigned to support KariGO SME Services participants in {{pilotZone}} from {{pilotDate}}.",
       "",
-      "Please respond with clear pilot-stage wording, route operational issues to the operations team, and avoid sharing provider private phone numbers, emails, payment details, OTPs or internal admin notes.",
+      "Please respond with clear production wording, route operational issues to the operations team, and avoid sharing provider private phone numbers, emails, payment details, OTPs or internal admin notes.",
       "",
       "Escalate unresolved issues to {{supportContact}}.",
       "",
@@ -644,7 +645,7 @@ export class ServiceProviderRequestsService {
     const generatedAt = new Date();
     const summary = await this.adminSummary();
     const stamp = generatedAt.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-    const filename = `karigo-sme-services-pilot-report-${stamp}.md`;
+    const filename = `karigo-sme-services-operations-report-${stamp}.md`;
     const requestLines = summary.recent.requests.length
       ? summary.recent.requests.map((request) => `| ${request.reference} | ${request.title} | ${request.status} | ${request.customerName} | ${this.reportDate(request.updatedAt)} |`).join("\n")
       : "| - | No recent SME Services requests | - | - | - |";
@@ -656,7 +657,7 @@ export class ServiceProviderRequestsService {
       : "| - | No recent provider records | - | - | - |";
 
     const markdown = [
-      "# KariGO SME Services Pilot Operations Report",
+      "# KariGO SME Services Operations Report",
       "",
       `Generated: ${this.reportDate(generatedAt)}`,
       "",
@@ -728,13 +729,13 @@ export class ServiceProviderRequestsService {
       "",
       "## Management Notes",
       "",
-      "- This report is for internal pilot monitoring and management review only.",
+      "- This report is for internal operations monitoring and management review only.",
       "- It does not expose customer phone numbers, provider phone numbers, provider emails, payment data, OTPs or private admin notes.",
       "- SME Services remains a manual review and coordination workflow until management approves future live operations."
     ].join("\n");
 
     return {
-      title: "KariGO SME Services Pilot Operations Report",
+      title: "KariGO SME Services Operations Report",
       generatedAt,
       filename,
       format: "markdown",
@@ -1169,7 +1170,7 @@ export class ServiceProviderRequestsService {
       } : {})
     };
 
-    const [items, total, pendingReview, approved, suspended, inactive] = await Promise.all([
+    const [items, total, pendingReview, approved, suspended, inactive, partnerRecords] = await Promise.all([
       this.prisma.serviceProvider.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -1179,12 +1180,111 @@ export class ServiceProviderRequestsService {
       this.prisma.serviceProvider.count({ where: { status: ServiceProviderStatus.PENDING_REVIEW } }),
       this.prisma.serviceProvider.count({ where: { status: ServiceProviderStatus.APPROVED } }),
       this.prisma.serviceProvider.count({ where: { status: ServiceProviderStatus.SUSPENDED } }),
-      this.prisma.serviceProvider.count({ where: { status: ServiceProviderStatus.INACTIVE } })
+      this.prisma.serviceProvider.count({ where: { status: ServiceProviderStatus.INACTIVE } }),
+      this.prisma.vendor.findMany({
+        where: { deletedAt: null },
+        select: {
+          id: true,
+          businessName: true,
+          businessCategory: true,
+          phoneNumber: true,
+          email: true,
+          city: true,
+          state: true,
+          status: true,
+          isOpen: true,
+          createdAt: true,
+          updatedAt: true,
+          sourceApplication: {
+            select: {
+              reference: true,
+              contactFullName: true,
+              serviceAreas: true,
+              businessCategory: true,
+              businessType: true,
+              catalogueCategory: true,
+              status: true
+            }
+          },
+          user: { select: { accountStatus: true, deletedAt: true } },
+          services: {
+            where: { deletedAt: null, status: { not: "ARCHIVED" } },
+            select: { serviceType: true, status: true, isAvailable: true }
+          }
+        },
+        orderBy: { createdAt: "desc" },
+        take: 300
+      })
     ]);
 
+    const unifiedPartners = partnerRecords
+      .map((partner) => ({ partner, capabilities: resolvePartnerCapabilities(partner) }))
+      .filter(({ capabilities }) => capabilities.partnerType === "SERVICE_PROVIDER" || capabilities.partnerType === "BOTH")
+      .map(({ partner, capabilities }) => {
+        const partnerStatus = partner.status === VendorStatus.ACTIVE
+          ? ServiceProviderStatus.APPROVED
+          : partner.status === VendorStatus.SUSPENDED
+            ? ServiceProviderStatus.SUSPENDED
+            : partner.status === VendorStatus.PENDING_APPROVAL
+              ? ServiceProviderStatus.PENDING_REVIEW
+              : ServiceProviderStatus.INACTIVE;
+        const serviceType = partner.services[0]?.serviceType ?? ServiceProviderType.OTHER;
+        return {
+          id: `partner:${partner.id}`,
+          providerCode: partner.sourceApplication?.reference ?? `PARTNER-${partner.id.slice(0, 8).toUpperCase()}`,
+          fullName: partner.sourceApplication?.contactFullName ?? partner.businessName,
+          businessName: partner.businessName,
+          serviceType,
+          phoneNumber: partner.phoneNumber,
+          email: partner.email,
+          city: partner.city,
+          state: partner.state,
+          serviceAreas: Array.isArray(partner.sourceApplication?.serviceAreas) ? partner.sourceApplication.serviceAreas : [],
+          status: partnerStatus,
+          readinessOnly: false,
+          notes: null,
+          verificationNote: null,
+          createdAt: partner.createdAt,
+          updatedAt: partner.updatedAt,
+          sourceType: "UNIFIED_PARTNER" as const,
+          partnerId: partner.id,
+          partnerType: capabilities.partnerType,
+          capabilityLabel: capabilities.partnerType === "BOTH" ? "Product Seller and Service Provider" : "Service Provider",
+          isOpen: partner.isOpen,
+          serviceCount: partner.services.length
+        };
+      });
+
+    const filteredPartners = unifiedPartners.filter((partner) => {
+      if (query.status && partner.status !== query.status) return false;
+      if (query.serviceType && partner.serviceType !== query.serviceType) return false;
+      if (query.city && !partner.city.toLowerCase().includes(query.city.trim().toLowerCase())) return false;
+      if (query.search) {
+        const value = query.search.toLowerCase();
+        const text = [partner.providerCode, partner.fullName, partner.businessName, partner.phoneNumber, partner.email].filter(Boolean).join(" ").toLowerCase();
+        if (!text.includes(value)) return false;
+      }
+      return true;
+    });
+
+    const partnerSummary = unifiedPartners.reduce((summary, partner) => {
+      summary.total += 1;
+      if (partner.status === ServiceProviderStatus.PENDING_REVIEW) summary.pendingReview += 1;
+      if (partner.status === ServiceProviderStatus.APPROVED) summary.approved += 1;
+      if (partner.status === ServiceProviderStatus.SUSPENDED) summary.suspended += 1;
+      if (partner.status === ServiceProviderStatus.INACTIVE) summary.inactive += 1;
+      return summary;
+    }, { total: 0, pendingReview: 0, approved: 0, suspended: 0, inactive: 0 });
+
     return {
-      summary: { total, pendingReview, approved, suspended, inactive },
-      items: items.map((provider) => this.adminProvider(provider))
+      summary: {
+        total: total + partnerSummary.total,
+        pendingReview: pendingReview + partnerSummary.pendingReview,
+        approved: approved + partnerSummary.approved,
+        suspended: suspended + partnerSummary.suspended,
+        inactive: inactive + partnerSummary.inactive
+      },
+      items: [...items.map((provider) => ({ ...this.adminProvider(provider), sourceType: "LEGACY_PROVIDER" as const })), ...filteredPartners]
     };
   }
 

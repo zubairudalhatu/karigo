@@ -14,6 +14,8 @@ export interface VendorApplication {
   reference: string;
   businessName: string;
   businessCategory: string;
+  businessType?: string | null;
+  catalogueCategory?: string | null;
   businessEmail: string;
   city: string;
   state: string;

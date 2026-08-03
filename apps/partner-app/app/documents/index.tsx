@@ -94,7 +94,7 @@ function DocumentsContent() {
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}>
       <Hero eyebrow="Onboarding" title="Documents" subtitle="Upload onboarding files from your phone and track KariGO review status." />
-      {error ? <MutedText>{error}</MutedText> : null}
+      {error ? <Card><MutedText>{error}</MutedText><PrimaryButton label="Retry" onPress={() => void load()} variant="secondary" /></Card> : null}
       {message ? <MutedText>{message}</MutedText> : null}
       <Card>
         <Text style={styles.title}>Submit document</Text>
@@ -140,6 +140,7 @@ function DocumentsContent() {
               <Badge label={formatLabel(document.verificationStatus)} tone={statusTone(document.verificationStatus)} />
             </View>
             <MutedText>Uploaded {new Date(document.uploadedAt).toLocaleDateString()}</MutedText>
+            <MutedText>Scope: Partner application{document.applicationReference ? ` · ${document.applicationReference}` : ""}</MutedText>
             {document.adminNote ? <MutedText>Admin note: {document.adminNote}</MutedText> : null}
           </Card>
         ))

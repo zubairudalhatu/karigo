@@ -69,7 +69,7 @@ export default function SmeServicesPilotParticipantDetailPage() {
   async function save() {
     if (!form) return;
     if (!form.displayName.trim()) {
-      setError("Pilot participant could not be updated. Please enter a display name.");
+      setError("SME participant could not be updated. Please enter a display name.");
       return;
     }
     if (form.relatedProviderId.trim() && form.participantType !== "SERVICE_PROVIDER") {
@@ -100,9 +100,9 @@ export default function SmeServicesPilotParticipantDetailPage() {
       });
       setParticipant(data);
       setForm(formFromParticipant(data));
-      setMessage("Pilot participant record has been updated.");
+      setMessage("SME participant record has been updated.");
     } catch (e) {
-      setError(friendlyError(e, "form") || "Pilot participant could not be updated. Please check the required fields and try again.");
+      setError(friendlyError(e, "form") || "SME participant could not be updated. Please check the required fields and try again.");
     } finally {
       setSaving(false);
     }
@@ -111,8 +111,8 @@ export default function SmeServicesPilotParticipantDetailPage() {
   useEffect(() => { void load(); }, [participantId]);
 
   return <PortalShell>
-    <h1>SME Services pilot participant</h1>
-    <p className="muted">Internal pilot coordination record only. Updating this page does not send invitations, activate live dispatch, grant provider login, grant provider app access, collect payments or expose provider contacts publicly.</p>
+    <h1>SME Services participant</h1>
+    <p className="muted">Internal operations coordination record only. Updating this page does not send invitations, activate automatic dispatch, collect payments or expose provider contacts publicly.</p>
     <div className="top-actions">
       <Link className="button-link" href="/sme-services/participants">Back to participants</Link>
       <Link className="button-link secondary" href="/sme-services/launch-control">Launch control</Link>
@@ -143,7 +143,7 @@ export default function SmeServicesPilotParticipantDetailPage() {
           <label>Phone<input value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} /></label>
           <label>Email<input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
           <label>City<input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></label>
-          <label>Pilot zone<input value={form.pilotZone} onChange={(e) => setForm({ ...form, pilotZone: e.target.value })} /></label>
+          <label>Operations zone<input value={form.pilotZone} onChange={(e) => setForm({ ...form, pilotZone: e.target.value })} /></label>
           <label>Related user ID<input value={form.relatedUserId} onChange={(e) => setForm({ ...form, relatedUserId: e.target.value })} /></label>
           <label>Related provider ID<input value={form.relatedProviderId} onChange={(e) => setForm({ ...form, relatedProviderId: e.target.value })} /></label>
           <label>Manual invitation channel<select value={form.invitationChannel} onChange={(e) => setForm({ ...form, invitationChannel: e.target.value as "" | SmeServicesPilotInvitationChannel })}>

@@ -137,6 +137,7 @@ expect(!nav.includes('icon: "H"') && !nav.includes('icon: "O"'), "Bottom nav mus
 expect(nav.includes("pathname.startsWith(\"/auth\")"), "Bottom nav must hide on auth screens.");
 expect(nav.includes("pathname.startsWith(\"/register\")"), "Bottom nav must hide on registration screens.");
 expect(nav.includes("partnerApi.onboardingState"), "Bottom nav must check Partner onboarding state before showing workspace tabs.");
+expect(nav.includes("partnerApi.capabilities") && nav.includes("canManageProducts") && nav.includes("canManageServices"), "Bottom nav must use backend Partner capabilities to show Products and Services.");
 expect(nav.includes('state.state === "approved"'), "Bottom nav must show only after the Partner profile is approved.");
 expect(nav.includes("useSafeAreaInsets") && nav.includes("Math.max(insets.bottom, 12)"), "Bottom nav must respect bottom safe-area insets.");
 
@@ -184,7 +185,8 @@ expect(partnerApi.includes("vendor/settlements"), "Partner API must load vendor 
 expect(partnerApi.includes("vendor/payout-account"), "Partner API must maintain vendor payout account details through vendor-scoped endpoints.");
 expect(!partnerApi.includes("admin/vendor-payout-accounts"), "Partner app must not call admin payout account endpoints.");
 
-expect(dashboard.includes("Product Seller") && dashboard.includes("Service Provider") && dashboard.includes("Both"), "Dashboard must describe supported partner types.");
+expect(dashboard.includes('partnerType === "BOTH"') && dashboard.includes("Product Seller and Service Provider"), "Dashboard must project the mixed Partner capability with a human-readable label.");
+expect(dashboard.includes('router.push("/products/new")') && dashboard.includes('router.push("/services/new")'), "Dashboard must expose both catalogue actions for eligible mixed Partners.");
 expect(dashboard.includes("Your KariGO account has been recognised."), "Dashboard must handle recognised Customer accounts without a Partner profile safely.");
 expect(dashboard.includes("Your Partner application is under review."), "Dashboard must show submitted Partner application state.");
 expect(dashboard.includes("Partner access needs support."), "Dashboard must show restricted Partner access state safely.");
@@ -196,7 +198,9 @@ expect(dashboard.includes("Open order detail"), "Dashboard latest active order m
 expect(dashboard.includes("partnerProfileWarning"), "Dashboard must warn for closed/demo partner profiles.");
 expect(dashboard.includes("Go Online") && dashboard.includes("Go Offline"), "Dashboard must support partner online/offline availability.");
 expect(dashboard.includes("partnerApi.updateProfile({ isOpen"), "Dashboard availability must use the safe profile update endpoint.");
-expect(dashboard.includes("Add product") && dashboard.includes("View earnings and settlements") && dashboard.includes("Edit partner profile"), "Dashboard must expose operations shortcuts.");
+expect(dashboard.includes("Add product") && dashboard.includes("Add service") && dashboard.includes("View earnings and settlements"), "Dashboard must expose capability-aware operations shortcuts.");
+expect(dashboard.includes("data.capabilities?.canManageProducts") && dashboard.includes("data.capabilities?.canManageServices"), "Dashboard quick actions and counts must use backend Partner capabilities.");
+expect(!dashboard.includes("Onboarding readiness") && !dashboard.includes("Edit partner profile"), "Active Partner Home must not duplicate profile or onboarding controls.");
 expect(orders.includes("Partner orders"), "Orders screen must be Partner branded.");
 expect(orders.includes("router.push(`/orders/${order.id}`)"), "Orders list cards must navigate to order detail.");
 expect(orders.includes("Tap to view order detail"), "Orders list must show a clear tap affordance.");
@@ -228,6 +232,8 @@ expect(payout.includes("partnerApi.payoutAccount") && payout.includes("partnerAp
 expect(payout.includes("This does not trigger payouts") && payout.includes("No money is sent from this screen"), "Payout screen must make payout automation guardrail explicit.");
 expect(documents.includes("pickAndUploadDocument") && documents.includes("partnerApi.uploadOnboardingDocument"), "Documents screen must support controlled mobile onboarding document upload.");
 expect(profile.includes("Edit partner profile") && profile.includes("Payout account") && profile.includes("View earnings"), "Profile must expose operations and payout routes.");
+expect(profile.includes("profilePhotoUrl") && profile.includes("onError={() => setPhotoFailed(true)"), "Profile must display the unified account photo with a safe initials fallback.");
+expect(profile.includes("Product Seller and Service Provider") && profile.includes("Application and documents"), "Profile must show human-readable Partner capability and role-scoped documents.");
 expect(profile.includes("partnerProfileWarning"), "Profile must warn for closed/demo partner profiles.");
 expect(profile.includes("partnerApi.onboardingState"), "Profile must resolve application state before showing profile actions.");
 expect(profile.includes("Partner profile not active yet"), "Profile must not show contradictory approved-profile actions before approval.");

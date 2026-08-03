@@ -24,6 +24,8 @@ export interface PartnerProfile {
   closingTime?: string | null;
   logoUrl?: string | null;
   coverImageUrl?: string | null;
+  tradingName?: string | null;
+  sourceApplication?: { reference: string; tradingName?: string | null } | null;
 }
 
 export type PartnerProfileUpdateInput = Partial<Pick<
@@ -128,6 +130,9 @@ export interface PartnerOnboardingDocument {
   adminNote?: string | null;
   uploadedAt: string;
   reviewedAt?: string | null;
+  applicationType?: "PARTNER";
+  applicationReference?: string | null;
+  roleScope?: "PARTNER";
 }
 
 export type VendorSettlementStatus = "PENDING" | "PROCESSING" | "PAID" | "FAILED" | "CANCELLED";

@@ -9,7 +9,7 @@ import { friendlyError } from "../../../src/lib/errors";
 const initialForm = {
   templateKey: "",
   recipientName: "",
-  pilotZone: "Kano selected pilot zones",
+  pilotZone: "Kano operations zones",
   pilotDate: "",
   serviceFocus: "SME Services",
   supportContact: "KariGO operations",
@@ -67,11 +67,11 @@ export default function SmeServicesPilotInvitationTemplatesPage() {
 
   return <PortalShell>
     <h1>SME Services invitation templates</h1>
-    <p className="muted">Safe manual copy templates for SME Services pilot customers, service providers, internal observers, operations staff and support staff. This page does not send SMS, email, WhatsApp, push or in-app invitations, and it does not activate dispatch, payments, payouts, provider login, provider app access or medical booking.</p>
+    <p className="muted">Safe manual copy templates for SME Services customers, service providers, internal observers, operations staff and support staff. This page does not send SMS, email, WhatsApp, push or in-app invitations, and it does not activate automatic dispatch, payments, payouts or medical booking.</p>
     <div className="top-actions">
-      <Link className="button-link" href="/sme-services/participants">Pilot participants</Link>
+      <Link className="button-link" href="/sme-services/participants">SME participants</Link>
       <Link className="button-link secondary" href="/sme-services/launch-control">Launch control</Link>
-      <Link className="button-link secondary" href="/sme-services/readiness">Pilot readiness</Link>
+      <Link className="button-link secondary" href="/sme-services/readiness">Operations readiness</Link>
       <button className="secondary" onClick={() => void load()}>Refresh</button>
     </div>
     <ErrorMessage>{error}</ErrorMessage>
@@ -119,8 +119,8 @@ export default function SmeServicesPilotInvitationTemplatesPage() {
             {data.templates.map((template) => <option key={template.key} value={template.key}>{template.title}</option>)}
           </select></label>
           <label>Recipient name<input value={form.recipientName} onChange={(event) => setForm({ ...form, recipientName: event.target.value })} placeholder="Optional; defaults to there" /></label>
-          <label>Pilot zone<input value={form.pilotZone} onChange={(event) => setForm({ ...form, pilotZone: event.target.value })} /></label>
-          <label>Pilot date<input value={form.pilotDate} onChange={(event) => setForm({ ...form, pilotDate: event.target.value })} placeholder="Example: 20 July 2026" /></label>
+          <label>Operations zone<input value={form.pilotZone} onChange={(event) => setForm({ ...form, pilotZone: event.target.value })} /></label>
+          <label>Start date<input value={form.pilotDate} onChange={(event) => setForm({ ...form, pilotDate: event.target.value })} placeholder="Example: 20 July 2026" /></label>
           <label>Service focus<input value={form.serviceFocus} onChange={(event) => setForm({ ...form, serviceFocus: event.target.value })} /></label>
           <label>Support contact label<input value={form.supportContact} onChange={(event) => setForm({ ...form, supportContact: event.target.value })} placeholder="Use a role label, not private contact details" /></label>
         </div>

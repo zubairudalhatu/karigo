@@ -184,13 +184,19 @@ export default function SmeProvidersPage() {
     <p className="success">{message}</p>
     <ErrorMessage>{error}</ErrorMessage>
     {loading ? <Loading /> : <section className="section">
-      {data?.items.length ? data.items.map((provider) => <Link className="card" href={`/sme-services/providers/${provider.id}`} key={provider.id}>
+      {data?.items.length ? data.items.map((provider) => {
+        const content = <>
         <strong>{provider.providerCode} - {provider.fullName}</strong>
-        <p><Badge>{provider.status}</Badge> {provider.readinessOnly ? <Badge>Readiness Only</Badge> : null}</p>
-        <p>{provider.businessName || "Independent provider"} - {provider.serviceType.replaceAll("_", " ")}</p>
+        <p><Badge>{provider.status}</Badge> {provider.sourceType === "UNIFIED_PARTNER" ? <Badge>{provider.isOpen ? "Online" : "Offline"}</Badge> : null} {provider.readinessOnly ? <Badge>Readiness Only</Badge> : null}</p>
+        <p>{provider.businessName || "Independent provider"} - {provider.capabilityLabel ?? provider.serviceType.replaceAll("_", " ")}</p>
         <p className="muted">{provider.city}, {provider.state} - {provider.phoneNumber}</p>
+        {provider.sourceType === "UNIFIED_PARTNER" ? <p className="muted">Unified Partner record · {provider.serviceCount ?? 0} service listing(s). Manage account status from Vendors.</p> : null}
         <p className="muted">Created {date(provider.createdAt)}</p>
-      </Link>) : <Empty>No SME Services providers found.</Empty>}
+        </>;
+        return provider.sourceType === "UNIFIED_PARTNER"
+          ? <article className="card" key={provider.id}>{content}</article>
+          : <Link className="card" href={`/sme-services/providers/${provider.id}`} key={provider.id}>{content}</Link>;
+      }) : <Empty>No SME Services providers found.</Empty>}
     </section>}
   </PortalShell>;
 }

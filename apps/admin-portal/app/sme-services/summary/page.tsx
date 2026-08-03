@@ -51,7 +51,7 @@ export default function SmeServicesSummaryPage() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      setMessage("SME Services pilot report generated.");
+      setMessage("SME Services operations report generated.");
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -63,17 +63,17 @@ export default function SmeServicesSummaryPage() {
 
   return <PortalShell>
     <h1>SME Services operations summary</h1>
-    <p className="muted">Internal pilot dashboard for request review, provider application review and provider directory activity. This page does not activate live dispatch, payment collection, provider payouts, provider login or medical booking.</p>
+    <p className="muted">Internal operations dashboard for request review, Partner application review and provider directory activity. This page does not activate automatic dispatch, payment collection, provider payouts or medical booking.</p>
     <div className="top-actions">
       <Link className="button-link" href="/sme-services">Customer requests</Link>
-      <Link className="button-link secondary" href="/sme-services/readiness">Pilot readiness</Link>
+      <Link className="button-link secondary" href="/sme-services/readiness">Operations readiness</Link>
       <Link className="button-link secondary" href="/sme-services/launch-control">Launch control</Link>
-      <Link className="button-link secondary" href="/sme-services/participants">Pilot participants</Link>
+      <Link className="button-link secondary" href="/sme-services/participants">SME participants</Link>
       <Link className="button-link secondary" href="/sme-services/invitation-templates">Invitation templates</Link>
       <Link className="button-link secondary" href="/sme-services/applications">Provider applications</Link>
       <Link className="button-link secondary" href="/sme-services/providers">Provider directory</Link>
       <button className="secondary" onClick={() => void load()}>Refresh</button>
-      <button onClick={() => void downloadPilotReport()} disabled={exporting}>{exporting ? "Generating..." : "Download pilot report"}</button>
+      <button onClick={() => void downloadPilotReport()} disabled={exporting}>{exporting ? "Generating..." : "Download operations report"}</button>
     </div>
     <p className="success">{message}</p>
     <ErrorMessage>{error}</ErrorMessage>
