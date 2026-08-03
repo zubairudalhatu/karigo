@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { AppState, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { AppState, AppStateStatus, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import MapView, { Marker, Region } from "react-native-maps";
 import { brand } from "@karigo/config";
@@ -159,9 +159,18 @@ export default function RiderDashboard() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [deviceLocation, setDeviceLocation] = useState<{ location: CaptainLocation; seenAt: string } | null>(null);
+  const [isForeground, setIsForeground] = useState(AppState.currentState === "active");
+  const [locationUpdating, setLocationUpdating] = useState(false);
+  const [locationAutoBlocked, setLocationAutoBlocked] = useState(false);
   const watcherRef = useRef<{ remove: () => void } | null>(null);
+  const watcherStartingRef = useRef(false);
+  const mountedRef = useRef(true);
   const uploadInFlightRef = useRef(false);
   const lastUploadedLocationRef = useRef<{ location: CaptainLocation; uploadedAt: number } | null>(null);
+  const backoffUntilRef = useRef(0);
+  const failureCountRef = useRef(0);
+  const lastAutoErrorAtRef = useRef(0);
+  const autoRefreshRequestedRef = useRef("");
   const latestWorkStateRef = useRef<CaptainWorkState | null>(null);
   const latestProjectionRef = useRef<ReturnType<typeof projectCaptainOperationalState> | null>(null);
 
@@ -197,10 +206,28 @@ export default function RiderDashboard() {
     }
   }
 
-  useEffect(() => { void load(); }, []);
+  function stopCaptainWatcher(reason: string) {
+    if (watcherRef.current) {
+      watcherRef.current.remove();
+      watcherRef.current = null;
+      console.log(`captain_gps_watcher_stopped reason=${reason}`);
+    }
+  }
+
   useEffect(() => {
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") void load();
+    mountedRef.current = true;
+    void load();
+    return () => {
+      mountedRef.current = false;
+      stopCaptainWatcher("unmount");
+    };
+  }, []);
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state: AppStateStatus) => {
+      const active = state === "active";
+      setIsForeground(active);
+      if (active) void load();
+      else stopCaptainWatcher("background");
     });
     return () => subscription.remove();
   }, []);
@@ -208,6 +235,7 @@ export default function RiderDashboard() {
   const projection = useMemo(() => projectCaptainOperationalState(captainAccess, workState), [captainAccess, workState]);
   const activeJob = useMemo(() => jobs.find((job) => ACTIVE_DELIVERY_STATUSES.has(job.orderStatus)), [jobs]);
   const mapState = locationSummary(captainAccess, profile, deviceLocation);
+  const hasMapCoordinate = Boolean(mapState.coordinate);
   const currentMapRegion = mapRegion(mapState.coordinate);
   const operationalLocationRequired = Boolean(
     projection.effectiveDeliveryOnline ||
@@ -215,6 +243,7 @@ export default function RiderDashboard() {
     workState?.activeWorkMode
   );
   const strongLocationAccuracy = Boolean(workState?.activeWorkMode);
+  const watcherShouldRun = operationalLocationRequired && isForeground && !locationAutoBlocked;
 
   useEffect(() => {
     latestWorkStateRef.current = workState;
@@ -232,35 +261,52 @@ export default function RiderDashboard() {
     return backendLocationAgeMs() > 55_000 || !mapState.coordinate;
   }
 
-  async function uploadCaptainLocation(location: CaptainLocation, options: { force?: boolean } = {}) {
+  async function uploadCaptainLocation(location: CaptainLocation, options: { force?: boolean; manual?: boolean } = {}) {
     const currentWorkState = latestWorkStateRef.current;
     if (!currentWorkState || uploadInFlightRef.current) return;
     const now = Date.now();
+    if (!options.manual && now < backoffUntilRef.current) {
+      setDeviceLocation({ location, seenAt: new Date(now).toISOString() });
+      return;
+    }
     const previous = lastUploadedLocationRef.current;
     const movedMeters = previous ? distanceMeters(previous.location, location) : Number.POSITIVE_INFINITY;
     const uploadAgeMs = previous ? now - previous.uploadedAt : Number.POSITIVE_INFINITY;
-    if (!options.force && movedMeters < 12 && uploadAgeMs < 45_000 && !storedLocationIsStale()) {
+    if (!options.force && movedMeters < 20 && uploadAgeMs < 30_000 && !storedLocationIsStale()) {
       setDeviceLocation({ location, seenAt: new Date(now).toISOString() });
       return;
     }
 
     uploadInFlightRef.current = true;
+    setLocationUpdating(true);
     try {
-      const updated = await captainAccessApi.updateAvailability({
-        ...(currentWorkState.activeWorkMode ? {} : {
-          deliveryOnline: currentWorkState.desiredDeliveryOnline,
-          rideOnline: currentWorkState.desiredRideOnline
-        }),
-        ...location
-      });
+      const updated = await captainAccessApi.updateAvailability({ ...location });
       lastUploadedLocationRef.current = { location, uploadedAt: now };
+      failureCountRef.current = 0;
+      backoffUntilRef.current = 0;
       setDeviceLocation({ location, seenAt: new Date(now).toISOString() });
       setWorkState(updated);
       if (latestProjectionRef.current?.delivery.active) {
         setProfile(await riderApi.profile().catch(() => null));
       }
+      if (options.manual) {
+        setMessage("Location refreshed.");
+        setError("");
+      }
+    } catch (e) {
+      failureCountRef.current += 1;
+      const backoffMs = Math.min(300_000, 30_000 * (2 ** Math.min(4, failureCountRef.current - 1)));
+      backoffUntilRef.current = Date.now() + backoffMs;
+      if (options.manual) {
+        setError(friendlyError(e));
+        setMessage("");
+      } else if (Date.now() - lastAutoErrorAtRef.current > 60_000) {
+        lastAutoErrorAtRef.current = Date.now();
+        setError("Captain location update is taking longer than expected. Your session is still active.");
+      }
     } finally {
       uploadInFlightRef.current = false;
+      setLocationUpdating(false);
     }
   }
 
@@ -268,61 +314,63 @@ export default function RiderDashboard() {
     if (!latestWorkStateRef.current) return;
     try {
       const currentLocation = await requestCaptainForegroundLocation(strongLocationAccuracy);
-      await uploadCaptainLocation(currentLocation, { force: options.force ?? true });
-      if (!options.silent) setMessage("Location refreshed.");
-      setError("");
+      setLocationAutoBlocked(false);
+      await uploadCaptainLocation(currentLocation, { force: options.force ?? true, manual: !options.silent });
     } catch (e) {
-      if (!options.silent) setError(friendlyError(e));
-      if (!options.silent) setMessage("");
+      setLocationAutoBlocked(true);
+      if (!options.silent) {
+        setError(friendlyError(e));
+        setMessage("");
+      }
     }
   }
 
   useEffect(() => {
-    if (!projection.hasAnyActiveMode) return;
+    if (!operationalLocationRequired || !isForeground || locationAutoBlocked) return;
+    const refreshKey = `${workState?.lastLocationAt ?? "none"}:${hasMapCoordinate}`;
+    if (autoRefreshRequestedRef.current === refreshKey) return;
     if (storedLocationIsStale()) {
+      autoRefreshRequestedRef.current = refreshKey;
       void refreshGps({ silent: true, force: true });
     }
-  }, [projection.hasAnyActiveMode]);
+  }, [hasMapCoordinate, isForeground, locationAutoBlocked, operationalLocationRequired, workState?.lastLocationAt]);
 
   useEffect(() => {
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active" && operationalLocationRequired) {
-        void refreshGps({ silent: true, force: storedLocationIsStale() });
-      }
-    });
-    return () => subscription.remove();
-  }, [operationalLocationRequired]);
-
-  useEffect(() => {
-    if (!operationalLocationRequired) {
-      watcherRef.current?.remove();
-      watcherRef.current = null;
+    if (!watcherShouldRun) {
+      stopCaptainWatcher("not_required");
       return;
     }
 
     let cancelled = false;
-    if (!watcherRef.current) {
+    if (!watcherRef.current && !watcherStartingRef.current) {
+      watcherStartingRef.current = true;
+      console.log("captain_gps_watcher_starting");
       watchCaptainForegroundLocation((location) => {
-        void uploadCaptainLocation(location);
+        void uploadCaptainLocation(location, { manual: false });
       }, strongLocationAccuracy)
         .then((subscription) => {
-          if (cancelled) {
+          if (cancelled || !mountedRef.current) {
             subscription.remove();
             return;
           }
           watcherRef.current = subscription;
+          console.log("captain_gps_watcher_started");
         })
         .catch((e) => {
+          setLocationAutoBlocked(true);
           setError(friendlyError(e));
+          console.log(`captain_gps_watcher_unavailable reason=${e instanceof Error ? e.message : "unknown"}`);
+        })
+        .finally(() => {
+          watcherStartingRef.current = false;
         });
     }
 
     return () => {
       cancelled = true;
-      watcherRef.current?.remove();
-      watcherRef.current = null;
+      stopCaptainWatcher("effect_cleanup");
     };
-  }, [operationalLocationRequired, strongLocationAccuracy]);
+  }, [strongLocationAccuracy, watcherShouldRun]);
 
   async function toggleDelivery() {
     if (!workState || !projection.delivery.active) return;
@@ -336,6 +384,7 @@ export default function RiderDashboard() {
       if (currentLocation) {
         lastUploadedLocationRef.current = { location: currentLocation, uploadedAt: Date.now() };
         setDeviceLocation({ location: currentLocation, seenAt: new Date().toISOString() });
+        setLocationAutoBlocked(false);
       }
       setWorkState(updated);
       setProfile(projection.delivery.active ? await riderApi.profile().catch(() => null) : null);
@@ -359,6 +408,7 @@ export default function RiderDashboard() {
       if (currentLocation) {
         lastUploadedLocationRef.current = { location: currentLocation, uploadedAt: Date.now() };
         setDeviceLocation({ location: currentLocation, seenAt: new Date().toISOString() });
+        setLocationAutoBlocked(false);
       }
       setWorkState(updated);
       setMessage(next ? "Ride availability is online." : "Ride availability is offline.");
@@ -437,7 +487,7 @@ export default function RiderDashboard() {
               <Text style={ui.muted}>Service area: {mapState.area}</Text>
             </View>
           </View>}
-          <Button title="Refresh GPS" tone="muted" disabled={!workState} onPress={() => void refreshGps()} />
+          <Button title={locationUpdating ? "Updating GPS..." : "Refresh GPS"} tone="muted" disabled={!workState || locationUpdating} onPress={() => void refreshGps()} />
         </Card>
 
         <Card>

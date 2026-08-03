@@ -117,6 +117,7 @@ expect(locationHelper.includes("hasServicesEnabledAsync"), "Captain location hel
 expect(locationHelper.includes("watchCaptainForegroundLocation"), "Captain location helper must expose a foreground GPS watcher.");
 expect(locationHelper.includes("distanceMeters"), "Captain location helper must expose distance filtering for GPS uploads.");
 expect(locationHelper.includes("We could not confirm your current location."), "Captain location helper must use safe customer-facing GPS unavailable copy.");
+expect(locationHelper.includes("timeInterval: 30_000") && locationHelper.includes("distanceInterval: strongAccuracy ? 15 : 20"), "Captain GPS watcher must use the launch throttle floor.");
 
 expect(dashboard.includes("projectCaptainOperationalState"), "Home must use state-aware Captain projection.");
 expect(dashboard.includes("karigo-logo.png"), "Home must use compact KariGO branding.");
@@ -129,9 +130,14 @@ expect(dashboard.includes("vehicleMarker") && dashboard.includes("mapFooter"), "
 expect(dashboard.includes("Location unavailable"), "Home map must include a safe unavailable state.");
 expect(dashboard.includes("Refresh GPS"), "Home must include a recoverable location refresh action.");
 expect(dashboard.includes("watcherRef") && dashboard.includes("watchCaptainForegroundLocation"), "Home must start one foreground GPS watcher while online or assigned.");
+expect(dashboard.includes("watcherStartingRef") && dashboard.includes("stopCaptainWatcher"), "Home must prevent duplicate GPS watchers and stop them on lifecycle changes.");
+expect(dashboard.includes("backoffUntilRef") && dashboard.includes("failureCountRef"), "Home must back off failed automatic GPS uploads.");
+expect(dashboard.includes("captain_gps_watcher_started") && dashboard.includes("captain_gps_watcher_stopped"), "Home must log safe GPS watcher diagnostics.");
 expect(dashboard.includes("uploadCaptainLocation"), "Home must upload automatic Captain GPS refreshes to backend work-state.");
+expect(dashboard.includes("captainAccessApi.updateAvailability({ ...location })"), "Home GPS refresh must submit location-only updates without mutating availability.");
+expect(!dashboard.includes("deliveryOnline: currentWorkState.desiredDeliveryOnline") && !dashboard.includes("rideOnline: currentWorkState.desiredRideOnline"), "Home GPS refresh must not resend desired availability during location updates.");
 expect(dashboard.includes("reasonCode === \"LOCATION_STALE\""), "Home must allow stale-location recovery through the normal online toggle.");
-expect(dashboard.includes("disabled={!workState}"), "Manual GPS refresh must remain available during active work once work-state is loaded.");
+expect(dashboard.includes("disabled={!workState || locationUpdating}"), "Manual GPS refresh must remain available during active work while preventing duplicate submissions.");
 expect(dashboard.includes("Availability"), "Home must show mode availability controls.");
 expect(dashboard.includes("Current work"), "Home must show current assignment state.");
 expect(dashboard.includes("No active assignment") && dashboard.includes("Waiting for assignment"), "Home must show clean assignment empty states.");

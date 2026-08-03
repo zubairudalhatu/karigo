@@ -42,6 +42,11 @@ export function friendlyError(error: unknown, context: ErrorContext = "dashboard
   if (context === "login" && error instanceof Error) {
     const safeMessages = [
       "This account is not authorised for the Partner Workspace.",
+      "This account is not active for Partner Workspace access.",
+      "No active Partner profile is linked to this KariGO account.",
+      "Partner activation is pending.",
+      "Your Partner application is still under review.",
+      "This Partner profile is suspended.",
       "Your session could not be created. Please try again.",
       "Verify your phone number to finish account setup."
     ];

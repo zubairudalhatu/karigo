@@ -5,7 +5,6 @@ import { NextResponse } from "next/server";
 const ACCESS_COOKIE = "karigo_vendor_access";
 const REFRESH_COOKIE = "karigo_vendor_refresh";
 const CSRF_COOKIE = "karigo_vendor_csrf";
-const REQUIRED_ROLE = "VENDOR";
 
 const PUBLIC_AUTH_PATHS = [
   "auth/login",
@@ -23,6 +22,12 @@ type BackendPayload = {
   data?: unknown;
   error_code?: string;
   details?: unknown;
+};
+
+type PartnerCapabilitiesPayload = {
+  canAccessWorkspace?: boolean;
+  operationalStatus?: string | null;
+  message?: string;
 };
 
 const unsafeMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -140,6 +145,57 @@ function jsonError(message: string, status = 403, errorCode = "BFF_SESSION_REJEC
   return NextResponse.json({ success: false, message, error_code: errorCode }, { status });
 }
 
+function partnerAccessErrorCode(operationalStatus?: string | null) {
+  const normalized = String(operationalStatus ?? "").toUpperCase();
+  if (normalized.includes("PENDING") || normalized.includes("REVIEW")) return "PORTAL_PARTNER_PENDING";
+  if (normalized.includes("SUSPENDED") || normalized.includes("BLOCKED")) return "PORTAL_PARTNER_SUSPENDED";
+  if (normalized.includes("REJECTED")) return "PORTAL_PARTNER_REJECTED";
+  if (normalized.includes("NO_PARTNER_PROFILE")) return "PORTAL_PARTNER_NO_PROFILE";
+  return "PORTAL_PARTNER_ACCESS_REJECTED";
+}
+
+async function verifyPartnerWorkspaceAccess(accessToken: string) {
+  const response = await fetch(`${apiBaseUrl()}/vendors/capabilities`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`
+    },
+    cache: "no-store"
+  }).catch((error) => {
+    console.error(`Partner BFF capability check failed reason=${error instanceof Error ? error.message : "unknown"}`);
+    return null;
+  });
+  if (!response) {
+    return {
+      ok: false,
+      status: 503,
+      message: "KariGO services are temporarily unavailable. Please try again shortly.",
+      errorCode: "BFF_BACKEND_UNAVAILABLE"
+    };
+  }
+
+  const payload = await response.json().catch(() => null) as BackendPayload | null;
+  const data = isPlainRecord(payload?.data) ? payload.data as PartnerCapabilitiesPayload : null;
+  if (!response.ok || payload?.success === false) {
+    return {
+      ok: false,
+      status: response.status,
+      message: payload?.message || "Partner Workspace access could not be confirmed.",
+      errorCode: response.status === 401 ? "BFF_SESSION_REJECTED" : partnerAccessErrorCode(data?.operationalStatus)
+    };
+  }
+  if (!data?.canAccessWorkspace) {
+    return {
+      ok: false,
+      status: 403,
+      message: data?.message || "This account is not active for Partner Workspace access.",
+      errorCode: partnerAccessErrorCode(data?.operationalStatus)
+    };
+  }
+  return { ok: true, status: 200, message: data.message || "Partner Workspace access confirmed.", errorCode: "PORTAL_PARTNER_ACCESS_CONFIRMED" };
+}
+
 function validateCsrf(request: NextRequest, path: string) {
   if (!unsafeMethods.has(request.method)) return null;
   if (!isAllowedOrigin(request)) {
@@ -244,18 +300,21 @@ export async function handleBffRequest(request: NextRequest, pathParts: string[]
   const data = isPlainRecord(payload?.data) ? payload.data : undefined;
   const accessFromPayload = typeof data?.accessToken === "string" ? data.accessToken : undefined;
   const refreshFromPayload = typeof data?.refreshToken === "string" ? data.refreshToken : undefined;
-  const role = data?.user && typeof data.user === "object" ? (data.user as { role?: string }).role : undefined;
+  const hasUser = data?.user && typeof data.user === "object";
 
-  if (accessFromPayload && !role) {
+  if (accessFromPayload && !hasUser) {
     const response = jsonError("Your session could not be created. Please try again.", 502, "BFF_SESSION_USER_MISSING");
     clearSessionCookies(response);
     return response;
   }
 
-  if (accessFromPayload && role !== REQUIRED_ROLE) {
-    const response = jsonError("This account is not authorised for the Partner Workspace.", 403, "PORTAL_ROLE_REJECTED");
-    clearSessionCookies(response);
-    return response;
+  if (accessFromPayload) {
+    const partnerAccess = await verifyPartnerWorkspaceAccess(accessFromPayload);
+    if (!partnerAccess.ok) {
+      const response = jsonError(partnerAccess.message, partnerAccess.status, partnerAccess.errorCode);
+      clearSessionCookies(response);
+      return response;
+    }
   }
 
   const response = NextResponse.json(payload ? sanitizePayload(payload) : { success: false, message: "Backend response was unavailable." }, {

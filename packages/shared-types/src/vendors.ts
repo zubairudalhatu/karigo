@@ -1,5 +1,18 @@
 import type { ProductCategory, ServiceCategory, ServiceProviderType, VendorServiceStatus } from "./index";
 
+export type PartnerType = "PRODUCT_SELLER" | "SERVICE_PROVIDER" | "BOTH";
+
+export interface PartnerCapabilities {
+  vendorId: string | null;
+  partnerType: PartnerType | null;
+  profileStatus: string | null;
+  operationalStatus: string;
+  canAccessWorkspace: boolean;
+  canManageProducts: boolean;
+  canManageServices: boolean;
+  message: string;
+}
+
 export interface VendorSummary {
   id: string;
   businessName: string;

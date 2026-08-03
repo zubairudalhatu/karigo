@@ -12,7 +12,7 @@ import { UpdateProductAvailabilityDto } from "./dto/update-product-availability.
 import { UpdateProductDto } from "./dto/update-product.dto";
 import { ProductsService } from "./products.service";
 
-const PARTNER_WORKSPACE_ROLES = [UserRole.VENDOR, UserRole.CUSTOMER];
+const PARTNER_WORKSPACE_ROLES = [UserRole.VENDOR, UserRole.CUSTOMER, UserRole.RIDER];
 
 @ApiTags("Products")
 @Controller("vendors/:vendorId/products")

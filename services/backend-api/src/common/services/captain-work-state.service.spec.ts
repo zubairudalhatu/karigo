@@ -159,6 +159,40 @@ describe("CaptainWorkStateService", () => {
     expect(tx.taxiDriverProfile.update).toHaveBeenCalled();
   });
 
+  it("updates GPS location without mutating availability when no assignment is active", async () => {
+    const user = userWithModes({
+      activeWorkMode: null,
+      desiredDeliveryOnline: true,
+      desiredRideOnline: true
+    });
+    const tx = {
+      captainWorkState: { update: jest.fn() },
+      rider: { update: jest.fn() },
+      taxiDriverProfile: { update: jest.fn() }
+    };
+    prisma.user.findUnique.mockResolvedValueOnce(user).mockResolvedValueOnce(user);
+    prisma.captainWorkState.findUnique.mockResolvedValueOnce(user.captainWorkState).mockResolvedValueOnce({
+      ...user.captainWorkState,
+      lastLocationAt: new Date()
+    });
+    prisma.$transaction.mockImplementationOnce(async (callback: any) => callback(tx));
+
+    await service.updateAvailability("captain-user", {
+      latitude: 12.0022,
+      longitude: 8.592
+    });
+
+    expect(tx.captainWorkState.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: "captain-user" },
+      data: expect.not.objectContaining({
+        desiredDeliveryOnline: expect.any(Boolean),
+        desiredRideOnline: expect.any(Boolean),
+        lastAvailabilityChangeAt: expect.any(Date)
+      })
+    }));
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+
   it("blocks effective online state when the saved location is stale", async () => {
     const user = userWithModes({
       riderStatus: RiderStatus.ACTIVE,

@@ -1,6 +1,6 @@
 import { api } from "./client";
 import { csrfHeaders } from "./client";
-import type { ApiErrorResponse, ApiSuccessResponse, VendorServiceInput, VendorServiceSummary, VendorUploadPurpose, VendorUploadResult } from "@karigo/shared-types";
+import type { ApiErrorResponse, ApiSuccessResponse, PartnerCapabilities, VendorServiceInput, VendorServiceSummary, VendorUploadPurpose, VendorUploadResult } from "@karigo/shared-types";
 import { KariGoApiError } from "@karigo/shared-types";
 
 export interface VendorProfile { id: string; businessName: string; description?: string | null; phoneNumber: string; email?: string | null; address: string; city: string; state: string; status: string; isOpen: boolean; openingTime?: string | null; closingTime?: string | null; logoUrl?: string | null; coverImageUrl?: string | null; }
@@ -27,6 +27,7 @@ async function uploadVendorFile(file: File, purpose: VendorUploadPurpose) {
 }
 
 export const vendorApi = {
+  capabilities: () => api.get<PartnerCapabilities>("vendors/capabilities"),
   profile: () => api.get<VendorProfile>("vendors/me"),
   update: (body: Partial<VendorProfile>) => api.patch<VendorProfile>("vendors/me", body),
   branches: () => api.get<VendorBranch[]>("vendors/branches"),

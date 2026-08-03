@@ -16,7 +16,10 @@ assert(!authContext.includes("tokenStore") && !authContext.includes("refreshToke
 assert(authContext.includes("authApi.logout()"), "Partner logout must call the BFF logout endpoint so HttpOnly cookies are cleared.");
 assert(!authContext.includes("result.accessToken"), "Partner login must not require browser-readable access tokens from the sanitized BFF response.");
 assert(authContext.includes("setUser(result.user)"), "Partner login must use the sanitized BFF user payload after HttpOnly session cookies are set.");
-assert(authContext.includes("This account is not authorised for the Partner Workspace."), "Partner login must show a safe workspace-authorisation message.");
+assert(authContext.includes("vendorApi.capabilities"), "Partner auth context must confirm capability-backed Workspace access after login and bootstrap.");
+assert(authContext.includes("canAccessWorkspace"), "Partner auth context must require active Partner Workspace access.");
+assert(!authContext.includes('result.user.role !== "VENDOR"'), "Partner auth context must not reject approved unified accounts solely by base role.");
+assert(authContext.includes("This account is not active for Partner Workspace access."), "Partner login must show a safe workspace-authorisation message.");
 const authApiSource = read("src", "api", "auth.api.ts");
 assert(!authApiSource.includes("accessToken") && !authApiSource.includes("refreshToken"), "Partner auth API type must not model browser-readable login tokens.");
 assert(authApiSource.includes("LoginVerificationRequiredResult"), "Partner auth API type must handle verification-required login responses safely.");
@@ -25,7 +28,10 @@ assert(!activationPage.includes("tokenStore") && !activationPage.includes("refre
 const bffSession = read("src", "lib", "bff-session.ts");
 const bffRoute = read("app", "api", "bff", "[...path]", "route.ts");
 assert(bffRoute.includes("handleBffRequest"), "Partner Workspace must expose the BFF catch-all route.");
-assert(bffSession.includes('const REQUIRED_ROLE = "VENDOR"'), "Partner BFF must enforce VENDOR role sessions.");
+assert(bffSession.includes("vendors/capabilities"), "Partner BFF must verify Partner Workspace capability before creating a session.");
+assert(bffSession.includes("canAccessWorkspace"), "Partner BFF must require active Partner profile access rather than hardcoded account role.");
+assert(bffSession.includes("PORTAL_PARTNER_PENDING") && bffSession.includes("PORTAL_PARTNER_NO_PROFILE"), "Partner BFF must return safe Partner access rejection codes.");
+assert(!bffSession.includes('const REQUIRED_ROLE = "VENDOR"'), "Partner BFF must not reject unified Partner accounts solely because their base role is not VENDOR.");
 assert(bffSession.includes("httpOnly: true"), "Partner BFF must store access and refresh tokens in HttpOnly cookies.");
 assert(bffSession.includes("secure: cookieSecure()"), "Partner BFF cookies must be Secure outside local development.");
 assert(bffSession.includes("sameSite: sameSite()"), "Partner BFF cookies must set SameSite protection.");

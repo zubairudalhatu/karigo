@@ -5,6 +5,7 @@ import { KariGoApiError } from "@karigo/shared-types";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { authApi } from "../api/auth.api";
 import { onUnauthorized } from "../api/client";
+import { vendorApi } from "../api/vendor.api";
 import { normalizeNigerianPhoneNumber } from "../lib/phone";
 
 interface AuthContextValue {
@@ -20,6 +21,14 @@ function isAuthStatus(error: unknown): boolean {
   return error instanceof KariGoApiError && error.status === 401;
 }
 
+async function assertPartnerWorkspaceAccess() {
+  const capabilities = await vendorApi.capabilities();
+  if (!capabilities.canAccessWorkspace) {
+    throw new Error(capabilities.message || "This account is not active for Partner Workspace access.");
+  }
+  return capabilities;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,12 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const currentUser = await authApi.me();
         if (!active) return;
-
-        if (currentUser.role === "VENDOR") {
-          setUser(currentUser);
-        } else {
-          setUser(null);
-        }
+        await assertPartnerWorkspaceAccess();
+        if (active) setUser(currentUser);
       } catch (error) {
         if (isAuthStatus(error)) {
           if (active) setUser(null);
@@ -74,9 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error("Your session could not be created. Please try again.");
           }
 
-          if (result.user.role !== "VENDOR") {
-            throw new Error("This account is not authorised for the Partner Workspace.");
-          }
+          await assertPartnerWorkspaceAccess();
 
           setUser(result.user);
         },

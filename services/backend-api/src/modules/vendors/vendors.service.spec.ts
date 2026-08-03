@@ -1,10 +1,12 @@
-import { Prisma, ServiceProviderType, VendorServiceStatus } from "@prisma/client";
+import { AccountStatus, Prisma, ServiceProviderType, VendorServiceStatus, VendorStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { VendorUploadPurpose } from "./dto/vendor-upload.dto";
 import { VendorsService } from "./vendors.service";
 
 describe("VendorsService public listing", () => {
   const prisma = {
+    user: { findUnique: jest.fn() },
+    vendorApplication: { findFirst: jest.fn() },
     vendor: { findMany: jest.fn(), findFirst: jest.fn() },
     vendorOnboardingDocument: { create: jest.fn() },
     vendorService: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
@@ -12,7 +14,10 @@ describe("VendorsService public listing", () => {
   };
   const service = new VendorsService(prisma as unknown as PrismaService);
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma.vendor.findFirst.mockResolvedValue(activeServiceVendor());
+  });
 
   it("returns a safe public vendor shape without bank details", async () => {
     prisma.vendor.findMany.mockResolvedValue([{
@@ -61,11 +66,7 @@ describe("VendorsService public listing", () => {
   });
 
   it("uploads onboarding document metadata for only the authenticated vendor", async () => {
-    prisma.vendor.findFirst.mockResolvedValue({
-      id: "vendor-1",
-      userId: "vendor-user-1",
-      businessName: "Kano Kitchen"
-    });
+    prisma.vendor.findFirst.mockResolvedValue(activeProductVendor());
     prisma.vendorOnboardingDocument.create.mockResolvedValue({
       id: "doc-1",
       vendorId: "vendor-1",
@@ -96,11 +97,7 @@ describe("VendorsService public listing", () => {
   });
 
   it("creates vendor-owned service catalogue entries", async () => {
-    prisma.vendor.findFirst.mockResolvedValue({
-      id: "vendor-1",
-      userId: "vendor-user-1",
-      businessName: "Kano Repairs"
-    });
+    prisma.vendor.findFirst.mockResolvedValue(activeServiceVendor());
     prisma.vendorService.create.mockResolvedValue({
       id: "service-1",
       vendorId: "vendor-1",
@@ -153,12 +150,36 @@ describe("VendorsService public listing", () => {
     }));
   });
 
-  it("rejects unsupported vendor upload file types before writing files", async () => {
-    prisma.vendor.findFirst.mockResolvedValue({
-      id: "vendor-1",
-      userId: "vendor-user-1",
-      businessName: "Kano Kitchen"
+  it("returns capabilities for a mixed Partner profile", async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: "vendor-user-1",
+      accountStatus: AccountStatus.ACTIVE,
+      deletedAt: null,
+      vendor: activeMixedVendor()
     });
+
+    await expect(serviceUnderTest().capabilities("vendor-user-1")).resolves.toMatchObject({
+      partnerType: "BOTH",
+      canAccessWorkspace: true,
+      canManageProducts: true,
+      canManageServices: true
+    });
+  });
+
+  it("blocks service catalogue writes for product-only Partners", async () => {
+    prisma.vendor.findFirst.mockResolvedValue(activeProductVendor());
+
+    await expect(serviceUnderTest().createService("vendor-user-1", {
+      serviceType: ServiceProviderType.PLUMBER,
+      name: "Plumbing repairs",
+      description: "Leak inspection and repair"
+    })).rejects.toThrow("Service Provider or mixed Partner capability");
+
+    expect(prisma.vendorService.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsupported vendor upload file types before writing files", async () => {
+    prisma.vendor.findFirst.mockResolvedValue(activeProductVendor());
 
     await expect(serviceUnderTest().uploadFile("vendor-user-1", VendorUploadPurpose.PRODUCT_IMAGE, {
       originalname: "notes.txt",
@@ -170,5 +191,59 @@ describe("VendorsService public listing", () => {
 
   function serviceUnderTest() {
     return new VendorsService(prisma as unknown as PrismaService);
+  }
+
+  function activeProductVendor() {
+    return {
+      id: "vendor-1",
+      userId: "vendor-user-1",
+      businessName: "Kano Kitchen",
+      businessCategory: "RESTAURANT",
+      status: VendorStatus.ACTIVE,
+      deletedAt: null,
+      sourceApplication: {
+        businessCategory: "RESTAURANT",
+        businessType: "Product Seller",
+        catalogueCategory: "RESTAURANT",
+        status: "APPROVED"
+      },
+      user: {
+        accountStatus: AccountStatus.ACTIVE,
+        deletedAt: null
+      }
+    };
+  }
+
+  function activeServiceVendor() {
+    return {
+      id: "vendor-1",
+      userId: "vendor-user-1",
+      businessName: "Kano Repairs",
+      businessCategory: "SME_SERVICES",
+      status: VendorStatus.ACTIVE,
+      deletedAt: null,
+      sourceApplication: {
+        businessCategory: "SME_SERVICES",
+        businessType: "Service Provider",
+        catalogueCategory: "SME_SERVICES",
+        status: "APPROVED"
+      },
+      user: {
+        accountStatus: AccountStatus.ACTIVE,
+        deletedAt: null
+      }
+    };
+  }
+
+  function activeMixedVendor() {
+    return {
+      ...activeServiceVendor(),
+      sourceApplication: {
+        businessCategory: "SME_SERVICES",
+        businessType: "Both Product Seller and Service Provider",
+        catalogueCategory: "SME_SERVICES",
+        status: "APPROVED"
+      }
+    };
   }
 });

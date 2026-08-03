@@ -20,7 +20,7 @@ interface RequestWithHeaders {
   headers: Record<string, string | string[] | undefined>;
 }
 
-const PARTNER_WORKSPACE_ROLES = [UserRole.VENDOR, UserRole.CUSTOMER];
+const PARTNER_WORKSPACE_ROLES = [UserRole.VENDOR, UserRole.CUSTOMER, UserRole.RIDER];
 
 @ApiTags("Vendors")
 @Controller("vendors")
@@ -43,6 +43,15 @@ export class VendorsController {
   @ApiOperation({ summary: "Update the authenticated vendor profile" })
   async update(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateVendorProfileDto) {
     return { message: "Vendor profile updated", data: await this.vendorsService.update(user.id, dto) };
+  }
+
+  @Get("capabilities")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Resolve authenticated Partner Workspace capabilities" })
+  async capabilities(@CurrentUser() user: AuthenticatedUser) {
+    return { message: "Partner capabilities resolved", data: await this.vendorsService.capabilities(user.id) };
   }
 
   @Get("team")
@@ -161,6 +170,15 @@ export class VendorsController {
   @ApiOperation({ summary: "Create a vendor service catalogue entry" })
   async createService(@CurrentUser() user: AuthenticatedUser, @Body() dto: VendorServiceInputDto) {
     return { message: "Vendor service created", data: await this.vendorsService.createService(user.id, dto) };
+  }
+
+  @Get("services/:serviceId")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get a vendor service catalogue entry" })
+  async service(@CurrentUser() user: AuthenticatedUser, @Param("serviceId", ParseUUIDPipe) serviceId: string) {
+    return { message: "Vendor service retrieved", data: await this.vendorsService.service(user.id, serviceId) };
   }
 
   @Patch("services/:serviceId")

@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
-import { ProductCategory } from "@prisma/client";
+import { AccountStatus, ProductCategory, VendorStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ProductsService } from "./products.service";
 
@@ -21,7 +21,42 @@ describe("ProductsService", () => {
     vendor: { businessName: "Kano Kitchen", businessCategory: "FOOD" },
     optionGroups: []
   };
-  const activeVendor = { id: "vendor-1", businessCategory: "RESTAURANT" };
+  const activeVendor = {
+    id: "vendor-1",
+    businessCategory: "RESTAURANT",
+    status: VendorStatus.ACTIVE,
+    deletedAt: null,
+    sourceApplication: {
+      businessCategory: "RESTAURANT",
+      businessType: "Product Seller",
+      catalogueCategory: "RESTAURANT",
+      status: "APPROVED"
+    },
+    user: {
+      accountStatus: AccountStatus.ACTIVE,
+      deletedAt: null
+    }
+  };
+  const activeMixedVendor = {
+    ...activeVendor,
+    businessCategory: "SME_SERVICES",
+    sourceApplication: {
+      businessCategory: "SME_SERVICES",
+      businessType: "Both Product Seller and Service Provider",
+      catalogueCategory: "SME_SERVICES",
+      status: "APPROVED"
+    }
+  };
+  const serviceOnlyVendor = {
+    ...activeVendor,
+    businessCategory: "SME_SERVICES",
+    sourceApplication: {
+      businessCategory: "SME_SERVICES",
+      businessType: "Service Provider",
+      catalogueCategory: "SME_SERVICES",
+      status: "APPROVED"
+    }
+  };
   const prisma = {
     vendor: { findFirst: jest.fn(), findUnique: jest.fn() },
     product: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
@@ -86,6 +121,27 @@ describe("ProductsService", () => {
     prisma.vendor.findFirst.mockResolvedValue(activeVendor);
     prisma.product.findFirst.mockResolvedValue(null);
     await expect(service.updateVendorProduct("user-1", "other-product", { name: "Blocked" })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("allows mixed partners to manage products even when legacy category is SME Services", async () => {
+    prisma.vendor.findFirst.mockResolvedValue(activeMixedVendor);
+    prisma.product.findMany.mockResolvedValue([product]);
+
+    await expect(service.listVendorProducts("user-1")).resolves.toHaveLength(1);
+  });
+
+  it("blocks service-only partners from product self-service", async () => {
+    prisma.vendor.findFirst.mockResolvedValue(serviceOnlyVendor);
+
+    await expect(service.createVendorProduct("user-1", {
+      name: "Pipe repairs",
+      description: "Service-only item.",
+      productCategory: ProductCategory.FOOD,
+      price: 3000,
+      imageUrl: "https://example.com/repair.jpg"
+    })).rejects.toThrow("Product Seller or mixed Partner capability");
+
+    expect(prisma.product.create).not.toHaveBeenCalled();
   });
 
   it("returns not found when reading another vendor's product", async () => {

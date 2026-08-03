@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { AccountStatus, Prisma, ProductCategory, VendorStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { resolvePartnerCapabilities } from "../vendors/partner-capabilities";
 import { ListProductsQueryDto } from "./dto/list-products-query.dto";
 import { ProductInputDto } from "./dto/product-input.dto";
 import { UpdateProductAvailabilityDto } from "./dto/update-product-availability.dto";
@@ -228,13 +229,36 @@ export class ProductsService {
         status: VendorStatus.ACTIVE,
         user: { accountStatus: AccountStatus.ACTIVE, deletedAt: null }
       },
-      select: { id: true, businessCategory: true }
+      select: {
+        id: true,
+        businessCategory: true,
+        status: true,
+        deletedAt: true,
+        sourceApplication: {
+          select: {
+            businessCategory: true,
+            businessType: true,
+            catalogueCategory: true,
+            status: true
+          }
+        },
+        user: {
+          select: {
+            accountStatus: true,
+            deletedAt: true
+          }
+        }
+      }
     });
     if (!vendor) {
       throw new ForbiddenException("Active approved Partner account is required to manage products.");
     }
-    if (["SME_SERVICES", "SERVICE_PROVIDER"].includes(vendor.businessCategory.toUpperCase())) {
-      throw new BadRequestException("Service-only partners should manage listings from the Services workspace.");
+    const capabilities = resolvePartnerCapabilities(vendor);
+    if (!capabilities.canAccessWorkspace) {
+      throw new ForbiddenException(capabilities.message);
+    }
+    if (!capabilities.canManageProducts) {
+      throw new BadRequestException("Product Seller or mixed Partner capability is required to manage products.");
     }
     return vendor;
   }

@@ -1,8 +1,10 @@
 import type {
   ProductCategory,
   ProductSummary,
+  PartnerCapabilities,
   VendorProductAvailabilityInput,
   VendorProductInput,
+  VendorServiceInput,
   VendorServiceSummary
 } from "@karigo/shared-types";
 import { api } from "./client";
@@ -183,6 +185,7 @@ export interface PayoutAccountPayload {
 
 export const partnerApi = {
   onboardingState: () => api.get<PartnerOnboardingState>("vendor-applications/me"),
+  capabilities: () => api.get<PartnerCapabilities>("vendors/capabilities"),
   profile: () => api.get<PartnerProfile>("vendors/me"),
   updateProfile: (body: PartnerProfileUpdateInput) => api.patch<PartnerProfile>("vendors/me", body),
   orders: () => api.get<PartnerOrderSummary[]>("vendor-dashboard/orders"),
@@ -199,6 +202,10 @@ export const partnerApi = {
   updateProductAvailability: (productId: string, body: VendorProductAvailabilityInput) =>
     api.patch<ProductSummary>(`vendor/products/${productId}/availability`, body),
   services: () => api.get<VendorServiceSummary[]>("vendors/services"),
+  service: (serviceId: string) => api.get<VendorServiceSummary>(`vendors/services/${serviceId}`),
+  createService: (body: VendorServiceInput) => api.post<VendorServiceSummary>("vendors/services", body),
+  updateService: (serviceId: string, body: Partial<VendorServiceInput>) => api.patch<VendorServiceSummary>(`vendors/services/${serviceId}`, body),
+  archiveService: (serviceId: string) => api.delete<VendorServiceSummary>(`vendors/services/${serviceId}`),
   documents: () => api.get<PartnerOnboardingDocument[]>("vendors/onboarding-documents"),
   uploadOnboardingDocument: (body: { documentType: string; documentName?: string; documentUrl: string }) =>
     api.post<PartnerOnboardingDocument>("vendors/onboarding-documents", body),

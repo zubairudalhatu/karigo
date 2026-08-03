@@ -39,6 +39,8 @@ export default function RootLayout() {
           <Stack.Screen name="products/new" options={backOnly} />
           <Stack.Screen name="products/[productId]" options={backOnly} />
           <Stack.Screen name="services/index" options={headerless} />
+          <Stack.Screen name="services/new" options={backOnly} />
+          <Stack.Screen name="services/[serviceId]" options={backOnly} />
           <Stack.Screen name="earnings/index" options={headerless} />
           <Stack.Screen name="payout/index" options={backOnly} />
           <Stack.Screen name="documents/index" options={headerless} />

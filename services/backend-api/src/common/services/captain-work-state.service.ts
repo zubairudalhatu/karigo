@@ -70,12 +70,12 @@ export class CaptainWorkStateService {
   async updateAvailability(userId: string, dto: CaptainAvailabilityUpdate) {
     const user = await this.loadUser(userId);
     const state = await this.ensureState(this.prisma, userId, user);
-    if (state.activeWorkMode) {
-      const locationOnly = dto.deliveryOnline === undefined && dto.rideOnline === undefined && this.hasValidLocation(dto);
-      if (!locationOnly) {
-        throw this.busyConflict(state, "Availability cannot be changed while an assignment is active.");
-      }
+    const locationOnly = dto.deliveryOnline === undefined && dto.rideOnline === undefined && this.hasValidLocation(dto);
+    if (locationOnly) {
       return this.updateLocationOnly(userId, user, dto);
+    }
+    if (state.activeWorkMode) {
+      throw this.busyConflict(state, "Availability cannot be changed while an assignment is active.");
     }
 
     const deliveryEligibility = this.deliveryEligibility(user);

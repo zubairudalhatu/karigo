@@ -1,5 +1,5 @@
 import { brand } from "@karigo/config";
-import { ProductSummary } from "@karigo/shared-types";
+import type { PartnerCapabilities, ProductSummary } from "@karigo/shared-types";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { RefreshControl, StyleSheet, Text, View } from "react-native";
@@ -11,6 +11,7 @@ import { formatLabel, money } from "../../src/lib/labels";
 function ProductsContent() {
   const router = useRouter();
   const [products, setProducts] = useState<ProductSummary[]>([]);
+  const [capabilities, setCapabilities] = useState<PartnerCapabilities | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +23,9 @@ function ProductsContent() {
     else setLoading(true);
     setError(null);
     try {
-      setProducts(await partnerApi.products());
+      const nextCapabilities = await partnerApi.capabilities();
+      setCapabilities(nextCapabilities);
+      setProducts(nextCapabilities.canManageProducts ? await partnerApi.products() : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Products could not be loaded.");
     } finally {
@@ -34,6 +37,8 @@ function ProductsContent() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const canManageProducts = capabilities?.canManageProducts ?? false;
 
   const toggleAvailability = useCallback(async (product: ProductSummary) => {
     setSavingProductId(product.id);
@@ -55,10 +60,17 @@ function ProductsContent() {
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}>
       <Hero eyebrow="Product Seller" title="Products" subtitle="Add and update products for restaurants, grocery stores, market sellers and approved merchants." />
-      <PrimaryButton label="Add product" onPress={() => router.push("/products/new")} />
+      {canManageProducts ? <PrimaryButton label="Add product" onPress={() => router.push("/products/new")} /> : null}
       {error ? <MutedText>{error}</MutedText> : null}
       {message ? <MutedText>{message}</MutedText> : null}
-      {products.length === 0 ? (
+      {!canManageProducts ? (
+        <EmptyState
+          title="Products unavailable for this account"
+          body={capabilities?.partnerType === "SERVICE_PROVIDER"
+            ? "This Partner profile is set up as a Service Provider. Use Services to manage your service catalogue, or contact KariGO if your business should also sell products."
+            : capabilities?.message ?? "Product Seller or mixed Partner capability is required to manage products."}
+        />
+      ) : products.length === 0 ? (
         <EmptyState title="No products yet" body="Create your first product from mobile, then use Partner Workspace for advanced upload and option management." />
       ) : (
         products.map((product) => (

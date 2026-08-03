@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, Optional } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Prisma, ProductCategory, ServiceCategory, VendorServiceStatus } from "@prisma/client";
 import { createHash, randomBytes } from "crypto";
@@ -13,6 +13,7 @@ import { InviteVendorTeamMemberDto, UpdateVendorTeamMemberDto } from "./dto/vend
 import { UpsertVendorBranchDto } from "./dto/vendor-branch.dto";
 import { UpdateVendorServiceDto, VendorServiceInputDto } from "./dto/vendor-service.dto";
 import { VendorUploadPurpose } from "./dto/vendor-upload.dto";
+import { resolvePartnerCapabilities } from "./partner-capabilities";
 
 export interface VendorUploadedFile {
   originalname: string;
@@ -70,6 +71,57 @@ export class VendorsService {
       fields: Object.keys(dto)
     });
     return updated;
+  }
+
+  async capabilities(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        accountStatus: true,
+        deletedAt: true,
+        vendor: {
+          select: {
+            id: true,
+            status: true,
+            deletedAt: true,
+            businessCategory: true,
+            sourceApplication: {
+              select: {
+                businessCategory: true,
+                businessType: true,
+                catalogueCategory: true,
+                status: true
+              }
+            },
+            user: {
+              select: {
+                accountStatus: true,
+                deletedAt: true
+              }
+            }
+          }
+        }
+      }
+    });
+    if (!user || user.deletedAt) {
+      throw new NotFoundException("KariGO account not found");
+    }
+    if (user.vendor) {
+      return resolvePartnerCapabilities(user.vendor);
+    }
+
+    const application = await this.prisma.vendorApplication.findFirst({
+      where: { applicantUserId: userId, deletedAt: null },
+      orderBy: { submittedAt: "desc" },
+      select: {
+        businessCategory: true,
+        businessType: true,
+        catalogueCategory: true,
+        status: true
+      }
+    });
+    return resolvePartnerCapabilities(null, application);
   }
 
   async team(userId: string) {
@@ -255,7 +307,7 @@ export class VendorsService {
   }
 
   async createService(userId: string, dto: VendorServiceInputDto) {
-    const vendor = await this.requireVendorForUser(userId);
+    const vendor = await this.requireActiveServiceVendor(userId);
     const service = await this.prisma.vendorService.create({
       data: this.vendorServiceCreateData(vendor.id, dto)
     });
@@ -268,7 +320,7 @@ export class VendorsService {
   }
 
   async updateService(userId: string, serviceId: string, dto: UpdateVendorServiceDto) {
-    const vendor = await this.requireVendorForUser(userId);
+    const vendor = await this.requireActiveServiceVendor(userId);
     const existing = await this.prisma.vendorService.findFirst({
       where: { id: serviceId, vendorId: vendor.id, deletedAt: null }
     });
@@ -283,8 +335,17 @@ export class VendorsService {
     return this.toVendorServiceSummary(service);
   }
 
+  async service(userId: string, serviceId: string) {
+    const vendor = await this.requireActiveServiceVendor(userId);
+    const service = await this.prisma.vendorService.findFirst({
+      where: { id: serviceId, vendorId: vendor.id, deletedAt: null }
+    });
+    if (!service) throw new NotFoundException("Vendor service not found");
+    return this.toVendorServiceSummary(service);
+  }
+
   async archiveService(userId: string, serviceId: string) {
-    const vendor = await this.requireVendorForUser(userId);
+    const vendor = await this.requireActiveServiceVendor(userId);
     const existing = await this.prisma.vendorService.findFirst({
       where: { id: serviceId, vendorId: vendor.id, deletedAt: null }
     });
@@ -418,9 +479,42 @@ export class VendorsService {
   private async requireVendorForUser(userId: string) {
     const vendor = await this.prisma.vendor.findFirst({
       where: { userId, deletedAt: null },
-      select: { id: true, userId: true, businessName: true }
+      select: {
+        id: true,
+        userId: true,
+        businessName: true,
+        businessCategory: true,
+        status: true,
+        deletedAt: true,
+        sourceApplication: {
+          select: {
+            businessCategory: true,
+            businessType: true,
+            catalogueCategory: true,
+            status: true
+          }
+        },
+        user: {
+          select: {
+            accountStatus: true,
+            deletedAt: true
+          }
+        }
+      }
     });
     if (!vendor) throw new NotFoundException("Vendor profile not found");
+    return vendor;
+  }
+
+  private async requireActiveServiceVendor(userId: string) {
+    const vendor = await this.requireVendorForUser(userId);
+    const capabilities = resolvePartnerCapabilities(vendor);
+    if (!capabilities.canAccessWorkspace) {
+      throw new ForbiddenException(capabilities.message);
+    }
+    if (!capabilities.canManageServices) {
+      throw new BadRequestException("Service Provider or mixed Partner capability is required to manage services.");
+    }
     return vendor;
   }
 

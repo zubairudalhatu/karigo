@@ -43,8 +43,8 @@ export async function watchCaptainForegroundLocation(
   }
   return Location.watchPositionAsync({
     accuracy: strongAccuracy ? Location.Accuracy.High : Location.Accuracy.Balanced,
-    timeInterval: strongAccuracy ? 20_000 : 30_000,
-    distanceInterval: strongAccuracy ? 10 : 20
+    timeInterval: 30_000,
+    distanceInterval: strongAccuracy ? 15 : 20
   }, (position) => {
     onLocation({
       latitude: position.coords.latitude,
