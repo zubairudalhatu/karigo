@@ -1,0 +1,210 @@
+{
+  "generatedBy": "scripts/generate-approved-app-icons.cjs",
+  "adaptiveSafeRadius": 320,
+  "approvedMaskPreview": {
+    "filename": "docs/google-play/icon-sources/KariGO-Android-Mask-Previews.png",
+    "field": "Approved Android mask reference",
+    "width": 1710,
+    "height": 740,
+    "bytes": 87788,
+    "hasAlpha": false,
+    "sha256": "4e0452b126e8da66cc7c2af23d5767102f2cea73d48ece20707ad3dbdb6b9644"
+  },
+  "preview": {
+    "filename": "docs/google-play/icon-validation/KariGO-Final-Icon-Validation.png",
+    "field": "Mask, small-size and themed-icon validation",
+    "width": 1600,
+    "height": 760,
+    "bytes": 93466,
+    "hasAlpha": true,
+    "sha256": "1e5694a99d0f23a4a97d52b6bf5da97dd86c44137c7c7a57af0be69e568fac9c"
+  },
+  "apps": [
+    {
+      "app": "customer",
+      "label": "KariGO Customer",
+      "adaptiveBackground": "#D90000",
+      "measuredForegroundRadius": 246.99,
+      "files": [
+        {
+          "filename": "docs/google-play/icon-sources/karigo-customer-launcher-master-1024.png",
+          "field": "Approved launcher source",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 90571,
+          "hasAlpha": false,
+          "sha256": "2d0111b2fb2c91e60104147b92f17ba20227d55934be677cc95b92ee44291513"
+        },
+        {
+          "filename": "apps/customer-app/assets/icon.png",
+          "field": "Fallback launcher icon",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 90571,
+          "hasAlpha": false,
+          "sha256": "2d0111b2fb2c91e60104147b92f17ba20227d55934be677cc95b92ee44291513"
+        },
+        {
+          "filename": "apps/customer-app/assets/adaptive-icon-foreground.png",
+          "field": "Adaptive icon foreground",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 44984,
+          "hasAlpha": true,
+          "sha256": "f8af8c7c2b8ec6141cf6f38506c916bb1d3581ec5c7ab63a5be48cd16d613110"
+        },
+        {
+          "filename": "apps/customer-app/assets/adaptive-icon-monochrome.png",
+          "field": "Android themed monochrome icon",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 9013,
+          "hasAlpha": true,
+          "sha256": "dcabf1377d41b79f45c196e4abd83812c04ba31bf751a86cc52ced41eb3e3e23"
+        },
+        {
+          "filename": "apps/customer-app/assets/play-store-icon.png",
+          "field": "App-local Play Store icon",
+          "width": 512,
+          "height": 512,
+          "bytes": 33162,
+          "hasAlpha": false,
+          "sha256": "a7b96c0c80bd6694f9162341723f09d36d4a8b058dbd9be9b2d4e3db2587e098"
+        },
+        {
+          "filename": "docs/google-play/customer/play-store-icon.png",
+          "field": "Google Play Console app icon",
+          "width": 512,
+          "height": 512,
+          "bytes": 33162,
+          "hasAlpha": false,
+          "sha256": "a7b96c0c80bd6694f9162341723f09d36d4a8b058dbd9be9b2d4e3db2587e098"
+        }
+      ]
+    },
+    {
+      "app": "captain",
+      "label": "KariGO Captain",
+      "adaptiveBackground": "#111111",
+      "measuredForegroundRadius": 246.99,
+      "files": [
+        {
+          "filename": "docs/google-play/icon-sources/karigo-captain-launcher-master-1024.png",
+          "field": "Approved launcher source",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 83865,
+          "hasAlpha": false,
+          "sha256": "509c4277ce153c1a45b38595db1b7c86ae8f53294b3a942dffaa28df04eed7f8"
+        },
+        {
+          "filename": "apps/rider-app/assets/icon.png",
+          "field": "Fallback launcher icon",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 83865,
+          "hasAlpha": false,
+          "sha256": "509c4277ce153c1a45b38595db1b7c86ae8f53294b3a942dffaa28df04eed7f8"
+        },
+        {
+          "filename": "apps/rider-app/assets/adaptive-icon-foreground.png",
+          "field": "Adaptive icon foreground",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 41686,
+          "hasAlpha": true,
+          "sha256": "96c9d189d1a09124a5cd115e1d3e568f67db2ec9efdd31bc1cb49db071dab8c1"
+        },
+        {
+          "filename": "apps/rider-app/assets/adaptive-icon-monochrome.png",
+          "field": "Android themed monochrome icon",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 8964,
+          "hasAlpha": true,
+          "sha256": "4963c6d151c21890408fb7dbe93fcfb70db3b24fb6fe9fc74924714d2bccf0f9"
+        },
+        {
+          "filename": "apps/rider-app/assets/play-store-icon.png",
+          "field": "App-local Play Store icon",
+          "width": 512,
+          "height": 512,
+          "bytes": 33157,
+          "hasAlpha": false,
+          "sha256": "474f690d68957b53fd584b8c5e51cfeabd8b60ecb826cce1ab4f682fce84e7c9"
+        },
+        {
+          "filename": "docs/google-play/captain/play-store-icon.png",
+          "field": "Google Play Console app icon",
+          "width": 512,
+          "height": 512,
+          "bytes": 33157,
+          "hasAlpha": false,
+          "sha256": "474f690d68957b53fd584b8c5e51cfeabd8b60ecb826cce1ab4f682fce84e7c9"
+        }
+      ]
+    },
+    {
+      "app": "partner",
+      "label": "KariGO Partner",
+      "adaptiveBackground": "#FAF7F3",
+      "measuredForegroundRadius": 246.99,
+      "files": [
+        {
+          "filename": "docs/google-play/icon-sources/karigo-partner-launcher-master-1024.png",
+          "field": "Approved launcher source",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 96266,
+          "hasAlpha": false,
+          "sha256": "7ba4d64162848c8eccbc917320c60f3dd3a32259df8c0aa47edc3acab5278436"
+        },
+        {
+          "filename": "apps/partner-app/assets/icon.png",
+          "field": "Fallback launcher icon",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 96266,
+          "hasAlpha": false,
+          "sha256": "7ba4d64162848c8eccbc917320c60f3dd3a32259df8c0aa47edc3acab5278436"
+        },
+        {
+          "filename": "apps/partner-app/assets/adaptive-icon-foreground.png",
+          "field": "Adaptive icon foreground",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 48999,
+          "hasAlpha": true,
+          "sha256": "e5eb84134f9acc2e3269c949811b71bdc2f4f60694353047770daf73fcb21bfc"
+        },
+        {
+          "filename": "apps/partner-app/assets/adaptive-icon-monochrome.png",
+          "field": "Android themed monochrome icon",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 9013,
+          "hasAlpha": true,
+          "sha256": "dcabf1377d41b79f45c196e4abd83812c04ba31bf751a86cc52ced41eb3e3e23"
+        },
+        {
+          "filename": "apps/partner-app/assets/play-store-icon.png",
+          "field": "App-local Play Store icon",
+          "width": 512,
+          "height": 512,
+          "bytes": 38756,
+          "hasAlpha": false,
+          "sha256": "67e7055c122b39db04802312db2b69f1544b6140b8f3f5e0580c4810fcdf3828"
+        },
+        {
+          "filename": "docs/google-play/partner/play-store-icon.png",
+          "field": "Google Play Console app icon",
+          "width": 512,
+          "height": 512,
+          "bytes": 38756,
+          "hasAlpha": false,
+          "sha256": "67e7055c122b39db04802312db2b69f1544b6140b8f3f5e0580c4810fcdf3828"
+        }
+      ]
+    }
+  ]
+}

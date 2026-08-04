@@ -54,7 +54,7 @@ export default ({ config }: ExpoConfigInput) => {
       "@react-native-community/datetimepicker",
       ["expo-build-properties", androidApi36BuildProperties]
     ],
-    icon: "./assets/karigo-icon.png",
+    icon: "./assets/icon.png",
     splash: {
       image: "./assets/karigo-logo.png",
       resizeMode: "contain",
@@ -74,6 +74,7 @@ export default ({ config }: ExpoConfigInput) => {
         ])
       ],
       allowBackup: false,
+      icon: "./assets/icon.png",
       config: googleMapsAndroidApiKey
         ? {
           ...(objectValue(config.android?.config)),
@@ -85,11 +86,12 @@ export default ({ config }: ExpoConfigInput) => {
         : config.android?.config,
       adaptiveIcon: {
         ...(objectValue(config.android?.adaptiveIcon)),
-        foregroundImage: "./assets/karigo-adaptive-icon.png",
-        backgroundColor: "#FFFFFF"
+        foregroundImage: "./assets/adaptive-icon-foreground.png",
+        backgroundColor: "#111111",
+        monochromeImage: "./assets/adaptive-icon-monochrome.png"
       },
       package: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider",
-      versionCode: isStaging ? 1 : 13
+      versionCode: isStaging ? 1 : 14
     },
     ios: {
       ...config.ios,

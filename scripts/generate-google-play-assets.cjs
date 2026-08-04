@@ -1,4 +1,5 @@
 const fs = require("node:fs/promises");
+const crypto = require("node:crypto");
 const path = require("node:path");
 const sharp = require("sharp");
 
@@ -6,7 +7,7 @@ const root = path.resolve(__dirname, "..");
 const apps = [
   {
     key: "customer",
-    source: "apps/customer-app/assets/karigo-icon.png",
+    source: "apps/customer-app/assets/play-store-icon.png",
     logo: "apps/customer-app/assets/karigo-logo.png",
     title: "KariGO",
     strapline: "Rides, deliveries and local services",
@@ -14,7 +15,7 @@ const apps = [
   },
   {
     key: "captain",
-    source: "apps/rider-app/assets/karigo-icon.png",
+    source: "apps/rider-app/assets/play-store-icon.png",
     logo: "apps/rider-app/assets/karigo-logo.png",
     title: "KariGO Captain",
     strapline: "Manage availability and assigned work",
@@ -22,7 +23,7 @@ const apps = [
   },
   {
     key: "partner",
-    source: "apps/partner-app/assets/karigo-icon.png",
+    source: "apps/partner-app/assets/play-store-icon.png",
     logo: "apps/partner-app/assets/karigo-logo.png",
     title: "KariGO Partner",
     strapline: "Manage products, services and orders",
@@ -40,7 +41,7 @@ async function generate(app) {
   const output = path.join(root, "docs", "google-play", app.key);
   await fs.mkdir(output, { recursive: true });
 
-  const iconPath = path.join(output, `${app.key}-store-icon-512.png`);
+  const iconPath = path.join(output, "play-store-icon.png");
   await sharp(path.join(root, app.source))
     .resize(512, 512, { fit: "contain", background: "#ffffff" })
     .flatten({ background: "#ffffff" })
@@ -78,6 +79,7 @@ async function generate(app) {
     sharp(iconPath).metadata(),
     sharp(graphicPath).metadata()
   ]);
+  const checksum = async (file) => crypto.createHash("sha256").update(await fs.readFile(file)).digest("hex");
   return {
     app: app.key,
     files: [
@@ -87,7 +89,8 @@ async function generate(app) {
         width: iconMetadata.width,
         height: iconMetadata.height,
         bytes: (await fs.stat(iconPath)).size,
-        transparency: Boolean(iconMetadata.hasAlpha)
+        transparency: Boolean(iconMetadata.hasAlpha),
+        sha256: await checksum(iconPath)
       },
       {
         filename: path.basename(graphicPath),
@@ -95,7 +98,8 @@ async function generate(app) {
         width: graphicMetadata.width,
         height: graphicMetadata.height,
         bytes: (await fs.stat(graphicPath)).size,
-        transparency: Boolean(graphicMetadata.hasAlpha)
+        transparency: Boolean(graphicMetadata.hasAlpha),
+        sha256: await checksum(graphicPath)
       }
     ]
   };

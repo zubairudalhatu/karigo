@@ -5,12 +5,13 @@
       "app": "customer",
       "files": [
         {
-          "filename": "customer-store-icon-512.png",
+          "filename": "play-store-icon.png",
           "field": "App icon",
           "width": 512,
           "height": 512,
-          "bytes": 39732,
-          "transparency": false
+          "bytes": 33162,
+          "transparency": false,
+          "sha256": "a7b96c0c80bd6694f9162341723f09d36d4a8b058dbd9be9b2d4e3db2587e098"
         },
         {
           "filename": "customer-feature-graphic-1024x500.png",
@@ -18,7 +19,8 @@
           "width": 1024,
           "height": 500,
           "bytes": 61673,
-          "transparency": false
+          "transparency": false,
+          "sha256": "919352438de83d43e254b8da2f1e8fa9dedfb8abd7d6cd44b6cdae30015beb1d"
         }
       ]
     },
@@ -26,12 +28,13 @@
       "app": "captain",
       "files": [
         {
-          "filename": "captain-store-icon-512.png",
+          "filename": "play-store-icon.png",
           "field": "App icon",
           "width": 512,
           "height": 512,
-          "bytes": 44801,
-          "transparency": false
+          "bytes": 33157,
+          "transparency": false,
+          "sha256": "474f690d68957b53fd584b8c5e51cfeabd8b60ecb826cce1ab4f682fce84e7c9"
         },
         {
           "filename": "captain-feature-graphic-1024x500.png",
@@ -39,7 +42,8 @@
           "width": 1024,
           "height": 500,
           "bytes": 60202,
-          "transparency": false
+          "transparency": false,
+          "sha256": "8cb4027221d36a52736ca7321af0c9da404bbc39a7577ac7ba7aa855d893091e"
         }
       ]
     },
@@ -47,12 +51,13 @@
       "app": "partner",
       "files": [
         {
-          "filename": "partner-store-icon-512.png",
+          "filename": "play-store-icon.png",
           "field": "App icon",
           "width": 512,
           "height": 512,
-          "bytes": 39732,
-          "transparency": false
+          "bytes": 38756,
+          "transparency": false,
+          "sha256": "67e7055c122b39db04802312db2b69f1544b6140b8f3f5e0580c4810fcdf3828"
         },
         {
           "filename": "partner-feature-graphic-1024x500.png",
@@ -60,7 +65,8 @@
           "width": 1024,
           "height": 500,
           "bytes": 65375,
-          "transparency": false
+          "transparency": false,
+          "sha256": "4ef24f5780e06e17d1ee4beebc4dc7fbdd68208c2da9267b6e577ab8195ebc62"
         }
       ]
     }

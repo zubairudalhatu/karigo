@@ -49,7 +49,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
     ],
     ["expo-build-properties", androidApi36BuildProperties]
   ],
-  icon: "./assets/karigo-icon.png",
+  icon: "./assets/icon.png",
   splash: {
     image: "./assets/karigo-logo.png",
     resizeMode: "contain",
@@ -74,6 +74,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
       ])
     ],
     allowBackup: false,
+    icon: "./assets/icon.png",
     config: googleMapsAndroidApiKey
       ? {
         ...(config.android?.config ?? {}),
@@ -85,11 +86,12 @@ export default ({ config }: { config: Record<string, any> }) => ({
       : config.android?.config,
     adaptiveIcon: {
       ...(config.android?.adaptiveIcon ?? {}),
-      foregroundImage: "./assets/karigo-adaptive-icon.png",
-      backgroundColor: "#FFFFFF"
+      foregroundImage: "./assets/adaptive-icon-foreground.png",
+      backgroundColor: "#D90000",
+      monochromeImage: "./assets/adaptive-icon-monochrome.png"
     },
     package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer",
-    versionCode: isStaging ? 1 : 15
+    versionCode: isStaging ? 1 : 16
   },
   ios: {
     ...config.ios,

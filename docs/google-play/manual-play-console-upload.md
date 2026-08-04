@@ -8,7 +8,7 @@ Repeat for each exact Play app record:
 2. Confirm Play App Signing is enabled and the expected upload certificate is registered.
 3. Open **Test and release > Testing > Internal testing**.
 4. Create a new release and upload the AAB downloaded from its authenticated EAS build page.
-5. Confirm package/versionCode: Customer `com.karigo.customer`/15; Captain `com.karigo.rider`/13; Partner `com.karigo.partner`/5.
+5. Confirm package/versionCode: Customer `com.karigo.customer`/16; Captain `com.karigo.rider`/14; Partner `com.karigo.partner`/6.
 6. Paste release notes from the app `store-listing.md`.
 7. Review device compatibility, signing, target SDK, policy and native-code warnings. Stop on any blocking warning.
 8. Add only the private Google/Workspace tester list and roll out to Internal testing.

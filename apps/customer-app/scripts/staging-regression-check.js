@@ -16,7 +16,7 @@ assert(appConfig.includes("compileSdkVersion: 36"), "Customer app must compile a
 assert(appConfig.includes("targetSdkVersion: 36"), "Customer app must target Android API 36.");
 assert(appConfig.includes('buildToolsVersion: "36.0.0"'), "Customer app must use Android build tools 36.0.0.");
 assert(appConfig.includes('package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer"'), "Customer app package names must remain stable.");
-assert(appConfig.includes("versionCode: isStaging ? 1 : 15"), "Customer production versionCode must be 15 for the hardened Play 1.0.0 AAB.");
+assert(appConfig.includes("versionCode: isStaging ? 1 : 16"), "Customer production versionCode must be 16 for the approved-icon Play 1.0.0 AAB.");
 assert(appConfig.includes('"android.permission.SYSTEM_ALERT_WINDOW"') && appConfig.includes("allowBackup: false"), "Customer production must block overlay access and Android backup.");
 assert(appConfig.includes('owner: "zamkah"'), "Customer app must resolve to the zamkah EAS account.");
 assert(appConfig.includes('const customerAppVersion = "1.0.0"'), "Customer app version must be 1.0.0 for the Play release line.");
@@ -530,7 +530,10 @@ assert(editAddressScreen.includes("Use current location"), "Edit address screen 
 assert(editAddressScreen.includes("requestForegroundPermissionsAsync"), "Edit address location refresh must request foreground permission.");
 
 assert(appConfig.includes('name: isStaging ? "KariGO Customer Staging" : "KariGO"'), "Customer production app name must remain KariGO.");
-assert(appConfig.includes("karigo-icon.png") && appConfig.includes("karigo-adaptive-icon.png"), "Customer App config must use launch-ready icon and adaptive icon assets.");
+assert(appConfig.includes('icon: "./assets/icon.png"'), "Customer App config must use the approved fallback launcher icon.");
+assert(appConfig.includes('foregroundImage: "./assets/adaptive-icon-foreground.png"'), "Customer App config must use the approved adaptive K foreground.");
+assert(appConfig.includes('monochromeImage: "./assets/adaptive-icon-monochrome.png"'), "Customer App config must use the approved themed K silhouette.");
+assert(appConfig.includes('backgroundColor: "#D90000"'), "Customer adaptive icon must use the approved KariGO red background.");
 assert(easConfig.includes("EXPO_PUBLIC_PAYMENT_LAUNCH_MODE") && easConfig.includes("flutterwave_live"), "Customer production EAS profile must default to live Flutterwave checkout mode.");
 assert(appConfig.includes("expo-location"), "Customer App config must include Expo Location.");
 assert(appConfig.includes("locationWhenInUsePermission"), "Customer App config must include safe location permission copy.");

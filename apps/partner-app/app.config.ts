@@ -44,7 +44,7 @@ export default ({ config }: ExpoConfigInput) => {
       "expo-document-picker",
       ["expo-build-properties", androidApi36BuildProperties]
     ],
-    icon: "./assets/karigo-icon.png",
+    icon: "./assets/icon.png",
     splash: {
       image: "./assets/karigo-logo.png",
       resizeMode: "contain",
@@ -65,13 +65,15 @@ export default ({ config }: ExpoConfigInput) => {
         ])
       ],
       allowBackup: false,
+      icon: "./assets/icon.png",
       adaptiveIcon: {
         ...(objectValue(config.android?.adaptiveIcon)),
-        foregroundImage: "./assets/karigo-adaptive-icon.png",
-        backgroundColor: "#FFFFFF"
+        foregroundImage: "./assets/adaptive-icon-foreground.png",
+        backgroundColor: "#FAF7F3",
+        monochromeImage: "./assets/adaptive-icon-monochrome.png"
       },
       package: isStaging ? "com.karigo.partner.staging" : "com.karigo.partner",
-      versionCode: isStaging ? 1 : 5
+      versionCode: isStaging ? 1 : 6
     },
     ios: {
       ...config.ios,

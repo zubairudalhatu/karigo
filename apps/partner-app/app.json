@@ -25,7 +25,7 @@
         }
       ]
     ],
-    "icon": "./assets/karigo-icon.png",
+    "icon": "./assets/icon.png",
     "splash": {
       "image": "./assets/karigo-logo.png",
       "resizeMode": "contain",
@@ -46,12 +46,14 @@
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
       "allowBackup": false,
+      "icon": "./assets/icon.png",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/karigo-adaptive-icon.png",
-        "backgroundColor": "#FFFFFF"
+        "foregroundImage": "./assets/adaptive-icon-foreground.png",
+        "backgroundColor": "#FAF7F3",
+        "monochromeImage": "./assets/adaptive-icon-monochrome.png"
       },
       "package": "com.karigo.partner",
-      "versionCode": 5
+      "versionCode": 6
     },
     "owner": "zamkah",
     "runtimeVersion": {
