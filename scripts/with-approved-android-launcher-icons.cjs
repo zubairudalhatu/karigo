@@ -13,7 +13,9 @@ module.exports = function withApprovedAndroidLauncherIcons(config) {
 
       for (const density of densities) {
         const source = path.join(sourceRoot, `mipmap-${density}-v4`);
-        const target = path.join(resourceRoot, `mipmap-${density}-v4`);
+        // Expo already creates these canonical density folders. Overwrite its
+        // generated legacy rasters instead of adding equivalent -v4 resources.
+        const target = path.join(resourceRoot, `mipmap-${density}`);
         await fs.mkdir(target, { recursive: true });
         await Promise.all([
           fs.copyFile(path.join(source, "ic_launcher.webp"), path.join(target, "ic_launcher.webp")),

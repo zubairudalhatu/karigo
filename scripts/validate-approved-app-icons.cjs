@@ -6,6 +6,7 @@ const sharp = require("sharp");
 
 const root = path.resolve(__dirname, "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "docs/google-play/approved-icon-asset-manifest.json"), "utf8"));
+const androidLauncherPlugin = fs.readFileSync(path.join(root, "scripts/with-approved-android-launcher-icons.cjs"), "utf8");
 
 const checksum = (file) => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 const byField = (app, field) => app.files.find((file) => file.field === field);
@@ -42,6 +43,14 @@ async function verifyMonochrome(record) {
 }
 
 async function main() {
+  assert(
+    androidLauncherPlugin.includes('path.join(resourceRoot, `mipmap-${density}`)'),
+    "The Android launcher plugin must overwrite Expo's canonical density folders."
+  );
+  assert(
+    !androidLauncherPlugin.includes('path.join(resourceRoot, `mipmap-${density}-v4`)'),
+    "The Android launcher plugin must not create duplicate -v4 density resources."
+  );
   assert.equal(manifest.apps.length, 3, "Exactly three app icon sets must be present.");
   assert.equal(manifest.adaptiveSafeRadius, 320, "The approved adaptive safe radius must remain 320px.");
   await verifyFile(manifest.approvedMaskPreview);
