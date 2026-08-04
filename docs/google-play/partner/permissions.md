@@ -13,4 +13,14 @@ Device location, contacts, SMS, call log, microphone and broad storage are not r
 
 ## Final merged AAB manifest
 
-Pending generated AAB inspection. Record every `uses-permission`, exported component, deep-link scheme and cleartext/backup setting here before Play upload.
+Build `effbe636-d5f4-4aa0-b69b-d1df7d1270d3` declares:
+
+| Permission | Purpose |
+| --- | --- |
+| `INTERNET`, `ACCESS_NETWORK_STATE` | HTTPS API and updates |
+| `READ_EXTERNAL_STORAGE` | User-selected product, service and document media compatibility on older Android versions |
+| `USE_BIOMETRIC`, `USE_FINGERPRINT` | Optional local biometric sign-in |
+| `VIBRATE` | Order/account notification feedback |
+| App-scoped dynamic receiver permission | Protects dynamically registered internal receivers |
+
+The launcher/deep-link activity supports `karigo-partner`. Library exported components are limited to the image crop activity and the profile installer receiver, which is protected by an Android system permission. Providers are not exported. Backup is disabled and no cleartext override is present. Location, camera, write-storage, microphone, overlay, contacts, SMS and call-log permissions are absent.

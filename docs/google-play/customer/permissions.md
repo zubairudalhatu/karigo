@@ -14,4 +14,16 @@ Not intended: background location, contacts, SMS, call log, broad storage, insta
 
 ## Final merged AAB manifest
 
-Pending generated AAB inspection. Record every `uses-permission`, exported component, deep-link scheme and cleartext/backup setting here before Play upload.
+Build `70d952a9-6fb4-45e9-a68d-05ee64723807` declares:
+
+| Permission | Purpose |
+| --- | --- |
+| `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION` | Foreground address, Ride pickup/destination and map selection |
+| `INTERNET`, `ACCESS_NETWORK_STATE` | HTTPS API, maps, hosted checkout and updates |
+| `READ_EXTERNAL_STORAGE` | User-selected media compatibility on older supported Android versions |
+| `USE_BIOMETRIC`, `USE_FINGERPRINT` | Optional local biometric sign-in |
+| `VIBRATE` | Local notification/haptic feedback |
+| `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE` | Expo updates/background work and foreground location support; no background-location permission is declared |
+| App-scoped dynamic receiver permission | Protects dynamically registered internal receivers |
+
+The launcher/deep-link activity supports `karigo-customer`. Library components exported by the merged manifest are the image crop activity plus WorkManager/profile diagnostic components; the latter are protected by Android system permissions. Providers are not exported. Backup is disabled and no cleartext override is present. Camera, write-storage, microphone, overlay, background-location, contacts, SMS and call-log permissions are absent.
