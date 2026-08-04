@@ -1,6 +1,6 @@
 # Google Play release build record
 
-Status: approved icons integrated. Final icon-bearing AAB builds pending.
+Status: final approved-icon AABs built and technically verified. Google Play Internal testing upload pending.
 
 | Field | Customer | Captain | Partner |
 | --- | --- | --- | --- |
@@ -12,20 +12,22 @@ Status: approved icons integrated. Final icon-bearing AAB builds pending.
 | Channel | `customer-production` | `captain-production` | `partner-production` |
 | Build profile | `customer-play-internal` | `captain-play-internal` | `partner-play-internal` |
 | Build environment | EAS `production` | EAS `production` | EAS `production` |
-| Commit | Pending icon integration commit | Pending icon integration commit | Pending icon integration commit |
-| Build ID | Pending | Pending | Pending |
-| EAS build page / artifact locator | Pending | Pending | Pending |
-| Build date (UTC) | Pending | Pending | Pending |
-| AAB size | Pending | Pending | Pending |
-| AAB SHA-256 | Pending | Pending | Pending |
-| Signing credential | Existing Customer credential; verify after build | Existing Captain credential; verify after build | Existing Partner credential; verify after build |
-| Signing certificate SHA-1 | Verify after build | Verify after build | Verify after build |
-| Target SDK | 36 configured; verify from final manifest | 36 configured; verify from final manifest | 36 configured; verify from final manifest |
-| 16 KB page support | Verify final AAB | Verify final AAB | Verify final AAB |
+| Commit | `94c66e22cd2c0fb043b1e45d52591d6eb7fc30f6` | `94c66e22cd2c0fb043b1e45d52591d6eb7fc30f6` | `94c66e22cd2c0fb043b1e45d52591d6eb7fc30f6` |
+| Build ID | `c64a4b43-208e-4c88-8420-6f1cb41b8ec4` | `237dbfb9-96c9-442c-88f4-8a8d83ca7112` | `610ee33e-24ce-4b05-8195-8adc36898886` |
+| EAS build page / artifact locator | [Customer build](https://expo.dev/accounts/zamkah/projects/karigo-customer/builds/c64a4b43-208e-4c88-8420-6f1cb41b8ec4) | [Captain build](https://expo.dev/accounts/zamkah/projects/karigo-rider/builds/237dbfb9-96c9-442c-88f4-8a8d83ca7112) | [Partner build](https://expo.dev/accounts/zamkah/projects/karigo-partner/builds/610ee33e-24ce-4b05-8195-8adc36898886) |
+| Build completed (UTC) | 2026-08-04 07:24:30 | 2026-08-04 07:39:51 | 2026-08-04 07:40:01 |
+| AAB size | 51,226,399 bytes | 51,254,398 bytes | 50,297,802 bytes |
+| AAB SHA-256 | `9A9805F221B542B1A7D9CC3129F2598F4B31D6B61DEC561D2B9E8C9C22F7FE17` | `2CF37E52F14B85132F7643AE6BAA935481A4B8EB123DD49281AA1987C626FCB3` | `87C395DDA4C4750047A31F55C8023A30D82B76D296BBBB5D8030413254930C10` |
+| Signing credential | Existing Customer remote credential verified | Existing Captain remote credential verified | Existing Partner remote credential verified |
+| Signing certificate SHA-1 | `17:CE:4B:B0:42:F0:C4:1B:21:0B:96:F6:A1:B0:39:9D:24:EB:C1:D9` | `5D:12:EF:B8:3A:F3:07:B3:D2:57:65:65:58:7B:22:28:56:24:E0:20` | `02:62:05:41:7D:B0:5A:06:76:BB:5F:E5:5A:28:AB:03:99:1F:7E:86` |
+| Target SDK | 36 verified from final manifest | 36 verified from final manifest | 36 verified from final manifest |
+| 16 KB page support | Passed for all 64-bit libraries | Passed for all 64-bit libraries | Passed for all 64-bit libraries |
 
 Direct signed download URLs are deliberately not stored in Git. Open the authenticated EAS build page to download each AAB.
 
 Only versionCodes 16, 14 and 6 with the approved icon assets may be uploaded to Play.
+
+Compiled AAB inspection confirmed that the pre-Android-8 legacy and round launchers contain each app's full approved composition, while adaptive and themed resources contain only the corrected KariGO K mark.
 
 ## Superseded inspection builds
 
