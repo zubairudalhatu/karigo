@@ -52,7 +52,8 @@ export default ({ config }: ExpoConfigInput) => {
         locationWhenInUsePermission: "KariGO Captain uses your location only while you are online or on an active delivery so dispatch can coordinate pickups and drop-offs."
       }],
       "@react-native-community/datetimepicker",
-      ["expo-build-properties", androidApi36BuildProperties]
+      ["expo-build-properties", androidApi36BuildProperties],
+      "../../scripts/with-approved-android-launcher-icons.cjs"
     ],
     icon: "./assets/icon.png",
     splash: {

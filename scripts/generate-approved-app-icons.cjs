@@ -10,6 +10,13 @@ const canvasSize = 1024;
 const foregroundLimitY = 520;
 const backgroundThreshold = 4;
 const adaptiveSafeRadius = 320;
+const androidDensities = [
+  ["mdpi", 48],
+  ["hdpi", 72],
+  ["xhdpi", 96],
+  ["xxhdpi", 144],
+  ["xxxhdpi", 192]
+];
 
 const apps = [
   {
@@ -152,6 +159,24 @@ async function maskedIcon(file, size, radius) {
   return sharp(file).resize(size, size).composite([{ input: mask, blend: "dest-in" }]).png().toBuffer();
 }
 
+async function generateAndroidFallbacks(source, assetRoot) {
+  const files = [];
+  for (const [density, size] of androidDensities) {
+    const directory = path.join(assetRoot, "android-launcher", `mipmap-${density}-v4`);
+    const launcher = path.join(directory, "ic_launcher.webp");
+    const roundLauncher = path.join(directory, "ic_launcher_round.webp");
+    await fs.mkdir(directory, { recursive: true });
+    await sharp(source).resize(size, size).webp({ lossless: true }).toFile(launcher);
+    const round = await maskedIcon(source, size, size / 2);
+    await sharp(round).webp({ lossless: true }).toFile(roundLauncher);
+    files.push(
+      await describe(launcher, `Android legacy launcher ${density}`),
+      await describe(roundLauncher, `Android legacy round launcher ${density}`)
+    );
+  }
+  return files;
+}
+
 async function buildPreview(results) {
   const width = 1600;
   const height = 760;
@@ -225,6 +250,7 @@ async function generate(app) {
     sharp(source).resize(512, 512).flatten({ background: app.background }).removeAlpha().png({ compressionLevel: 9 }).toFile(appPlayStoreIcon)
   ]);
   await fs.copyFile(appPlayStoreIcon, docsPlayStoreIcon);
+  const androidFallbackFiles = await generateAndroidFallbacks(source, assetRoot);
 
   const radius = await safeRadius(foreground);
   if (radius > adaptiveSafeRadius) {
@@ -243,7 +269,8 @@ async function generate(app) {
       describe(foreground, "Adaptive icon foreground"),
       describe(monochrome, "Android themed monochrome icon"),
       describe(appPlayStoreIcon, "App-local Play Store icon"),
-      describe(docsPlayStoreIcon, "Google Play Console app icon")
+      describe(docsPlayStoreIcon, "Google Play Console app icon"),
+      ...androidFallbackFiles
     ])
   };
 }

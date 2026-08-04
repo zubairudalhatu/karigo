@@ -41,4 +41,12 @@ The hardened Task 208B builds are also superseded by the approved icon release a
 - Captain `f7afbcd7-bf24-422b-8ed9-948042cbdce3`, versionCode 13.
 - Partner `effbe636-d5f4-4aa0-b69b-d1df7d1270d3`, versionCode 5.
 
+The first Task 208B-A1 icon builds were used to inspect compiled Android resources and must not be uploaded:
+
+- Customer `815ecd34-70ac-4f15-8b33-13138e962cff`, versionCode 16.
+- Captain `aa031990-0776-434d-aea7-e590c311846b`, versionCode 14.
+- Partner `392cbbf7-6c72-4f37-ba28-ca7fbee6640e`, versionCode 6.
+
+Those artifacts contained the correct adaptive K foreground, but Expo's generated pre-Android-8 launcher raster used only that foreground instead of the approved full fallback composition. A deterministic native resource override now preserves the full approved fallback at every Android density while leaving adaptive and themed icons unchanged.
+
 Inspection found an unnecessary overlay permission. Customer and Partner also carried camera/write-storage permissions that their gallery-only upload flows do not use. The final builds use new version codes after those permissions and Android backup were blocked.

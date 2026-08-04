@@ -15,7 +15,8 @@
             "buildToolsVersion": "36.0.0"
           }
         }
-      ]
+      ],
+      "../../scripts/with-approved-android-launcher-icons.cjs"
     ],
     "icon": "./assets/icon.png",
     "splash": {

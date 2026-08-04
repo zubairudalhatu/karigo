@@ -72,12 +72,14 @@ expect(appConfig.includes('"android.permission.SYSTEM_ALERT_WINDOW"') && appConf
 expect(appConfig.includes('icon: "./assets/icon.png"'), "Captain config must use the approved fallback launcher icon.");
 expect(appConfig.includes('foregroundImage: "./assets/adaptive-icon-foreground.png"'), "Captain config must use the approved adaptive K foreground.");
 expect(appConfig.includes('monochromeImage: "./assets/adaptive-icon-monochrome.png"'), "Captain config must use the approved themed K silhouette.");
+expect(appConfig.includes('"../../scripts/with-approved-android-launcher-icons.cjs"'), "Captain config must preserve approved Android fallback launchers.");
 expect(appConfig.includes('backgroundColor: "#111111"'), "Captain adaptive icon must use the approved black background.");
 expect(easJson.build?.["captain-play-internal"]?.channel === "captain-production", "Captain Play Internal profile must use the production channel.");
 expect(easJson.submit?.["captain-play-internal"]?.android?.track === "internal", "Captain Play submit profile must target Internal testing.");
 expect(productionProfile?.env?.EXPO_PUBLIC_RIDES_CONTROLLED_PILOT_ENABLED === "false", "Captain production must disable the controlled-pilot flag.");
 expect(productionProfile?.env?.EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED === "false", "Captain production must disable staging dispatch.");
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-build-properties"), "Captain app base config must include build-properties.");
+expect(JSON.stringify(appJson.expo.plugins).includes("with-approved-android-launcher-icons.cjs"), "Captain app base config must preserve approved Android fallback launchers.");
 expect(JSON.stringify(appJson.expo.plugins).includes('"targetSdkVersion":36'), "Captain app base config must target Android API 36.");
 
 expect(apiClient.includes("karigo_captain_session_v2"), "Captain app must persist access/refresh tokens in the v2 session envelope.");

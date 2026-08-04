@@ -42,7 +42,8 @@ export default ({ config }: ExpoConfigInput) => {
         }
       ],
       "expo-document-picker",
-      ["expo-build-properties", androidApi36BuildProperties]
+      ["expo-build-properties", androidApi36BuildProperties],
+      "../../scripts/with-approved-android-launcher-icons.cjs"
     ],
     icon: "./assets/icon.png",
     splash: {

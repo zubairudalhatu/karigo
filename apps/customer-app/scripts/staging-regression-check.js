@@ -12,6 +12,7 @@ const appConfig = read("app.config.ts");
 
 assert(packageJson.dependencies?.["expo-build-properties"] === "~0.14.8", "Customer app must use Expo build-properties for Android API 36 readiness.");
 assert(JSON.stringify(appJson.expo.plugins).includes("expo-build-properties"), "Customer app base config must include build-properties.");
+assert(JSON.stringify(appJson.expo.plugins).includes("with-approved-android-launcher-icons.cjs"), "Customer app base config must preserve approved Android fallback launchers.");
 assert(appConfig.includes("compileSdkVersion: 36"), "Customer app must compile against Android API 36.");
 assert(appConfig.includes("targetSdkVersion: 36"), "Customer app must target Android API 36.");
 assert(appConfig.includes('buildToolsVersion: "36.0.0"'), "Customer app must use Android build tools 36.0.0.");
@@ -533,6 +534,7 @@ assert(appConfig.includes('name: isStaging ? "KariGO Customer Staging" : "KariGO
 assert(appConfig.includes('icon: "./assets/icon.png"'), "Customer App config must use the approved fallback launcher icon.");
 assert(appConfig.includes('foregroundImage: "./assets/adaptive-icon-foreground.png"'), "Customer App config must use the approved adaptive K foreground.");
 assert(appConfig.includes('monochromeImage: "./assets/adaptive-icon-monochrome.png"'), "Customer App config must use the approved themed K silhouette.");
+assert(appConfig.includes('"../../scripts/with-approved-android-launcher-icons.cjs"'), "Customer App config must preserve approved Android fallback launchers.");
 assert(appConfig.includes('backgroundColor: "#D90000"'), "Customer adaptive icon must use the approved KariGO red background.");
 assert(easConfig.includes("EXPO_PUBLIC_PAYMENT_LAUNCH_MODE") && easConfig.includes("flutterwave_live"), "Customer production EAS profile must default to live Flutterwave checkout mode.");
 assert(appConfig.includes("expo-location"), "Customer App config must include Expo Location.");

@@ -79,6 +79,96 @@
           "bytes": 33162,
           "hasAlpha": false,
           "sha256": "a7b96c0c80bd6694f9162341723f09d36d4a8b058dbd9be9b2d4e3db2587e098"
+        },
+        {
+          "filename": "apps/customer-app/assets/android-launcher/mipmap-mdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher mdpi",
+          "width": 48,
+          "height": 48,
+          "bytes": 1132,
+          "hasAlpha": false,
+          "sha256": "f546023393d974320365d72074840469de668b50395c5f80d5c3aa1daa829d36"
+        },
+        {
+          "filename": "apps/customer-app/assets/android-launcher/mipmap-mdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher mdpi",
+          "width": 48,
+          "height": 48,
+          "bytes": 1540,
+          "hasAlpha": true,
+          "sha256": "1f39b83969c4ef818185aaa28a649ca11c0346e0f35c876b57a519fc8da0cbde"
+        },
+        {
+          "filename": "apps/customer-app/assets/android-launcher/mipmap-hdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher hdpi",
+          "width": 72,
+          "height": 72,
+          "bytes": 1914,
+          "hasAlpha": false,
+          "sha256": "2bab77a3a77ea783037600898bfca2bf2476243ba54c3d363c933357b8e27990"
+        },
+        {
+          "filename": "apps/customer-app/assets/android-launcher/mipmap-hdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher hdpi",
+          "width": 72,
+          "height": 72,
+          "bytes": 2558,
+          "hasAlpha": true,
+          "sha256": "926c64e9cdcdbf78ff8865eb3255453a3613bc3a385d0a3bdc04b9a3397ed84c"
+        },
+        {
+          "filename": "apps/customer-app/assets/android-launcher/mipmap-xhdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher xhdpi",
+          "width": 96,
+          "height": 96,
+          "bytes": 2810,
+          "hasAlpha": false,
+          "sha256": "fb12d6a4e09186edf096a433d8ad1c6108d9fdedbbcf5ea167c8bd86fb6de06a"
+        },
+        {
+          "filename": "apps/customer-app/assets/android-launcher/mipmap-xhdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher xhdpi",
+          "width": 96,
+          "height": 96,
+          "bytes": 3702,
+          "hasAlpha": true,
+          "sha256": "b0b885c5a373d49946734bce0a10f31e1ce9d5587a1e852faaaae481898b2b38"
+        },
+        {
+          "filename": "apps/customer-app/assets/android-launcher/mipmap-xxhdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher xxhdpi",
+          "width": 144,
+          "height": 144,
+          "bytes": 4666,
+          "hasAlpha": false,
+          "sha256": "1ba7c71583ab655a365df6a783c70405363800e2c87c37592049f8babe2dd517"
+        },
+        {
+          "filename": "apps/customer-app/assets/android-launcher/mipmap-xxhdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher xxhdpi",
+          "width": 144,
+          "height": 144,
+          "bytes": 5934,
+          "hasAlpha": true,
+          "sha256": "e98d958d90fb3273c185d130ff1ba8ad1762c61b1131d0175cbbd7d84c2dca1d"
+        },
+        {
+          "filename": "apps/customer-app/assets/android-launcher/mipmap-xxxhdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher xxxhdpi",
+          "width": 192,
+          "height": 192,
+          "bytes": 6410,
+          "hasAlpha": false,
+          "sha256": "1778e920d4c64940a2fe82920a23c683a2e46f73775595d45b22a49525d8a5e8"
+        },
+        {
+          "filename": "apps/customer-app/assets/android-launcher/mipmap-xxxhdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher xxxhdpi",
+          "width": 192,
+          "height": 192,
+          "bytes": 8226,
+          "hasAlpha": true,
+          "sha256": "1748c7e2d637f7e04d74f0fc2918edbb6e1b63555dcea025bd966273fbff6b86"
         }
       ]
     },
@@ -141,6 +231,96 @@
           "bytes": 33157,
           "hasAlpha": false,
           "sha256": "474f690d68957b53fd584b8c5e51cfeabd8b60ecb826cce1ab4f682fce84e7c9"
+        },
+        {
+          "filename": "apps/rider-app/assets/android-launcher/mipmap-mdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher mdpi",
+          "width": 48,
+          "height": 48,
+          "bytes": 1204,
+          "hasAlpha": false,
+          "sha256": "0b36d3a0f9d00d362130d6b4d59c39a6579298e2192910cdccfa41c49b7732e0"
+        },
+        {
+          "filename": "apps/rider-app/assets/android-launcher/mipmap-mdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher mdpi",
+          "width": 48,
+          "height": 48,
+          "bytes": 1566,
+          "hasAlpha": true,
+          "sha256": "cb7be4e75dd38f3cb31b02fd2c2e8a7067f87f2b090060ed1b89f31714b2dd99"
+        },
+        {
+          "filename": "apps/rider-app/assets/android-launcher/mipmap-hdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher hdpi",
+          "width": 72,
+          "height": 72,
+          "bytes": 2010,
+          "hasAlpha": false,
+          "sha256": "c4172d80882eb67b7dc73319bd865b253863c44b7ceaacdf83f8795f6683a919"
+        },
+        {
+          "filename": "apps/rider-app/assets/android-launcher/mipmap-hdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher hdpi",
+          "width": 72,
+          "height": 72,
+          "bytes": 2656,
+          "hasAlpha": true,
+          "sha256": "3bdd0e8d472aa817f1e6867c925f63efd0c251ae384dbcd485d05e8401d55165"
+        },
+        {
+          "filename": "apps/rider-app/assets/android-launcher/mipmap-xhdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher xhdpi",
+          "width": 96,
+          "height": 96,
+          "bytes": 2692,
+          "hasAlpha": false,
+          "sha256": "9f5c4f3e5d18d05c004b68e0a2e1e679186179b54e785fe84501af47591c4986"
+        },
+        {
+          "filename": "apps/rider-app/assets/android-launcher/mipmap-xhdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher xhdpi",
+          "width": 96,
+          "height": 96,
+          "bytes": 3612,
+          "hasAlpha": true,
+          "sha256": "ac845ad22eb9310a829c9599e7ed38f4f6b422ec91715650e50ad1399cbcba29"
+        },
+        {
+          "filename": "apps/rider-app/assets/android-launcher/mipmap-xxhdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher xxhdpi",
+          "width": 144,
+          "height": 144,
+          "bytes": 4510,
+          "hasAlpha": false,
+          "sha256": "d20d3483590aeb0032bb25b5ff9014859a1a475e4afda0bc7bfc234ef5a443b1"
+        },
+        {
+          "filename": "apps/rider-app/assets/android-launcher/mipmap-xxhdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher xxhdpi",
+          "width": 144,
+          "height": 144,
+          "bytes": 5794,
+          "hasAlpha": true,
+          "sha256": "a6edca0a22cb33579ee748d48df8b1c5ff13b24873c9e9ddabb460437c763fc9"
+        },
+        {
+          "filename": "apps/rider-app/assets/android-launcher/mipmap-xxxhdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher xxxhdpi",
+          "width": 192,
+          "height": 192,
+          "bytes": 6370,
+          "hasAlpha": false,
+          "sha256": "f5dc0b8420995cbdfbeee5b7fdb417bd95cd54930f9c3fef4c62bffd5fbf6b86"
+        },
+        {
+          "filename": "apps/rider-app/assets/android-launcher/mipmap-xxxhdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher xxxhdpi",
+          "width": 192,
+          "height": 192,
+          "bytes": 8422,
+          "hasAlpha": true,
+          "sha256": "14edb560547437ac8abdc22f654cee75050121e5ee7d06b07c203051076e2057"
         }
       ]
     },
@@ -203,6 +383,96 @@
           "bytes": 38756,
           "hasAlpha": false,
           "sha256": "67e7055c122b39db04802312db2b69f1544b6140b8f3f5e0580c4810fcdf3828"
+        },
+        {
+          "filename": "apps/partner-app/assets/android-launcher/mipmap-mdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher mdpi",
+          "width": 48,
+          "height": 48,
+          "bytes": 1462,
+          "hasAlpha": false,
+          "sha256": "752c307ba3244bdd439d76f495ce9ad48389abb48e33d4f151fa296e9427f9cd"
+        },
+        {
+          "filename": "apps/partner-app/assets/android-launcher/mipmap-mdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher mdpi",
+          "width": 48,
+          "height": 48,
+          "bytes": 1914,
+          "hasAlpha": true,
+          "sha256": "9e5959083484592ec827be5b8b4a5e88b14c133cf8a61571ad7348a99cb11a64"
+        },
+        {
+          "filename": "apps/partner-app/assets/android-launcher/mipmap-hdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher hdpi",
+          "width": 72,
+          "height": 72,
+          "bytes": 2458,
+          "hasAlpha": false,
+          "sha256": "4f3c4acc1f84e59c24d374b612e76182db5090abc0469066c06deccbcc3a5a2e"
+        },
+        {
+          "filename": "apps/partner-app/assets/android-launcher/mipmap-hdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher hdpi",
+          "width": 72,
+          "height": 72,
+          "bytes": 3128,
+          "hasAlpha": true,
+          "sha256": "01321276bfb65f004ad8b5ecbc5aa3a6e432e4021e21b94a1db8a2c358e42b9f"
+        },
+        {
+          "filename": "apps/partner-app/assets/android-launcher/mipmap-xhdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher xhdpi",
+          "width": 96,
+          "height": 96,
+          "bytes": 3546,
+          "hasAlpha": false,
+          "sha256": "379da021f110921c9c946c88358b2f8667f645858bd5b8b55306e8c2d8394277"
+        },
+        {
+          "filename": "apps/partner-app/assets/android-launcher/mipmap-xhdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher xhdpi",
+          "width": 96,
+          "height": 96,
+          "bytes": 4400,
+          "hasAlpha": true,
+          "sha256": "3d37aa03964caf9cd614d9419755a9cefb8badcf985a9b9f8aab0bd6cfd4449d"
+        },
+        {
+          "filename": "apps/partner-app/assets/android-launcher/mipmap-xxhdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher xxhdpi",
+          "width": 144,
+          "height": 144,
+          "bytes": 5770,
+          "hasAlpha": false,
+          "sha256": "4a49cbfa4548b74b1f019226ed3b9fc93e42a9d6a7998c4dc719967f4fc53569"
+        },
+        {
+          "filename": "apps/partner-app/assets/android-launcher/mipmap-xxhdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher xxhdpi",
+          "width": 144,
+          "height": 144,
+          "bytes": 7200,
+          "hasAlpha": true,
+          "sha256": "64a4cd38cc14dffbaea4bcd8ee22eddd27f67b4e510db2701879536f0814f912"
+        },
+        {
+          "filename": "apps/partner-app/assets/android-launcher/mipmap-xxxhdpi-v4/ic_launcher.webp",
+          "field": "Android legacy launcher xxxhdpi",
+          "width": 192,
+          "height": 192,
+          "bytes": 7682,
+          "hasAlpha": false,
+          "sha256": "35c8d9d8b846340a84d7f95448a21042003c0e016d87809e7338d9bdb644b7c1"
+        },
+        {
+          "filename": "apps/partner-app/assets/android-launcher/mipmap-xxxhdpi-v4/ic_launcher_round.webp",
+          "field": "Android legacy round launcher xxxhdpi",
+          "width": 192,
+          "height": 192,
+          "bytes": 10286,
+          "hasAlpha": true,
+          "sha256": "5666d69e653babd59d1d37c7a9028059cedfc66089375271b0aaa1eedbcfaaa8"
         }
       ]
     }

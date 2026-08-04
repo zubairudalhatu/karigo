@@ -47,7 +47,8 @@ export default ({ config }: { config: Record<string, any> }) => ({
         locationWhenInUsePermission: "KariGO uses your location only when you choose to detect a delivery or service address."
       }
     ],
-    ["expo-build-properties", androidApi36BuildProperties]
+    ["expo-build-properties", androidApi36BuildProperties],
+    "../../scripts/with-approved-android-launcher-icons.cjs"
   ],
   icon: "./assets/icon.png",
   splash: {

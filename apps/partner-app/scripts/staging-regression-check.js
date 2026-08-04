@@ -76,6 +76,7 @@ expect(appJson.expo.ios?.bundleIdentifier === "com.karigo.partner", "Partner app
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-image-picker"), "Base app.json must configure Expo Image Picker.");
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-document-picker"), "Base app.json must configure Expo Document Picker.");
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-build-properties"), "Base app.json must configure Expo build-properties.");
+expect(JSON.stringify(appJson.expo.plugins).includes("with-approved-android-launcher-icons.cjs"), "Base app.json must preserve approved Android fallback launchers.");
 expect(JSON.stringify(appJson.expo.plugins).includes('"targetSdkVersion":36'), "Base app.json must target Android API 36.");
 
 expect(appConfig.includes("KariGO Partner"), "App config must use KariGO Partner branding.");
@@ -95,6 +96,7 @@ expect(appConfig.includes('"android.permission.SYSTEM_ALERT_WINDOW"') && appConf
 expect(appConfig.includes('icon: "./assets/icon.png"'), "Partner config must use the approved fallback launcher icon.");
 expect(appConfig.includes('foregroundImage: "./assets/adaptive-icon-foreground.png"'), "Partner config must use the approved adaptive K foreground.");
 expect(appConfig.includes('monochromeImage: "./assets/adaptive-icon-monochrome.png"'), "Partner config must use the approved themed K silhouette.");
+expect(appConfig.includes('"../../scripts/with-approved-android-launcher-icons.cjs"'), "Partner config must preserve approved Android fallback launchers.");
 expect(appConfig.includes('backgroundColor: "#FAF7F3"'), "Partner adaptive icon must use the approved light background.");
 expect(!appConfig.includes("https://u.expo.dev/"), "Partner app must not configure an Expo Updates URL before EAS project linking.");
 

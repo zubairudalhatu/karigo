@@ -14,7 +14,8 @@ async function verifyFile(record) {
   const file = path.join(root, record.filename);
   assert(fs.existsSync(file), `${record.filename} must exist.`);
   const metadata = await sharp(file).metadata();
-  assert.equal(metadata.format, "png", `${record.filename} must be PNG.`);
+  const expectedFormat = path.extname(file).toLowerCase() === ".webp" ? "webp" : "png";
+  assert.equal(metadata.format, expectedFormat, `${record.filename} must be ${expectedFormat.toUpperCase()}.`);
   assert.equal(metadata.width, record.width, `${record.filename} width must match its manifest.`);
   assert.equal(metadata.height, record.height, `${record.filename} height must match its manifest.`);
   assert.equal(fs.statSync(file).size, record.bytes, `${record.filename} size must match its manifest.`);
@@ -54,6 +55,8 @@ async function main() {
     const monochrome = byField(app, "Android themed monochrome icon");
     const appStore = byField(app, "App-local Play Store icon");
     const docsStore = byField(app, "Google Play Console app icon");
+    const legacyLaunchers = app.files.filter((file) => file.field.startsWith("Android legacy launcher "));
+    const roundLaunchers = app.files.filter((file) => file.field.startsWith("Android legacy round launcher "));
 
     assert(source && fallback && foreground && monochrome && appStore && docsStore, `${app.label} must include every required icon role.`);
     assert.equal(source.width, 1024);
@@ -72,6 +75,14 @@ async function main() {
     assert.equal(appStore.hasAlpha, false);
     assert(appStore.bytes < 1_000_000, `${app.label} Play Store icon must be under 1 MB.`);
     assert.equal(appStore.sha256, docsStore.sha256, `${app.label} app-local and Play Console icons must match.`);
+    assert.equal(legacyLaunchers.length, 5, `${app.label} must include all five Android legacy launcher densities.`);
+    assert.equal(roundLaunchers.length, 5, `${app.label} must include all five Android round launcher densities.`);
+    for (const launcher of legacyLaunchers) {
+      assert.equal(launcher.hasAlpha, false, `${launcher.filename} must be opaque.`);
+    }
+    for (const launcher of roundLaunchers) {
+      assert.equal(launcher.hasAlpha, true, `${launcher.filename} must retain its circular transparency.`);
+    }
     await verifyMonochrome(monochrome);
   }
 
