@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "KariGO Partner",
+    "version": "1.0.0",
     "slug": "karigo-partner",
     "scheme": "karigo-partner",
     "plugins": [
@@ -8,7 +9,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "KariGO Partner uses photo access only when you choose product images, business logo or cover images to upload."
+          "photosPermission": "KariGO Partner uses photo access only when you choose product images, business logo or cover images to upload.",
+          "microphonePermission": false
         }
       ],
       "expo-document-picker",
@@ -37,12 +39,15 @@
       }
     },
     "android": {
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/karigo-adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.karigo.partner",
-      "versionCode": 3
+      "versionCode": 4
     },
     "owner": "zamkah",
     "runtimeVersion": {

@@ -16,10 +16,14 @@ assert(appConfig.includes("compileSdkVersion: 36"), "Customer app must compile a
 assert(appConfig.includes("targetSdkVersion: 36"), "Customer app must target Android API 36.");
 assert(appConfig.includes('buildToolsVersion: "36.0.0"'), "Customer app must use Android build tools 36.0.0.");
 assert(appConfig.includes('package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer"'), "Customer app package names must remain stable.");
-assert(appConfig.includes("versionCode: isStaging ? 1 : 13"), "Customer production versionCode must be bumped to 13 for the next Play-ready utility/map AAB.");
+assert(appConfig.includes("versionCode: isStaging ? 1 : 14"), "Customer production versionCode must be 14 for the Play 1.0.0 AAB.");
 assert(appConfig.includes('owner: "zamkah"'), "Customer app must resolve to the zamkah EAS account.");
-assert(appConfig.includes('const customerRuntimeVersion = "0.1.0"'), "Customer runtime must remain explicit for versionCode 13 OTA compatibility.");
-assert(appConfig.includes("runtimeVersion: customerRuntimeVersion"), "Customer app must not rely on implicit runtime policy for production OTA reliability.");
+assert(appConfig.includes('const customerAppVersion = "1.0.0"'), "Customer app version must be 1.0.0 for the Play release line.");
+assert(appConfig.includes('policy: "appVersion"'), "Customer runtimeVersion must use the appVersion policy.");
+assert(easJson.build?.["customer-play-internal"]?.channel === "customer-production", "Customer Play Internal profile must use the production channel.");
+assert(easJson.submit?.["customer-play-internal"]?.android?.track === "internal", "Customer Play submit profile must target Internal testing.");
+assert(easJson.build?.["customer-production"]?.env?.EXPO_PUBLIC_RIDES_CONTROLLED_PILOT_ENABLED === "false", "Customer production must disable the controlled-pilot flag.");
+assert(easJson.build?.["customer-production"]?.env?.EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED === "false", "Customer production must disable staging dispatch.");
 assert(appConfig.includes("EXPO_PUBLIC_API_BASE_URL") && appConfig.includes("EXPO_PUBLIC_API_URL"), "Customer app config must support the approved API base env aliases.");
 assert(!appConfig.includes("task206lVerificationMarker"), "Customer app config must not expose the temporary Task 206L OTA marker after acceptance.");
 assert(appConfig.includes("GOOGLE_MAPS_ANDROID_API_KEY"), "Customer map builds must read the Android Maps SDK key from environment variables.");

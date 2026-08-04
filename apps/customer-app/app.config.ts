@@ -18,7 +18,7 @@ const googleMapsAndroidApiKey =
   process.env.GOOGLE_MAPS_ANDROID_API_KEY ??
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY;
 
-const customerRuntimeVersion = "0.1.0";
+const customerAppVersion = "1.0.0";
 const apiBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ??
   process.env.EXPO_PUBLIC_API_URL ??
@@ -27,6 +27,7 @@ const apiBaseUrl =
 export default ({ config }: { config: Record<string, any> }) => ({
   ...config,
   name: isStaging ? "KariGO Customer Staging" : "KariGO",
+  version: customerAppVersion,
   owner: "zamkah",
   slug: "karigo-customer",
   scheme: isStaging ? "karigo-customer-staging" : "karigo-customer",
@@ -36,7 +37,8 @@ export default ({ config }: { config: Record<string, any> }) => ({
     [
       "expo-image-picker",
       {
-        photosPermission: "KariGO uses photo library access only when you choose a customer profile photo."
+        photosPermission: "KariGO uses photo library access only when you choose a customer profile photo.",
+        microphonePermission: false
       }
     ],
     [
@@ -57,9 +59,14 @@ export default ({ config }: { config: Record<string, any> }) => ({
     ...config.updates,
     url: "https://u.expo.dev/467aa2f6-22b1-4a81-a9d6-c38f3ebe191d"
   },
-  runtimeVersion: customerRuntimeVersion,
+  runtimeVersion: {
+    policy: "appVersion"
+  },
   android: {
     ...config.android,
+    blockedPermissions: [
+      ...new Set([...(config.android?.blockedPermissions ?? []), "android.permission.RECORD_AUDIO"])
+    ],
     config: googleMapsAndroidApiKey
       ? {
         ...(config.android?.config ?? {}),
@@ -75,7 +82,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
       backgroundColor: "#FFFFFF"
     },
     package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer",
-    versionCode: isStaging ? 1 : 13
+    versionCode: isStaging ? 1 : 14
   },
   ios: {
     ...config.ios,
@@ -87,7 +94,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
     apiBaseUrl,
     appEnvironment: process.env.APP_VARIANT ?? "development",
     updateChannel: isStaging ? "customer-staging" : "customer-production",
-    runtimeVersion: customerRuntimeVersion,
+    runtimeVersion: customerAppVersion,
     eas: {
       ...easExtra(config.extra?.eas),
       projectId: "467aa2f6-22b1-4a81-a9d6-c38f3ebe191d"

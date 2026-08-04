@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "KariGO",
+    "version": "1.0.0",
     "slug": "karigo-customer",
     "scheme": "karigo-customer",
     "plugins": [
@@ -8,7 +9,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "KariGO uses photo library access only when you choose a customer profile photo."
+          "photosPermission": "KariGO uses photo library access only when you choose a customer profile photo.",
+          "microphonePermission": false
         }
       ],
       [
@@ -32,6 +34,9 @@
       "router": {}
     },
     "android": {
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/karigo-adaptive-icon.png",
         "backgroundColor": "#FFFFFF"

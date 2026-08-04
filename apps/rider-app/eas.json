@@ -35,6 +35,7 @@
     "captain-production": {
       "distribution": "store",
       "channel": "captain-production",
+      "environment": "production",
       "android": {
         "buildType": "app-bundle"
       },
@@ -43,9 +44,26 @@
         "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1",
         "EXPO_PUBLIC_RIDES_SERVICE_ENABLED": "true",
         "EXPO_PUBLIC_RIDES_PRODUCTION_ENABLED": "true",
+        "EXPO_PUBLIC_RIDES_CONTROLLED_PILOT_ENABLED": "false",
+        "EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED": "false",
         "EXPO_PUBLIC_TAXI_SERVICE_ENABLED": "true"
+      }
+    },
+    "captain-play-internal": {
+      "extends": "captain-production",
+      "distribution": "store",
+      "channel": "captain-production",
+      "environment": "production",
+      "android": {
+        "buildType": "app-bundle"
       }
     }
   },
-  "submit": {}
+  "submit": {
+    "captain-play-internal": {
+      "android": {
+        "track": "internal"
+      }
+    }
+  }
 }

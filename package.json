@@ -9,6 +9,7 @@
     "packages/*"
   ],
   "scripts": {
+    "google-play:assets": "node scripts/generate-google-play-assets.cjs",
     "build": "npm run build --workspaces --if-present",
     "dev:api": "npm run start:dev --workspace @karigo/backend-api",
     "dev:customer": "npm run start --workspace @karigo/customer-app",

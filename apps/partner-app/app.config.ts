@@ -29,6 +29,7 @@ export default ({ config }: ExpoConfigInput) => {
   return {
     ...config,
     name: isStaging ? "KariGO Partner Staging" : "KariGO Partner",
+    version: "1.0.0",
     slug: "karigo-partner",
     scheme: isStaging ? "karigo-partner-staging" : "karigo-partner",
     plugins: [
@@ -36,7 +37,8 @@ export default ({ config }: ExpoConfigInput) => {
       [
         "expo-image-picker",
         {
-          photosPermission: "KariGO Partner uses photo access only when you choose product images, business logo or cover images to upload."
+          photosPermission: "KariGO Partner uses photo access only when you choose product images, business logo or cover images to upload.",
+          microphonePermission: false
         }
       ],
       "expo-document-picker",
@@ -53,13 +55,16 @@ export default ({ config }: ExpoConfigInput) => {
     },
     android: {
       ...config.android,
+      blockedPermissions: [
+        ...new Set([...(Array.isArray(config.android?.blockedPermissions) ? config.android.blockedPermissions : []), "android.permission.RECORD_AUDIO"])
+      ],
       adaptiveIcon: {
         ...(objectValue(config.android?.adaptiveIcon)),
         foregroundImage: "./assets/karigo-adaptive-icon.png",
         backgroundColor: "#FFFFFF"
       },
       package: isStaging ? "com.karigo.partner.staging" : "com.karigo.partner",
-      versionCode: isStaging ? 1 : 3
+      versionCode: isStaging ? 1 : 4
     },
     ios: {
       ...config.ios,

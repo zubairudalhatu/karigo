@@ -43,7 +43,7 @@ export default ({ config }: ExpoConfigInput) => {
   return {
     ...config,
     name: isStaging ? "KariGO Captain Staging" : "KariGO Captain",
-    version: "0.1.2",
+    version: "1.0.0",
     slug: "karigo-rider",
     scheme: isStaging ? "karigo-rider-staging" : "karigo-rider",
     plugins: [
@@ -66,6 +66,9 @@ export default ({ config }: ExpoConfigInput) => {
     },
     android: {
       ...config.android,
+      blockedPermissions: [
+        ...new Set([...(Array.isArray(config.android?.blockedPermissions) ? config.android.blockedPermissions : []), "android.permission.RECORD_AUDIO"])
+      ],
       config: googleMapsAndroidApiKey
         ? {
           ...(objectValue(config.android?.config)),
@@ -81,7 +84,7 @@ export default ({ config }: ExpoConfigInput) => {
         backgroundColor: "#FFFFFF"
       },
       package: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider",
-      versionCode: isStaging ? 1 : 11
+      versionCode: isStaging ? 1 : 12
     },
     ios: {
       ...config.ios,

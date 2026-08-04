@@ -66,8 +66,12 @@ expect(appConfig.includes('policy: "appVersion"'), "Captain runtimeVersion must 
 expect(appConfig.includes("compileSdkVersion: 36"), "Captain app must compile against Android API 36.");
 expect(appConfig.includes("targetSdkVersion: 36"), "Captain app must target Android API 36.");
 expect(appConfig.includes("GOOGLE_MAPS_ANDROID_API_KEY") && appConfig.includes("googleMaps"), "Captain app must pass the Android Google Maps API key through Expo config when available.");
-expect(appConfig.includes('version: "0.1.2"'), "Captain app version must be 0.1.2 for the native-map release line.");
-expect(appConfig.includes("versionCode: isStaging ? 1 : 11"), "Captain production versionCode must be 11 for the native-map AAB.");
+expect(appConfig.includes('version: "1.0.0"'), "Captain app version must be 1.0.0 for the Play release line.");
+expect(appConfig.includes("versionCode: isStaging ? 1 : 12"), "Captain production versionCode must be 12 for the Play 1.0.0 AAB.");
+expect(easJson.build?.["captain-play-internal"]?.channel === "captain-production", "Captain Play Internal profile must use the production channel.");
+expect(easJson.submit?.["captain-play-internal"]?.android?.track === "internal", "Captain Play submit profile must target Internal testing.");
+expect(productionProfile?.env?.EXPO_PUBLIC_RIDES_CONTROLLED_PILOT_ENABLED === "false", "Captain production must disable the controlled-pilot flag.");
+expect(productionProfile?.env?.EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED === "false", "Captain production must disable staging dispatch.");
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-build-properties"), "Captain app base config must include build-properties.");
 expect(JSON.stringify(appJson.expo.plugins).includes('"targetSdkVersion":36'), "Captain app base config must target Android API 36.");
 

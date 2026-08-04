@@ -29,6 +29,7 @@
     "partner-production": {
       "distribution": "store",
       "channel": "partner-production",
+      "environment": "production",
       "android": {
         "buildType": "app-bundle"
       },
@@ -36,7 +37,22 @@
         "APP_VARIANT": "production",
         "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1"
       }
+    },
+    "partner-play-internal": {
+      "extends": "partner-production",
+      "distribution": "store",
+      "channel": "partner-production",
+      "environment": "production",
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   },
-  "submit": {}
+  "submit": {
+    "partner-play-internal": {
+      "android": {
+        "track": "internal"
+      }
+    }
+  }
 }

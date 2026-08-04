@@ -97,6 +97,7 @@ export function SiteFooter() {
           <Link href="/refunds">Refunds</Link>
           <Link href="/privacy">Privacy Policy</Link>
           <Link href="/terms">Terms</Link>
+          <Link href="/account-deletion">Account deletion</Link>
         </nav>
 
         <section className="footer-apps" aria-label="App launch status">

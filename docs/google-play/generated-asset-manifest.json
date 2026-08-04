@@ -1,0 +1,68 @@
+{
+  "generatedBy": "scripts/generate-google-play-assets.cjs",
+  "assets": [
+    {
+      "app": "customer",
+      "files": [
+        {
+          "filename": "customer-store-icon-512.png",
+          "field": "App icon",
+          "width": 512,
+          "height": 512,
+          "bytes": 39732,
+          "transparency": false
+        },
+        {
+          "filename": "customer-feature-graphic-1024x500.png",
+          "field": "Feature graphic",
+          "width": 1024,
+          "height": 500,
+          "bytes": 61673,
+          "transparency": false
+        }
+      ]
+    },
+    {
+      "app": "captain",
+      "files": [
+        {
+          "filename": "captain-store-icon-512.png",
+          "field": "App icon",
+          "width": 512,
+          "height": 512,
+          "bytes": 44801,
+          "transparency": false
+        },
+        {
+          "filename": "captain-feature-graphic-1024x500.png",
+          "field": "Feature graphic",
+          "width": 1024,
+          "height": 500,
+          "bytes": 60202,
+          "transparency": false
+        }
+      ]
+    },
+    {
+      "app": "partner",
+      "files": [
+        {
+          "filename": "partner-store-icon-512.png",
+          "field": "App icon",
+          "width": 512,
+          "height": 512,
+          "bytes": 39732,
+          "transparency": false
+        },
+        {
+          "filename": "partner-feature-graphic-1024x500.png",
+          "field": "Feature graphic",
+          "width": 1024,
+          "height": 500,
+          "bytes": 65375,
+          "transparency": false
+        }
+      ]
+    }
+  ]
+}

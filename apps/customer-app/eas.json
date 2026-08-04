@@ -35,6 +35,7 @@
     "customer-production": {
       "distribution": "store",
       "channel": "customer-production",
+      "environment": "production",
       "android": {
         "buildType": "app-bundle"
       },
@@ -44,9 +45,26 @@
         "EXPO_PUBLIC_PAYMENT_LAUNCH_MODE": "flutterwave_live",
         "EXPO_PUBLIC_RIDES_SERVICE_ENABLED": "true",
         "EXPO_PUBLIC_RIDES_PRODUCTION_ENABLED": "true",
+        "EXPO_PUBLIC_RIDES_CONTROLLED_PILOT_ENABLED": "false",
+        "EXPO_PUBLIC_TAXI_STAGING_DISPATCH_ENABLED": "false",
         "EXPO_PUBLIC_TAXI_SERVICE_ENABLED": "true"
+      }
+    },
+    "customer-play-internal": {
+      "extends": "customer-production",
+      "distribution": "store",
+      "channel": "customer-production",
+      "environment": "production",
+      "android": {
+        "buildType": "app-bundle"
       }
     }
   },
-  "submit": {}
+  "submit": {
+    "customer-play-internal": {
+      "android": {
+        "track": "internal"
+      }
+    }
+  }
 }

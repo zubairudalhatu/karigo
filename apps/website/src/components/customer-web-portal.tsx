@@ -19,12 +19,21 @@ type ServiceProviderType =
   | "LAUNDRY" | "LESSON_TEACHER" | "LEGAL_PRACTITIONER" | "RENT_A_CAR" | "HEALTH_PROFESSIONAL" | "OTHER";
 type ServiceProviderCategory = { type: ServiceProviderType; label: string; description: string; readinessOnly: boolean; statusLabel: string };
 type ServiceRequest = { id: string; requestNumber: string; serviceLabel: string; status: string; createdAt: string; serviceAddress?: Address };
+type AccountDeletionAccountType = "CUSTOMER" | "CAPTAIN" | "PARTNER" | "COMPLETE_ACCOUNT";
+type AccountDeletionRequest = {
+  id: string;
+  requestReference: string;
+  accountType: AccountDeletionAccountType;
+  status: "REQUESTED" | "BLOCKED" | "IN_REVIEW" | "PROCESSING" | "COMPLETED" | "CANCELLED";
+  canCancel: boolean;
+  blockers: Array<{ code: string; message: string }>;
+};
 type ApiPayload<T> = { success?: boolean; data?: T; message?: string; error_code?: string };
 
 const TOKEN_KEY = "karigo_customer_web_access_token";
 const REFRESH_TOKEN_KEY = "karigo_customer_web_refresh_token";
 
-const tabs = ["Dashboard", "Wallet", "Utilities", "SME Services", "Orders", "Addresses", "Profile", "Support"] as const;
+const tabs = ["Dashboard", "Wallet", "Utilities", "SME Services", "Orders", "Addresses", "Profile", "Account deletion", "Support"] as const;
 type Tab = (typeof tabs)[number];
 
 const utilityTypes: UtilityServiceType[] = ["AIRTIME", "DATA", "ELECTRICITY", "CABLE_TV"];
@@ -80,6 +89,7 @@ export function CustomerWebPortal() {
   const [utilityTransactions, setUtilityTransactions] = useState<UtilityTransaction[]>([]);
   const [smeCatalogue, setSmeCatalogue] = useState<ServiceProviderCategory[]>([]);
   const [smeRequests, setSmeRequests] = useState<ServiceRequest[]>([]);
+  const [deletionRequest, setDeletionRequest] = useState<AccountDeletionRequest | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -92,6 +102,7 @@ export function CustomerWebPortal() {
   const [pendingTopUpReference, setPendingTopUpReference] = useState("");
   const [utilityForm, setUtilityForm] = useState({ serviceType: "AIRTIME" as UtilityServiceType, providerId: "", productId: "", amountNaira: "", recipient: "", recipientName: "", meterType: "PREPAID" });
   const [smeForm, setSmeForm] = useState({ serviceType: "PAINTER" as ServiceProviderType, serviceAddressId: "", description: "", contactPhone: "", preferredDate: "", preferredTimeWindow: "" });
+  const [deletionForm, setDeletionForm] = useState({ accountType: "CUSTOMER" as AccountDeletionAccountType, reason: "", confirmation: "" });
 
   const authenticated = Boolean(accessToken && user?.role === "CUSTOMER");
   const utilityProviderOptions = useMemo(() => utilityProviders.filter((provider) => provider.type === utilityForm.serviceType), [utilityProviders, utilityForm.serviceType]);
@@ -159,6 +170,7 @@ export function CustomerWebPortal() {
     setOrders([]);
     setUtilityTransactions([]);
     setSmeRequests([]);
+    setDeletionRequest(null);
   }
 
   async function loadPortalData() {
@@ -166,7 +178,7 @@ export function CustomerWebPortal() {
     setLoading(true);
     setError("");
     try {
-      const [currentUser, nextProfile, walletSummary, walletLedger, addressList, orderList, utilityHistory, catalogue, requestHistory] = await Promise.all([
+      const [currentUser, nextProfile, walletSummary, walletLedger, addressList, orderList, utilityHistory, catalogue, requestHistory, currentDeletionRequest] = await Promise.all([
         request<AuthenticatedUser>("auth/me"),
         request<Profile>("customers/me"),
         request<Wallet>("wallet"),
@@ -175,7 +187,8 @@ export function CustomerWebPortal() {
         request<Order[]>("orders/my-orders"),
         request<UtilityTransaction[]>("customer/utilities/transactions"),
         request<ServiceProviderCategory[]>("service-provider-requests/catalogue"),
-        request<ServiceRequest[]>("service-provider-requests/my-requests")
+        request<ServiceRequest[]>("service-provider-requests/my-requests"),
+        request<AccountDeletionRequest | null>("account-deletion")
       ]);
       if (currentUser.role !== "CUSTOMER") throw new Error("Only customer accounts can use the customer web portal.");
       setUser(currentUser);
@@ -188,6 +201,7 @@ export function CustomerWebPortal() {
       setUtilityTransactions(utilityHistory);
       setSmeCatalogue(catalogue);
       setSmeRequests(requestHistory);
+      setDeletionRequest(currentDeletionRequest);
       setSmeForm((current) => ({
         ...current,
         serviceAddressId: current.serviceAddressId || addressList.find((address) => address.isDefault)?.id || addressList[0]?.id || "",
@@ -420,6 +434,45 @@ export function CustomerWebPortal() {
     setMessage("You have been logged out.");
   }
 
+  async function submitDeletionRequest(event: FormEvent) {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    try {
+      const created = await request<AccountDeletionRequest>("account-deletion", {
+        method: "POST",
+        body: JSON.stringify({
+          accountType: deletionForm.accountType,
+          reason: deletionForm.reason.trim() || undefined,
+          confirmation: "DELETE"
+        })
+      });
+      setDeletionRequest(created);
+      setDeletionForm((current) => ({ ...current, reason: "", confirmation: "" }));
+      setMessage(created.status === "BLOCKED"
+        ? "Your request was recorded but cannot be processed until the listed obligations are resolved."
+        : "Your account deletion request has been recorded for KariGO review.");
+      if (created.status === "PROCESSING" || created.status === "COMPLETED") clearSession();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Account deletion request could not be submitted.");
+    }
+  }
+
+  async function cancelDeletionRequest() {
+    setMessage("");
+    setError("");
+    try {
+      const cancelled = await request<AccountDeletionRequest>("account-deletion/cancel", {
+        method: "POST",
+        body: JSON.stringify({ reason: "Cancelled by customer in the secure web portal." })
+      });
+      setDeletionRequest(cancelled);
+      setMessage("Your account deletion request has been cancelled.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Account deletion request could not be cancelled.");
+    }
+  }
+
   if (!sessionChecked || (accessToken && !user && loading)) {
     return <main className="customer-web">
       <section className="customer-web-hero">
@@ -589,6 +642,34 @@ export function CustomerWebPortal() {
         <label>Email optional<input type="email" value={profileForm.email} onChange={(event) => setProfileForm({ ...profileForm, email: event.target.value })} /></label>
         <button type="submit">Save profile</button>
       </form> : null}
+
+      {activeTab === "Account deletion" ? <section className="portal-stack">
+        <article className="portal-card">
+          <h2>Delete KariGO access</h2>
+          <p>This secure portal accepts deletion requests only after customer sign-in. KariGO reviews active orders, rides, wallet balances, refunds, support cases and legal retention duties before processing.</p>
+          <p>Operational, payment, security and audit records may be retained where required by law, fraud prevention, finance or safety obligations.</p>
+        </article>
+        {deletionRequest ? <article className="portal-card">
+          <h2>Current request</h2>
+          <p><strong>Reference:</strong> {deletionRequest.requestReference}</p>
+          <p><strong>Scope:</strong> {label(deletionRequest.accountType)}</p>
+          <p><strong>Status:</strong> {label(deletionRequest.status)}</p>
+          {deletionRequest.blockers.map((blocker) => <p key={blocker.code} className="notice">{blocker.message}</p>)}
+          {deletionRequest.canCancel ? <button type="button" className="button secondary" onClick={() => void cancelDeletionRequest()}>Cancel deletion request</button> : null}
+        </article> : null}
+        <form className="portal-card" onSubmit={submitDeletionRequest}>
+          <h2>Request deletion</h2>
+          <label>Account access to delete<select value={deletionForm.accountType} onChange={(event) => setDeletionForm({ ...deletionForm, accountType: event.target.value as AccountDeletionAccountType })}>
+            <option value="CUSTOMER">Customer account</option>
+            <option value="CAPTAIN">Captain access</option>
+            <option value="PARTNER">Partner business access</option>
+            <option value="COMPLETE_ACCOUNT">Complete KariGO account</option>
+          </select></label>
+          <label>Reason optional<textarea value={deletionForm.reason} onChange={(event) => setDeletionForm({ ...deletionForm, reason: event.target.value })} /></label>
+          <label>Type DELETE to confirm<input value={deletionForm.confirmation} onChange={(event) => setDeletionForm({ ...deletionForm, confirmation: event.target.value })} autoComplete="off" /></label>
+          <button type="submit" disabled={deletionForm.confirmation.trim().toUpperCase() !== "DELETE"}>Submit deletion request</button>
+        </form>
+      </section> : null}
 
       {activeTab === "Support" ? <section className="portal-card">
         <h2>Support and help</h2>

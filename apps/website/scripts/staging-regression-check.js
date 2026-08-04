@@ -30,7 +30,8 @@ const customerWebPortal = read("src", "components", "customer-web-portal.tsx");
   "customer/utilities/quote",
   "customer/utilities/transactions",
   "service-provider-requests/catalogue",
-  "service-provider-requests/my-requests"
+  "service-provider-requests/my-requests",
+  "account-deletion"
 ].forEach((endpoint) => assert(customerWebPortal.includes(endpoint), `Customer Web Portal must call ${endpoint}.`));
 assert(customerWebPortal.includes("sessionStorage"), "Customer Web Portal must use browser-session token storage.");
 assert(customerWebPortal.includes("window.open") && customerWebPortal.includes("https://"), "Customer Web Portal must open wallet checkout links as external HTTPS URLs.");
@@ -188,6 +189,7 @@ assert(!footer.includes("{link.label}\n                </a>"), "Footer social li
 assert(footer.includes("Google Play soon"), "Footer must include Android launch status.");
 assert(footer.includes("/riders#ride-waitlist"), "Footer must use the public Ride waitlist anchor.");
 assert(footer.includes("/riders#ride-captain-application"), "Footer must use the public Ride Captain application anchor.");
+assert(footer.includes("/account-deletion"), "Footer must link to the public account-deletion resource.");
 assert(!footer.includes("/riders#taxi-driver-application"), "Footer must not use the old Taxi driver application anchor.");
 assert(!footer.includes("KariGO is focused on core delivery services while preparing new categories carefully."), "Footer must not include internal service-focus note.");
 assert(!footer.includes("Official store links will appear here when available."), "Footer must not include app-store placeholder note.");
@@ -204,6 +206,13 @@ const privacy = read("app", "privacy", "page.tsx");
 assert(privacy.includes("Information we may collect"), "Privacy page must include data collection content.");
 assert(privacy.includes("How we use information"), "Privacy page must include usage content.");
 assert(privacy.includes("Security and retention"), "Privacy page must include security and retention content.");
+
+const accountDeletion = read("app", "account-deletion", "page.tsx");
+assert(accountDeletion.includes("Customer account access"), "Account deletion page must support Customer scope.");
+assert(accountDeletion.includes("Captain operational access"), "Account deletion page must support Captain scope.");
+assert(accountDeletion.includes("Partner business access"), "Account deletion page must support Partner scope.");
+assert(accountDeletion.includes("Complete KariGO account"), "Account deletion page must support complete account scope.");
+assert(accountDeletion.includes("Open secure Customer Web Portal"), "Account deletion page must route users to authenticated verification.");
 
 const terms = read("app", "terms", "page.tsx");
 assert(terms.includes("Using KariGO"), "Terms page must include platform usage content.");
