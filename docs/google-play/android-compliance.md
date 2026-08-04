@@ -36,5 +36,6 @@ The build is not technically approved until these generated-AAB checks pass. A s
 - API is `https://karigo-8htn.onrender.com/api/v1`.
 - Customer and Captain production Maps key names exist in EAS; values are never printed.
 - No development client, staging package or staging channel.
-- `android.permission.RECORD_AUDIO` is explicitly blocked because none of the three apps records audio.
+- `android.permission.RECORD_AUDIO` and `android.permission.SYSTEM_ALERT_WINDOW` are explicitly blocked for all apps. Customer and Partner also block camera/write-storage because they only choose existing files.
+- Android app-data backup is disabled for all three production apps.
 - No OTA is published to a runtime older than 1.0.0.

@@ -40,14 +40,18 @@
     },
     "android": {
       "blockedPermissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
+      "allowBackup": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/karigo-adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.karigo.partner",
-      "versionCode": 4
+      "versionCode": 5
     },
     "owner": "zamkah",
     "runtimeVersion": {

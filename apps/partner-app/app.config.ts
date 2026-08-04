@@ -56,15 +56,22 @@ export default ({ config }: ExpoConfigInput) => {
     android: {
       ...config.android,
       blockedPermissions: [
-        ...new Set([...(Array.isArray(config.android?.blockedPermissions) ? config.android.blockedPermissions : []), "android.permission.RECORD_AUDIO"])
+        ...new Set([
+          ...(Array.isArray(config.android?.blockedPermissions) ? config.android.blockedPermissions : []),
+          "android.permission.CAMERA",
+          "android.permission.RECORD_AUDIO",
+          "android.permission.SYSTEM_ALERT_WINDOW",
+          "android.permission.WRITE_EXTERNAL_STORAGE"
+        ])
       ],
+      allowBackup: false,
       adaptiveIcon: {
         ...(objectValue(config.android?.adaptiveIcon)),
         foregroundImage: "./assets/karigo-adaptive-icon.png",
         backgroundColor: "#FFFFFF"
       },
       package: isStaging ? "com.karigo.partner.staging" : "com.karigo.partner",
-      versionCode: isStaging ? 1 : 4
+      versionCode: isStaging ? 1 : 5
     },
     ios: {
       ...config.ios,

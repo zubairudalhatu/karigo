@@ -67,8 +67,13 @@ export default ({ config }: ExpoConfigInput) => {
     android: {
       ...config.android,
       blockedPermissions: [
-        ...new Set([...(Array.isArray(config.android?.blockedPermissions) ? config.android.blockedPermissions : []), "android.permission.RECORD_AUDIO"])
+        ...new Set([
+          ...(Array.isArray(config.android?.blockedPermissions) ? config.android.blockedPermissions : []),
+          "android.permission.RECORD_AUDIO",
+          "android.permission.SYSTEM_ALERT_WINDOW"
+        ])
       ],
+      allowBackup: false,
       config: googleMapsAndroidApiKey
         ? {
           ...(objectValue(config.android?.config)),
@@ -84,7 +89,7 @@ export default ({ config }: ExpoConfigInput) => {
         backgroundColor: "#FFFFFF"
       },
       package: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider",
-      versionCode: isStaging ? 1 : 12
+      versionCode: isStaging ? 1 : 13
     },
     ios: {
       ...config.ios,

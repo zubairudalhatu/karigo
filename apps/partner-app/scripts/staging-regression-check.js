@@ -71,7 +71,7 @@ expect(appJson.expo.extra?.eas?.projectId === "44e595bd-739a-430f-8d4d-99e961ac2
 expect(appJson.expo.updates?.url === "https://u.expo.dev/44e595bd-739a-430f-8d4d-99e961ac2451", "Partner app must keep the linked EAS updates URL.");
 expect(appJson.expo.android?.package === "com.karigo.partner", "Partner app base Android package must remain com.karigo.partner.");
 expect(appJson.expo.version === "1.0.0", "Partner app version must be 1.0.0 for the Play release line.");
-expect(appJson.expo.android?.versionCode === 4, "Partner app base Android versionCode must be 4 for the Play 1.0.0 AAB.");
+expect(appJson.expo.android?.versionCode === 5, "Partner app base Android versionCode must be 5 for the hardened Play 1.0.0 AAB.");
 expect(appJson.expo.ios?.bundleIdentifier === "com.karigo.partner", "Partner app base iOS bundle identifier must remain com.karigo.partner.");
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-image-picker"), "Base app.json must configure Expo Image Picker.");
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-document-picker"), "Base app.json must configure Expo Document Picker.");
@@ -90,7 +90,8 @@ expect(appConfig.includes("compileSdkVersion: 36"), "Partner app must compile ag
 expect(appConfig.includes("targetSdkVersion: 36"), "Partner app must target Android API 36.");
 expect(appConfig.includes('buildToolsVersion: "36.0.0"'), "Partner app must use Android build tools 36.0.0.");
 expect(appConfig.includes('version: "1.0.0"'), "Partner production app version must be 1.0.0.");
-expect(appConfig.includes("versionCode: isStaging ? 1 : 4"), "Partner production versionCode must be 4 for the Play 1.0.0 AAB.");
+expect(appConfig.includes("versionCode: isStaging ? 1 : 5"), "Partner production versionCode must be 5 for the hardened Play 1.0.0 AAB.");
+expect(appConfig.includes('"android.permission.SYSTEM_ALERT_WINDOW"') && appConfig.includes("allowBackup: false"), "Partner production must block overlay access and Android backup.");
 expect(!appConfig.includes("https://u.expo.dev/"), "Partner app must not configure an Expo Updates URL before EAS project linking.");
 
 expect(easJson.build?.["partner-staging"]?.distribution === "internal", "partner-staging must be internal.");

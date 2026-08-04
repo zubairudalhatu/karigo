@@ -4,9 +4,9 @@ This folder is the controlled source for KariGO Android Internal and Closed Test
 
 | App | Package | Version | Runtime | versionCode | Build profile | Channel |
 | --- | --- | --- | --- | ---: | --- | --- |
-| KariGO | `com.karigo.customer` | 1.0.0 | 1.0.0 | 14 | `customer-play-internal` | `customer-production` |
-| KariGO Captain | `com.karigo.rider` | 1.0.0 | 1.0.0 | 12 | `captain-play-internal` | `captain-production` |
-| KariGO Partner | `com.karigo.partner` | 1.0.0 | 1.0.0 | 4 | `partner-play-internal` | `partner-production` |
+| KariGO | `com.karigo.customer` | 1.0.0 | 1.0.0 | 15 | `customer-play-internal` | `customer-production` |
+| KariGO Captain | `com.karigo.rider` | 1.0.0 | 1.0.0 | 13 | `captain-play-internal` | `captain-production` |
+| KariGO Partner | `com.karigo.partner` | 1.0.0 | 1.0.0 | 5 | `partner-play-internal` | `partner-production` |
 
 All profiles produce an Android App Bundle, use the production environment and API, and target Internal testing when EAS Submit is deliberately invoked. Public Production submission is not approved.
 

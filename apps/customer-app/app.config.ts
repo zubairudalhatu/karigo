@@ -65,8 +65,15 @@ export default ({ config }: { config: Record<string, any> }) => ({
   android: {
     ...config.android,
     blockedPermissions: [
-      ...new Set([...(config.android?.blockedPermissions ?? []), "android.permission.RECORD_AUDIO"])
+      ...new Set([
+        ...(config.android?.blockedPermissions ?? []),
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ])
     ],
+    allowBackup: false,
     config: googleMapsAndroidApiKey
       ? {
         ...(config.android?.config ?? {}),
@@ -82,7 +89,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
       backgroundColor: "#FFFFFF"
     },
     package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer",
-    versionCode: isStaging ? 1 : 14
+    versionCode: isStaging ? 1 : 15
   },
   ios: {
     ...config.ios,
