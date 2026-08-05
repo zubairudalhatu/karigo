@@ -51,5 +51,3 @@ Create the cohort in `DRAFT`, set a maximum, add active Customer UUIDs only, the
 | Open SEV1 | n/a | any | Incident commander |
 
 Configure external alerts in the approved monitoring provider using these thresholds and named owners. Never place credentials in repository configuration.
-
-\n

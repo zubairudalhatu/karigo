@@ -19,5 +19,3 @@ Customer request -> Admin review -> provider matching/assignment -> safe Custome
 Record payment failure, Customer/Captain cancellation, Partner rejection, support escalation and emergency pause. Confirm reversal/refund procedures where applicable and that no service resumes automatically.
 
 Run relevant drills in both Kano and Abuja before `LIMITED_PUBLIC`. Mark `PASSED` only after evidence is reviewed.
-
-\n

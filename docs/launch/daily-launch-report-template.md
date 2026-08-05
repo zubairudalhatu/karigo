@@ -26,5 +26,3 @@ Finance reviewer:
 Use Admin > Production Launch > Reports for the privacy-safe CSV. Reconcile Customer payments against completed activity, refunds, earnings and settlement records. Record duplicate payments, cash orders, chargebacks and manual mark-paid exceptions separately with audit references.
 
 Do not include names, phone numbers, email addresses, tokens, OTPs, Ride PINs or private document links.
-
-\n

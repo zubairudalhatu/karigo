@@ -349,5 +349,3 @@ export class UpdateLaunchDrillDto {
   @MaxLength(500)
   evidenceReference?: string;
 }
-
-\n

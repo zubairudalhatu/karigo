@@ -20,5 +20,3 @@ Stable performance is sustained across operating windows; supply and capacity he
 - Paused: “This KariGO service is temporarily paused. Existing activity remains available.”
 
 No stage promotes automatically. Nationwide availability must not be implied.
-
-\n

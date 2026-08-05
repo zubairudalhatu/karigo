@@ -23,5 +23,3 @@ Abuja is a separate market. Kano readiness or supply must not be used as Abuja e
 ## Stop conditions
 
 Pause for safety events, major outage, repeated assignment failure, capacity below configured floor, uncontrolled payment exceptions or a launch-blocking SEV2. Existing work remains manageable. Resolution does not auto-resume the service.
-
-\n

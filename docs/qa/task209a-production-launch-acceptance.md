@@ -44,5 +44,3 @@ Operations acceptance:
 Security/privacy acceptance:
 Final stage decision (manual):
 Approver and timestamp:
-
-\n

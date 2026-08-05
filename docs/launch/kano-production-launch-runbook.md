@@ -29,5 +29,3 @@
 ## Pause
 
 Open an incident, select the affected Kano service, choose “Pause affected service”, enter the operational reason and confirm twice. Notify Customers/Captains/Partners using approved production copy. Never cancel active assignments automatically. Resume only through a separate audited configuration change.
-
-\n

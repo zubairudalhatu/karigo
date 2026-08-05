@@ -14,5 +14,3 @@
 Activation confirmation: “Your KariGO Captain operations access is active for the approved mode and city. Go online only during the communicated operating window.”
 
 Do not activate or suspend a real Captain from a repository task. Operations performs and audits that action.
-
-\n

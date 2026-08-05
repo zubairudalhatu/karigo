@@ -11,5 +11,3 @@
 - Service pause blocks new Customer activity but preserves catalogue and historical order access.
 
 Activation confirmation: “Your KariGO Partner operations access is active for the approved city and capabilities. Keep availability and catalogue information current during operating hours.”
-
-\n

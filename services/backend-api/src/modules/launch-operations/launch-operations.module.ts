@@ -13,5 +13,3 @@ import { LaunchOperationsService } from "./launch-operations.service";
   exports: [LaunchOperationsService]
 })
 export class LaunchOperationsModule {}
-
-\n

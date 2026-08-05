@@ -25,5 +25,3 @@
 - Partner: “New Customer activity is paused. Keep existing orders managed; catalogue access remains available.”
 
 Never include OTPs, Ride PINs, tokens, payment secrets or private document URLs.
-
-\n

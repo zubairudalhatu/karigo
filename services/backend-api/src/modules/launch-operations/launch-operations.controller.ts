@@ -131,5 +131,3 @@ export class AdminLaunchOperationsController {
 
   private async wrap(message: string, promise: Promise<unknown>) { return { message, data: await promise }; }
 }
-
-\n
