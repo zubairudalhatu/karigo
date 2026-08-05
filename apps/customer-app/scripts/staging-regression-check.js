@@ -738,4 +738,6 @@ assert(support.includes("ticket.category"), "Support ticket list must show categ
 assert(support.includes("ticket.status"), "Support ticket list must show status.");
 assert(support.includes("ticket.priority"), "Support ticket list must show priority.");
 
+assert(customerHome.includes("KariGO operations testing is active for your approved account"), "Controlled Customers must see an operations-only access message.");
+assert(customerHome.includes('service.launchStage === "OPERATIONS_ONLY" && service.available'), "Operations-only copy must render only for an authenticated eligible Customer.");
 console.log("Customer staging regression checks passed.");

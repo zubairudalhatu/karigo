@@ -238,6 +238,10 @@ expect(taxiReadiness.includes("Accept assigned ride") && taxiReadiness.includes(
 expect(taxiApi.includes("rider/taxi/profile") && taxiApi.includes("rider/taxi/trips/available"), "Ride API client must expose profile and assigned trips.");
 expect(!taxiReadiness.includes("Pay Now") && !taxiReadiness.includes("cashout"), "Ride screen must not expose payment or cashout actions.");
 
+expect(dashboard.includes("Your Ride Captain access is approved for scheduled controlled production operations."), "Controlled Ride Captains must see the operations-only operating-window message.");
+expect(dashboard.includes("Your Delivery Captain access is approved for scheduled controlled production operations."), "Controlled Delivery Captains must see the operations-only operating-window message.");
+expect(dashboard.includes('launchStage === "OPERATIONS_ONLY"'), "Captain operations-only messages must depend on backend launch eligibility.");
+
 if (failures.length) {
   console.error("Captain regression check failed:");
   for (const failure of failures) console.error(`- ${failure}`);

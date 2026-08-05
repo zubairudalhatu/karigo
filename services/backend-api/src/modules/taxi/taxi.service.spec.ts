@@ -242,7 +242,11 @@ describe("TaxiService", () => {
     releaseLock: jest.fn(),
     transitionLock: jest.fn()
   };
-  const launchOperations = { assertCustomerCanStart: jest.fn().mockResolvedValue({ available: true }) };
+  const launchOperations = {
+    assertCustomerCanStart: jest.fn().mockResolvedValue({ available: true }),
+    assertControlledSupplyCanReceive: jest.fn().mockResolvedValue(undefined),
+    controlledSupplyAccountEligible: jest.fn().mockResolvedValue(true)
+  };
   const service = new TaxiService(
     prisma as unknown as PrismaService,
     audit as unknown as AdminAuditService,

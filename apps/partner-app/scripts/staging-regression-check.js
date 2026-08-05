@@ -261,6 +261,9 @@ expect(labels.includes("Pay on Delivery") && labels.includes("formatLabel") && l
 expect(labels.includes("Pending verification") && labels.includes("Verified"), "Partner app must format payout account statuses safely.");
 expect(partnerProfile.includes("Partner record requires confirmation") && partnerProfile.includes("Partner profile is closed or inactive"), "Partner profile helper must handle flagged and closed profiles.");
 
+expect(dashboard.includes("Your approved Partner account can receive scheduled controlled production operations"), "Controlled Partners must see scheduled operations-only guidance.");
+expect(dashboard.includes('item.available && item.launchStage === "OPERATIONS_ONLY"'), "Partner controlled-operations copy must depend on backend eligibility.");
+
 if (failures.length) {
   console.error("Partner app regression check failed:");
   for (const failure of failures) console.error(`- ${failure}`);

@@ -78,6 +78,7 @@ export class OrdersService {
         ? LaunchServiceType.GROCERIES
         : LaunchServiceType.MARKETPLACE;
     await this.launchOperations.assertCustomerCanStart({ city: deliveryAddress.city || vendor.city, serviceType: launchService, userId });
+    await this.launchOperations.assertControlledSupplyCanReceive({ city: deliveryAddress.city || vendor.city, serviceType: launchService, userId: vendor.userId, participant: "Partner" });
 
     const productIds = [...new Set(dto.items.map((item) => item.productId))];
     const products = await this.prisma.product.findMany({
@@ -153,6 +154,7 @@ export class OrdersService {
         ? LaunchServiceType.GROCERIES
         : LaunchServiceType.MARKETPLACE;
     await this.launchOperations.assertCustomerCanStart({ city: deliveryAddress.city || vendor.city, serviceType: launchService, userId });
+    await this.launchOperations.assertControlledSupplyCanReceive({ city: deliveryAddress.city || vendor.city, serviceType: launchService, userId: vendor.userId, participant: "Partner" });
 
     const productIds = [...new Set(dto.items.map((item) => item.productId))];
     const products = await this.prisma.product.findMany({

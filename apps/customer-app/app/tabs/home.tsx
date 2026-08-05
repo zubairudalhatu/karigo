@@ -253,6 +253,10 @@ export default function CustomerHome() {
         </View>
       </Card>}
 
+      {user && launchAvailability?.services.some((service) => service.launchStage === "OPERATIONS_ONLY" && service.available) ? <Message>
+        KariGO operations testing is active for your approved account in {launchAvailability.city.name}. This access is limited to scheduled operational exercises.
+      </Message> : null}
+
       {activeRide ? <Pressable
         accessibilityRole="button"
         accessibilityLabel="View active KariGO Ride status"

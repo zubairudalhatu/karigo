@@ -4,12 +4,13 @@ import { PrismaModule } from "../../prisma/prisma.module";
 import { AdminRolesGuard } from "../../common/guards/admin-roles.guard";
 import { AdminLaunchOperationsController, LaunchAvailabilityController } from "./launch-operations.controller";
 import { LaunchOperationsService } from "./launch-operations.service";
+import { ControlledSupplyService } from "./controlled-supply.service";
 
 @Global()
 @Module({
   imports: [PrismaModule, AdminAuditModule],
   controllers: [LaunchAvailabilityController, AdminLaunchOperationsController],
-  providers: [LaunchOperationsService, AdminRolesGuard],
-  exports: [LaunchOperationsService]
+  providers: [LaunchOperationsService, ControlledSupplyService, AdminRolesGuard],
+  exports: [LaunchOperationsService, ControlledSupplyService]
 })
 export class LaunchOperationsModule {}

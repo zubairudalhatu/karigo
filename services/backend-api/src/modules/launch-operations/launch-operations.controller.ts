@@ -9,19 +9,30 @@ import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import {
+  AddControlledOperationsCustomerDto,
+  AddControlledSupplyMemberDto,
   AddLaunchCohortMembersDto,
+  CreateControlledSupplyGroupDto,
   CreateLaunchCohortDto,
   CreateLaunchDrillDto,
   CreateLaunchIncidentDto,
+  LinkLaunchDrillFailureDto,
   LaunchAvailabilityQueryDto,
   PauseFromIncidentDto,
+  ReopenLaunchDrillDto,
+  UpdateControlledOperationsCustomerDto,
+  UpdateControlledSupplyGroupDto,
+  UpdateControlledSupplyMemberDto,
   UpdateLaunchCohortDto,
   UpdateLaunchCohortMemberDto,
   UpdateLaunchConfigDto,
   UpdateLaunchDrillDto,
+  UpdateLaunchDrillStepDto,
   UpdateLaunchIncidentDto,
-  UpdateLaunchReadinessDto
+  UpdateLaunchReadinessDto,
+  UpdateOperationsChecklistItemDto
 } from "./dto/launch-operations.dto";
+import { ControlledSupplyService } from "./controlled-supply.service";
 import { LaunchOperationsService } from "./launch-operations.service";
 
 const LAUNCH_ADMINS = [AdminRole.SUPER_ADMIN, AdminRole.OPERATIONS_ADMIN, AdminRole.DISPATCH_OFFICER];
@@ -54,7 +65,7 @@ export class LaunchAvailabilityController {
 @AdminRoles(...LAUNCH_ADMINS)
 @ApiBearerAuth()
 export class AdminLaunchOperationsController {
-  constructor(private readonly launch: LaunchOperationsService) {}
+  constructor(private readonly launch: LaunchOperationsService, private readonly controlled: ControlledSupplyService) {}
 
   @Get("command-centre")
   commandCentre() { return this.wrap("Production launch command centre retrieved", this.launch.commandCentre()); }
@@ -97,6 +108,51 @@ export class AdminLaunchOperationsController {
   @Get("supply")
   supply(@Query("city") city?: string) { return this.wrap("Launch supply retrieved", this.launch.supply(city)); }
 
+  @Get("controlled-groups")
+  controlledGroups(@Query("city") city?: string) { return this.wrap("Controlled supply groups retrieved", this.controlled.groups(city)); }
+
+  @Post("controlled-groups")
+  createControlledGroup(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateControlledSupplyGroupDto) { return this.wrap("Controlled supply group created", this.controlled.createGroup(user.id, dto)); }
+
+  @Patch("controlled-groups/:groupId")
+  updateControlledGroup(@CurrentUser() user: AuthenticatedUser, @Param("groupId", ParseUUIDPipe) groupId: string, @Body() dto: UpdateControlledSupplyGroupDto) { return this.wrap("Controlled supply group updated", this.controlled.updateGroup(groupId, user.id, dto)); }
+
+  @Post("controlled-groups/:groupId/members")
+  addControlledMember(@CurrentUser() user: AuthenticatedUser, @Param("groupId", ParseUUIDPipe) groupId: string, @Body() dto: AddControlledSupplyMemberDto) { return this.wrap("Controlled supply member added", this.controlled.addMember(groupId, user.id, dto)); }
+
+  @Patch("controlled-groups/:groupId/members/:memberId")
+  updateControlledMember(@CurrentUser() user: AuthenticatedUser, @Param("groupId", ParseUUIDPipe) groupId: string, @Param("memberId", ParseUUIDPipe) memberId: string, @Body() dto: UpdateControlledSupplyMemberDto) { return this.wrap("Controlled supply member updated", this.controlled.updateMember(groupId, memberId, user.id, dto)); }
+
+  @Get("controlled-customers")
+  controlledCustomers(@Query("city") city?: string) { return this.wrap("Controlled Operations Customers retrieved", this.controlled.customers(city)); }
+
+  @Post("controlled-customers")
+  addControlledCustomer(@CurrentUser() user: AuthenticatedUser, @Body() dto: AddControlledOperationsCustomerDto) { return this.wrap("Controlled Operations Customer added", this.controlled.addCustomer(user.id, dto)); }
+
+  @Patch("controlled-customers/:customerId")
+  updateControlledCustomer(@CurrentUser() user: AuthenticatedUser, @Param("customerId", ParseUUIDPipe) customerId: string, @Body() dto: UpdateControlledOperationsCustomerDto) { return this.wrap("Controlled Operations Customer updated", this.controlled.updateCustomer(customerId, user.id, dto)); }
+
+  @Get("controlled-captains")
+  controlledCaptains(@Query("city") city: string, @Query("serviceType", new ParseEnumPipe(LaunchServiceType)) serviceType: LaunchServiceType) { return this.wrap("Controlled Captain eligibility retrieved", this.controlled.captainEligibility(city, serviceType)); }
+
+  @Get("controlled-partners")
+  controlledPartners(@Query("city") city: string, @Query("serviceType", new ParseEnumPipe(LaunchServiceType)) serviceType: LaunchServiceType) { return this.wrap("Controlled Partner eligibility retrieved", this.controlled.partnerEligibility(city, serviceType)); }
+
+  @Get("operations-checklist/:city/:serviceType")
+  operationsChecklist(@Param("city") city: string, @Param("serviceType", new ParseEnumPipe(LaunchServiceType)) serviceType: LaunchServiceType) { return this.wrap("Operations-only checklist retrieved", this.controlled.checklist(city, serviceType)); }
+
+  @Patch("operations-checklist/:city/:serviceType/:itemId")
+  updateOperationsChecklist(@CurrentUser() user: AuthenticatedUser, @Param("city") city: string, @Param("serviceType", new ParseEnumPipe(LaunchServiceType)) serviceType: LaunchServiceType, @Param("itemId", ParseUUIDPipe) itemId: string, @Body() dto: UpdateOperationsChecklistItemDto) { return this.wrap("Operations-only checklist item updated", this.controlled.updateChecklist(city, serviceType, itemId, user.id, dto)); }
+
+  @Get("controlled-readiness")
+  controlledReadiness(@Query("city") city?: string) { return this.wrap("Controlled supply readiness retrieved", this.controlled.readinessProjection(city)); }
+
+  @Get("controlled-monitor")
+  controlledMonitor(@Query("city") city?: string) { return this.wrap("Live controlled supply monitor retrieved", this.controlled.monitor(city)); }
+
+  @Get("controlled-audit")
+  controlledAudit() { return this.wrap("Controlled supply audit history retrieved", this.controlled.auditHistory()); }
+
   @Get("incidents")
   incidents() { return this.wrap("Launch incidents retrieved", this.launch.incidents()); }
 
@@ -117,6 +173,15 @@ export class AdminLaunchOperationsController {
 
   @Patch("drills/:drillId")
   updateDrill(@CurrentUser() user: AuthenticatedUser, @Param("drillId", ParseUUIDPipe) drillId: string, @Body() dto: UpdateLaunchDrillDto) { return this.wrap("Launch drill updated", this.launch.updateDrill(drillId, user.id, dto)); }
+
+  @Patch("drills/:drillId/steps/:stepId")
+  updateDrillStep(@CurrentUser() user: AuthenticatedUser, @Param("drillId", ParseUUIDPipe) drillId: string, @Param("stepId", ParseUUIDPipe) stepId: string, @Body() dto: UpdateLaunchDrillStepDto) { return this.wrap("Launch drill step updated", this.launch.updateDrillStep(drillId, stepId, user.id, dto)); }
+
+  @Post("drills/:drillId/reopen")
+  reopenDrill(@CurrentUser() user: AuthenticatedUser, @Param("drillId", ParseUUIDPipe) drillId: string, @Body() dto: ReopenLaunchDrillDto) { return this.wrap("Launch drill reopened", this.launch.reopenDrill(drillId, user.id, dto)); }
+
+  @Post("drills/:drillId/failure-follow-up")
+  drillFailureFollowUp(@CurrentUser() user: AuthenticatedUser, @Param("drillId", ParseUUIDPipe) drillId: string, @Body() dto: LinkLaunchDrillFailureDto) { return this.wrap("Launch drill failure follow-up recorded", this.launch.linkDrillFailure(drillId, user.id, dto)); }
 
   @Get("support-queue")
   supportQueue() { return this.wrap("Launch support queue retrieved", this.launch.supportQueue()); }

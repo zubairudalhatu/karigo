@@ -5,6 +5,8 @@ import {
   LaunchCohortMemberStatus,
   LaunchCohortStatus,
   LaunchDrillResult,
+  LaunchDrillStepStatus,
+  LaunchDrillType,
   LaunchIncidentSeverity,
   LaunchIncidentStatus,
   LaunchReadinessStatus,
@@ -18,6 +20,8 @@ import {
   ServiceProviderStatus,
   SettlementStatus,
   SupportTicketStatus,
+  SupportTicketCategory,
+  SupportTicketPriority,
   TaxiDriverProfileStatus,
   TaxiTripStatus,
   UserRole,
@@ -38,6 +42,8 @@ import {
   UpdateLaunchIncidentDto,
   UpdateLaunchReadinessDto
 } from "./dto/launch-operations.dto";
+import { LinkLaunchDrillFailureDto, ReopenLaunchDrillDto, UpdateLaunchDrillStepDto } from "./dto/launch-operations.dto";
+import { ControlledSupplyService } from "./controlled-supply.service";
 
 export const LAUNCH_CITIES = [
   { code: "KANO", name: "Kano" },
@@ -87,6 +93,35 @@ const DEFAULT_CUSTOMER_MESSAGES: Record<LaunchStage, string> = {
   PAUSED: "This KariGO service is temporarily paused. Existing activity remains available."
 };
 
+const DRILL_CHECKLISTS: Partial<Record<LaunchDrillType, string[]>> = {
+  RIDE_END_TO_END: [
+    "Confirm OPERATIONS_ONLY", "Confirm controlled Customer", "Confirm eligible controlled Ride Captain", "Captain online for Ride",
+    "Customer creates Ride", "Admin sees request", "Admin sees eligible Captain", "Admin assigns Captain manually",
+    "Captain receives assignment", "Captain accepts", "Customer sees Captain and vehicle", "Captain progresses to pickup",
+    "Captain marks arrival", "Ride PIN appears only at arrival", "Captain verifies PIN", "Captain starts Ride",
+    "Captain reaches destination", "Captain completes Ride", "Customer receipt appears", "Captain earning appears",
+    "Admin audit timeline complete", "Exclusive lock releases", "Captain availability restored", "Drill result recorded"
+  ],
+  PRODUCT_ORDER_END_TO_END: [
+    "Confirm OPERATIONS_ONLY", "Controlled Customer creates order", "Controlled Partner receives order", "Partner accepts",
+    "Partner prepares order", "Controlled Delivery Captain eligible", "Admin assigns Delivery Captain", "Captain accepts",
+    "Captain confirms pickup", "Customer receives status updates", "Handoff verification completes", "Order completes",
+    "Partner earning appears", "Captain earning appears", "Reconciliation record available", "Cross-mode lock releases", "Drill result recorded"
+  ],
+  DELIVERY_END_TO_END: [
+    "Confirm OPERATIONS_ONLY", "Controlled Customer creates delivery", "Controlled Partner confirms work", "Controlled Delivery Captain eligible",
+    "Admin assigns Delivery Captain", "Captain accepts", "Captain confirms pickup", "Customer receives status updates",
+    "Handoff verification completes", "Delivery completes", "Earnings appear", "Reconciliation record available", "Lock releases", "Drill result recorded"
+  ],
+  SERVICE_REQUEST_END_TO_END: [
+    "Confirm OPERATIONS_ONLY", "Controlled Customer selects active service", "Controlled Service Provider sees request", "Provider acknowledges",
+    "Lifecycle progresses", "Customer receives status updates", "Service completes", "Settlement record reviewed",
+    "Admin audit record complete", "Drill result recorded"
+  ]
+};
+
+const GENERIC_DRILL_CHECKLIST = ["Confirm controlled participants", "Start drill", "Record expected result", "Review audit evidence", "Record drill outcome"];
+
 type EligibilityInput = {
   city: string;
   serviceType: LaunchServiceType;
@@ -100,7 +135,8 @@ export class LaunchOperationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-    private readonly audit: AdminAuditService
+    private readonly audit: AdminAuditService,
+    private readonly controlledSupply: ControlledSupplyService
   ) {}
 
   normalizeCity(value: string) {
@@ -253,8 +289,10 @@ export class LaunchOperationsService {
     const user = input.userId ? await this.prisma.user.findUnique({ where: { id: input.userId }, select: { role: true, accountStatus: true, deletedAt: true } }) : null;
     if (input.userId && (!user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE)) return this.safeEligibility(city, input.serviceType, config.launchStage, false, "ACCOUNT_NOT_ELIGIBLE", config);
     const cohortEligible = await this.cohortEligible(config, input.userId);
-    const operationsRole = user?.role === UserRole.ADMIN || user?.role === UserRole.RIDER || user?.role === UserRole.VENDOR;
-    if (config.launchStage === LaunchStage.OPERATIONS_ONLY && !operationsRole && !cohortEligible) return this.safeEligibility(city, input.serviceType, config.launchStage, false, "OPERATIONS_ONLY", config);
+    if (config.launchStage === LaunchStage.OPERATIONS_ONLY) {
+      const controlledEligible = Boolean(input.userId && user && await this.controlledSupply.accountEligible(city.name, input.serviceType, input.userId, user.role));
+      if (!controlledEligible) return this.safeEligibility(city, input.serviceType, config.launchStage, false, user?.role === UserRole.CUSTOMER ? "OPERATIONS_ONLY" : "NOT_IN_CONTROLLED_GROUP", config);
+    }
     if (config.launchStage === LaunchStage.INVITE_ONLY && !cohortEligible) return this.safeEligibility(city, input.serviceType, config.launchStage, false, "INVITE_REQUIRED", config);
     if (input.enforceCapacity !== false) {
       const capacity = await this.capacity(config);
@@ -264,6 +302,22 @@ export class LaunchOperationsService {
       }
     }
     return this.safeEligibility(city, input.serviceType, config.launchStage, true, null, config);
+  }
+
+  async controlledSupplyAccountEligible(input: { city: string; serviceType: LaunchServiceType; userId?: string | null }) {
+    const city = this.normalizeCity(input.city);
+    const config = await this.prisma.launchMarketConfig.findUnique({ where: { cityCode_serviceType: { cityCode: city.code, serviceType: input.serviceType } } });
+    if (!config || config.launchStage !== LaunchStage.OPERATIONS_ONLY || !config.isEnabled) return true;
+    if (!input.userId) return false;
+    const user = await this.prisma.user.findUnique({ where: { id: input.userId }, select: { role: true, accountStatus: true, deletedAt: true } });
+    if (!user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE) return false;
+    return this.controlledSupply.accountEligible(city.name, input.serviceType, input.userId, user.role);
+  }
+
+  async assertControlledSupplyCanReceive(input: { city: string; serviceType: LaunchServiceType; userId: string; participant: "Captain" | "Partner" }) {
+    if (!await this.controlledSupplyAccountEligible(input)) {
+      throw new ServiceUnavailableException(`${input.participant} is not enabled in active controlled supply for this city and service.`);
+    }
   }
 
   private safeEligibility(city: typeof LAUNCH_CITIES[number], serviceType: LaunchServiceType, stage: LaunchStage, available: boolean, reasonCode: string | null, config: { customerMessage: string | null; closedMessage: string | null; timezone: string; operatingHours: Prisma.JsonValue | null } | null) {
@@ -297,6 +351,7 @@ export class LaunchOperationsService {
     if (dto.launchStage === LaunchStage.PAUSED && !dto.pausedReason?.trim()) throw new BadRequestException("A pause reason is required");
     if (dto.activeFrom && dto.activeUntil && new Date(dto.activeFrom) >= new Date(dto.activeUntil)) throw new BadRequestException("activeUntil must be after activeFrom");
     const existing = await this.prisma.launchMarketConfig.findUnique({ where: { cityCode_serviceType: { cityCode: city.code, serviceType } } });
+    if (dto.launchStage === LaunchStage.OPERATIONS_ONLY && existing?.launchStage !== LaunchStage.OPERATIONS_ONLY) await this.controlledSupply.assertOperationsReady(city.name, serviceType);
     const previous = existing ?? { launchStage: LaunchStage.OFF, isEnabled: false, cityCode: city.code, cityName: city.name, serviceType };
     const data = {
       cityName: city.name,
@@ -447,11 +502,36 @@ export class LaunchOperationsService {
     return this.updateConfig(incident.cityCode, incident.serviceType, adminUserId, { launchStage: LaunchStage.PAUSED, isEnabled: false, reason: dto.reason, confirmed: dto.confirmed, highImpactConfirmed: dto.highImpactConfirmed, pausedReason: `${incident.reference}: ${dto.reason}` });
   }
 
-  async drills() { return this.prisma.launchDrill.findMany({ orderBy: { createdAt: "desc" }, take: 500 }); }
+  async drills() { return this.prisma.launchDrill.findMany({ include: { steps: { orderBy: { position: "asc" } }, events: { orderBy: { createdAt: "desc" }, take: 100 } }, orderBy: { createdAt: "desc" }, take: 500 }); }
+
+  private drillServiceType(drillType: LaunchDrillType, serviceType?: LaunchServiceType) {
+    if (serviceType) return serviceType;
+    if (drillType === LaunchDrillType.RIDE_END_TO_END) return LaunchServiceType.RIDES;
+    if (drillType === LaunchDrillType.PRODUCT_ORDER_END_TO_END) return LaunchServiceType.MARKETPLACE;
+    if (drillType === LaunchDrillType.DELIVERY_END_TO_END) return LaunchServiceType.PARCEL_DELIVERY;
+    if (drillType === LaunchDrillType.SERVICE_REQUEST_END_TO_END) return LaunchServiceType.SME_SERVICES;
+    return undefined;
+  }
 
   async createDrill(adminUserId: string, dto: CreateLaunchDrillDto) {
     const city = this.normalizeCity(dto.city);
-    const drill = await this.prisma.launchDrill.create({ data: { cityCode: city.code, drillType: dto.drillType, customerUserId: dto.customerUserId, captainUserId: dto.captainUserId, partnerUserId: dto.partnerUserId, relatedReference: dto.relatedReference?.trim(), notes: dto.notes?.trim(), responsibleAdminId: adminUserId } });
+    const serviceType = this.drillServiceType(dto.drillType, dto.serviceType);
+    if (dto.controlledCustomerId) {
+      const customer = await this.prisma.controlledOperationsCustomer.findFirst({ where: { id: dto.controlledCustomerId, cityCode: city.code, enabled: true } });
+      if (!customer) throw new BadRequestException("Select an enabled controlled Customer for this city");
+    }
+    if (dto.controlledSupplyGroupId) {
+      const group = await this.prisma.controlledSupplyGroup.findFirst({ where: { id: dto.controlledSupplyGroupId, cityCode: city.code, ...(serviceType ? { serviceType } : {}) } });
+      if (!group) throw new BadRequestException("Controlled supply group does not match the drill city and service");
+    }
+    const checklist = DRILL_CHECKLISTS[dto.drillType] ?? GENERIC_DRILL_CHECKLIST;
+    const drill = await this.prisma.launchDrill.create({ data: {
+      cityCode: city.code, drillType: dto.drillType, serviceType, customerUserId: dto.customerUserId,
+      captainUserId: dto.captainUserId, partnerUserId: dto.partnerUserId, controlledCustomerId: dto.controlledCustomerId,
+      controlledSupplyGroupId: dto.controlledSupplyGroupId, relatedReference: dto.relatedReference?.trim(), notes: dto.notes?.trim(), responsibleAdminId: adminUserId,
+      steps: { create: checklist.map((label, position) => ({ key: `step_${position + 1}`, label, position: position + 1 })) },
+      events: { create: { eventType: "CREATED", note: "Controlled production drill record created; no transaction started automatically", adminUserId } }
+    }, include: { steps: { orderBy: { position: "asc" } }, events: true } });
     await this.audit.record(adminUserId, "admin.production_launch.drill_created", "LaunchDrill", drill.id, { cityCode: city.code, drillType: dto.drillType });
     return drill;
   }
@@ -460,8 +540,48 @@ export class LaunchOperationsService {
     const drill = await this.prisma.launchDrill.findUnique({ where: { id } });
     if (!drill) throw new NotFoundException("Launch drill not found");
     const completed = dto.result === LaunchDrillResult.PASSED || dto.result === LaunchDrillResult.FAILED || dto.result === LaunchDrillResult.BLOCKED;
-    const updated = await this.prisma.launchDrill.update({ where: { id }, data: { result: dto.result, failureStage: dto.failureStage?.trim(), notes: dto.notes?.trim(), evidenceReference: dto.evidenceReference?.trim(), startedAt: drill.startedAt ?? (dto.result === LaunchDrillResult.NOT_STARTED ? null : new Date()), completedAt: completed ? new Date() : null } });
+    const updated = await this.prisma.launchDrill.update({ where: { id }, data: { result: dto.result, failureStage: dto.failureStage?.trim(), notes: dto.notes?.trim(), evidenceReference: dto.evidenceReference?.trim(), criticalFailure: dto.criticalFailure ?? drill.criticalFailure, startedAt: drill.startedAt ?? (dto.result === LaunchDrillResult.NOT_STARTED ? null : new Date()), completedAt: completed ? new Date() : null, events: { create: { eventType: "RESULT_CHANGED", note: dto.notes?.trim() || `Result changed to ${dto.result}`, adminUserId, metadata: { previousResult: drill.result, newResult: dto.result } } } }, include: { steps: { orderBy: { position: "asc" } }, events: { orderBy: { createdAt: "desc" } } } });
     await this.audit.record(adminUserId, "admin.production_launch.drill_changed", "LaunchDrill", id, { previousResult: drill.result, newResult: dto.result });
+    return updated;
+  }
+
+  async updateDrillStep(drillId: string, stepId: string, adminUserId: string, dto: UpdateLaunchDrillStepDto) {
+    const step = await this.prisma.launchDrillStep.findFirst({ where: { id: stepId, drillId } });
+    if (!step) throw new NotFoundException("Launch drill step not found");
+    const updated = await this.prisma.launchDrillStep.update({ where: { id: stepId }, data: { status: dto.status, note: dto.note?.trim(), updatedByAdminId: adminUserId, completedAt: dto.status === LaunchDrillStepStatus.PENDING ? null : new Date() } });
+    await this.prisma.launchDrillEvent.create({ data: { drillId, eventType: "STEP_CHANGED", note: `${step.label}: ${dto.status}${dto.note ? ` — ${dto.note.trim()}` : ""}`, adminUserId, metadata: { stepId, previousStatus: step.status, newStatus: dto.status } } });
+    await this.audit.record(adminUserId, "admin.production_launch.drill_step_changed", "LaunchDrillStep", stepId, { drillId, previousStatus: step.status, newStatus: dto.status });
+    return updated;
+  }
+
+  async reopenDrill(id: string, adminUserId: string, dto: ReopenLaunchDrillDto) {
+    const drill = await this.prisma.launchDrill.findUnique({ where: { id } });
+    if (!drill) throw new NotFoundException("Launch drill not found");
+    if (drill.result !== LaunchDrillResult.FAILED && drill.result !== LaunchDrillResult.BLOCKED) throw new BadRequestException("Only failed or blocked drills can be reopened");
+    const updated = await this.prisma.launchDrill.update({ where: { id }, data: { result: LaunchDrillResult.IN_PROGRESS, completedAt: null, reopenedAt: new Date(), events: { create: { eventType: "REOPENED", note: dto.reason.trim(), adminUserId } } }, include: { steps: { orderBy: { position: "asc" } }, events: { orderBy: { createdAt: "desc" } } } });
+    await this.audit.record(adminUserId, "admin.production_launch.drill_reopened", "LaunchDrill", id, { previousResult: drill.result, reason: dto.reason.trim() });
+    return updated;
+  }
+
+  async linkDrillFailure(id: string, adminUserId: string, dto: LinkLaunchDrillFailureDto) {
+    const drill = await this.prisma.launchDrill.findUnique({ where: { id } });
+    if (!drill) throw new NotFoundException("Launch drill not found");
+    if (drill.result !== LaunchDrillResult.FAILED && drill.result !== LaunchDrillResult.BLOCKED) throw new BadRequestException("Only a failed or blocked drill can create incident/support follow-up");
+    let incidentId = drill.incidentId;
+    let supportTicketId = drill.supportTicketId;
+    if ((dto.action === "INCIDENT" || dto.action === "BOTH") && !incidentId) {
+      const incident = await this.createIncident(adminUserId, { city: drill.cityCode, serviceType: drill.serviceType ?? undefined, severity: dto.severity ?? LaunchIncidentSeverity.SEV2, summary: dto.summary });
+      incidentId = incident.id;
+    }
+    if ((dto.action === "SUPPORT" || dto.action === "BOTH") && !supportTicketId) {
+      if (!drill.controlledCustomerId) throw new BadRequestException("A controlled Customer is required before creating drill support follow-up");
+      const customer = await this.prisma.controlledOperationsCustomer.findUnique({ where: { id: drill.controlledCustomerId } });
+      if (!customer) throw new BadRequestException("Controlled Customer record not found");
+      const ticket = await this.prisma.supportTicket.create({ data: { ticketNumber: `KGO-SUP-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`, customerId: customer.customerProfileId, category: SupportTicketCategory.OTHER, priority: dto.criticalFailure ? SupportTicketPriority.CRITICAL : SupportTicketPriority.HIGH, subject: `Controlled drill follow-up: ${drill.drillType}`, description: dto.summary.trim(), assignedAdminId: adminUserId } });
+      supportTicketId = ticket.id;
+    }
+    const updated = await this.prisma.launchDrill.update({ where: { id }, data: { incidentId, supportTicketId, criticalFailure: dto.criticalFailure ?? drill.criticalFailure, events: { create: { eventType: "FAILURE_FOLLOW_UP", note: dto.summary.trim(), adminUserId, metadata: { action: dto.action, incidentId, supportTicketId } } } }, include: { steps: { orderBy: { position: "asc" } }, events: { orderBy: { createdAt: "desc" } } } });
+    await this.audit.record(adminUserId, "admin.production_launch.drill_failure_linked", "LaunchDrill", id, { action: dto.action, incidentId, supportTicketId, criticalFailure: updated.criticalFailure });
     return updated;
   }
 

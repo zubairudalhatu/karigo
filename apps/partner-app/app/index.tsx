@@ -165,6 +165,7 @@ function DashboardContent() {
   ) ?? [];
   const launchAcceptingActivity = relevantLaunchServices.length === 0 || relevantLaunchServices.some((item) => item.available);
   const launchMessage = relevantLaunchServices.find((item) => !item.available)?.message;
+  const operationsOnlyEnabled = relevantLaunchServices.some((item) => item.available && item.launchStage === "OPERATIONS_ONLY");
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}>
@@ -189,9 +190,9 @@ function DashboardContent() {
       {launchAvailability ? <Card>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>City operations</Text>
-          <Badge label={launchAcceptingActivity ? "Accepting activity" : "Customer activity paused"} tone={launchAcceptingActivity ? "success" : "warning"} />
+          <Badge label={operationsOnlyEnabled ? "Controlled operations" : launchAcceptingActivity ? "Accepting activity" : "Customer activity paused"} tone={launchAcceptingActivity ? "success" : "warning"} />
         </View>
-        <MutedText>{launchAcceptingActivity ? `KariGO services are available for this Partner capability in ${launchAvailability.city.name}.` : launchMessage ?? "New Customer activity is not available for this Partner capability right now."}</MutedText>
+        <MutedText>{operationsOnlyEnabled ? `Your approved Partner account can receive scheduled controlled production operations in ${launchAvailability.city.name}.` : launchAcceptingActivity ? `KariGO services are available for this Partner capability in ${launchAvailability.city.name}.` : launchMessage ?? "New Customer activity is not available for this Partner capability right now."}</MutedText>
         <MutedText>Catalogue management and historical orders remain available during a service pause.</MutedText>
       </Card> : null}
 

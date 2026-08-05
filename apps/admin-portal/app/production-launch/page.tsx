@@ -2,6 +2,12 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
+  ControlledCandidate,
+  ControlledMonitor,
+  ControlledOperationsCustomer,
+  ControlledReadiness,
+  ControlledSupplyGroup,
+  ControlledSupplyMemberType,
   DailyLaunchReport,
   LaunchCohort,
   LaunchCommandCentre,
@@ -13,6 +19,7 @@ import {
   LaunchServiceType,
   LaunchStage,
   LaunchSupportQueue,
+  OperationsChecklist,
   productionLaunchApi,
   ReadinessStatus
 } from "../../src/api/production-launch.api";
@@ -23,7 +30,7 @@ const stages: LaunchStage[] = ["OFF", "OPERATIONS_ONLY", "INVITE_ONLY", "LIMITED
 const services: LaunchServiceType[] = ["RIDES", "FOOD", "GROCERIES", "MARKETPLACE", "PARCEL_DELIVERY", "SME_SERVICES"];
 const readinessStatuses: ReadinessStatus[] = ["NOT_READY", "AT_RISK", "READY", "WAIVED"];
 const drillTypes = ["RIDE_END_TO_END", "DELIVERY_END_TO_END", "PRODUCT_ORDER_END_TO_END", "SERVICE_REQUEST_END_TO_END", "PAYMENT_SUCCESS", "PAYMENT_FAILURE", "CUSTOMER_CANCELLATION", "CAPTAIN_CANCELLATION", "PARTNER_REJECTION", "SUPPORT_ESCALATION", "EMERGENCY_SERVICE_PAUSE"];
-type View = "command" | "readiness" | "supply" | "cohorts" | "incidents" | "support" | "drills" | "reports" | "history";
+type View = "command" | "controlled" | "checklist" | "readiness" | "supply" | "cohorts" | "incidents" | "support" | "drills" | "reports" | "history";
 
 function label(value: string) {
   return value.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -122,6 +129,11 @@ export default function ProductionLaunchPage() {
   const [support, setSupport] = useState<LaunchSupportQueue | null>(null);
   const [report, setReport] = useState<DailyLaunchReport | null>(null);
   const [history, setHistory] = useState<LaunchHistoryItem[]>([]);
+  const [controlledGroups, setControlledGroups] = useState<ControlledSupplyGroup[]>([]);
+  const [controlledCustomers, setControlledCustomers] = useState<ControlledOperationsCustomer[]>([]);
+  const [controlledReadiness, setControlledReadiness] = useState<ControlledReadiness[]>([]);
+  const [controlledMonitor, setControlledMonitor] = useState<ControlledMonitor[]>([]);
+  const [controlledAudit, setControlledAudit] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -130,10 +142,11 @@ export default function ProductionLaunchPage() {
     setLoading(true);
     setError("");
     try {
-      const [nextCommand, nextConfigs, kano, abuja, nextCohorts, nextIncidents, nextDrills, nextSupport, nextReport, nextHistory] = await Promise.all([
-        productionLaunchApi.commandCentre(), productionLaunchApi.configs(), productionLaunchApi.readiness("Kano"), productionLaunchApi.readiness("Abuja"), productionLaunchApi.cohorts(), productionLaunchApi.incidents(), productionLaunchApi.drills(), productionLaunchApi.supportQueue(), productionLaunchApi.report(), productionLaunchApi.history()
+      const [nextCommand, nextConfigs, kano, abuja, nextCohorts, nextIncidents, nextDrills, nextSupport, nextReport, nextHistory, nextGroups, nextCustomers, nextControlledReadiness, nextMonitor, nextControlledAudit] = await Promise.all([
+        productionLaunchApi.commandCentre(), productionLaunchApi.configs(), productionLaunchApi.readiness("Kano"), productionLaunchApi.readiness("Abuja"), productionLaunchApi.cohorts(), productionLaunchApi.incidents(), productionLaunchApi.drills(), productionLaunchApi.supportQueue(), productionLaunchApi.report(), productionLaunchApi.history(), productionLaunchApi.controlledGroups(), productionLaunchApi.controlledCustomers(), productionLaunchApi.controlledReadiness(), productionLaunchApi.controlledMonitor(), productionLaunchApi.controlledAudit()
       ]);
       setCommand(nextCommand); setConfigs(nextConfigs); setReadiness([kano, abuja]); setCohorts(nextCohorts); setIncidents(nextIncidents); setDrills(nextDrills); setSupport(nextSupport); setReport(nextReport); setHistory(nextHistory);
+      setControlledGroups(nextGroups); setControlledCustomers(nextCustomers); setControlledReadiness(nextControlledReadiness); setControlledMonitor(nextMonitor); setControlledAudit(nextControlledAudit);
     } catch (cause) {
       setError(friendlyError(cause));
     } finally {
@@ -152,7 +165,7 @@ export default function ProductionLaunchPage() {
     <h1>Production Launch</h1>
     <p className="muted">Kano and Abuja operations control. All city/service records default to OFF. No stage advances automatically, active work is not cancelled, and customer demand remains server-gated by stage, account eligibility, hours, zone and capacity.</p>
     <div className="actions">
-      {(["command", "readiness", "supply", "cohorts", "incidents", "support", "drills", "reports", "history"] as View[]).map((item) => <button key={item} className={view === item ? "" : "secondary"} onClick={() => setView(item)}>{label(item)}</button>)}
+      {(["command", "controlled", "checklist", "readiness", "supply", "cohorts", "incidents", "support", "drills", "reports", "history"] as View[]).map((item) => <button key={item} className={view === item ? "" : "secondary"} onClick={() => setView(item)}>{label(item)}</button>)}
       <button className="secondary" onClick={() => void load()}>Refresh</button>
     </div>
     {message ? <p className="success">{message}</p> : null}
@@ -172,7 +185,8 @@ export default function ProductionLaunchPage() {
           <article className="card"><span className="muted">Readiness score</span><p className="metric">{city.readiness.percentage}%</p><p>{city.readiness.ready}/{city.readiness.total} categories ready or validly waived</p></article>
           <article className="card"><span className="muted">Open Ride requests</span><p className="metric">{city.demand.openRides ?? 0}</p><p>Unassigned: {city.demand.unassignedRides ?? 0}</p></article>
           <article className="card"><span className="muted">Active orders / services</span><p className="metric">{city.demand.activeOrders ?? 0} / {city.demand.activeServices ?? 0}</p></article>
-          <article className="card"><span className="muted">Open incidents</span><p className="metric">{city.openIncidents}</p><p>{city.lastSuccessfulOperationalTransaction ? `${city.lastSuccessfulOperationalTransaction.type} ${city.lastSuccessfulOperationalTransaction.reference}` : "No successful transaction recorded"}</p></article>
+          <article className="card"><span className="muted">Open incidents</span><p className="metric">{city.openIncidents}</p><p className="muted">Unresolved launch incidents for this city</p></article>
+          <article className="card"><span className="muted">Latest operational reference</span><p>{city.lastSuccessfulOperationalTransaction ? `${city.lastSuccessfulOperationalTransaction.type} ${city.lastSuccessfulOperationalTransaction.reference}` : "No successful transaction recorded"}</p><p className="muted">{dateTime(city.lastSuccessfulOperationalTransaction?.at)}</p></article>
         </div>
         <div className="grid">{configs.filter((item) => item.cityCode === city.city.code).map((config) => <ConfigEditor key={config.id} config={config} onSaved={load} />)}</div>
       </section>)}
@@ -185,13 +199,137 @@ export default function ProductionLaunchPage() {
     </section>) : null}
 
     {!loading && view === "supply" && command ? <SupplyView command={command} /> : null}
+    {!loading && view === "controlled" ? <ControlledSupplyView groups={controlledGroups} customers={controlledCustomers} readiness={controlledReadiness} monitor={controlledMonitor} audit={controlledAudit} action={action} reload={load} /> : null}
+    {!loading && view === "checklist" ? <OperationsChecklistView action={action} /> : null}
     {!loading && view === "cohorts" ? <CohortsView cohorts={cohorts} action={action} /> : null}
     {!loading && view === "incidents" ? <IncidentsView incidents={incidents} action={action} /> : null}
-    {!loading && view === "drills" ? <DrillsView drills={drills} action={action} /> : null}
+    {!loading && view === "drills" ? <DrillsView drills={drills} groups={controlledGroups} customers={controlledCustomers} action={action} /> : null}
     {!loading && view === "support" ? <SupportView support={support} /> : null}
     {!loading && view === "reports" ? <ReportsView report={report} /> : null}
     {!loading && view === "history" ? <HistoryView history={history} /> : null}
   </PortalShell>;
+}
+
+function ControlledSupplyView({ groups, customers, readiness, monitor, audit, action, reload }: {
+  groups: ControlledSupplyGroup[];
+  customers: ControlledOperationsCustomer[];
+  readiness: ControlledReadiness[];
+  monitor: ControlledMonitor[];
+  audit: Array<Record<string, unknown>>;
+  action: (fn: () => Promise<unknown>, message: string) => Promise<void>;
+  reload: () => Promise<void>;
+}) {
+  const [groupName, setGroupName] = useState("");
+  const [city, setCity] = useState("KANO");
+  const [serviceType, setServiceType] = useState<LaunchServiceType>("RIDES");
+  const [maximumMembers, setMaximumMembers] = useState("4");
+  const [startAt, setStartAt] = useState("");
+  const [endAt, setEndAt] = useState("");
+  const [groupId, setGroupId] = useState("");
+  const [memberType, setMemberType] = useState<ControlledSupplyMemberType>("RIDE_CAPTAIN");
+  const [identityId, setIdentityId] = useState("");
+  const [customerUserId, setCustomerUserId] = useState("");
+  const [customerLabel, setCustomerLabel] = useState("");
+  const [captains, setCaptains] = useState<ControlledCandidate[]>([]);
+  const [partners, setPartners] = useState<ControlledCandidate[]>([]);
+  const [eligibilityError, setEligibilityError] = useState("");
+  const captainType = ["RIDE_CAPTAIN", "DELIVERY_CAPTAIN", "DUAL_MODE_CAPTAIN"].includes(memberType);
+
+  async function loadEligibility() {
+    setEligibilityError("");
+    try {
+      const [nextCaptains, nextPartners] = await Promise.all([
+        productionLaunchApi.controlledCaptains(city, serviceType),
+        productionLaunchApi.controlledPartners(city, serviceType)
+      ]);
+      setCaptains(nextCaptains); setPartners(nextPartners);
+    } catch (cause) { setEligibilityError(friendlyError(cause, "form")); }
+  }
+
+  return <>
+    <section className="section">
+      <h2>Controlled Captain and Partner activation</h2>
+      <p className="muted">These controls reference existing approved accounts. They never recreate identities, activate payouts, enable automatic matching, or change a city/service launch stage.</p>
+      <div className="grid">
+        {readiness.map((item) => <article className="card" key={item.city.code}>
+          <h3>{item.city.name} controlled supply</h3>
+          <p><Badge>{item.drillReady ? "DRILL_READY" : "NOT_READY"}</Badge></p>
+          {Object.entries(item.targets).map(([key, value]) => <p key={key}>{label(key)}: <strong>{value}</strong> / {item.requiredTargets[key]} configured minimum</p>)}
+          <p className="muted">{item.recommendation}</p>
+          <p>Invite rollout ready: <strong>No</strong> · Limited public ready: <strong>No</strong></p>
+        </article>)}
+      </div>
+    </section>
+
+    <section className="section">
+      <h2>Controlled supply groups</h2>
+      <article className="card">
+        <div className="form-grid">
+          <label>Name<input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Kano Ride drill supply" /></label>
+          <label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option>KANO</option><option>ABUJA</option></select></label>
+          <label>Service<select value={serviceType} onChange={(event) => setServiceType(event.target.value as LaunchServiceType)}>{services.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label>Maximum members<input inputMode="numeric" value={maximumMembers} onChange={(event) => setMaximumMembers(event.target.value)} /></label>
+          <label>Window starts<input type="datetime-local" value={startAt} onChange={(event) => setStartAt(event.target.value)} /></label>
+          <label>Window ends<input type="datetime-local" value={endAt} onChange={(event) => setEndAt(event.target.value)} /></label>
+        </div>
+        <button disabled={!groupName.trim() || Number(maximumMembers) < 1 || Boolean(startAt && endAt && startAt >= endAt)} onClick={() => void action(() => productionLaunchApi.createControlledGroup({ name: groupName, city, serviceType, maximumMembers: Number(maximumMembers), ...(startAt ? { startAt } : {}), ...(endAt ? { endAt } : {}), internalNote: "Controlled production operations only; no credentials or private documents." }), "Controlled supply group created in DRAFT.")}>Create DRAFT group</button>
+        <p className="muted">Disabled until a name and safe member limit are supplied. Activation remains an explicit audited owner action.</p>
+      </article>
+    </section>
+
+    <section className="section">
+      <h2>Controlled groups and members</h2>
+      {groups.length ? groups.map((group) => <article className="card" key={group.id}>
+        <h3>{group.name}</h3>
+        <p><Badge>{group.status}</Badge> · {group.cityCode} · {label(group.serviceType)} · {group._count.members}/{group.maximumMembers}</p>
+        <p className="muted">Window: {dateTime(group.startAt)} to {dateTime(group.endAt)} · {group.activeWindow ? "Within configured window" : "Outside configured window"}</p>
+        <div className="actions">
+          {group.status !== "ACTIVE" ? <button onClick={() => { const reason = window.prompt("Audited reason for activating this controlled group"); if (reason?.trim()) void action(() => productionLaunchApi.updateControlledGroup(group.id, { status: "ACTIVE", reason }), "Controlled group activated; no launch stage changed."); }}>Activate group</button> : null}
+          {group.status !== "PAUSED" ? <button className="secondary" onClick={() => { const reason = window.prompt("Audited reason for pausing this group"); if (reason?.trim()) void action(() => productionLaunchApi.updateControlledGroup(group.id, { status: "PAUSED", reason }), "Controlled group paused."); }}>Pause group</button> : null}
+        </div>
+        {group.members.length ? <table className="table"><thead><tr><th>Type</th><th>Identity</th><th>State</th><th>Reason</th><th>Action</th></tr></thead><tbody>{group.members.map((member) => <tr key={member.id}><td>{label(member.memberType)}</td><td>{member.captainUserId ?? member.vendorId}</td><td><Badge>{member.enabled ? "ACTIVE" : "DISABLED"}</Badge></td><td>{member.reason ?? "Not recorded"}</td><td><button className="secondary" onClick={() => { const reason = window.prompt(`Audited reason to ${member.enabled ? "remove from active controlled supply" : "activate"} this member`); if (reason?.trim()) void action(() => productionLaunchApi.updateControlledMember(group.id, member.id, { enabled: !member.enabled, reason }), member.enabled ? "Controlled member removed from active supply and retained for audit." : "Controlled member activated after eligibility checks."); }}>{member.enabled ? "Remove / deactivate" : "Activate"}</button></td></tr>)}</tbody></table> : <Empty>No members. Add an existing approved Captain or Partner by ID.</Empty>}
+      </article>) : <Empty>No controlled supply groups. Kano and Abuja remain NOT_READY — SUPPLY_REQUIRED.</Empty>}
+    </section>
+
+    <section className="section">
+      <h2>Add existing Captain or Partner</h2>
+      <article className="card"><div className="form-grid">
+        <label>Controlled group<select value={groupId} onChange={(event) => setGroupId(event.target.value)}><option value="">Select group</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.cityCode} · {group.serviceType} · {group.name}</option>)}</select></label>
+        <label>Member type<select value={memberType} onChange={(event) => setMemberType(event.target.value as ControlledSupplyMemberType)}>{(["RIDE_CAPTAIN", "DELIVERY_CAPTAIN", "DUAL_MODE_CAPTAIN", "PRODUCT_SELLER", "SERVICE_PROVIDER", "MIXED_PARTNER"] as ControlledSupplyMemberType[]).map((item) => <option key={item}>{item}</option>)}</select></label>
+        <label>{captainType ? "Captain user UUID" : "Partner vendor UUID"}<input value={identityId} onChange={(event) => setIdentityId(event.target.value)} /></label>
+      </div><button disabled={!groupId || !identityId.trim()} onClick={() => void action(() => productionLaunchApi.addControlledMember(groupId, { memberType, ...(captainType ? { captainUserId: identityId } : { vendorId: identityId }), reason: "Selected for scheduled controlled production operations" }), "Existing account added disabled; confirm eligibility before activation.")}>Add disabled member</button></article>
+    </section>
+
+    <section className="section">
+      <h2>Controlled Operations Customers</h2>
+      <p className="muted">Use separate reusable Kano and Abuja Operations accounts. Never enter credentials, OTPs, payment secrets, founder accounts, or private personal data.</p>
+      <article className="card"><div className="form-grid"><label>Customer user UUID<input value={customerUserId} onChange={(event) => setCustomerUserId(event.target.value)} /></label><label>Safe label<input value={customerLabel} onChange={(event) => setCustomerLabel(event.target.value)} placeholder="Kano Operations Customer" /></label><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option>KANO</option><option>ABUJA</option></select></label></div><button disabled={!customerUserId || !customerLabel.trim()} onClick={() => void action(() => productionLaunchApi.addControlledCustomer({ city, userId: customerUserId, label: customerLabel, internalNote: "Credentials held privately by authorised owner." }), "Controlled Operations Customer added disabled and excluded from campaigns.")}>Add controlled Customer</button></article>
+      {customers.length ? <table className="table"><thead><tr><th>City</th><th>Safe label</th><th>Campaigns</th><th>State</th><th>Action</th></tr></thead><tbody>{customers.map((customer) => <tr key={customer.id}><td>{customer.cityCode}</td><td>{customer.label}</td><td>{customer.excludedFromCampaigns ? "Excluded" : "Review required"}</td><td><Badge>{customer.enabled ? "ACTIVE" : "DISABLED"}</Badge></td><td><button className="secondary" onClick={() => { const reason = window.prompt(`Audited reason to ${customer.enabled ? "deactivate" : "activate"} this Operations Customer`); if (reason?.trim()) void action(() => productionLaunchApi.updateControlledCustomer(customer.id, { enabled: !customer.enabled, reason }), customer.enabled ? "Controlled Customer deactivated." : "Controlled Customer activated for Operations-only use."); }}>{customer.enabled ? "Deactivate" : "Activate"}</button></td></tr>)}</tbody></table> : <Empty>No controlled Operations Customers are registered.</Empty>}
+    </section>
+
+    <section className="section">
+      <h2>Eligibility and live controlled supply</h2>
+      <div className="actions"><button onClick={() => void loadEligibility()}>Load eligibility for {city} / {label(serviceType)}</button><button className="secondary" onClick={() => void reload()}>Manual Refresh monitor</button></div>
+      <p className="muted">Refresh is manual to avoid aggressive polling, GPS loops, or background load.</p><ErrorMessage>{eligibilityError}</ErrorMessage>
+      {captains.length ? <table className="table"><thead><tr><th>Captain</th><th>City / online</th><th>Modes / vehicle</th><th>GPS</th><th>Documents / group</th><th>Eligibility</th></tr></thead><tbody>{captains.map((captain) => <tr key={captain.userId}><td>{captain.captainName}<br /><span className="muted">{captain.captainCode}</span></td><td>{captain.city}<br /><Badge>{captain.onlineState}</Badge></td><td>{captain.rideStatus} / {captain.deliveryStatus}<br />{captain.vehicle || "Vehicle incomplete"}</td><td>{dateTime(captain.lastGpsUpdate)}</td><td>{captain.documentStatus}<br /><span className="muted">{captain.controlledGroup?.name ?? "No matching controlled group"}</span></td><td><Badge>{captain.eligibility}</Badge><br /><span className="muted">{captain.blockers.join(", ") || "ELIGIBLE"}</span></td></tr>)}</tbody></table> : <Empty>Load eligibility to view Captain blockers.</Empty>}
+      {partners.length ? <table className="table"><thead><tr><th>Partner</th><th>City / online</th><th>Capability</th><th>Catalogue / orders</th><th>Documents / group</th><th>Eligibility</th></tr></thead><tbody>{partners.map((partner) => <tr key={partner.vendorId ?? partner.userId}><td>{partner.businessName}<br /><span className="muted">{partner.tradingName || "No trading name"}</span></td><td>{partner.city}<br /><Badge>{partner.onlineState}</Badge></td><td>{partner.capability}</td><td>{partner.activeProductCount ?? 0} products / {partner.activeServiceCount ?? 0} services<br />{partner.openOrderCount ?? 0} open orders</td><td>{partner.documentStatus}<br /><span className="muted">{partner.controlledGroup?.name ?? "No matching controlled group"}</span></td><td><Badge>{partner.eligibility}</Badge><br /><span className="muted">{partner.blockers.join(", ") || "ELIGIBLE"}</span></td></tr>)}</tbody></table> : <Empty>Load eligibility to view Partner blockers.</Empty>}
+      <div className="grid">{monitor.map((item) => <article className="card" key={item.city.code}><h3>{item.city.name} monitor</h3><p>Captains — approved: <strong>{String(item.captains.approved ?? 0)}</strong> · controlled: <strong>{String(item.captains.controlled ?? 0)}</strong> · online: <strong>{String(item.captains.online ?? 0)}</strong> · available: <strong>{String(item.captains.available ?? 0)}</strong> · busy: <strong>{String(item.captains.busy ?? 0)}</strong> · offline: <strong>{String(item.captains.offline ?? 0)}</strong> · stale: <strong>{String(item.captains.locationStale ?? 0)}</strong> · suspended: <strong>{String(item.captains.suspended ?? 0)}</strong> · active Ride: <strong>{String(item.captains.activeRide ?? 0)}</strong> · active Delivery: <strong>{String(item.captains.activeDelivery ?? 0)}</strong></p><p>Partners — approved: <strong>{String(item.partners.approved ?? 0)}</strong> · controlled: <strong>{String(item.partners.controlled ?? 0)}</strong> · online: <strong>{String(item.partners.online ?? 0)}</strong> · offline: <strong>{String(item.partners.offline ?? 0)}</strong> · Product Seller: <strong>{String(item.partners.productSellers ?? 0)}</strong> · Service Provider: <strong>{String(item.partners.serviceProviders ?? 0)}</strong> · both: <strong>{String(item.partners.both ?? 0)}</strong> · active products: <strong>{String(item.partners.activeProducts ?? 0)}</strong> · active services: <strong>{String(item.partners.activeServices ?? 0)}</strong> · open orders: <strong>{String(item.partners.openOrders ?? 0)}</strong></p><p className="muted">Refreshed {dateTime(item.refreshedAt)}</p></article>)}</div>
+    </section>
+
+    <section className="section"><h2>Controlled activation audit history</h2>{audit.length ? <table className="table"><thead><tr><th>Time</th><th>Action</th><th>Entity</th></tr></thead><tbody>{audit.slice(0, 100).map((entry, index) => <tr key={String(entry.id ?? index)}><td>{dateTime(String(entry.createdAt ?? ""))}</td><td>{label(String(entry.action ?? "unknown"))}</td><td>{String(entry.entityType ?? "Unknown")} {String(entry.entityId ?? "")}</td></tr>)}</tbody></table> : <Empty>No controlled activation audit history yet.</Empty>}</section>
+  </>;
+}
+
+function OperationsChecklistView({ action }: { action: (fn: () => Promise<unknown>, message: string) => Promise<void> }) {
+  const [city, setCity] = useState("KANO");
+  const [serviceType, setServiceType] = useState<LaunchServiceType>("RIDES");
+  const [checklist, setChecklist] = useState<OperationsChecklist | null>(null);
+  const [error, setError] = useState("");
+  async function loadChecklist() { try { setChecklist(await productionLaunchApi.operationsChecklist(city, serviceType)); setError(""); } catch (cause) { setError(friendlyError(cause, "form")); } }
+  useEffect(() => { void loadChecklist(); }, [city, serviceType]);
+  return <section className="section"><h2>Operations-only activation checklist</h2><p className="muted">The Apply audited change button remains backend-blocked until every mandatory item is complete or validly waived. No checklist action promotes a launch stage.</p><div className="actions"><select value={city} onChange={(event) => setCity(event.target.value)}><option>KANO</option><option>ABUJA</option></select><select value={serviceType} onChange={(event) => setServiceType(event.target.value as LaunchServiceType)}>{services.map((item) => <option key={item}>{item}</option>)}</select><button className="secondary" onClick={() => void loadChecklist()}>Refresh checklist</button></div><ErrorMessage>{error}</ErrorMessage>
+    {checklist ? <><p><Badge>{checklist.canEnableOperationsOnly ? "CHECKLIST_COMPLETE" : "OPERATIONS_ONLY_DISABLED"}</Badge> {checklist.score.satisfied}/{checklist.score.total} satisfied · Critical blockers: {checklist.criticalFailures}</p><table className="table"><thead><tr><th>Mandatory check</th><th>Status</th><th>Note / waiver</th><th>Action</th></tr></thead><tbody>{checklist.items.map((item) => <tr key={item.id}><td>{item.label}</td><td><Badge>{item.status}</Badge></td><td>{item.waiverReason ?? item.note ?? "Evidence required"}</td><td><select value={item.status} onChange={(event) => { const status = event.target.value; let waiverReason: string | undefined; let waiverExpiresAt: string | undefined; if (status === "WAIVED") { waiverReason = window.prompt("Required waiver reason") ?? undefined; waiverExpiresAt = window.prompt("Required waiver expiry (YYYY-MM-DD)") ?? undefined; if (!waiverReason?.trim() || !waiverExpiresAt?.trim()) return; } void action(() => productionLaunchApi.updateOperationsChecklist(city, serviceType, item.id, { status, note: status === "COMPLETE" ? "Owner-confirmed operational evidence recorded" : undefined, waiverReason, waiverExpiresAt }), "Operations checklist item updated and audited.").then(loadChecklist); }}><option>NOT_READY</option><option>COMPLETE</option><option>WAIVED</option></select></td></tr>)}</tbody></table></> : <Loading />}
+  </section>;
 }
 
 function SupplyView({ command }: { command: LaunchCommandCentre }) {
@@ -228,10 +366,34 @@ function IncidentsView({ incidents, action }: { incidents: LaunchIncident[]; act
   </section>;
 }
 
-function DrillsView({ drills, action }: { drills: LaunchDrill[]; action: (fn: () => Promise<unknown>, message: string) => Promise<void> }) {
-  const [city, setCity] = useState("KANO"); const [drillType, setDrillType] = useState(drillTypes[0]); const [reference, setReference] = useState("");
-  return <section className="section"><h2>Controlled transaction drills</h2><article className="card"><div className="form-grid"><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option>KANO</option><option>ABUJA</option></select></label><label>Drill type<select value={drillType} onChange={(event) => setDrillType(event.target.value)}>{drillTypes.map((item) => <option key={item}>{item}</option>)}</select></label><label>Existing request/order reference<input value={reference} onChange={(event) => setReference(event.target.value)} /></label></div><button onClick={() => void action(() => productionLaunchApi.createDrill({ city, drillType, relatedReference: reference || undefined }), "Drill record created. No real transaction was initiated.")}>Create drill record</button></article>
-    {drills.length ? <table className="table"><thead><tr><th>City</th><th>Drill</th><th>Reference</th><th>Result</th><th>Action</th></tr></thead><tbody>{drills.map((drill) => <tr key={drill.id}><td>{drill.cityCode}</td><td>{label(drill.drillType)}</td><td>{drill.relatedReference ?? "Not linked"}</td><td><Badge>{drill.result}</Badge></td><td><button onClick={() => void action(() => productionLaunchApi.updateDrill(drill.id, { result: "PASSED", notes: "Operations evidence reviewed" }), "Drill marked passed and audited.")}>Mark passed</button></td></tr>)}</tbody></table> : <Empty>No controlled drill records.</Empty>}
+function DrillsView({ drills, groups, customers, action }: { drills: LaunchDrill[]; groups: ControlledSupplyGroup[]; customers: ControlledOperationsCustomer[]; action: (fn: () => Promise<unknown>, message: string) => Promise<void> }) {
+  const [city, setCity] = useState("KANO");
+  const [drillType, setDrillType] = useState(drillTypes[0]);
+  const [serviceType, setServiceType] = useState<LaunchServiceType>("RIDES");
+  const [reference, setReference] = useState("");
+  const [customerId, setCustomerId] = useState("");
+  const [groupId, setGroupId] = useState("");
+  const [captainUserId, setCaptainUserId] = useState("");
+  const [partnerUserId, setPartnerUserId] = useState("");
+  const selectedGroups = groups.filter((group) => group.cityCode === city && group.serviceType === serviceType);
+  const selectedCustomers = customers.filter((customer) => customer.cityCode === city && customer.enabled);
+
+  return <section className="section"><h2>Controlled transaction drills</h2><p className="muted">Creating or updating a drill records an audited checklist only. It never initiates a Ride, order, payment, assignment, payout, or stage change.</p><article className="card"><h3>Drill console</h3><div className="form-grid">
+    <label>City<select value={city} onChange={(event) => { setCity(event.target.value); setCustomerId(""); setGroupId(""); }}><option>KANO</option><option>ABUJA</option></select></label>
+    <label>Drill type<select value={drillType} onChange={(event) => setDrillType(event.target.value)}>{drillTypes.map((item) => <option key={item}>{item}</option>)}</select></label>
+    <label>Service<select value={serviceType} onChange={(event) => { setServiceType(event.target.value as LaunchServiceType); setGroupId(""); }}>{services.map((item) => <option key={item}>{item}</option>)}</select></label>
+    <label>Controlled Customer<select value={customerId} onChange={(event) => setCustomerId(event.target.value)}><option value="">Select enabled Customer</option>{selectedCustomers.map((customer) => <option key={customer.id} value={customer.id}>{customer.label}</option>)}</select></label>
+    <label>Controlled supply group<select value={groupId} onChange={(event) => setGroupId(event.target.value)}><option value="">Select matching group</option>{selectedGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
+    <label>Captain user UUID<input value={captainUserId} onChange={(event) => setCaptainUserId(event.target.value)} /></label>
+    <label>Partner user UUID<input value={partnerUserId} onChange={(event) => setPartnerUserId(event.target.value)} /></label>
+    <label>Ride / order / service reference<input value={reference} onChange={(event) => setReference(event.target.value)} /></label>
+  </div><button disabled={!customerId || !groupId} onClick={() => void action(() => productionLaunchApi.createDrill({ city, drillType, serviceType, controlledCustomerId: customerId, controlledSupplyGroupId: groupId, captainUserId: captainUserId || undefined, partnerUserId: partnerUserId || undefined, relatedReference: reference || undefined }), "Controlled drill created with predefined checklist. No real transaction was initiated.")}>Create controlled drill</button><p className="muted">Disabled until an enabled city Customer and matching controlled supply group are selected.</p></article>
+    {drills.length ? drills.map((drill) => <article className="card" key={drill.id}><h3>{drill.cityCode} · {label(drill.drillType)}</h3><p><Badge>{drill.result}</Badge> · {drill.serviceType ? label(drill.serviceType) : "Service not selected"} · Reference: {drill.relatedReference ?? "Not linked"}</p><p>Incident: {drill.incidentId ?? "None"} · Support: {drill.supportTicketId ?? "None"} · Critical blocker: {drill.criticalFailure ? "Yes" : "No"}</p>
+      <div className="actions"><button onClick={() => void action(() => productionLaunchApi.updateDrill(drill.id, { result: "IN_PROGRESS", notes: "Owner started scheduled controlled drill" }), "Drill started and audited.")}>Start drill</button><button className="secondary" onClick={() => { const evidenceReference = window.prompt("Non-secret evidence reference required"); if (evidenceReference?.trim()) void action(() => productionLaunchApi.updateDrill(drill.id, { result: "PASSED", notes: "Operations evidence reviewed", evidenceReference }), "Drill marked passed and audited."); }}>Complete passed</button><button className="secondary" onClick={() => { const failureStage = window.prompt("Failure stage"); if (failureStage?.trim()) void action(() => productionLaunchApi.updateDrill(drill.id, { result: "FAILED", failureStage, notes: "Controlled drill stopped safely", criticalFailure: false }), "Drill marked failed and audited."); }}>Record failure</button>{["FAILED", "BLOCKED"].includes(drill.result) ? <button className="secondary" onClick={() => { const reason = window.prompt("Reason for reopening this incomplete drill"); if (reason?.trim()) void action(() => productionLaunchApi.reopenDrill(drill.id, reason), "Drill reopened and audited."); }}>Reopen incomplete drill</button> : null}</div>
+      {drill.steps?.length ? <table className="table"><thead><tr><th>Step</th><th>Status</th><th>Safe note</th><th>Action</th></tr></thead><tbody>{drill.steps.map((step) => <tr key={step.id}><td>{step.position}. {step.label}</td><td><Badge>{step.status}</Badge></td><td>{step.note ?? "Not recorded"}</td><td><div className="actions"><button className="secondary" onClick={() => void action(() => productionLaunchApi.updateDrillStep(drill.id, step.id, { status: "PASSED", note: "Owner-confirmed evidence" }), "Drill step passed and audited.")}>Pass</button><button className="secondary" onClick={() => { const note = window.prompt("Safe failure note; do not enter secrets, PINs or private URLs"); if (note?.trim()) void action(() => productionLaunchApi.updateDrillStep(drill.id, step.id, { status: "FAILED", note }), "Drill step failed and audited."); }}>Fail</button></div></td></tr>)}</tbody></table> : <Empty>No predefined steps loaded.</Empty>}
+      {["FAILED", "BLOCKED"].includes(drill.result) ? <div className="actions"><button className="secondary" onClick={() => { const summary = window.prompt("Safe failure summary"); if (!summary?.trim()) return; const actionType = window.prompt("Follow-up: INCIDENT, SUPPORT, BOTH or NEITHER", "INCIDENT"); if (!["INCIDENT", "SUPPORT", "BOTH", "NEITHER"].includes(actionType ?? "")) return; const criticalFailure = window.confirm("Is this a critical readiness-blocking failure?"); void action(() => productionLaunchApi.drillFailureFollowUp(drill.id, { action: actionType, summary, criticalFailure, severity: criticalFailure ? "SEV1" : "SEV2" }), "Drill failure follow-up linked and audited."); }}>Create incident / Create support / Create both / Record neither</button></div> : null}
+      {drill.events?.length ? <details><summary>Audit history ({drill.events.length})</summary>{drill.events.map((event) => <p key={event.id}><strong>{label(event.eventType)}</strong> · {dateTime(event.createdAt)} · {event.note ?? "No note"}</p>)}</details> : null}
+    </article>) : <Empty>No controlled drill records.</Empty>}
   </section>;
 }
 

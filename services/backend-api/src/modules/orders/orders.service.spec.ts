@@ -23,7 +23,10 @@ describe("OrdersService", () => {
   const promos = { validateForCustomer: jest.fn() };
   const notifications = { createNotification: jest.fn() };
   const applicationNotifications = { orderCreated: jest.fn() };
-  const launchOperations = { assertCustomerCanStart: jest.fn().mockResolvedValue({ available: true }) };
+  const launchOperations = {
+    assertCustomerCanStart: jest.fn().mockResolvedValue({ available: true }),
+    assertControlledSupplyCanReceive: jest.fn().mockResolvedValue(undefined)
+  };
   const service = new OrdersService(
     prisma as unknown as PrismaService,
     config as unknown as ConfigService,
@@ -55,8 +58,8 @@ describe("OrdersService", () => {
     let createData: Record<string, any> = {};
     enableFlutterwaveCheckout();
     prisma.customerProfile.findUnique.mockResolvedValue({ id: "customer-1", user: { fullName: "Demo Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } });
-    prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-1" });
-    prisma.address.findFirst.mockResolvedValue({ id: "address-1" });
+    prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-1", userId: "partner-user-1", city: "Kano" });
+    prisma.address.findFirst.mockResolvedValue({ id: "address-1", city: "Kano", state: "Kano" });
     prisma.product.findMany.mockResolvedValue([
       { id: "product-1", name: "Jollof Rice", price: new Prisma.Decimal(2500) }
     ]);
@@ -88,6 +91,7 @@ describe("OrdersService", () => {
       phoneNumber: "+2348030000000",
       email: "customer@example.test"
     }));
+    expect(launchOperations.assertControlledSupplyCanReceive).toHaveBeenCalledWith({ city: "Kano", serviceType: "FOOD", userId: "partner-user-1", participant: "Partner" });
   });
 
   it("quotes a vendor order without creating it", async () => {

@@ -70,6 +70,28 @@ assert(productionLaunchPage.includes("Second confirmation"), "High-impact launch
 assert(productionLaunchPage.includes("Customer cohorts") && productionLaunchPage.includes("Launch incidents") && productionLaunchPage.includes("Controlled transaction drills"), "Production Launch must include cohorts, incidents and drills.");
 assert(productionLaunchPage.includes("Export privacy-safe CSV"), "Production Launch must expose privacy-safe daily report export.");
 assert(productionLaunchApi.includes("admin/production-launch/command-centre"), "Production Launch API must call the admin-only command centre.");
+assert(productionLaunchPage.includes("Controlled supply groups") && productionLaunchPage.includes("Create DRAFT group"), "Production Launch must create controlled groups without activating them automatically.");
+assert(productionLaunchPage.includes("Add existing Captain or Partner") && productionLaunchPage.includes("Activate") && productionLaunchPage.includes("Deactivate"), "Production Launch must support audited controlled membership actions.");
+assert(productionLaunchPage.includes("Eligibility and live controlled supply") && productionLaunchPage.includes("Manual Refresh monitor"), "Production Launch must expose eligibility reasons and manual supply refresh without aggressive polling.");
+assert(productionLaunchPage.includes("Load eligibility to view Captain blockers.") && productionLaunchPage.includes("Load eligibility to view Partner blockers."), "Controlled supply must expose explicit empty states.");
+assert(productionLaunchPage.includes("Operations-only activation checklist") && productionLaunchPage.includes("OPERATIONS_ONLY_DISABLED"), "Production Launch must gate Operations-only activation on its audited checklist.");
+assert(productionLaunchPage.includes("No controlled supply groups. Kano and Abuja remain NOT_READY — SUPPLY_REQUIRED."), "Kano and Abuja must remain independently not ready without controlled supply.");
+assert(productionLaunchPage.includes("No controlled Operations Customers are registered."), "Production Launch must expose the controlled Customer empty state.");
+assert(productionLaunchPage.includes("No controlled activation audit history yet."), "Production Launch must expose controlled activation audit history.");
+assert(productionLaunchPage.includes("Latest operational reference") && productionLaunchPage.includes("Unresolved launch incidents for this city"), "Operational references must be separated from the Open incidents count.");
+assert(productionLaunchPage.includes("Pass") && productionLaunchPage.includes("Fail") && productionLaunchPage.includes("Reopen"), "Drill console must support step results and reopening failed work.");
+assert(productionLaunchPage.includes("Create incident") && productionLaunchPage.includes("Create support") && productionLaunchPage.includes("Create both"), "Failed drills must support incident and support follow-up choices.");
+assert(productionLaunchPage.includes("No predefined steps loaded.") && productionLaunchPage.includes("No controlled drill records."), "Drill console must expose clear empty states.");
+[
+  "admin/production-launch/controlled-groups",
+  "admin/production-launch/controlled-customers",
+  "admin/production-launch/controlled-captains",
+  "admin/production-launch/controlled-partners",
+  "admin/production-launch/controlled-monitor",
+  "admin/production-launch/controlled-audit",
+  "admin/production-launch/operations-checklist",
+  "failure-follow-up"
+].forEach((endpoint) => assert(productionLaunchApi.includes(endpoint), `Production Launch API must expose ${endpoint}.`));
 
 const supportTicketPage = read("app", "support", "[id]", "page.tsx");
 const supportTicketStatusSource = read("src", "lib", "support-ticket-status.ts");

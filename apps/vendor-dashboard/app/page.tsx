@@ -38,6 +38,7 @@ export default function VendorDashboard() {
       .finally(() => setLoading(false));
   }, []);
   const count = (statuses: string[]) => orders.filter((order) => statuses.includes(order.orderStatus)).length;
+  const operationsOnlyEnabled = launchAvailability?.services.some((service) => service.available && service.launchStage === "OPERATIONS_ONLY");
   if (loading) return <DashboardShell><Loading /></DashboardShell>;
   if (missingProfile) return <DashboardShell unread={unread}>
     <section className="card missing-profile">
@@ -53,7 +54,7 @@ export default function VendorDashboard() {
     </section>
   </DashboardShell>;
   return <DashboardShell unread={unread}><header className="topbar"><div><p className="muted">Partner workspace</p><h1>Operations overview</h1><p className="muted">Product sellers and SME service providers can manage the approved workspace areas for their account.</p></div><StatusBadge>Live API</StatusBadge></header><ErrorMessage>{error}</ErrorMessage>
-    {launchAvailability ? <section className="notice"><strong>{launchAvailability.city.name} operational status</strong><p>{launchAvailability.services.some((service) => service.available) ? "At least one approved KariGO service is accepting new Customer activity." : "New Customer activity is currently unavailable. Catalogue management and historical orders remain accessible."}</p></section> : null}
+    {launchAvailability ? <section className="notice"><strong>{launchAvailability.city.name} operational status</strong><p>{operationsOnlyEnabled ? "This approved Partner account can receive scheduled controlled production operations." : launchAvailability.services.some((service) => service.available) ? "At least one approved KariGO service is accepting new Customer activity." : "New Customer activity is currently unavailable. Catalogue management and historical orders remain accessible."}</p></section> : null}
     <div className="grid">
       <article className="card"><span className="muted">New orders</span><p className="metric">{count(["PAID", "VENDOR_CONFIRMING"])}</p></article>
       <article className="card"><span className="muted">Active orders</span><p className="metric">{count(["VENDOR_ACCEPTED", "PREPARING", "READY_FOR_PICKUP"])}</p></article>

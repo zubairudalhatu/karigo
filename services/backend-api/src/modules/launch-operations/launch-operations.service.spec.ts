@@ -3,6 +3,9 @@ import { ConfigService } from "@nestjs/config";
 import {
   AccountStatus,
   LaunchCohortMemberStatus,
+  LaunchDrillResult,
+  LaunchDrillStepStatus,
+  LaunchDrillType,
   LaunchIncidentSeverity,
   LaunchReadinessStatus,
   LaunchServiceType,
@@ -21,6 +24,12 @@ describe("LaunchOperationsService", () => {
     launchMarketConfigHistory: { create: jest.fn() },
     launchReadinessItem: { upsert: jest.fn(), findMany: jest.fn() },
     launchIncident: { create: jest.fn() },
+    launchDrill: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+    launchDrillStep: { findFirst: jest.fn(), update: jest.fn() },
+    launchDrillEvent: { create: jest.fn() },
+    controlledOperationsCustomer: { findFirst: jest.fn(), findUnique: jest.fn() },
+    controlledSupplyGroup: { findFirst: jest.fn() },
+    supportTicket: { create: jest.fn() },
     user: { findUnique: jest.fn() },
     taxiDriverProfile: { count: jest.fn() },
     taxiTrip: { count: jest.fn() },
@@ -28,10 +37,12 @@ describe("LaunchOperationsService", () => {
   };
   const config = { get: jest.fn((_key: string, fallback?: unknown) => fallback) };
   const audit = { record: jest.fn() };
+  const controlledSupply = { accountEligible: jest.fn(), assertOperationsReady: jest.fn() };
   const service = new LaunchOperationsService(
     prisma as unknown as PrismaService,
     config as unknown as ConfigService,
-    audit as unknown as AdminAuditService
+    audit as unknown as AdminAuditService,
+    controlledSupply as never
   );
 
   const baseConfig = {
@@ -71,6 +82,8 @@ describe("LaunchOperationsService", () => {
     prisma.taxiDriverProfile.count.mockResolvedValue(0);
     prisma.taxiTrip.count.mockResolvedValue(0);
     prisma.launchReadinessItem.upsert.mockResolvedValue({ id: "readiness-id" });
+    controlledSupply.accountEligible.mockResolvedValue(false);
+    controlledSupply.assertOperationsReady.mockResolvedValue(undefined);
   });
 
   it("fails closed when no city/service configuration exists", async () => {
@@ -102,13 +115,35 @@ describe("LaunchOperationsService", () => {
     expect(result.available).toBe(true);
   });
 
-  it("allows authenticated Captain operations access while keeping Customers cohort-gated", async () => {
+  it("allows only a controlled Captain during operations-only access", async () => {
     prisma.launchMarketConfig.findUnique.mockResolvedValue({ ...baseConfig, launchStage: LaunchStage.OPERATIONS_ONLY });
     prisma.user.findUnique.mockResolvedValue({ role: UserRole.RIDER, accountStatus: AccountStatus.ACTIVE, deletedAt: null });
+    controlledSupply.accountEligible.mockResolvedValue(true);
 
     const result = await service.resolveEligibility({ city: "Kano", serviceType: LaunchServiceType.RIDES, userId: "captain-user", enforceCapacity: false });
 
     expect(result.available).toBe(true);
+  });
+
+  it("rejects a non-controlled Customer during operations-only access", async () => {
+    prisma.launchMarketConfig.findUnique.mockResolvedValue({ ...baseConfig, launchStage: LaunchStage.OPERATIONS_ONLY });
+
+    const result = await service.resolveEligibility({ city: "Kano", serviceType: LaunchServiceType.RIDES, userId: "customer-user", enforceCapacity: false });
+
+    expect(result).toMatchObject({ available: false, reasonCode: "OPERATIONS_ONLY" });
+  });
+
+  it("rejects non-controlled supply from receiving new operations-only work", async () => {
+    prisma.launchMarketConfig.findUnique.mockResolvedValue({ ...baseConfig, launchStage: LaunchStage.OPERATIONS_ONLY });
+    prisma.user.findUnique.mockResolvedValue({ role: UserRole.VENDOR, accountStatus: AccountStatus.ACTIVE, deletedAt: null });
+    controlledSupply.accountEligible.mockResolvedValue(false);
+
+    await expect(service.assertControlledSupplyCanReceive({
+      city: "Kano",
+      serviceType: LaunchServiceType.MARKETPLACE,
+      userId: "partner-user",
+      participant: "Partner"
+    })).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
   it("enforces configured operating hours", async () => {
@@ -220,5 +255,72 @@ describe("LaunchOperationsService", () => {
     expect(csv).toContain('"ADMIN_DECISION_REQUIRED"');
     expect(csv).not.toContain("customerUserId");
     reportSpy.mockRestore();
+  });
+
+  it("creates a Ride drill with the predefined 24-step checklist without starting live work", async () => {
+    prisma.controlledOperationsCustomer.findFirst.mockResolvedValue({ id: "customer-record" });
+    prisma.controlledSupplyGroup.findFirst.mockResolvedValue({ id: "ride-group" });
+    prisma.launchDrill.create.mockImplementation(async ({ data }: any) => ({ id: "drill-1", ...data }));
+
+    const drill = await service.createDrill("admin-id", {
+      city: "Kano",
+      drillType: LaunchDrillType.RIDE_END_TO_END,
+      controlledCustomerId: "customer-record",
+      controlledSupplyGroupId: "ride-group"
+    });
+
+    expect(prisma.launchDrill.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        cityCode: "KANO",
+        serviceType: LaunchServiceType.RIDES,
+        steps: { create: expect.arrayContaining([expect.objectContaining({ position: 24, label: "Drill result recorded" })]) },
+        events: { create: expect.objectContaining({ eventType: "CREATED" }) }
+      }),
+      include: expect.any(Object)
+    });
+    expect(drill).toBeDefined();
+    expect(prisma.launchMarketConfig.upsert).not.toHaveBeenCalled();
+  });
+
+  it("records drill step pass/fail changes in the event and Admin audit histories", async () => {
+    prisma.launchDrillStep.findFirst.mockResolvedValue({ id: "step-1", drillId: "drill-1", label: "Captain accepts", status: LaunchDrillStepStatus.PENDING });
+    prisma.launchDrillStep.update.mockResolvedValue({ id: "step-1", status: LaunchDrillStepStatus.FAILED });
+
+    await service.updateDrillStep("drill-1", "step-1", "admin-id", {
+      status: LaunchDrillStepStatus.FAILED,
+      note: "Assignment was declined"
+    });
+
+    expect(prisma.launchDrillEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({ drillId: "drill-1", eventType: "STEP_CHANGED" }) });
+    expect(audit.record).toHaveBeenCalledWith("admin-id", "admin.production_launch.drill_step_changed", "LaunchDrillStep", "step-1", expect.any(Object));
+  });
+
+  it("links both an incident and support ticket to a failed controlled drill", async () => {
+    prisma.launchDrill.findUnique.mockResolvedValue({
+      id: "drill-1",
+      result: LaunchDrillResult.FAILED,
+      cityCode: "KANO",
+      serviceType: LaunchServiceType.RIDES,
+      drillType: LaunchDrillType.RIDE_END_TO_END,
+      controlledCustomerId: "customer-record",
+      incidentId: null,
+      supportTicketId: null,
+      criticalFailure: false
+    });
+    prisma.launchMarketConfig.findUnique.mockResolvedValue({ id: "config-id" });
+    prisma.launchIncident.create.mockResolvedValue({ id: "incident-1", reference: "KGO-INC-1" });
+    prisma.controlledOperationsCustomer.findUnique.mockResolvedValue({ id: "customer-record", customerProfileId: "customer-profile" });
+    prisma.supportTicket.create.mockResolvedValue({ id: "support-1" });
+    prisma.launchDrill.update.mockResolvedValue({ id: "drill-1", criticalFailure: true });
+
+    await service.linkDrillFailure("drill-1", "admin-id", {
+      action: "BOTH",
+      summary: "Assignment lock did not release",
+      criticalFailure: true
+    });
+
+    expect(prisma.launchIncident.create).toHaveBeenCalled();
+    expect(prisma.supportTicket.create).toHaveBeenCalledWith({ data: expect.objectContaining({ customerId: "customer-profile", assignedAdminId: "admin-id" }) });
+    expect(prisma.launchDrill.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ incidentId: "incident-1", supportTicketId: "support-1", criticalFailure: true }) }));
   });
 });

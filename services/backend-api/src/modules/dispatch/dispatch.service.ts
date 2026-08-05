@@ -11,7 +11,8 @@ import {
   RiderStatus,
   SettlementStatus,
   TaxiDriverProfileStatus,
-  TaxiTripStatus
+  TaxiTripStatus,
+  LaunchServiceType
 } from "@prisma/client";
 import { randomInt } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -24,6 +25,7 @@ import { DispatchEventsService } from "./dispatch-events.service";
 import { DispatchStatusService } from "./dispatch-status.service";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
+import { LaunchOperationsService } from "../launch-operations/launch-operations.service";
 
 const CLOSED_JOB_STATUSES = [
   OrderStatus.COMPLETED,
@@ -39,7 +41,8 @@ export class DispatchService {
     private readonly statuses: DispatchStatusService,
     private readonly events: DispatchEventsService,
     private readonly audit: AdminAuditService,
-    private readonly captainWorkState: CaptainWorkStateService
+    private readonly captainWorkState: CaptainWorkStateService,
+    private readonly launchOperations: LaunchOperationsService
   ) {}
 
   async updateAvailability(userId: string, dto: UpdateRiderAvailabilityDto) {
@@ -51,6 +54,8 @@ export class DispatchService {
       ) {
         throw new BadRequestException("Only approved active riders can go online");
       }
+      const application = await this.prisma.deliveryCaptainApplication.findFirst({ where: { applicantUserId: userId }, orderBy: { createdAt: "desc" }, select: { city: true } });
+      if (application) await this.launchOperations.assertControlledSupplyCanReceive({ city: application.city, serviceType: LaunchServiceType.PARCEL_DELIVERY, userId, participant: "Captain" });
     }
     if (rider.availabilityStatus === RiderStatus.BUSY) {
       throw new ConflictException("A rider with an active job cannot change availability");
@@ -127,6 +132,11 @@ export class DispatchService {
       this.requireAvailableRider(riderId)
     ]);
     if (!order) throw new NotFoundException("Order not found");
+    if (!rider.userId) throw new BadRequestException("Delivery Captain account is not linked");
+    if (!order.deliveryAddressId) throw new BadRequestException("Order delivery address is not linked");
+    const riderUserId = rider.userId;
+    const deliveryAddress = await this.prisma.address.findUnique({ where: { id: order.deliveryAddressId }, select: { city: true, state: true } });
+    await this.launchOperations.assertControlledSupplyCanReceive({ city: deliveryAddress?.city || deliveryAddress?.state || "", serviceType: LaunchServiceType.PARCEL_DELIVERY, userId: riderUserId, participant: "Captain" });
     this.statuses.assertTransition(order.orderStatus, OrderStatus.RIDER_ASSIGNED);
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -172,6 +182,11 @@ export class DispatchService {
       this.requireAvailableRider(newRiderId)
     ]);
     if (!order) throw new NotFoundException("Order not found");
+    if (!newRider.userId) throw new BadRequestException("Delivery Captain account is not linked");
+    if (!order.deliveryAddressId) throw new BadRequestException("Order delivery address is not linked");
+    const newRiderUserId = newRider.userId;
+    const deliveryAddress = await this.prisma.address.findUnique({ where: { id: order.deliveryAddressId }, select: { city: true, state: true } });
+    await this.launchOperations.assertControlledSupplyCanReceive({ city: deliveryAddress?.city || deliveryAddress?.state || "", serviceType: LaunchServiceType.PARCEL_DELIVERY, userId: newRiderUserId, participant: "Captain" });
     this.statuses.assertReassignable(order.orderStatus);
     if (order.riderId === newRider.id) throw new ConflictException("Rider is already assigned to this order");
 

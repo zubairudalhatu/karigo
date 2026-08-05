@@ -184,4 +184,6 @@ assert(profilePage.includes("vendorApi.update(profileUpdatePayload(profile))"), 
 assert(profilePage.includes("friendlyError(err, \"form\")"), "Profile save errors must show form-level API messages.");
 assert(profilePage.includes("disabled={saving || Boolean(uploading)}"), "Profile save must be disabled while uploads or saves are in progress.");
 
+assert(dashboardPage.includes("This approved Partner account can receive scheduled controlled production operations."), "Partner Workspace must identify operations-only activity for controlled Partners.");
+assert(dashboardPage.includes('service.available && service.launchStage === "OPERATIONS_ONLY"'), "Partner Workspace controlled-operations copy must depend on backend eligibility.");
 console.log("Vendor dashboard staging regression checks passed.");

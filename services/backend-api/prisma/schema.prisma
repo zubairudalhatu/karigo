@@ -109,6 +109,34 @@ enum LaunchDrillResult {
   BLOCKED
 }
 
+enum ControlledSupplyGroupStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+enum ControlledSupplyMemberType {
+  RIDE_CAPTAIN
+  DELIVERY_CAPTAIN
+  DUAL_MODE_CAPTAIN
+  PRODUCT_SELLER
+  SERVICE_PROVIDER
+  MIXED_PARTNER
+}
+
+enum LaunchChecklistItemStatus {
+  NOT_READY
+  COMPLETE
+  WAIVED
+}
+
+enum LaunchDrillStepStatus {
+  PENDING
+  PASSED
+  FAILED
+}
+
 enum AccountDeletionAccountType {
   CUSTOMER
   CAPTAIN
@@ -2572,25 +2600,148 @@ model LaunchIncident {
 }
 
 model LaunchDrill {
-  id                 String            @id @default(uuid()) @db.Uuid
-  cityCode           String
-  drillType          LaunchDrillType
-  customerUserId     String?           @db.Uuid
-  captainUserId      String?           @db.Uuid
-  partnerUserId      String?           @db.Uuid
-  relatedReference   String?
-  startedAt          DateTime?
-  completedAt        DateTime?
-  result             LaunchDrillResult @default(NOT_STARTED)
-  failureStage       String?
-  notes              String?
-  evidenceReference  String?
-  responsibleAdminId String            @db.Uuid
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  id                      String             @id @default(uuid()) @db.Uuid
+  cityCode                String
+  drillType               LaunchDrillType
+  serviceType             LaunchServiceType?
+  customerUserId          String?            @db.Uuid
+  captainUserId           String?            @db.Uuid
+  partnerUserId           String?            @db.Uuid
+  controlledCustomerId    String?            @db.Uuid
+  controlledSupplyGroupId String?            @db.Uuid
+  relatedReference        String?
+  incidentId              String?            @db.Uuid
+  supportTicketId         String?            @db.Uuid
+  criticalFailure         Boolean            @default(false)
+  startedAt               DateTime?
+  completedAt             DateTime?
+  reopenedAt              DateTime?
+  result                  LaunchDrillResult  @default(NOT_STARTED)
+  failureStage            String?
+  notes                   String?
+  evidenceReference       String?
+  responsibleAdminId      String             @db.Uuid
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  steps                   LaunchDrillStep[]
+  events                  LaunchDrillEvent[]
 
   @@index([cityCode, drillType, result])
+  @@index([cityCode, serviceType, result])
   @@map("launch_drills")
+}
+
+model ControlledSupplyGroup {
+  id               String                      @id @default(uuid()) @db.Uuid
+  name             String
+  cityCode         String
+  serviceType      LaunchServiceType
+  status           ControlledSupplyGroupStatus @default(DRAFT)
+  startAt          DateTime?
+  endAt            DateTime?
+  maximumMembers   Int
+  internalNote     String?
+  createdByAdminId String                      @db.Uuid
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+  members          ControlledSupplyMember[]
+
+  @@index([cityCode, serviceType, status])
+  @@map("controlled_supply_groups")
+}
+
+model ControlledSupplyMember {
+  id             String                     @id @default(uuid()) @db.Uuid
+  groupId        String                     @db.Uuid
+  memberType     ControlledSupplyMemberType
+  captainUserId  String?                    @db.Uuid
+  vendorId       String?                    @db.Uuid
+  enabled        Boolean                    @default(false)
+  activatedAt    DateTime?
+  deactivatedAt  DateTime?
+  reason         String?
+  addedByAdminId String                     @db.Uuid
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  group          ControlledSupplyGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, enabled])
+  @@index([captainUserId, enabled])
+  @@index([vendorId, enabled])
+  @@map("controlled_supply_members")
+}
+
+model ControlledOperationsCustomer {
+  id                    String    @id @default(uuid()) @db.Uuid
+  cityCode              String
+  customerProfileId     String    @db.Uuid
+  userId                String    @unique @db.Uuid
+  label                 String
+  enabled               Boolean   @default(false)
+  excludedFromCampaigns Boolean   @default(true)
+  internalNote          String?
+  addedByAdminId        String    @db.Uuid
+  activatedAt           DateTime?
+  deactivatedAt         DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([cityCode, customerProfileId])
+  @@index([cityCode, enabled])
+  @@map("controlled_operations_customers")
+}
+
+model LaunchOperationsChecklistItem {
+  id               String                    @id @default(uuid()) @db.Uuid
+  cityCode         String
+  serviceType      LaunchServiceType
+  key              String
+  label            String
+  mandatory        Boolean                   @default(true)
+  status           LaunchChecklistItemStatus @default(NOT_READY)
+  note             String?
+  waiverReason     String?
+  waiverExpiresAt  DateTime?
+  updatedByAdminId String?                   @db.Uuid
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  @@unique([cityCode, serviceType, key])
+  @@index([cityCode, serviceType, status])
+  @@map("launch_operations_checklist_items")
+}
+
+model LaunchDrillStep {
+  id               String                @id @default(uuid()) @db.Uuid
+  drillId          String                @db.Uuid
+  key              String
+  label            String
+  position         Int
+  status           LaunchDrillStepStatus @default(PENDING)
+  note             String?
+  updatedByAdminId String?               @db.Uuid
+  completedAt      DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  drill            LaunchDrill           @relation(fields: [drillId], references: [id], onDelete: Cascade)
+
+  @@unique([drillId, key])
+  @@index([drillId, position])
+  @@map("launch_drill_steps")
+}
+
+model LaunchDrillEvent {
+  id          String      @id @default(uuid()) @db.Uuid
+  drillId     String      @db.Uuid
+  eventType   String
+  note        String?
+  adminUserId String      @db.Uuid
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+  drill       LaunchDrill @relation(fields: [drillId], references: [id], onDelete: Cascade)
+
+  @@index([drillId, createdAt])
+  @@map("launch_drill_events")
 }
 
 model LaunchCapacityDenial {

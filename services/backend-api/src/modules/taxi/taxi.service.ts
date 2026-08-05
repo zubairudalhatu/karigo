@@ -812,6 +812,7 @@ export class TaxiService {
       if (profileArea && profileArea !== resolvedArea.city) {
         throw new BadRequestException(`This Ride Captain profile is approved for ${profileArea}. Choose the matching operating area before going online.`);
       }
+      await this.launchOperations.assertControlledSupplyCanReceive({ city: resolvedArea.city, serviceType: LaunchServiceType.RIDES, userId, participant: "Captain" });
     }
     await this.captainWorkState.updateAvailability(userId, {
       rideOnline: dto.isAvailableForTaxi,
@@ -1098,7 +1099,8 @@ export class TaxiService {
       const workState = profile.user?.captainWorkState;
       const activeOtherWork = Boolean(workState?.activeWorkMode);
       const desiredRideOnline = workState?.desiredRideOnline ?? profile.isAvailableForTaxi;
-      const eligible = !activeTrip && !activeOtherWork && desiredRideOnline && serviceAreaMatch && locationFreshness === "fresh";
+      const controlledSupplyEligible = await this.launchOperations.controlledSupplyAccountEligible({ city: pickupCity ?? profileCity ?? profile.city, serviceType: LaunchServiceType.RIDES, userId: profile.userId });
+      const eligible = !activeTrip && !activeOtherWork && desiredRideOnline && serviceAreaMatch && locationFreshness === "fresh" && controlledSupplyEligible;
       const distanceToPickupKm = this.distanceToPickupKm(profile, trip);
       candidates.push({
         id: profile.id,
@@ -1118,6 +1120,7 @@ export class TaxiService {
           activeTrip ? "Captain already has an active Ride." : null,
           activeOtherWork ? `Captain is busy with ${workState?.activeWorkMode === "DELIVERY" ? "Delivery" : "Ride"}.` : null,
           !desiredRideOnline ? "Captain is not online for Ride assignments." : null,
+          !controlledSupplyEligible ? "Captain is not in active controlled Ride supply." : null,
           !serviceAreaMatch ? "Captain operating area does not match pickup area." : null,
           locationFreshness !== "fresh" ? "Captain location is stale or unavailable." : null
         ].filter(Boolean)
@@ -1148,6 +1151,7 @@ export class TaxiService {
     if (pickupCity && profileCity && pickupCity !== profileCity) {
       throw new BadRequestException("Ride Captain operating area does not match the Ride pickup area.");
     }
+    await this.launchOperations.assertControlledSupplyCanReceive({ city: pickupCity ?? profileCity ?? profile.city, serviceType: LaunchServiceType.RIDES, userId: profile.user!.id, participant: "Captain" });
     if (trip.status !== TaxiTripStatus.REQUESTED) throw new BadRequestException("Only requested Ride requests can be assigned");
     await this.assertDriverHasNoActiveTrip(profile.id, trip.id);
     const updated = await this.updateTripWithEvent(trip.id, {

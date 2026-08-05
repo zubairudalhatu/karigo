@@ -33,6 +33,8 @@ describe("DispatchService", () => {
     order: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn() },
     riderEarning: { findMany: jest.fn() },
     captainWorkState: { updateMany: jest.fn() },
+    deliveryCaptainApplication: { findFirst: jest.fn() },
+    address: { findUnique: jest.fn() },
     $transaction: jest.fn((callback) => callback(tx))
   };
   const events = { emit: jest.fn() };
@@ -43,12 +45,14 @@ describe("DispatchService", () => {
     releaseLock: jest.fn(),
     transitionLock: jest.fn()
   };
+  const launchOperations = { assertControlledSupplyCanReceive: jest.fn().mockResolvedValue(undefined) };
   const service = new DispatchService(
     prisma as unknown as PrismaService,
     new DispatchStatusService(),
     events as unknown as DispatchEventsService,
     audit as never,
-    captainWorkState as unknown as CaptainWorkStateService
+    captainWorkState as unknown as CaptainWorkStateService,
+    launchOperations as never
   );
 
   beforeEach(() => jest.clearAllMocks());
@@ -67,9 +71,11 @@ describe("DispatchService", () => {
   it("assigns an online rider to a ready order and records history", async () => {
     prisma.order.findUnique.mockResolvedValue({
       id: "order-1",
+      deliveryAddressId: "address-1",
       orderStatus: OrderStatus.READY_FOR_PICKUP
     });
-    prisma.rider.findFirst.mockResolvedValue({ id: "rider-1", riderCode: "KGO-R-1" });
+    prisma.address.findUnique.mockResolvedValue({ city: "Kano", state: "Kano" });
+    prisma.rider.findFirst.mockResolvedValue({ id: "rider-1", userId: "rider-user-1", riderCode: "KGO-R-1" });
     tx.order.update.mockResolvedValue({ id: "order-1" });
 
     await service.assignRider("admin-1", "order-1", "rider-1");

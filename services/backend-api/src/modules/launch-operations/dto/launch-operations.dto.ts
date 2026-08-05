@@ -6,6 +6,7 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsObject,
@@ -17,9 +18,13 @@ import {
   Min
 } from "class-validator";
 import {
+  ControlledSupplyGroupStatus,
+  ControlledSupplyMemberType,
+  LaunchChecklistItemStatus,
   LaunchCohortMemberStatus,
   LaunchCohortStatus,
   LaunchDrillResult,
+  LaunchDrillStepStatus,
   LaunchDrillType,
   LaunchIncidentSeverity,
   LaunchIncidentStatus,
@@ -205,6 +210,52 @@ export class UpdateLaunchCohortMemberDto {
   reason?: string;
 }
 
+export class CreateControlledSupplyGroupDto {
+  @IsString() @IsNotEmpty() @MaxLength(120) name!: string;
+  @IsString() @MaxLength(80) city!: string;
+  @IsEnum(LaunchServiceType) serviceType!: LaunchServiceType;
+  @Type(() => Number) @IsInt() @Min(1) @Max(500) maximumMembers!: number;
+  @IsOptional() @IsDateString() startAt?: string;
+  @IsOptional() @IsDateString() endAt?: string;
+  @IsOptional() @IsString() @MaxLength(1000) internalNote?: string;
+}
+
+export class UpdateControlledSupplyGroupDto {
+  @IsEnum(ControlledSupplyGroupStatus) status!: ControlledSupplyGroupStatus;
+  @IsString() @IsNotEmpty() @MaxLength(500) reason!: string;
+}
+
+export class AddControlledSupplyMemberDto {
+  @IsEnum(ControlledSupplyMemberType) memberType!: ControlledSupplyMemberType;
+  @IsOptional() @IsUUID() captainUserId?: string;
+  @IsOptional() @IsUUID() vendorId?: string;
+  @IsString() @IsNotEmpty() @MaxLength(500) reason!: string;
+}
+
+export class UpdateControlledSupplyMemberDto {
+  @IsBoolean() enabled!: boolean;
+  @IsString() @IsNotEmpty() @MaxLength(500) reason!: string;
+}
+
+export class AddControlledOperationsCustomerDto {
+  @IsString() @MaxLength(80) city!: string;
+  @IsUUID() userId!: string;
+  @IsString() @IsNotEmpty() @MaxLength(120) label!: string;
+  @IsOptional() @IsString() @MaxLength(1000) internalNote?: string;
+}
+
+export class UpdateControlledOperationsCustomerDto {
+  @IsBoolean() enabled!: boolean;
+  @IsString() @IsNotEmpty() @MaxLength(500) reason!: string;
+}
+
+export class UpdateOperationsChecklistItemDto {
+  @IsEnum(LaunchChecklistItemStatus) status!: LaunchChecklistItemStatus;
+  @IsOptional() @IsString() @MaxLength(1000) note?: string;
+  @IsOptional() @IsString() @MaxLength(1000) waiverReason?: string;
+  @IsOptional() @IsDateString() waiverExpiresAt?: string;
+}
+
 export class UpdateLaunchReadinessDto {
   @IsEnum(LaunchReadinessStatus)
   status!: LaunchReadinessStatus;
@@ -308,6 +359,10 @@ export class CreateLaunchDrillDto {
   drillType!: LaunchDrillType;
 
   @IsOptional()
+  @IsEnum(LaunchServiceType)
+  serviceType?: LaunchServiceType;
+
+  @IsOptional()
   @IsUUID()
   customerUserId?: string;
 
@@ -318,6 +373,14 @@ export class CreateLaunchDrillDto {
   @IsOptional()
   @IsUUID()
   partnerUserId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  controlledCustomerId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  controlledSupplyGroupId?: string;
 
   @IsOptional()
   @IsString()
@@ -348,4 +411,25 @@ export class UpdateLaunchDrillDto {
   @IsString()
   @MaxLength(500)
   evidenceReference?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  criticalFailure?: boolean;
+}
+
+export class UpdateLaunchDrillStepDto {
+  @IsEnum(LaunchDrillStepStatus) status!: LaunchDrillStepStatus;
+  @IsOptional() @IsString() @MaxLength(1000) note?: string;
+}
+
+export class ReopenLaunchDrillDto {
+  @IsString() @IsNotEmpty() @MaxLength(500) reason!: string;
+}
+
+export class LinkLaunchDrillFailureDto {
+  @IsIn(["INCIDENT", "SUPPORT", "BOTH", "NEITHER"])
+  action!: "INCIDENT" | "SUPPORT" | "BOTH" | "NEITHER";
+  @IsOptional() @IsEnum(LaunchIncidentSeverity) severity?: LaunchIncidentSeverity;
+  @IsString() @IsNotEmpty() @MaxLength(500) summary!: string;
+  @IsOptional() @IsBoolean() criticalFailure?: boolean;
 }

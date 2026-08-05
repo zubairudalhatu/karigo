@@ -466,6 +466,8 @@ export default function RiderDashboard() {
       </View>
       <Message>{message}</Message>
       <Message error>{error}</Message>
+      {rideLaunch?.available && rideLaunch.launchStage === "OPERATIONS_ONLY" ? <Message>Your Ride Captain access is approved for scheduled controlled production operations. Go online only during the communicated operating window.</Message> : null}
+      {deliveryLaunch?.available && deliveryLaunch.launchStage === "OPERATIONS_ONLY" ? <Message>Your Delivery Captain access is approved for scheduled controlled production operations. Go online only during the communicated operating window.</Message> : null}
       {deliveryLaunch && !deliveryLaunch.available && projection.delivery.active ? <Message>{deliveryLaunch.message} Your online preference is preserved; existing assignments remain available.</Message> : null}
       {rideLaunch && !rideLaunch.available && projection.ride.active ? <Message>{rideLaunch.message} Your online preference is preserved; existing assignments remain available.</Message> : null}
 
