@@ -850,6 +850,7 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     PUSH_PROVIDER: pushProvider,
     RIDES_SERVICE_ENABLED: ridesServiceEnabled,
     RIDES_PRODUCTION_ENABLED: ridesProductionEnabled,
+    LAUNCH_GLOBAL_KILL_SWITCH: booleanFlag(config.LAUNCH_GLOBAL_KILL_SWITCH, "LAUNCH_GLOBAL_KILL_SWITCH", false),
     RIDES_DISPATCH_MODE: ridesDispatchMode,
     RIDES_ACTIVE_SERVICE_AREAS: typeof config.RIDES_ACTIVE_SERVICE_AREAS === "string" && config.RIDES_ACTIVE_SERVICE_AREAS.trim()
       ? config.RIDES_ACTIVE_SERVICE_AREAS.trim()

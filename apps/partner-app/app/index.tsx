@@ -1,9 +1,10 @@
 import { brand } from "@karigo/config";
-import { KariGoApiError, PartnerCapabilities, ProductSummary, VendorServiceSummary } from "@karigo/shared-types";
+import { KariGoApiError, LaunchAvailabilityResponse, PartnerCapabilities, ProductSummary, VendorServiceSummary } from "@karigo/shared-types";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Image, Linking, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { partnerApi, PartnerOnboardingDocument, PartnerOnboardingState, PartnerOrderSummary, PartnerProfile } from "../src/api/partner.api";
+import { launchApi } from "../src/api/launch.api";
 import { AuthGate } from "../src/components/auth-gate";
 import { Badge, Card, EmptyState, Hero, LoadingState, MutedText, PrimaryButton, Screen, StatCard } from "../src/components/ui";
 import { useAuth } from "../src/contexts/auth-context";
@@ -50,6 +51,7 @@ function DashboardContent() {
   const [error, setError] = useState<string | null>(null);
   const [availabilityMessage, setAvailabilityMessage] = useState<string | null>(null);
   const [availabilitySaving, setAvailabilitySaving] = useState(false);
+  const [launchAvailability, setLaunchAvailability] = useState<LaunchAvailabilityResponse | null>(null);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
@@ -75,6 +77,7 @@ function DashboardContent() {
         partnerApi.documents().catch(() => [])
       ]);
       setData({ profile, orders, products, services, documents, capabilities });
+      setLaunchAvailability(await launchApi.myAvailability(profile.city).catch(() => null));
     } catch (err) {
       if (isMissingProfile(err)) {
         setMissingProfile(true);
@@ -156,6 +159,12 @@ function DashboardContent() {
   const profileWarning = partnerProfileWarning(data.profile);
   const canManageProducts = data.capabilities?.canManageProducts ?? false;
   const canManageServices = data.capabilities?.canManageServices ?? false;
+  const relevantLaunchServices = launchAvailability?.services.filter((item) =>
+    (canManageServices && item.serviceType === "SME_SERVICES") ||
+    (canManageProducts && ["FOOD", "GROCERIES", "MARKETPLACE"].includes(item.serviceType))
+  ) ?? [];
+  const launchAcceptingActivity = relevantLaunchServices.length === 0 || relevantLaunchServices.some((item) => item.available);
+  const launchMessage = relevantLaunchServices.find((item) => !item.available)?.message;
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}>
@@ -177,6 +186,15 @@ function DashboardContent() {
         </MutedText>
       </Card>
 
+      {launchAvailability ? <Card>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>City operations</Text>
+          <Badge label={launchAcceptingActivity ? "Accepting activity" : "Customer activity paused"} tone={launchAcceptingActivity ? "success" : "warning"} />
+        </View>
+        <MutedText>{launchAcceptingActivity ? `KariGO services are available for this Partner capability in ${launchAvailability.city.name}.` : launchMessage ?? "New Customer activity is not available for this Partner capability right now."}</MutedText>
+        <MutedText>Catalogue management and historical orders remain available during a service pause.</MutedText>
+      </Card> : null}
+
       <Card>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>Availability</Text>
@@ -189,7 +207,7 @@ function DashboardContent() {
         <PrimaryButton
           label={availabilitySaving ? "Updating..." : data.profile?.isOpen ? "Go Offline" : "Go Online"}
           onPress={() => void toggleAvailability()}
-          disabled={!data.profile || !!profileWarning || availabilitySaving}
+          disabled={!data.profile || !!profileWarning || availabilitySaving || (!data.profile.isOpen && !launchAcceptingActivity)}
           variant={data.profile?.isOpen ? "secondary" : "primary"}
         />
       </Card>

@@ -5,10 +5,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import MapView, { Marker, Region } from "react-native-maps";
 import { brand } from "@karigo/config";
 import type { CaptainAccess, CaptainWorkState } from "../../src/api/captain-access.api";
+import type { LaunchAvailabilityResponse } from "@karigo/shared-types";
 import { captainAccessApi } from "../../src/api/captain-access.api";
 import { riderApi, RiderProfile } from "../../src/api/rider.api";
 import { jobsApi, RiderJob } from "../../src/api/jobs.api";
 import { notificationsApi } from "../../src/api/notifications.api";
+import { launchApi } from "../../src/api/launch.api";
 import { Button, Card, Loading, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
@@ -152,6 +154,7 @@ export default function RiderDashboard() {
   const [profile, setProfile] = useState<RiderProfile | null>(null);
   const [jobs, setJobs] = useState<RiderJob[]>([]);
   const [workState, setWorkState] = useState<CaptainWorkState | null>(null);
+  const [launchAvailability, setLaunchAvailability] = useState<LaunchAvailabilityResponse | null>(null);
   const [unread, setUnread] = useState(0);
   const [onboardingStatus, setOnboardingStatus] = useState<CaptainAccess["deliveryCaptainApplication"] | null>(null);
   const [rideOnboardingStatus, setRideOnboardingStatus] = useState<CaptainAccess["rideCaptainApplication"] | null>(null);
@@ -186,6 +189,15 @@ export default function RiderDashboard() {
       setWorkState(state);
       setOnboardingStatus(access.deliveryCaptainApplication);
       setRideOnboardingStatus(access.rideCaptainApplication);
+
+      const deliveryApplication = access.deliveryCaptainApplication as { pilotCity?: string | null; currentProfileLocation?: { city?: string | null } | null };
+      const rideApplication = access.rideCaptainApplication as { pilotCity?: string | null; currentProfileLocation?: { city?: string | null } | null };
+      const captainCity = access.rideCaptainProfile?.city
+        ?? deliveryApplication.currentProfileLocation?.city
+        ?? deliveryApplication.pilotCity
+        ?? rideApplication.currentProfileLocation?.city
+        ?? rideApplication.pilotCity;
+      setLaunchAvailability(captainCity ? await launchApi.myAvailability(captainCity).catch(() => null) : null);
 
       const [deliveryProfile, deliveryJobs, notificationCount] = await Promise.all([
         projection.hasActiveDeliveryMode ? riderApi.profile().catch(() => null) : Promise.resolve(null),
@@ -423,10 +435,12 @@ export default function RiderDashboard() {
   const rideApplicationExists = hasRideApplication(rideOnboardingStatus);
   const hasAnyApplication = deliveryApplicationExists || rideApplicationExists;
   const canToggle = !!workState && !workState.activeWorkMode;
+  const deliveryLaunch = launchAvailability?.services.find((item) => item.serviceType === "PARCEL_DELIVERY");
+  const rideLaunch = launchAvailability?.services.find((item) => item.serviceType === "RIDES");
   const deliveryCanRefreshStaleLocation = workState?.deliveryEligibility.reasonCode === "LOCATION_STALE";
   const rideCanRefreshStaleLocation = workState?.rideEligibility.reasonCode === "LOCATION_STALE";
-  const canToggleDelivery = !!workState && canToggle && projection.delivery.active && (workState.deliveryEligibility.eligible || deliveryCanRefreshStaleLocation);
-  const canToggleRide = !!workState && canToggle && projection.ride.active && (workState.rideEligibility.eligible || rideCanRefreshStaleLocation);
+  const canToggleDelivery = !!workState && canToggle && projection.delivery.active && deliveryLaunch?.available !== false && (workState.deliveryEligibility.eligible || deliveryCanRefreshStaleLocation);
+  const canToggleRide = !!workState && canToggle && projection.ride.active && rideLaunch?.available !== false && (workState.rideEligibility.eligible || rideCanRefreshStaleLocation);
   const activeWork = activeWorkTitle(workState);
 
   if (loading && !captainAccess) {
@@ -452,6 +466,8 @@ export default function RiderDashboard() {
       </View>
       <Message>{message}</Message>
       <Message error>{error}</Message>
+      {deliveryLaunch && !deliveryLaunch.available && projection.delivery.active ? <Message>{deliveryLaunch.message} Your online preference is preserved; existing assignments remain available.</Message> : null}
+      {rideLaunch && !rideLaunch.available && projection.ride.active ? <Message>{rideLaunch.message} Your online preference is preserved; existing assignments remain available.</Message> : null}
 
       {projection.hasAnyActiveMode ? <>
         <Card>

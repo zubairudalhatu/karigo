@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { ConfigService } from "@nestjs/config";
 import {
   CashCollectionStatus,
+  LaunchServiceType,
   NotificationType,
   OrderPaymentMethod,
   OrderStatus,
@@ -22,6 +23,7 @@ import { CreateOrderDto } from "./dto/create-order.dto";
 import { CreateParcelOrderDto } from "./dto/create-parcel-order.dto";
 import { PromoService } from "../promos/promo.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { LaunchOperationsService } from "../launch-operations/launch-operations.service";
 
 const VENDOR_ORDER_CATEGORIES: ServiceCategory[] = [
   ServiceCategory.FOOD,
@@ -42,7 +44,8 @@ export class OrdersService {
     private readonly config: ConfigService,
     private readonly promos: PromoService,
     private readonly notifications: NotificationsService,
-    private readonly applicationNotifications: ApplicationNotificationsService
+    private readonly applicationNotifications: ApplicationNotificationsService,
+    private readonly launchOperations: LaunchOperationsService
   ) {}
 
   async quoteVendorOrder(userId: string, dto: CreateOrderDto) {
@@ -68,6 +71,13 @@ export class OrdersService {
     if (!deliveryAddress) {
       throw new NotFoundException("Delivery address not found");
     }
+
+    const launchService = dto.serviceCategory === ServiceCategory.FOOD
+      ? LaunchServiceType.FOOD
+      : dto.serviceCategory === ServiceCategory.GROCERY
+        ? LaunchServiceType.GROCERIES
+        : LaunchServiceType.MARKETPLACE;
+    await this.launchOperations.assertCustomerCanStart({ city: deliveryAddress.city || vendor.city, serviceType: launchService, userId });
 
     const productIds = [...new Set(dto.items.map((item) => item.productId))];
     const products = await this.prisma.product.findMany({
@@ -136,6 +146,13 @@ export class OrdersService {
     if (!deliveryAddress) {
       throw new NotFoundException("Delivery address not found");
     }
+
+    const launchService = dto.serviceCategory === ServiceCategory.FOOD
+      ? LaunchServiceType.FOOD
+      : dto.serviceCategory === ServiceCategory.GROCERY
+        ? LaunchServiceType.GROCERIES
+        : LaunchServiceType.MARKETPLACE;
+    await this.launchOperations.assertCustomerCanStart({ city: deliveryAddress.city || vendor.city, serviceType: launchService, userId });
 
     const productIds = [...new Set(dto.items.map((item) => item.productId))];
     const products = await this.prisma.product.findMany({
@@ -455,6 +472,8 @@ export class OrdersService {
     if (addressCount !== expectedAddressCount) {
       throw new NotFoundException("Pickup or delivery address not found");
     }
+    const deliveryAddress = await this.prisma.address.findFirst({ where: { id: dto.deliveryAddressId, userId }, select: { city: true, state: true } });
+    await this.launchOperations.assertCustomerCanStart({ city: deliveryAddress?.city || deliveryAddress?.state || "", serviceType: LaunchServiceType.PARCEL_DELIVERY, userId });
 
     const deliveryFee = new Prisma.Decimal(this.config.get<number>("PARCEL_DELIVERY_FEE", 1500));
     const order = await this.prisma.order.create({

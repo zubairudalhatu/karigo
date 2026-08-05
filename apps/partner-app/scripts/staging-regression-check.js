@@ -53,6 +53,10 @@ const productForm = read("src/components/product-form.tsx");
 const serviceForm = read("src/components/service-form.tsx");
 const uploadPickers = read("src/lib/upload-pickers.ts");
 const registrationContext = read("src/contexts/partner-registration-context.tsx");
+const launchApi = read("src/api/launch.api.ts");
+expect(launchApi.includes("launch/availability/me"), "Partner app must resolve launch state from backend.");
+expect(dashboard.includes("Catalogue management and historical orders remain available during a service pause."), "Partner app must preserve catalogue and order history during pauses.");
+expect(dashboard.includes("launchAcceptingActivity"), "Partner online control must reflect launch availability.");
 
 expect(packageJson.name === "@karigo/partner-app", "Partner app package name must be @karigo/partner-app.");
 expect(packageJson.main === "expo-router/entry", "Partner app must use Expo Router entry.");

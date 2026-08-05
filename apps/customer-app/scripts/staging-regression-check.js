@@ -73,6 +73,11 @@ assert(ui.includes("PasswordField"), "Shared UI must include a password visibili
 assert(ui.includes("visible ? \"Hide\" : \"Show\""), "Password field must expose show/hide toggle copy.");
 
 const index = read("app", "index.tsx");
+const launchApi = read("src", "api", "launch.api.ts");
+const customerHome = read("app", "tabs", "home.tsx");
+assert(launchApi.includes("launch/availability/me"), "Customer app must resolve account-aware launch availability from backend.");
+assert(customerHome.includes("loadLaunchAvailability") && customerHome.includes("useFocusEffect"), "Customer home must refresh launch availability on foreground/focus.");
+assert(customerHome.includes("availability.message"), "Customer home must display safe launch closure/capacity copy.");
 assert(index.includes("Everything you need, delivered."), "Logged-out Customer App launch must show the KariGO welcome intro.");
 assert(index.includes("Order food, shop groceries, send parcels and request SME Services across Kano and Abuja."), "Welcome intro must use current SME Services copy.");
 assert(index.includes("Get started"), "Welcome intro must expose a Get started action.");
@@ -108,7 +113,7 @@ const ridesFlags = read("src", "lib", "rides-flags.ts");
 assert(ridesFlags.includes("EXPO_PUBLIC_RIDES_SERVICE_ENABLED"), "Ride launch must use the public Rides service flag.");
 assert(ridesFlags.includes("EXPO_PUBLIC_RIDES_PRODUCTION_ENABLED"), "Ride launch must use the production Rides flag.");
 assert(ridesFlags.includes("EXPO_PUBLIC_TAXI_SERVICE_ENABLED"), "Ride launch must preserve the legacy Taxi service alias.");
-assert(home.includes("Live in ${ridesServiceAreaLabel}") && home.includes("Join waitlist"), "Ride tile must use live-city/waitlist copy.");
+assert(home.includes("Available in ${ridesServiceAreaLabel}") && home.includes("Join waitlist"), "Ride tile must avoid claiming live availability before backend launch resolution.");
 assert(home.includes("Market Items"), "Home must keep Market Items service category.");
 assert(home.includes("Pharmacy"), "Home must include the compliance-gated Pharmacy category.");
 assert(home.includes("Parcel Delivery"), "Home must keep Parcel Delivery service category.");

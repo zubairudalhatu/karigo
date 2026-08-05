@@ -90,12 +90,22 @@ describe("environment configuration", () => {
     expect(result.PUSH_PROVIDER).toBe("mock");
     expect(result.RIDES_SERVICE_ENABLED).toBe(false);
     expect(result.RIDES_PRODUCTION_ENABLED).toBe(false);
+    expect(result.LAUNCH_GLOBAL_KILL_SWITCH).toBe(false);
     expect(result.RIDES_CONTROLLED_PILOT_ENABLED).toBe(false);
     expect(result.RIDES_DISPATCH_MODE).toBe("MANUAL");
     expect(result.RIDES_AUTO_DISPATCH_ENABLED).toBe(false);
     expect(result.RIDES_PAYMENT_ENABLED).toBe(false);
     expect(result.TAXI_SERVICE_ENABLED).toBe(false);
     expect(result.TAXI_STAGING_DISPATCH_ENABLED).toBe(false);
+  });
+
+  it("retains the global production launch kill switch as a validated boolean", () => {
+    const result = validateEnvironment({
+      ...baseConfig(),
+      LAUNCH_GLOBAL_KILL_SWITCH: "true"
+    });
+
+    expect(result.LAUNCH_GLOBAL_KILL_SWITCH).toBe(true);
   });
 
   it("enables production KariGO Rides with explicit RIDES flags", () => {

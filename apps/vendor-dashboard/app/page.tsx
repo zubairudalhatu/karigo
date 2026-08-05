@@ -6,6 +6,9 @@ import { notificationsApi } from "../src/api/notifications.api";
 import { DashboardShell, Empty, ErrorMessage, Loading, StatusBadge } from "../src/components/dashboard";
 import { useAuth } from "../src/contexts/auth-context";
 import { money } from "../src/lib/errors";
+import { vendorApi } from "../src/api/vendor.api";
+import { launchApi } from "../src/api/launch.api";
+import type { LaunchAvailabilityResponse } from "@karigo/shared-types";
 
 export default function VendorDashboard() {
   const router = useRouter();
@@ -15,11 +18,13 @@ export default function VendorDashboard() {
   const [error, setError] = useState("");
   const [missingProfile, setMissingProfile] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [launchAvailability, setLaunchAvailability] = useState<LaunchAvailabilityResponse | null>(null);
   useEffect(() => {
-    Promise.all([ordersApi.list(), notificationsApi.unreadCount()])
-      .then(([o, n]) => {
+    Promise.all([ordersApi.list(), notificationsApi.unreadCount(), vendorApi.profile()])
+      .then(async ([o, n, profile]) => {
         setOrders(o);
         setUnread(n.count);
+        setLaunchAvailability(await launchApi.myAvailability(profile.city).catch(() => null));
       })
       .catch((e) => {
         const message = String(e instanceof Error ? e.message : e);
@@ -48,6 +53,7 @@ export default function VendorDashboard() {
     </section>
   </DashboardShell>;
   return <DashboardShell unread={unread}><header className="topbar"><div><p className="muted">Partner workspace</p><h1>Operations overview</h1><p className="muted">Product sellers and SME service providers can manage the approved workspace areas for their account.</p></div><StatusBadge>Live API</StatusBadge></header><ErrorMessage>{error}</ErrorMessage>
+    {launchAvailability ? <section className="notice"><strong>{launchAvailability.city.name} operational status</strong><p>{launchAvailability.services.some((service) => service.available) ? "At least one approved KariGO service is accepting new Customer activity." : "New Customer activity is currently unavailable. Catalogue management and historical orders remain accessible."}</p></section> : null}
     <div className="grid">
       <article className="card"><span className="muted">New orders</span><p className="metric">{count(["PAID", "VENDOR_CONFIRMING"])}</p></article>
       <article className="card"><span className="muted">Active orders</span><p className="metric">{count(["VENDOR_ACCEPTED", "PREPARING", "READY_FOR_PICKUP"])}</p></article>

@@ -25,6 +25,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
     <aside className="sidebar">
       <Image src="/karigo-logo.png" alt="KariGO Admin Portal" width={300} height={300} priority />
       <p className="sidebar-label">Operations control centre</p>
+      <nav className="nav" aria-label="Production launch navigation"><a href="/production-launch" aria-current={path.startsWith("/production-launch") ? "page" : undefined}>Production Launch</a></nav>
       <nav className="nav" aria-label="Admin portal navigation">{nav.map(([label, href]) => {
         const active = href === activeHref;
         return <a key={href} href={href} aria-current={active ? "page" : undefined}>{label}</a>;

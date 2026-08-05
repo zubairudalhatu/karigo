@@ -41,6 +41,10 @@ const applicantOnboardingApi = read("src/api/applicant-onboarding.api.ts");
 const deliveryCaptainApplicationsApi = read("src/api/delivery-captain-applications.api.ts");
 const captainCatalogApi = read("src/api/captain-catalog.api.ts");
 const locationHelper = read("src/lib/location.ts");
+const launchApi = read("src/api/launch.api.ts");
+expect(launchApi.includes("launch/availability/me"), "Captain app must resolve city/service launch state from backend.");
+expect(dashboard.includes("Your online preference is preserved; existing assignments remain available."), "Captain app must preserve safe active-work continuity during a launch pause.");
+expect(dashboard.includes("deliveryLaunch?.available !== false") && dashboard.includes("rideLaunch?.available !== false"), "Captain availability toggles must respect backend launch state.");
 
 const stagingProfile = easJson.build?.["rider-staging"];
 const productionProfile = easJson.build?.["captain-production"];

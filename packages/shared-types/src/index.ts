@@ -1,6 +1,27 @@
 export const userRoles = ["CUSTOMER", "VENDOR", "RIDER", "ADMIN"] as const;
 export type UserRole = (typeof userRoles)[number];
 
+export const launchStages = ["OFF", "OPERATIONS_ONLY", "INVITE_ONLY", "LIMITED_PUBLIC", "CITY_WIDE", "PAUSED"] as const;
+export type LaunchStage = (typeof launchStages)[number];
+export const launchServiceTypes = ["RIDES", "FOOD", "GROCERIES", "MARKETPLACE", "PARCEL_DELIVERY", "SME_SERVICES"] as const;
+export type LaunchServiceType = (typeof launchServiceTypes)[number];
+export interface LaunchServiceAvailability {
+  cityCode: string;
+  cityName: string;
+  serviceType: LaunchServiceType;
+  launchStage: LaunchStage;
+  available: boolean;
+  reasonCode: string | null;
+  message: string;
+  timezone: string;
+  operatingHours: unknown;
+}
+export interface LaunchAvailabilityResponse {
+  city: { code: string; name: string };
+  services: LaunchServiceAvailability[];
+  refreshedAt: string;
+}
+
 export const serviceCategories = [
   "FOOD",
   "GROCERY",

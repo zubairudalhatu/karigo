@@ -168,9 +168,11 @@ describe("ServiceProviderRequestsService admin operations", () => {
     adminAuditLog: { findMany: jest.fn() }
   };
   const audit = { record: jest.fn() };
+  const launchOperations = { assertCustomerCanStart: jest.fn().mockResolvedValue({ available: true }) };
   const service = new ServiceProviderRequestsService(
     prisma as unknown as PrismaService,
-    audit as unknown as AdminAuditService
+    audit as unknown as AdminAuditService,
+    launchOperations as never
   );
 
   beforeEach(() => {

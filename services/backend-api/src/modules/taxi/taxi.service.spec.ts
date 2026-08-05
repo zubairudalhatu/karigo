@@ -242,13 +242,15 @@ describe("TaxiService", () => {
     releaseLock: jest.fn(),
     transitionLock: jest.fn()
   };
+  const launchOperations = { assertCustomerCanStart: jest.fn().mockResolvedValue({ available: true }) };
   const service = new TaxiService(
     prisma as unknown as PrismaService,
     audit as unknown as AdminAuditService,
     config as never,
     captainUploadStorage as unknown as CaptainUploadStorageService,
     applicationNotifications as unknown as ApplicationNotificationsService,
-    captainWorkState as unknown as CaptainWorkStateService
+    captainWorkState as unknown as CaptainWorkStateService,
+    launchOperations as never
   );
 
   function enableTaxiStaging() {

@@ -33,6 +33,82 @@ enum AccountStatus {
   BLOCKED
 }
 
+enum LaunchStage {
+  OFF
+  OPERATIONS_ONLY
+  INVITE_ONLY
+  LIMITED_PUBLIC
+  CITY_WIDE
+  PAUSED
+}
+
+enum LaunchServiceType {
+  RIDES
+  FOOD
+  GROCERIES
+  MARKETPLACE
+  PARCEL_DELIVERY
+  SME_SERVICES
+}
+
+enum LaunchCohortStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+enum LaunchCohortMemberStatus {
+  INVITED
+  ACTIVE
+  REMOVED
+}
+
+enum LaunchReadinessStatus {
+  NOT_READY
+  AT_RISK
+  READY
+  WAIVED
+}
+
+enum LaunchIncidentSeverity {
+  SEV1
+  SEV2
+  SEV3
+  SEV4
+}
+
+enum LaunchIncidentStatus {
+  OPEN
+  INVESTIGATING
+  MITIGATING
+  MONITORING
+  RESOLVED
+  CLOSED
+}
+
+enum LaunchDrillType {
+  RIDE_END_TO_END
+  DELIVERY_END_TO_END
+  PRODUCT_ORDER_END_TO_END
+  SERVICE_REQUEST_END_TO_END
+  PAYMENT_SUCCESS
+  PAYMENT_FAILURE
+  CUSTOMER_CANCELLATION
+  CAPTAIN_CANCELLATION
+  PARTNER_REJECTION
+  SUPPORT_ESCALATION
+  EMERGENCY_SERVICE_PAUSE
+}
+
+enum LaunchDrillResult {
+  NOT_STARTED
+  IN_PROGRESS
+  PASSED
+  FAILED
+  BLOCKED
+}
+
 enum AccountDeletionAccountType {
   CUSTOMER
   CAPTAIN
@@ -2354,4 +2430,178 @@ model AdminAuditLog {
 
   @@index([adminUserId, createdAt])
   @@map("admin_audit_logs")
+}
+
+model LaunchMarketConfig {
+  id                          String                      @id @default(uuid()) @db.Uuid
+  cityCode                    String
+  cityName                    String
+  serviceType                 LaunchServiceType
+  launchStage                 LaunchStage                 @default(OFF)
+  isEnabled                   Boolean                     @default(false)
+  activeFrom                  DateTime?
+  activeUntil                 DateTime?
+  operatingHours              Json?
+  timezone                    String                      @default("Africa/Lagos")
+  allowedZoneIds              Json?
+  inviteCohortId              String?                     @db.Uuid
+  maxConcurrentRequests       Int?
+  maxUnassignedRequests       Int?
+  minimumOnlineCaptainCount   Int?
+  minimumOnlinePartnerCount   Int?
+  assignmentTimeoutMinutes    Int?
+  captainLocationFreshMinutes Int?
+  customerMessage             String?
+  closedMessage               String?
+  internalNote                String?
+  pausedReason                String?
+  emergencyClosed             Boolean                     @default(false)
+  updatedByAdminId            String?                     @db.Uuid
+  createdAt                   DateTime                    @default(now())
+  updatedAt                   DateTime                    @updatedAt
+  inviteCohort                LaunchCohort?               @relation(fields: [inviteCohortId], references: [id])
+  history                     LaunchMarketConfigHistory[]
+  incidents                   LaunchIncident[]
+  denials                     LaunchCapacityDenial[]
+
+  @@unique([cityCode, serviceType])
+  @@index([cityCode, launchStage, isEnabled])
+  @@map("launch_market_configs")
+}
+
+model LaunchMarketConfigHistory {
+  id            String             @id @default(uuid()) @db.Uuid
+  configId      String             @db.Uuid
+  previousStage LaunchStage
+  newStage      LaunchStage
+  previousValue Json
+  newValue      Json
+  reason        String
+  adminUserId   String             @db.Uuid
+  createdAt     DateTime           @default(now())
+  config        LaunchMarketConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@index([configId, createdAt])
+  @@index([adminUserId, createdAt])
+  @@map("launch_market_config_history")
+}
+
+model LaunchCohort {
+  id               String               @id @default(uuid()) @db.Uuid
+  name             String
+  cityCode         String
+  startAt          DateTime?
+  endAt            DateTime?
+  maximumCustomers Int
+  status           LaunchCohortStatus   @default(DRAFT)
+  notes            String?
+  createdByAdminId String               @db.Uuid
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  members          LaunchCohortMember[]
+  marketConfigs    LaunchMarketConfig[]
+
+  @@index([cityCode, status])
+  @@map("launch_cohorts")
+}
+
+model LaunchCohortMember {
+  id             String                   @id @default(uuid()) @db.Uuid
+  cohortId       String                   @db.Uuid
+  userId         String                   @db.Uuid
+  status         LaunchCohortMemberStatus @default(INVITED)
+  invitedAt      DateTime                 @default(now())
+  activatedAt    DateTime?
+  removedAt      DateTime?
+  reason         String?
+  addedByAdminId String                   @db.Uuid
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  cohort         LaunchCohort             @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+
+  @@unique([cohortId, userId])
+  @@index([userId, status])
+  @@map("launch_cohort_members")
+}
+
+model LaunchReadinessItem {
+  id               String                @id @default(uuid()) @db.Uuid
+  cityCode         String
+  category         String
+  key              String
+  label            String
+  status           LaunchReadinessStatus @default(NOT_READY)
+  note             String?
+  waiverReason     String?
+  waiverExpiresAt  DateTime?
+  updatedByAdminId String?               @db.Uuid
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@unique([cityCode, key])
+  @@index([cityCode, category, status])
+  @@map("launch_readiness_items")
+}
+
+model LaunchIncident {
+  id                   String                 @id @default(uuid()) @db.Uuid
+  reference            String                 @unique
+  severity             LaunchIncidentSeverity
+  cityCode             String
+  serviceType          LaunchServiceType?
+  marketConfigId       String?                @db.Uuid
+  status               LaunchIncidentStatus   @default(OPEN)
+  summary              String
+  timeline             Json?
+  assignedOwnerId      String?                @db.Uuid
+  customerImpact       String?
+  captainPartnerImpact String?
+  mitigation           String?
+  rootCause            String?
+  resolution           String?
+  followUpActions      String?
+  openedByAdminId      String                 @db.Uuid
+  closedAt             DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  marketConfig         LaunchMarketConfig?    @relation(fields: [marketConfigId], references: [id])
+
+  @@index([cityCode, status, severity])
+  @@index([serviceType, status])
+  @@map("launch_incidents")
+}
+
+model LaunchDrill {
+  id                 String            @id @default(uuid()) @db.Uuid
+  cityCode           String
+  drillType          LaunchDrillType
+  customerUserId     String?           @db.Uuid
+  captainUserId      String?           @db.Uuid
+  partnerUserId      String?           @db.Uuid
+  relatedReference   String?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  result             LaunchDrillResult @default(NOT_STARTED)
+  failureStage       String?
+  notes              String?
+  evidenceReference  String?
+  responsibleAdminId String            @db.Uuid
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([cityCode, drillType, result])
+  @@map("launch_drills")
+}
+
+model LaunchCapacityDenial {
+  id             String              @id @default(uuid()) @db.Uuid
+  cityCode       String
+  serviceType    LaunchServiceType
+  marketConfigId String?             @db.Uuid
+  reasonCode     String
+  occurredAt     DateTime            @default(now())
+  marketConfig   LaunchMarketConfig? @relation(fields: [marketConfigId], references: [id])
+
+  @@index([cityCode, serviceType, occurredAt])
+  @@map("launch_capacity_denials")
 }

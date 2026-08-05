@@ -8,6 +8,7 @@ import {
   CaptainWorkLockStage,
   CaptainWorkMode,
   DocumentVerificationStatus,
+  LaunchServiceType,
   Prisma,
   RiderStatus,
   TaxiApplicationStatus,
@@ -25,6 +26,7 @@ import { ApplicationNotificationsService } from "../../common/services/applicati
 import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
 import { PrismaService } from "../../prisma/prisma.service";
+import { LaunchOperationsService } from "../launch-operations/launch-operations.service";
 import { captainServiceAreas } from "../platform/captain-catalog";
 import { assertFutureLicenceDate, resolveCaptainLocation, resolveVehicleDetails } from "../platform/captain-catalog.validation";
 import { CaptainUploadStorageService } from "../riders/captain-upload-storage.service";
@@ -229,7 +231,8 @@ export class TaxiService {
     private readonly config: ConfigService,
     private readonly captainUploadStorage: CaptainUploadStorageService,
     private readonly applicationNotifications: ApplicationNotificationsService,
-    private readonly captainWorkState: CaptainWorkStateService
+    private readonly captainWorkState: CaptainWorkStateService,
+    private readonly launchOperations: LaunchOperationsService
   ) {}
 
   async joinWaitlist(dto: CreateTaxiWaitlistDto) {
@@ -655,6 +658,11 @@ export class TaxiService {
   async createCustomerTrip(userId: string, dto: CreateTaxiTripDto) {
     this.assertTaxiStagingEnabled();
     await this.expireStaleTrips();
+    const pickupArea = resolveRideServiceArea(this.config, dto.pickupLatitude, dto.pickupLongitude);
+    const pickupText = dto.pickupAddress.toLowerCase();
+    const launchCity = pickupArea?.city ?? (pickupText.includes("kano") ? "Kano" : pickupText.includes("abuja") || pickupText.includes("fct") ? "Abuja" : null);
+    if (!launchCity) throw new BadRequestException("Choose a pickup within Kano or Abuja");
+    await this.launchOperations.assertCustomerCanStart({ city: launchCity, serviceType: LaunchServiceType.RIDES, userId });
     const customer = await this.requireCustomer(userId);
     const estimate = this.calculateFare(dto);
     const tripPin = randomInt(100000, 1000000).toString();

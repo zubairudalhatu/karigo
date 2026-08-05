@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, ServiceProviderApplicationStatus, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType, SmeServicesPilotDecisionStatus, SmeServicesPilotParticipantStatus, SmeServicesPilotParticipantType, VendorStatus } from "@prisma/client";
+import { LaunchServiceType, Prisma, ServiceProviderApplicationStatus, ServiceProviderRequestStatus, ServiceProviderStatus, ServiceProviderType, SmeServicesPilotDecisionStatus, SmeServicesPilotParticipantStatus, SmeServicesPilotParticipantType, VendorStatus } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { resolvePartnerCapabilities } from "../vendors/partner-capabilities";
+import { LaunchOperationsService } from "../launch-operations/launch-operations.service";
 import { AssignServiceProviderDto } from "./dto/assign-service-provider.dto";
 import { CreateServiceProviderReviewDto } from "./dto/create-service-provider-review.dto";
 import { CreateServiceProviderDto } from "./dto/create-service-provider.dto";
@@ -252,7 +253,8 @@ const PILOT_INVITATION_TEMPLATES = [
 export class ServiceProviderRequestsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly audit: AdminAuditService
+    private readonly audit: AdminAuditService,
+    private readonly launchOperations: LaunchOperationsService
   ) {}
 
   catalogue() {
@@ -324,11 +326,12 @@ export class ServiceProviderRequestsService {
     const customer = await this.requireCustomer(userId);
     const serviceAddress = await this.prisma.address.findFirst({
       where: { id: dto.serviceAddressId, userId },
-      select: { id: true }
+      select: { id: true, city: true, state: true }
     });
     if (!serviceAddress) {
       throw new NotFoundException("Service address not found");
     }
+    await this.launchOperations.assertCustomerCanStart({ city: serviceAddress.city || serviceAddress.state, serviceType: LaunchServiceType.SME_SERVICES, userId });
     const preferredProvider = dto.preferredProviderId
       ? await this.requireSelectableProvider(dto.preferredProviderId, dto.serviceType)
       : null;

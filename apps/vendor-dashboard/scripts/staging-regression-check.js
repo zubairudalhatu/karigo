@@ -6,6 +6,10 @@ const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 
 const authClient = read("src", "api", "client.ts");
+const launchApi = read("src", "api", "launch.api.ts");
+const dashboardPage = read("app", "page.tsx");
+assert(launchApi.includes("launch/availability/me"), "Partner Workspace must resolve backend launch availability.");
+assert(dashboardPage.includes("Catalogue management and historical orders remain accessible."), "Partner Workspace must preserve operations access during launch pauses.");
 assert(authClient.includes('baseUrl: "/api/bff"'), "Partner API client must use the same-origin BFF route.");
 assert(authClient.includes("karigo_vendor_csrf"), "Partner API client must attach the CSRF cookie header.");
 assert(!authClient.includes("localStorage") && !authClient.includes("sessionStorage"), "Partner API client must not store JWTs in browser storage.");
@@ -79,7 +83,6 @@ assert(shell.includes("Ads"), "Vendor sidebar must include the ads page.");
 assert(shell.includes("Partner workspace"), "Vendor shell must use Partner Workspace copy.");
 assert(shell.includes("KariGO Partner Workspace"), "Vendor shell must expose KariGO Partner Workspace branding.");
 
-const dashboardPage = read("app", "page.tsx");
 assert(dashboardPage.includes("Your partner profile is not active."), "Partner dashboard must show a friendly missing-profile state.");
 assert(dashboardPage.includes("Start Partner Onboarding"), "Missing-profile state must link to onboarding.");
 assert(dashboardPage.includes("Contact Support"), "Missing-profile state must expose support contact action.");

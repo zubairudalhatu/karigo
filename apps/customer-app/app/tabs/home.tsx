@@ -1,12 +1,13 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import * as Location from "expo-location";
-import type { ServiceCategory, TaxiTrip, VendorSummary } from "@karigo/shared-types";
+import type { LaunchAvailabilityResponse, LaunchServiceType, ServiceCategory, TaxiTrip, VendorSummary } from "@karigo/shared-types";
 import { isActiveTaxiTripStatus, taxiLifecycleForStatus } from "@karigo/shared-types";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { adsApi, CustomerHomeAd } from "../../src/api/ads.api";
+import { launchApi } from "../../src/api/launch.api";
 import { taxiApi } from "../../src/api/taxi.api";
 import { vendorsApi } from "../../src/api/vendors.api";
 import { Button, Card, Empty, Loading, Message, Screen, ui } from "../../src/components/ui";
@@ -31,11 +32,12 @@ const categories: {
   state: "active" | "readiness";
   statusLabel?: string;
   requiresAuth?: boolean;
+  launchService?: LaunchServiceType;
 }[] = [
-  { label: "Food Delivery", icon: "coffee", href: "/catalogue/food", serviceCategory: "FOOD", tone: "#FFF1F2", state: "active" },
-  { label: "Groceries", icon: "shopping-bag", href: "/catalogue/groceries", serviceCategory: "GROCERY", tone: "#ECFDF3", state: "active" },
-  { label: "KariGO Rides", icon: "navigation", href: ridesEnabled ? "/taxi/request" : "/readiness/taxi", tone: "#F3F4F6", state: "readiness", statusLabel: ridesEnabled ? `Live in ${ridesServiceAreaLabel}` : "Join waitlist", requiresAuth: ridesEnabled },
-  { label: "Market Items", icon: "shopping-cart", href: "/catalogue/market-items", serviceCategory: "MARKET", tone: "#EFF6FF", state: "active" },
+  { label: "Food Delivery", icon: "coffee", href: "/catalogue/food", serviceCategory: "FOOD", tone: "#FFF1F2", state: "active", launchService: "FOOD" },
+  { label: "Groceries", icon: "shopping-bag", href: "/catalogue/groceries", serviceCategory: "GROCERY", tone: "#ECFDF3", state: "active", launchService: "GROCERIES" },
+  { label: "KariGO Rides", icon: "navigation", href: ridesEnabled ? "/taxi/request" : "/readiness/taxi", tone: "#F3F4F6", state: "readiness", statusLabel: ridesEnabled ? `Available in ${ridesServiceAreaLabel}` : "Join waitlist", requiresAuth: ridesEnabled, launchService: "RIDES" },
+  { label: "Market Items", icon: "shopping-cart", href: "/catalogue/market-items", serviceCategory: "MARKET", tone: "#EFF6FF", state: "active", launchService: "MARKETPLACE" },
   {
     label: "Pharmacy",
     icon: "plus-square",
@@ -45,8 +47,8 @@ const categories: {
     state: process.env.EXPO_PUBLIC_PHARMACY_MARKETPLACE_ENABLED === "true" ? "active" : "readiness",
     statusLabel: process.env.EXPO_PUBLIC_PHARMACY_MARKETPLACE_ENABLED === "true" ? undefined : "Preparing launch"
   },
-  { label: "Parcel Delivery", icon: "package", href: "/parcel", serviceCategory: "PARCEL", tone: "#FFFBEB", state: "active", requiresAuth: true },
-  { label: "SME Services", subtitle: "Book trusted service providers", icon: "tool", href: "/sme-services", serviceCategory: "CORPORATE", tone: "#F5F3FF", state: "active", requiresAuth: true },
+  { label: "Parcel Delivery", icon: "package", href: "/parcel", serviceCategory: "PARCEL", tone: "#FFFBEB", state: "active", requiresAuth: true, launchService: "PARCEL_DELIVERY" },
+  { label: "SME Services", subtitle: "Book trusted service providers", icon: "tool", href: "/sme-services", serviceCategory: "CORPORATE", tone: "#F5F3FF", state: "active", requiresAuth: true, launchService: "SME_SERVICES" },
   { label: "Airtime", icon: "phone", href: "/utilities/airtime", tone: "#FEF2F2", state: "readiness", statusLabel: "Available", requiresAuth: true },
   { label: "Data", icon: "wifi", href: "/utilities/data", tone: "#FEF2F2", state: "readiness", statusLabel: "Available", requiresAuth: true },
   { label: "Electricity", icon: "zap", href: "/utilities/electricity", tone: "#FEF2F2", state: "readiness", statusLabel: "Available", requiresAuth: true },
@@ -76,6 +78,13 @@ function cityFromGeocode(place?: Location.LocationGeocodedAddress | null) {
 
 function activeRideTitle(trip: TaxiTrip) {
   return (trip.lifecycle ?? taxiLifecycleForStatus(trip.status)).customerTitle;
+}
+
+function labelLaunchStage(stage: string) {
+  if (stage === "CITY_WIDE") return "Available in your city";
+  if (stage === "LIMITED_PUBLIC") return "Limited availability";
+  if (stage === "INVITE_ONLY") return "Invitation access";
+  return stage.toLowerCase().replaceAll("_", " ");
 }
 
 function VendorSpotlight({ vendor }: { vendor: VendorSummary }) {
@@ -109,6 +118,7 @@ export default function CustomerHome() {
   const [locationMessage, setLocationMessage] = useState("");
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [rides, setRides] = useState<TaxiTrip[]>([]);
+  const [launchAvailability, setLaunchAvailability] = useState<LaunchAvailabilityResponse | null>(null);
 
   useEffect(() => {
     vendorsApi.list()
@@ -145,6 +155,15 @@ export default function CustomerHome() {
     loadActiveRides();
   }, [loadActiveRides]));
 
+  const loadLaunchAvailability = useCallback(() => {
+    if (!detectedCity) return;
+    const request = user ? launchApi.myAvailability(detectedCity) : launchApi.publicAvailability(detectedCity);
+    request.then(setLaunchAvailability).catch(() => undefined);
+  }, [detectedCity, user?.id]);
+
+  useEffect(() => { loadLaunchAvailability(); }, [loadLaunchAvailability]);
+  useFocusEffect(useCallback(() => { loadLaunchAvailability(); }, [loadLaunchAvailability]));
+
   async function detectLaunchCity(showFeedback = true) {
     setDetectingLocation(true);
     if (showFeedback) setLocationMessage("");
@@ -178,6 +197,11 @@ export default function CustomerHome() {
   const serviceTileBasis = `${(100 / columns) - 2}%` as const;
 
   function openCategory(category: typeof categories[number]) {
+    const availability = category.launchService ? launchAvailability?.services.find((item) => item.serviceType === category.launchService) : null;
+    if (availability && !availability.available) {
+      setGuestPrompt(availability.message);
+      return;
+    }
     if (!user && category.requiresAuth) {
       setGuestPrompt(`${category.label} needs a KariGO account. Login or sign up to continue.`);
       return;
@@ -245,20 +269,23 @@ export default function CustomerHome() {
         <Text style={ui.sectionTitle}>What do you need today?</Text>
       </View>
       <View style={styles.categoryGrid}>
-        {categories.map((category) => <Pressable
+        {categories.map((category) => {
+          const availability = category.launchService ? launchAvailability?.services.find((item) => item.serviceType === category.launchService) : null;
+          const unavailable = Boolean(availability && !availability.available);
+          return <Pressable
           key={category.label}
           accessibilityRole="button"
           accessibilityLabel={`Open ${category.label}`}
           onPress={() => openCategory(category)}
-          style={({ pressed }) => [styles.categoryCard, { flexBasis: serviceTileBasis }, pressed && styles.categoryPressed]}
+          style={({ pressed }) => [styles.categoryCard, { flexBasis: serviceTileBasis }, unavailable && styles.categoryUnavailable, pressed && styles.categoryPressed]}
         >
           <View style={[styles.categoryIcon, { backgroundColor: category.tone }]}>
             <Feather name={category.icon} size={21} color={category.state === "readiness" ? brand.colors.charcoal : brand.colors.primary} />
           </View>
           <Text style={styles.categoryLabel}>{category.label}</Text>
           {category.subtitle ? <Text style={styles.categorySubtitle}>{category.subtitle}</Text> : null}
-          {category.statusLabel || (category.label === "KariGO Rides" && activeRide) ? <Text style={styles.serviceStatus}>{category.label === "KariGO Rides" && activeRide ? "Active ride" : category.statusLabel}</Text> : null}
-        </Pressable>)}
+          {availability || category.statusLabel || (category.label === "KariGO Rides" && activeRide) ? <Text style={styles.serviceStatus}>{category.label === "KariGO Rides" && activeRide ? "Active ride" : availability ? (availability.available ? labelLaunchStage(availability.launchStage) : availability.message) : category.statusLabel}</Text> : null}
+        </Pressable>})}
       </View>
 
       <Text style={ui.sectionTitle}>Today's featured for you</Text>
@@ -293,6 +320,7 @@ const styles = StyleSheet.create({
   categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
   categoryCard: { alignItems: "center", backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, flexGrow: 1, gap: 6, minHeight: 104, padding: 10 },
   categoryPressed: { borderColor: brand.colors.primary, transform: [{ scale: 0.99 }] },
+  categoryUnavailable: { backgroundColor: "#F9FAFB", opacity: 0.72 },
   categoryIcon: { alignItems: "center", borderRadius: 16, height: 42, justifyContent: "center", width: 42 },
   categoryLabel: { color: brand.colors.charcoal, fontSize: 12.5, fontWeight: "900", lineHeight: 16, textAlign: "center" },
   categorySubtitle: { color: brand.colors.muted, fontSize: 10.5, fontWeight: "700", lineHeight: 13, textAlign: "center" },

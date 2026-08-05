@@ -23,12 +23,14 @@ describe("OrdersService", () => {
   const promos = { validateForCustomer: jest.fn() };
   const notifications = { createNotification: jest.fn() };
   const applicationNotifications = { orderCreated: jest.fn() };
+  const launchOperations = { assertCustomerCanStart: jest.fn().mockResolvedValue({ available: true }) };
   const service = new OrdersService(
     prisma as unknown as PrismaService,
     config as unknown as ConfigService,
     promos as unknown as PromoService,
     notifications as unknown as NotificationsService,
-    applicationNotifications as unknown as ApplicationNotificationsService
+    applicationNotifications as unknown as ApplicationNotificationsService,
+    launchOperations as never
   );
 
   beforeEach(() => {
