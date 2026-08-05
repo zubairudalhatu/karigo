@@ -70,6 +70,27 @@ assert(productionLaunchPage.includes("Second confirmation"), "High-impact launch
 assert(productionLaunchPage.includes("Customer cohorts") && productionLaunchPage.includes("Launch incidents") && productionLaunchPage.includes("Controlled transaction drills"), "Production Launch must include cohorts, incidents and drills.");
 assert(productionLaunchPage.includes("Export privacy-safe CSV"), "Production Launch must expose privacy-safe daily report export.");
 assert(productionLaunchApi.includes("admin/production-launch/command-centre"), "Production Launch API must call the admin-only command centre.");
+
+const supportTicketPage = read("app", "support", "[id]", "page.tsx");
+const supportTicketStatusSource = read("src", "lib", "support-ticket-status.ts");
+[
+  ['OPEN: ["IN_REVIEW"]', "OPEN must move only to IN_REVIEW."],
+  ['IN_REVIEW: ["WAITING_FOR_CUSTOMER", "WAITING_FOR_VENDOR", "WAITING_FOR_RIDER", "RESOLVED"]', "IN_REVIEW must expose only waiting or resolved states."],
+  ['WAITING_FOR_CUSTOMER: ["IN_REVIEW", "RESOLVED"]', "WAITING_FOR_CUSTOMER must return to review or resolve."],
+  ['WAITING_FOR_VENDOR: ["IN_REVIEW", "RESOLVED"]', "WAITING_FOR_VENDOR must return to review or resolve."],
+  ['WAITING_FOR_RIDER: ["IN_REVIEW", "RESOLVED"]', "WAITING_FOR_RIDER must return to review or resolve."],
+  ['RESOLVED: ["CLOSED", "IN_REVIEW"]', "RESOLVED must close or reopen for review."],
+  ['CLOSED: ["IN_REVIEW"]', "CLOSED must reopen only to IN_REVIEW."]
+].forEach(([transition, message]) => assert(supportTicketStatusSource.includes(transition), message));
+assert(!supportTicketStatusSource.includes('OPEN: ["CLOSED"]'), "OPEN must never transition directly to CLOSED.");
+assert(!supportTicketStatusSource.includes('IN_REVIEW: ["CLOSED"]'), "IN_REVIEW must never transition directly to CLOSED.");
+assert(supportTicketPage.includes("nextSupportTicketStatuses(ticket.status)"), "Admin Support must render only valid next statuses for the current ticket.");
+assert(supportTicketPage.includes("Resolve the ticket before closing it."), "Admin Support must explain the resolve-before-close workflow.");
+assert(supportTicketPage.includes("!status || statusSaving") && supportTicketPage.includes("disabled={!status || statusSaving}"), "Admin Support must prevent repeated status submissions while saving.");
+assert(supportTicketPage.includes('friendlyError(updateError, "form")'), "Admin Support must display the backend status-transition message.");
+assert(supportTicketPage.includes('className="success" role="status"'), "Admin Support must show a visible status-update confirmation beside the controls.");
+assert(supportTicketPage.includes("const refreshedTicket = await supportApi.detail(id)") && supportTicketPage.includes("syncTicket(refreshedTicket)"), "Admin Support must refresh and resync controls after a successful update.");
+
 assert(shell.includes("SME Services Summary"), "Admin sidebar must include SME Services operations summary.");
 assert(shell.includes("SME Operations Readiness"), "Admin sidebar must include SME Services operations readiness.");
 assert(shell.includes("SME Operations Control"), "Admin sidebar must include SME Services operations control.");
