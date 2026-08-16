@@ -1,5 +1,6 @@
 import { normalizeApiBaseUrl } from "@karigo/config";
 import type { NextRequest } from "next/server";
+import { buildBffUpstreamUrl } from "./bff-url";
 import { NextResponse } from "next/server";
 
 const ACCESS_COOKIE = "karigo_admin_access";
@@ -169,7 +170,7 @@ async function fetchBackend(path: string, request: NextRequest, accessToken?: st
   if (path === "auth/logout") headers.set("Content-Type", "application/json");
   else if (contentType) headers.set("Content-Type", contentType);
   if (accessToken && !publicAuthPath(path)) headers.set("Authorization", `Bearer ${accessToken}`);
-  return fetch(`${apiBaseUrl()}/${path}`, {
+  return fetch(buildBffUpstreamUrl(apiBaseUrl(), path, request.nextUrl.search), {
     method: request.method,
     headers,
     body,

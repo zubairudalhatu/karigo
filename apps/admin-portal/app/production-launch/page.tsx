@@ -36,6 +36,15 @@ const services: LaunchServiceType[] = ["RIDES", "FOOD", "GROCERIES", "MARKETPLAC
 const readinessStatuses: ReadinessStatus[] = ["NOT_READY", "AT_RISK", "READY", "WAIVED"];
 const drillTypes = ["RIDE_END_TO_END", "DELIVERY_END_TO_END", "PRODUCT_ORDER_END_TO_END", "SERVICE_REQUEST_END_TO_END", "PAYMENT_SUCCESS", "PAYMENT_FAILURE", "CUSTOMER_CANCELLATION", "CAPTAIN_CANCELLATION", "PARTNER_REJECTION", "SUPPORT_ESCALATION", "EMERGENCY_SERVICE_PAUSE"];
 type View = "quick" | "command" | "controlled" | "checklist" | "readiness" | "supply" | "cohorts" | "incidents" | "support" | "drills" | "reports" | "history";
+type QuickSelectorKey = "customer" | "captain" | "partner";
+type QuickSelectorRequest = { loading: boolean; error: string; query: string; page: number };
+
+const emptyQuickLaunchDiscovery = (): QuickLaunchDiscoveryPage => ({
+  items: [],
+  pagination: { page: 1, pageSize: 50, total: 0, hasMore: false },
+  diagnosticCode: null
+});
+
 
 function label(value: string) {
   return value.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -327,19 +336,23 @@ function ControlledSupplyView({ groups, customers, readiness, monitor, audit, ac
   </>;
 }
 
-function QuickCandidateSelector({ title, query, setQuery, candidates, selectedId, setSelectedId, loading, onSearch, onBrowse, onPage, pagination, diagnosticCode, identity }: {
+function QuickCandidateSelector({ title, accountLabel, query, setQuery, candidates, selectedId, setSelectedId, loading, error, onSearch, onBrowse, onRetry, onPage, pagination, diagnosticCode, sourceCount, identity }: {
   title: string;
+  accountLabel: string;
   query: string;
   setQuery: (value: string) => void;
   candidates: QuickLaunchCandidate[];
   selectedId: string;
   setSelectedId: (value: string) => void;
   loading: boolean;
+  error: string;
   onSearch: () => void;
   onBrowse: () => void;
+  onRetry: () => void;
   onPage: (page: number) => void;
   pagination: QuickLaunchDiscoveryPage["pagination"];
   diagnosticCode: QuickLaunchDiscoveryPage["diagnosticCode"];
+  sourceCount?: number;
   identity: (candidate: QuickLaunchCandidate) => string;
 }) {
   const [readyOnly, setReadyOnly] = useState(false);
@@ -355,7 +368,9 @@ function QuickCandidateSelector({ title, query, setQuery, candidates, selectedId
     <button className="secondary" disabled={loading} onClick={onBrowse}>Browse / Select account</button>
     <div className="actions"><input aria-label={`Search ${title}`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, phone or reference" /><button className="secondary" disabled={loading} onClick={onSearch}>{loading ? "Loading..." : "Search"}</button></div>
     <div className="actions"><label>Readiness<select value={readyOnly ? "READY" : "ALL"} onChange={(event) => setReadyOnly(event.target.value === "READY")}><option value="ALL">All</option><option value="READY">READY only</option></select></label>{supportsCapability ? <label>Capability<select value={capability} onChange={(event) => setCapability(event.target.value)}><option value="ALL">All capabilities</option><option value="RIDE">Ride</option><option value="DELIVERY">Delivery</option><option value="PRODUCT">Product Seller</option><option value="SERVICE">Service Provider</option></select></label> : null}</div>
-    {visibleCandidates.length ? <label>Select account<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select a {title}</option>{visibleCandidates.map((candidate) => <option key={identity(candidate)} value={identity(candidate)}>{candidateName(candidate)} · {candidate.phoneNumber} · {candidateCode(candidate)} · {candidate.ready ? "READY" : candidate.blockerMessages.join("; ")}</option>)}</select></label> : !loading && diagnosticCode === "IDENTITY_NOT_FOUND" ? <p className="empty">No matching KariGO account found. Check the name or phone number.</p> : !loading ? <p className="empty">{diagnosticCode ? label(diagnosticCode) : "No accounts match the selected filters."}</p> : null}
+    {error ? <div className="quick-blocked" role="alert"><strong>Unable to load {accountLabel} accounts.</strong><p>{error}</p><button className="secondary" disabled={loading} onClick={onRetry}>Retry</button></div> : null}
+    {!error && !loading && sourceCount && !candidates.length && !diagnosticCode ? <div className="quick-blocked" role="alert"><strong>Authoritative {accountLabel} source returned {sourceCount} account(s), but Browse returned none.</strong><p>Retry this selector. If the issue continues, do not start a controlled test.</p><button className="secondary" onClick={onRetry}>Retry</button></div> : null}
+    {visibleCandidates.length ? <label>Select account<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select a {title}</option>{visibleCandidates.map((candidate) => <option key={identity(candidate)} value={identity(candidate)}>{candidateName(candidate)} · {candidate.phoneNumber} · {candidateCode(candidate)} · {candidate.ready ? "READY" : candidate.blockerMessages.join("; ")}</option>)}</select></label> : !error && !loading && diagnosticCode === "IDENTITY_NOT_FOUND" ? <p className="empty">No matching KariGO account found. Check the name or phone number.</p> : !error && !loading && !(sourceCount && !candidates.length && !diagnosticCode) ? <p className="empty">{diagnosticCode ? label(diagnosticCode) : "No accounts match the selected filters."}</p> : null}
     {selected ? <div className={selected.ready ? "quick-ready" : "quick-blocked"}><p><Badge>{selected.ready ? "READY" : "BLOCKED"}</Badge> <strong>{candidateName(selected)}</strong></p><p>{selected.phoneNumber} · {candidateCode(selected)}{selected.email ? ` · ${selected.email}` : ""}</p><p>{selected.capabilityLabel ?? title} · {selected.statusLabel ?? (selected.ready ? "Operational access ready" : "Not ready")}</p>{selected.cityReadiness ? <p>{selected.cityReadiness}</p> : <p>City: {selected.city}</p>}{selected.approvedCities?.length ? <p>Approved cities: {selected.approvedCities.join(", ")} · Ride app: {selected.rideApplicationStatus} · Delivery app: {selected.deliveryApplicationStatus} · Vehicle: {selected.vehicleReadiness} · Documents: {selected.documentReadiness} · GPS: {dateTime(selected.lastGpsUpdate)} · {selected.onlineState} · Assignment: {selected.activeAssignment ? "ACTIVE" : "CLEAR"}</p> : null}{selected.lifecycleStatus ? <p>Lifecycle: {label(selected.lifecycleStatus)} · Active products: {selected.activeProductCount ?? 0} · Active services: {selected.activeServiceCount ?? 0} · Open work: {selected.openOrderCount ?? 0} · Documents: {selected.documentReadiness}</p> : null}{selected.blockerMessages.map((blocker) => <p key={blocker}>{blocker}</p>)}<small className="muted">Technical ID: {identity(selected)}</small></div> : candidates.length ? <p className="muted">Search and select an existing account. Internal IDs are shown only as secondary technical information.</p> : null}
     {pagination.total ? <div className="actions"><button className="secondary" disabled={loading || pagination.page <= 1} onClick={() => onPage(pagination.page - 1)}>Previous</button><span>Page {pagination.page} · {pagination.total} account(s)</span><button className="secondary" disabled={loading || !pagination.hasMore} onClick={() => onPage(pagination.page + 1)}>Next</button></div> : null}
   </article>;
@@ -365,10 +380,9 @@ function QuickLaunchView({ reload }: { reload: () => Promise<void> }) {
   const [city, setCity] = useState("KANO");
   const [serviceType, setServiceType] = useState<LaunchServiceType>("RIDES");
   const [context, setContext] = useState<QuickLaunchContext | null>(null);
-  const emptyDiscovery: QuickLaunchDiscoveryPage = { items: [], pagination: { page: 1, pageSize: 50, total: 0, hasMore: false }, diagnosticCode: null };
-  const [customerDiscovery, setCustomerDiscovery] = useState<QuickLaunchDiscoveryPage>(emptyDiscovery);
-  const [captainDiscovery, setCaptainDiscovery] = useState<QuickLaunchDiscoveryPage>(emptyDiscovery);
-  const [partnerDiscovery, setPartnerDiscovery] = useState<QuickLaunchDiscoveryPage>(emptyDiscovery);
+  const [customerDiscovery, setCustomerDiscovery] = useState<QuickLaunchDiscoveryPage>(emptyQuickLaunchDiscovery);
+  const [captainDiscovery, setCaptainDiscovery] = useState<QuickLaunchDiscoveryPage>(emptyQuickLaunchDiscovery);
+  const [partnerDiscovery, setPartnerDiscovery] = useState<QuickLaunchDiscoveryPage>(emptyQuickLaunchDiscovery);
   const [diagnostics, setDiagnostics] = useState<QuickLaunchIdentityDiagnostics | null>(null);
   const customers = customerDiscovery.items; const captains = captainDiscovery.items; const partners = partnerDiscovery.items;
   const [customerQuery, setCustomerQuery] = useState("");
@@ -380,7 +394,11 @@ function QuickLaunchView({ reload }: { reload: () => Promise<void> }) {
   const [reason, setReason] = useState("");
   const [reviewing, setReviewing] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
-  const [loadingCandidates, setLoadingCandidates] = useState(false);
+  const [candidateRequests, setCandidateRequests] = useState<Record<QuickSelectorKey, QuickSelectorRequest>>({
+    customer: { loading: false, error: "", query: "", page: 1 },
+    captain: { loading: false, error: "", query: "", page: 1 },
+    partner: { loading: false, error: "", query: "", page: 1 }
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -394,20 +412,46 @@ function QuickLaunchView({ reload }: { reload: () => Promise<void> }) {
   const selectedPartner = partners.find((item) => item.vendorId === partnerId);
   const selectionsReady = Boolean(selectedCustomer?.ready && (!requirements.captain || selectedCaptain?.ready) && (!requirements.partner || selectedPartner?.ready));
 
+  const loadCandidate = useCallback(async (selector: QuickSelectorKey, query: string, page = 1) => {
+    setCandidateRequests((current) => ({ ...current, [selector]: { loading: true, error: "", query, page } }));
+    try {
+      let discovery: QuickLaunchDiscoveryPage;
+      if (selector === "customer") {
+        discovery = await productionLaunchApi.quickLaunchCustomers(city, query, "ALL", page);
+        setCustomerDiscovery(discovery);
+      } else if (selector === "captain") {
+        discovery = await productionLaunchApi.quickLaunchCaptains(city, serviceType, query, "ALL", "ALL", page);
+        setCaptainDiscovery(discovery);
+      } else {
+        discovery = await productionLaunchApi.quickLaunchPartners(city, serviceType, query, "ALL", "ALL", page);
+        setPartnerDiscovery(discovery);
+      }
+      setCandidateRequests((current) => ({ ...current, [selector]: { ...current[selector], loading: false, error: "" } }));
+    } catch (cause) {
+      const selectorError = friendlyError(cause, "form");
+      setCandidateRequests((current) => ({ ...current, [selector]: { ...current[selector], loading: false, error: selectorError } }));
+    }
+  }, [city, serviceType]);
+
   const loadCandidates = useCallback(async (queries?: { customer?: string; captain?: string; partner?: string }, pages?: { customer?: number; captain?: number; partner?: number }) => {
-    setLoadingCandidates(true);
     setError("");
     try {
       const nextContext = await productionLaunchApi.quickLaunchContext(city, serviceType);
-      const [nextCustomers, nextCaptains, nextPartners] = await Promise.all([
-        productionLaunchApi.quickLaunchCustomers(city, queries?.customer ?? customerQuery, "ALL", pages?.customer ?? 1),
-        nextContext.requirements.captain ? productionLaunchApi.quickLaunchCaptains(city, serviceType, queries?.captain ?? captainQuery, "ALL", "ALL", pages?.captain ?? 1) : Promise.resolve(emptyDiscovery),
-        nextContext.requirements.partner ? productionLaunchApi.quickLaunchPartners(city, serviceType, queries?.partner ?? partnerQuery, "ALL", "ALL", pages?.partner ?? 1) : Promise.resolve(emptyDiscovery)
-      ]);
-      setContext(nextContext); setCustomerDiscovery(nextCustomers); setCaptainDiscovery(nextCaptains); setPartnerDiscovery(nextPartners);
+      setContext(nextContext);
+      const requests = [loadCandidate("customer", queries?.customer ?? customerQuery, pages?.customer ?? 1)];
+      if (nextContext.requirements.captain) {
+        requests.push(loadCandidate("captain", queries?.captain ?? captainQuery, pages?.captain ?? 1));
+      } else {
+        setCaptainDiscovery(emptyQuickLaunchDiscovery());
+      }
+      if (nextContext.requirements.partner) {
+        requests.push(loadCandidate("partner", queries?.partner ?? partnerQuery, pages?.partner ?? 1));
+      } else {
+        setPartnerDiscovery(emptyQuickLaunchDiscovery());
+      }
+      await Promise.all(requests);
     } catch (cause) { setError(friendlyError(cause, "form")); }
-    finally { setLoadingCandidates(false); }
-  }, [city, serviceType, customerQuery, captainQuery, partnerQuery]);
+  }, [city, serviceType, customerQuery, captainQuery, partnerQuery, loadCandidate]);
 
   useEffect(() => {
     setCustomerId(""); setCaptainId(""); setPartnerId(""); setReviewing(false); setConfirmed(false); setSession(null);
@@ -468,9 +512,9 @@ function QuickLaunchView({ reload }: { reload: () => Promise<void> }) {
   return <section className="section quick-launch"><h2>Quick Launch</h2><p>Start one controlled Kano or Abuja production test without copying account UUIDs or creating technical supply records.</p><p className="muted">Quick Launch can only select OPERATIONS ONLY. It cannot activate Invite Only, Limited Public or City Wide, initiate automatic matching, or enable payouts.</p>
     <div className="form-grid"><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="KANO">Kano</option><option value="ABUJA">Abuja</option></select></label><label>Service<select value={serviceType} onChange={(event) => setServiceType(event.target.value as LaunchServiceType)}>{services.map((service) => <option key={service} value={service}>{label(service)}</option>)}</select></label></div>
     {context && !context.stageSafeForQuickLaunch ? <div className="quick-blocked"><strong>Advanced stage must return OFF</strong><p>This service is currently {label(context.currentStage)}. Return it to OFF in Command before using Quick Launch.</p></div> : context && !context.manualChecklistReady ? <div className="quick-blocked"><strong>Manual safety checks still required</strong><p>Open the Checklist tab and complete: {context.manualChecklistBlockers.join(", ") || `${context.criticalFailures} critical drill blocker(s)`}.</p></div> : <div className="quick-ready"><strong>Manual safety checks ready</strong><p>Quick Launch will verify and audit the controlled account, group and 1/1 capacity checks.</p></div>}
-    <div className="grid quick-grid"><QuickCandidateSelector title="Controlled Customer" query={customerQuery} setQuery={setCustomerQuery} candidates={customers} selectedId={customerId} setSelectedId={setCustomerId} loading={loadingCandidates} onSearch={() => void loadCandidates({ customer: customerQuery })} onBrowse={() => { setCustomerQuery(""); void loadCandidates({ customer: "" }); }} onPage={(page) => void loadCandidates(undefined, { customer: page })} pagination={customerDiscovery.pagination} diagnosticCode={customerDiscovery.diagnosticCode} identity={(candidate) => candidate.userId} />
-      {requirements.captain ? <QuickCandidateSelector title={serviceType === "RIDES" ? "Ride Captain" : "Delivery Captain"} query={captainQuery} setQuery={setCaptainQuery} candidates={captains} selectedId={captainId} setSelectedId={setCaptainId} loading={loadingCandidates} onSearch={() => void loadCandidates({ captain: captainQuery })} onBrowse={() => { setCaptainQuery(""); void loadCandidates({ captain: "" }); }} onPage={(page) => void loadCandidates(undefined, { captain: page })} pagination={captainDiscovery.pagination} diagnosticCode={captainDiscovery.diagnosticCode} identity={(candidate) => candidate.userId} /> : null}
-      {requirements.partner ? <QuickCandidateSelector title={serviceType === "SME_SERVICES" ? "Service Provider" : "Partner"} query={partnerQuery} setQuery={setPartnerQuery} candidates={partners} selectedId={partnerId} setSelectedId={setPartnerId} loading={loadingCandidates} onSearch={() => void loadCandidates({ partner: partnerQuery })} onBrowse={() => { setPartnerQuery(""); void loadCandidates({ partner: "" }); }} onPage={(page) => void loadCandidates(undefined, { partner: page })} pagination={partnerDiscovery.pagination} diagnosticCode={partnerDiscovery.diagnosticCode} identity={(candidate) => candidate.vendorId ?? ""} /> : null}</div>
+    <div className="grid quick-grid"><QuickCandidateSelector title="Controlled Customer" accountLabel="Customer" query={customerQuery} setQuery={setCustomerQuery} candidates={customers} selectedId={customerId} setSelectedId={setCustomerId} loading={candidateRequests.customer.loading} error={candidateRequests.customer.error} onSearch={() => void loadCandidate("customer", customerQuery, 1)} onBrowse={() => { setCustomerQuery(""); void loadCandidate("customer", "", 1); }} onRetry={() => void loadCandidate("customer", candidateRequests.customer.query, candidateRequests.customer.page)} onPage={(page) => void loadCandidate("customer", candidateRequests.customer.query, page)} pagination={customerDiscovery.pagination} diagnosticCode={customerDiscovery.diagnosticCode} sourceCount={diagnostics?.counts.customersVisible} identity={(candidate) => candidate.userId} />
+      {requirements.captain ? <QuickCandidateSelector title={serviceType === "RIDES" ? "Ride Captain" : "Delivery Captain"} accountLabel="Captain" query={captainQuery} setQuery={setCaptainQuery} candidates={captains} selectedId={captainId} setSelectedId={setCaptainId} loading={candidateRequests.captain.loading} error={candidateRequests.captain.error} onSearch={() => void loadCandidate("captain", captainQuery, 1)} onBrowse={() => { setCaptainQuery(""); void loadCandidate("captain", "", 1); }} onRetry={() => void loadCandidate("captain", candidateRequests.captain.query, candidateRequests.captain.page)} onPage={(page) => void loadCandidate("captain", candidateRequests.captain.query, page)} pagination={captainDiscovery.pagination} diagnosticCode={captainDiscovery.diagnosticCode} sourceCount={diagnostics?.counts[serviceType === "RIDES" ? "rideCaptainsVisible" : "deliveryCaptainsVisible"]} identity={(candidate) => candidate.userId} /> : null}
+      {requirements.partner ? <QuickCandidateSelector title={serviceType === "SME_SERVICES" ? "Service Provider" : "Partner"} accountLabel="Partner" query={partnerQuery} setQuery={setPartnerQuery} candidates={partners} selectedId={partnerId} setSelectedId={setPartnerId} loading={candidateRequests.partner.loading} error={candidateRequests.partner.error} onSearch={() => void loadCandidate("partner", partnerQuery, 1)} onBrowse={() => { setPartnerQuery(""); void loadCandidate("partner", "", 1); }} onRetry={() => void loadCandidate("partner", candidateRequests.partner.query, candidateRequests.partner.page)} onPage={(page) => void loadCandidate("partner", candidateRequests.partner.query, page)} pagination={partnerDiscovery.pagination} diagnosticCode={partnerDiscovery.diagnosticCode} sourceCount={diagnostics?.counts.partnersVisible} identity={(candidate) => candidate.vendorId ?? ""} /> : null}</div>
     {diagnostics ? <article className="card internal"><h3>Quick Launch Identity Diagnostics</h3><p className="muted">Admin-only, read-only counts from the same authoritative account sources. No passwords, tokens, OTPs or private document URLs are included.</p><p>Customers visible in Admin source: <strong>{diagnostics.counts.customersVisible}</strong> · Ride Captains: <strong>{diagnostics.counts.rideCaptainsVisible}</strong> · Delivery Captains: <strong>{diagnostics.counts.deliveryCaptainsVisible}</strong> · Partners: <strong>{diagnostics.counts.partnersVisible}</strong></p><p>Missing expected links: <strong>{diagnostics.counts.identitiesMissingExpectedProfileLinks}</strong> · Customer profiles: <strong>{diagnostics.counts.customerProfilesMissing}</strong> · Approved Captain applications missing User: <strong>{diagnostics.counts.approvedCaptainApplicationsMissingUser}</strong> · Profiles missing User: <strong>{diagnostics.counts.profilesMissingUser}</strong> · Vendors missing User: <strong>{diagnostics.counts.vendorsMissingUser}</strong></p></article> : null}
     <article className="card"><label>Required operational reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Example: Owner-approved first Kano Ride controlled transaction" /></label><button disabled={!selectionsReady || !context?.manualChecklistReady || !context.stageSafeForQuickLaunch || !reason.trim()} onClick={() => setReviewing(true)}>Review controlled test</button></article>
     {reviewing ? <article className="card confirmation"><h3>Confirm Quick Launch changes</h3><p>Only <strong>{label(city)} / {label(serviceType)}</strong> will change.</p><ul><li>Create or reuse one controlled supply group.</li><li>Enable only the selected controlled participants.</li><li>Set maximum concurrent and unassigned requests to 1.</li><li>Preserve configured operating hours.</li><li>Set the selected service to OPERATIONS ONLY and create its guided drill.</li><li>Leave every other city/service unchanged.</li></ul><label className="check-row"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />I confirm this controlled production change and reason.</label><ErrorMessage>{error}</ErrorMessage>{success ? <p className="success">{success}</p> : null}<div className="actions"><button disabled={saving || !confirmed} onClick={() => void start()}>{saving ? "Starting..." : "Start Controlled Test"}</button><button className="secondary" disabled={saving} onClick={() => { setReviewing(false); setConfirmed(false); }}>Back</button></div></article> : <ErrorMessage>{error}</ErrorMessage>}
