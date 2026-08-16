@@ -21,6 +21,9 @@ import {
   LaunchSupportQueue,
   OperationsChecklist,
   productionLaunchApi,
+  QuickLaunchCandidate,
+  QuickLaunchContext,
+  QuickLaunchSession,
   ReadinessStatus
 } from "../../src/api/production-launch.api";
 import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
@@ -30,7 +33,7 @@ const stages: LaunchStage[] = ["OFF", "OPERATIONS_ONLY", "INVITE_ONLY", "LIMITED
 const services: LaunchServiceType[] = ["RIDES", "FOOD", "GROCERIES", "MARKETPLACE", "PARCEL_DELIVERY", "SME_SERVICES"];
 const readinessStatuses: ReadinessStatus[] = ["NOT_READY", "AT_RISK", "READY", "WAIVED"];
 const drillTypes = ["RIDE_END_TO_END", "DELIVERY_END_TO_END", "PRODUCT_ORDER_END_TO_END", "SERVICE_REQUEST_END_TO_END", "PAYMENT_SUCCESS", "PAYMENT_FAILURE", "CUSTOMER_CANCELLATION", "CAPTAIN_CANCELLATION", "PARTNER_REJECTION", "SUPPORT_ESCALATION", "EMERGENCY_SERVICE_PAUSE"];
-type View = "command" | "controlled" | "checklist" | "readiness" | "supply" | "cohorts" | "incidents" | "support" | "drills" | "reports" | "history";
+type View = "quick" | "command" | "controlled" | "checklist" | "readiness" | "supply" | "cohorts" | "incidents" | "support" | "drills" | "reports" | "history";
 
 function label(value: string) {
   return value.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -119,7 +122,7 @@ function ConfigEditor({ config, onSaved }: { config: LaunchConfig; onSaved: () =
 }
 
 export default function ProductionLaunchPage() {
-  const [view, setView] = useState<View>("command");
+  const [view, setView] = useState<View>("quick");
   const [command, setCommand] = useState<LaunchCommandCentre | null>(null);
   const [configs, setConfigs] = useState<LaunchConfig[]>([]);
   const [readiness, setReadiness] = useState<LaunchReadiness[]>([]);
@@ -165,12 +168,14 @@ export default function ProductionLaunchPage() {
     <h1>Production Launch</h1>
     <p className="muted">Kano and Abuja operations control. All city/service records default to OFF. No stage advances automatically, active work is not cancelled, and customer demand remains server-gated by stage, account eligibility, hours, zone and capacity.</p>
     <div className="actions">
-      {(["command", "controlled", "checklist", "readiness", "supply", "cohorts", "incidents", "support", "drills", "reports", "history"] as View[]).map((item) => <button key={item} className={view === item ? "" : "secondary"} onClick={() => setView(item)}>{label(item)}</button>)}
+      {(["quick", "command", "controlled", "checklist", "readiness", "supply", "cohorts", "incidents", "support", "drills", "reports", "history"] as View[]).map((item) => <button key={item} className={view === item ? "" : "secondary"} onClick={() => setView(item)}>{item === "quick" ? "Quick Launch" : label(item)}</button>)}
       <button className="secondary" onClick={() => void load()}>Refresh</button>
     </div>
     {message ? <p className="success">{message}</p> : null}
     <ErrorMessage>{error}</ErrorMessage>
     {loading ? <Loading /> : null}
+
+    {!loading && view === "quick" ? <QuickLaunchView reload={load} /> : null}
 
     {!loading && view === "command" && command ? <>
       <section className="grid">
@@ -318,6 +323,137 @@ function ControlledSupplyView({ groups, customers, readiness, monitor, audit, ac
 
     <section className="section"><h2>Controlled activation audit history</h2>{audit.length ? <table className="table"><thead><tr><th>Time</th><th>Action</th><th>Entity</th></tr></thead><tbody>{audit.slice(0, 100).map((entry, index) => <tr key={String(entry.id ?? index)}><td>{dateTime(String(entry.createdAt ?? ""))}</td><td>{label(String(entry.action ?? "unknown"))}</td><td>{String(entry.entityType ?? "Unknown")} {String(entry.entityId ?? "")}</td></tr>)}</tbody></table> : <Empty>No controlled activation audit history yet.</Empty>}</section>
   </>;
+}
+
+function QuickCandidateSelector({ title, query, setQuery, candidates, selectedId, setSelectedId, loading, onSearch, identity }: {
+  title: string;
+  query: string;
+  setQuery: (value: string) => void;
+  candidates: QuickLaunchCandidate[];
+  selectedId: string;
+  setSelectedId: (value: string) => void;
+  loading: boolean;
+  onSearch: () => void;
+  identity: (candidate: QuickLaunchCandidate) => string;
+}) {
+  const selected = candidates.find((candidate) => identity(candidate) === selectedId);
+  const candidateName = (candidate: QuickLaunchCandidate) => candidate.name ?? candidate.captainName ?? candidate.businessName ?? candidate.tradingName ?? "Unnamed account";
+  const candidateCode = (candidate: QuickLaunchCandidate) => candidate.customerCode ?? candidate.captainCode ?? candidate.partnerCode ?? "No KariGO code";
+  return <article className="card quick-selector">
+    <h3>{title}</h3>
+    <div className="actions"><input aria-label={`Search ${title}`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, phone or KariGO code" /><button className="secondary" disabled={loading} onClick={onSearch}>{loading ? "Searching..." : "Search"}</button></div>
+    <label>Select account<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Select a {title}</option>{candidates.map((candidate) => <option key={identity(candidate)} value={identity(candidate)}>{candidateName(candidate)} · {candidate.phoneNumber} · {candidateCode(candidate)} · {candidate.ready ? "READY" : candidate.blockerMessages[0]}</option>)}</select></label>
+    {selected ? <div className={selected.ready ? "quick-ready" : "quick-blocked"}><p><Badge>{selected.ready ? "READY" : "BLOCKED"}</Badge> <strong>{candidateName(selected)}</strong></p><p>{selected.phoneNumber} · {candidateCode(selected)}</p>{selected.blockerMessages.map((blocker) => <p key={blocker}>{blocker}</p>)}<small className="muted">Technical ID: {identity(selected)}</small></div> : <p className="muted">Search and select an existing account. Internal IDs are shown only as secondary technical information.</p>}
+  </article>;
+}
+
+function QuickLaunchView({ reload }: { reload: () => Promise<void> }) {
+  const [city, setCity] = useState("KANO");
+  const [serviceType, setServiceType] = useState<LaunchServiceType>("RIDES");
+  const [context, setContext] = useState<QuickLaunchContext | null>(null);
+  const [customers, setCustomers] = useState<QuickLaunchCandidate[]>([]);
+  const [captains, setCaptains] = useState<QuickLaunchCandidate[]>([]);
+  const [partners, setPartners] = useState<QuickLaunchCandidate[]>([]);
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [captainQuery, setCaptainQuery] = useState("");
+  const [partnerQuery, setPartnerQuery] = useState("");
+  const [customerId, setCustomerId] = useState("");
+  const [captainId, setCaptainId] = useState("");
+  const [partnerId, setPartnerId] = useState("");
+  const [reason, setReason] = useState("");
+  const [reviewing, setReviewing] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [loadingCandidates, setLoadingCandidates] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [session, setSession] = useState<QuickLaunchSession | null>(null);
+  const [returnAfterPass, setReturnAfterPass] = useState(true);
+  const [stopReason, setStopReason] = useState("");
+
+  const requirements = context?.requirements ?? { customer: true as const, captain: serviceType !== "SME_SERVICES", partner: serviceType !== "RIDES" };
+  const selectedCustomer = customers.find((item) => item.userId === customerId);
+  const selectedCaptain = captains.find((item) => item.userId === captainId);
+  const selectedPartner = partners.find((item) => item.vendorId === partnerId);
+  const selectionsReady = Boolean(selectedCustomer?.ready && (!requirements.captain || selectedCaptain?.ready) && (!requirements.partner || selectedPartner?.ready));
+
+  const loadCandidates = useCallback(async (queries?: { customer?: string; captain?: string; partner?: string }) => {
+    setLoadingCandidates(true);
+    setError("");
+    try {
+      const nextContext = await productionLaunchApi.quickLaunchContext(city, serviceType);
+      const [nextCustomers, nextCaptains, nextPartners] = await Promise.all([
+        productionLaunchApi.quickLaunchCustomers(city, queries?.customer ?? customerQuery),
+        nextContext.requirements.captain ? productionLaunchApi.quickLaunchCaptains(city, serviceType, queries?.captain ?? captainQuery) : Promise.resolve([]),
+        nextContext.requirements.partner ? productionLaunchApi.quickLaunchPartners(city, serviceType, queries?.partner ?? partnerQuery) : Promise.resolve([])
+      ]);
+      setContext(nextContext); setCustomers(nextCustomers); setCaptains(nextCaptains); setPartners(nextPartners);
+    } catch (cause) { setError(friendlyError(cause, "form")); }
+    finally { setLoadingCandidates(false); }
+  }, [city, serviceType, customerQuery, captainQuery, partnerQuery]);
+
+  useEffect(() => {
+    setCustomerId(""); setCaptainId(""); setPartnerId(""); setReviewing(false); setConfirmed(false); setSession(null);
+    void loadCandidates({ customer: "", captain: "", partner: "" });
+  }, [city, serviceType]);
+
+  async function start() {
+    if (saving) return;
+    setSaving(true); setError(""); setSuccess("");
+    try {
+      const next = await productionLaunchApi.startQuickLaunch({ city, serviceType, customerUserId: customerId, captainUserId: requirements.captain ? captainId : undefined, partnerVendorId: requirements.partner ? partnerId : undefined, reason, confirmed });
+      setSession(next); setReviewing(false); setConfirmed(false); setSuccess(`${label(serviceType)} is OPERATIONS ONLY in ${label(city)}. Guided controlled test started.`);
+      await reload();
+    } catch (cause) { setError(friendlyError(cause, "form")); }
+    finally { setSaving(false); }
+  }
+
+  async function updateStep(stepId: string, status: "PASSED" | "FAILED") {
+    if (!session || saving) return;
+    setSaving(true); setError(""); setSuccess("");
+    try {
+      const note = status === "PASSED" ? "Operations confirmed guided Quick Launch evidence" : window.prompt("Describe the failure without entering secrets, PINs or private URLs")?.trim();
+      if (status === "FAILED" && !note) return;
+      const updated = await productionLaunchApi.updateDrillStep(session.drill.id, stepId, { status, note });
+      setSession({ ...session, drill: { ...session.drill, steps: session.drill.steps.map((step) => step.id === stepId ? { ...step, ...(updated as object) } : step) } });
+      setSuccess(`Guided test step marked ${status.toLowerCase()}.`);
+    } catch (cause) { setError(friendlyError(cause, "form")); }
+    finally { setSaving(false); }
+  }
+
+  async function finish(outcome: "PASSED" | "FAILED" | "STOPPED") {
+    if (!session || saving) return;
+    const finishReason = outcome === "PASSED" ? `Quick Launch ${label(serviceType)} controlled test passed` : stopReason.trim();
+    if (!finishReason) { setError("Enter a failure or stop reason before returning the service OFF."); return; }
+    setSaving(true); setError(""); setSuccess("");
+    try {
+      const result = await productionLaunchApi.finishQuickLaunch(session.drill.id, { outcome, returnServiceOff: outcome === "PASSED" ? returnAfterPass : true, reason: finishReason, confirmed: true });
+      setSession({ ...session, drill: result.drill, config: result.config ?? session.config });
+      setSuccess(result.serviceReturnedOff ? "Test saved. The selected city/service is OFF; active transactions were preserved." : "Test passed. The selected city/service remains OPERATIONS ONLY for another controlled test.");
+      await reload();
+    } catch (cause) { setError(friendlyError(cause, "form")); }
+    finally { setSaving(false); }
+  }
+
+  if (session) {
+    const finished = ["PASSED", "FAILED", "BLOCKED"].includes(session.drill.result);
+    const allPassed = session.drill.steps.every((step) => step.status === "PASSED");
+    return <section className="section quick-launch"><h2>Quick Launch guided test</h2><p><Badge>{session.drill.result}</Badge> {session.city.name} · {label(session.serviceType)}</p>{success ? <p className="success">{success}</p> : null}<ErrorMessage>{error}</ErrorMessage>
+      <div className="quick-steps">{session.drill.steps.map((step) => <article className="card" key={step.id}><p><strong>{step.position}. {step.label}</strong></p><p><Badge>{step.status}</Badge></p>{!finished ? <div className="actions"><button disabled={saving || step.status === "PASSED"} onClick={() => void updateStep(step.id, "PASSED")}>Check / Pass</button><button className="secondary" disabled={saving} onClick={() => void updateStep(step.id, "FAILED")}>Record blocker</button></div> : null}</article>)}</div>
+      {!finished ? <article className="card finish-controls"><h3>Finish controlled test</h3><label className="check-row"><input type="radio" checked={returnAfterPass} onChange={() => setReturnAfterPass(true)} />After passing, return this service OFF</label><label className="check-row"><input type="radio" checked={!returnAfterPass} onChange={() => setReturnAfterPass(false)} />After passing, keep OPERATIONS ONLY for another test</label><div className="actions"><button disabled={saving || !allPassed} onClick={() => void finish("PASSED")}>Pass Test</button></div><p className="muted">Every guided step must pass before the test can be passed.</p><label>Failure / stop reason<textarea value={stopReason} onChange={(event) => setStopReason(event.target.value)} placeholder="Record why the controlled test stopped. Do not enter secrets." /></label><button className="secondary" disabled={saving || !stopReason.trim()} onClick={() => void finish("STOPPED")}>Stop Test / Return Service OFF</button><p className="muted">Returning OFF blocks new demand and preserves any active transaction safely. Controlled records and audit history are retained.</p></article> : null}
+    </section>;
+  }
+
+  return <section className="section quick-launch"><h2>Quick Launch</h2><p>Start one controlled Kano or Abuja production test without copying account UUIDs or creating technical supply records.</p><p className="muted">Quick Launch can only select OPERATIONS ONLY. It cannot activate Invite Only, Limited Public or City Wide, initiate automatic matching, or enable payouts.</p>
+    <div className="form-grid"><label>City<select value={city} onChange={(event) => setCity(event.target.value)}><option value="KANO">Kano</option><option value="ABUJA">Abuja</option></select></label><label>Service<select value={serviceType} onChange={(event) => setServiceType(event.target.value as LaunchServiceType)}>{services.map((service) => <option key={service} value={service}>{label(service)}</option>)}</select></label></div>
+    {context && !context.stageSafeForQuickLaunch ? <div className="quick-blocked"><strong>Advanced stage must return OFF</strong><p>This service is currently {label(context.currentStage)}. Return it to OFF in Command before using Quick Launch.</p></div> : context && !context.manualChecklistReady ? <div className="quick-blocked"><strong>Manual safety checks still required</strong><p>Open the Checklist tab and complete: {context.manualChecklistBlockers.join(", ") || `${context.criticalFailures} critical drill blocker(s)`}.</p></div> : <div className="quick-ready"><strong>Manual safety checks ready</strong><p>Quick Launch will verify and audit the controlled account, group and 1/1 capacity checks.</p></div>}
+    <div className="grid quick-grid"><QuickCandidateSelector title="Controlled Customer" query={customerQuery} setQuery={setCustomerQuery} candidates={customers} selectedId={customerId} setSelectedId={setCustomerId} loading={loadingCandidates} onSearch={() => void loadCandidates({ customer: customerQuery })} identity={(candidate) => candidate.userId} />
+      {requirements.captain ? <QuickCandidateSelector title={serviceType === "RIDES" ? "Ride Captain" : "Delivery Captain"} query={captainQuery} setQuery={setCaptainQuery} candidates={captains} selectedId={captainId} setSelectedId={setCaptainId} loading={loadingCandidates} onSearch={() => void loadCandidates({ captain: captainQuery })} identity={(candidate) => candidate.userId} /> : null}
+      {requirements.partner ? <QuickCandidateSelector title={serviceType === "SME_SERVICES" ? "Service Provider" : "Partner"} query={partnerQuery} setQuery={setPartnerQuery} candidates={partners} selectedId={partnerId} setSelectedId={setPartnerId} loading={loadingCandidates} onSearch={() => void loadCandidates({ partner: partnerQuery })} identity={(candidate) => candidate.vendorId ?? ""} /> : null}</div>
+    <article className="card"><label>Required operational reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Example: Owner-approved first Kano Ride controlled transaction" /></label><button disabled={!selectionsReady || !context?.manualChecklistReady || !context.stageSafeForQuickLaunch || !reason.trim()} onClick={() => setReviewing(true)}>Review controlled test</button></article>
+    {reviewing ? <article className="card confirmation"><h3>Confirm Quick Launch changes</h3><p>Only <strong>{label(city)} / {label(serviceType)}</strong> will change.</p><ul><li>Create or reuse one controlled supply group.</li><li>Enable only the selected controlled participants.</li><li>Set maximum concurrent and unassigned requests to 1.</li><li>Preserve configured operating hours.</li><li>Set the selected service to OPERATIONS ONLY and create its guided drill.</li><li>Leave every other city/service unchanged.</li></ul><label className="check-row"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />I confirm this controlled production change and reason.</label><ErrorMessage>{error}</ErrorMessage>{success ? <p className="success">{success}</p> : null}<div className="actions"><button disabled={saving || !confirmed} onClick={() => void start()}>{saving ? "Starting..." : "Start Controlled Test"}</button><button className="secondary" disabled={saving} onClick={() => { setReviewing(false); setConfirmed(false); }}>Back</button></div></article> : <ErrorMessage>{error}</ErrorMessage>}
+    <article className="card internal"><h3>Accelerate utilities</h3><p><strong>Provider network access configured — production transaction verification pending.</strong></p><p className="muted">Airtime, Data, Electricity and Cable TV live vending/reconciliation are tested separately and do not block initial Ride, Delivery, Partner or SME controlled launch.</p></article>
+  </section>;
 }
 
 function OperationsChecklistView({ action }: { action: (fn: () => Promise<unknown>, message: string) => Promise<void> }) {

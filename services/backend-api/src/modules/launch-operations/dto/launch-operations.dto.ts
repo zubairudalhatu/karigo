@@ -256,6 +256,43 @@ export class UpdateOperationsChecklistItemDto {
   @IsOptional() @IsDateString() waiverExpiresAt?: string;
 }
 
+export class QuickLaunchSearchQueryDto {
+  @IsString() @MaxLength(80) city!: string;
+  @IsEnum(LaunchServiceType) serviceType!: LaunchServiceType;
+  @IsOptional() @IsString() @MaxLength(120) query?: string;
+}
+
+export class QuickLaunchCustomerSearchQueryDto {
+  @IsString() @MaxLength(80) city!: string;
+  @IsOptional() @IsString() @MaxLength(120) query?: string;
+}
+
+export class StartQuickLaunchDto {
+  @IsString() @MaxLength(80) city!: string;
+  @IsEnum(LaunchServiceType) serviceType!: LaunchServiceType;
+  @IsUUID() customerUserId!: string;
+  @IsOptional() @IsUUID() captainUserId?: string;
+  @IsOptional() @IsUUID() partnerVendorId?: string;
+  @IsString() @IsNotEmpty() @MaxLength(500) reason!: string;
+  @IsBoolean() confirmed!: boolean;
+}
+
+export class FinishQuickLaunchDto {
+  @IsIn(["PASSED", "FAILED", "STOPPED"])
+  outcome!: "PASSED" | "FAILED" | "STOPPED";
+
+  @IsBoolean()
+  returnServiceOff!: boolean;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(1000)
+  reason!: string;
+
+  @IsBoolean()
+  confirmed!: boolean;
+}
+
 export class UpdateLaunchReadinessDto {
   @IsEnum(LaunchReadinessStatus)
   status!: LaunchReadinessStatus;

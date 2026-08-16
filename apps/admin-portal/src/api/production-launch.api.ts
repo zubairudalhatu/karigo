@@ -70,6 +70,40 @@ export interface ControlledSupplyMember { id: string; memberType: ControlledSupp
 export interface ControlledSupplyGroup { id: string; name: string; cityCode: string; serviceType: LaunchServiceType; status: ControlledSupplyGroupStatus; startAt?: string | null; endAt?: string | null; maximumMembers: number; internalNote?: string | null; activeWindow: boolean; members: ControlledSupplyMember[]; _count: { members: number }; }
 export interface ControlledOperationsCustomer { id: string; cityCode: string; userId: string; label: string; enabled: boolean; excludedFromCampaigns: boolean; internalNote?: string | null; }
 export interface ControlledCandidate { userId: string; vendorId?: string; captainName?: string; captainCode?: string; businessName?: string; tradingName?: string; city: string; capability?: string; rideStatus?: string; deliveryStatus?: string; onlineState: string; lastGpsUpdate?: string | null; vehicle?: string; activeRide?: boolean; activeDelivery?: boolean; activeProductCount?: number; activeServiceCount?: number; openOrderCount?: number; documentStatus: string; eligibility: string; blockers: string[]; controlledGroup?: { id: string; name: string; enabled: boolean; memberId: string } | null; }
+export interface QuickLaunchCandidate {
+  userId: string;
+  vendorId?: string;
+  name?: string;
+  captainName?: string;
+  businessName?: string;
+  tradingName?: string;
+  phoneNumber: string;
+  customerCode?: string | null;
+  captainCode?: string | null;
+  partnerCode?: string | null;
+  city: string;
+  ready: boolean;
+  blockerMessages: string[];
+  technicalId?: string;
+  lastGpsUpdate?: string | null;
+}
+export interface QuickLaunchContext {
+  requirements: { customer: true; captain: boolean; partner: boolean };
+  manualChecklistReady: boolean;
+  manualChecklistBlockers: string[];
+  criticalFailures: number;
+  currentStage: LaunchStage;
+  stageSafeForQuickLaunch: boolean;
+  automaticChecks: string[];
+}
+export interface QuickLaunchSession {
+  city: { code: string; name: string };
+  serviceType: LaunchServiceType;
+  config: LaunchConfig;
+  controlledGroup: { id: string; name: string };
+  controlledCustomer: { id: string; label: string };
+  drill: LaunchDrill;
+}
 export interface OperationsChecklist { city: { code: string; name: string }; serviceType: LaunchServiceType; items: Array<{ id: string; key: string; label: string; mandatory: boolean; status: OperationsChecklistStatus; note?: string | null; waiverReason?: string | null; waiverExpiresAt?: string | null }>; criticalFailures: number; canEnableOperationsOnly: boolean; score: { satisfied: number; total: number }; }
 export interface ControlledReadiness { city: { code: string; name: string }; targets: Record<string, number>; requiredTargets: Record<string, number>; drillReady: boolean; inviteRolloutReady: false; limitedPublicReady: false; recommendation: string; }
 export interface ControlledMonitor { city: { code: string; name: string }; refreshedAt: string; captains: Record<string, number | ControlledCandidate[]>; partners: Record<string, number | ControlledCandidate[]>; }
@@ -109,6 +143,12 @@ export const productionLaunchApi = {
   controlledReadiness: () => api.get<ControlledReadiness[]>("admin/production-launch/controlled-readiness"),
   controlledMonitor: () => api.get<ControlledMonitor[]>("admin/production-launch/controlled-monitor"),
   controlledAudit: () => api.get<Array<Record<string, unknown>>>("admin/production-launch/controlled-audit"),
+  quickLaunchContext: (city: string, serviceType: LaunchServiceType) => api.get<QuickLaunchContext>(`admin/production-launch/quick-launch/context?city=${encodeURIComponent(city)}&serviceType=${serviceType}`),
+  quickLaunchCustomers: (city: string, query = "") => api.get<QuickLaunchCandidate[]>(`admin/production-launch/quick-launch/customers?city=${encodeURIComponent(city)}&query=${encodeURIComponent(query)}`),
+  quickLaunchCaptains: (city: string, serviceType: LaunchServiceType, query = "") => api.get<QuickLaunchCandidate[]>(`admin/production-launch/quick-launch/captains?city=${encodeURIComponent(city)}&serviceType=${serviceType}&query=${encodeURIComponent(query)}`),
+  quickLaunchPartners: (city: string, serviceType: LaunchServiceType, query = "") => api.get<QuickLaunchCandidate[]>(`admin/production-launch/quick-launch/partners?city=${encodeURIComponent(city)}&serviceType=${serviceType}&query=${encodeURIComponent(query)}`),
+  startQuickLaunch: (payload: Record<string, unknown>) => api.post<QuickLaunchSession>("admin/production-launch/quick-launch/start", payload),
+  finishQuickLaunch: (drillId: string, payload: Record<string, unknown>) => api.post<{ drill: LaunchDrill; config?: LaunchConfig | null; serviceReturnedOff: boolean; activeTransactionsPreserved: true }>(`admin/production-launch/quick-launch/drills/${drillId}/finish`, payload),
   updateDrillStep: (drillId: string, stepId: string, payload: Record<string, unknown>) => api.patch(`admin/production-launch/drills/${drillId}/steps/${stepId}`, payload),
   reopenDrill: (drillId: string, reason: string) => api.post(`admin/production-launch/drills/${drillId}/reopen`, { reason }),
   drillFailureFollowUp: (drillId: string, payload: Record<string, unknown>) => api.post(`admin/production-launch/drills/${drillId}/failure-follow-up`, payload)

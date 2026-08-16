@@ -19,7 +19,11 @@ import {
   LinkLaunchDrillFailureDto,
   LaunchAvailabilityQueryDto,
   PauseFromIncidentDto,
+  FinishQuickLaunchDto,
+  QuickLaunchCustomerSearchQueryDto,
+  QuickLaunchSearchQueryDto,
   ReopenLaunchDrillDto,
+  StartQuickLaunchDto,
   UpdateControlledOperationsCustomerDto,
   UpdateControlledSupplyGroupDto,
   UpdateControlledSupplyMemberDto,
@@ -34,6 +38,7 @@ import {
 } from "./dto/launch-operations.dto";
 import { ControlledSupplyService } from "./controlled-supply.service";
 import { LaunchOperationsService } from "./launch-operations.service";
+import { QuickLaunchService } from "./quick-launch.service";
 
 const LAUNCH_ADMINS = [AdminRole.SUPER_ADMIN, AdminRole.OPERATIONS_ADMIN, AdminRole.DISPATCH_OFFICER];
 
@@ -65,7 +70,25 @@ export class LaunchAvailabilityController {
 @AdminRoles(...LAUNCH_ADMINS)
 @ApiBearerAuth()
 export class AdminLaunchOperationsController {
-  constructor(private readonly launch: LaunchOperationsService, private readonly controlled: ControlledSupplyService) {}
+  constructor(private readonly launch: LaunchOperationsService, private readonly controlled: ControlledSupplyService, private readonly quickLaunch: QuickLaunchService) {}
+
+  @Get("quick-launch/context")
+  quickLaunchContext(@Query() query: QuickLaunchSearchQueryDto) { return this.wrap("Quick Launch context retrieved", this.quickLaunch.context(query.city, query.serviceType)); }
+
+  @Get("quick-launch/customers")
+  quickLaunchCustomers(@Query() query: QuickLaunchCustomerSearchQueryDto) { return this.wrap("Quick Launch Customer candidates retrieved", this.quickLaunch.customerCandidates(query.city, query.query)); }
+
+  @Get("quick-launch/captains")
+  quickLaunchCaptains(@Query() query: QuickLaunchSearchQueryDto) { return this.wrap("Quick Launch Captain candidates retrieved", this.quickLaunch.captainCandidates(query.city, query.serviceType, query.query)); }
+
+  @Get("quick-launch/partners")
+  quickLaunchPartners(@Query() query: QuickLaunchSearchQueryDto) { return this.wrap("Quick Launch Partner candidates retrieved", this.quickLaunch.partnerCandidates(query.city, query.serviceType, query.query)); }
+
+  @Post("quick-launch/start")
+  startQuickLaunch(@CurrentUser() user: AuthenticatedUser, @Body() dto: StartQuickLaunchDto) { return this.wrap("Controlled test started", this.quickLaunch.start(user.id, dto)); }
+
+  @Post("quick-launch/drills/:drillId/finish")
+  finishQuickLaunch(@CurrentUser() user: AuthenticatedUser, @Param("drillId", ParseUUIDPipe) drillId: string, @Body() dto: FinishQuickLaunchDto) { return this.wrap("Controlled test finished", this.quickLaunch.finish(drillId, user.id, dto)); }
 
   @Get("command-centre")
   commandCentre() { return this.wrap("Production launch command centre retrieved", this.launch.commandCentre()); }

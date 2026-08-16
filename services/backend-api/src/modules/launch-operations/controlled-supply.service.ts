@@ -235,7 +235,8 @@ export class ControlledSupplyService {
       if (!membership) blockers.push("NOT_IN_CONTROLLED_GROUP");
       else if (!membership.enabled) blockers.push("ACTIVATION_PENDING");
       return {
-        userId: user.id, captainName: user.fullName, captainCode: user.rider?.riderCode ?? rideProfile?.id ?? "NOT_ASSIGNED", city: city.name,
+        userId: user.id, captainName: user.fullName, phoneNumber: user.phoneNumber,
+        captainCode: user.rider?.riderCode ?? (needsRide ? rideProfile?.application?.applicationReference : deliveryApplication?.applicationReference) ?? "NOT_ASSIGNED", city: city.name,
         rideStatus: rideProfile?.status ?? "NOT_CONFIGURED", deliveryStatus: user.rider?.verificationStatus ?? "NOT_CONFIGURED",
         onlineState: user.captainWorkState?.desiredRideOnline || user.captainWorkState?.desiredDeliveryOnline ? "ONLINE" : "OFFLINE",
         activeRide: Boolean(user.captainWorkState?.activeRideTripId), activeDelivery: Boolean(user.captainWorkState?.activeDeliveryAssignmentId),
@@ -263,6 +264,13 @@ export class ControlledSupplyService {
       const membership = memberships.find((item) => item.vendorId === vendor.id && requiredTypes.includes(item.memberType) && item.group.status === ControlledSupplyGroupStatus.ACTIVE && this.activeWindow(item.group));
       const productCapability = vendor.products.length > 0;
       const serviceCapability = vendor.services.length > 0;
+      const category = [vendor.businessCategory, vendor.sourceApplication?.businessCategory, vendor.sourceApplication?.businessType, vendor.sourceApplication?.catalogueCategory]
+        .filter(Boolean).join(" ").toUpperCase().replace(/[_-]+/g, " ");
+      const serviceCapabilityMatches = serviceType === LaunchServiceType.MARKETPLACE
+        || (serviceType === LaunchServiceType.FOOD && /FOOD|RESTAURANT/.test(category))
+        || (serviceType === LaunchServiceType.GROCERIES && /GROCERY|GROCERIES|PHARMACY/.test(category))
+        || (serviceType === LaunchServiceType.PARCEL_DELIVERY && /PARCEL|LOGISTIC|DELIVERY/.test(category))
+        || serviceType === LaunchServiceType.SME_SERVICES;
       let cityMatches = false;
       try { cityMatches = this.city(vendor.city).code === city.code; } catch { cityMatches = false; }
       const capability = productCapability && serviceCapability ? "BOTH" : serviceCapability ? "SERVICE_PROVIDER" : "PRODUCT_SELLER";
@@ -273,12 +281,15 @@ export class ControlledSupplyService {
       if (vendor.sourceApplication?.status !== VendorApplicationStatus.APPROVED) blockers.push("APPLICATION_NOT_APPROVED");
       if (!this.documentsApproved(documents)) blockers.push("DOCUMENTS_NOT_APPROVED");
       if (serviceType === LaunchServiceType.SME_SERVICES && !serviceCapability) blockers.push("NO_ACTIVE_SERVICE");
-      if (serviceType !== LaunchServiceType.SME_SERVICES && !productCapability) blockers.push("NO_ACTIVE_PRODUCT");
+      if (([LaunchServiceType.FOOD, LaunchServiceType.GROCERIES, LaunchServiceType.MARKETPLACE] as LaunchServiceType[]).includes(serviceType) && !productCapability) blockers.push("NO_ACTIVE_PRODUCT");
+      if (serviceType === LaunchServiceType.PARCEL_DELIVERY && !productCapability && !serviceCapability) blockers.push("NO_ACTIVE_DELIVERY_SERVICE");
+      if (!serviceCapabilityMatches) blockers.push("CAPABILITY_MISMATCH");
       if (!cityMatches) blockers.push("CITY_MISMATCH");
       if (!membership) blockers.push("NOT_IN_CONTROLLED_GROUP");
       else if (!membership.enabled) blockers.push("ACTIVATION_PENDING");
       return {
         userId: vendor.userId, vendorId: vendor.id, businessName: vendor.businessName, tradingName: vendor.sourceApplication?.tradingName,
+        phoneNumber: vendor.phoneNumber || vendor.user.phoneNumber, partnerCode: vendor.sourceApplication?.reference ?? null,
         capability, city: vendor.city, onlineState: vendor.isOpen ? "ONLINE" : "OFFLINE", activeProductCount: vendor.products.length,
         activeServiceCount: vendor.services.length, openOrderCount: vendor.orders.length, documentStatus: this.documentsApproved(documents) ? "APPROVED" : "INCOMPLETE",
         eligibility: blockers[0] ?? "ELIGIBLE", blockers: [...new Set(blockers)], controlledGroup: membership ? { id: membership.groupId, name: membership.group.name, enabled: membership.enabled, memberId: membership.id } : null

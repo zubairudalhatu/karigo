@@ -95,28 +95,20 @@ const DEFAULT_CUSTOMER_MESSAGES: Record<LaunchStage, string> = {
 
 const DRILL_CHECKLISTS: Partial<Record<LaunchDrillType, string[]>> = {
   RIDE_END_TO_END: [
-    "Confirm OPERATIONS_ONLY", "Confirm controlled Customer", "Confirm eligible controlled Ride Captain", "Captain online for Ride",
-    "Customer creates Ride", "Admin sees request", "Admin sees eligible Captain", "Admin assigns Captain manually",
-    "Captain receives assignment", "Captain accepts", "Customer sees Captain and vehicle", "Captain progresses to pickup",
-    "Captain marks arrival", "Ride PIN appears only at arrival", "Captain verifies PIN", "Captain starts Ride",
-    "Captain reaches destination", "Captain completes Ride", "Customer receipt appears", "Captain earning appears",
-    "Admin audit timeline complete", "Exclusive lock releases", "Captain availability restored", "Drill result recorded"
+    "Captain online", "Customer Ride requested", "Captain assigned", "Captain accepted", "Arrived pickup",
+    "Ride PIN available", "Ride started", "Destination reached", "Ride completed", "Customer record verified",
+    "Captain earnings verified", "Assignment lock released"
   ],
   PRODUCT_ORDER_END_TO_END: [
-    "Confirm OPERATIONS_ONLY", "Controlled Customer creates order", "Controlled Partner receives order", "Partner accepts",
-    "Partner prepares order", "Controlled Delivery Captain eligible", "Admin assigns Delivery Captain", "Captain accepts",
-    "Captain confirms pickup", "Customer receives status updates", "Handoff verification completes", "Order completes",
-    "Partner earning appears", "Captain earning appears", "Reconciliation record available", "Cross-mode lock releases", "Drill result recorded"
+    "Order created", "Partner accepted", "Delivery Captain assigned", "Pickup completed", "Delivery completed",
+    "Customer handoff completed", "Partner earning recorded", "Captain earning recorded", "Reconciliation verified"
   ],
   DELIVERY_END_TO_END: [
-    "Confirm OPERATIONS_ONLY", "Controlled Customer creates delivery", "Controlled Partner confirms work", "Controlled Delivery Captain eligible",
-    "Admin assigns Delivery Captain", "Captain accepts", "Captain confirms pickup", "Customer receives status updates",
-    "Handoff verification completes", "Delivery completes", "Earnings appear", "Reconciliation record available", "Lock releases", "Drill result recorded"
+    "Order created", "Partner accepted", "Delivery Captain assigned", "Pickup completed", "Delivery completed",
+    "Customer handoff completed", "Partner earning recorded", "Captain earning recorded", "Reconciliation verified"
   ],
   SERVICE_REQUEST_END_TO_END: [
-    "Confirm OPERATIONS_ONLY", "Controlled Customer selects active service", "Controlled Service Provider sees request", "Provider acknowledges",
-    "Lifecycle progresses", "Customer receives status updates", "Service completes", "Settlement record reviewed",
-    "Admin audit record complete", "Drill result recorded"
+    "Request created", "Provider acknowledged", "Lifecycle progressed", "Completed", "Relevant earning or settlement verified"
   ]
 };
 

@@ -70,6 +70,20 @@ assert(productionLaunchPage.includes("Second confirmation"), "High-impact launch
 assert(productionLaunchPage.includes("Customer cohorts") && productionLaunchPage.includes("Launch incidents") && productionLaunchPage.includes("Controlled transaction drills"), "Production Launch must include cohorts, incidents and drills.");
 assert(productionLaunchPage.includes("Export privacy-safe CSV"), "Production Launch must expose privacy-safe daily report export.");
 assert(productionLaunchApi.includes("admin/production-launch/command-centre"), "Production Launch API must call the admin-only command centre.");
+assert(productionLaunchPage.includes('"quick"') && productionLaunchPage.includes("Quick Launch"), "Production Launch must expose Quick Launch as a prominent tab.");
+assert(productionLaunchPage.includes("Search name, phone or KariGO code") && productionLaunchPage.includes("Technical ID:"), "Quick Launch selectors must search operational identities and show UUIDs only as secondary information.");
+assert(productionLaunchPage.includes("Review controlled test") && productionLaunchPage.includes("Start Controlled Test"), "Quick Launch must require a confirmation review before starting.");
+assert(productionLaunchPage.includes("Pass Test") && productionLaunchPage.includes("Stop Test / Return Service OFF"), "Quick Launch must expose guided pass and safe OFF controls.");
+assert(productionLaunchPage.includes("Provider network access configured — production transaction verification pending"), "Accelerate verification must remain separate from initial controlled launch.");
+assert(!productionLaunchPage.includes('launchStage: "INVITE_ONLY"') && !productionLaunchPage.includes('launchStage: "LIMITED_PUBLIC"') && !productionLaunchPage.includes('launchStage: "CITY_WIDE"'), "Quick Launch must not promote public launch stages.");
+[
+  "quick-launch/context",
+  "quick-launch/customers",
+  "quick-launch/captains",
+  "quick-launch/partners",
+  "quick-launch/start",
+  "quick-launch/drills"
+].forEach((endpoint) => assert(productionLaunchApi.includes(endpoint), `Quick Launch API must expose ${endpoint}.`));
 assert(productionLaunchPage.includes("Controlled supply groups") && productionLaunchPage.includes("Create DRAFT group"), "Production Launch must create controlled groups without activating them automatically.");
 assert(productionLaunchPage.includes("Add existing Captain or Partner") && productionLaunchPage.includes("Activate") && productionLaunchPage.includes("Deactivate"), "Production Launch must support audited controlled membership actions.");
 assert(productionLaunchPage.includes("Eligibility and live controlled supply") && productionLaunchPage.includes("Manual Refresh monitor"), "Production Launch must expose eligibility reasons and manual supply refresh without aggressive polling.");

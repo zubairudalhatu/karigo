@@ -257,7 +257,7 @@ describe("LaunchOperationsService", () => {
     reportSpy.mockRestore();
   });
 
-  it("creates a Ride drill with the predefined 24-step checklist without starting live work", async () => {
+  it("creates a Ride drill with the guided 12-step Quick Launch checklist without starting live work", async () => {
     prisma.controlledOperationsCustomer.findFirst.mockResolvedValue({ id: "customer-record" });
     prisma.controlledSupplyGroup.findFirst.mockResolvedValue({ id: "ride-group" });
     prisma.launchDrill.create.mockImplementation(async ({ data }: any) => ({ id: "drill-1", ...data }));
@@ -273,7 +273,7 @@ describe("LaunchOperationsService", () => {
       data: expect.objectContaining({
         cityCode: "KANO",
         serviceType: LaunchServiceType.RIDES,
-        steps: { create: expect.arrayContaining([expect.objectContaining({ position: 24, label: "Drill result recorded" })]) },
+        steps: { create: expect.arrayContaining([expect.objectContaining({ position: 12, label: "Assignment lock released" })]) },
         events: { create: expect.objectContaining({ eventType: "CREATED" }) }
       }),
       include: expect.any(Object)
