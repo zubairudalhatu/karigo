@@ -45,6 +45,8 @@ const VENDOR_CLEANUP_SELECT = {
   id: true,
   userId: true,
   businessName: true,
+  phoneNumber: true,
+  email: true,
   businessCategory: true,
   city: true,
   state: true,
@@ -54,7 +56,7 @@ const VENDOR_CLEANUP_SELECT = {
   deletedAt: true,
   createdAt: true,
   updatedAt: true,
-  user: { select: { accountStatus: true, deletedAt: true } },
+  user: { select: { fullName: true, phoneNumber: true, email: true, accountStatus: true, deletedAt: true } },
   sourceApplication: {
     select: {
       reference: true,
@@ -498,17 +500,17 @@ export class AdminOperationsService {
             passwordHash: true,
             onboardingPasswordSetAt: true,
             deliveryCaptainApplications: {
-              select: { id: true, applicationReference: true, status: true, createdAt: true, updatedAt: true },
+              select: { id: true, applicationReference: true, status: true, city: true, state: true, createdAt: true, updatedAt: true },
               orderBy: { createdAt: "desc" },
               take: 1
             },
             taxiDriverApplications: {
-              select: { id: true, applicationReference: true, status: true, createdAt: true, updatedAt: true },
+              select: { id: true, applicationReference: true, status: true, city: true, state: true, createdAt: true, updatedAt: true },
               orderBy: { createdAt: "desc" },
               take: 1
             },
             taxiDriverProfiles: {
-              select: { id: true, applicationId: true, status: true, isAvailableForTaxi: true, updatedAt: true },
+              select: { id: true, applicationId: true, status: true, city: true, state: true, isAvailableForTaxi: true, updatedAt: true },
               orderBy: { createdAt: "desc" },
               take: 1
             },

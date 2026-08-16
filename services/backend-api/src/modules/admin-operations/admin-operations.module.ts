@@ -11,6 +11,7 @@ import { SettlementsService } from "./settlements.service";
 @Module({
   imports: [AuthModule],
   controllers: [AdminOperationsController, AdminReportsController, AdminSettlementsController],
-  providers: [AdminOperationsService, SettlementsService, ApplicationNotificationsService, AdminRolesGuard]
+  providers: [AdminOperationsService, SettlementsService, ApplicationNotificationsService, AdminRolesGuard],
+  exports: [AdminOperationsService]
 })
 export class AdminOperationsModule {}

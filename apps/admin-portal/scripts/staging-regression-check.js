@@ -71,7 +71,9 @@ assert(productionLaunchPage.includes("Customer cohorts") && productionLaunchPage
 assert(productionLaunchPage.includes("Export privacy-safe CSV"), "Production Launch must expose privacy-safe daily report export.");
 assert(productionLaunchApi.includes("admin/production-launch/command-centre"), "Production Launch API must call the admin-only command centre.");
 assert(productionLaunchPage.includes('"quick"') && productionLaunchPage.includes("Quick Launch"), "Production Launch must expose Quick Launch as a prominent tab.");
-assert(productionLaunchPage.includes("Search name, phone or KariGO code") && productionLaunchPage.includes("Technical ID:"), "Quick Launch selectors must search operational identities and show UUIDs only as secondary information.");
+assert(productionLaunchPage.includes("Browse / Select account") && productionLaunchPage.includes("Search name, phone or reference") && productionLaunchPage.includes("Technical ID:"), "Quick Launch selectors must browse and refine authoritative operational identities while showing UUIDs only as secondary information.");
+assert(productionLaunchPage.includes("READY only") && productionLaunchPage.includes("All capabilities") && productionLaunchPage.includes("Page {pagination.page}"), "Quick Launch selectors must expose readiness/capability filters and pagination.");
+assert(productionLaunchPage.includes("Quick Launch Identity Diagnostics") && productionLaunchPage.includes("private document URLs"), "Quick Launch must expose privacy-safe Admin identity diagnostics.");
 assert(productionLaunchPage.includes("No matching KariGO account found. Check the name or phone number."), "Quick Launch must show an explicit no-match account-search state.");
 assert(productionLaunchPage.includes("selected.capabilityLabel") && productionLaunchPage.includes("selected.cityReadiness"), "Quick Launch must show human-readable capability and city readiness details.");
 assert(productionLaunchPage.includes("Review controlled test") && productionLaunchPage.includes("Start Controlled Test"), "Quick Launch must require a confirmation review before starting.");
@@ -80,6 +82,7 @@ assert(productionLaunchPage.includes("Provider network access configured — pro
 assert(!productionLaunchPage.includes('launchStage: "INVITE_ONLY"') && !productionLaunchPage.includes('launchStage: "LIMITED_PUBLIC"') && !productionLaunchPage.includes('launchStage: "CITY_WIDE"'), "Quick Launch must not promote public launch stages.");
 [
   "quick-launch/context",
+  "quick-launch/diagnostics",
   "quick-launch/customers",
   "quick-launch/captains",
   "quick-launch/partners",

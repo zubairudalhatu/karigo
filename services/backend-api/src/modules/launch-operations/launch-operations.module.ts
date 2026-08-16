@@ -6,10 +6,11 @@ import { AdminLaunchOperationsController, LaunchAvailabilityController } from ".
 import { LaunchOperationsService } from "./launch-operations.service";
 import { ControlledSupplyService } from "./controlled-supply.service";
 import { QuickLaunchService } from "./quick-launch.service";
+import { AdminOperationsModule } from "../admin-operations/admin-operations.module";
 
 @Global()
 @Module({
-  imports: [PrismaModule, AdminAuditModule],
+  imports: [PrismaModule, AdminAuditModule, AdminOperationsModule],
   controllers: [LaunchAvailabilityController, AdminLaunchOperationsController],
   providers: [LaunchOperationsService, ControlledSupplyService, QuickLaunchService, AdminRolesGuard],
   exports: [LaunchOperationsService, ControlledSupplyService]

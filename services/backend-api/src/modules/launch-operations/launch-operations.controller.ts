@@ -74,15 +74,18 @@ export class AdminLaunchOperationsController {
 
   @Get("quick-launch/context")
   quickLaunchContext(@Query() query: QuickLaunchSearchQueryDto) { return this.wrap("Quick Launch context retrieved", this.quickLaunch.context(query.city, query.serviceType)); }
+  @Get("quick-launch/diagnostics")
+  quickLaunchDiagnostics() { return this.wrap("Quick Launch identity diagnostics retrieved", this.quickLaunch.identityDiagnostics()); }
+
 
   @Get("quick-launch/customers")
-  quickLaunchCustomers(@Query() query: QuickLaunchCustomerSearchQueryDto) { return this.wrap("Quick Launch Customer candidates retrieved", this.quickLaunch.customerCandidates(query.city, query.query)); }
+  quickLaunchCustomers(@Query() query: QuickLaunchCustomerSearchQueryDto) { return this.wrap("Quick Launch Customer candidates retrieved", this.quickLaunch.customerDiscovery(query)); }
 
   @Get("quick-launch/captains")
-  quickLaunchCaptains(@Query() query: QuickLaunchSearchQueryDto) { return this.wrap("Quick Launch Captain candidates retrieved", this.quickLaunch.captainCandidates(query.city, query.serviceType, query.query)); }
+  quickLaunchCaptains(@Query() query: QuickLaunchSearchQueryDto) { return this.wrap("Quick Launch Captain candidates retrieved", this.quickLaunch.captainDiscovery(query)); }
 
   @Get("quick-launch/partners")
-  quickLaunchPartners(@Query() query: QuickLaunchSearchQueryDto) { return this.wrap("Quick Launch Partner candidates retrieved", this.quickLaunch.partnerCandidates(query.city, query.serviceType, query.query)); }
+  quickLaunchPartners(@Query() query: QuickLaunchSearchQueryDto) { return this.wrap("Quick Launch Partner candidates retrieved", this.quickLaunch.partnerDiscovery(query)); }
 
   @Post("quick-launch/start")
   startQuickLaunch(@CurrentUser() user: AuthenticatedUser, @Body() dto: StartQuickLaunchDto) { return this.wrap("Controlled test started", this.quickLaunch.start(user.id, dto)); }

@@ -260,11 +260,18 @@ export class QuickLaunchSearchQueryDto {
   @IsString() @MaxLength(80) city!: string;
   @IsEnum(LaunchServiceType) serviceType!: LaunchServiceType;
   @IsOptional() @IsString() @MaxLength(120) query?: string;
+  @IsOptional() @IsIn(["ALL", "READY"]) readiness?: "ALL" | "READY";
+  @IsOptional() @IsString() @MaxLength(40) capability?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize?: number;
 }
 
 export class QuickLaunchCustomerSearchQueryDto {
   @IsString() @MaxLength(80) city!: string;
   @IsOptional() @IsString() @MaxLength(120) query?: string;
+  @IsOptional() @IsIn(["ALL", "READY"]) readiness?: "ALL" | "READY";
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize?: number;
 }
 
 export class StartQuickLaunchDto {

@@ -74,6 +74,10 @@ export interface QuickLaunchCandidate {
   userId: string;
   vendorId?: string;
   name?: string;
+  fullName?: string;
+  email?: string | null;
+  accountStatus?: string;
+  lifecycleStatus?: string;
   captainName?: string;
   businessName?: string;
   tradingName?: string;
@@ -90,7 +94,24 @@ export interface QuickLaunchCandidate {
   capabilityLabel?: string;
   statusLabel?: string;
   cityReadiness?: string;
+  diagnosticCodes?: string[];
+  rideCapability?: boolean;
+  deliveryCapability?: boolean;
+  approvedCities?: string[];
+  rideApplicationStatus?: string;
+  deliveryApplicationStatus?: string;
+  rideProfileStatus?: string;
+  deliveryProfileStatus?: string;
+  vehicleReadiness?: string;
+  documentReadiness?: string;
+  onlineState?: string;
+  activeAssignment?: boolean;
+  activeProductCount?: number;
+  activeServiceCount?: number;
+  openOrderCount?: number;
 }
+export interface QuickLaunchDiscoveryPage { items: QuickLaunchCandidate[]; pagination: { page: number; pageSize: number; total: number; hasMore: boolean }; diagnosticCode: "IDENTITY_NOT_FOUND" | "CAPABILITY_NOT_FOUND" | "ACCOUNT_BLOCKED" | "CITY_MISMATCH" | "PROFILE_INCOMPLETE" | "LOCATION_STALE" | null; }
+export interface QuickLaunchIdentityDiagnostics { sourceRoutes: Record<string, string>; counts: Record<string, number>; readOnly: true; containsPrivateDocumentUrls: false; }
 export interface QuickLaunchContext {
   requirements: { customer: true; captain: boolean; partner: boolean };
   manualChecklistReady: boolean;
@@ -148,9 +169,10 @@ export const productionLaunchApi = {
   controlledMonitor: () => api.get<ControlledMonitor[]>("admin/production-launch/controlled-monitor"),
   controlledAudit: () => api.get<Array<Record<string, unknown>>>("admin/production-launch/controlled-audit"),
   quickLaunchContext: (city: string, serviceType: LaunchServiceType) => api.get<QuickLaunchContext>(`admin/production-launch/quick-launch/context?city=${encodeURIComponent(city)}&serviceType=${serviceType}`),
-  quickLaunchCustomers: (city: string, query = "") => api.get<QuickLaunchCandidate[]>(`admin/production-launch/quick-launch/customers?city=${encodeURIComponent(city)}&query=${encodeURIComponent(query)}`),
-  quickLaunchCaptains: (city: string, serviceType: LaunchServiceType, query = "") => api.get<QuickLaunchCandidate[]>(`admin/production-launch/quick-launch/captains?city=${encodeURIComponent(city)}&serviceType=${serviceType}&query=${encodeURIComponent(query)}`),
-  quickLaunchPartners: (city: string, serviceType: LaunchServiceType, query = "") => api.get<QuickLaunchCandidate[]>(`admin/production-launch/quick-launch/partners?city=${encodeURIComponent(city)}&serviceType=${serviceType}&query=${encodeURIComponent(query)}`),
+  quickLaunchDiagnostics: () => api.get<QuickLaunchIdentityDiagnostics>("admin/production-launch/quick-launch/diagnostics"),
+  quickLaunchCustomers: (city: string, query = "", readiness = "ALL", page = 1) => api.get<QuickLaunchDiscoveryPage>(`admin/production-launch/quick-launch/customers?city=${encodeURIComponent(city)}&query=${encodeURIComponent(query)}&readiness=${readiness}&page=${page}`),
+  quickLaunchCaptains: (city: string, serviceType: LaunchServiceType, query = "", readiness = "ALL", capability = "ALL", page = 1) => api.get<QuickLaunchDiscoveryPage>(`admin/production-launch/quick-launch/captains?city=${encodeURIComponent(city)}&serviceType=${serviceType}&query=${encodeURIComponent(query)}&readiness=${readiness}&capability=${capability}&page=${page}`),
+  quickLaunchPartners: (city: string, serviceType: LaunchServiceType, query = "", readiness = "ALL", capability = "ALL", page = 1) => api.get<QuickLaunchDiscoveryPage>(`admin/production-launch/quick-launch/partners?city=${encodeURIComponent(city)}&serviceType=${serviceType}&query=${encodeURIComponent(query)}&readiness=${readiness}&capability=${capability}&page=${page}`),
   startQuickLaunch: (payload: Record<string, unknown>) => api.post<QuickLaunchSession>("admin/production-launch/quick-launch/start", payload),
   finishQuickLaunch: (drillId: string, payload: Record<string, unknown>) => api.post<{ drill: LaunchDrill; config?: LaunchConfig | null; serviceReturnedOff: boolean; activeTransactionsPreserved: true }>(`admin/production-launch/quick-launch/drills/${drillId}/finish`, payload),
   updateDrillStep: (drillId: string, stepId: string, payload: Record<string, unknown>) => api.patch(`admin/production-launch/drills/${drillId}/steps/${stepId}`, payload),
