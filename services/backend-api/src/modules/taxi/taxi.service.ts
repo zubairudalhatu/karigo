@@ -1099,7 +1099,7 @@ export class TaxiService {
       const workState = profile.user?.captainWorkState;
       const activeOtherWork = Boolean(workState?.activeWorkMode);
       const desiredRideOnline = workState?.desiredRideOnline ?? profile.isAvailableForTaxi;
-      const controlledSupplyEligible = await this.launchOperations.controlledSupplyAccountEligible({ city: pickupCity ?? profileCity ?? profile.city, serviceType: LaunchServiceType.RIDES, userId: profile.userId });
+      const controlledSupplyEligible = await this.launchOperations.controlledSupplyAccountEligible({ city: pickupCity ?? profileCity ?? profile.city, serviceType: LaunchServiceType.RIDES, userId: profile.userId, participant: "Captain" });
       const eligible = !activeTrip && !activeOtherWork && desiredRideOnline && serviceAreaMatch && locationFreshness === "fresh" && controlledSupplyEligible;
       const distanceToPickupKm = this.distanceToPickupKm(profile, trip);
       candidates.push({

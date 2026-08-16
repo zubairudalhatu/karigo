@@ -155,6 +155,23 @@ describe("LaunchOperationsService", () => {
     })).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
+  it("uses Captain capability instead of a unified account's base role at the assignment boundary", async () => {
+    prisma.launchMarketConfig.findUnique.mockResolvedValue({ ...baseConfig, launchStage: LaunchStage.OPERATIONS_ONLY });
+    prisma.user.findUnique.mockResolvedValue({ role: UserRole.CUSTOMER, accountStatus: AccountStatus.ACTIVE, deletedAt: null });
+    controlledSupply.accountEligible.mockResolvedValue(true);
+
+    await expect(service.assertControlledSupplyCanReceive({
+      city: "Kano",
+      serviceType: LaunchServiceType.RIDES,
+      userId: "unified-captain",
+      participant: "Captain"
+    })).resolves.toBeUndefined();
+
+    expect(controlledSupply.accountEligible).toHaveBeenCalledWith(
+      "Kano", LaunchServiceType.RIDES, "unified-captain", UserRole.RIDER
+    );
+  });
+
   it("enforces configured operating hours", async () => {
     prisma.launchMarketConfig.findUnique.mockResolvedValue({ ...baseConfig, operatingHours: { weekly: { mon: { closed: true }, tue: { closed: true }, wed: { closed: true }, thu: { closed: true }, fri: { closed: true }, sat: { closed: true }, sun: { closed: true } } } });
     const result = await service.resolveEligibility({ city: "Kano", serviceType: LaunchServiceType.RIDES, userId: "user", enforceCapacity: false });

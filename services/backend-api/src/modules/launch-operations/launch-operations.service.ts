@@ -298,14 +298,16 @@ export class LaunchOperationsService {
     return this.safeEligibility(city, input.serviceType, config.launchStage, true, null, config);
   }
 
-  async controlledSupplyAccountEligible(input: { city: string; serviceType: LaunchServiceType; userId?: string | null }) {
+  async controlledSupplyAccountEligible(input: { city: string; serviceType: LaunchServiceType; userId?: string | null; participant?: "Captain" | "Partner" }) {
     const city = this.normalizeCity(input.city);
     const config = await this.prisma.launchMarketConfig.findUnique({ where: { cityCode_serviceType: { cityCode: city.code, serviceType: input.serviceType } } });
     if (!config || config.launchStage !== LaunchStage.OPERATIONS_ONLY || !config.isEnabled) return true;
     if (!input.userId) return false;
     const user = await this.prisma.user.findUnique({ where: { id: input.userId }, select: { role: true, accountStatus: true, deletedAt: true } });
     if (!user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE) return false;
-    return this.controlledSupply.accountEligible(city.name, input.serviceType, input.userId, user.role);
+    const capabilityRole = input.participant === "Captain" ? UserRole.RIDER
+      : input.participant === "Partner" ? UserRole.VENDOR : user.role;
+    return this.controlledSupply.accountEligible(city.name, input.serviceType, input.userId, capabilityRole);
   }
 
   async assertControlledSupplyCanReceive(input: { city: string; serviceType: LaunchServiceType; userId: string; participant: "Captain" | "Partner" }) {

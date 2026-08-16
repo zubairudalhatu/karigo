@@ -78,14 +78,15 @@ export class QuickLaunchService {
     };
   }
 
-  private quickBlocker(code: string, participant: "Captain" | "Partner") {
+  private quickBlocker(code: string, participant: "Captain" | "Partner", selectedCity: string) {
     const messages: Record<string, string> = {
       SUSPENDED: `${participant} is suspended`,
       LOGIN_NOT_READY: `${participant} operational access is not active`,
       APPLICATION_NOT_APPROVED: `${participant} application is not approved`,
       DOCUMENTS_NOT_APPROVED: `${participant} documents are not approved`,
+      ACTIVATION_PENDING: `${participant} activation is incomplete`,
       PROFILE_INACTIVE: `${participant} activation is incomplete`,
-      CITY_MISMATCH: `${participant} is not approved for the selected city`,
+      CITY_MISMATCH: `${participant} is not approved for ${selectedCity}`,
       LOCATION_STALE: "Refresh Captain GPS",
       ACTIVE_ASSIGNMENT: "Captain has a conflicting assignment",
       NO_ACTIVE_PRODUCT: "Partner has no active product",
@@ -97,8 +98,8 @@ export class QuickLaunchService {
     return messages[code] ?? `${participant} is not ready`;
   }
 
-  private quickCandidate(candidate: BaseCandidate, participant: "Captain" | "Partner", serviceType: LaunchServiceType) {
-    const setupOnly = new Set(["NOT_IN_CONTROLLED_GROUP", "ACTIVATION_PENDING"]);
+  private quickCandidate(candidate: BaseCandidate, participant: "Captain" | "Partner", serviceType: LaunchServiceType, selectedCity: string) {
+    const setupOnly = new Set(["NOT_IN_CONTROLLED_GROUP", "MEMBERSHIP_ACTIVATION_PENDING"]);
     const blockingCodes = candidate.blockers.filter((code) => !setupOnly.has(code));
     return {
       userId: candidate.userId,
@@ -114,9 +115,10 @@ export class QuickLaunchService {
       capabilityLabel: participant === "Captain"
         ? serviceType === LaunchServiceType.RIDES ? "Ride Captain" : "Delivery Captain"
         : candidate.capability === "BOTH" ? "Product Seller and Service Provider" : candidate.capability === "SERVICE_PROVIDER" ? "Service Provider" : "Product Seller",
-      statusLabel: blockingCodes.length ? this.quickBlocker(blockingCodes[0], participant) : "Operational access ready",
+      statusLabel: blockingCodes.length ? this.quickBlocker(blockingCodes[0], participant, selectedCity) : "Operational access ready",
       ready: blockingCodes.length === 0,
-      blockerMessages: [...new Set(blockingCodes.map((code) => this.quickBlocker(code, participant)))]
+      blockerCodes: [...new Set(blockingCodes)],
+      blockerMessages: [...new Set(blockingCodes.map((code) => this.quickBlocker(code, participant, selectedCity)))]
     };
   }
 
@@ -134,14 +136,21 @@ export class QuickLaunchService {
     const city = this.city(cityInput);
     const term = query?.trim();
     const phoneDigits = term ? nigerianPhoneSearchDigits(term) : null;
+    const matchingPhoneIds = phoneDigits ? (await this.prisma.user.findMany({
+      where: { deletedAt: null },
+      select: { id: true, phoneNumber: true },
+      orderBy: { fullName: "asc" }
+    }))
+      .filter((user) => nigerianPhoneSearchDigits(user.phoneNumber) === phoneDigits)
+      .slice(0, 50)
+      .map((user) => user.id) : null;
+    if (matchingPhoneIds && matchingPhoneIds.length === 0) return [];
     const users = await this.prisma.user.findMany({
       where: {
         deletedAt: null,
-        customerProfile: { isNot: null },
-        ...(term ? { OR: [
+        ...(matchingPhoneIds ? { id: { in: matchingPhoneIds } } : term ? { OR: [
           { fullName: { contains: term, mode: "insensitive" } },
           { phoneNumber: { contains: term } },
-          ...(phoneDigits ? [{ phoneNumber: { contains: phoneDigits } }] : []),
           { customerProfile: { referralCode: { contains: term, mode: "insensitive" } } }
         ] } : {})
       },
@@ -149,7 +158,9 @@ export class QuickLaunchService {
       orderBy: { fullName: "asc" },
       take: 50
     });
-    return users.filter((user) => !user.deletedAt).map((user) => this.customerCandidate(city, user));
+    return users
+      .filter((user) => !user.deletedAt)
+      .map((user) => this.customerCandidate(city, user));
   }
 
   private customerCandidate(city: typeof CITIES[number], user: {
@@ -168,6 +179,7 @@ export class QuickLaunchService {
     const blockers = [
       user.accountStatus !== AccountStatus.ACTIVE ? "Customer account inactive" : null,
       !user.phoneVerified ? "Customer phone is not verified" : null,
+      !user.customerProfile ? "Customer profile is incomplete" : null,
       !cityMatches ? "Customer has no address in the selected service area" : null
     ].filter((item): item is string => Boolean(item));
     return {
@@ -186,13 +198,15 @@ export class QuickLaunchService {
   }
 
   async captainCandidates(city: string, serviceType: LaunchServiceType, query?: string) {
+    const selectedCity = this.city(city).name;
     const candidates = await this.controlled.captainEligibility(city, serviceType) as BaseCandidate[];
-    return candidates.filter((item) => this.matches(item, query)).map((item) => this.quickCandidate(item, "Captain", serviceType)).slice(0, 50);
+    return candidates.filter((item) => this.matches(item, query)).map((item) => this.quickCandidate(item, "Captain", serviceType, selectedCity)).slice(0, 50);
   }
 
   async partnerCandidates(city: string, serviceType: LaunchServiceType, query?: string) {
+    const selectedCity = this.city(city).name;
     const candidates = await this.controlled.partnerEligibility(city, serviceType) as BaseCandidate[];
-    return candidates.filter((item) => this.matches(item, query)).map((item) => this.quickCandidate(item, "Partner", serviceType)).slice(0, 50);
+    return candidates.filter((item) => this.matches(item, query)).map((item) => this.quickCandidate(item, "Partner", serviceType, selectedCity)).slice(0, 50);
   }
 
   async context(city: string, serviceType: LaunchServiceType) {
@@ -254,7 +268,7 @@ export class QuickLaunchService {
 
     const city = this.city(dto.city);
     const customerAccount = await this.prisma.user.findFirst({
-      where: { id: dto.customerUserId, deletedAt: null, customerProfile: { isNot: null } },
+      where: { id: dto.customerUserId, deletedAt: null },
       include: { customerProfile: true, addresses: { select: { city: true, state: true } } }
     });
     if (!customerAccount) throw new BadRequestException("Selected Customer account was not found");
@@ -264,13 +278,13 @@ export class QuickLaunchService {
     if (required.captain) {
       const baseCaptain = (await this.controlled.captainEligibility(dto.city, dto.serviceType) as BaseCandidate[]).find((item) => item.userId === dto.captainUserId);
       if (!baseCaptain) throw new BadRequestException("Selected Captain account was not found");
-      const captain = this.quickCandidate(baseCaptain, "Captain", dto.serviceType);
+      const captain = this.quickCandidate(baseCaptain, "Captain", dto.serviceType, city.name);
       if (!captain.ready) throw new BadRequestException(captain.blockerMessages.join("; "));
     }
     if (required.partner) {
       const basePartner = (await this.controlled.partnerEligibility(dto.city, dto.serviceType) as BaseCandidate[]).find((item) => item.vendorId === dto.partnerVendorId);
       if (!basePartner) throw new BadRequestException("Selected Partner account was not found");
-      const partner = this.quickCandidate(basePartner, "Partner", dto.serviceType);
+      const partner = this.quickCandidate(basePartner, "Partner", dto.serviceType, city.name);
       if (!partner.ready) throw new BadRequestException(partner.blockerMessages.join("; "));
     }
     return customer;

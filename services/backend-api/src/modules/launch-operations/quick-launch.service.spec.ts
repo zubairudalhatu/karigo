@@ -92,7 +92,7 @@ describe("QuickLaunchService", () => {
     }]);
     controlled.partnerEligibility.mockResolvedValue([{
       userId: "partner-user", vendorId: "partner-1", businessName: "Ready Partner", phoneNumber: "+2348000000003", partnerCode: "KGO-PAR-1",
-      blockers: ["ACTIVATION_PENDING"], city: "Kano"
+      blockers: ["MEMBERSHIP_ACTIVATION_PENDING"], city: "Kano"
     }]);
     controlled.checklist.mockResolvedValue({ items: checklistItems, criticalFailures: 0 });
     prisma.controlledSupplyGroup.findFirst.mockResolvedValue({
@@ -113,25 +113,63 @@ describe("QuickLaunchService", () => {
 
     expect(result[0]).toMatchObject({ name: "KariGO Operations", phoneNumber: "+2348000000001", customerCode: "KGO-CUST-1", capabilityLabel: "Customer", statusLabel: "Customer account active", cityReadiness: "Ready for Kano", ready: true });
     const query = prisma.user.findMany.mock.calls[0][0];
-    expect(query).toEqual(expect.objectContaining({ where: expect.objectContaining({ deletedAt: null, customerProfile: { isNot: null }, OR: expect.any(Array) }), take: 50 }));
+    expect(query).toEqual(expect.objectContaining({ where: expect.objectContaining({ deletedAt: null, OR: expect.any(Array) }), take: 50 }));
     expect(query.where).not.toHaveProperty("role");
+    expect(query.where).not.toHaveProperty("customerProfile");
   });
 
   it("matches a stored canonical Customer phone when Operations enters local form", async () => {
     await expect(service.customerCandidates("Kano", "08000000001")).resolves.toHaveLength(1);
-    const phoneConditions = prisma.user.findMany.mock.calls[0][0].where.OR.filter((item: any) => item.phoneNumber);
-    expect(phoneConditions).toContainEqual({ phoneNumber: { contains: "8000000001" } });
+    expect(prisma.user.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ select: { id: true, phoneNumber: true } }));
+    expect(prisma.user.findMany.mock.calls[1][0].where).toMatchObject({ deletedAt: null, id: { in: ["customer-1"] } });
   });
 
   it("matches a stored local Customer phone when Operations enters canonical form", async () => {
-    prisma.user.findMany.mockResolvedValueOnce([{
+    prisma.user.findMany.mockResolvedValue([{
       id: "customer-local", fullName: "Local Customer", phoneNumber: "08033686696", role: UserRole.CUSTOMER,
       accountStatus: AccountStatus.ACTIVE, phoneVerified: true, deletedAt: null, customerProfile: { referralCode: "KGO-LOCAL" },
       addresses: [{ city: "Kano", state: "Kano", isDefault: true }]
     }]);
     const result = await service.customerCandidates("Kano", "+2348033686696");
     expect(result[0]).toMatchObject({ phoneNumber: "08033686696", ready: true });
-    expect(prisma.user.findMany.mock.calls[0][0].where.OR).toContainEqual({ phoneNumber: { contains: "8033686696" } });
+    expect(prisma.user.findMany.mock.calls[1][0].where).toMatchObject({ id: { in: ["customer-local"] } });
+  });
+
+  it("returns a matching Customer app account without a Customer profile as blocked", async () => {
+    prisma.user.findMany.mockResolvedValue([{
+      id: "profile-missing", fullName: "Profile Missing", phoneNumber: "+2348126733333", role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE, phoneVerified: true, deletedAt: null, customerProfile: null,
+      addresses: [{ city: "Abuja", state: "FCT", isDefault: true }]
+    }]);
+
+    const result = await service.customerCandidates("Abuja", "08126733333");
+
+    expect(result[0]).toMatchObject({ userId: "profile-missing", ready: false, blockerMessages: ["Customer profile is incomplete"] });
+    expect(prisma.user.findMany.mock.calls[0][0].where).not.toHaveProperty("customerProfile");
+  });
+
+  it("returns a profiled Customer READY when the Abuja service-area address is valid", async () => {
+    prisma.user.findMany.mockResolvedValueOnce([{
+      id: "abuja-customer", fullName: "Abuja Customer", phoneNumber: "+2348126733333", role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE, phoneVerified: true, deletedAt: null, customerProfile: { referralCode: "KGO-ABUJA" },
+      addresses: [{ city: "Abuja", state: "Federal Capital Territory", isDefault: true }]
+    }]);
+
+    await expect(service.customerCandidates("Abuja", "Abuja Customer")).resolves.toEqual([
+      expect.objectContaining({ userId: "abuja-customer", cityReadiness: "Ready for Abuja", ready: true })
+    ]);
+  });
+
+  it("matches punctuation-formatted stored Customer phones in memory", async () => {
+    prisma.user.findMany.mockResolvedValue([{
+      id: "formatted-phone", fullName: "Formatted Phone", phoneNumber: "+234 (803) 368-6696", role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE, phoneVerified: true, deletedAt: null, customerProfile: { referralCode: "KGO-FORMAT" },
+      addresses: [{ city: "Kano", state: "Kano", isDefault: true }]
+    }]);
+
+    await expect(service.customerCandidates("Kano", "08033686696")).resolves.toEqual([
+      expect.objectContaining({ userId: "formatted-phone", ready: true })
+    ]);
   });
 
   it.each([UserRole.RIDER, UserRole.VENDOR])("keeps Customer capability selectable for a unified %s-base account", async (role) => {
@@ -172,10 +210,22 @@ describe("QuickLaunchService", () => {
     expect(blocked[0]).toMatchObject({ ready: false, blockerMessages: ["Refresh Captain GPS"] });
   });
 
+  it("keeps Captain profile activation pending as a blocker", async () => {
+    controlled.captainEligibility.mockResolvedValueOnce([{
+      userId: "pending-captain", captainName: "Pending Captain", phoneNumber: "+2348033686696",
+      rideStatus: "PENDING_ACTIVATION", blockers: ["ACTIVATION_PENDING", "NOT_IN_CONTROLLED_GROUP"], city: "Kano"
+    }]);
+
+    const result = await service.captainCandidates("Kano", LaunchServiceType.RIDES, "Pending Captain");
+
+    expect(result[0]).toMatchObject({ ready: false, blockerCodes: ["ACTIVATION_PENDING"], blockerMessages: ["Captain activation is incomplete"] });
+  });
+
   it.each([
     ["08033686696", "+2348033686696"],
     ["+2348033686696", "08033686696"],
-    ["8033686696", "+2348033686696"]
+    ["8033686696", "+2348033686696"],
+    ["08033686696", "+234 (803) 368-6696"]
   ])("matches Captain phone query %s against stored %s", async (query, stored) => {
     controlled.captainEligibility.mockResolvedValueOnce([{ userId: "captain-phone", captainName: "Phone Captain", phoneNumber: stored, captainCode: "KGO-CAP-PHONE", blockers: ["NOT_IN_CONTROLLED_GROUP"], city: "Kano" }]);
     const result = await service.captainCandidates("Kano", LaunchServiceType.RIDES, query);
@@ -185,11 +235,54 @@ describe("QuickLaunchService", () => {
   it.each([
     ["08033686696", "+2348033686696"],
     ["+2348033686696", "08033686696"],
-    ["8033686696", "2348033686696"]
+    ["8033686696", "2348033686696"],
+    ["08033686696", "+234-803-368-6696"]
   ])("matches Partner phone query %s against stored %s", async (query, stored) => {
     controlled.partnerEligibility.mockResolvedValueOnce([{ userId: "partner-user", vendorId: "partner-phone", businessName: "Phone Partner", phoneNumber: stored, partnerCode: "KGO-PAR-PHONE", capability: "BOTH", blockers: ["NOT_IN_CONTROLLED_GROUP"], city: "Kano" }]);
     const result = await service.partnerCandidates("Kano", LaunchServiceType.MARKETPLACE, query);
     expect(result[0]).toMatchObject({ phoneNumber: stored, capabilityLabel: "Product Seller and Service Provider", ready: true });
+  });
+
+  it("shows a Kano Captain under Abuja with a CITY_MISMATCH blocker", async () => {
+    controlled.captainEligibility.mockResolvedValueOnce([{
+      userId: "kano-captain", captainName: "Kano Captain", phoneNumber: "+2348033686696", captainCode: "KGO-KANO",
+      blockers: ["CITY_MISMATCH", "NOT_IN_CONTROLLED_GROUP"], city: "Kano"
+    }]);
+
+    const result = await service.captainCandidates("Abuja", LaunchServiceType.RIDES, "08033686696");
+
+    expect(result[0]).toMatchObject({ city: "Kano", ready: false, blockerCodes: ["CITY_MISMATCH"], blockerMessages: ["Captain is not approved for Abuja"] });
+  });
+
+  it("keeps the Quick Launch start assertion strict for a city-mismatched Captain", async () => {
+    prisma.user.findFirst.mockResolvedValueOnce({
+      id: "customer-1", fullName: "Abuja Customer", phoneNumber: "+2348126733333", role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE, phoneVerified: true, deletedAt: null, customerProfile: { referralCode: "KGO-ABUJA" },
+      addresses: [{ city: "Abuja", state: "FCT" }]
+    });
+    controlled.captainEligibility.mockResolvedValueOnce([{
+      userId: "kano-captain", captainName: "Kano Captain", phoneNumber: "+2348033686696", captainCode: "KGO-KANO",
+      blockers: ["CITY_MISMATCH", "NOT_IN_CONTROLLED_GROUP"], city: "Kano"
+    }]);
+
+    await expect(service.start("admin-1", {
+      city: "Abuja", serviceType: LaunchServiceType.RIDES, customerUserId: "customer-1", captainUserId: "kano-captain",
+      reason: "Verify city mismatch remains blocked", confirmed: true
+    })).rejects.toThrow("Captain is not approved for Abuja");
+    expect(launch.updateConfig).not.toHaveBeenCalled();
+  });
+
+  it("keeps the Quick Launch start assertion strict when Customer capability is incomplete", async () => {
+    prisma.user.findFirst.mockResolvedValueOnce({
+      id: "profile-missing", fullName: "Profile Missing", phoneNumber: "+2348126733333", role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE, phoneVerified: true, deletedAt: null, customerProfile: null,
+      addresses: [{ city: "Kano", state: "Kano" }]
+    });
+
+    await expect(service.start("admin-1", {
+      city: "Kano", serviceType: LaunchServiceType.RIDES, customerUserId: "profile-missing", captainUserId: "captain-1",
+      reason: "Verify incomplete Customer remains blocked", confirmed: true
+    })).rejects.toThrow("Customer profile is incomplete");
   });
 
   it("returns an empty collection when no account matches", async () => {

@@ -145,17 +145,10 @@ export class ControlledSupplyService {
     if (captainType === Boolean(dto.vendorId) || partnerType === Boolean(dto.captainUserId)) throw new BadRequestException("Select exactly one matching Captain or Partner identity");
 
     if (captainType) {
-      const captain = await this.prisma.user.findFirst({
-        where: { id: dto.captainUserId, role: UserRole.RIDER, deletedAt: null },
-        include: { rider: true, taxiDriverProfiles: true, deliveryCaptainApplications: true }
-      });
+      const captain = (await this.captainEligibility(group.cityCode, group.serviceType))
+        .find((candidate) => candidate.userId === dto.captainUserId);
       if (!captain) throw new BadRequestException("Captain account not found");
-      const cities = [captain.deliveryCaptainApplications[0]?.city, ...captain.taxiDriverProfiles.map((profile) => profile.city)]
-        .filter(Boolean)
-        .flatMap((value) => {
-          try { return [this.city(String(value)).code]; } catch { return []; }
-        });
-      if (!cities.includes(group.cityCode as typeof cities[number])) throw new BadRequestException("Captain city does not match the controlled group");
+      if (captain.blockers.includes("CITY_MISMATCH")) throw new BadRequestException("Captain city does not match the controlled group");
     } else {
       const vendor = await this.prisma.vendor.findFirst({ where: { id: dto.vendorId, deletedAt: null }, select: { id: true, city: true } });
       if (!vendor) throw new BadRequestException("Partner account not found");
@@ -177,7 +170,7 @@ export class ControlledSupplyService {
       const candidate = member.captainUserId
         ? (await this.captainEligibility(member.group.cityCode, member.group.serviceType)).find((item) => item.userId === member.captainUserId)
         : (await this.partnerEligibility(member.group.cityCode, member.group.serviceType)).find((item) => item.vendorId === member.vendorId);
-      const blocking = candidate?.blockers.filter((code) => code !== "ACTIVATION_PENDING" && code !== "NOT_IN_CONTROLLED_GROUP") ?? ["PROFILE_INACTIVE"];
+      const blocking = candidate?.blockers.filter((code) => code !== "MEMBERSHIP_ACTIVATION_PENDING" && code !== "NOT_IN_CONTROLLED_GROUP") ?? ["PROFILE_INACTIVE"];
       if (blocking.length) throw new BadRequestException(`Controlled activation blocked: ${blocking.join(", ")}`);
     }
     const updated = await this.prisma.controlledSupplyMember.update({ where: { id: memberId }, data: { enabled: dto.enabled, reason: dto.reason.trim(), activatedAt: dto.enabled ? new Date() : member.activatedAt, deactivatedAt: dto.enabled ? null : new Date() } });
@@ -192,10 +185,20 @@ export class ControlledSupplyService {
   async captainEligibility(cityInput: string, serviceType: LaunchServiceType) {
     const city = this.city(cityInput);
     const users = await this.prisma.user.findMany({
-      where: { role: UserRole.RIDER, deletedAt: null },
+      where: {
+        deletedAt: null,
+        OR: [
+          { rider: { isNot: null } },
+          { taxiDriverProfiles: { some: {} } },
+          { taxiDriverApplications: { some: {} } },
+          { deliveryCaptainApplications: { some: {} } },
+          { captainWorkState: { isNot: null } }
+        ]
+      },
       include: {
         rider: { include: { documents: true } },
         taxiDriverProfiles: { include: { application: { include: { captainDocuments: { where: { deletedAt: null } } } } } },
+        taxiDriverApplications: { include: { captainDocuments: { where: { deletedAt: null } } }, orderBy: { createdAt: "desc" } },
         deliveryCaptainApplications: { include: { captainDocuments: { where: { deletedAt: null } }, documents: true }, orderBy: { createdAt: "desc" } },
         captainWorkState: true
       }
@@ -206,16 +209,32 @@ export class ControlledSupplyService {
     const freshAfter = new Date(Date.now() - freshnessMinutes * 60_000);
 
     return users.map((user) => {
-      const rideProfile = user.taxiDriverProfiles.find((profile) => {
+      const matchingRideProfile = user.taxiDriverProfiles.find((profile) => {
         try { return this.city(profile.city).code === city.code; } catch { return false; }
       });
-      const deliveryApplication = user.deliveryCaptainApplications.find((application) => {
+      const matchingRideApplication = user.taxiDriverApplications.find((application) => {
         try { return this.city(application.city).code === city.code; } catch { return false; }
       });
+      const matchingDeliveryApplication = user.deliveryCaptainApplications.find((application) => {
+        try { return this.city(application.city).code === city.code; } catch { return false; }
+      });
+      const rideProfile = matchingRideProfile
+        ?? user.taxiDriverProfiles.find((profile) => profile.status === TaxiDriverProfileStatus.ACTIVE)
+        ?? user.taxiDriverProfiles[0];
+      const rideApplication = matchingRideProfile?.application
+        ?? matchingRideApplication
+        ?? rideProfile?.application
+        ?? user.taxiDriverApplications.find((application) => application.status === TaxiApplicationStatus.APPROVED)
+        ?? user.taxiDriverApplications[0];
+      const deliveryApplication = matchingDeliveryApplication
+        ?? user.deliveryCaptainApplications.find((application) => application.status === DeliveryCaptainApplicationStatus.APPROVED)
+        ?? user.deliveryCaptainApplications[0];
       const needsRide = serviceType === LaunchServiceType.RIDES;
       const profile = needsRide ? rideProfile : user.rider;
-      const applicationApproved = needsRide ? rideProfile?.application?.status === TaxiApplicationStatus.APPROVED : deliveryApplication?.status === DeliveryCaptainApplicationStatus.APPROVED;
-      const documents = needsRide ? rideProfile?.application?.captainDocuments ?? [] : [...(deliveryApplication?.captainDocuments ?? []), ...(deliveryApplication?.documents ?? [])];
+      const cityMatches = needsRide ? Boolean(matchingRideProfile || matchingRideApplication) : Boolean(matchingDeliveryApplication);
+      const captainCity = needsRide ? (rideProfile?.city ?? rideApplication?.city) : deliveryApplication?.city;
+      const applicationApproved = needsRide ? rideApplication?.status === TaxiApplicationStatus.APPROVED : deliveryApplication?.status === DeliveryCaptainApplicationStatus.APPROVED;
+      const documents = needsRide ? rideApplication?.captainDocuments ?? [] : [...(deliveryApplication?.captainDocuments ?? []), ...(deliveryApplication?.documents ?? [])];
       const profileActive = needsRide ? rideProfile?.status === TaxiDriverProfileStatus.ACTIVE : user.rider?.verificationStatus === RiderStatus.ACTIVE;
       const locationAt = needsRide ? rideProfile?.lastSeenAt : (user.captainWorkState?.lastLocationAt ?? user.rider?.currentLocationUpdatedAt);
       const vehicleValid = needsRide
@@ -225,18 +244,18 @@ export class ControlledSupplyService {
       const blockers: string[] = [];
       if (user.accountStatus === AccountStatus.SUSPENDED || user.rider?.verificationStatus === RiderStatus.SUSPENDED || rideProfile?.status === TaxiDriverProfileStatus.SUSPENDED) blockers.push("SUSPENDED");
       if (user.accountStatus !== AccountStatus.ACTIVE || !user.phoneVerified || (!user.lastLoginAt && !user.onboardingPasswordSetAt)) blockers.push("LOGIN_NOT_READY");
+      if (!cityMatches) blockers.push("CITY_MISMATCH");
       if (!applicationApproved) blockers.push("APPLICATION_NOT_APPROVED");
       if (!this.documentsApproved(documents)) blockers.push("DOCUMENTS_NOT_APPROVED");
       if (!profileActive) blockers.push(profile && "status" in profile && profile.status === TaxiDriverProfileStatus.PENDING_ACTIVATION ? "ACTIVATION_PENDING" : "PROFILE_INACTIVE");
-      if (!rideProfile && needsRide || !deliveryApplication && !needsRide) blockers.push("CITY_MISMATCH");
       if (!vehicleValid) blockers.push("PROFILE_INACTIVE");
       if (!locationAt || locationAt < freshAfter) blockers.push("LOCATION_STALE");
       if (user.captainWorkState?.activeDeliveryAssignmentId || user.captainWorkState?.activeRideTripId) blockers.push("ACTIVE_ASSIGNMENT");
       if (!membership) blockers.push("NOT_IN_CONTROLLED_GROUP");
-      else if (!membership.enabled) blockers.push("ACTIVATION_PENDING");
+      else if (!membership.enabled) blockers.push("MEMBERSHIP_ACTIVATION_PENDING");
       return {
         userId: user.id, captainName: user.fullName, phoneNumber: user.phoneNumber,
-        captainCode: user.rider?.riderCode ?? (needsRide ? rideProfile?.application?.applicationReference : deliveryApplication?.applicationReference) ?? "NOT_ASSIGNED", city: city.name,
+        captainCode: user.rider?.riderCode ?? (needsRide ? rideApplication?.applicationReference : deliveryApplication?.applicationReference) ?? "NOT_ASSIGNED", city: captainCity ?? city.name,
         rideStatus: rideProfile?.status ?? "NOT_CONFIGURED", deliveryStatus: user.rider?.verificationStatus ?? "NOT_CONFIGURED",
         onlineState: user.captainWorkState?.desiredRideOnline || user.captainWorkState?.desiredDeliveryOnline ? "ONLINE" : "OFFLINE",
         activeRide: Boolean(user.captainWorkState?.activeRideTripId), activeDelivery: Boolean(user.captainWorkState?.activeDeliveryAssignmentId),
@@ -286,7 +305,7 @@ export class ControlledSupplyService {
       if (!serviceCapabilityMatches) blockers.push("CAPABILITY_MISMATCH");
       if (!cityMatches) blockers.push("CITY_MISMATCH");
       if (!membership) blockers.push("NOT_IN_CONTROLLED_GROUP");
-      else if (!membership.enabled) blockers.push("ACTIVATION_PENDING");
+      else if (!membership.enabled) blockers.push("MEMBERSHIP_ACTIVATION_PENDING");
       return {
         userId: vendor.userId, vendorId: vendor.id, businessName: vendor.businessName, tradingName: vendor.sourceApplication?.tradingName,
         phoneNumber: vendor.phoneNumber || vendor.user.phoneNumber, partnerCode: vendor.sourceApplication?.reference ?? null,

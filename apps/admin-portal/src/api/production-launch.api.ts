@@ -83,6 +83,7 @@ export interface QuickLaunchCandidate {
   partnerCode?: string | null;
   city: string;
   ready: boolean;
+  blockerCodes?: string[];
   blockerMessages: string[];
   technicalId?: string;
   lastGpsUpdate?: string | null;
