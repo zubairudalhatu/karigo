@@ -111,8 +111,54 @@ describe("QuickLaunchService", () => {
   it("searches Customers by operational identity and resolves service-area readiness", async () => {
     const result = await service.customerCandidates("Kano", "KGO-CUST-1");
 
-    expect(result[0]).toMatchObject({ name: "KariGO Operations", phoneNumber: "+2348000000001", customerCode: "KGO-CUST-1", ready: true });
-    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ role: UserRole.CUSTOMER, OR: expect.any(Array) }), take: 50 }));
+    expect(result[0]).toMatchObject({ name: "KariGO Operations", phoneNumber: "+2348000000001", customerCode: "KGO-CUST-1", capabilityLabel: "Customer", statusLabel: "Customer account active", cityReadiness: "Ready for Kano", ready: true });
+    const query = prisma.user.findMany.mock.calls[0][0];
+    expect(query).toEqual(expect.objectContaining({ where: expect.objectContaining({ deletedAt: null, customerProfile: { isNot: null }, OR: expect.any(Array) }), take: 50 }));
+    expect(query.where).not.toHaveProperty("role");
+  });
+
+  it("matches a stored canonical Customer phone when Operations enters local form", async () => {
+    await expect(service.customerCandidates("Kano", "08000000001")).resolves.toHaveLength(1);
+    const phoneConditions = prisma.user.findMany.mock.calls[0][0].where.OR.filter((item: any) => item.phoneNumber);
+    expect(phoneConditions).toContainEqual({ phoneNumber: { contains: "8000000001" } });
+  });
+
+  it("matches a stored local Customer phone when Operations enters canonical form", async () => {
+    prisma.user.findMany.mockResolvedValueOnce([{
+      id: "customer-local", fullName: "Local Customer", phoneNumber: "08033686696", role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE, phoneVerified: true, deletedAt: null, customerProfile: { referralCode: "KGO-LOCAL" },
+      addresses: [{ city: "Kano", state: "Kano", isDefault: true }]
+    }]);
+    const result = await service.customerCandidates("Kano", "+2348033686696");
+    expect(result[0]).toMatchObject({ phoneNumber: "08033686696", ready: true });
+    expect(prisma.user.findMany.mock.calls[0][0].where.OR).toContainEqual({ phoneNumber: { contains: "8033686696" } });
+  });
+
+  it.each([UserRole.RIDER, UserRole.VENDOR])("keeps Customer capability selectable for a unified %s-base account", async (role) => {
+    prisma.user.findMany.mockResolvedValueOnce([{
+      id: `unified-${role}`, fullName: `Unified ${role}`, phoneNumber: "+2348033686696", role,
+      accountStatus: AccountStatus.ACTIVE, phoneVerified: true, deletedAt: null, customerProfile: { referralCode: `KGO-${role}` },
+      addresses: [{ city: "Kano", state: "Kano", isDefault: true }]
+    }]);
+    const result = await service.customerCandidates("Kano", "Unified");
+    expect(result[0]).toMatchObject({ capabilityLabel: "Customer", ready: true });
+    expect(prisma.user.findMany.mock.calls[0][0].where).not.toHaveProperty("role");
+  });
+
+  it("shows suspended Customers as blocked and excludes deleted accounts defensively", async () => {
+    prisma.user.findMany.mockResolvedValueOnce([
+      { id: "suspended", fullName: "Suspended Customer", phoneNumber: "08033686696", role: UserRole.CUSTOMER, accountStatus: AccountStatus.SUSPENDED, phoneVerified: true, deletedAt: null, customerProfile: { referralCode: "KGO-SUSPENDED" }, addresses: [{ city: "Kano", state: "Kano" }] },
+      { id: "deleted", fullName: "Deleted Customer", phoneNumber: "08033686697", role: UserRole.CUSTOMER, accountStatus: AccountStatus.ACTIVE, phoneVerified: true, deletedAt: new Date(), customerProfile: { referralCode: "KGO-DELETED" }, addresses: [{ city: "Kano", state: "Kano" }] }
+    ]);
+    const result = await service.customerCandidates("Kano", "Customer");
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ userId: "suspended", ready: false, blockerMessages: ["Customer account inactive"] });
+    expect(prisma.user.findMany.mock.calls[0][0].where.deletedAt).toBeNull();
+  });
+
+  it("returns an Abuja-mismatched Customer with a safe city blocker", async () => {
+    const result = await service.customerCandidates("Abuja", "KariGO Operations");
+    expect(result[0]).toMatchObject({ ready: false, cityReadiness: "No Abuja service-area address", blockerMessages: ["Customer has no address in the selected service area"] });
   });
 
   it("turns setup-only Captain blockers into READY while keeping operational blockers visible", async () => {
@@ -126,6 +172,31 @@ describe("QuickLaunchService", () => {
     expect(blocked[0]).toMatchObject({ ready: false, blockerMessages: ["Refresh Captain GPS"] });
   });
 
+  it.each([
+    ["08033686696", "+2348033686696"],
+    ["+2348033686696", "08033686696"],
+    ["8033686696", "+2348033686696"]
+  ])("matches Captain phone query %s against stored %s", async (query, stored) => {
+    controlled.captainEligibility.mockResolvedValueOnce([{ userId: "captain-phone", captainName: "Phone Captain", phoneNumber: stored, captainCode: "KGO-CAP-PHONE", blockers: ["NOT_IN_CONTROLLED_GROUP"], city: "Kano" }]);
+    const result = await service.captainCandidates("Kano", LaunchServiceType.RIDES, query);
+    expect(result[0]).toMatchObject({ phoneNumber: stored, capabilityLabel: "Ride Captain", ready: true });
+  });
+
+  it.each([
+    ["08033686696", "+2348033686696"],
+    ["+2348033686696", "08033686696"],
+    ["8033686696", "2348033686696"]
+  ])("matches Partner phone query %s against stored %s", async (query, stored) => {
+    controlled.partnerEligibility.mockResolvedValueOnce([{ userId: "partner-user", vendorId: "partner-phone", businessName: "Phone Partner", phoneNumber: stored, partnerCode: "KGO-PAR-PHONE", capability: "BOTH", blockers: ["NOT_IN_CONTROLLED_GROUP"], city: "Kano" }]);
+    const result = await service.partnerCandidates("Kano", LaunchServiceType.MARKETPLACE, query);
+    expect(result[0]).toMatchObject({ phoneNumber: stored, capabilityLabel: "Product Seller and Service Provider", ready: true });
+  });
+
+  it("returns an empty collection when no account matches", async () => {
+    prisma.user.findMany.mockResolvedValueOnce([]);
+    await expect(service.customerCandidates("Kano", "Nobody Here")).resolves.toEqual([]);
+  });
+
   it("rejects a delivery/order test when its Partner has not been selected", async () => {
     await expect(service.start("admin-1", {
       city: "Kano", serviceType: LaunchServiceType.MARKETPLACE, customerUserId: "customer-1", captainUserId: "captain-1",
@@ -134,6 +205,10 @@ describe("QuickLaunchService", () => {
   });
 
   it("starts a confirmed Ride test with reused records, preserved hours, 1/1 capacity and OPERATIONS_ONLY", async () => {
+    prisma.user.findFirst.mockResolvedValueOnce({
+      id: "customer-1", fullName: "KariGO Operations", phoneNumber: "+2348000000001", role: UserRole.RIDER,
+      accountStatus: AccountStatus.ACTIVE, phoneVerified: true, deletedAt: null, customerProfile: { referralCode: "KGO-CUST-1" }, addresses: [{ city: "Kano", state: "Kano" }]
+    });
     const result = await service.start("admin-1", {
       city: "Kano", serviceType: LaunchServiceType.RIDES, customerUserId: "customer-1", captainUserId: "captain-1",
       reason: "Owner-approved first Kano Ride test", confirmed: true
@@ -143,6 +218,7 @@ describe("QuickLaunchService", () => {
     expect(launch.updateConfig).toHaveBeenNthCalledWith(1, "Kano", LaunchServiceType.RIDES, "admin-1", expect.objectContaining({ launchStage: LaunchStage.OFF, isEnabled: false, operatingHours: config.operatingHours, maxConcurrentRequests: 1, maxUnassignedRequests: 1 }));
     expect(launch.updateConfig).toHaveBeenNthCalledWith(2, "Kano", LaunchServiceType.RIDES, "admin-1", expect.objectContaining({ launchStage: LaunchStage.OPERATIONS_ONLY, isEnabled: true, operatingHours: config.operatingHours, maxConcurrentRequests: 1, maxUnassignedRequests: 1 }));
     expect(launch.createDrill).toHaveBeenCalledWith("admin-1", expect.objectContaining({ controlledCustomerId: "controlled-customer-1", controlledSupplyGroupId: "group-1", captainUserId: "captain-1" }));
+    expect(prisma.user.findFirst.mock.calls[0][0].where).not.toHaveProperty("role");
     expect(result.drill).toMatchObject({ result: LaunchDrillResult.IN_PROGRESS });
   });
 

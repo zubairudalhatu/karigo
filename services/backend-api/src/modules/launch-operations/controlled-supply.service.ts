@@ -304,7 +304,7 @@ export class ControlledSupplyService {
 
   async addCustomer(adminUserId: string, dto: AddControlledOperationsCustomerDto) {
     const city = this.city(dto.city);
-    const user = await this.prisma.user.findFirst({ where: { id: dto.userId, role: UserRole.CUSTOMER, accountStatus: AccountStatus.ACTIVE, deletedAt: null }, include: { customerProfile: true } });
+    const user = await this.prisma.user.findFirst({ where: { id: dto.userId, accountStatus: AccountStatus.ACTIVE, deletedAt: null }, include: { customerProfile: true } });
     if (!user?.customerProfile) throw new BadRequestException("Controlled Customer must be an existing active Customer account");
     const customer = await this.prisma.controlledOperationsCustomer.upsert({ where: { userId: user.id }, create: { cityCode: city.code, customerProfileId: user.customerProfile.id, userId: user.id, label: dto.label.trim(), internalNote: dto.internalNote?.trim(), addedByAdminId: adminUserId }, update: { cityCode: city.code, customerProfileId: user.customerProfile.id, label: dto.label.trim(), internalNote: dto.internalNote?.trim(), enabled: false, deactivatedAt: new Date(), addedByAdminId: adminUserId } });
     await this.audit.record(adminUserId, "admin.production_launch.controlled_customer_added", "ControlledOperationsCustomer", customer.id, { cityCode: city.code, excludedFromCampaigns: true });

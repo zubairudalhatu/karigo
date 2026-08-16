@@ -11,7 +11,7 @@ import { ControlledSupplyService } from "./controlled-supply.service";
 
 describe("ControlledSupplyService", () => {
   const prisma: any = {
-    controlledOperationsCustomer: { findFirst: jest.fn() },
+    controlledOperationsCustomer: { findFirst: jest.fn(), upsert: jest.fn() },
     controlledSupplyGroup: { findUnique: jest.fn() },
     controlledSupplyMember: { findFirst: jest.fn() },
     launchOperationsChecklistItem: {
@@ -22,6 +22,7 @@ describe("ControlledSupplyService", () => {
     },
     launchDrill: { count: jest.fn() },
     vendor: { findUnique: jest.fn(), findFirst: jest.fn() },
+    user: { findFirst: jest.fn() },
     $transaction: jest.fn(async (operations: Array<Promise<unknown>>) => Promise.all(operations))
   };
   const audit = { record: jest.fn() };
@@ -46,6 +47,18 @@ describe("ControlledSupplyService", () => {
     expect(prisma.controlledOperationsCustomer.findFirst).toHaveBeenNthCalledWith(1, {
       where: { cityCode: "KANO", userId: "customer-1", enabled: true, excludedFromCampaigns: true }
     });
+  });
+
+  it.each([UserRole.RIDER, UserRole.VENDOR])("adds an active unified %s-base account with an existing Customer profile", async (role) => {
+    prisma.user.findFirst.mockResolvedValueOnce({ id: "unified-user", role, customerProfile: { id: "customer-profile" } });
+    prisma.controlledOperationsCustomer.upsert.mockResolvedValueOnce({ id: "controlled-customer", userId: "unified-user" });
+
+    await service.addCustomer("admin-1", { city: "Kano", userId: "unified-user", label: "Unified Customer" });
+
+    const where = prisma.user.findFirst.mock.calls[0][0].where;
+    expect(where).toMatchObject({ id: "unified-user", accountStatus: "ACTIVE", deletedAt: null });
+    expect(where).not.toHaveProperty("role");
+    expect(prisma.controlledOperationsCustomer.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: "unified-user" } }));
   });
 
   it("requires the correct controlled group service and Captain member type", async () => {

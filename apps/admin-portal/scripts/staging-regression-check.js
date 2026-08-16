@@ -72,6 +72,8 @@ assert(productionLaunchPage.includes("Export privacy-safe CSV"), "Production Lau
 assert(productionLaunchApi.includes("admin/production-launch/command-centre"), "Production Launch API must call the admin-only command centre.");
 assert(productionLaunchPage.includes('"quick"') && productionLaunchPage.includes("Quick Launch"), "Production Launch must expose Quick Launch as a prominent tab.");
 assert(productionLaunchPage.includes("Search name, phone or KariGO code") && productionLaunchPage.includes("Technical ID:"), "Quick Launch selectors must search operational identities and show UUIDs only as secondary information.");
+assert(productionLaunchPage.includes("No matching KariGO account found. Check the name or phone number."), "Quick Launch must show an explicit no-match account-search state.");
+assert(productionLaunchPage.includes("selected.capabilityLabel") && productionLaunchPage.includes("selected.cityReadiness"), "Quick Launch must show human-readable capability and city readiness details.");
 assert(productionLaunchPage.includes("Review controlled test") && productionLaunchPage.includes("Start Controlled Test"), "Quick Launch must require a confirmation review before starting.");
 assert(productionLaunchPage.includes("Pass Test") && productionLaunchPage.includes("Stop Test / Return Service OFF"), "Quick Launch must expose guided pass and safe OFF controls.");
 assert(productionLaunchPage.includes("Provider network access configured — production transaction verification pending"), "Accelerate verification must remain separate from initial controlled launch.");

@@ -125,6 +125,15 @@ describe("LaunchOperationsService", () => {
     expect(result.available).toBe(true);
   });
 
+  it("uses Customer capability for a unified account when starting controlled Customer work", async () => {
+    prisma.launchMarketConfig.findUnique.mockResolvedValue({ ...baseConfig, launchStage: LaunchStage.OPERATIONS_ONLY });
+    prisma.user.findUnique.mockResolvedValue({ role: UserRole.RIDER, accountStatus: AccountStatus.ACTIVE, deletedAt: null });
+    controlledSupply.accountEligible.mockResolvedValue(true);
+
+    await expect(service.assertCustomerCanStart({ city: "Kano", serviceType: LaunchServiceType.RIDES, userId: "unified-customer" })).resolves.toMatchObject({ available: true });
+    expect(controlledSupply.accountEligible).toHaveBeenCalledWith("Kano", LaunchServiceType.RIDES, "unified-customer", UserRole.CUSTOMER);
+  });
+
   it("rejects a non-controlled Customer during operations-only access", async () => {
     prisma.launchMarketConfig.findUnique.mockResolvedValue({ ...baseConfig, launchStage: LaunchStage.OPERATIONS_ONLY });
 

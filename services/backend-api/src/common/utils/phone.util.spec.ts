@@ -1,4 +1,4 @@
-import { normalizePhoneNumber, NIGERIAN_PHONE_PATTERN } from "./phone.util";
+import { nigerianPhoneSearchDigits, normalizePhoneNumber, NIGERIAN_PHONE_PATTERN } from "./phone.util";
 
 describe("Nigerian phone normalization", () => {
   it.each([
@@ -20,5 +20,19 @@ describe("Nigerian phone normalization", () => {
 
   it.each(["12345", "+2346012345678", "+234801234567"])("rejects invalid Nigerian mobile shape %s", (input) => {
     expect(normalizePhoneNumber(input)).not.toMatch(NIGERIAN_PHONE_PATTERN);
+  });
+
+  it.each([
+    "08033686696",
+    "8033686696",
+    "2348033686696",
+    "+2348033686696",
+    "+234 803 368 6696"
+  ])("derives the same non-mutating phone-search key for %s", (input) => {
+    expect(nigerianPhoneSearchDigits(input)).toBe("8033686696");
+  });
+
+  it.each(["", "8033", "+12025550123", "2346033686696"])("does not derive a Nigerian search key for %s", (input) => {
+    expect(nigerianPhoneSearchDigits(input)).toBeNull();
   });
 });

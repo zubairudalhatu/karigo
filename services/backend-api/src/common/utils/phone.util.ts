@@ -16,3 +16,11 @@ export function normalizePhoneNumber(phoneNumber: string): string {
 
   return normalized;
 }
+
+export function nigerianPhoneSearchDigits(phoneNumber: string): string | null {
+  const digits = phoneNumber.replace(/\D/g, "");
+  if (/^[789]\d{9}$/.test(digits)) return digits;
+  if (/^0[789]\d{9}$/.test(digits)) return digits.slice(1);
+  if (/^234[789]\d{9}$/.test(digits)) return digits.slice(-10);
+  return null;
+}

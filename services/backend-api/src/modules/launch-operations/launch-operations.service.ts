@@ -120,6 +120,7 @@ type EligibilityInput = {
   userId?: string;
   zoneId?: string;
   enforceCapacity?: boolean;
+  participantRole?: UserRole;
 };
 
 @Injectable()
@@ -282,8 +283,9 @@ export class LaunchOperationsService {
     if (input.userId && (!user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE)) return this.safeEligibility(city, input.serviceType, config.launchStage, false, "ACCOUNT_NOT_ELIGIBLE", config);
     const cohortEligible = await this.cohortEligible(config, input.userId);
     if (config.launchStage === LaunchStage.OPERATIONS_ONLY) {
-      const controlledEligible = Boolean(input.userId && user && await this.controlledSupply.accountEligible(city.name, input.serviceType, input.userId, user.role));
-      if (!controlledEligible) return this.safeEligibility(city, input.serviceType, config.launchStage, false, user?.role === UserRole.CUSTOMER ? "OPERATIONS_ONLY" : "NOT_IN_CONTROLLED_GROUP", config);
+      const participantRole = input.participantRole ?? user?.role;
+      const controlledEligible = Boolean(input.userId && participantRole && await this.controlledSupply.accountEligible(city.name, input.serviceType, input.userId, participantRole));
+      if (!controlledEligible) return this.safeEligibility(city, input.serviceType, config.launchStage, false, participantRole === UserRole.CUSTOMER ? "OPERATIONS_ONLY" : "NOT_IN_CONTROLLED_GROUP", config);
     }
     if (config.launchStage === LaunchStage.INVITE_ONLY && !cohortEligible) return this.safeEligibility(city, input.serviceType, config.launchStage, false, "INVITE_REQUIRED", config);
     if (input.enforceCapacity !== false) {
@@ -320,7 +322,7 @@ export class LaunchOperationsService {
   }
 
   async assertCustomerCanStart(input: EligibilityInput) {
-    const result = await this.resolveEligibility({ ...input, enforceCapacity: true });
+    const result = await this.resolveEligibility({ ...input, participantRole: UserRole.CUSTOMER, enforceCapacity: true });
     if (!result.available) throw new ServiceUnavailableException({ message: result.message, reasonCode: result.reasonCode, launchStage: result.launchStage });
     return result;
   }

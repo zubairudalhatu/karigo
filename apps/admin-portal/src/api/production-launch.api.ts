@@ -86,6 +86,9 @@ export interface QuickLaunchCandidate {
   blockerMessages: string[];
   technicalId?: string;
   lastGpsUpdate?: string | null;
+  capabilityLabel?: string;
+  statusLabel?: string;
+  cityReadiness?: string;
 }
 export interface QuickLaunchContext {
   requirements: { customer: true; captain: boolean; partner: boolean };
