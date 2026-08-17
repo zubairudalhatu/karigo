@@ -135,6 +135,11 @@ export class QuickLaunchService {
       partnerCode: candidate.partnerCode,
       city: candidate.city,
       lastGpsUpdate: candidate.lastGpsUpdate,
+      approvedOperatingAreas: candidate.approvedOperatingAreas,
+      primaryOperatingArea: candidate.primaryOperatingArea,
+      currentGpsArea: candidate.currentGpsArea,
+      residentialLocation: candidate.residentialLocation,
+      operatingAreasRequireReview: candidate.operatingAreasRequireReview,
       capabilityLabel: participant === "Captain"
         ? serviceType === LaunchServiceType.RIDES ? "Ride Captain" : "Delivery Captain"
         : candidate.capability === "BOTH" ? "Product Seller and Service Provider" : candidate.capability === "SERVICE_PROVIDER" ? "Service Provider" : "Product Seller",
@@ -233,11 +238,10 @@ export class QuickLaunchService {
       const deliveryCapability = Boolean(source.deliveryApplication || source.id);
       const requestedCapability = serviceType === LaunchServiceType.RIDES ? rideCapability : deliveryCapability;
       const blockers = [...(eligibility?.blockers ?? ["PROFILE_INCOMPLETE"]), ...(!requestedCapability ? ["CAPABILITY_NOT_FOUND"] : [])];
-      const approvedCities = [...new Set([
-        source.rideApplication?.city,
-        source.rideProfile?.city,
-        source.deliveryApplication?.city
-      ].filter((value): value is string => Boolean(value)))];
+      const eligibilityAreas = Array.isArray(eligibility?.approvedOperatingAreas)
+        ? eligibility.approvedOperatingAreas as Array<{ cityName?: string }>
+        : [];
+      const approvedCities = [...new Set(eligibilityAreas.map((area) => area.cityName).filter((value): value is string => Boolean(value)))];
       const candidate: BaseCandidate = {
         ...eligibility,
         userId: source.user.id,

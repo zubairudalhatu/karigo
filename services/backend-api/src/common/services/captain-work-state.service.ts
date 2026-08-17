@@ -3,12 +3,17 @@ import {
   AccountStatus,
   CaptainWorkLockStage,
   CaptainWorkMode,
+  DeliveryCaptainApplicationStatus,
+  LaunchServiceType,
   Prisma,
   RiderStatus,
+  TaxiApplicationStatus,
   TaxiDriverProfileStatus
 } from "@prisma/client";
 import { AdminAuditService } from "./admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { LaunchOperationsService } from "../../modules/launch-operations/launch-operations.service";
+import { captainIsApprovedForOperatingArea, captainOperatingAreaFromCoordinates, captainOperatingAreaSummary } from "../../modules/platform/captain-operating-areas";
 
 type PrismaTx = Prisma.TransactionClient | PrismaService;
 
@@ -16,6 +21,8 @@ type WorkStateUser = Prisma.UserGetPayload<{
   include: {
     rider: true;
     taxiDriverProfiles: { orderBy: { createdAt: "desc" }; take: 1 };
+    deliveryCaptainApplications: { where: { status: "APPROVED" }; orderBy: { createdAt: "desc" }; take: 1 };
+    taxiDriverApplications: { where: { status: "APPROVED" }; orderBy: { createdAt: "desc" }; take: 1 };
     captainWorkState: true;
   };
 }>;
@@ -58,7 +65,8 @@ export interface ReleaseCaptainWorkLockInput {
 export class CaptainWorkStateService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly audit: AdminAuditService
+    private readonly audit: AdminAuditService,
+    private readonly launchOperations: LaunchOperationsService
   ) {}
 
   async getForUser(userId: string) {
@@ -87,6 +95,8 @@ export class CaptainWorkStateService {
       throw new BadRequestException(rideEligibility.reason ?? "Ride availability is not available for this account.");
     }
 
+    if (dto.deliveryOnline === true) await this.assertOperatingAreaCanGoOnline(user, CaptainWorkMode.DELIVERY, dto);
+    if (dto.rideOnline === true) await this.assertOperatingAreaCanGoOnline(user, CaptainWorkMode.RIDE, dto);
     const updated = await this.prisma.$transaction(async (tx) => {
       const now = new Date();
       const workState = await tx.captainWorkState.update({
@@ -300,6 +310,8 @@ export class CaptainWorkStateService {
       include: {
         rider: true,
         taxiDriverProfiles: { orderBy: { createdAt: "desc" }, take: 1 },
+        deliveryCaptainApplications: { where: { status: DeliveryCaptainApplicationStatus.APPROVED }, orderBy: { createdAt: "desc" }, take: 1 },
+        taxiDriverApplications: { where: { status: TaxiApplicationStatus.APPROVED }, orderBy: { createdAt: "desc" }, take: 1 },
         captainWorkState: true
       }
     });
@@ -329,6 +341,8 @@ export class CaptainWorkStateService {
       include: {
         rider: true,
         taxiDriverProfiles: { orderBy: { createdAt: "desc" }, take: 1 },
+        deliveryCaptainApplications: { where: { status: DeliveryCaptainApplicationStatus.APPROVED }, orderBy: { createdAt: "desc" }, take: 1 },
+        taxiDriverApplications: { where: { status: TaxiApplicationStatus.APPROVED }, orderBy: { createdAt: "desc" }, take: 1 },
         captainWorkState: true
       }
     });
@@ -344,6 +358,8 @@ export class CaptainWorkStateService {
       include: {
         rider: true,
         taxiDriverProfiles: { orderBy: { createdAt: "desc" }, take: 1 },
+        deliveryCaptainApplications: { where: { status: DeliveryCaptainApplicationStatus.APPROVED }, orderBy: { createdAt: "desc" }, take: 1 },
+        taxiDriverApplications: { where: { status: TaxiApplicationStatus.APPROVED }, orderBy: { createdAt: "desc" }, take: 1 },
         captainWorkState: true
       }
     });
@@ -356,6 +372,28 @@ export class CaptainWorkStateService {
         lastAvailabilityChangeAt: new Date(),
         lastLocationAt: user?.rider?.currentLocationUpdatedAt ?? rideProfile?.lastSeenAt ?? null
       }
+    });
+  }
+
+  private async assertOperatingAreaCanGoOnline(user: WorkStateUser, mode: CaptainWorkMode, dto: CaptainAvailabilityUpdate) {
+    if (!this.hasValidLocation(dto)) {
+      throw new BadRequestException("Current foreground location is required before going online.");
+    }
+    const currentArea = captainOperatingAreaFromCoordinates(dto.latitude, dto.longitude);
+    const application = mode === CaptainWorkMode.RIDE
+      ? user.taxiDriverApplications[0]
+      : user.deliveryCaptainApplications[0];
+    const rideProfile = user.taxiDriverProfiles[0];
+    const legacyLocation = mode === CaptainWorkMode.RIDE
+      ? { city: rideProfile?.city ?? application?.city, state: rideProfile?.state ?? application?.state }
+      : { city: application?.city, state: application?.state };
+    if (!currentArea || !application || !captainIsApprovedForOperatingArea(application, currentArea.id, legacyLocation)) {
+      throw new BadRequestException("This Captain is not approved to operate in the current area.");
+    }
+    await this.launchOperations.assertCaptainCanReceive({
+      city: currentArea.cityName,
+      serviceType: mode === CaptainWorkMode.RIDE ? LaunchServiceType.RIDES : LaunchServiceType.PARCEL_DELIVERY,
+      userId: user.id
     });
   }
 
@@ -414,6 +452,10 @@ export class CaptainWorkStateService {
   private formatState(state: Awaited<ReturnType<CaptainWorkStateService["ensureState"]>>, user: WorkStateUser) {
     const deliveryEligibility = this.modeEligibilityWithState(this.deliveryEligibility(user), state, CaptainWorkMode.DELIVERY);
     const rideEligibility = this.modeEligibilityWithState(this.rideEligibility(user), state, CaptainWorkMode.RIDE);
+    const currentArea = captainOperatingAreaFromCoordinates(
+      Number(user.rider?.currentLatitude ?? user.taxiDriverProfiles[0]?.lastKnownLatitude),
+      Number(user.rider?.currentLongitude ?? user.taxiDriverProfiles[0]?.lastKnownLongitude)
+    );
     return {
       desiredDeliveryOnline: state.desiredDeliveryOnline,
       desiredRideOnline: state.desiredRideOnline,
@@ -428,6 +470,7 @@ export class CaptainWorkStateService {
       lastAvailabilityChangeAt: state.lastAvailabilityChangeAt?.toISOString() ?? null,
       lastLocationAt: state.lastLocationAt?.toISOString() ?? null,
       deliveryEligibility,
+      currentGpsArea: currentArea ? captainOperatingAreaSummary(currentArea) : null,
       rideEligibility
     };
   }

@@ -28,6 +28,14 @@ import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils
 import { PrismaService } from "../../prisma/prisma.service";
 import { LaunchOperationsService } from "../launch-operations/launch-operations.service";
 import { captainServiceAreas } from "../platform/captain-catalog";
+import {
+  captainIsApprovedForOperatingArea,
+  captainOperatingAreaFromCoordinates,
+  captainOperatingAreaFromText,
+  captainOperatingAreaProjection,
+  captainOperatingAreaSummary,
+  captainResidentialLocation
+} from "../platform/captain-operating-areas";
 import { assertFutureLicenceDate, resolveCaptainLocation, resolveVehicleDetails } from "../platform/captain-catalog.validation";
 import { CaptainUploadStorageService } from "../riders/captain-upload-storage.service";
 import { CaptainApplicationTrashDto } from "../riders/dto/captain-application-trash.dto";
@@ -808,11 +816,11 @@ export class TaxiService {
       if (!resolvedArea?.active) {
         throw new BadRequestException("Your current location is outside active KariGO Ride service areas.");
       }
-      const profileArea = rideCityFromText(this.config, profile.city, profile.state);
-      if (profileArea && profileArea !== resolvedArea.city) {
-        throw new BadRequestException(`This Ride Captain profile is approved for ${profileArea}. Choose the matching operating area before going online.`);
+      const currentArea = captainOperatingAreaFromText(resolvedArea.city);
+      if (!currentArea || profile.application?.status !== TaxiApplicationStatus.APPROVED || !captainIsApprovedForOperatingArea(profile.application, currentArea.id, profile)) {
+        throw new BadRequestException("This Captain is not approved to operate in the current area.");
       }
-      await this.launchOperations.assertControlledSupplyCanReceive({ city: resolvedArea.city, serviceType: LaunchServiceType.RIDES, userId, participant: "Captain" });
+      await this.launchOperations.assertCaptainCanReceive({ city: resolvedArea.city, serviceType: LaunchServiceType.RIDES, userId });
     }
     await this.captainWorkState.updateAvailability(userId, {
       rideOnline: dto.isAvailableForTaxi,
@@ -1094,13 +1102,17 @@ export class TaxiService {
         select: { id: true, tripReference: true, status: true }
       });
       const profileCity = rideCityFromText(this.config, profile.city, profile.state);
+      const pickupArea = captainOperatingAreaFromText(pickupCity);
+      const currentGpsArea = captainOperatingAreaFromCoordinates(Number(profile.lastKnownLatitude), Number(profile.lastKnownLongitude));
+      const areaProjection = captainOperatingAreaProjection(profile.application, profile);
       const locationFreshness = this.driverLocationFreshness(profile);
-      const serviceAreaMatch = !pickupCity || !profileCity || pickupCity === profileCity;
+      const serviceAreaMatch = Boolean(pickupArea && profile.application?.status === TaxiApplicationStatus.APPROVED && captainIsApprovedForOperatingArea(profile.application, pickupArea.id, profile));
+      const gpsAreaMatch = Boolean(pickupArea && currentGpsArea?.id === pickupArea.id);
       const workState = profile.user?.captainWorkState;
       const activeOtherWork = Boolean(workState?.activeWorkMode);
       const desiredRideOnline = workState?.desiredRideOnline ?? profile.isAvailableForTaxi;
       const controlledSupplyEligible = await this.launchOperations.controlledSupplyAccountEligible({ city: pickupCity ?? profileCity ?? profile.city, serviceType: LaunchServiceType.RIDES, userId: profile.userId, participant: "Captain" });
-      const eligible = !activeTrip && !activeOtherWork && desiredRideOnline && serviceAreaMatch && locationFreshness === "fresh" && controlledSupplyEligible;
+      const eligible = !activeTrip && !activeOtherWork && desiredRideOnline && serviceAreaMatch && gpsAreaMatch && locationFreshness === "fresh" && controlledSupplyEligible;
       const distanceToPickupKm = this.distanceToPickupKm(profile, trip);
       candidates.push({
         id: profile.id,
@@ -1109,6 +1121,10 @@ export class TaxiService {
         vehicle: [profile.vehicleMake, profile.vehicleModel, profile.vehicleYear].filter(Boolean).join(" ") || null,
         plateNumber: profile.vehiclePlateNumber,
         operatingArea: profileCity,
+        residentialLocation: captainResidentialLocation(profile.application, profile),
+        ...areaProjection,
+        currentGpsArea: currentGpsArea ? captainOperatingAreaSummary(currentGpsArea) : null,
+        pickupOperatingArea: pickupArea ? captainOperatingAreaSummary(pickupArea) : null,
         status: profile.status,
         online: profile.isAvailableForTaxi,
         lastSeenAt: profile.lastSeenAt?.toISOString() ?? null,
@@ -1122,6 +1138,7 @@ export class TaxiService {
           !desiredRideOnline ? "Captain is not online for Ride assignments." : null,
           !controlledSupplyEligible ? "Captain is not in active controlled Ride supply." : null,
           !serviceAreaMatch ? "Captain operating area does not match pickup area." : null,
+          serviceAreaMatch && !gpsAreaMatch ? "Captain GPS is not in the Ride pickup area." : null,
           locationFreshness !== "fresh" ? "Captain location is stale or unavailable." : null
         ].filter(Boolean)
       });
@@ -1134,7 +1151,7 @@ export class TaxiService {
     await this.expireStaleTrips();
     const [trip, profile] = await Promise.all([
       this.prisma.taxiTrip.findUnique({ where: { id: tripId } }),
-      this.prisma.taxiDriverProfile.findUnique({ where: { id: dto.driverProfileId }, include: { user: true } })
+      this.prisma.taxiDriverProfile.findUnique({ where: { id: dto.driverProfileId }, include: { application: true, user: true } })
     ]);
     if (!trip) throw new NotFoundException("Ride request not found");
     if (!profile || profile.status !== TaxiDriverProfileStatus.ACTIVE || !profile.isAvailableForTaxi) {
@@ -1147,11 +1164,15 @@ export class TaxiService {
       throw new BadRequestException("Ride Captain location is stale or unavailable. Ask the Captain to refresh online status.");
     }
     const pickupCity = this.tripPickupServiceArea(trip as TaxiTripWithRelations);
-    const profileCity = rideCityFromText(this.config, profile.city, profile.state);
-    if (pickupCity && profileCity && pickupCity !== profileCity) {
+    const pickupArea = captainOperatingAreaFromText(pickupCity);
+    if (!pickupArea || profile.application?.status !== TaxiApplicationStatus.APPROVED || !captainIsApprovedForOperatingArea(profile.application, pickupArea.id, profile)) {
       throw new BadRequestException("Ride Captain operating area does not match the Ride pickup area.");
     }
-    await this.launchOperations.assertControlledSupplyCanReceive({ city: pickupCity ?? profileCity ?? profile.city, serviceType: LaunchServiceType.RIDES, userId: profile.user!.id, participant: "Captain" });
+    const currentGpsArea = captainOperatingAreaFromCoordinates(Number(profile.lastKnownLatitude), Number(profile.lastKnownLongitude));
+    if (currentGpsArea?.id !== pickupArea.id) {
+      throw new BadRequestException("Ride Captain GPS is not in the Ride pickup area.");
+    }
+    await this.launchOperations.assertCaptainCanReceive({ city: pickupArea.cityName, serviceType: LaunchServiceType.RIDES, userId: profile.user!.id });
     if (trip.status !== TaxiTripStatus.REQUESTED) throw new BadRequestException("Only requested Ride requests can be assigned");
     await this.assertDriverHasNoActiveTrip(profile.id, trip.id);
     const updated = await this.updateTripWithEvent(trip.id, {
@@ -1543,7 +1564,7 @@ export class TaxiService {
   }
 
   private async requireActiveTaxiDriverProfile(userId: string) {
-    const profile = await this.prisma.taxiDriverProfile.findUnique({ where: { userId } });
+    const profile = await this.prisma.taxiDriverProfile.findUnique({ where: { userId }, include: { application: true } });
     if (!profile) throw new ForbiddenException("Ride operations will be available after KariGO approves your Captain account.");
     if (profile.status !== TaxiDriverProfileStatus.ACTIVE) {
       throw new ForbiddenException("Ride operations will be available after KariGO approves your Captain account.");

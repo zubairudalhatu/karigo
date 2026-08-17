@@ -58,6 +58,8 @@ export interface AdminUserSummary {
   createdAt: string;
 }
 
+type AdminOperatingAreaSummary = { id: string; cityName: string; stateName: string; label: string };
+type AdminCaptainApplicationSummary = { id: string; applicationReference: string; status: string; city?: string | null; state?: string | null; residentialLocation?: { label?: string | null } | null; approvedOperatingAreas?: AdminOperatingAreaSummary[]; primaryOperatingArea?: AdminOperatingAreaSummary | null; operatingAreasRequireReview?: boolean; createdAt: string; updatedAt: string };
 export interface AdminRiderSummary {
   id: string;
   riderCode: string;
@@ -69,8 +71,8 @@ export interface AdminRiderSummary {
   currentLongitude?: string | null;
   currentLocationUpdatedAt?: string | null;
   user: { id: string; fullName: string; accountStatus: string; phoneVerified?: boolean; passwordCreated?: boolean; loginReady?: boolean };
-  deliveryApplication?: { id: string; applicationReference: string; status: string; createdAt: string; updatedAt: string } | null;
-  rideApplication?: { id: string; applicationReference: string; status: string; createdAt: string; updatedAt: string } | null;
+  deliveryApplication?: AdminCaptainApplicationSummary | null;
+  rideApplication?: AdminCaptainApplicationSummary | null;
   rideProfile?: { id: string; applicationId?: string | null; status: string; isAvailableForTaxi: boolean; updatedAt: string } | null;
   workState?: {
     desiredDeliveryOnline: boolean;

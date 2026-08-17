@@ -25,6 +25,9 @@ function userWithModes(input?: {
     rider: {
       id: "delivery-profile",
       userId: "captain-user",
+      currentLatitude: 9.0765,
+      currentLongitude: 7.3986,
+      currentLocationUpdatedAt: now,
       verificationStatus: input?.riderStatus ?? RiderStatus.ACTIVE,
       availabilityStatus: RiderStatus.OFFLINE
     },
@@ -32,8 +35,15 @@ function userWithModes(input?: {
       id: "ride-profile",
       userId: "captain-user",
       status: input?.rideStatus ?? TaxiDriverProfileStatus.ACTIVE,
-      isAvailableForTaxi: false
+      isAvailableForTaxi: false,
+      city: "Kano",
+      state: "Kano State",
+      lastKnownLatitude: 9.0765,
+      lastKnownLongitude: 7.3986,
+      lastSeenAt: now,
     }],
+    deliveryCaptainApplications: [{ id: "delivery-application", status: "APPROVED", operatingAreaIds: ["kano-kano", "fct-abuja"], primaryOperatingAreaId: "kano-kano", city: "Kano", state: "Kano State" }],
+    taxiDriverApplications: [{ id: "ride-application", status: "APPROVED", operatingAreaIds: ["kano-kano", "fct-abuja"], primaryOperatingAreaId: "kano-kano", city: "Kano", state: "Kano State" }],
     captainWorkState: {
       id: "work-state",
       userId: "captain-user",
@@ -67,7 +77,8 @@ describe("CaptainWorkStateService", () => {
     $transaction: jest.fn()
   };
   const audit = { record: jest.fn() };
-  const service = new CaptainWorkStateService(prisma as unknown as PrismaService, audit as unknown as AdminAuditService);
+  const launchOperations = { assertCaptainCanReceive: jest.fn() };
+  const service = new CaptainWorkStateService(prisma as unknown as PrismaService, audit as unknown as AdminAuditService, launchOperations as never);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -191,6 +202,53 @@ describe("CaptainWorkStateService", () => {
       })
     }));
     expect(audit.record).not.toHaveBeenCalled();
+  });
+
+  it("allows Ride and Delivery online in Abuja when approved areas also include Kano", async () => {
+    const user = userWithModes();
+    const updatedState = { ...user.captainWorkState, desiredDeliveryOnline: true, desiredRideOnline: true, lastLocationAt: new Date() };
+    const tx = {
+      captainWorkState: { update: jest.fn().mockResolvedValue(updatedState) },
+      rider: { update: jest.fn() },
+      taxiDriverProfile: { update: jest.fn() }
+    };
+    prisma.user.findUnique.mockResolvedValue(user);
+    prisma.captainWorkState.findUnique.mockResolvedValue(updatedState);
+    prisma.$transaction.mockImplementationOnce(async (callback: any) => callback(tx));
+
+    await expect(service.updateAvailability("captain-user", {
+      deliveryOnline: true,
+      rideOnline: true,
+      latitude: 9.0765,
+      longitude: 7.3986
+    })).resolves.toBeDefined();
+
+    expect(launchOperations.assertCaptainCanReceive).toHaveBeenCalledWith({
+      city: "Abuja",
+      serviceType: "RIDES",
+      userId: "captain-user"
+    });
+    expect(launchOperations.assertCaptainCanReceive).toHaveBeenCalledWith({
+      city: "Abuja",
+      serviceType: "PARCEL_DELIVERY",
+      userId: "captain-user"
+    });
+  });
+
+  it("blocks Abuja online when the approved Ride application contains only Kano", async () => {
+    const user = userWithModes();
+    user.taxiDriverApplications[0].operatingAreaIds = ["kano-kano"];
+    prisma.user.findUnique.mockResolvedValueOnce(user);
+    prisma.captainWorkState.findUnique.mockResolvedValueOnce(user.captainWorkState);
+
+    await expect(service.updateAvailability("captain-user", {
+      rideOnline: true,
+      latitude: 9.0765,
+      longitude: 7.3986
+    })).rejects.toThrow("This Captain is not approved to operate in the current area.");
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(launchOperations.assertCaptainCanReceive).not.toHaveBeenCalled();
   });
 
   it("blocks effective online state when the saved location is stale", async () => {

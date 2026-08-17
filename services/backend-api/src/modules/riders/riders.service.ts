@@ -16,6 +16,7 @@ import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
 import { captainServiceAreas, captainVehicleTypes, vehicleColours, vehicleMakes } from "../platform/captain-catalog";
+import { captainOperatingAreaFromCoordinates, captainOperatingAreaProjection, captainOperatingAreaSummary, captainResidentialLocation } from "../platform/captain-operating-areas";
 import { resolveCaptainLocation } from "../platform/captain-catalog.validation";
 import { PrismaService } from "../../prisma/prisma.service";
 import { publicUserSelect } from "../users/users.service";
@@ -289,6 +290,10 @@ export class RidersService {
     const rideVehicleMakeLabel = this.vehicleMakeLabel(rideProfile?.vehicleMake);
     const rideVehicleModelLabel = this.vehicleModelLabel(rideProfile?.vehicleMake, rideProfile?.vehicleModel);
     const rideVehicleColourLabel = this.vehicleColourLabel(rideProfile?.vehicleColour);
+    const deliveryOperatingAreas = captainOperatingAreaProjection(deliveryApplication?.status === DeliveryCaptainApplicationStatus.APPROVED ? deliveryApplication : null, deliveryApplication);
+    const rideOperatingAreas = captainOperatingAreaProjection(rideApplication?.status === TaxiApplicationStatus.APPROVED ? rideApplication : null, rideProfile ?? rideApplication);
+    const deliveryCurrentArea = captainOperatingAreaFromCoordinates(Number(deliveryProfile?.currentLatitude), Number(deliveryProfile?.currentLongitude));
+    const rideCurrentArea = captainOperatingAreaFromCoordinates(Number(rideProfile?.lastKnownLatitude), Number(rideProfile?.lastKnownLongitude));
 
     return {
       account: {
@@ -342,6 +347,9 @@ export class RidersService {
         currentLocationUpdatedAt: deliveryProfile.currentLocationUpdatedAt?.toISOString() ?? null,
         preferredServiceAreas: this.preferredServiceAreaValues(deliveryProfile.preferredServiceAreas),
         operationalAccess: deliveryOperational,
+        ...deliveryOperatingAreas,
+        residentialLocation: captainResidentialLocation(deliveryApplication),
+        currentGpsArea: deliveryCurrentArea ? captainOperatingAreaSummary(deliveryCurrentArea) : null,
         createdAt: deliveryProfile.createdAt.toISOString(),
         updatedAt: deliveryProfile.updatedAt.toISOString()
       } : null,
@@ -362,6 +370,9 @@ export class RidersService {
         vehiclePlateNumber: rideProfile.vehiclePlateNumber,
         vehicleType: rideProfile.vehicleType,
         vehicleTypeLabel: this.vehicleTypeLabel(rideProfile.vehicleType),
+        ...rideOperatingAreas,
+        residentialLocation: captainResidentialLocation(rideApplication, rideProfile),
+        currentGpsArea: rideCurrentArea ? captainOperatingAreaSummary(rideCurrentArea) : null,
         status: rideProfile.status,
         isAvailableForTaxi: rideProfile.isAvailableForTaxi,
         operationalAccess: rideOperational,

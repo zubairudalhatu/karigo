@@ -316,6 +316,33 @@ export class LaunchOperationsService {
     }
   }
 
+  async assertCaptainCanReceive(input: { city: string; serviceType: LaunchServiceType; userId: string }) {
+    const city = this.normalizeCity(input.city);
+    const config = await this.prisma.launchMarketConfig.findUnique({
+      where: { cityCode_serviceType: { cityCode: city.code, serviceType: input.serviceType } }
+    });
+    const now = new Date();
+    const unavailableReason = !config || this.launchKilled() || !config.isEnabled || config.launchStage === LaunchStage.OFF || config.emergencyClosed
+      ? "SERVICE_OFF"
+      : config.launchStage === LaunchStage.PAUSED
+        ? "SERVICE_PAUSED"
+        : (config.activeFrom && config.activeFrom > now) || (config.activeUntil && config.activeUntil < now)
+          ? "OUTSIDE_ACTIVE_DATES"
+          : !this.operatingWindow(config).open
+            ? "OUTSIDE_OPERATING_HOURS"
+            : null;
+    if (unavailableReason) {
+      const safe = this.safeEligibility(city, input.serviceType, config?.launchStage ?? LaunchStage.OFF, false, unavailableReason, config ?? null);
+      throw new ServiceUnavailableException({ message: safe.message, reasonCode: unavailableReason, launchStage: safe.launchStage });
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: input.userId }, select: { accountStatus: true, deletedAt: true } });
+    if (!user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE) {
+      throw new ServiceUnavailableException({ message: "Captain account is not eligible for this service.", reasonCode: "ACCOUNT_NOT_ELIGIBLE", launchStage: config!.launchStage });
+    }
+    await this.assertControlledSupplyCanReceive({ ...input, participant: "Captain" });
+    return { cityCode: city.code, cityName: city.name, serviceType: input.serviceType, launchStage: config!.launchStage };
+  }
+
   private safeEligibility(city: typeof LAUNCH_CITIES[number], serviceType: LaunchServiceType, stage: LaunchStage, available: boolean, reasonCode: string | null, config: { customerMessage: string | null; closedMessage: string | null; timezone: string; operatingHours: Prisma.JsonValue | null } | null) {
     const message = available ? (config?.customerMessage || DEFAULT_CUSTOMER_MESSAGES[stage])
       : reasonCode === "AT_CAPACITY" ? "KariGO is currently at capacity in your area. Please try again shortly."

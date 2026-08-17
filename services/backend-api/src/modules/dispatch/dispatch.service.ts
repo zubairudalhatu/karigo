@@ -4,6 +4,7 @@ import {
   CashCollectionStatus,
   CaptainWorkLockStage,
   CaptainWorkMode,
+  DeliveryCaptainApplicationStatus,
   OrderPaymentMethod,
   OrderStatus,
   PaymentStatus,
@@ -26,6 +27,7 @@ import { DispatchStatusService } from "./dispatch-status.service";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
 import { LaunchOperationsService } from "../launch-operations/launch-operations.service";
+import { captainIsApprovedForOperatingArea, captainOperatingAreaFromCoordinates, captainOperatingAreaFromText } from "../platform/captain-operating-areas";
 
 const CLOSED_JOB_STATUSES = [
   OrderStatus.COMPLETED,
@@ -54,8 +56,6 @@ export class DispatchService {
       ) {
         throw new BadRequestException("Only approved active riders can go online");
       }
-      const application = await this.prisma.deliveryCaptainApplication.findFirst({ where: { applicantUserId: userId }, orderBy: { createdAt: "desc" }, select: { city: true } });
-      if (application) await this.launchOperations.assertControlledSupplyCanReceive({ city: application.city, serviceType: LaunchServiceType.PARCEL_DELIVERY, userId, participant: "Captain" });
     }
     if (rider.availabilityStatus === RiderStatus.BUSY) {
       throw new ConflictException("A rider with an active job cannot change availability");
@@ -136,7 +136,7 @@ export class DispatchService {
     if (!order.deliveryAddressId) throw new BadRequestException("Order delivery address is not linked");
     const riderUserId = rider.userId;
     const deliveryAddress = await this.prisma.address.findUnique({ where: { id: order.deliveryAddressId }, select: { city: true, state: true } });
-    await this.launchOperations.assertControlledSupplyCanReceive({ city: deliveryAddress?.city || deliveryAddress?.state || "", serviceType: LaunchServiceType.PARCEL_DELIVERY, userId: riderUserId, participant: "Captain" });
+    await this.assertDeliveryAssignmentOperatingArea(riderUserId, rider, deliveryAddress);
     this.statuses.assertTransition(order.orderStatus, OrderStatus.RIDER_ASSIGNED);
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -186,7 +186,7 @@ export class DispatchService {
     if (!order.deliveryAddressId) throw new BadRequestException("Order delivery address is not linked");
     const newRiderUserId = newRider.userId;
     const deliveryAddress = await this.prisma.address.findUnique({ where: { id: order.deliveryAddressId }, select: { city: true, state: true } });
-    await this.launchOperations.assertControlledSupplyCanReceive({ city: deliveryAddress?.city || deliveryAddress?.state || "", serviceType: LaunchServiceType.PARCEL_DELIVERY, userId: newRiderUserId, participant: "Captain" });
+    await this.assertDeliveryAssignmentOperatingArea(newRiderUserId, newRider, deliveryAddress);
     this.statuses.assertReassignable(order.orderStatus);
     if (order.riderId === newRider.id) throw new ConflictException("Rider is already assigned to this order");
 
@@ -495,6 +495,32 @@ export class DispatchService {
     });
     await this.events.emit(this.eventFor(nextStatus), updated.id, rider.id);
     return updated;
+  }
+
+  private async assertDeliveryAssignmentOperatingArea(
+    userId: string,
+    rider: { currentLatitude: Prisma.Decimal | null; currentLongitude: Prisma.Decimal | null; currentLocationUpdatedAt: Date | null },
+    address: { city: string; state: string } | null
+  ) {
+    const pickupArea = captainOperatingAreaFromText(address?.city, address?.state);
+    const application = await this.prisma.deliveryCaptainApplication.findFirst({
+      where: { applicantUserId: userId, status: DeliveryCaptainApplicationStatus.APPROVED, trashedAt: null },
+      orderBy: { createdAt: "desc" },
+      select: { operatingAreaIds: true, primaryOperatingAreaId: true, city: true, state: true, residentialCityCode: true, residentialStateCode: true }
+    });
+    if (!pickupArea || !application || !captainIsApprovedForOperatingArea(application, pickupArea.id, application)) {
+      throw new BadRequestException("Delivery Captain operating area does not match the delivery area.");
+    }
+    const staleSeconds = Number(process.env.CAPTAIN_LOCATION_STALE_SECONDS ?? 90);
+    const staleMs = Number.isFinite(staleSeconds) && staleSeconds > 0 ? staleSeconds * 1000 : 90_000;
+    if (!rider.currentLocationUpdatedAt || Date.now() - rider.currentLocationUpdatedAt.getTime() > staleMs) {
+      throw new BadRequestException("Delivery Captain location is stale or unavailable.");
+    }
+    const currentArea = captainOperatingAreaFromCoordinates(Number(rider.currentLatitude), Number(rider.currentLongitude));
+    if (currentArea?.id !== pickupArea.id) {
+      throw new BadRequestException("Delivery Captain GPS is not in the delivery area.");
+    }
+    await this.launchOperations.assertCaptainCanReceive({ city: pickupArea.cityName, serviceType: LaunchServiceType.PARCEL_DELIVERY, userId });
   }
 
   private async requireRider(userId: string) {

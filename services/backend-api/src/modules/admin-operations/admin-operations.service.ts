@@ -24,6 +24,7 @@ import { createHash, randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { captainOperatingAreaProjection, captainResidentialLocation } from "../platform/captain-operating-areas";
 import { resolvePartnerCapabilities } from "../vendors/partner-capabilities";
 import { AccountLifecycleAction } from "./dto/account-lifecycle-action.dto";
 import { ListAdminOrdersQueryDto } from "./dto/list-admin-orders-query.dto";
@@ -500,12 +501,12 @@ export class AdminOperationsService {
             passwordHash: true,
             onboardingPasswordSetAt: true,
             deliveryCaptainApplications: {
-              select: { id: true, applicationReference: true, status: true, city: true, state: true, createdAt: true, updatedAt: true },
+              select: { id: true, applicationReference: true, status: true, city: true, state: true, residentialStateCode: true, residentialCityCode: true, operatingAreaIds: true, primaryOperatingAreaId: true, createdAt: true, updatedAt: true },
               orderBy: { createdAt: "desc" },
               take: 1
             },
             taxiDriverApplications: {
-              select: { id: true, applicationReference: true, status: true, city: true, state: true, createdAt: true, updatedAt: true },
+              select: { id: true, applicationReference: true, status: true, city: true, state: true, residentialStateCode: true, residentialCityCode: true, operatingAreaIds: true, primaryOperatingAreaId: true, createdAt: true, updatedAt: true },
               orderBy: { createdAt: "desc" },
               take: 1
             },
@@ -545,11 +546,15 @@ export class AdminOperationsService {
         },
         deliveryApplication: latestDeliveryApplication ? {
           ...latestDeliveryApplication,
+          ...captainOperatingAreaProjection(latestDeliveryApplication.status === "APPROVED" ? latestDeliveryApplication : null, latestDeliveryApplication),
+          residentialLocation: captainResidentialLocation(latestDeliveryApplication),
           createdAt: latestDeliveryApplication.createdAt.toISOString(),
           updatedAt: latestDeliveryApplication.updatedAt.toISOString()
         } : null,
         rideApplication: latestRideApplication ? {
           ...latestRideApplication,
+          ...captainOperatingAreaProjection(latestRideApplication.status === "APPROVED" ? latestRideApplication : null, rideProfile ?? latestRideApplication),
+          residentialLocation: captainResidentialLocation(latestRideApplication, rideProfile),
           createdAt: latestRideApplication.createdAt.toISOString(),
           updatedAt: latestRideApplication.updatedAt.toISOString()
         } : null,

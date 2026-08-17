@@ -104,6 +104,17 @@ export default function RidersPage() {
           <p className="muted">Operational modes: {rider.operationalModes?.length ? rider.operationalModes.join(", ") : "None active"}</p>
         </div>
         <div className="notice">
+          <strong>Residence and approved operating areas</strong>
+          <p>Residential location: {rider.rideApplication?.residentialLocation?.label ?? rider.deliveryApplication?.residentialLocation?.label ?? "Not recorded"}</p>
+          <p>Approved Ride operating areas: {rider.rideApplication?.approvedOperatingAreas?.map((area) => area.label).join(", ") || "Not recorded"}</p>
+          <p>Ride primary operating area: {rider.rideApplication?.primaryOperatingArea?.label ?? "Not recorded"}</p>
+          <p>Approved Delivery operating areas: {rider.deliveryApplication?.approvedOperatingAreas?.map((area) => area.label).join(", ") || "Not recorded"}</p>
+          <p>Delivery primary operating area: {rider.deliveryApplication?.primaryOperatingArea?.label ?? "Not recorded"}</p>
+          {rider.rideApplication?.operatingAreasRequireReview || rider.deliveryApplication?.operatingAreasRequireReview
+            ? <p className="notice">Operating areas require review</p>
+            : null}
+        </div>
+        <div className="notice">
           <strong>Availability</strong>
           <p><Badge>{captainAvailabilityLabel(rider)}</Badge></p>
           {rider.workState ? <>

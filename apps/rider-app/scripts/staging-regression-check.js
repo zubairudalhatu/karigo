@@ -249,3 +249,7 @@ if (failures.length) {
 }
 
 console.log("Captain regression check passed.");
+expect(profile.includes("Approved Ride operating areas") && profile.includes("Approved Delivery operating areas"), "Profile must show approved operating areas per mode.");
+expect(profile.includes("primary operating area"), "Profile must show the primary operating-area preference.");
+expect(profile.includes("Operating areas require review"), "Profile must flag legacy applications whose operating areas need review.");
+expect(dashboard.includes("Current operating area:"), "Home map footer must label the current GPS area rather than residence.");

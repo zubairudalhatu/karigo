@@ -123,7 +123,7 @@ const driverProfile = {
   lastSeenAt: now,
   createdAt: now,
   updatedAt: now,
-  application,
+  application: { ...application, status: TaxiApplicationStatus.APPROVED },
   user: {
     id: "rider-user",
     accountStatus: AccountStatus.ACTIVE,
@@ -245,6 +245,7 @@ describe("TaxiService", () => {
   const launchOperations = {
     assertCustomerCanStart: jest.fn().mockResolvedValue({ available: true }),
     assertControlledSupplyCanReceive: jest.fn().mockResolvedValue(undefined),
+    assertCaptainCanReceive: jest.fn().mockResolvedValue(undefined),
     controlledSupplyAccountEligible: jest.fn().mockResolvedValue(true)
   };
   const service = new TaxiService(
@@ -962,6 +963,46 @@ describe("TaxiService", () => {
     expect(audit.record).toHaveBeenCalledWith("admin-user", "admin.taxi.trip.driver_assigned", "TaxiTrip", taxiTrip.id, expect.objectContaining({
       productionMode: true
     }));
+  });
+
+  it("allows an Abuja Ride assignment for a Kano resident approved for both areas", async () => {
+    enableTaxiStaging();
+    const abujaTrip = { ...taxiTrip, pickupAddress: "Wuse 2, Abuja" };
+    const abujaCaptain = {
+      ...driverProfile,
+      lastKnownLatitude: new Prisma.Decimal("9.0765"),
+      lastKnownLongitude: new Prisma.Decimal("7.3986"),
+      lastSeenAt: new Date(),
+      application: { ...driverProfile.application, operatingAreaIds: ["kano-kano", "fct-abuja"], primaryOperatingAreaId: "kano-kano" }
+    };
+    prisma.taxiTrip.findUnique.mockResolvedValueOnce(abujaTrip);
+    prisma.taxiDriverProfile.findUnique.mockResolvedValueOnce(abujaCaptain);
+
+    await expect(service.adminAssignDriver("admin-user", abujaTrip.id, { driverProfileId: driverProfile.id })).resolves.toBeDefined();
+
+    expect(launchOperations.assertCaptainCanReceive).toHaveBeenCalledWith({
+      city: "Abuja",
+      serviceType: "RIDES",
+      userId: "rider-user"
+    });
+  });
+
+  it("blocks an Abuja Ride assignment when the approved application contains only Kano", async () => {
+    enableTaxiStaging();
+    const abujaTrip = { ...taxiTrip, pickupAddress: "Wuse 2, Abuja" };
+    const kanoOnlyCaptain = {
+      ...driverProfile,
+      lastKnownLatitude: new Prisma.Decimal("9.0765"),
+      lastKnownLongitude: new Prisma.Decimal("7.3986"),
+      lastSeenAt: new Date(),
+      application: { ...driverProfile.application, operatingAreaIds: ["kano-kano"], primaryOperatingAreaId: "kano-kano" }
+    };
+    prisma.taxiTrip.findUnique.mockResolvedValueOnce(abujaTrip);
+    prisma.taxiDriverProfile.findUnique.mockResolvedValueOnce(kanoOnlyCaptain);
+
+    await expect(service.adminAssignDriver("admin-user", abujaTrip.id, { driverProfileId: driverProfile.id }))
+      .rejects.toThrow("Ride Captain operating area does not match the Ride pickup area.");
+    expect(launchOperations.assertCaptainCanReceive).not.toHaveBeenCalled();
   });
 
   it("does not let customers access another customer's Taxi trip", async () => {

@@ -45,7 +45,7 @@ describe("DispatchService", () => {
     releaseLock: jest.fn(),
     transitionLock: jest.fn()
   };
-  const launchOperations = { assertControlledSupplyCanReceive: jest.fn().mockResolvedValue(undefined) };
+  const launchOperations = { assertControlledSupplyCanReceive: jest.fn().mockResolvedValue(undefined), assertCaptainCanReceive: jest.fn().mockResolvedValue(undefined) };
   const service = new DispatchService(
     prisma as unknown as PrismaService,
     new DispatchStatusService(),
@@ -75,7 +75,8 @@ describe("DispatchService", () => {
       orderStatus: OrderStatus.READY_FOR_PICKUP
     });
     prisma.address.findUnique.mockResolvedValue({ city: "Kano", state: "Kano" });
-    prisma.rider.findFirst.mockResolvedValue({ id: "rider-1", userId: "rider-user-1", riderCode: "KGO-R-1" });
+    prisma.rider.findFirst.mockResolvedValue({ id: "rider-1", userId: "rider-user-1", riderCode: "KGO-R-1", currentLatitude: new Prisma.Decimal("12.0022"), currentLongitude: new Prisma.Decimal("8.592"), currentLocationUpdatedAt: new Date() });
+    prisma.deliveryCaptainApplication.findFirst.mockResolvedValue({ operatingAreaIds: ["kano-kano", "fct-abuja"], primaryOperatingAreaId: "kano-kano", city: "Kano", state: "Kano", residentialCityCode: "KANO", residentialStateCode: "KANO" });
     tx.order.update.mockResolvedValue({ id: "order-1" });
 
     await service.assignRider("admin-1", "order-1", "rider-1");
@@ -92,6 +93,60 @@ describe("DispatchService", () => {
         statusHistory: { create: expect.objectContaining({ changedByRole: "ADMIN" }) }
       })
     }));
+  });
+
+  it("allows an Abuja Delivery assignment for a Kano resident approved for both areas", async () => {
+    prisma.order.findUnique.mockResolvedValue({
+      id: "order-abuja",
+      deliveryAddressId: "address-abuja",
+      orderStatus: OrderStatus.READY_FOR_PICKUP
+    });
+    prisma.address.findUnique.mockResolvedValue({ city: "Abuja", state: "FCT" });
+    prisma.rider.findFirst.mockResolvedValue({
+      id: "rider-1",
+      userId: "rider-user-1",
+      riderCode: "KGO-R-1",
+      currentLatitude: new Prisma.Decimal("9.0765"),
+      currentLongitude: new Prisma.Decimal("7.3986"),
+      currentLocationUpdatedAt: new Date()
+    });
+    prisma.deliveryCaptainApplication.findFirst.mockResolvedValue({
+      operatingAreaIds: ["kano-kano", "fct-abuja"],
+      primaryOperatingAreaId: "kano-kano",
+      city: "Kano",
+      state: "Kano State"
+    });
+    tx.order.update.mockResolvedValue({ id: "order-abuja" });
+
+    await expect(service.assignRider("admin-1", "order-abuja", "rider-1")).resolves.toBeDefined();
+    expect(launchOperations.assertCaptainCanReceive).toHaveBeenCalledWith({ city: "Abuja", serviceType: "PARCEL_DELIVERY", userId: "rider-user-1" });
+  });
+
+  it("blocks an Abuja Delivery assignment when the approved application contains only Kano", async () => {
+    prisma.order.findUnique.mockResolvedValue({
+      id: "order-abuja",
+      deliveryAddressId: "address-abuja",
+      orderStatus: OrderStatus.READY_FOR_PICKUP
+    });
+    prisma.address.findUnique.mockResolvedValue({ city: "Abuja", state: "FCT" });
+    prisma.rider.findFirst.mockResolvedValue({
+      id: "rider-1",
+      userId: "rider-user-1",
+      riderCode: "KGO-R-1",
+      currentLatitude: new Prisma.Decimal("9.0765"),
+      currentLongitude: new Prisma.Decimal("7.3986"),
+      currentLocationUpdatedAt: new Date()
+    });
+    prisma.deliveryCaptainApplication.findFirst.mockResolvedValue({
+      operatingAreaIds: ["kano-kano"],
+      primaryOperatingAreaId: "kano-kano",
+      city: "Kano",
+      state: "Kano State"
+    });
+
+    await expect(service.assignRider("admin-1", "order-abuja", "rider-1"))
+      .rejects.toThrow("Delivery Captain operating area does not match the delivery area.");
+    expect(launchOperations.assertCaptainCanReceive).not.toHaveBeenCalled();
   });
 
   it("returns a rejected assigned job to ready for pickup", async () => {

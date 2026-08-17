@@ -18,6 +18,14 @@ import {
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import {
+  captainIsApprovedForOperatingArea,
+  captainOperatingAreaFromCoordinates,
+  captainOperatingAreaFromText,
+  captainOperatingAreaProjection,
+  captainOperatingAreaSummary,
+  captainResidentialLocation
+} from "../platform/captain-operating-areas";
+import {
   AddControlledOperationsCustomerDto,
   AddControlledSupplyMemberDto,
   CreateControlledSupplyGroupDto,
@@ -209,29 +217,31 @@ export class ControlledSupplyService {
     const freshAfter = new Date(Date.now() - freshnessMinutes * 60_000);
 
     return users.map((user) => {
-      const matchingRideProfile = user.taxiDriverProfiles.find((profile) => {
-        try { return this.city(profile.city).code === city.code; } catch { return false; }
-      });
-      const matchingRideApplication = user.taxiDriverApplications.find((application) => {
-        try { return this.city(application.city).code === city.code; } catch { return false; }
-      });
-      const matchingDeliveryApplication = user.deliveryCaptainApplications.find((application) => {
-        try { return this.city(application.city).code === city.code; } catch { return false; }
-      });
-      const rideProfile = matchingRideProfile
+      const needsRide = serviceType === LaunchServiceType.RIDES;
+      const targetArea = captainOperatingAreaFromText(city.name, city.code);
+      const approvedRideApplications = user.taxiDriverApplications.filter((application) => application.status === TaxiApplicationStatus.APPROVED);
+      const approvedProfileApplication = user.taxiDriverProfiles
+        .map((profile) => profile.application)
+        .find((application) => application?.status === TaxiApplicationStatus.APPROVED);
+      const matchingRideApplication = targetArea
+        ? approvedRideApplications.find((application) => captainIsApprovedForOperatingArea(application, targetArea.id, { city: application.city, state: application.state }))
+          ?? (approvedProfileApplication && captainIsApprovedForOperatingArea(approvedProfileApplication, targetArea.id, approvedProfileApplication) ? approvedProfileApplication : undefined)
+        : undefined;
+      const rideApplication = matchingRideApplication ?? approvedRideApplications[0] ?? approvedProfileApplication ?? user.taxiDriverApplications[0];
+      const rideProfile = user.taxiDriverProfiles.find((profile) => profile.applicationId === rideApplication?.id)
         ?? user.taxiDriverProfiles.find((profile) => profile.status === TaxiDriverProfileStatus.ACTIVE)
         ?? user.taxiDriverProfiles[0];
-      const rideApplication = matchingRideProfile?.application
-        ?? matchingRideApplication
-        ?? rideProfile?.application
-        ?? user.taxiDriverApplications.find((application) => application.status === TaxiApplicationStatus.APPROVED)
-        ?? user.taxiDriverApplications[0];
-      const deliveryApplication = matchingDeliveryApplication
-        ?? user.deliveryCaptainApplications.find((application) => application.status === DeliveryCaptainApplicationStatus.APPROVED)
-        ?? user.deliveryCaptainApplications[0];
-      const needsRide = serviceType === LaunchServiceType.RIDES;
+      const approvedDeliveryApplications = user.deliveryCaptainApplications.filter((application) => application.status === DeliveryCaptainApplicationStatus.APPROVED);
+      const matchingDeliveryApplication = targetArea
+        ? approvedDeliveryApplications.find((application) => captainIsApprovedForOperatingArea(application, targetArea.id, { city: application.city, state: application.state }))
+        : undefined;
+      const deliveryApplication = matchingDeliveryApplication ?? approvedDeliveryApplications[0] ?? user.deliveryCaptainApplications[0];
       const profile = needsRide ? rideProfile : user.rider;
-      const cityMatches = needsRide ? Boolean(matchingRideProfile || matchingRideApplication) : Boolean(matchingDeliveryApplication);
+      const relevantApplication = needsRide ? rideApplication : deliveryApplication;
+      const legacyLocation = needsRide
+        ? { city: rideProfile?.city ?? rideApplication?.city, state: rideProfile?.state ?? rideApplication?.state }
+        : { city: deliveryApplication?.city, state: deliveryApplication?.state };
+      const cityMatches = Boolean(targetArea && relevantApplication && captainIsApprovedForOperatingArea(relevantApplication, targetArea.id, legacyLocation));
       const captainCity = needsRide ? (rideProfile?.city ?? rideApplication?.city) : deliveryApplication?.city;
       const applicationApproved = needsRide ? rideApplication?.status === TaxiApplicationStatus.APPROVED : deliveryApplication?.status === DeliveryCaptainApplicationStatus.APPROVED;
       const documents = needsRide ? rideApplication?.captainDocuments ?? [] : [...(deliveryApplication?.captainDocuments ?? []), ...(deliveryApplication?.documents ?? [])];
@@ -240,6 +250,11 @@ export class ControlledSupplyService {
       const vehicleValid = needsRide
         ? Boolean(rideProfile?.vehicleMake && rideProfile.vehicleModel && rideProfile.vehiclePlateNumber)
         : Boolean(user.rider?.vehicleType && user.rider.plateNumber);
+      const operatingAreaProjection = captainOperatingAreaProjection(applicationApproved ? relevantApplication : null, legacyLocation);
+      const currentArea = captainOperatingAreaFromCoordinates(
+        needsRide ? Number(rideProfile?.lastKnownLatitude) : Number(user.rider?.currentLatitude),
+        needsRide ? Number(rideProfile?.lastKnownLongitude) : Number(user.rider?.currentLongitude)
+      );
       const membership = memberships.find((item) => item.captainUserId === user.id && requiredTypes.includes(item.memberType) && item.group.status === ControlledSupplyGroupStatus.ACTIVE && this.activeWindow(item.group));
       const blockers: string[] = [];
       if (user.accountStatus === AccountStatus.SUSPENDED || user.rider?.verificationStatus === RiderStatus.SUSPENDED || rideProfile?.status === TaxiDriverProfileStatus.SUSPENDED) blockers.push("SUSPENDED");
@@ -260,6 +275,9 @@ export class ControlledSupplyService {
         onlineState: user.captainWorkState?.desiredRideOnline || user.captainWorkState?.desiredDeliveryOnline ? "ONLINE" : "OFFLINE",
         activeRide: Boolean(user.captainWorkState?.activeRideTripId), activeDelivery: Boolean(user.captainWorkState?.activeDeliveryAssignmentId),
         lastGpsUpdate: locationAt, vehicle: needsRide ? [rideProfile?.vehicleMake, rideProfile?.vehicleModel, rideProfile?.vehiclePlateNumber].filter(Boolean).join(" ") : [user.rider?.vehicleType, user.rider?.plateNumber].filter(Boolean).join(" "),
+        ...operatingAreaProjection,
+        residentialLocation: captainResidentialLocation(relevantApplication, legacyLocation),
+        currentGpsArea: currentArea ? captainOperatingAreaSummary(currentArea) : null,
         documentStatus: this.documentsApproved(documents) ? "APPROVED" : "INCOMPLETE", eligibility: blockers[0] ?? "ELIGIBLE", blockers: [...new Set(blockers)],
         controlledGroup: membership ? { id: membership.groupId, name: membership.group.name, enabled: membership.enabled, memberId: membership.id } : null
       };

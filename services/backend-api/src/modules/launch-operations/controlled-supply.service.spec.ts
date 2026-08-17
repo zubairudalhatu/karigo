@@ -58,6 +58,10 @@ describe("ControlledSupplyService", () => {
       vehicleModel: "Corolla",
       vehiclePlateNumber: "KANO-001",
       application: {
+        id: "ride-application",
+        operatingAreaIds: ["kano-kano", "fct-abuja"],
+        primaryOperatingAreaId: "kano-kano",
+        city: "Kano",
         status: TaxiApplicationStatus.APPROVED,
         applicationReference: "KGO-RIDE-UNIFIED",
         captainDocuments: [approvedDocument]
@@ -138,6 +142,19 @@ describe("ControlledSupplyService", () => {
     ]));
   });
 
+  it("honors Abuja in approved Ride areas even when residence and primary area are Kano", async () => {
+    prisma.user.findMany.mockResolvedValueOnce([rideCaptain()]);
+
+    const result = await service.captainEligibility("Abuja", LaunchServiceType.RIDES);
+
+    expect(result[0].blockers).not.toContain("CITY_MISMATCH");
+    expect(result[0].approvedOperatingAreas).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "kano-kano", cityName: "Kano" }),
+      expect.objectContaining({ id: "fct-abuja", cityName: "Abuja" })
+    ]));
+    expect(result[0].primaryOperatingArea).toMatchObject({ id: "kano-kano", cityName: "Kano" });
+  });
+
   it("discovers an approved Delivery Captain whose unified account keeps base CUSTOMER role", async () => {
     prisma.user.findMany.mockResolvedValueOnce([deliveryCaptain()]);
 
@@ -148,7 +165,9 @@ describe("ControlledSupplyService", () => {
   });
 
   it("keeps a Kano Captain discoverable under Abuja with CITY_MISMATCH", async () => {
-    prisma.user.findMany.mockResolvedValueOnce([rideCaptain()]);
+    const captain = rideCaptain();
+    captain.taxiDriverProfiles[0].application.operatingAreaIds = ["kano-kano"];
+    prisma.user.findMany.mockResolvedValueOnce([captain]);
 
     const result = await service.captainEligibility("Abuja", LaunchServiceType.RIDES);
 

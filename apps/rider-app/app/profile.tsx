@@ -35,6 +35,10 @@ function InfoRow({ label, value }: { label: string; value?: string | number | nu
 function areaList(values?: string[] | null) {
   return values?.filter(Boolean).join("\n") || null;
 }
+function operatingAreaList(values?: Array<{ label?: string | null; cityName?: string | null }> | null) {
+  return areaList(values?.map((area) => area.label ?? area.cityName ?? "").filter(Boolean));
+}
+
 
 function catalogLabel(value?: string | null) {
   const normalized = value?.trim().toUpperCase();
@@ -94,6 +98,7 @@ export default function Profile() {
   const isOnline = projection.effectiveDeliveryOnline || projection.effectiveRideOnline;
   const rideProfile = captainAccess?.rideCaptainProfile;
   const modeRows = [projection.delivery, projection.ride];
+  const deliveryCaptainProfile = captainAccess?.deliveryCaptainProfile;
 
   if (loading && !captainAccess) return <Loading label="Preparing Captain profile..." />;
 
@@ -156,9 +161,12 @@ export default function Profile() {
 
     <Card>
       <Text style={ui.sectionTitle}>Operating areas</Text>
-      <InfoRow label="Ride primary area" value={[rideProfile?.city, rideProfile?.state].filter(Boolean).join(", ")} />
-      <InfoRow label="Delivery areas" value={areaList(profile?.preferredServiceAreas)} />
-      {!rideProfile?.city && !profile?.preferredServiceAreas?.length ? <Text style={ui.muted}>KariGO Operations manages active service areas for each Captain mode.</Text> : null}
+      <InfoRow label="Approved Ride operating areas" value={operatingAreaList(rideProfile?.approvedOperatingAreas)} />
+      <InfoRow label="Ride primary operating area" value={rideProfile?.primaryOperatingArea?.label ?? rideProfile?.primaryOperatingArea?.cityName} />
+      <InfoRow label="Approved Delivery operating areas" value={operatingAreaList(deliveryCaptainProfile?.approvedOperatingAreas)} />
+      <InfoRow label="Delivery primary operating area" value={deliveryCaptainProfile?.primaryOperatingArea?.label ?? deliveryCaptainProfile?.primaryOperatingArea?.cityName} />
+      {rideProfile?.operatingAreasRequireReview || deliveryCaptainProfile?.operatingAreasRequireReview ? <Text style={ui.muted}>Operating areas require review</Text> : null}
+      {!rideProfile?.approvedOperatingAreas?.length && !deliveryCaptainProfile?.approvedOperatingAreas?.length ? <Text style={ui.muted}>KariGO Operations manages active service areas for each Captain mode.</Text> : null}
     </Card>
 
     <Card>

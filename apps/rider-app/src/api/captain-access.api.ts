@@ -33,6 +33,7 @@ export interface CaptainWorkState {
   activeRideTripId?: string | null;
   lockStage: CaptainWorkLockStage;
   lockedAt?: string | null;
+  currentGpsArea?: CaptainOperatingAreaSummary | null;
   lastAvailabilityChangeAt?: string | null;
   lastLocationAt?: string | null;
   deliveryEligibility: { eligible: boolean; reasonCode?: CaptainAvailabilityReasonCode; reason?: string | null };
@@ -71,6 +72,11 @@ export interface CaptainAccess {
     currentLongitude?: string | number | null;
     currentLocationUpdatedAt?: string | null;
     preferredServiceAreas?: string[] | null;
+    approvedOperatingAreas?: CaptainOperatingAreaSummary[];
+    primaryOperatingArea?: CaptainOperatingAreaSummary | null;
+    residentialLocation?: CaptainLocationSummary | null;
+    currentGpsArea?: CaptainOperatingAreaSummary | null;
+    operatingAreasRequireReview?: boolean;
     operationalAccess: boolean;
     createdAt: string;
     updatedAt: string;
@@ -94,6 +100,11 @@ export interface CaptainAccess {
     vehicleTypeLabel?: string | null;
     status: string;
     isAvailableForTaxi: boolean;
+    approvedOperatingAreas?: CaptainOperatingAreaSummary[];
+    primaryOperatingArea?: CaptainOperatingAreaSummary | null;
+    residentialLocation?: CaptainLocationSummary | null;
+    currentGpsArea?: CaptainOperatingAreaSummary | null;
+    operatingAreasRequireReview?: boolean;
     operationalAccess: boolean;
     lastKnownLatitude?: string | number | null;
     lastKnownLongitude?: string | number | null;

@@ -99,14 +99,13 @@ function timestampValue(value?: string | null) {
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
-function locationSummary(access: CaptainAccess | null, profile: RiderProfile | null, deviceLocation: { location: CaptainLocation; seenAt: string } | null) {
+function locationSummary(access: CaptainAccess | null, profile: RiderProfile | null, workState: CaptainWorkState | null, deviceLocation: { location: CaptainLocation; seenAt: string } | null) {
   const deliveryLat = coordinateNumber(profile?.currentLatitude);
   const deliveryLng = coordinateNumber(profile?.currentLongitude);
   const rideProfile = access?.rideCaptainProfile;
   const rideLat = coordinateNumber(rideProfile?.lastKnownLatitude);
   const rideLng = coordinateNumber(rideProfile?.lastKnownLongitude);
-  const rideLocation = rideProfile?.city && rideProfile.state ? `${rideProfile.city}, ${rideProfile.state}` : rideProfile?.city ?? null;
-  const deliveryAreas = profile?.preferredServiceAreas?.length ? profile.preferredServiceAreas.join(", ") : null;
+  const currentArea = workState?.currentGpsArea ?? access?.deliveryCaptainProfile?.currentGpsArea ?? rideProfile?.currentGpsArea;
   const candidates = [
     deviceLocation ? {
       coordinate: { latitude: deviceLocation.location.latitude, longitude: deviceLocation.location.longitude },
@@ -129,7 +128,7 @@ function locationSummary(access: CaptainAccess | null, profile: RiderProfile | n
   return {
     coordinate: candidates[0]?.coordinate ?? null,
     source: candidates[0]?.source ?? null,
-    area: deliveryAreas ?? rideLocation ?? "Kano / Abuja service areas",
+    area: currentArea?.label ?? currentArea?.cityName ?? "Unavailable",
     lastSeen: candidates[0]?.lastSeen ?? profile?.currentLocationUpdatedAt ?? access?.rideCaptainProfile?.lastSeenAt ?? null
   };
 }
@@ -246,7 +245,7 @@ export default function RiderDashboard() {
 
   const projection = useMemo(() => projectCaptainOperationalState(captainAccess, workState), [captainAccess, workState]);
   const activeJob = useMemo(() => jobs.find((job) => ACTIVE_DELIVERY_STATUSES.has(job.orderStatus)), [jobs]);
-  const mapState = locationSummary(captainAccess, profile, deviceLocation);
+  const mapState = locationSummary(captainAccess, profile, workState, deviceLocation);
   const hasMapCoordinate = Boolean(mapState.coordinate);
   const currentMapRegion = mapRegion(mapState.coordinate);
   const operationalLocationRequired = Boolean(
@@ -494,7 +493,7 @@ export default function RiderDashboard() {
             </MapView>
             <View style={styles.mapFooter}>
               <Text style={styles.mapFooterTitle}>{workState?.activeWorkMode ? activeWork : projection.overallStatus === "Offline" ? "Offline location view" : "Live location ready"}</Text>
-              <Text style={styles.mapFooterText}>Service area: {mapState.area}</Text>
+              <Text style={styles.mapFooterText}>Current operating area: {mapState.area}</Text>
               <Text style={styles.mapFooterText}>{mapState.lastSeen ? `Last update: ${new Date(mapState.lastSeen).toLocaleString()}` : "Location updates when you go online."}</Text>
             </View>
           </View> : <View style={styles.mapUnavailable}>
@@ -502,7 +501,7 @@ export default function RiderDashboard() {
             <View style={styles.mapCopy}>
               <Text style={styles.mapTitle}>Location unavailable</Text>
               <Text style={ui.muted}>Enable location permission and refresh GPS to show your live Captain position.</Text>
-              <Text style={ui.muted}>Service area: {mapState.area}</Text>
+              <Text style={ui.muted}>Current operating area: {mapState.area}</Text>
             </View>
           </View>}
           <Button title={locationUpdating ? "Updating GPS..." : "Refresh GPS"} tone="muted" disabled={!workState || locationUpdating} onPress={() => void refreshGps()} />

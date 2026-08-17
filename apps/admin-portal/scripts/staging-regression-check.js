@@ -197,6 +197,10 @@ assert(ridersPage.includes("Reactivate Captain"), "Admin Captains page must expo
 assert(ridersPage.includes("A reason of at least 5 characters is required."), "Admin Captains lifecycle controls must require a meaningful reason.");
 assert(ridersPage.includes("do not activate payouts or KariGO Rides"), "Admin Captains page must state lifecycle controls do not activate payouts or rides.");
 assert(ridersPage.includes("window.confirm"), "Admin Captains lifecycle controls must require confirmation.");
+assert(ridersPage.includes("Residential location:"), "Admin Captains page must distinguish residential location.");
+assert(ridersPage.includes("Approved Ride operating areas:") && ridersPage.includes("Approved Delivery operating areas:"), "Admin Captains page must show approved areas per mode.");
+assert(ridersPage.includes("primary operating area:"), "Admin Captains page must show primary operating areas as preferences.");
+assert(ridersPage.includes("Operating areas require review"), "Admin Captains page must flag legacy empty operating areas.");
 
 const usersPage = read("app", "users", "page.tsx");
 assert(usersPage.includes("Customer account lifecycle controls are audited and reason-required"), "Admin Users page must explain Customer lifecycle scope.");
