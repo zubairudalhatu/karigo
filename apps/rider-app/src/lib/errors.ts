@@ -13,8 +13,8 @@ type ErrorContext = "default" | "login";
 
 export function friendlyError(error: unknown, context: ErrorContext = "default"): string {
   if (error instanceof ApiBaseUrlError) return "KariGO Captain is not configured correctly on this build. Please install the latest app update.";
-  if (error instanceof ApiTimeoutError) return "The request timed out. Please check your connection and try again.";
-  if (error instanceof ApiNetworkError) return "KariGO Captain could not connect. Please check your network and try again.";
+  if (error instanceof ApiTimeoutError) return "KariGO is taking longer than expected. Try again.";
+  if (error instanceof ApiNetworkError) return "You're offline. We'll reconnect when your connection returns.";
   if (error instanceof ApiParseError) return "KariGO Captain could not read the server response safely. Please try again.";
   if (error instanceof SessionTemporarilyUnavailableError) return error.message;
   if (error instanceof SessionCorruptionError) return "Your saved Captain login needs to be reset before continuing.";
@@ -27,6 +27,6 @@ export function friendlyError(error: unknown, context: ErrorContext = "default")
     return error.message || "We could not complete that request. Please try again.";
   }
   if (error instanceof Error && error.message.includes("cannot use the Captain app")) return error.message;
-  return "We could not complete that request. Please check your connection and try again.";
+  return "We could not complete that request. Please try again.";
 }
 export function money(value: number | string | undefined) { return `NGN ${Number(value ?? 0).toLocaleString()}`; }

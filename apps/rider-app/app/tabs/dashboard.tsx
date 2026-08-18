@@ -9,12 +9,15 @@ import type { LaunchAvailabilityResponse } from "@karigo/shared-types";
 import { captainAccessApi } from "../../src/api/captain-access.api";
 import { riderApi, RiderProfile } from "../../src/api/rider.api";
 import { jobsApi, RiderJob } from "../../src/api/jobs.api";
+import type { EarningsSummary } from "../../src/api/earnings.api";
+import { earningsApi } from "../../src/api/earnings.api";
 import { notificationsApi } from "../../src/api/notifications.api";
 import { launchApi } from "../../src/api/launch.api";
 import { Button, Card, Loading, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
-import { friendlyError } from "../../src/lib/errors";
+import { friendlyError, money } from "../../src/lib/errors";
 import { CaptainLocation, distanceMeters, requestCaptainForegroundLocation, watchCaptainForegroundLocation } from "../../src/lib/location";
+import { captainRequestMessage } from "../../src/lib/network-errors";
 import {
   applicantReviewCopy,
   classifyCaptainApplication,
@@ -155,11 +158,14 @@ export default function RiderDashboard() {
   const [workState, setWorkState] = useState<CaptainWorkState | null>(null);
   const [launchAvailability, setLaunchAvailability] = useState<LaunchAvailabilityResponse | null>(null);
   const [unread, setUnread] = useState(0);
+  const [earnings, setEarnings] = useState<EarningsSummary | null>(null);
   const [onboardingStatus, setOnboardingStatus] = useState<CaptainAccess["deliveryCaptainApplication"] | null>(null);
   const [rideOnboardingStatus, setRideOnboardingStatus] = useState<CaptainAccess["rideCaptainApplication"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [refreshNotice, setRefreshNotice] = useState("");
+  const [availabilityUpdating, setAvailabilityUpdating] = useState(false);
   const [deviceLocation, setDeviceLocation] = useState<{ location: CaptainLocation; seenAt: string } | null>(null);
   const [isForeground, setIsForeground] = useState(AppState.currentState === "active");
   const [locationUpdating, setLocationUpdating] = useState(false);
@@ -169,6 +175,10 @@ export default function RiderDashboard() {
   const mountedRef = useRef(true);
   const uploadInFlightRef = useRef(false);
   const lastUploadedLocationRef = useRef<{ location: CaptainLocation; uploadedAt: number } | null>(null);
+  const loadInFlightRef = useRef<Promise<void> | null>(null);
+  const loadAbortRef = useRef<AbortController | null>(null);
+  const captainAccessRef = useRef<CaptainAccess | null>(null);
+  const lastLocationSuccessAtRef = useRef(0);
   const backoffUntilRef = useRef(0);
   const failureCountRef = useRef(0);
   const lastAutoErrorAtRef = useRef(0);
@@ -176,45 +186,72 @@ export default function RiderDashboard() {
   const latestWorkStateRef = useRef<CaptainWorkState | null>(null);
   const latestProjectionRef = useRef<ReturnType<typeof projectCaptainOperationalState> | null>(null);
 
-  async function load() {
+  function load() {
+    if (loadInFlightRef.current) return loadInFlightRef.current;
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
     setLoading(true);
-    try {
-      const [access, state] = await Promise.all([
-        captainAccessApi.resolve(),
-        captainAccessApi.workState().catch(() => null)
-      ]);
-      const projection = projectCaptainOperationalState(access, state);
-      setCaptainAccess(access);
-      setWorkState(state);
-      setOnboardingStatus(access.deliveryCaptainApplication);
-      setRideOnboardingStatus(access.rideCaptainApplication);
+    const request = (async () => {
+      let secondaryRefreshFailed = false;
+      const secondary = async <T,>(promise: Promise<T>, fallback: T) => promise.catch(() => {
+        secondaryRefreshFailed = true;
+        return fallback;
+      });
+      try {
+        const [access, state] = await Promise.all([
+          captainAccessApi.resolve({ signal: controller.signal }),
+          secondary(captainAccessApi.workState({ signal: controller.signal }), null)
+        ]);
+        if (controller.signal.aborted || !mountedRef.current) return;
+        const projection = projectCaptainOperationalState(access, state);
+        captainAccessRef.current = access;
+        setCaptainAccess(access);
+        setWorkState(state);
+        setOnboardingStatus(access.deliveryCaptainApplication);
+        setRideOnboardingStatus(access.rideCaptainApplication);
 
-      const deliveryApplication = access.deliveryCaptainApplication as { pilotCity?: string | null; currentProfileLocation?: { city?: string | null } | null };
-      const rideApplication = access.rideCaptainApplication as { pilotCity?: string | null; currentProfileLocation?: { city?: string | null } | null };
-      const captainCity = access.rideCaptainProfile?.city
-        ?? deliveryApplication.currentProfileLocation?.city
-        ?? deliveryApplication.pilotCity
-        ?? rideApplication.currentProfileLocation?.city
-        ?? rideApplication.pilotCity;
-      setLaunchAvailability(captainCity ? await launchApi.myAvailability(captainCity).catch(() => null) : null);
-
-      const [deliveryProfile, deliveryJobs, notificationCount] = await Promise.all([
-        projection.hasActiveDeliveryMode ? riderApi.profile().catch(() => null) : Promise.resolve(null),
-        projection.hasActiveDeliveryMode ? jobsApi.list().catch(() => []) : Promise.resolve([]),
-        projection.hasAnyActiveMode ? notificationsApi.unreadCount().catch(() => ({ count: 0 })) : Promise.resolve({ count: 0 })
-      ]);
-      setProfile(deliveryProfile);
-      setJobs(deliveryJobs);
-      setUnread(notificationCount.count);
-      setError("");
-    } catch (e) {
-      setError(friendlyError(e));
-      setProfile(null);
-      setJobs([]);
-      setUnread(0);
-    } finally {
-      setLoading(false);
-    }
+        const deliveryApplication = access.deliveryCaptainApplication as { pilotCity?: string | null; currentProfileLocation?: { city?: string | null } | null };
+        const rideApplication = access.rideCaptainApplication as { pilotCity?: string | null; currentProfileLocation?: { city?: string | null } | null };
+        const captainCity = access.rideCaptainProfile?.city
+          ?? deliveryApplication.currentProfileLocation?.city
+          ?? deliveryApplication.pilotCity
+          ?? rideApplication.currentProfileLocation?.city
+          ?? rideApplication.pilotCity;
+        const [launchState, deliveryProfile, deliveryJobs, notificationCount, earningsSummary] = await Promise.all([
+          captainCity ? secondary(launchApi.myAvailability(captainCity, { signal: controller.signal }), null) : Promise.resolve(null),
+          projection.hasActiveDeliveryMode ? secondary(riderApi.profile({ signal: controller.signal }), null) : Promise.resolve(null),
+          projection.hasActiveDeliveryMode ? secondary(jobsApi.list({ signal: controller.signal }), []) : Promise.resolve([]),
+          projection.hasAnyActiveMode ? secondary(notificationsApi.unreadCount({ signal: controller.signal }), { count: 0 }) : Promise.resolve({ count: 0 }),
+          projection.hasAnyActiveMode ? secondary(earningsApi.summary({ signal: controller.signal }), null) : Promise.resolve(null)
+        ]);
+        if (controller.signal.aborted || !mountedRef.current) return;
+        setLaunchAvailability(launchState);
+        setProfile(deliveryProfile);
+        setJobs(deliveryJobs);
+        setUnread(notificationCount.count);
+        setEarnings(earningsSummary);
+        setError("");
+        setRefreshNotice(secondaryRefreshFailed && Date.now() - lastLocationSuccessAtRef.current > 5_000
+          ? "Some information could not be refreshed. Tap to retry."
+          : "");
+      } catch (e) {
+        if (controller.signal.aborted || !mountedRef.current) return;
+        if (captainAccessRef.current) {
+          setRefreshNotice(Date.now() - lastLocationSuccessAtRef.current > 5_000
+            ? captainRequestMessage(e, "secondary")
+            : "");
+        }
+        else setError(captainRequestMessage(e, "critical"));
+      } finally {
+        if (!controller.signal.aborted && mountedRef.current) setLoading(false);
+      }
+    })();
+    loadInFlightRef.current = request;
+    void request.finally(() => {
+      if (loadInFlightRef.current === request) loadInFlightRef.current = null;
+      if (loadAbortRef.current === controller) loadAbortRef.current = null;
+    });
+    return request;
   }
 
   function stopCaptainWatcher(reason: string) {
@@ -239,6 +276,7 @@ export default function RiderDashboard() {
       setIsForeground(active);
       if (active) void load();
       else stopCaptainWatcher("background");
+      loadAbortRef.current?.abort();
     });
     return () => subscription.remove();
   }, []);
@@ -310,6 +348,8 @@ export default function RiderDashboard() {
       backoffUntilRef.current = Date.now() + backoffMs;
       if (options.manual) {
         setError(friendlyError(e));
+        lastLocationSuccessAtRef.current = Date.now();
+        setRefreshNotice("");
         setMessage("");
       } else if (Date.now() - lastAutoErrorAtRef.current > 60_000) {
         lastAutoErrorAtRef.current = Date.now();
@@ -369,7 +409,7 @@ export default function RiderDashboard() {
         })
         .catch((e) => {
           setLocationAutoBlocked(true);
-          setError(friendlyError(e));
+          setError(e instanceof Error ? e.message : "Captain location is unavailable. Refresh GPS to try again.");
           console.log(`captain_gps_watcher_unavailable reason=${e instanceof Error ? e.message : "unknown"}`);
         })
         .finally(() => {
@@ -384,7 +424,8 @@ export default function RiderDashboard() {
   }, [strongLocationAccuracy, watcherShouldRun]);
 
   async function toggleDelivery() {
-    if (!workState || !projection.delivery.active) return;
+    if (!workState || !projection.delivery.active || availabilityUpdating) return;
+    setAvailabilityUpdating(true);
     try {
       const next = !workState.desiredDeliveryOnline;
       const currentLocation = next ? await requestCaptainForegroundLocation(strongLocationAccuracy) : null;
@@ -402,13 +443,16 @@ export default function RiderDashboard() {
       setMessage(next ? "Delivery availability is online." : "Delivery availability is offline.");
       setError("");
     } catch (e) {
-      setError(friendlyError(e));
+      setError(captainRequestMessage(e, "critical"));
       setMessage("");
+    } finally {
+      setAvailabilityUpdating(false);
     }
   }
 
   async function toggleRide() {
-    if (!workState || !projection.ride.active) return;
+    if (!workState || !projection.ride.active || availabilityUpdating) return;
+    setAvailabilityUpdating(true);
     try {
       const next = !workState.desiredRideOnline;
       const currentLocation = next ? await requestCaptainForegroundLocation(strongLocationAccuracy) : null;
@@ -425,8 +469,37 @@ export default function RiderDashboard() {
       setMessage(next ? "Ride availability is online." : "Ride availability is offline.");
       setError("");
     } catch (e) {
-      setError(friendlyError(e));
+      setError(captainRequestMessage(e, "critical"));
       setMessage("");
+    } finally {
+      setAvailabilityUpdating(false);
+    }
+  }
+
+  async function toggleOverallAvailability() {
+    if (!workState || availabilityUpdating || workState.activeWorkMode) return;
+    const goOnline = !(workState.desiredDeliveryOnline && workState.desiredRideOnline);
+    setAvailabilityUpdating(true);
+    try {
+      const currentLocation = goOnline ? await requestCaptainForegroundLocation(strongLocationAccuracy) : null;
+      const updated = await captainAccessApi.updateAvailability({
+        deliveryOnline: goOnline,
+        rideOnline: goOnline,
+        ...(currentLocation ?? {})
+      });
+      if (currentLocation) {
+        lastUploadedLocationRef.current = { location: currentLocation, uploadedAt: Date.now() };
+        setDeviceLocation({ location: currentLocation, seenAt: new Date().toISOString() });
+        setLocationAutoBlocked(false);
+      }
+      setWorkState(updated);
+      setMessage(goOnline ? "Online for Ride and Delivery." : "You are offline.");
+      setError("");
+    } catch (e) {
+      setError(captainRequestMessage(e, "critical"));
+      setMessage("");
+    } finally {
+      setAvailabilityUpdating(false);
     }
   }
 
@@ -438,8 +511,22 @@ export default function RiderDashboard() {
   const rideLaunch = launchAvailability?.services.find((item) => item.serviceType === "RIDES");
   const deliveryCanRefreshStaleLocation = workState?.deliveryEligibility.reasonCode === "LOCATION_STALE";
   const rideCanRefreshStaleLocation = workState?.rideEligibility.reasonCode === "LOCATION_STALE";
-  const canToggleDelivery = !!workState && canToggle && projection.delivery.active && deliveryLaunch?.available !== false && (workState.deliveryEligibility.eligible || deliveryCanRefreshStaleLocation);
-  const canToggleRide = !!workState && canToggle && projection.ride.active && rideLaunch?.available !== false && (workState.rideEligibility.eligible || rideCanRefreshStaleLocation);
+  const canToggleDelivery = !!workState && canToggle && !availabilityUpdating && projection.delivery.active && deliveryLaunch?.available !== false && (workState.deliveryEligibility.eligible || deliveryCanRefreshStaleLocation);
+  const canToggleRide = !!workState && canToggle && !availabilityUpdating && projection.ride.active && rideLaunch?.available !== false && (workState.rideEligibility.eligible || rideCanRefreshStaleLocation);
+  const canToggleBoth = canToggleDelivery && canToggleRide;
+  const bothModesOnline = Boolean(workState?.desiredDeliveryOnline && workState?.desiredRideOnline);
+  const overallModeLabel = workState?.desiredDeliveryOnline && workState?.desiredRideOnline ? "Online for both"
+    : workState?.desiredRideOnline ? "Ride only"
+      : workState?.desiredDeliveryOnline ? "Delivery only"
+        : "Offline";
+  const launchMessages = [...new Set([
+    rideLaunch?.available && rideLaunch.launchStage === "OPERATIONS_ONLY" ? "Your Ride Captain access is approved for scheduled controlled production operations. Go online only during the communicated operating window." : null,
+    deliveryLaunch?.available && deliveryLaunch.launchStage === "OPERATIONS_ONLY" ? "Your Delivery Captain access is approved for scheduled controlled production operations. Go online only during the communicated operating window." : null,
+    deliveryLaunch && !deliveryLaunch.available && projection.delivery.active ? `${deliveryLaunch.message} Your online preference is preserved; existing assignments remain available.` : null,
+    rideLaunch && !rideLaunch.available && projection.ride.active ? `${rideLaunch.message} Your online preference is preserved; existing assignments remain available.` : null
+  ].filter((value): value is string => Boolean(value)))];
+  const deliveryOperationsStatus = deliveryLaunch?.available === false ? "Unavailable" : projection.delivery.active ? "Available" : projection.delivery.operationsLabel;
+  const rideOperationsStatus = rideLaunch?.available === false ? "Unavailable" : projection.ride.active ? "Available" : projection.ride.operationsLabel;
   const activeWork = activeWorkTitle(workState);
 
   if (loading && !captainAccess) {
@@ -465,12 +552,10 @@ export default function RiderDashboard() {
       </View>
       <Message>{message}</Message>
       <Message error>{error}</Message>
-      {rideLaunch?.available && rideLaunch.launchStage === "OPERATIONS_ONLY" ? <Message>Your Ride Captain access is approved for scheduled controlled production operations. Go online only during the communicated operating window.</Message> : null}
-      {deliveryLaunch?.available && deliveryLaunch.launchStage === "OPERATIONS_ONLY" ? <Message>Your Delivery Captain access is approved for scheduled controlled production operations. Go online only during the communicated operating window.</Message> : null}
-      {deliveryLaunch && !deliveryLaunch.available && projection.delivery.active ? <Message>{deliveryLaunch.message} Your online preference is preserved; existing assignments remain available.</Message> : null}
-      {rideLaunch && !rideLaunch.available && projection.ride.active ? <Message>{rideLaunch.message} Your online preference is preserved; existing assignments remain available.</Message> : null}
+      {refreshNotice ? <Pressable accessibilityRole="button" accessibilityLabel="Retry Home refresh" onPress={() => void load()} style={styles.refreshNotice}><Text style={styles.refreshNoticeText}>{refreshNotice}</Text></Pressable> : null}
 
       {projection.hasAnyActiveMode ? <>
+
         <Card>
           <View style={ui.spaceBetween}>
             <Text style={ui.title}>Live map</Text>
@@ -508,19 +593,39 @@ export default function RiderDashboard() {
         </Card>
 
         <Card>
+          <Text style={ui.title}>Operations status</Text>
+          {projection.delivery.active ? <View style={styles.operationsRow}>
+            <Text style={styles.modeTitle}>Delivery</Text>
+            <Text style={[styles.modeBadge, modeStatusStyle(deliveryOperationsStatus)]}>{deliveryOperationsStatus}</Text>
+          </View> : null}
+          {projection.ride.active ? <View style={styles.operationsRow}>
+            <Text style={styles.modeTitle}>Ride</Text>
+            <Text style={[styles.modeBadge, modeStatusStyle(rideOperationsStatus)]}>{rideOperationsStatus}</Text>
+          </View> : null}
+          {launchMessages.map((notice) => <Text key={notice} style={ui.muted}>{notice}</Text>)}
+        </Card>
+        <Card>
           <Text style={ui.title}>Availability</Text>
           <Text style={ui.muted}>
             {workState?.activeWorkMode
               ? `Availability is paused while your ${workState.activeWorkMode === "DELIVERY" ? "Delivery assignment" : "Ride assignment"} is active.`
               : "Choose where you want to work today."}
           </Text>
+          {projection.delivery.active && projection.ride.active ? <View style={styles.overallControl}>
+            <View style={styles.modeCopy}>
+              <Text style={styles.modeTitle}>Overall status</Text>
+              <Text style={ui.muted}>{overallModeLabel}</Text>
+            </View>
+            <Button title={availabilityUpdating ? "Updating..." : bothModesOnline ? "Go offline" : "Go online"} disabled={!canToggleBoth} onPress={toggleOverallAvailability} />
+          </View> : null}
           <View style={styles.modeRow}>
             <View style={styles.modeCopy}>
               <Text style={styles.modeTitle}>Delivery</Text>
               <Text style={[styles.modeBadge, modeStatusStyle(modeStatus(workState, "DELIVERY", projection.delivery))]}>{modeStatus(workState, "DELIVERY", projection.delivery)}</Text>
               {!projection.delivery.eligible ? <Text style={styles.reason}>{projection.delivery.eligibilityReason ?? "Delivery Captain activation is pending."}</Text> : null}
             </View>
-            <Button title={workState?.desiredDeliveryOnline ? "Go offline" : "Go online"} disabled={!canToggleDelivery} onPress={toggleDelivery} />
+
+            <Button title={availabilityUpdating ? "Updating..." : workState?.desiredDeliveryOnline ? "Go offline" : "Go online"} disabled={!canToggleDelivery} onPress={toggleDelivery} />
           </View>
           <View style={styles.modeRow}>
             <View style={styles.modeCopy}>
@@ -528,7 +633,7 @@ export default function RiderDashboard() {
               <Text style={[styles.modeBadge, modeStatusStyle(modeStatus(workState, "RIDE", projection.ride))]}>{modeStatus(workState, "RIDE", projection.ride)}</Text>
               {!projection.ride.eligible ? <Text style={styles.reason}>{projection.ride.eligibilityReason ?? "Ride Captain activation is pending."}</Text> : null}
             </View>
-            <Button title={workState?.desiredRideOnline ? "Go offline" : "Go online"} disabled={!canToggleRide} onPress={toggleRide} />
+            <Button title={availabilityUpdating ? "Updating..." : workState?.desiredRideOnline ? "Go offline" : "Go online"} disabled={!canToggleRide} onPress={toggleRide} />
           </View>
         </Card>
 
@@ -548,6 +653,16 @@ export default function RiderDashboard() {
           </>}
         </Card>
 
+        <Card>
+          <View style={ui.spaceBetween}>
+            <Text style={ui.title}>Earnings</Text>
+            <NavLink href="/earnings" label="View earnings" />
+          </View>
+          <View style={styles.earningsRow}>
+            <View style={styles.earningMetric}><Text style={ui.muted}>Today</Text><Text style={styles.earningValue}>{money(earnings?.todayEarnings ?? 0)}</Text></View>
+            <View style={styles.earningMetric}><Text style={ui.muted}>This week</Text><Text style={styles.earningValue}>{money(earnings?.thisWeekEarnings ?? 0)}</Text></View>
+          </View>
+        </Card>
       </> : <>
         {hasAnyApplication ? <Card tone="soft">
           <Text style={ui.title}>{projection.hasApprovedPendingActivation ? "Activation pending" : projection.hasRevisionRequired ? "Changes requested" : "Application status"}</Text>
@@ -603,8 +718,8 @@ const styles = StyleSheet.create({
   modePending: { backgroundColor: "#FEF3C7", color: "#92400E" },
   modeBusy: { backgroundColor: "#DBEAFE", color: "#1E40AF" },
   reason: { color: brand.colors.muted, fontSize: 12, fontWeight: "700" },
-  mapShell: { borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, minHeight: 260, overflow: "hidden" },
-  map: { height: 260, width: "100%" },
+  mapShell: { borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, minHeight: 300, overflow: "hidden" },
+  map: { height: 300, width: "100%" },
   mapFooter: { backgroundColor: "rgba(17, 17, 17, 0.82)", bottom: 0, left: 0, padding: 12, position: "absolute", right: 0 },
   mapFooterTitle: { color: brand.colors.white, fontSize: 14, fontWeight: "900" },
   mapFooterText: { color: "#F3F4F6", fontSize: 12, fontWeight: "700", lineHeight: 17 },
@@ -615,5 +730,12 @@ const styles = StyleSheet.create({
   vehicleMarker: { alignItems: "center", backgroundColor: brand.colors.primary, borderColor: brand.colors.white, borderRadius: 999, borderWidth: 3, height: 38, justifyContent: "center", shadowColor: "#111827", shadowOpacity: 0.22, shadowRadius: 8, width: 38 },
   jobRef: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "800" },
   emptyTitle: { color: brand.colors.charcoal, fontSize: 18, fontWeight: "900" },
-  applicationLine: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" }
+  applicationLine: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  refreshNotice: { backgroundColor: "#FFF7ED", borderColor: "#FED7AA", borderRadius: 12, borderWidth: 1, padding: 12 },
+  refreshNoticeText: { color: "#9A3412", fontWeight: "800", lineHeight: 20 },
+  operationsRow: { alignItems: "center", borderBottomColor: brand.colors.border, borderBottomWidth: 1, flexDirection: "row", justifyContent: "space-between", paddingVertical: 8 },
+  overallControl: { alignItems: "center", backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, flexDirection: "row", gap: 12, justifyContent: "space-between", padding: 14 },
+  earningsRow: { flexDirection: "row", gap: 10 },
+  earningMetric: { backgroundColor: "#F9FAFB", borderRadius: 14, flex: 1, gap: 3, padding: 12 },
+  earningValue: { color: brand.colors.charcoal, fontSize: 17, fontWeight: "900" }
 });

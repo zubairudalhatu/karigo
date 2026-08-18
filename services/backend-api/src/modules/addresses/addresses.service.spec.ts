@@ -38,6 +38,43 @@ describe("AddressesService", () => {
     });
   });
 
+  it.each([
+    ["Federal Capital Territory", "FCT"],
+    ["Federal Capital Territory (FCT)", "FCT"],
+    ["Kano State", "KANO"],
+    ["Lagos State", "LAGOS"]
+  ])("stores %s as canonical %s on create", async (state, expected) => {
+    tx.address.count.mockResolvedValue(0);
+    tx.address.create.mockImplementation(({ data }) => data);
+
+    const address = await service.create("user-1", {
+      label: "Home",
+      addressLine: "Customer address",
+      city: expected === "FCT" ? "Abuja" : "Kano",
+      state
+    });
+
+    expect(address.state).toBe(expected);
+  });
+
+  it("updates only the owned address and canonicalizes its state", async () => {
+    prisma.address.findFirst.mockResolvedValue({ id: "address-1", userId: "user-1" });
+    tx.address.update.mockImplementation(({ data }) => data);
+
+    const address = await service.update("user-1", "address-1", {
+      label: "Work",
+      addressLine: "Central Area",
+      city: "Abuja",
+      state: "Federal Capital Territory"
+    });
+
+    expect(address).toMatchObject({ label: "Work", city: "Abuja", state: "FCT" });
+    expect(tx.address.update).toHaveBeenCalledWith({
+      where: { id: "address-1" },
+      data: expect.not.objectContaining({ id: expect.anything(), userId: expect.anything() })
+    });
+  });
+
   it("does not allow a customer to set another customer's address as default", async () => {
     prisma.address.findFirst.mockResolvedValue(null);
 

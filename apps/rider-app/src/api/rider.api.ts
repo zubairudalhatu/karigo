@@ -1,4 +1,6 @@
+import type { ApiRequestOptions } from "@karigo/config";
 import { api } from "./client";
+import { captainGetOptions } from "./reliable-get";
 
 export interface RiderProfile {
   id: string;
@@ -19,7 +21,7 @@ export interface RiderProfile {
 }
 
 export const riderApi = {
-  profile: () => api.get<RiderProfile>("riders/me"),
+  profile: (options?: ApiRequestOptions) => api.get<RiderProfile>("riders/me", captainGetOptions(options)),
   updateProfile: (body: Partial<Pick<RiderProfile, "photoUrl" | "vehicleType" | "plateNumber" | "licenseNumber" | "preferredServiceAreas">>) => api.patch<RiderProfile>("riders/me", body),
   updateAvailability: (availability: "ONLINE" | "OFFLINE") => api.patch<RiderProfile>("rider/availability", { availability }),
   updateLocation: (latitude: number, longitude: number) => api.patch<RiderProfile>("rider/location", { latitude, longitude })

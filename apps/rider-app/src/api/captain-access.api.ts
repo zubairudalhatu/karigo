@@ -1,4 +1,6 @@
+import type { ApiRequestOptions } from "@karigo/config";
 import { api } from "./client";
+import { captainGetOptions } from "./reliable-get";
 import type {
   CaptainCurrentProfileLocation,
   CaptainLocationSummary,
@@ -127,8 +129,8 @@ export type CaptainApplicationWithLocation = {
 };
 
 export const captainAccessApi = {
-  resolve: () => api.get<CaptainAccess>("captain/access"),
-  workState: () => api.get<CaptainWorkState>("captain/work-state"),
+  resolve: (options?: ApiRequestOptions) => api.get<CaptainAccess>("captain/access", captainGetOptions(options)),
+  workState: (options?: ApiRequestOptions) => api.get<CaptainWorkState>("captain/work-state", captainGetOptions(options)),
   updateAvailability: (body: {
     deliveryOnline?: boolean;
     rideOnline?: boolean;

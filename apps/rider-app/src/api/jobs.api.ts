@@ -1,4 +1,6 @@
+import type { ApiRequestOptions } from "@karigo/config";
 import { api } from "./client";
+import { captainGetOptions } from "./reliable-get";
 
 export type DeliveryStatus = "PICKED_UP" | "ON_THE_WAY" | "ARRIVED_DESTINATION" | "DELIVERED";
 export type RiderRejectionReason = "TOO_FAR" | "VEHICLE_ISSUE" | "EMERGENCY" | "UNABLE_TO_CONTACT" | "OTHER";
@@ -26,8 +28,8 @@ export interface RiderJob {
 }
 
 export const jobsApi = {
-  list: () => api.get<RiderJob[]>("rider/jobs"),
-  detail: (id: string) => api.get<RiderJob>(`rider/jobs/${id}`),
+  list: (options?: ApiRequestOptions) => api.get<RiderJob[]>("rider/jobs", captainGetOptions(options)),
+  detail: (id: string, options?: ApiRequestOptions) => api.get<RiderJob>(`rider/jobs/${id}`, captainGetOptions(options)),
   accept: (id: string) => api.post<RiderJob>(`rider/jobs/${id}/accept`),
   reject: (id: string, reason: RiderRejectionReason, details?: string) => api.post<RiderJob & { reassignmentRequired: boolean }>(`rider/jobs/${id}/reject`, { reason, details }),
   status: (id: string, status: DeliveryStatus) => api.post<RiderJob>(`rider/jobs/${id}/status`, { status }),

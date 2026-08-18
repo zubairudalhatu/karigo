@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { canonicalNigeriaStateCode } from "../../common/utils/nigeria-state.util";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateAddressDto } from "./dto/create-address.dto";
 import { UpdateAddressDto } from "./dto/update-address.dto";
@@ -24,7 +25,7 @@ export class AddressesService {
       }
 
       return tx.address.create({
-        data: { ...dto, userId, country: dto.country ?? "Nigeria", isDefault: makeDefault }
+        data: { ...dto, state: canonicalNigeriaStateCode(dto.state) ?? dto.state.trim(), userId, country: dto.country ?? "Nigeria", isDefault: makeDefault }
       });
     });
   }
@@ -36,7 +37,10 @@ export class AddressesService {
       if (dto.isDefault === true) {
         await tx.address.updateMany({ where: { userId, isDefault: true }, data: { isDefault: false } });
       }
-      return tx.address.update({ where: { id: addressId }, data: dto });
+      return tx.address.update({
+        where: { id: addressId },
+        data: { ...dto, ...(dto.state ? { state: canonicalNigeriaStateCode(dto.state) ?? dto.state.trim() } : {}) }
+      });
     });
   }
 

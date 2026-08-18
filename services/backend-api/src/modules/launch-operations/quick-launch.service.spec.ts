@@ -197,6 +197,30 @@ describe("QuickLaunchService", () => {
     ]);
   });
 
+  it.each(["FCT", "Federal Capital Territory", "Federal Capital Territory (FCT)"])("makes Savannah READY for an Abuja address stored with %s", async (state) => {
+    prisma.user.findMany.mockResolvedValueOnce([{
+      id: "savannah", fullName: "Savannah Customer", phoneNumber: "+2348126733333", role: UserRole.RIDER,
+      accountStatus: AccountStatus.ACTIVE, phoneVerified: true, deletedAt: null, customerProfile: { referralCode: "KGO-SAVANNAH" },
+      addresses: [{ city: "Abuja", state, latitude: null, longitude: null, isDefault: false }]
+    }]);
+
+    await expect(service.customerCandidates("Abuja", "Savannah")).resolves.toEqual([
+      expect.objectContaining({ userId: "savannah", cityReadiness: "Ready for Abuja", ready: true })
+    ]);
+  });
+
+  it("uses saved coordinates as a backward-compatible Abuja readiness signal", async () => {
+    prisma.user.findMany.mockResolvedValueOnce([{
+      id: "coordinate-customer", fullName: "Coordinate Customer", phoneNumber: "+2348126733333", role: UserRole.CUSTOMER,
+      accountStatus: AccountStatus.ACTIVE, phoneVerified: true, deletedAt: null, customerProfile: { referralCode: "KGO-COORD" },
+      addresses: [{ city: "Municipal", state: "Nigeria", latitude: "9.0765", longitude: "7.3986", isDefault: false }]
+    }]);
+
+    await expect(service.customerCandidates("Abuja", "Coordinate Customer")).resolves.toEqual([
+      expect.objectContaining({ cityReadiness: "Ready for Abuja", ready: true })
+    ]);
+  });
+
   it("matches punctuation-formatted stored Customer phones in memory", async () => {
     prisma.user.findMany.mockResolvedValue([{
       id: "formatted-phone", fullName: "Formatted Phone", phoneNumber: "+234 (803) 368-6696", role: UserRole.CUSTOMER,

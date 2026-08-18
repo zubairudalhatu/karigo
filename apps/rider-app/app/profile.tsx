@@ -101,6 +101,9 @@ export default function Profile() {
   const deliveryCaptainProfile = captainAccess?.deliveryCaptainProfile;
 
   if (loading && !captainAccess) return <Loading label="Preparing Captain profile..." />;
+  const rideApplicationReference = captainAccess?.rideCaptainApplication.exists
+    ? captainAccess.rideCaptainApplication.applicationReference
+    : null;
 
   async function toggleBiometricSignIn() {
     setBiometricBusy(true);
@@ -118,6 +121,10 @@ export default function Profile() {
 
   return <Protected><Screen title="Captain Profile" subtitle="Your KariGO Captain identity, modes and account controls." refreshing={loading} onRefresh={load}><Message error>{error}</Message><Message>{message}</Message>
     <Card tone="soft">
+      <Text style={ui.sectionTitle}>Captain identity</Text>
+      <InfoRow label="Captain code" value={deliveryCaptainProfile?.riderCode ?? profile?.riderCode ?? rideApplicationReference} />
+      <InfoRow label="Account status" value={account?.accountStatus} />
+      <InfoRow label="Captain status" value={projection.overallStatus} />
       <View style={styles.headerRow}>
         {displayPhoto ? <Image source={{ uri: displayPhoto }} style={styles.avatarImage} /> : <View style={styles.avatar}><Text style={styles.avatarText}>{initials(displayName).toUpperCase()}</Text></View>}
         <View style={styles.headerText}>
@@ -133,7 +140,7 @@ export default function Profile() {
     </Card>
 
     <Card>
-      <Text style={ui.sectionTitle}>Captain access</Text>
+      <Text style={ui.sectionTitle}>Operations</Text>
       <Text style={ui.muted}>{projection.overallMessage}</Text>
       {modeRows.map((mode) => <View key={mode.key} style={styles.modeRow}>
         <View style={ui.spaceBetween}>
@@ -165,10 +172,22 @@ export default function Profile() {
       <InfoRow label="Ride primary operating area" value={rideProfile?.primaryOperatingArea?.label ?? rideProfile?.primaryOperatingArea?.cityName} />
       <InfoRow label="Approved Delivery operating areas" value={operatingAreaList(deliveryCaptainProfile?.approvedOperatingAreas)} />
       <InfoRow label="Delivery primary operating area" value={deliveryCaptainProfile?.primaryOperatingArea?.label ?? deliveryCaptainProfile?.primaryOperatingArea?.cityName} />
-      {rideProfile?.operatingAreasRequireReview || deliveryCaptainProfile?.operatingAreasRequireReview ? <Text style={ui.muted}>Operating areas require review</Text> : null}
+      {rideProfile?.operatingAreasRequireReview ? <Text style={styles.reason}>Ride operating areas require review</Text> : null}
+      {deliveryCaptainProfile?.operatingAreasRequireReview ? <Text style={styles.reason}>Delivery operating areas require review</Text> : null}
       {!rideProfile?.approvedOperatingAreas?.length && !deliveryCaptainProfile?.approvedOperatingAreas?.length ? <Text style={ui.muted}>KariGO Operations manages active service areas for each Captain mode.</Text> : null}
     </Card>
 
+
+    <Card>
+      <Text style={ui.sectionTitle}>Driver preferences</Text>
+      <InfoRow label="Active vehicle" value={rideProfile?.vehicle ?? catalogLabel(profile?.vehicleType)} />
+      <InfoRow label="Ride preference" value={projection.ride.active ? workState?.desiredRideOnline ? "Online" : "Offline" : "Not activated"} />
+      <InfoRow label="Delivery preference" value={projection.delivery.active ? workState?.desiredDeliveryOnline ? "Online" : "Offline" : "Not activated"} />
+      <InfoRow label="Operating areas" value={operatingAreaList(rideProfile?.approvedOperatingAreas) ?? operatingAreaList(deliveryCaptainProfile?.approvedOperatingAreas)} />
+      <InfoRow label="Notifications" value="In-app operational alerts" />
+      <InfoRow label="Navigation" value="Device maps" />
+      <Text style={ui.muted}>KariGO Operations controls matching. Automatic matching and auto-accept remain disabled.</Text>
+    </Card>
     <Card>
       <Text style={ui.sectionTitle}>Documents</Text>
       <Text style={ui.muted}>Document review, expiry and revision requests are shown on Application Status. Private document files are not exposed in the production app UI.</Text>
@@ -181,7 +200,7 @@ export default function Profile() {
     </Card>
 
     <Card>
-      <Text style={ui.sectionTitle}>Notifications</Text>
+      <Text style={ui.sectionTitle}>App notifications</Text>
       <Text style={ui.muted}>{unread ? `${unread > 99 ? "99+" : unread} unread` : "No unread updates"}</Text>
       <NavLink href="/notifications" label="View notifications" />
     </Card>
@@ -199,9 +218,12 @@ export default function Profile() {
     </Card>
 
     <Card>
-      <Text style={ui.sectionTitle}>Support</Text>
+      <Text style={ui.sectionTitle}>Safety and support</Text>
+      <Text style={ui.muted}>For an immediate safety concern, stop in a safe place and contact emergency services or KariGO Operations.</Text>
+      <NavLink href="/notifications" label="Review safety and operations alerts" />
       <Text style={ui.muted}>For account, assignment or document issues, contact KariGO Operations through the approved support channel shared with your Captain account.</Text>
       <Button title="Open Support" tone="muted" onPress={() => Linking.openURL("https://www.karigo.com.ng/contact")} />
+      <Button title="Report an issue" tone="muted" onPress={() => Linking.openURL("https://www.karigo.com.ng/contact")} />
     </Card>
 
     <Button tone="muted" title="Log out" onPress={async () => { await logout(); router.replace("/auth/login"); }} />

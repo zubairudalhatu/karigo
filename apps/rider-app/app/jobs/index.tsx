@@ -129,7 +129,10 @@ export default function Jobs() {
     {completedJobs.length === 0 && cancelledJobs.length === 0 ? <Empty message="Completed and cancelled Delivery assignments will appear here." /> : [...completedJobs, ...cancelledJobs].map((job) =>
       <Link key={`history-${job.id}`} href={`/jobs/${job.id}` as never} asChild><Pressable><Card>
         <Text style={ui.title}>{job.orderNumber}</Text><StatusBadge status={job.orderStatus} />
-        <Text style={ui.muted}>{money(job.deliveryFee)} delivery fee</Text>
+        <Text style={ui.muted}>{new Date(job.updatedAt ?? job.createdAt).toLocaleString()}</Text>
+        <Text style={ui.muted}>From: {job.vendor?.businessName ?? ([job.pickupAddress?.addressLine, job.pickupAddress?.city].filter(Boolean).join(", ") || "Pickup withheld")}</Text>
+        <Text style={ui.muted}>To: {[job.deliveryAddress?.addressLine, job.deliveryAddress?.city].filter(Boolean).join(", ") || "Destination withheld"}</Text>
+        <Text style={ui.muted}>Delivery fee: {money(job.deliveryFee)}</Text>
       </Card></Pressable></Link>)}
     </>}
   </Screen></Protected>;

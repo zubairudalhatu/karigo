@@ -94,3 +94,4 @@ export default function JobDetails() {
 const styles = StyleSheet.create({
   reasonGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 }
 });
+    <Card><Text style={ui.title}>Help with this delivery</Text><Text style={ui.muted}>Report an assignment, payment or safety issue without sharing unnecessary Customer details.</Text><Button tone="muted" title="Contact KariGO Support" onPress={() => Linking.openURL("https://www.karigo.com.ng/contact")} /></Card>

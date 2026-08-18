@@ -139,6 +139,10 @@ function refreshSucceeded(result: RefreshAuthResult): boolean {
   return result === true || result === "refreshed";
 }
 
+function retryDelayMs(): number {
+  return 300 + Math.floor(Math.random() * 151);
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -271,7 +275,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
     } catch (error) {
       const retryNetwork = retryOnNetworkFailure || shouldRetryAuthMe(normalizedPath, method, hasRetried);
       if (!hasRetried && retryNetwork && isNetworkLikeError(error)) {
-        await delay(350);
+        await delay(retryDelayMs());
         return request<T>(path, requestOptions, true);
       }
       throw error;
@@ -282,7 +286,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
       isTemporaryHttpStatus(response.status) &&
       (retryOnTemporaryFailure || shouldRetryAuthMe(normalizedPath, method, hasRetried))
     ) {
-      await delay(350);
+      await delay(retryDelayMs());
       return request<T>(path, requestOptions, true);
     }
 

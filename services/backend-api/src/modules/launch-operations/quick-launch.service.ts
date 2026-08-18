@@ -25,6 +25,7 @@ import {
   StartQuickLaunchDto
 } from "./dto/launch-operations.dto";
 import { LaunchOperationsService } from "./launch-operations.service";
+import { customerHasServiceAreaAddress, CustomerAddressLocation } from "./customer-address-service-area";
 
 const CITIES = [
   { code: "KANO", name: "Kano" },
@@ -167,7 +168,7 @@ export class QuickLaunchService {
     if (!authoritativeUsers.length) return [];
     const users = await this.prisma.user.findMany({
       where: { id: { in: authoritativeUsers.map((user) => user.id) }, deletedAt: null },
-      include: { customerProfile: true, addresses: { select: { city: true, state: true, isDefault: true } } },
+      include: { customerProfile: true, addresses: { select: { city: true, state: true, latitude: true, longitude: true, isDefault: true } } },
       orderBy: { fullName: "asc" }
     });
     const term = query?.trim().toLowerCase();
@@ -189,11 +190,9 @@ export class QuickLaunchService {
     phoneVerified: boolean;
     deletedAt?: Date | null;
     customerProfile: { referralCode: string } | null;
-    addresses: Array<{ city: string; state: string }>;
+    addresses: CustomerAddressLocation[];
   }) {
-    const cityMatches = user.addresses.some((address) => {
-      try { return this.city(`${address.city} ${address.state}`).code === city.code; } catch { return false; }
-    });
+    const cityMatches = customerHasServiceAreaAddress(user.addresses, city.code);
     const blockerCodes = [
       user.accountStatus !== AccountStatus.ACTIVE ? "ACCOUNT_BLOCKED" : null,
       !user.phoneVerified || !user.customerProfile ? "PROFILE_INCOMPLETE" : null,
@@ -457,7 +456,7 @@ export class QuickLaunchService {
     const city = this.city(dto.city);
     const customerAccount = await this.prisma.user.findFirst({
       where: { id: dto.customerUserId, deletedAt: null },
-      include: { customerProfile: true, addresses: { select: { city: true, state: true } } }
+      include: { customerProfile: true, addresses: { select: { city: true, state: true, latitude: true, longitude: true } } }
     });
     if (!customerAccount) throw new BadRequestException("Selected Customer account was not found");
     const customer = this.customerCandidate(city, customerAccount);

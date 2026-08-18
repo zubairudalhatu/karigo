@@ -527,13 +527,27 @@ const authApi = read("src", "api", "auth.api.ts");
 assert(authApi.includes("LoginResponse"), "Customer auth API must type login as success or verification-required response.");
 
 const addressesScreen = read("app", "addresses.tsx");
+const addressesApi = read("src", "api", "addresses.api.ts");
+const stateSelector = read("src", "components", "nigeria-state-selector.tsx");
+const nigeriaStatesCatalog = read(path.join("..", "..", "packages", "shared-types", "src", "nigeria-states.ts"));
 assert(addressesScreen.includes("expo-location"), "Saved address screen must use Expo Location for optional device location capture.");
 assert(addressesScreen.includes("Use current location"), "Saved address screen must expose a customer-controlled location action.");
 assert(addressesScreen.includes("manual"), "Saved address location failure copy must preserve manual address entry.");
 assert(addressesScreen.includes("latitude") && addressesScreen.includes("longitude"), "Saved address creation must preserve captured coordinates.");
+assert(addressesScreen.includes("Address saved.") && addressesScreen.includes("saving"), "Saved address creation must show success and prevent duplicate submissions.");
+assert(addressesScreen.includes("Street address, area / neighbourhood") && addressesScreen.includes("Delivery note (optional)"), "Address form must clearly label dispatch address fields.");
+assert(stateSelector.includes("all 36 Nigerian States") && stateSelector.includes("Federal Capital Territory"), "Address form must use a complete Nigerian State/Territory selector.");
+assert((nigeriaStatesCatalog.match(/\{ code:/g) || []).length === 37, "Nigerian State/Territory catalog must contain 36 states plus FCT.");
+assert(nigeriaStatesCatalog.includes('{ code: "FCT", name: "Federal Capital Territory" }') && nigeriaStatesCatalog.includes('{ code: "KANO", name: "Kano State" }'), "Address state catalog must preserve canonical FCT and KANO values.");
 const editAddressScreen = read("app", "addresses", "[id].tsx");
 assert(editAddressScreen.includes("Use current location"), "Edit address screen must expose location refresh.");
 assert(editAddressScreen.includes("requestForegroundPermissionsAsync"), "Edit address location refresh must request foreground permission.");
+assert(editAddressScreen.includes("addressUpdateInput") && !editAddressScreen.includes("addressesApi.update(id, address)"), "Edit address must send an explicit mutable payload without the stored id.");
+assert(editAddressScreen.includes("Saving address...") && editAddressScreen.includes('saved: "1"'), "Edit address must prevent duplicates and return with save confirmation.");
+assert(addressesApi.includes("AddressUpdateInput") && addressesApi.includes("label: address.label.trim()"), "Address API must serialize mutable update fields explicitly.");
+["id", "userId", "customerId", "createdAt", "updatedAt", "deletedAt"].forEach((field) => {
+  assert(!addressesApi.slice(addressesApi.indexOf("function addressUpdateInput"), addressesApi.indexOf("export const addressesApi")).includes(`${field}: address.`), `Address update payload must not serialize ${field}.`);
+});
 
 assert(appConfig.includes('name: isStaging ? "KariGO Customer Staging" : "KariGO"'), "Customer production app name must remain KariGO.");
 assert(appConfig.includes('icon: "./assets/icon.png"'), "Customer App config must use the approved fallback launcher icon.");
