@@ -198,6 +198,61 @@ describe("AccelerateUtilityProvider", () => {
     expect(JSON.stringify(result)).not.toContain("accelerate-private-key-placeholder");
   });
 
+  it("returns structured readiness when Accelerate credentials are missing", async () => {
+    const missingConfig = { get: jest.fn() } as unknown as ConfigService;
+    const fetchMock = jest.spyOn(global, "fetch");
+    const provider = new AccelerateUtilityProvider(missingConfig);
+
+    await expect(provider.connectivityReadiness()).resolves.toMatchObject({
+      configuration: "MISSING_CONFIGURATION",
+      ipAllowlist: "VERIFICATION_REQUIRED",
+      authentication: "NOT_RUN",
+      services: {
+        AIRTIME: "NOT_RUN",
+        DATA: "NOT_RUN",
+        ELECTRICITY: "NOT_RUN",
+        CABLE_TV: "NOT_RUN"
+      }
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns structured readiness when Accelerate authentication fails", async () => {
+    jest.spyOn(global, "fetch").mockResolvedValueOnce(response({ message: "Invalid credentials" }, false, 401));
+    const provider = new AccelerateUtilityProvider(config);
+
+    await expect(provider.connectivityReadiness()).resolves.toMatchObject({
+      configuration: "READY",
+      ipAllowlist: "VERIFICATION_REQUIRED",
+      authentication: "FAILED",
+      services: {
+        AIRTIME: "NOT_RUN",
+        DATA: "NOT_RUN",
+        ELECTRICITY: "NOT_RUN",
+        CABLE_TV: "NOT_RUN"
+      }
+    });
+  });
+
+  it("returns structured readiness when authenticated endpoints are unreachable", async () => {
+    jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce(response({ data: { access_token: "jwt-token" } }))
+      .mockResolvedValue(response({ message: "Service unavailable" }, false, 503));
+    const provider = new AccelerateUtilityProvider(config);
+
+    await expect(provider.connectivityReadiness()).resolves.toMatchObject({
+      configuration: "READY",
+      ipAllowlist: "VERIFIED",
+      authentication: "READY",
+      services: {
+        AIRTIME: "FAILED",
+        DATA: "FAILED",
+        ELECTRICITY: "FAILED",
+        CABLE_TV: "FAILED"
+      }
+    });
+  });
+
   it("does not verify provider IP access when a probe returns the known IP denial", async () => {
     jest.spyOn(global, "fetch")
       .mockResolvedValueOnce(response({ data: { access_token: "jwt-token" } }))

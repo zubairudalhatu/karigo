@@ -305,6 +305,9 @@ assert(paymentReadinessPage.includes("Live provider fulfilment"), "Payment Readi
 assert(paymentReadinessPage.includes("Wallet-to-utility payment is enabled for Utilities only"), "Payment Readiness page must state wallet utility payment live guardrails.");
 assert(paymentReadinessPage.includes("Wallet-to-utility payment remains disabled until Utilities customer purchases"), "Payment Readiness page must state utility rollback guardrails when flags are disabled.");
 assert(paymentReadinessPage.includes("Run non-destructive Accelerate check"), "Payment Readiness page must expose the safe Accelerate connectivity check.");
+assert(paymentReadinessPage.includes("Accelerate readiness check could not be completed. No wallet debit or utility vend occurred."), "Accelerate readiness failures must use provider-specific non-destructive copy.");
+assert(paymentReadinessPage.includes("setUtilityCheckError(accelerateReadinessCheckError(e))"), "Accelerate readiness failures must not use sandbox initialization error copy.");
+assert(paymentReadinessPage.includes(">Retry</button>"), "Accelerate readiness failures must expose Retry beside the error.");
 assert(paymentReadinessPage.includes("Provider IP access") && paymentReadinessPage.includes("ipAllowlist"), "Payment Readiness page must show evidence-based IP allowlist status.");
 assert(paymentReadinessPage.includes("Airtime API") && paymentReadinessPage.includes("Data API") && paymentReadinessPage.includes("Electricity API") && paymentReadinessPage.includes("Cable TV API"), "Payment Readiness page must show all Accelerate service probes.");
 assert(paymentReadinessPage.includes("Utilities activation gates") && paymentReadinessPage.includes("Data catalogue") && paymentReadinessPage.includes("Cable TV catalogue"), "Payment Readiness page must show explicit utility and catalogue gates.");

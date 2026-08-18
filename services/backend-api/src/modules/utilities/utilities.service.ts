@@ -126,7 +126,7 @@ export class UtilitiesService {
         customerPurchases: this.customerUtilityPurchasesFlagEnabled() ? "READY" : "NOT_ENABLED"
       }
     };
-    await this.audit.record(adminUserId, "admin.utilities.accelerate_readiness_checked", "UtilityProvider", "accelerate", {
+    await this.audit.record(adminUserId, "admin.utilities.accelerate_readiness_checked", "UtilityProvider", null, {
       environment: connectivity.environment,
       configuration: connectivity.configuration,
       authentication: connectivity.authentication,

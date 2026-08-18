@@ -46,7 +46,7 @@ function serviceWith(options: {
   prismaOverrides?: Record<string, unknown>;
   txOverrides?: Record<string, unknown>;
   configValues?: Record<string, unknown>;
-  accelerateProvider?: Partial<UtilityProviderClient> & { isConfigured?: jest.Mock };
+  accelerateProvider?: Partial<UtilityProviderClient> & { isConfigured?: jest.Mock; connectivityReadiness?: jest.Mock };
 } = {}) {
   const now = new Date();
   const transactionCreate = jest.fn().mockImplementation(({ data }) => Promise.resolve({
@@ -185,6 +185,51 @@ const successfulAccelerateProvider = {
 };
 
 describe("UtilitiesService", () => {
+  it("records a non-destructive readiness audit with the authenticated Admin UUID and no non-UUID target", async () => {
+    const adminUserId = "78a90390-b713-4edf-86ca-862912859acd";
+    const connectivity = {
+      provider: "accelerate" as const,
+      configuration: "READY" as const,
+      environment: "LIVE" as const,
+      ipAllowlist: "VERIFIED" as const,
+      authentication: "READY" as const,
+      services: {
+        AIRTIME: "REACHABLE" as const,
+        DATA: "REACHABLE" as const,
+        ELECTRICITY: "REACHABLE" as const,
+        CABLE_TV: "REACHABLE" as const
+      },
+      checkedAt: new Date().toISOString(),
+      safeNote: "Authentication and non-destructive endpoint probes completed without an IP allowlist denial."
+    };
+    const { audit, accelerateProvider, service, tx } = serviceWith({
+      configValues: {
+        UTILITIES_PROVIDER: "accelerate",
+        UTILITIES_ENABLED: true,
+        ACCELERATE_ENABLED: true
+      },
+      accelerateProvider: { connectivityReadiness: jest.fn().mockResolvedValue(connectivity) }
+    });
+
+    await expect(service.adminConnectivityReadiness(adminUserId)).resolves.toMatchObject({ connectivity });
+
+    expect(audit.record).toHaveBeenCalledWith(
+      adminUserId,
+      "admin.utilities.accelerate_readiness_checked",
+      "UtilityProvider",
+      null,
+      expect.objectContaining({
+        environment: "LIVE",
+        authentication: "READY",
+        ipAllowlist: "VERIFIED"
+      })
+    );
+    const auditDetails = (audit.record as jest.Mock).mock.calls[0][4];
+    expect(JSON.stringify(auditDetails)).not.toMatch(/credential|private.?key|public.?key|jwt|token/i);
+    expect(accelerateProvider.purchase).not.toHaveBeenCalled();
+    expect(tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
   it("lists only active catalogue providers through the public catalogue path", async () => {
     const { prisma, service } = serviceWith();
     await expect(service.listProviders({ type: UtilityServiceType.AIRTIME })).resolves.toEqual([provider]);

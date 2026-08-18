@@ -88,6 +88,10 @@ function paymentInitializationTestError(error: unknown) {
   return base;
 }
 
+function accelerateReadinessCheckError(_error: unknown) {
+  return "Accelerate readiness check could not be completed. No wallet debit or utility vend occurred.";
+}
+
 function isSandboxTestProvider(provider: string): provider is SandboxInitializationTestProvider {
   return sandboxTestProviders.includes(provider);
 }
@@ -138,7 +142,7 @@ export default function PaymentReadinessPage() {
     setUtilityCheckError("");
     utilitiesApi.readinessCheck()
       .then(setUtilityCheck)
-      .catch((e) => setUtilityCheckError(paymentInitializationTestError(e)))
+      .catch((e) => setUtilityCheckError(accelerateReadinessCheckError(e)))
       .finally(() => setCheckingUtilities(false));
   }
 
@@ -156,7 +160,6 @@ export default function PaymentReadinessPage() {
       <p className="muted">Admin-only configuration readiness for Flutterwave, Cash / Pay on Delivery, Wallet, Squad, Monnify, Paystack and mock payment. This page shows key names and safe status only; it does not expose secret values and does not activate live checkout, wallet funding, refunds, payouts or settlements. Admin does not initiate customer payments from this page; the Customer App initiates checkout and backend verification confirms the final payment state.</p>
       <ErrorMessage>{error}</ErrorMessage>
       <ErrorMessage>{testError}</ErrorMessage>
-      <ErrorMessage>{utilityCheckError}</ErrorMessage>
 
       {loading ? <Loading /> : readiness ? (
         <>
@@ -255,6 +258,12 @@ export default function PaymentReadinessPage() {
                   <h3>{readiness.utilityReadiness.providerLabel}</h3>
                   <p><Badge>{readiness.utilityReadiness.accountStatus}</Badge> <Badge>{readiness.utilityReadiness.integrationStatus}</Badge></p>
               <button onClick={checkUtilities} disabled={checkingUtilities}>{checkingUtilities ? "Checking Accelerate..." : "Run non-destructive Accelerate check"}</button>
+              {utilityCheckError ? (
+                <div className="item">
+                  <ErrorMessage>{utilityCheckError}</ErrorMessage>
+                  <button className="secondary" onClick={checkUtilities} disabled={checkingUtilities}>Retry</button>
+                </div>
+              ) : null}
               <p className="muted">This authenticates from the deployed backend and probes validation routes with OPTIONS. It never validates a customer, debits a wallet, or vends a service.</p>
                   <div className="item"><span>Backend utilities enabled</span><strong>{yesNo(readiness.utilityReadiness.enabled)}</strong></div>
                   <div className="item"><span>Test mode</span><strong>{yesNo(readiness.utilityReadiness.testMode)}</strong></div>
