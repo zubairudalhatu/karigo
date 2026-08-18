@@ -561,18 +561,19 @@ assert(appConfig.includes("locationWhenInUsePermission"), "Customer App config m
 
 const utilitiesApi = read("src", "api", "utilities.api.ts");
 assert(utilitiesApi.includes("utilities/providers"), "Customer utilities API must load public providers.");
+assert(utilitiesApi.includes("utilities/readiness"), "Customer utilities API must load per-service availability.");
 assert(utilitiesApi.includes("customer/utilities/quote"), "Customer utilities API must quote test transactions.");
 assert(utilitiesApi.includes("customer/utilities/transactions"), "Customer utilities API must create and list utility transactions.");
 assert(utilitiesApi.includes("customer/utilities/transactions/${id}/cancel"), "Customer utilities API must call the owned cancellation endpoint.");
 const utilitiesHome = read("app", "utilities", "index.tsx");
-assert(utilitiesHome.includes("paymentsApi.publicConfig"), "Utilities hub must load public-safe backend utility readiness config.");
+assert(utilitiesHome.includes("utilitiesApi.readiness"), "Utilities hub must load public-safe per-service utility readiness.");
 assert(utilitiesHome.includes("utilitiesStatusNote"), "Utilities hub must show backend-controlled utility readiness copy.");
-assert(utilitiesHome.includes("Available") && utilitiesHome.includes("Provider review"), "Utilities hub must distinguish provider-backed and review states.");
+assert(utilitiesHome.includes("Available") && utilitiesHome.includes("Preparing launch") && utilitiesHome.includes("Temporarily unavailable"), "Utilities hub must distinguish all controlled launch states.");
 assert(utilitiesHome.includes("Airtime") && utilitiesHome.includes("Data") && utilitiesHome.includes("Electricity") && utilitiesHome.includes("Cable TV"), "Utilities hub must show all four services.");
 assert(utilitiesHome.includes("/utilities/history"), "Utilities hub must link to history.");
 const utilityFlow = read("app", "utilities", "[service].tsx");
 assert(utilityFlow.includes("Review Utility Request"), "Utility quote button must use provider-review copy.");
-assert(utilityFlow.includes("Submit Utility Request") && utilityFlow.includes("Submit Review Record"), "Utility confirm button must support provider-backed and review copy.");
+assert(utilityFlow.includes('availability !== "AVAILABLE"') && utilityFlow.includes("No utility request can be submitted until this service is available"), "Utility flow must block submission until the service is available.");
 assert(utilityFlow.includes("Pay with Wallet"), "Utility flow must expose wallet payment only when backend public config enables it.");
 assert(utilityFlow.includes("walletApi.summary"), "Utility flow must load the server-side wallet balance.");
 assert(utilityFlow.includes("walletUtilitiesEnabled"), "Utility flow must use backend utility wallet/live fulfilment flags.");

@@ -33,6 +33,29 @@ export interface AdminUtilityTransaction {
   completedAt?: string | null;
 }
 
+export interface AdminUtilityReadinessCheck {
+  connectivity: {
+    provider: "accelerate";
+    configuration: "READY" | "MISSING_CONFIGURATION";
+    environment: "LIVE" | "SANDBOX";
+    ipAllowlist: "VERIFIED" | "NOT_VERIFIED" | "VERIFICATION_REQUIRED";
+    authentication: "READY" | "FAILED" | "NOT_RUN";
+    services: Record<UtilityServiceType, "REACHABLE" | "FAILED" | "NOT_RUN">;
+    checkedAt: string;
+    safeNote: string;
+  };
+  catalogue: Record<UtilityServiceType, { status: "READY" | "BLOCKED"; reason: string }>;
+  gates: {
+    providerConfigured: "READY" | "BLOCKED";
+    accelerateAuth: "READY" | "BLOCKED";
+    providerIpAccess: "READY" | "BLOCKED";
+    walletPayment: "READY" | "NOT_ENABLED";
+    liveFulfilment: "READY" | "NOT_ENABLED";
+    customerPurchases: "READY" | "NOT_ENABLED";
+  };
+}
+
+
 const query = (params: Record<string, string | undefined>) => {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -49,5 +72,6 @@ export const utilitiesApi = {
   detail: (id: string) => api.get<AdminUtilityTransaction>(`admin/utilities/transactions/${id}`),
   verifyProviderStatus: (id: string) => api.post<AdminUtilityTransaction>(`admin/utilities/transactions/${id}/verify`),
   updateStatus: (id: string, status: UtilityTransactionStatus, note?: string) =>
-    api.patch<AdminUtilityTransaction>(`admin/utilities/transactions/${id}/status`, { status, note })
+    api.patch<AdminUtilityTransaction>(`admin/utilities/transactions/${id}/status`, { status, note }),
+  readinessCheck: () => api.post<AdminUtilityReadinessCheck>("admin/utilities/readiness/check")
 };

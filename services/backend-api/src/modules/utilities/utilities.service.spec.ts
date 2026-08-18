@@ -1099,4 +1099,63 @@ describe("UtilitiesService", () => {
     });
     await expect(service.customerDetail("user-id", "transaction-id")).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it("reports demo Data and Cable catalogues as temporarily unavailable", async () => {
+    const { service } = serviceWith({
+      prismaOverrides: {
+        utilityProvider: {
+          findMany: jest.fn().mockResolvedValue([
+            { type: UtilityServiceType.AIRTIME, code: "DEMO_MTN_AIRTIME_PROVIDER" },
+            { type: UtilityServiceType.DATA, code: "DEMO_MTN_DATA_PROVIDER" },
+            { type: UtilityServiceType.ELECTRICITY, code: "DEMO_KEDCO_PROVIDER" },
+            { type: UtilityServiceType.CABLE_TV, code: "DEMO_DSTV_PROVIDER" }
+          ])
+        },
+        utilityProduct: {
+          findMany: jest.fn().mockResolvedValue([
+            { type: UtilityServiceType.DATA, code: "DEMO_MTN_1GB" },
+            { type: UtilityServiceType.CABLE_TV, code: "DEMO_DSTV_COMPACT" }
+          ])
+        }
+      }
+    });
+
+    const readiness = await service.publicReadiness();
+    const byType = Object.fromEntries(readiness.services.map((item) => [item.serviceType, item]));
+
+    expect(byType.AIRTIME.availability).toBe("PREPARING_LAUNCH");
+    expect(byType.ELECTRICITY.availability).toBe("PREPARING_LAUNCH");
+    expect(byType.DATA).toMatchObject({ availability: "TEMPORARILY_UNAVAILABLE", note: "Live Accelerate Data package codes required." });
+    expect(byType.CABLE_TV).toMatchObject({ availability: "TEMPORARILY_UNAVAILABLE", note: "Live Accelerate Cable TV package codes required." });
+  });
+
+  it("honours preferred provider aliases and exposes only ready live catalogues", async () => {
+    const types = Object.values(UtilityServiceType);
+    const { service } = serviceWith({
+      configValues: {
+        UTILITIES_PROVIDER_NAME: "accelerate",
+        UTILITIES_PROVIDER_ENABLED: true,
+        UTILITIES_CUSTOMER_PURCHASE_ENABLED: true,
+        ACCELERATE_UTILITIES_ENABLED: true,
+        UTILITIES_TEST_MODE: false,
+        UTILITIES_WALLET_PAYMENT_ENABLED: true,
+        UTILITIES_LIVE_FULFILLMENT_ENABLED: true
+      },
+      prismaOverrides: {
+        utilityProvider: {
+          findMany: jest.fn().mockResolvedValue(types.map((type) => ({ type, code: `${type}_PROVIDER` })))
+        },
+        utilityProduct: {
+          findMany: jest.fn().mockResolvedValue([
+            { type: UtilityServiceType.DATA, code: "MTN_1GB_30D" },
+            { type: UtilityServiceType.CABLE_TV, code: "DSTV_COMPACT" }
+          ])
+        }
+      }
+    });
+
+    const readiness = await service.publicReadiness();
+
+    expect(readiness.services.every((item) => item.availability === "AVAILABLE")).toBe(true);
+  });
 });

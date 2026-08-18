@@ -13,6 +13,17 @@ import {
 
 type JsonRecord = Record<string, unknown>;
 type AccelerateBase = "airtimeData" | "power";
+export type AccelerateConnectivityStatus = {
+  provider: "accelerate";
+  configuration: "READY" | "MISSING_CONFIGURATION";
+  environment: "LIVE" | "SANDBOX";
+  ipAllowlist: "VERIFIED" | "NOT_VERIFIED" | "VERIFICATION_REQUIRED";
+  authentication: "READY" | "FAILED" | "NOT_RUN";
+  services: Record<UtilityServiceType, "REACHABLE" | "FAILED" | "NOT_RUN">;
+  checkedAt: string;
+  safeNote: string;
+};
+
 type AccelerateMode = "sandbox" | "live";
 
 const DEFAULT_ACCELERATE_URLS: Record<AccelerateMode, { auth: string; airtimeData: string; power: string }> = {
@@ -70,6 +81,69 @@ export class AccelerateUtilityProvider implements UtilityProviderClient {
   isConfigured(): boolean {
     return Boolean(this.publicKey() && this.privateKey());
   }
+  async connectivityReadiness(): Promise<AccelerateConnectivityStatus> {
+    const checkedAt = new Date().toISOString();
+    const services: AccelerateConnectivityStatus["services"] = {
+      AIRTIME: "NOT_RUN",
+      DATA: "NOT_RUN",
+      ELECTRICITY: "NOT_RUN",
+      CABLE_TV: "NOT_RUN"
+    };
+    if (!this.isConfigured()) {
+      return {
+        provider: "accelerate",
+        configuration: "MISSING_CONFIGURATION",
+        environment: this.mode().toUpperCase() as "LIVE" | "SANDBOX",
+        ipAllowlist: "VERIFICATION_REQUIRED",
+        authentication: "NOT_RUN",
+        services,
+        checkedAt,
+        safeNote: "Accelerate credentials are missing. No provider request was made."
+      };
+    }
+
+    let token: string;
+    try {
+      token = await this.accessToken();
+    } catch (error) {
+      const ipDenied = this.isIpAllowlistDenied(error);
+      return {
+        provider: "accelerate",
+        configuration: "READY",
+        environment: this.mode().toUpperCase() as "LIVE" | "SANDBOX",
+        ipAllowlist: ipDenied ? "NOT_VERIFIED" : "VERIFICATION_REQUIRED",
+        authentication: "FAILED",
+        services,
+        checkedAt,
+        safeNote: ipDenied
+          ? "Provider rejected the backend request because its IP is not allowlisted."
+          : "Accelerate authentication failed. Review production credentials and provider availability."
+      };
+    }
+
+    let ipDenied = false;
+    await Promise.all((Object.values(UtilityServiceType) as UtilityServiceType[]).map(async (serviceType) => {
+      const result = await this.probeEndpoint(serviceType, token);
+      services[serviceType] = result.reachable ? "REACHABLE" : "FAILED";
+      ipDenied ||= result.ipDenied;
+    }));
+    const allReachable = Object.values(services).every((status) => status === "REACHABLE");
+    return {
+      provider: "accelerate",
+      configuration: "READY",
+      environment: this.mode().toUpperCase() as "LIVE" | "SANDBOX",
+      ipAllowlist: ipDenied ? "NOT_VERIFIED" : "VERIFIED",
+      authentication: "READY",
+      services,
+      checkedAt,
+      safeNote: ipDenied
+        ? "Provider IP access is not verified. Customer-paid Utilities must remain disabled."
+        : allReachable
+          ? "Authentication and non-destructive endpoint probes completed without an IP allowlist denial."
+          : "Authentication succeeded and provider IP access was verified, but one or more service endpoints did not respond as reachable."
+    };
+  }
+
 
   async validateRecipient(serviceType: UtilityServiceType, recipient: string): Promise<UtilityRecipientValidationResult> {
     return this.localRecipientValidation(serviceType, recipient);
@@ -262,6 +336,28 @@ export class AccelerateUtilityProvider implements UtilityProviderClient {
     if (/(pending|queued|accepted|processing|process|submitted|in_progress|initiated)/.test(normalized)) return UtilityTransactionStatus.PROCESSING;
     return UtilityTransactionStatus.PROCESSING;
   }
+
+  private async probeEndpoint(serviceType: UtilityServiceType, token: string): Promise<{ reachable: boolean; ipDenied: boolean }> {
+    try {
+      const endpoint = SERVICE_ENDPOINTS[serviceType];
+      const response = await fetch(this.url(endpoint.base, endpoint.validate), {
+        method: "OPTIONS",
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${token}`
+        }
+      });
+      const payload = await this.safeJson(response);
+      const ipDenied = this.responseIsIpAllowlistDenied(response.status, payload);
+      return {
+        reachable: !ipDenied && response.status < 500 && response.status !== 401 && response.status !== 403,
+        ipDenied
+      };
+    } catch {
+      return { reachable: false, ipDenied: false };
+    }
+  }
+
 
   private customerNote(status: UtilityTransactionStatus): string {
     if (status === UtilityTransactionStatus.SUCCESSFUL) {
@@ -481,6 +577,12 @@ export class AccelerateUtilityProvider implements UtilityProviderClient {
 
   private validationReference(response: JsonRecord): string | undefined {
     return this.firstStringFrom(response, ["validation_reference", "validationReference", "validation_ref", "reference", "ref"]);
+  }
+
+  private responseIsIpAllowlistDenied(status: number, payload: JsonRecord): boolean {
+    if (status !== 401 && status !== 403) return false;
+    const message = this.safeProviderMessage(payload, "").toLowerCase();
+    return /ip/.test(message) && /(not allowed|not allowlisted|allowlist|whitelist)/.test(message);
   }
 
   private tokenFromResponse(response: JsonRecord): string | undefined {

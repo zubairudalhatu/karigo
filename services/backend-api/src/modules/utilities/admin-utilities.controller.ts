@@ -26,6 +26,15 @@ const UTILITY_ADMINS = [
 @Roles(UserRole.ADMIN)
 @AdminRoles(...UTILITY_ADMINS)
 export class AdminUtilitiesController {
+  @Post("readiness/check")
+  @ApiOperation({ summary: "Run a non-destructive Accelerate connectivity and catalogue readiness check" })
+  async readinessCheck(@CurrentUser() user: AuthenticatedUser) {
+    return {
+      message: "Accelerate Utilities readiness checked",
+      data: await this.utilities.adminConnectivityReadiness(user.id)
+    };
+  }
+
   constructor(private readonly utilities: UtilitiesService) {}
 
   @Get("summary")

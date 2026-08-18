@@ -8,6 +8,12 @@ import { UtilitiesService } from "./utilities.service";
 export class UtilitiesController {
   constructor(private readonly utilities: UtilitiesService) {}
 
+  @Get("readiness")
+  @ApiOperation({ summary: "Get safe customer-facing Bills & Utilities availability" })
+  async readiness() {
+    return { message: "Utility availability retrieved", data: await this.utilities.publicReadiness() };
+  }
+
   @Get("providers")
   @ApiOperation({ summary: "List active Bills & Utilities providers" })
   async providers(@Query() query: UtilityProvidersQueryDto) {

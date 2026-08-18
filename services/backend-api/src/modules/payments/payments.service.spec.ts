@@ -612,10 +612,13 @@ describe("PaymentsService", () => {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       const values: Record<string, string | boolean> = {
         UTILITIES_PROVIDER: "accelerate",
-        UTILITIES_ENABLED: "false",
+        UTILITIES_ENABLED: "true",
         UTILITIES_TEST_MODE: "true",
         UTILITIES_CUSTOMER_PURCHASE_ENABLED: "false",
         ACCELERATE_ENABLED: "true",
+        ACCELERATE_ENV: "live",
+        ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+        ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder",
         ACCELERATE_BASE_URL: "https://api.accelerate.example",
         ACCELERATE_API_KEY: "accelerate-api-key-placeholder",
         ACCELERATE_CLIENT_ID: "accelerate-client-id-placeholder",
@@ -632,8 +635,8 @@ describe("PaymentsService", () => {
       provider: "accelerate",
       providerLabel: "Accelerate.ng",
       accountStatus: "Approved",
-      integrationStatus: "Readiness / controlled testing",
-      enabled: false,
+      integrationStatus: "Provider integration configured",
+      enabled: true,
       testMode: true,
       customerPurchaseEnabled: false,
       customerPurchaseBlocked: true,
@@ -646,6 +649,8 @@ describe("PaymentsService", () => {
     });
     expect(serialized).not.toContain("accelerate-api-key-placeholder");
     expect(serialized).not.toContain("accelerate-client-secret-placeholder");
+    expect(serialized).not.toContain("accelerate-public-key-placeholder");
+    expect(serialized).not.toContain("accelerate-private-key-placeholder");
     expect(serialized).not.toContain("accelerate-webhook-secret-placeholder");
   });
 
@@ -755,6 +760,9 @@ describe("PaymentsService", () => {
         UTILITIES_LIVE_FULFILLMENT_ENABLED: "true",
         ACCELERATE_ENABLED: "true",
         ACCELERATE_BASE_URL: "https://api.accelerate.example",
+        ACCELERATE_ENV: "live",
+        ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+        ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder",
         ACCELERATE_API_KEY: "accelerate-api-key-placeholder"
       };
       return values[key] ?? fallback;
@@ -785,7 +793,7 @@ describe("PaymentsService", () => {
       utilitiesPaymentMethod: "WALLET"
     });
     expect(publicConfig.utilitiesStatusNote).toContain("KariGO Wallet");
-    expect(serialized).toContain("Accelerate may require KariGO backend outbound IP allowlisting before live fulfilment works.");
+    expect(serialized).toContain("Provider IP access is VERIFIED only after the deployed backend completes a real, non-destructive request without an IP allowlist denial.");
     expect(serialized).not.toContain("accelerate-api-key-placeholder");
   });
 

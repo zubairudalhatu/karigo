@@ -80,6 +80,95 @@ export class UtilitiesService {
     });
   }
 
+  async publicReadiness() {
+    const catalogue = await this.catalogueReadiness();
+    const paidProcessingEnabled = this.accelerateCustomerPurchasesEnabled() &&
+      !this.flagValue("UTILITIES_TEST_MODE", true) &&
+      this.flagValue("UTILITIES_WALLET_PAYMENT_ENABLED", false) &&
+      this.flagValue("UTILITIES_LIVE_FULFILLMENT_ENABLED", false);
+    return {
+      services: (Object.values(UtilityServiceType) as UtilityServiceType[]).map((serviceType) => {
+        const gate = catalogue[serviceType];
+        const availability = paidProcessingEnabled && gate.status === "READY"
+          ? "AVAILABLE"
+          : gate.status === "READY"
+            ? "PREPARING_LAUNCH"
+            : "TEMPORARILY_UNAVAILABLE";
+        return {
+          serviceType,
+          availability,
+          note: availability === "AVAILABLE"
+            ? `${this.serviceLabel(serviceType)} is available for wallet payment.`
+            : availability === "PREPARING_LAUNCH"
+              ? `${this.serviceLabel(serviceType)} is preparing for controlled launch.`
+              : gate.reason
+        };
+      })
+    };
+  }
+
+  async adminConnectivityReadiness(adminUserId: string) {
+    const [connectivity, catalogue] = await Promise.all([
+      this.accelerateProvider.connectivityReadiness(),
+      this.catalogueReadiness()
+    ]);
+    const providerSelected = this.utilitiesProviderName() === "accelerate";
+    const providerEnabled = this.utilitiesPlatformEnabled() && this.accelerateIntegrationEnabled();
+    const result = {
+      connectivity,
+      catalogue,
+      gates: {
+        providerConfigured: providerSelected && providerEnabled && connectivity.configuration === "READY" ? "READY" : "BLOCKED",
+        accelerateAuth: connectivity.authentication === "READY" ? "READY" : "BLOCKED",
+        providerIpAccess: connectivity.ipAllowlist === "VERIFIED" ? "READY" : "BLOCKED",
+        walletPayment: this.flagValue("UTILITIES_WALLET_PAYMENT_ENABLED", false) ? "READY" : "NOT_ENABLED",
+        liveFulfilment: this.flagValue("UTILITIES_LIVE_FULFILLMENT_ENABLED", false) ? "READY" : "NOT_ENABLED",
+        customerPurchases: this.customerUtilityPurchasesFlagEnabled() ? "READY" : "NOT_ENABLED"
+      }
+    };
+    await this.audit.record(adminUserId, "admin.utilities.accelerate_readiness_checked", "UtilityProvider", "accelerate", {
+      environment: connectivity.environment,
+      configuration: connectivity.configuration,
+      authentication: connectivity.authentication,
+      ipAllowlist: connectivity.ipAllowlist,
+      services: connectivity.services,
+      catalogue
+    });
+    return result;
+  }
+
+  private async catalogueReadiness() {
+    const [providers, products] = await Promise.all([
+      this.prisma.utilityProvider.findMany({
+        where: { isActive: true },
+        select: { type: true, code: true }
+      }),
+      this.prisma.utilityProduct.findMany({
+        where: { isActive: true, provider: { isActive: true } },
+        select: { type: true, code: true }
+      })
+    ]);
+    const providerReady = (type: UtilityServiceType) => providers.some((item) => item.type === type);
+    const liveProductReady = (type: UtilityServiceType) => products.some((item) => item.type === type && !item.code.startsWith("DEMO_"));
+    const gate = (type: UtilityServiceType, requiresLiveProducts: boolean) => {
+      const ready = providerReady(type) && (!requiresLiveProducts || liveProductReady(type));
+      return {
+        status: ready ? "READY" as const : "BLOCKED" as const,
+        reason: ready
+          ? `${this.serviceLabel(type)} provider configuration is ready.`
+          : requiresLiveProducts
+            ? `Live Accelerate ${this.serviceLabel(type)} package codes required.`
+            : `${this.serviceLabel(type)} provider configuration is required.`
+      };
+    };
+    return {
+      AIRTIME: gate(UtilityServiceType.AIRTIME, false),
+      DATA: gate(UtilityServiceType.DATA, true),
+      ELECTRICITY: gate(UtilityServiceType.ELECTRICITY, false),
+      CABLE_TV: gate(UtilityServiceType.CABLE_TV, true)
+    };
+  }
+
   async quote(userId: string, dto: UtilityQuoteDto) {
     const customer = await this.requireCustomer(userId);
     const utilityProvider = this.activeUtilityProvider();
@@ -741,10 +830,22 @@ export class UtilitiesService {
   }
 
   private accelerateCustomerPurchasesEnabled() {
-    return this.stringValue("UTILITIES_PROVIDER", "mock") === "accelerate" &&
-      this.flagValue("UTILITIES_ENABLED", false) &&
+    return this.utilitiesProviderName() === "accelerate" &&
+      this.utilitiesPlatformEnabled() &&
       this.customerUtilityPurchasesFlagEnabled() &&
-      this.flagValue("ACCELERATE_ENABLED", false);
+      this.accelerateIntegrationEnabled();
+  }
+
+  private utilitiesProviderName() {
+    return this.stringValue("UTILITIES_PROVIDER", this.stringValue("UTILITIES_PROVIDER_NAME", "mock"));
+  }
+
+  private utilitiesPlatformEnabled() {
+    return this.flagValue("UTILITIES_ENABLED", false) || this.flagValue("UTILITIES_PROVIDER_ENABLED", false);
+  }
+
+  private accelerateIntegrationEnabled() {
+    return this.flagValue("ACCELERATE_ENABLED", false) || this.flagValue("ACCELERATE_UTILITIES_ENABLED", false);
   }
 
   private walletUtilityPaymentEnabled(utilityProvider: ReturnType<UtilitiesService["activeUtilityProvider"]>) {
@@ -782,6 +883,10 @@ export class UtilitiesService {
       ...(this.jsonObject(currentMetadata)),
       ...(metadata ?? {})
     } as Prisma.InputJsonObject;
+  }
+
+  private serviceLabel(type: UtilityServiceType) {
+    return type === UtilityServiceType.CABLE_TV ? "Cable TV" : type.charAt(0) + type.slice(1).toLowerCase();
   }
 
   private transactionProviderMode(metadata: Prisma.JsonValue | null) {

@@ -149,15 +149,18 @@ export default function AdminUtilitiesPage() {
           <div className="item"><span>Fee</span><strong>{moneyKobo(selected.convenienceFeeKobo)}</strong></div>
           <div className="item"><span>Total</span><strong>{moneyKobo(selected.totalKobo)}</strong></div>
           <div className="item"><span>Status</span><Badge>{selected.status}</Badge></div>
+          {selected.providerStatus ? <div className="item"><span>Provider status</span><Badge>{selected.providerStatus}</Badge></div> : null}
           {selected.providerReference ? <div className="item"><span>Provider reference</span><strong>{selected.providerReference}</strong></div> : null}
           {selected.walletDebitReference ? <div className="item"><span>Wallet debit reference</span><strong>{selected.walletDebitReference}</strong></div> : null}
           {selected.walletDebitStatus ? <div className="item"><span>Wallet debit status</span><Badge>{selected.walletDebitStatus}</Badge></div> : null}
           {selected.walletReversalReference ? <div className="item"><span>Wallet reversal reference</span><strong>{selected.walletReversalReference}</strong></div> : null}
           {selected.walletReversalStatus ? <div className="item"><span>Wallet reversal status</span><Badge>{selected.walletReversalStatus}</Badge></div> : null}
-          {selected.mockToken ? <div className="item"><span>Mock token</span><strong>{selected.mockToken}</strong></div> : null}
+          {selected.mockToken ? <div className="item"><span>Prepaid token / receipt</span><strong>{selected.mockToken}</strong></div> : null}
           {selected.providerSafeNote ? <p className="warning">{selected.providerSafeNote}</p> : null}
           {selected.customerNote ? <p className="muted">{selected.customerNote}</p> : null}
           {selected.failureReason ? <p className="error">{selected.failureReason}</p> : null}
+          <div className="item"><span>Created</span><strong>{new Date(selected.createdAt).toLocaleString()}</strong></div>
+          <div className="item"><span>Updated</span><strong>{new Date(selected.updatedAt).toLocaleString()}</strong></div>
           <textarea placeholder="Operations override note" value={note} onChange={(event) => setNote(event.target.value)} />
           <div className="actions">
             <button className="secondary" onClick={verifyProviderStatus} disabled={verifying || terminalStatuses.includes(selected.status)}>{verifying ? "Checking..." : "Verify provider status"}</button>

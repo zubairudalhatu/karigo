@@ -155,4 +155,60 @@ describe("AccelerateUtilityProvider", () => {
       normalizedRecipient: "123456"
     });
   });
+
+  it("verifies live authentication and all service endpoints without vending", async () => {
+    const liveConfig = {
+      get: jest.fn((key: string) => {
+        const values: Record<string, string> = {
+          ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+          ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder",
+          ACCELERATE_ENV: "live"
+        };
+        return values[key];
+      })
+    } as unknown as ConfigService;
+    const fetchMock = jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce(response({ data: { access_token: "jwt-token" } }))
+      .mockResolvedValue(response({}, true, 204));
+    const provider = new AccelerateUtilityProvider(liveConfig);
+
+    const result = await provider.connectivityReadiness();
+
+    expect(result).toMatchObject({
+      configuration: "READY",
+      environment: "LIVE",
+      ipAllowlist: "VERIFIED",
+      authentication: "READY",
+      services: {
+        AIRTIME: "REACHABLE",
+        DATA: "REACHABLE",
+        ELECTRICITY: "REACHABLE",
+        CABLE_TV: "REACHABLE"
+      }
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock.mock.calls.slice(1).every((call) => (call[1] as RequestInit).method === "OPTIONS")).toBe(true);
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual(expect.arrayContaining([
+      "https://prod.airtime-data.irechargetech.com/api/v2/merchant/airtime/validate",
+      "https://prod.airtime-data.irechargetech.com/api/v2/merchant/data/validate",
+      "https://prod.power.irechargetech.com/api/v2/merchant/power/validate",
+      "https://prod.airtime-data.irechargetech.com/api/v2/merchant/tv/validate"
+    ]));
+    expect(JSON.stringify(result)).not.toContain("jwt-token");
+    expect(JSON.stringify(result)).not.toContain("accelerate-private-key-placeholder");
+  });
+
+  it("does not verify provider IP access when a probe returns the known IP denial", async () => {
+    jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce(response({ data: { access_token: "jwt-token" } }))
+      .mockResolvedValue(response({ message: "Access denied: IP not allowed" }, false, 401));
+    const provider = new AccelerateUtilityProvider(config);
+
+    const result = await provider.connectivityReadiness();
+
+    expect(result.ipAllowlist).toBe("NOT_VERIFIED");
+    expect(result.authentication).toBe("READY");
+    expect(Object.values(result.services)).toEqual(["FAILED", "FAILED", "FAILED", "FAILED"]);
+    expect(result.safeNote).toContain("must remain disabled");
+  });
 });

@@ -982,27 +982,30 @@ export class PaymentsService {
     const customerPurchaseEnabled = this.customerUtilityPurchasesEnabled();
     const walletPaymentEnabled = this.flagValue("UTILITIES_WALLET_PAYMENT_ENABLED", false);
     const liveFulfillmentEnabled = this.flagValue("UTILITIES_LIVE_FULFILLMENT_ENABLED", false);
-    const accelerateBaseUrl = this.optionalValue("ACCELERATE_BASE_URL") ?? this.optionalValue("ACCELERATE_API_BASE_URL") ?? this.optionalValue("UTILITIES_PROVIDER_BASE_URL");
-    const accelerateApiKey = this.optionalValue("ACCELERATE_API_KEY") ?? this.optionalValue("UTILITIES_PROVIDER_API_KEY");
+    const acceleratePublicKey = this.optionalValue("ACCELERATE_API_PUBLIC_KEY") ?? this.optionalValue("ACCELERATE_PUBLIC_KEY") ?? this.optionalValue("ACCELERATE_API_KEY") ?? this.optionalValue("UTILITIES_PROVIDER_API_KEY");
+    const acceleratePrivateKey = this.optionalValue("ACCELERATE_API_PRIVATE_KEY") ?? this.optionalValue("ACCELERATE_PRIVATE_KEY") ?? this.optionalValue("ACCELERATE_API_SECRET") ?? this.optionalValue("UTILITIES_PROVIDER_SECRET");
     const requirements: ProviderRequirement[] = [
-      this.utilityFlagRequirement("UTILITIES_PROVIDER", provider === "accelerate", "Set to accelerate for approved Accelerate.ng provider readiness"),
-      this.utilityFlagRequirement("ACCELERATE_ENABLED", accelerateEnabled, "Enable backend Accelerate readiness visibility after account approval"),
+      this.utilityFlagRequirement("UTILITIES_PROVIDER / UTILITIES_PROVIDER_NAME", provider === "accelerate", "Set both preferred provider selectors to accelerate"),
+      this.utilityFlagRequirement("UTILITIES_PROVIDER_ENABLED / UTILITIES_ENABLED", utilitiesEnabled, "Enable the Utilities provider foundation without enabling customer purchases"),
+      this.utilityFlagRequirement("ACCELERATE_ENABLED / ACCELERATE_UTILITIES_ENABLED", accelerateEnabled, "Enable the Accelerate integration foundation"),
+      this.utilityFlagRequirement("ACCELERATE_ENV=live", this.optionalValue("ACCELERATE_ENV")?.toLowerCase() === "live", "Select Accelerate production defaults"),
       {
-        name: "ACCELERATE_BASE_URL",
+        name: "ACCELERATE_API_PUBLIC_KEY",
         required: true,
-        configured: Boolean(accelerateBaseUrl),
-        purpose: "Accelerate.ng provider base URL configured in Render/secret manager",
-        issue: !accelerateBaseUrl ? "missing ACCELERATE_BASE_URL" : !accelerateBaseUrl.startsWith("https://") ? "ACCELERATE_BASE_URL must use HTTPS" : undefined
+        configured: Boolean(acceleratePublicKey),
+        purpose: "Accelerate Basic-auth public key configured in Render",
+        issue: acceleratePublicKey ? undefined : "missing ACCELERATE_API_PUBLIC_KEY"
       },
       {
-        name: "ACCELERATE_API_KEY",
+        name: "ACCELERATE_API_PRIVATE_KEY",
         required: true,
-        configured: Boolean(accelerateApiKey),
-        purpose: "Accelerate.ng API key configured in Render/secret manager",
-        issue: accelerateApiKey ? undefined : "missing ACCELERATE_API_KEY"
+        configured: Boolean(acceleratePrivateKey),
+        purpose: "Accelerate Basic-auth private key configured in Render",
+        issue: acceleratePrivateKey ? undefined : "missing ACCELERATE_API_PRIVATE_KEY"
       },
-      this.utilityOptionalSecretRequirement("ACCELERATE_CLIENT_ID", "Accelerate.ng client ID if required by the approved account"),
-      this.utilityOptionalSecretRequirement("ACCELERATE_CLIENT_SECRET", "Accelerate.ng client secret if required by the approved account"),
+      this.utilityOptionalSecretRequirement("ACCELERATE_AUTH_URL", "Optional provider-approved auth URL override; production default is built in"),
+      this.utilityOptionalSecretRequirement("ACCELERATE_AIRTIME_DATA_BASE_URL", "Optional provider-approved Airtime/Data/TV URL override; production default is built in"),
+      this.utilityOptionalSecretRequirement("ACCELERATE_POWER_BASE_URL", "Optional provider-approved power URL override; production default is built in"),
       this.utilityOptionalSecretRequirement("ACCELERATE_WEBHOOK_SECRET", "Accelerate.ng webhook secret if required for callbacks")
     ];
     const missingRequiredKeys = requirements
@@ -1037,7 +1040,7 @@ export class PaymentsService {
             ? "Customer Utilities can submit provider-backed requests in controlled test/sandbox mode only."
           : "Customer Utilities remain readiness/test-mode until provider-backed customer purchases are explicitly enabled.",
         "No Accelerate API keys, client secrets or webhook secrets are returned by this readiness response.",
-        "Accelerate may require KariGO backend outbound IP allowlisting before live fulfilment works.",
+        "Provider IP access is VERIFIED only after the deployed backend completes a real, non-destructive request without an IP allowlist denial.",
         walletPaymentEnabled
           ? "Wallet-to-utility payment is enabled only for Utilities and only when backend balance checks pass; no card/bank direct utility payment is active."
           : "Wallet-to-utility payment remains a future flow and is not active. Live fulfilment with payment-backed settlement remains disabled until separately approved."

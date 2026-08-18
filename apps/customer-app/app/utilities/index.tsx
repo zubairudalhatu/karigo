@@ -3,30 +3,35 @@ import { brand } from "@karigo/config";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { paymentsApi } from "../../src/api/payments.api";
+import { utilitiesApi, UtilityAvailability } from "../../src/api/utilities.api";
 import { Card, Protected, Screen, ui } from "../../src/components/ui";
 import { fallbackCustomerPaymentConfig } from "../../src/lib/payment-status";
 
 const services = [
-  { label: "Airtime", slug: "airtime", icon: "phone", description: "Select a mobile network and review an airtime request." },
-  { label: "Data", slug: "data", icon: "wifi", description: "Select a mobile network and data plan before review." },
-  { label: "Electricity", slug: "electricity", icon: "zap", description: "Select a distribution company and meter type before review." },
-  { label: "Cable TV", slug: "cable-tv", icon: "tv", description: "Select a TV provider and bouquet before review." }
+  { type: "AIRTIME", label: "Airtime", slug: "airtime", icon: "phone", description: "Select a mobile network and review an airtime request." },
+  { type: "DATA", label: "Data", slug: "data", icon: "wifi", description: "Select a mobile network and data plan before review." },
+  { type: "ELECTRICITY", label: "Electricity", slug: "electricity", icon: "zap", description: "Select a distribution company and meter type before review." },
+  { type: "CABLE_TV", label: "Cable TV", slug: "cable-tv", icon: "tv", description: "Select a TV provider and bouquet before review." }
 ] as const;
 
+const availabilityLabel: Record<UtilityAvailability, string> = {
+  AVAILABLE: "Available",
+  PREPARING_LAUNCH: "Preparing launch",
+  TEMPORARILY_UNAVAILABLE: "Temporarily unavailable"
+};
 export default function UtilitiesHome() {
   const [utilitiesStatusNote, setUtilitiesStatusNote] = useState(fallbackCustomerPaymentConfig.utilitiesStatusNote);
-  const [utilitiesEnabled, setUtilitiesEnabled] = useState(false);
+  const [availability, setAvailability] = useState<Record<string, UtilityAvailability>>({});
 
   useEffect(() => {
-    paymentsApi.publicConfig()
-      .then((config) => {
-        setUtilitiesStatusNote(config.utilitiesStatusNote ?? fallbackCustomerPaymentConfig.utilitiesStatusNote);
-        setUtilitiesEnabled(Boolean(config.utilitiesCustomerPurchaseEnabled));
+    utilitiesApi.readiness()
+      .then((readiness) => {
+        setAvailability(Object.fromEntries(readiness.services.map((item) => [item.serviceType, item.availability])));
+        setUtilitiesStatusNote("Utilities are opening in controlled stages. Each service shows its current launch state below.");
       })
       .catch(() => {
         setUtilitiesStatusNote(fallbackCustomerPaymentConfig.utilitiesStatusNote);
-        setUtilitiesEnabled(false);
+        setAvailability({});
       });
   }, []);
 
@@ -43,7 +48,7 @@ export default function UtilitiesHome() {
         <View style={styles.icon}><Feather name={service.icon} size={22} color={brand.colors.primary} /></View>
         <Text style={ui.cardTitle}>{service.label}</Text>
         <Text style={ui.muted}>{service.description}</Text>
-        <Text style={styles.badge}>{utilitiesEnabled ? "Available" : "Provider review"}</Text>
+        <Text style={styles.badge}>{availabilityLabel[availability[service.type] ?? "TEMPORARILY_UNAVAILABLE"]}</Text>
       </Pressable>)}
     </View>
     <Card>

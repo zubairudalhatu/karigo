@@ -9,6 +9,16 @@ import type {
   UtilityTransactionStatus
 } from "@karigo/shared-types";
 import { api } from "./client";
+export type UtilityAvailability = "AVAILABLE" | "PREPARING_LAUNCH" | "TEMPORARILY_UNAVAILABLE";
+
+export interface UtilityReadiness {
+  services: Array<{
+    serviceType: UtilityServiceType;
+    availability: UtilityAvailability;
+    note: string;
+  }>;
+}
+
 
 const query = (params: Record<string, string | undefined>) => {
   const search = new URLSearchParams();
@@ -21,6 +31,7 @@ const query = (params: Record<string, string | undefined>) => {
 
 export const utilitiesApi = {
   providers: (type?: UtilityServiceType) => api.get<UtilityProviderSummary[]>(`utilities/providers${query({ type })}`, { authenticated: false }),
+  readiness: () => api.get<UtilityReadiness>("utilities/readiness", { authenticated: false }),
   products: (filters: { type?: UtilityServiceType; providerId?: string }) =>
     api.get<UtilityProductSummary[]>(`utilities/products${query(filters)}`, { authenticated: false }),
   quote: (body: UtilityQuoteRequest) => api.post<UtilityQuoteResult>("customer/utilities/quote", body),

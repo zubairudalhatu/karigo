@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import type { UtilityMeterType, UtilityProductSummary, UtilityProviderSummary, UtilityQuoteResult, UtilityServiceType, UtilityTransactionSummary } from "@karigo/shared-types";
 import { paymentsApi } from "../../src/api/payments.api";
-import { utilitiesApi } from "../../src/api/utilities.api";
+import { utilitiesApi, UtilityAvailability } from "../../src/api/utilities.api";
 import { CustomerWallet, walletApi } from "../../src/api/wallet.api";
 import { Button, Card, Empty, Field, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError } from "../../src/lib/errors";
@@ -163,6 +163,8 @@ export default function UtilityServiceFlow() {
   const [walletPaymentEnabled, setWalletPaymentEnabled] = useState(false);
   const [utilitiesStatusNote, setUtilitiesStatusNote] = useState(fallbackCustomerPaymentConfig.utilitiesStatusNote);
   const [wallet, setWallet] = useState<CustomerWallet | null>(null);
+  const [availability, setAvailability] = useState<UtilityAvailability>("TEMPORARILY_UNAVAILABLE");
+  const [availabilityNote, setAvailabilityNote] = useState("This utility service is temporarily unavailable.");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -174,13 +176,17 @@ export default function UtilityServiceFlow() {
     setError("");
     setCatalogueError("");
     try {
-      const [paymentConfig, nextProviders, nextProducts, walletSummary] = await Promise.all([
+      const [paymentConfig, readiness, nextProviders, nextProducts, walletSummary] = await Promise.all([
         paymentsApi.publicConfig(),
+        utilitiesApi.readiness(),
         utilitiesApi.providers(config.type),
         utilitiesApi.products({ type: config.type }),
         walletApi.summary()
       ]);
       setUtilitiesEnabled(Boolean(paymentConfig.utilitiesCustomerPurchaseEnabled));
+      const serviceReadiness = readiness.services.find((item) => item.serviceType === config.type);
+      setAvailability(serviceReadiness?.availability ?? "TEMPORARILY_UNAVAILABLE");
+      setAvailabilityNote(serviceReadiness?.note ?? "This utility service is temporarily unavailable.");
       setWalletPaymentEnabled(walletUtilitiesEnabled(paymentConfig));
       setUtilitiesStatusNote(paymentConfig.utilitiesStatusNote ?? fallbackCustomerPaymentConfig.utilitiesStatusNote);
       setWallet(walletSummary);
@@ -200,6 +206,8 @@ export default function UtilityServiceFlow() {
       setWalletPaymentEnabled(false);
       setUtilitiesStatusNote(fallbackCustomerPaymentConfig.utilitiesStatusNote);
       setCatalogueError(utilityProviderConnectionUnavailable);
+      setAvailability("TEMPORARILY_UNAVAILABLE");
+      setAvailabilityNote(utilityProviderConnectionUnavailable);
     } finally {
       setLoading(false);
     }
@@ -234,6 +242,7 @@ export default function UtilityServiceFlow() {
   function reviewDisabledReason() {
     if (catalogueError) return catalogueError;
     if (!providers.length) return "This service is temporarily unavailable.";
+    if (availability !== "AVAILABLE") return availabilityNote;
     if (!providerId || !selectedProvider) return `Select a ${config.providerLabel.toLowerCase()}.`;
     if (config.needsProduct && !providerProducts.length) return `${config.productLabel ?? "Package"} catalogue is temporarily unavailable for ${selectedProvider.name}.`;
     if (config.needsProduct && !selectedProduct) return `Select a ${config.productLabel?.toLowerCase() ?? "package"}.`;
@@ -348,6 +357,7 @@ export default function UtilityServiceFlow() {
     <Text style={ui.pageIntro}>{config.description}</Text>
     <Message>{utilitiesStatusNote}</Message>
     <Message error>{error}</Message>
+    <Message>{availability === "AVAILABLE" ? "Available" : availability === "PREPARING_LAUNCH" ? "Preparing launch" : "Temporarily unavailable"}: {availabilityNote}</Message>
     {loading ? <Loading label={`Loading ${config.title} catalogue...`} /> : catalogueError ? <Card>
       <Text style={ui.cardTitle}>This service is temporarily unavailable.</Text>
       <Text style={ui.muted}>{catalogueError}</Text>
@@ -360,7 +370,7 @@ export default function UtilityServiceFlow() {
       <Card>
         <Text style={ui.cardTitle}>KariGO Wallet</Text>
         <Text style={ui.cardText}>Available balance: {moneyKobo(walletKobo)}</Text>
-        {walletPaymentEnabled ? <Text style={ui.muted}>Your KariGO Wallet will be debited after you submit this request. If provider fulfilment fails, KariGO will reverse the debit automatically.</Text> : <Text style={ui.muted}>Wallet-backed Utilities are controlled by backend readiness flags. Review records can still be prepared when live fulfilment is unavailable.</Text>}
+        {walletPaymentEnabled ? <Text style={ui.muted}>Your KariGO Wallet will be debited after you submit this request. If provider fulfilment fails, KariGO will reverse the debit automatically.</Text> : <Text style={ui.muted}>Wallet-backed Utilities are controlled by backend readiness flags. No utility request can be submitted until this service is available.</Text>}
       </Card>
 
       <Text style={ui.sectionTitle}>{config.providerLabel}</Text>

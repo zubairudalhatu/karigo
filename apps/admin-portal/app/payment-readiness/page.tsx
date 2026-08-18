@@ -9,11 +9,12 @@ import {
   SandboxInitializationTestProvider,
   paymentsApi
 } from "../../src/api/payments.api";
+import { AdminUtilityReadinessCheck, utilitiesApi } from "../../src/api/utilities.api";
 import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
 
 const providerPriority = ["flutterwave", "squad", "monnify", "paystack"];
 const sandboxTestProviders = ["paystack", "monnify", "squad"];
-const accelerateIpAllowlistNote = "Accelerate may require KariGO backend outbound IP allowlisting before live fulfilment works.";
+const accelerateIpAllowlistNote = "Provider IP access is VERIFIED only after this backend completes a real, non-destructive provider request without an IP allowlist denial.";
 
 function providerLabel(value: string) {
   switch (value) {
@@ -107,6 +108,9 @@ export default function PaymentReadinessPage() {
   const [testError, setTestError] = useState("");
   const [testingProvider, setTestingProvider] = useState("");
   const [testResults, setTestResults] = useState<Record<string, PaymentProviderInitializationTestResult>>({});
+  const [utilityCheck, setUtilityCheck] = useState<AdminUtilityReadinessCheck | null>(null);
+  const [checkingUtilities, setCheckingUtilities] = useState(false);
+  const [utilityCheckError, setUtilityCheckError] = useState("");
 
   const providers = useMemo(() => readiness ? sortProviders(readiness.providers) : [], [readiness]);
 
@@ -128,6 +132,16 @@ export default function PaymentReadinessPage() {
       .finally(() => setTestingProvider(""));
   }
 
+  function checkUtilities() {
+    if (checkingUtilities) return;
+    setCheckingUtilities(true);
+    setUtilityCheckError("");
+    utilitiesApi.readinessCheck()
+      .then(setUtilityCheck)
+      .catch((e) => setUtilityCheckError(paymentInitializationTestError(e)))
+      .finally(() => setCheckingUtilities(false));
+  }
+
   useEffect(() => { load(); }, []);
 
   return (
@@ -142,6 +156,7 @@ export default function PaymentReadinessPage() {
       <p className="muted">Admin-only configuration readiness for Flutterwave, Cash / Pay on Delivery, Wallet, Squad, Monnify, Paystack and mock payment. This page shows key names and safe status only; it does not expose secret values and does not activate live checkout, wallet funding, refunds, payouts or settlements. Admin does not initiate customer payments from this page; the Customer App initiates checkout and backend verification confirms the final payment state.</p>
       <ErrorMessage>{error}</ErrorMessage>
       <ErrorMessage>{testError}</ErrorMessage>
+      <ErrorMessage>{utilityCheckError}</ErrorMessage>
 
       {loading ? <Loading /> : readiness ? (
         <>
@@ -239,6 +254,8 @@ export default function PaymentReadinessPage() {
                 <article className="card">
                   <h3>{readiness.utilityReadiness.providerLabel}</h3>
                   <p><Badge>{readiness.utilityReadiness.accountStatus}</Badge> <Badge>{readiness.utilityReadiness.integrationStatus}</Badge></p>
+              <button onClick={checkUtilities} disabled={checkingUtilities}>{checkingUtilities ? "Checking Accelerate..." : "Run non-destructive Accelerate check"}</button>
+              <p className="muted">This authenticates from the deployed backend and probes validation routes with OPTIONS. It never validates a customer, debits a wallet, or vends a service.</p>
                   <div className="item"><span>Backend utilities enabled</span><strong>{yesNo(readiness.utilityReadiness.enabled)}</strong></div>
                   <div className="item"><span>Test mode</span><strong>{yesNo(readiness.utilityReadiness.testMode)}</strong></div>
                   <div className="item"><span>Customer purchases</span><strong>{readiness.utilityReadiness.liveCustomerPurchaseStatus}</strong></div>
@@ -270,6 +287,34 @@ export default function PaymentReadinessPage() {
                     </tbody>
                   </table>
                 </article>
+                {utilityCheck ? <article className="card">
+                  <h3>Latest backend connectivity check</h3>
+                  <div className="item"><span>Configuration</span><strong>{utilityCheck.connectivity.configuration === "READY" ? "Ready" : "Missing configuration"}</strong></div>
+                  <div className="item"><span>Environment</span><strong>{utilityCheck.connectivity.environment === "LIVE" ? "Live" : "Sandbox"}</strong></div>
+                  <div className="item"><span>Provider IP access</span><strong>{utilityCheck.connectivity.ipAllowlist}</strong></div>
+                  <div className="item"><span>Authentication</span><strong>{utilityCheck.connectivity.authentication === "READY" ? "Ready" : utilityCheck.connectivity.authentication === "FAILED" ? "Failed" : "Not run"}</strong></div>
+                  <div className="item"><span>Airtime API</span><strong>{utilityCheck.connectivity.services.AIRTIME === "REACHABLE" ? "Reachable" : utilityCheck.connectivity.services.AIRTIME === "FAILED" ? "Failed" : "Not run"}</strong></div>
+                  <div className="item"><span>Data API</span><strong>{utilityCheck.connectivity.services.DATA === "REACHABLE" ? "Reachable" : utilityCheck.connectivity.services.DATA === "FAILED" ? "Failed" : "Not run"}</strong></div>
+                  <div className="item"><span>Electricity API</span><strong>{utilityCheck.connectivity.services.ELECTRICITY === "REACHABLE" ? "Reachable" : utilityCheck.connectivity.services.ELECTRICITY === "FAILED" ? "Failed" : "Not run"}</strong></div>
+                  <div className="item"><span>Cable TV API</span><strong>{utilityCheck.connectivity.services.CABLE_TV === "REACHABLE" ? "Reachable" : utilityCheck.connectivity.services.CABLE_TV === "FAILED" ? "Failed" : "Not run"}</strong></div>
+                  <div className="item"><span>Checked</span><strong>{new Date(utilityCheck.connectivity.checkedAt).toLocaleString()}</strong></div>
+                  <p className="muted">{utilityCheck.connectivity.safeNote}</p>
+                </article> : null}
+                {utilityCheck ? <article className="card">
+                  <h3>Utilities activation gates</h3>
+                  <div className="item"><span>Provider configured</span><strong>{utilityCheck.gates.providerConfigured}</strong></div>
+                  <div className="item"><span>Accelerate auth</span><strong>{utilityCheck.gates.accelerateAuth}</strong></div>
+                  <div className="item"><span>Provider IP access</span><strong>{utilityCheck.gates.providerIpAccess}</strong></div>
+                  <div className="item"><span>Wallet payment</span><strong>{utilityCheck.gates.walletPayment}</strong></div>
+                  <div className="item"><span>Live fulfilment</span><strong>{utilityCheck.gates.liveFulfilment}</strong></div>
+                  <div className="item"><span>Customer purchases</span><strong>{utilityCheck.gates.customerPurchases}</strong></div>
+                  <div className="item"><span>Airtime</span><strong>{utilityCheck.catalogue.AIRTIME.status}</strong></div>
+                  <div className="item"><span>Data catalogue</span><strong>{utilityCheck.catalogue.DATA.status}</strong></div>
+                  <p className="muted">{utilityCheck.catalogue.DATA.reason}</p>
+                  <div className="item"><span>Electricity</span><strong>{utilityCheck.catalogue.ELECTRICITY.status}</strong></div>
+                  <div className="item"><span>Cable TV catalogue</span><strong>{utilityCheck.catalogue.CABLE_TV.status}</strong></div>
+                  <p className="muted">{utilityCheck.catalogue.CABLE_TV.reason}</p>
+                </article> : null}
               </div>
             </section>
           ) : null}
