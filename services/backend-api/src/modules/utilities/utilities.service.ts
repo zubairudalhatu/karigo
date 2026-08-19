@@ -141,15 +141,41 @@ export class UtilitiesService {
     const [providers, products] = await Promise.all([
       this.prisma.utilityProvider.findMany({
         where: { isActive: true },
-        select: { type: true, code: true }
+        select: { type: true, name: true, code: true, metadata: true }
       }),
       this.prisma.utilityProduct.findMany({
         where: { isActive: true, provider: { isActive: true } },
-        select: { type: true, code: true }
+        select: {
+          type: true,
+          name: true,
+          code: true,
+          amountKobo: true,
+          minAmountKobo: true,
+          maxAmountKobo: true,
+          metadata: true,
+          provider: { select: { code: true, metadata: true } }
+        }
       })
     ]);
-    const providerReady = (type: UtilityServiceType) => providers.some((item) => item.type === type);
-    const liveProductReady = (type: UtilityServiceType) => products.some((item) => item.type === type && !item.code.startsWith("DEMO_"));
+    const liveMetadata = (metadata: Prisma.JsonValue | null | undefined) => {
+      const value = this.jsonObject(metadata);
+      return value.catalogueMode === "LIVE" && value.integration === "ACCELERATE" && value.demoOnly !== true;
+    };
+    const liveProvider = (item: typeof providers[number]) =>
+      Boolean(item.name.trim()) && !item.code.startsWith("DEMO_") && liveMetadata(item.metadata);
+    const validProductAmount = (item: typeof products[number]) =>
+      (typeof item.amountKobo === "number" && item.amountKobo > 0) ||
+      (typeof item.minAmountKobo === "number" && item.minAmountKobo > 0 &&
+        typeof item.maxAmountKobo === "number" && item.maxAmountKobo >= item.minAmountKobo);
+    const liveProduct = (item: typeof products[number]) =>
+      Boolean(item.name.trim()) &&
+      !item.code.startsWith("DEMO_") &&
+      !item.provider.code.startsWith("DEMO_") &&
+      liveMetadata(item.metadata) &&
+      liveMetadata(item.provider.metadata) &&
+      validProductAmount(item);
+    const providerReady = (type: UtilityServiceType) => providers.some((item) => item.type === type && liveProvider(item));
+    const liveProductReady = (type: UtilityServiceType) => products.some((item) => item.type === type && liveProduct(item));
     const gate = (type: UtilityServiceType, requiresLiveProducts: boolean) => {
       const ready = providerReady(type) && (!requiresLiveProducts || liveProductReady(type));
       return {
@@ -158,7 +184,7 @@ export class UtilitiesService {
           ? `${this.serviceLabel(type)} provider configuration is ready.`
           : requiresLiveProducts
             ? `Live Accelerate ${this.serviceLabel(type)} package codes required.`
-            : `${this.serviceLabel(type)} provider configuration is required.`
+            : `No active live ${this.serviceLabel(type)} provider records configured.`
       };
     };
     return {

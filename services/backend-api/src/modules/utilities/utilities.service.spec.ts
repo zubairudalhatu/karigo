@@ -1145,21 +1145,39 @@ describe("UtilitiesService", () => {
     await expect(service.customerDetail("user-id", "transaction-id")).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it("reports demo Data and Cable catalogues as temporarily unavailable", async () => {
-    const { service } = serviceWith({
+  it("keeps every active DEMO provider and product blocked", async () => {
+    const { accelerateProvider, service, tx } = serviceWith({
       prismaOverrides: {
         utilityProvider: {
           findMany: jest.fn().mockResolvedValue([
-            { type: UtilityServiceType.AIRTIME, code: "DEMO_MTN_AIRTIME_PROVIDER" },
-            { type: UtilityServiceType.DATA, code: "DEMO_MTN_DATA_PROVIDER" },
-            { type: UtilityServiceType.ELECTRICITY, code: "DEMO_KEDCO_PROVIDER" },
-            { type: UtilityServiceType.CABLE_TV, code: "DEMO_DSTV_PROVIDER" }
+            { type: UtilityServiceType.AIRTIME, name: "MTN Demo", code: "DEMO_MTN_AIRTIME_PROVIDER", metadata: { demoOnly: true } },
+            { type: UtilityServiceType.DATA, name: "MTN Data Demo", code: "DEMO_MTN_DATA_PROVIDER", metadata: { demoOnly: true } },
+            { type: UtilityServiceType.ELECTRICITY, name: "KEDCO Demo", code: "DEMO_KEDCO_PROVIDER", metadata: { demoOnly: true } },
+            { type: UtilityServiceType.CABLE_TV, name: "DStv Demo", code: "DEMO_DSTV_PROVIDER", metadata: { demoOnly: true } }
           ])
         },
         utilityProduct: {
           findMany: jest.fn().mockResolvedValue([
-            { type: UtilityServiceType.DATA, code: "DEMO_MTN_1GB" },
-            { type: UtilityServiceType.CABLE_TV, code: "DEMO_DSTV_COMPACT" }
+            {
+              type: UtilityServiceType.DATA,
+              name: "MTN 1GB Demo",
+              code: "DEMO_MTN_1GB",
+              amountKobo: 50000,
+              minAmountKobo: 50000,
+              maxAmountKobo: 50000,
+              metadata: { demoOnly: true },
+              provider: { code: "DEMO_MTN_DATA_PROVIDER", metadata: { demoOnly: true } }
+            },
+            {
+              type: UtilityServiceType.CABLE_TV,
+              name: "DStv Compact Demo",
+              code: "DEMO_DSTV_COMPACT",
+              amountKobo: 1200000,
+              minAmountKobo: 1200000,
+              maxAmountKobo: 1200000,
+              metadata: { demoOnly: true },
+              provider: { code: "DEMO_DSTV_PROVIDER", metadata: { demoOnly: true } }
+            }
           ])
         }
       }
@@ -1168,10 +1186,107 @@ describe("UtilitiesService", () => {
     const readiness = await service.publicReadiness();
     const byType = Object.fromEntries(readiness.services.map((item) => [item.serviceType, item]));
 
-    expect(byType.AIRTIME.availability).toBe("PREPARING_LAUNCH");
-    expect(byType.ELECTRICITY.availability).toBe("PREPARING_LAUNCH");
+    expect(byType.AIRTIME).toMatchObject({ availability: "TEMPORARILY_UNAVAILABLE", note: "No active live Airtime provider records configured." });
+    expect(byType.ELECTRICITY).toMatchObject({ availability: "TEMPORARILY_UNAVAILABLE", note: "No active live Electricity provider records configured." });
     expect(byType.DATA).toMatchObject({ availability: "TEMPORARILY_UNAVAILABLE", note: "Live Accelerate Data package codes required." });
     expect(byType.CABLE_TV).toMatchObject({ availability: "TEMPORARILY_UNAVAILABLE", note: "Live Accelerate Cable TV package codes required." });
+    expect(accelerateProvider.purchase).not.toHaveBeenCalled();
+    expect(tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("keeps Airtime blocked when no active live provider exists", async () => {
+    const { service } = serviceWith({
+      prismaOverrides: {
+        utilityProvider: { findMany: jest.fn().mockResolvedValue([]) },
+        utilityProduct: { findMany: jest.fn().mockResolvedValue([]) }
+      }
+    });
+
+    const readiness = await service.publicReadiness();
+    expect(readiness.services.find((item) => item.serviceType === UtilityServiceType.AIRTIME)).toMatchObject({
+      availability: "TEMPORARILY_UNAVAILABLE",
+      note: "No active live Airtime provider records configured."
+    });
+  });
+
+  it("makes Airtime catalogue ready with an active confirmed Accelerate provider while paid purchases stay disabled", async () => {
+    const { accelerateProvider, service, tx } = serviceWith({
+      prismaOverrides: {
+        utilityProvider: {
+          findMany: jest.fn().mockResolvedValue([
+            { type: UtilityServiceType.AIRTIME, name: "MTN", code: "MTN", metadata: { catalogueMode: "LIVE", integration: "ACCELERATE" } }
+          ])
+        },
+        utilityProduct: { findMany: jest.fn().mockResolvedValue([]) }
+      }
+    });
+
+    const readiness = await service.publicReadiness();
+    expect(readiness.services.find((item) => item.serviceType === UtilityServiceType.AIRTIME)).toMatchObject({
+      availability: "PREPARING_LAUNCH",
+      note: "Airtime is preparing for controlled launch."
+    });
+    expect(accelerateProvider.purchase).not.toHaveBeenCalled();
+    expect(tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("makes Electricity ready only for an explicitly live Accelerate provider", async () => {
+    const { service } = serviceWith({
+      prismaOverrides: {
+        utilityProvider: {
+          findMany: jest.fn().mockResolvedValue([
+            { type: UtilityServiceType.ELECTRICITY, name: "Owner-confirmed Disco", code: "OWNER_CONFIRMED_DISCO", metadata: { catalogueMode: "LIVE", integration: "ACCELERATE" } }
+          ])
+        },
+        utilityProduct: { findMany: jest.fn().mockResolvedValue([]) }
+      }
+    });
+
+    const readiness = await service.publicReadiness();
+    expect(readiness.services.find((item) => item.serviceType === UtilityServiceType.ELECTRICITY)).toMatchObject({
+      availability: "PREPARING_LAUNCH",
+      note: "Electricity is preparing for controlled launch."
+    });
+  });
+
+  it.each([
+    [UtilityServiceType.DATA, "Owner-confirmed Data", "OWNER_CONFIRMED_DATA", "Owner-confirmed Data package", "OWNER_CONFIRMED_DATA_PACKAGE"],
+    [UtilityServiceType.CABLE_TV, "Owner-confirmed TV", "OWNER_CONFIRMED_TV", "Owner-confirmed TV package", "OWNER_CONFIRMED_TV_PACKAGE"]
+  ])("makes %s ready only when an active live package has a valid amount", async (type, providerName, providerCode, productName, productCode) => {
+    const liveMetadata = { catalogueMode: "LIVE", integration: "ACCELERATE" };
+    const { service } = serviceWith({
+      configValues: {
+        UTILITIES_PROVIDER: "accelerate",
+        UTILITIES_ENABLED: true,
+        ACCELERATE_ENABLED: true,
+        UTILITIES_CUSTOMER_PURCHASE_ENABLED: true,
+        UTILITIES_TEST_MODE: false,
+        UTILITIES_WALLET_PAYMENT_ENABLED: true,
+        UTILITIES_LIVE_FULFILLMENT_ENABLED: true
+      },
+      prismaOverrides: {
+        utilityProvider: {
+          findMany: jest.fn().mockResolvedValue([{ type, name: providerName, code: providerCode, metadata: liveMetadata }])
+        },
+        utilityProduct: {
+          findMany: jest.fn().mockResolvedValue([{
+            type,
+            name: productName,
+            code: productCode,
+            amountKobo: 100000,
+            minAmountKobo: 100000,
+            maxAmountKobo: 100000,
+            metadata: liveMetadata,
+            provider: { code: providerCode, metadata: liveMetadata }
+          }])
+        }
+      }
+    });
+
+    const readiness = await service.publicReadiness();
+    expect(readiness.services.find((item) => item.serviceType === type)).toMatchObject({
+      availability: "AVAILABLE"
+    });
   });
 
   it("honours preferred provider aliases and exposes only ready live catalogues", async () => {
@@ -1188,12 +1303,25 @@ describe("UtilitiesService", () => {
       },
       prismaOverrides: {
         utilityProvider: {
-          findMany: jest.fn().mockResolvedValue(types.map((type) => ({ type, code: `${type}_PROVIDER` })))
+          findMany: jest.fn().mockResolvedValue(types.map((type) => ({
+            type,
+            name: `${type} provider`,
+            code: `${type}_PROVIDER`,
+            metadata: { catalogueMode: "LIVE", integration: "ACCELERATE" }
+          })))
         },
         utilityProduct: {
           findMany: jest.fn().mockResolvedValue([
-            { type: UtilityServiceType.DATA, code: "MTN_1GB_30D" },
-            { type: UtilityServiceType.CABLE_TV, code: "DSTV_COMPACT" }
+            {
+              type: UtilityServiceType.DATA, name: "MTN 1GB 30 days", code: "MTN_1GB_30D", amountKobo: 50000,
+              minAmountKobo: 50000, maxAmountKobo: 50000, metadata: { catalogueMode: "LIVE", integration: "ACCELERATE" },
+              provider: { code: "DATA_PROVIDER", metadata: { catalogueMode: "LIVE", integration: "ACCELERATE" } }
+            },
+            {
+              type: UtilityServiceType.CABLE_TV, name: "DStv Compact", code: "DSTV_COMPACT", amountKobo: 1200000,
+              minAmountKobo: 1200000, maxAmountKobo: 1200000, metadata: { catalogueMode: "LIVE", integration: "ACCELERATE" },
+              provider: { code: "CABLE_TV_PROVIDER", metadata: { catalogueMode: "LIVE", integration: "ACCELERATE" } }
+            }
           ])
         }
       }

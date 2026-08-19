@@ -15,6 +15,7 @@
     "seed": "prisma db seed",
     "cleanup:live": "node scripts/live-data-cleanup.cjs",
     "cleanup:production-demo-data": "node scripts/cleanup-production-demo-data.cjs",
+    "sync:accelerate-catalogue": "node scripts/sync-accelerate-live-catalogue.cjs",
     "verify:task207b-migration": "node scripts/verify-task207b-migration-split.cjs",
     "test": "jest --runInBand",
     "test:e2e:smoke": "node scripts/e2e-smoke.mjs",
