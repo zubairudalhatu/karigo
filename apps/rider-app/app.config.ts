@@ -49,7 +49,15 @@ export default ({ config }: ExpoConfigInput) => {
     plugins: [
       "expo-router",
       ["expo-location", {
-        locationWhenInUsePermission: "KariGO Captain uses your location only while you are online or on an active delivery so dispatch can coordinate pickups and drop-offs."
+        locationWhenInUsePermission: "KariGO Captain uses your location while you are online or completing assigned Ride and Delivery work.",
+        locationAlwaysAndWhenInUsePermission: "KariGO Captain uses background location only while assigned work is active so pickup and destination progress remain current.",
+        isIosBackgroundLocationEnabled: true,
+        isAndroidBackgroundLocationEnabled: true,
+        isAndroidForegroundServiceEnabled: true
+      }],
+      ["expo-notifications", {
+        color: "#E31E24",
+        defaultChannel: "captain-assignments"
       }],
       "@react-native-community/datetimepicker",
       ["expo-build-properties", androidApi36BuildProperties],

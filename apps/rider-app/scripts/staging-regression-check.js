@@ -45,6 +45,9 @@ const earningsApi = read("src/api/earnings.api.ts");
 const sharedApi = read("../../packages/config/src/api.ts");
 const captainCatalogApi = read("src/api/captain-catalog.api.ts");
 const locationHelper = read("src/lib/location.ts");
+const captainNotifications = read("src/lib/captain-notifications.ts");
+const backgroundLocation = read("src/lib/background-location.ts");
+const rideWorkspace = read("src/components/captain-ride-workspace.tsx");
 const launchApi = read("src/api/launch.api.ts");
 expect(launchApi.includes("launch/availability/me"), "Captain app must resolve city/service launch state from backend.");
 expect(dashboard.includes("Your online preference is preserved; existing assignments remain available."), "Captain app must preserve safe active-work continuity during a launch pause.");
@@ -56,6 +59,10 @@ const productionProfile = easJson.build?.["captain-production"];
 expect(!JSON.stringify(packageJson).includes("eas-cli"), "Captain app must not depend on eas-cli.");
 expect(packageJson.dependencies?.["expo-updates"] === "~0.28.18", "Captain app must use Expo SDK 53-compatible expo-updates.");
 expect(packageJson.dependencies?.["expo-location"] === "~18.1.6", "Captain app must use Expo SDK 53-compatible location support.");
+expect(packageJson.dependencies?.["expo-notifications"] === "~0.31.5", "Captain app must use Expo SDK 53-compatible push notifications.");
+expect(packageJson.dependencies?.["expo-task-manager"] === "~13.1.6", "Captain app must use Expo SDK 53-compatible background tasks.");
+expect(packageJson.dependencies?.["expo-device"] === "~7.1.4", "Captain app must use Expo SDK 53-compatible device registration.");
+expect(packageJson.dependencies?.["@react-native-community/netinfo"] === "11.4.1", "Captain app must use the approved connectivity listener.");
 expect(packageJson.dependencies?.["expo-local-authentication"] === "~16.0.5", "Captain app must use Expo SDK 53-compatible local authentication.");
 expect(packageJson.dependencies?.["expo-build-properties"] === "~0.14.8", "Captain app must use Expo build-properties for API 36 readiness.");
 expect(packageJson.dependencies?.["react-native-maps"] === "1.20.1", "Captain app must include the native map dependency for the operational Home map.");
@@ -119,8 +126,11 @@ expect(rootLayout.includes("notifications"), "Notifications route must be regist
 expect(rootLayout.includes("taxi-readiness"), "Ride operations route must be configured.");
 expect(rootLayout.includes("CaptainBottomNav"), "Root layout must mount the Captain bottom navigation.");
 expect(rootLayout.includes('Stack.Screen name="tabs/dashboard"'), "Root layout must register the operational Home route.");
+expect(rootLayout.includes('import "../src/lib/background-location"'), "Root layout must register the background location task at startup.");
+expect(appConfig.includes("isAndroidBackgroundLocationEnabled: true") && appConfig.includes("isIosBackgroundLocationEnabled: true"), "Captain native config must enable active-work background location.");
+expect(appConfig.includes('"expo-notifications"') && appConfig.includes('defaultChannel: "captain-assignments"'), "Captain native config must register assignment notifications.");
 expect(captainAccessBootstrap.includes("router.replace(access.nextStep === \"APPLICATION_STATUS\" ? \"/application-status\" : access.nextRoute)"), "Captain access bootstrap must route operational Captains through backend nextRoute.");
-expect(riderNav.includes("Home") && riderNav.includes("Deliveries") && riderNav.includes("Earnings") && riderNav.includes("Profile"), "Captain bottom nav must expose Home, Deliveries, Earnings and Profile.");
+expect(riderNav.includes("Home") && riderNav.includes("Work") && riderNav.includes("Earnings") && riderNav.includes("Profile"), "Captain bottom nav must expose Home, Work, Earnings and Profile.");
 expect(riderNav.includes("@expo/vector-icons") && riderNav.includes("Feather"), "Captain bottom nav must use proper icons.");
 expect(riderNav.includes("pathname.startsWith(\"/auth\")"), "Captain bottom nav must hide on auth screens.");
 
@@ -147,12 +157,20 @@ expect(dashboard.includes("AppState.addEventListener"), "Home must refresh unrea
 expect(dashboard.includes("Live map"), "Home must show the live map card.");
 expect(dashboard.includes("vehicleMarker") && dashboard.includes("mapFooter"), "Home map must show a Captain position marker and compact service-area footer.");
 expect(dashboard.includes("Location unavailable"), "Home map must include a safe unavailable state.");
-expect(dashboard.includes("Refresh GPS"), "Home must include a recoverable location refresh action.");
+expect(!dashboard.includes("Refresh GPS") && dashboard.includes("Retry location"), "Home must remove normal-workflow GPS refresh while retaining diagnostics-only retry.");
 expect(dashboard.includes("watcherRef") && dashboard.includes("watchCaptainForegroundLocation"), "Home must start one foreground GPS watcher while online or assigned.");
 expect(dashboard.includes("watcherStartingRef") && dashboard.includes("stopCaptainWatcher"), "Home must prevent duplicate GPS watchers and stop them on lifecycle changes.");
 expect(dashboard.includes("backoffUntilRef") && dashboard.includes("failureCountRef"), "Home must back off failed automatic GPS uploads.");
 expect(dashboard.includes("captain_gps_watcher_started") && dashboard.includes("captain_gps_watcher_stopped"), "Home must log safe GPS watcher diagnostics.");
 expect(dashboard.includes("uploadCaptainLocation"), "Home must upload automatic Captain GPS refreshes to backend work-state.");
+expect(dashboard.includes("assignmentSyncInFlightRef") && dashboard.includes("syncActiveWork"), "Home must use one deduplicated active-work sync coordinator.");
+expect(dashboard.includes("online_idle_fallback") && dashboard.includes("12_000"), "Online-idle fallback sync must use a battery-conscious 12-second interval.");
+expect(dashboard.includes("AppState.addEventListener") && dashboard.includes('syncActiveWork("foreground")'), "Foreground resume must resync authoritative work.");
+expect(dashboard.includes("NetInfo.addEventListener") && dashboard.includes("connectivity_restored"), "Connectivity restoration must resync authoritative work.");
+expect(captainNotifications.includes("addNotificationReceivedListener") && captainNotifications.includes("addNotificationResponseReceivedListener"), "Captain push receipt and tap handlers must refresh assignments.");
+expect(captainNotifications.includes("registerDeviceToken") && captainNotifications.includes("RIDER_APP"), "Captain app must register its authenticated Expo token.");
+expect(backgroundLocation.includes("hasStartedLocationUpdatesAsync") && backgroundLocation.includes("stopLocationUpdatesAsync"), "Background tracking must run only as one controlled active-work task.");
+expect(rideWorkspace.includes("NEW KARIGO RIDE") && rideWorkspace.includes("ACCEPT RIDE") && rideWorkspace.includes("PIN REQUIRED") && rideWorkspace.includes("COMPLETE RIDE"), "Ride takeover workspace must cover the full Captain lifecycle.");
 expect(dashboard.includes("captainAccessApi.updateAvailability({ ...location })"), "Home GPS refresh must submit location-only updates without mutating availability.");
 expect(!dashboard.includes("deliveryOnline: currentWorkState.desiredDeliveryOnline") && !dashboard.includes("rideOnline: currentWorkState.desiredRideOnline"), "Home GPS refresh must not resend desired availability during location updates.");
 expect(dashboard.includes("reasonCode === \"LOCATION_STALE\""), "Home must allow stale-location recovery through the normal online toggle.");
@@ -194,17 +212,16 @@ expect(notifications.includes("Mark all read"), "Notifications screen must suppo
 expect(notifications.includes("notificationsApi.markRead"), "Notifications screen must mark individual notifications read.");
 expect(notifications.includes("notificationsApi.markAllRead"), "Notifications screen must persist mark-all-read.");
 expect(notifications.includes("No notifications yet. Updates about assignments, applications and your Captain account will appear here."), "Notifications screen must include the approved empty state.");
-expect(notifications.includes("targetFor") && notifications.includes("/taxi-readiness") && notifications.includes("/application-status") && notifications.includes("/earnings"), "Notifications must validate safe deep-link targets.");
+expect(notifications.includes("targetFor") && notifications.includes("/tabs/dashboard") && notifications.includes("/application-status") && notifications.includes("/earnings"), "Ride notifications must deep-link to the active cockpit.");
 expect(notifications.includes("categoryIcon"), "Notifications must show category icons.");
 expect(notificationsApi.includes("notifications/unread-count"), "Notifications API must expose unread count.");
 expect(notificationsApi.includes("read-all") && notificationsApi.includes("/read"), "Notifications API must support read persistence.");
 
-expect(jobsIndex.includes("Delivery activation pending"), "Deliveries tab must show compact pending state for inactive Delivery mode.");
-expect(jobsIndex.includes('Screen title="Deliveries"'), "Deliveries tab heading must be Deliveries.");
-expect(jobsIndex.includes("Today assigned") && jobsIndex.includes("Completed") && jobsIndex.includes("Cancelled") && jobsIndex.includes("Delivery earnings"), "Deliveries tab must own Delivery summary stats.");
-expect(jobsIndex.includes("Active delivery"), "Deliveries tab must own active Delivery workflow.");
-expect(jobsIndex.includes("Assigned jobs"), "Deliveries tab must keep assigned jobs as a section.");
-expect(jobsIndex.includes("Delivery history"), "Deliveries tab must own Delivery history.");
+expect(jobsIndex.includes('Screen title="Work"'), "Combined work tab heading must be Work.");
+expect(jobsIndex.includes("Active") && jobsIndex.includes("Work history"), "Work tab must expose active and chronological history sections.");
+expect(jobsIndex.includes("taxiApi.trips") && jobsIndex.includes("jobsApi.list"), "Work tab must combine Ride and Delivery authority.");
+expect(jobsIndex.includes("Open active Ride cockpit") && jobsIndex.includes("Open active Delivery"), "Work tab must route both active assignment modes.");
+expect(jobsIndex.includes("Ride") && jobsIndex.includes("Delivery"), "Work tab must label both work types.");
 expect(jobDetail.includes("Accept job") && jobDetail.includes("Reject job"), "Delivery detail must support accept/reject actions.");
 expect(jobDetail.includes("Complete delivery") && jobDetail.includes("Delivery completed successfully."), "Delivery detail must support OTP completion.");
 
@@ -239,7 +256,7 @@ expect(taxiReadiness.includes("Go online to become available for Ride assignment
 expect(taxiReadiness.includes("taxiApi.updateAvailability"), "Ride screen must support availability updates.");
 expect(taxiReadiness.includes("taxiApi.availableTrips"), "Ride screen must fetch assigned trips.");
 expect(taxiReadiness.includes("Accept assigned ride") && taxiReadiness.includes("Start trip with PIN") && taxiReadiness.includes("Complete trip"), "Ride screen must support controlled lifecycle actions.");
-expect(taxiApi.includes("rider/taxi/profile") && taxiApi.includes("rider/taxi/trips/available"), "Ride API client must expose profile and assigned trips.");
+expect(taxiApi.includes("rider/taxi/profile") && taxiApi.includes("rider/taxi/trips/available") && taxiApi.includes('rider/taxi/trips"'), "Ride API client must expose active assignments and history.");
 expect(!taxiReadiness.includes("Pay Now") && !taxiReadiness.includes("cashout"), "Ride screen must not expose payment or cashout actions.");
 
 expect(dashboard.includes("Your Ride Captain access is approved for scheduled controlled production operations."), "Controlled Ride Captains must see the operations-only operating-window message.");
@@ -269,7 +286,7 @@ expect(!profile.includes(">Operating areas require review<"), "Captain Profile m
 expect(profile.includes("Automatic matching and auto-accept remain disabled."), "Captain Profile must preserve manual controlled matching guardrails.");
 expect(profile.includes("Safety and support") && profile.includes("Report an issue"), "Captain Profile must expose clear safety and support actions.");
 expect(earnings.includes("Today") && earnings.includes("This week") && earnings.includes("Pending payout") && earnings.includes("Paid"), "Captain Earnings must preserve today, week, pending and paid settlement hierarchy.");
-expect(jobsIndex.includes("From:") && jobsIndex.includes("To:") && jobsIndex.includes("Delivery fee:"), "Captain history must show safe route and backend-supported amount summaries.");
+expect(jobsIndex.includes("From:") && jobsIndex.includes("To:") && jobsIndex.includes("money("), "Captain Work history must show safe route and backend-supported amount summaries.");
 expect(jobDetail.includes("Payment method:") && jobDetail.includes("Activity") && jobDetail.includes("Contact KariGO Support"), "Captain work detail must preserve payment/lifecycle data and add a support action.");
 expect(jobDetail.includes("without sharing unnecessary Customer details"), "Captain support detail must reinforce Customer privacy.");
 expect(locationHelper.includes("timeInterval: 30_000") && (locationHelper.match(/watchPositionAsync/g) || []).length === 1, "Captain must preserve one throttled foreground watcher implementation.");

@@ -2,6 +2,7 @@ import { Stack } from "expo-router";
 import { brand } from "@karigo/config";
 import { AuthProvider } from "../src/contexts/auth-context";
 import { CaptainBottomNav } from "../src/components/rider-navigation";
+import "../src/lib/background-location";
 
 const hiddenHeader = {
   headerShown: false

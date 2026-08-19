@@ -1,68 +1,50 @@
+import type { TaxiTrip } from "@karigo/shared-types";
 import { Link } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { brand } from "@karigo/config";
 import { captainAccessApi } from "../../src/api/captain-access.api";
-import type { EarningsSummary } from "../../src/api/earnings.api";
-import { earningsApi } from "../../src/api/earnings.api";
+import type { CaptainAccess, CaptainWorkState } from "../../src/api/captain-access.api";
 import { jobsApi, RiderJob } from "../../src/api/jobs.api";
-import { riderApi, RiderProfile } from "../../src/api/rider.api";
+import { taxiApi } from "../../src/api/taxi.api";
 import { Card, Empty, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError, money } from "../../src/lib/errors";
-import type { CaptainAccess, CaptainWorkState } from "../../src/api/captain-access.api";
 import { projectCaptainOperationalState } from "../../src/lib/captain-operational-state";
 
-function deliveryModeStatus(workState: CaptainWorkState | null, deliveryActive: boolean) {
-  if (!deliveryActive) return "Activation pending";
-  if (!workState) return "Checking";
-  if (workState.activeWorkMode === "DELIVERY") return "Busy";
-  if (workState.activeWorkMode === "RIDE") return "Paused";
-  if (workState.effectiveDeliveryOnline) return "Online";
-  if (workState.desiredDeliveryOnline) return "Pending";
-  return "Offline";
+const ACTIVE_DELIVERY = new Set(["RIDER_ASSIGNED", "RIDER_ARRIVING_PICKUP", "PICKED_UP", "ON_THE_WAY", "ARRIVED_DESTINATION", "DELIVERED"]);
+const TERMINAL_RIDE = new Set(["COMPLETED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_DRIVER", "CANCELLED_BY_ADMIN", "EXPIRED"]);
+
+function tripTime(trip: TaxiTrip) {
+  return trip.completedAt ?? trip.cancelledAt ?? trip.updatedAt ?? trip.createdAt;
 }
 
-function amountTotal(records: Array<{ riderPayout: string | number }>) {
-  return records.reduce((total, record) => total + Number(record.riderPayout ?? 0), 0);
-}
-
-export default function Jobs() {
+export default function Work() {
   const [jobs, setJobs] = useState<RiderJob[]>([]);
-  const [profile, setProfile] = useState<RiderProfile | null>(null);
+  const [rides, setRides] = useState<TaxiTrip[]>([]);
   const [access, setAccess] = useState<CaptainAccess | null>(null);
   const [workState, setWorkState] = useState<CaptainWorkState | null>(null);
-  const [earnings, setEarnings] = useState<EarningsSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function load() {
     setLoading(true);
     try {
-      const [access, state] = await Promise.all([
+      const [resolvedAccess, state] = await Promise.all([
         captainAccessApi.resolve(),
         captainAccessApi.workState().catch(() => null)
       ]);
-      setAccess(access);
+      setAccess(resolvedAccess);
       setWorkState(state);
-      const projection = projectCaptainOperationalState(access, state);
-      if (!projection.hasActiveDeliveryMode) {
-        setJobs([]);
-        setProfile(null);
-        setEarnings(null);
-        setError("");
-        return;
-      }
-      const [items, deliveryProfile, earningsSummary] = await Promise.all([
-        jobsApi.list(),
-        riderApi.profile().catch(() => null),
-        earningsApi.summary().catch(() => null)
+      const projection = projectCaptainOperationalState(resolvedAccess, state);
+      const [deliveryJobs, rideTrips] = await Promise.all([
+        projection.hasActiveDeliveryMode ? jobsApi.list() : Promise.resolve([]),
+        projection.hasActiveRideMode ? taxiApi.trips() : Promise.resolve([])
       ]);
-      setJobs(items);
-      setProfile(deliveryProfile);
-      setEarnings(earningsSummary);
+      setJobs(deliveryJobs);
+      setRides(rideTrips);
       setError("");
-    } catch (e) {
-      setError(friendlyError(e));
+    } catch (cause) {
+      setError(friendlyError(cause));
     } finally {
       setLoading(false);
     }
@@ -70,75 +52,66 @@ export default function Jobs() {
 
   useEffect(() => { void load(); }, []);
 
-  const projection = projectCaptainOperationalState(access, workState);
-  const deliveryAccessReady = projection.hasActiveDeliveryMode;
-  const activeJob = useMemo(() => jobs.find((job) => [
-    "RIDER_ASSIGNED",
-    "RIDER_ARRIVING_PICKUP",
-    "PICKED_UP",
-    "ON_THE_WAY",
-    "ARRIVED_DESTINATION",
-    "DELIVERED"
-  ].includes(job.orderStatus)), [jobs]);
-  const todayJobs = useMemo(() => {
-    const today = new Date().toDateString();
-    return jobs.filter((job) => new Date(job.updatedAt ?? job.createdAt).toDateString() === today);
-  }, [jobs]);
-  const completedJobs = jobs.filter((job) => job.orderStatus === "COMPLETED" || job.orderStatus === "DELIVERED");
-  const cancelledJobs = jobs.filter((job) => job.orderStatus === "CANCELLED" || job.orderStatus === "FAILED" || job.orderStatus === "REFUNDED");
-  const openJobs = jobs.filter((job) => !["COMPLETED", "CANCELLED", "FAILED", "REFUNDED"].includes(job.orderStatus));
-  const deliveryStatus = deliveryModeStatus(workState, deliveryAccessReady);
-  const deliveryEarnings = amountTotal(earnings?.completedJobs ?? []);
+  const projection = useMemo(() => projectCaptainOperationalState(access, workState), [access, workState]);
+  const activeDelivery = jobs.find((job) => ACTIVE_DELIVERY.has(job.orderStatus));
+  const activeRide = rides.find((ride) => !TERMINAL_RIDE.has(ride.status));
+  const rideHistory = rides.filter((ride) => TERMINAL_RIDE.has(ride.status));
+  const deliveryHistory = jobs.filter((job) => !ACTIVE_DELIVERY.has(job.orderStatus));
+  const chronological = [
+    ...rideHistory.map((ride) => ({ type: "Ride" as const, id: ride.id, date: tripTime(ride), ride })),
+    ...deliveryHistory.map((job) => ({ type: "Delivery" as const, id: job.id, date: job.updatedAt ?? job.createdAt, job }))
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  return <Protected><Screen title="Deliveries" subtitle={deliveryAccessReady ? "Assigned jobs, active delivery and delivery history." : "Delivery activation pending."} refreshing={loading} onRefresh={load}><Message error>{error}</Message>
-    {!deliveryAccessReady ? <Card tone="soft">
-      <Text style={ui.sectionTitle}>Delivery activation pending</Text>
-      <Text style={ui.pageIntro}>KariGO Operations will notify you when Delivery access is activated.</Text>
+  return <Protected><Screen title="Work" subtitle="Active assignments, Ride history and Delivery history." refreshing={loading} onRefresh={load}>
+    <Message error>{error}</Message>
+    {!projection.hasAnyActiveMode ? <Card tone="soft">
+      <Text style={ui.sectionTitle}>Captain activation pending</Text>
+      <Text style={ui.pageIntro}>Work becomes available after KariGO activates at least one Captain mode.</Text>
       <NavLink href="/application-status" label="View application status" />
-      <NavLink href="/tabs/dashboard" label="Return home" />
     </Card> : <>
-    <Card tone="soft">
-      <View style={ui.spaceBetween}>
-        <Text style={ui.sectionTitle}>Mode status</Text>
-        <StatusBadge status={deliveryStatus} />
-      </View>
-      <Text style={ui.pageIntro}>{projection.activeWorkMode === "RIDE" ? "Delivery is paused while a Ride assignment is active." : "Delivery assignments and history live here."}</Text>
-      {projection.delivery.eligibilityReason ? <Text style={ui.muted}>{projection.delivery.eligibilityReason}</Text> : null}
-    </Card>
-    <View style={styles.summaryGrid}>
-      <Card><Text style={ui.muted}>Today assigned</Text><Text style={styles.metric}>{todayJobs.length}</Text></Card>
-      <Card><Text style={ui.muted}>Completed</Text><Text style={styles.metric}>{profile?.totalDeliveries ?? completedJobs.length}</Text></Card>
-      <Card><Text style={ui.muted}>Cancelled</Text><Text style={styles.metric}>{cancelledJobs.length}</Text></Card>
-      <Card><Text style={ui.muted}>Delivery earnings</Text><Text style={styles.metric}>{money(deliveryEarnings)}</Text></Card>
-    </View>
-    <Card>
-      <Text style={ui.sectionTitle}>Active delivery</Text>
-      {activeJob ? <>
-        <Text style={ui.title}>{activeJob.orderNumber}</Text>
-        <StatusBadge status={activeJob.orderStatus} />
-        <NavLink href={`/jobs/${activeJob.id}`} label="Open active delivery" />
-      </> : <Text style={ui.muted}>No active delivery.</Text>}
-    </Card>
-    <Text style={ui.sectionTitle}>Assigned jobs</Text>
-    {openJobs.length === 0 ? <Empty message="No delivery jobs assigned yet. Check again after dispatch assigns a delivery." /> : openJobs.map((job) =>
-      <Link key={job.id} href={`/jobs/${job.id}` as never} asChild><Pressable><Card>
-        <Text style={ui.title}>{job.orderNumber}</Text><StatusBadge status={job.orderStatus} />
-        <Text style={ui.muted}>{job.vendor?.businessName ?? job.serviceCategory} - {money(job.deliveryFee)} delivery fee</Text>
-      </Card></Pressable></Link>)}
-    <Text style={ui.sectionTitle}>Delivery history</Text>
-    {completedJobs.length === 0 && cancelledJobs.length === 0 ? <Empty message="Completed and cancelled Delivery assignments will appear here." /> : [...completedJobs, ...cancelledJobs].map((job) =>
-      <Link key={`history-${job.id}`} href={`/jobs/${job.id}` as never} asChild><Pressable><Card>
-        <Text style={ui.title}>{job.orderNumber}</Text><StatusBadge status={job.orderStatus} />
-        <Text style={ui.muted}>{new Date(job.updatedAt ?? job.createdAt).toLocaleString()}</Text>
-        <Text style={ui.muted}>From: {job.vendor?.businessName ?? ([job.pickupAddress?.addressLine, job.pickupAddress?.city].filter(Boolean).join(", ") || "Pickup withheld")}</Text>
-        <Text style={ui.muted}>To: {[job.deliveryAddress?.addressLine, job.deliveryAddress?.city].filter(Boolean).join(", ") || "Destination withheld"}</Text>
-        <Text style={ui.muted}>Delivery fee: {money(job.deliveryFee)}</Text>
+      <Card tone="soft">
+        <View style={ui.spaceBetween}><Text style={ui.sectionTitle}>Current status</Text><StatusBadge status={workState?.activeWorkMode ? `Busy — ${workState.activeWorkMode === "RIDE" ? "Ride" : "Delivery"}` : projection.overallStatus} /></View>
+        <Text style={ui.pageIntro}>{projection.hasActiveRideMode && projection.hasActiveDeliveryMode ? "Ride + Delivery" : projection.hasActiveRideMode ? "Ride" : "Delivery"} capability</Text>
+      </Card>
+
+      <Card>
+        <Text style={ui.sectionTitle}>Active</Text>
+        {activeRide ? <>
+          <View style={styles.modeRow}><Text style={styles.mode}>Ride</Text><StatusBadge status={activeRide.status} /></View>
+          <Text style={styles.reference}>{activeRide.tripReference}</Text>
+          <Text style={ui.muted}>{activeRide.pickupAddress}</Text>
+          <Text style={ui.muted}>to {activeRide.destinationAddress}</Text>
+          <NavLink href="/tabs/dashboard" label="Open active Ride cockpit" />
+        </> : activeDelivery ? <>
+          <View style={styles.modeRow}><Text style={styles.mode}>Delivery</Text><StatusBadge status={activeDelivery.orderStatus} /></View>
+          <Text style={styles.reference}>{activeDelivery.orderNumber}</Text>
+          <NavLink href={`/jobs/${activeDelivery.id}`} label="Open active Delivery" />
+        </> : <Text style={ui.muted}>No active assignment.</Text>}
+      </Card>
+
+      <Text style={ui.sectionTitle}>Work history</Text>
+      {!chronological.length ? <Empty message="Completed and cancelled Ride or Delivery work will appear here." /> : chronological.map((record) => record.type === "Ride" ? <Card key={`ride-${record.id}`}>
+        <View style={styles.modeRow}><Text style={styles.mode}>Ride</Text><StatusBadge status={record.ride.status} /></View>
+        <Text style={styles.reference}>{record.ride.tripReference}</Text>
+        <Text style={ui.muted}>{new Date(record.date).toLocaleString()}</Text>
+        <Text style={ui.muted}>From: {record.ride.pickupAddress}</Text>
+        <Text style={ui.muted}>To: {record.ride.destinationAddress}</Text>
+        <Text style={styles.amount}>{money(record.ride.finalFareKobo ?? record.ride.estimatedFareKobo)}</Text>
+      </Card> : <Link key={`delivery-${record.id}`} href={`/jobs/${record.job.id}` as never} asChild><Pressable><Card>
+        <View style={styles.modeRow}><Text style={styles.mode}>Delivery</Text><StatusBadge status={record.job.orderStatus} /></View>
+        <Text style={styles.reference}>{record.job.orderNumber}</Text>
+        <Text style={ui.muted}>{new Date(record.date).toLocaleString()}</Text>
+        <Text style={ui.muted}>From: {record.job.vendor?.businessName ?? ([record.job.pickupAddress?.addressLine, record.job.pickupAddress?.city].filter(Boolean).join(", ") || "Pickup withheld")}</Text>
+        <Text style={ui.muted}>To: {[record.job.deliveryAddress?.addressLine, record.job.deliveryAddress?.city].filter(Boolean).join(", ") || "Destination withheld"}</Text>
+        <Text style={styles.amount}>{money(record.job.deliveryFee)}</Text>
       </Card></Pressable></Link>)}
     </>}
   </Screen></Protected>;
 }
 
 const styles = StyleSheet.create({
-  summaryGrid: { gap: 10 },
-  metric: { color: brand.colors.charcoal, fontSize: 22, fontWeight: "900" }
+  modeRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  mode: { color: brand.colors.primary, fontSize: 12, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase" },
+  reference: { color: brand.colors.charcoal, fontSize: 18, fontWeight: "900" },
+  amount: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "900" }
 });

@@ -12,6 +12,9 @@ import type { AuthenticatedUser, LoginRequest } from "@karigo/shared-types";
 import { KariGoApiError } from "@karigo/shared-types";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { authApi } from "../api/auth.api";
+import { deactivateCaptainPushNotifications } from "../lib/captain-notifications";
+import { disableActiveWorkBackgroundLocation } from "../lib/background-location";
+
 import { authSessionStore, onUnauthorized, refreshTokenStore } from "../api/client";
 import { authenticateWithBiometrics, getBiometricCapability, getBiometricSignInEnabled, setBiometricSignInEnabled } from "../lib/biometric-auth";
 import { normalizeNigerianPhoneNumber } from "../lib/phone";
@@ -188,6 +191,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSessionMessage("Saved login reset. Please sign in again.");
     },
     logout: async () => {
+      await Promise.allSettled([
+        deactivateCaptainPushNotifications(),
+        disableActiveWorkBackgroundLocation()
+      ]);
       const refreshToken = await refreshTokenStore.getToken();
       const generation = authSessionStore.beginNewSession();
       if (refreshToken) {

@@ -32,6 +32,12 @@ export class RiderTaxiController {
   async available(@CurrentUser() user: AuthenticatedUser) {
     return { message: "Assigned ride trips retrieved", data: await this.taxi.availableTaxiTrips(user.id) };
   }
+  @Get("trips")
+  @ApiOperation({ summary: "List the Captain's KariGO Ride work history" })
+  async trips(@CurrentUser() user: AuthenticatedUser) {
+    return { message: "Ride work history retrieved", data: await this.taxi.riderTaxiTrips(user.id) };
+  }
+
 
   @Post("trips/:tripId/accept")
   async accept(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {

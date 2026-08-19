@@ -1,11 +1,12 @@
 import { Feather } from "@expo/vector-icons";
+import NetInfo from "@react-native-community/netinfo";
 import { router } from "expo-router";
 import { AppState, AppStateStatus, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import MapView, { Marker, Region } from "react-native-maps";
 import { brand } from "@karigo/config";
 import type { CaptainAccess, CaptainWorkState } from "../../src/api/captain-access.api";
-import type { LaunchAvailabilityResponse } from "@karigo/shared-types";
+import type { LaunchAvailabilityResponse, TaxiTrip } from "@karigo/shared-types";
 import { captainAccessApi } from "../../src/api/captain-access.api";
 import { riderApi, RiderProfile } from "../../src/api/rider.api";
 import { jobsApi, RiderJob } from "../../src/api/jobs.api";
@@ -13,6 +14,9 @@ import type { EarningsSummary } from "../../src/api/earnings.api";
 import { earningsApi } from "../../src/api/earnings.api";
 import { notificationsApi } from "../../src/api/notifications.api";
 import { launchApi } from "../../src/api/launch.api";
+import { taxiApi } from "../../src/api/taxi.api";
+import { CaptainRideWorkspace } from "../../src/components/captain-ride-workspace";
+import { disableActiveWorkBackgroundLocation, enableActiveWorkBackgroundLocation } from "../../src/lib/background-location";
 import { Button, Card, Loading, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError, money } from "../../src/lib/errors";
@@ -24,6 +28,7 @@ import {
   hasSubmittedCaptainApplication
 } from "../../src/lib/captain-application-status";
 import { CaptainModeProjection, projectCaptainOperationalState } from "../../src/lib/captain-operational-state";
+import { registerCaptainPushNotifications, subscribeToCaptainAssignmentNotifications } from "../../src/lib/captain-notifications";
 
 const ACTIVE_DELIVERY_STATUSES = new Set([
   "RIDER_ASSIGNED",
@@ -155,6 +160,7 @@ export default function RiderDashboard() {
   const [captainAccess, setCaptainAccess] = useState<CaptainAccess | null>(null);
   const [profile, setProfile] = useState<RiderProfile | null>(null);
   const [jobs, setJobs] = useState<RiderJob[]>([]);
+  const [rideTrips, setRideTrips] = useState<TaxiTrip[]>([]);
   const [workState, setWorkState] = useState<CaptainWorkState | null>(null);
   const [launchAvailability, setLaunchAvailability] = useState<LaunchAvailabilityResponse | null>(null);
   const [unread, setUnread] = useState(0);
@@ -185,6 +191,8 @@ export default function RiderDashboard() {
   const autoRefreshRequestedRef = useRef("");
   const latestWorkStateRef = useRef<CaptainWorkState | null>(null);
   const latestProjectionRef = useRef<ReturnType<typeof projectCaptainOperationalState> | null>(null);
+  const rideTripsRef = useRef<TaxiTrip[]>([]);
+  const assignmentSyncInFlightRef = useRef<Promise<void> | null>(null);
 
   function load() {
     if (loadInFlightRef.current) return loadInFlightRef.current;
@@ -217,12 +225,13 @@ export default function RiderDashboard() {
           ?? deliveryApplication.pilotCity
           ?? rideApplication.currentProfileLocation?.city
           ?? rideApplication.pilotCity;
-        const [launchState, deliveryProfile, deliveryJobs, notificationCount, earningsSummary] = await Promise.all([
+        const [launchState, deliveryProfile, deliveryJobs, notificationCount, earningsSummary, assignedRides] = await Promise.all([
           captainCity ? secondary(launchApi.myAvailability(captainCity, { signal: controller.signal }), null) : Promise.resolve(null),
           projection.hasActiveDeliveryMode ? secondary(riderApi.profile({ signal: controller.signal }), null) : Promise.resolve(null),
           projection.hasActiveDeliveryMode ? secondary(jobsApi.list({ signal: controller.signal }), []) : Promise.resolve([]),
           projection.hasAnyActiveMode ? secondary(notificationsApi.unreadCount({ signal: controller.signal }), { count: 0 }) : Promise.resolve({ count: 0 }),
-          projection.hasAnyActiveMode ? secondary(earningsApi.summary({ signal: controller.signal }), null) : Promise.resolve(null)
+          projection.hasAnyActiveMode ? secondary(earningsApi.summary({ signal: controller.signal }), null) : Promise.resolve(null),
+          projection.hasActiveRideMode ? secondary(taxiApi.availableTrips(), rideTripsRef.current) : Promise.resolve([])
         ]);
         if (controller.signal.aborted || !mountedRef.current) return;
         setLaunchAvailability(launchState);
@@ -231,6 +240,8 @@ export default function RiderDashboard() {
         setUnread(notificationCount.count);
         setEarnings(earningsSummary);
         setError("");
+        rideTripsRef.current = assignedRides;
+        setRideTrips(assignedRides);
         setRefreshNotice(secondaryRefreshFailed && Date.now() - lastLocationSuccessAtRef.current > 5_000
           ? "Some information could not be refreshed. Tap to retry."
           : "");
@@ -250,6 +261,37 @@ export default function RiderDashboard() {
     void request.finally(() => {
       if (loadInFlightRef.current === request) loadInFlightRef.current = null;
       if (loadAbortRef.current === controller) loadAbortRef.current = null;
+    });
+    return request;
+  }
+
+  function syncActiveWork(reason: string) {
+    if (assignmentSyncInFlightRef.current) return assignmentSyncInFlightRef.current;
+    const request = (async () => {
+      try {
+        const state = await captainAccessApi.workState();
+        const access = captainAccessRef.current;
+        const [assignedRides, deliveryJobs] = await Promise.all([
+          access?.rideCaptainProfile ? taxiApi.availableTrips() : Promise.resolve([]),
+          access?.deliveryCaptainProfile ? jobsApi.list() : Promise.resolve([])
+        ]);
+        if (!mountedRef.current) return;
+        latestWorkStateRef.current = state;
+        rideTripsRef.current = assignedRides;
+        setWorkState(state);
+        setRideTrips(assignedRides);
+        setJobs(deliveryJobs);
+        setRefreshNotice("");
+        console.log(`captain_assignment_sync reason=${reason} activeMode=${state.activeWorkMode ?? "none"}`);
+      } catch {
+        if (mountedRef.current && (latestWorkStateRef.current?.activeWorkMode || rideTripsRef.current.length)) {
+          setRefreshNotice("Live updates are reconnecting. Your last confirmed assignment remains visible.");
+        }
+      }
+    })();
+    assignmentSyncInFlightRef.current = request;
+    void request.finally(() => {
+      if (assignmentSyncInFlightRef.current === request) assignmentSyncInFlightRef.current = null;
     });
     return request;
   }
@@ -274,12 +316,24 @@ export default function RiderDashboard() {
     const subscription = AppState.addEventListener("change", (state: AppStateStatus) => {
       const active = state === "active";
       setIsForeground(active);
-      if (active) void load();
-      else stopCaptainWatcher("background");
-      loadAbortRef.current?.abort();
+      if (active) void syncActiveWork("foreground");
+      else {
+        stopCaptainWatcher("background");
+        loadAbortRef.current?.abort();
+      }
     });
     return () => subscription.remove();
   }, []);
+
+  useEffect(() => {
+    void registerCaptainPushNotifications().catch(() => undefined);
+    return subscribeToCaptainAssignmentNotifications(() => {
+      void syncActiveWork("notification");
+    });
+  }, []);
+  useEffect(() => NetInfo.addEventListener((state) => {
+    if (state.isConnected) void syncActiveWork("connectivity_restored");
+  }), []);
 
   const projection = useMemo(() => projectCaptainOperationalState(captainAccess, workState), [captainAccess, workState]);
   const activeJob = useMemo(() => jobs.find((job) => ACTIVE_DELIVERY_STATUSES.has(job.orderStatus)), [jobs]);
@@ -298,6 +352,24 @@ export default function RiderDashboard() {
     latestWorkStateRef.current = workState;
     latestProjectionRef.current = projection;
   }, [projection, workState]);
+
+  useEffect(() => {
+    const online = Boolean(workState?.desiredDeliveryOnline || workState?.desiredRideOnline);
+    if (!online && !workState?.activeWorkMode) return;
+    const intervalMs = workState?.activeWorkMode ? 8_000 : 12_000;
+    const timer = setInterval(() => {
+      if (isForeground) void syncActiveWork(workState?.activeWorkMode ? "active_work_fallback" : "online_idle_fallback");
+    }, intervalMs);
+    return () => clearInterval(timer);
+  }, [isForeground, workState?.activeWorkMode, workState?.desiredDeliveryOnline, workState?.desiredRideOnline]);
+
+  useEffect(() => {
+    if (workState?.activeWorkMode) {
+      void enableActiveWorkBackgroundLocation().catch(() => undefined);
+    } else {
+      void disableActiveWorkBackgroundLocation().catch(() => undefined);
+    }
+  }, [workState?.activeWorkMode]);
 
   function backendLocationAgeMs() {
     const timestamp = latestWorkStateRef.current?.lastLocationAt ?? mapState.lastSeen;
@@ -409,7 +481,7 @@ export default function RiderDashboard() {
         })
         .catch((e) => {
           setLocationAutoBlocked(true);
-          setError(e instanceof Error ? e.message : "Captain location is unavailable. Refresh GPS to try again.");
+          setError(e instanceof Error ? e.message : "Captain location is unavailable. Retry from Profile diagnostics.");
           console.log(`captain_gps_watcher_unavailable reason=${e instanceof Error ? e.message : "unknown"}`);
         })
         .finally(() => {
@@ -447,6 +519,7 @@ export default function RiderDashboard() {
       setMessage("");
     } finally {
       setAvailabilityUpdating(false);
+      void syncActiveWork("availability_changed");
     }
   }
 
@@ -473,6 +546,7 @@ export default function RiderDashboard() {
       setMessage("");
     } finally {
       setAvailabilityUpdating(false);
+      void syncActiveWork("availability_changed");
     }
   }
 
@@ -500,6 +574,7 @@ export default function RiderDashboard() {
       setMessage("");
     } finally {
       setAvailabilityUpdating(false);
+      void syncActiveWork("availability_changed");
     }
   }
 
@@ -528,14 +603,44 @@ export default function RiderDashboard() {
   const deliveryOperationsStatus = deliveryLaunch?.available === false ? "Unavailable" : projection.delivery.active ? "Available" : projection.delivery.operationsLabel;
   const rideOperationsStatus = rideLaunch?.available === false ? "Unavailable" : projection.ride.active ? "Available" : projection.ride.operationsLabel;
   const activeWork = activeWorkTitle(workState);
+  const activeRide = rideTrips.find((trip) => !["COMPLETED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_DRIVER", "CANCELLED_BY_ADMIN", "EXPIRED"].includes(trip.status)) ?? null;
+
+  async function onRideUpdated(updated: TaxiTrip) {
+    const next = rideTripsRef.current.map((trip) => trip.id === updated.id ? updated : trip);
+    if (!next.some((trip) => trip.id === updated.id)) next.unshift(updated);
+    rideTripsRef.current = next;
+    setRideTrips(next);
+    await syncActiveWork("assignment_mutation");
+  }
+
 
   if (loading && !captainAccess) {
     return <Protected><Loading label="Preparing your KariGO Captain access..." /></Protected>;
   }
 
+
+  if (activeRide) {
+    return <Protected><Screen refreshing={loading} onRefresh={() => void syncActiveWork("manual_refresh")}>
+      <View style={styles.cockpitHeader}>
+        <Image source={require("../../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
+        <View style={styles.headerActions}>
+          <View style={[styles.statusChip, styles.statusChipBusy]}><Text style={styles.statusChipText}>Busy — Ride</Text></View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={() => router.push("/notifications")} style={styles.notificationBell}>
+            <Feather name="bell" size={20} color={brand.colors.charcoal} />
+            {unread > 0 ? <View style={styles.unreadBadge}><Text style={styles.unreadText}>{unread > 99 ? "99+" : unread}</Text></View> : null}
+          </Pressable>
+        </View>
+      </View>
+      <Message>{message}</Message>
+      <Message error>{error}</Message>
+      {refreshNotice ? <Text style={styles.resyncNotice}>{refreshNotice}</Text> : null}
+      <CaptainRideWorkspace trip={activeRide} captainCoordinate={mapState.coordinate} operatingArea={mapState.area} onUpdated={onRideUpdated} />
+    </Screen></Protected>;
+  }
   return (
     <Protected><Screen refreshing={loading} onRefresh={load}>
       <View style={styles.heroCard}>
+
         <View style={styles.heroTopRow}>
           <Image source={require("../../assets/karigo-logo.png")} style={styles.logo} resizeMode="contain" />
           <View style={styles.headerActions}>
@@ -553,6 +658,7 @@ export default function RiderDashboard() {
       <Message>{message}</Message>
       <Message error>{error}</Message>
       {refreshNotice ? <Pressable accessibilityRole="button" accessibilityLabel="Retry Home refresh" onPress={() => void load()} style={styles.refreshNotice}><Text style={styles.refreshNoticeText}>{refreshNotice}</Text></Pressable> : null}
+
 
       {projection.hasAnyActiveMode ? <>
 
@@ -585,11 +691,11 @@ export default function RiderDashboard() {
             <View style={styles.mapPin}><Feather name="map-pin" size={24} color={brand.colors.primary} /></View>
             <View style={styles.mapCopy}>
               <Text style={styles.mapTitle}>Location unavailable</Text>
-              <Text style={ui.muted}>Enable location permission and refresh GPS to show your live Captain position.</Text>
+              <Text style={ui.muted}>Location updates automatically while you are online. Use Profile diagnostics if it remains unavailable.</Text>
               <Text style={ui.muted}>Current operating area: {mapState.area}</Text>
             </View>
           </View>}
-          <Button title={locationUpdating ? "Updating GPS..." : "Refresh GPS"} tone="muted" disabled={!workState || locationUpdating} onPress={() => void refreshGps()} />
+          {locationAutoBlocked ? <Button title={locationUpdating ? "Retrying location..." : "Retry location"} tone="muted" disabled={!workState || locationUpdating} onPress={() => void refreshGps()} /> : null}
         </Card>
 
         <Card>
@@ -737,5 +843,7 @@ const styles = StyleSheet.create({
   overallControl: { alignItems: "center", backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, flexDirection: "row", gap: 12, justifyContent: "space-between", padding: 14 },
   earningsRow: { flexDirection: "row", gap: 10 },
   earningMetric: { backgroundColor: "#F9FAFB", borderRadius: 14, flex: 1, gap: 3, padding: 12 },
-  earningValue: { color: brand.colors.charcoal, fontSize: 17, fontWeight: "900" }
+  earningValue: { color: brand.colors.charcoal, fontSize: 17, fontWeight: "900" },
+  cockpitHeader: { alignItems: "center", backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 20, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", padding: 14 },
+  resyncNotice: { backgroundColor: "#FFF7ED", borderColor: "#FED7AA", borderRadius: 12, borderWidth: 1, color: "#9A3412", fontWeight: "800", lineHeight: 20, padding: 12 }
 });

@@ -905,4 +905,19 @@ describe("environment configuration", () => {
       PUSH_PROVIDER: "expo"
     })).toThrow("PUSH_PROVIDER must remain mock");
   });
+
+  it("allows Expo push only with the explicit approval flag and credentials", () => {
+    const result = validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      PUSH_PROVIDER: "expo",
+      PUSH_NOTIFICATION_ENABLED: "true",
+      EXPO_ACCESS_TOKEN: "expo-test-token-not-real"
+    });
+
+    expect(result.PUSH_PROVIDER).toBe("expo");
+    expect(result.PUSH_NOTIFICATION_ENABLED).toBe(true);
+    expect(result.EXPO_PUSH_URL).toBe("https://exp.host/--/api/v2/push/send");
+  });
+
 });

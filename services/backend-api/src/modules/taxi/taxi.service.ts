@@ -9,6 +9,8 @@ import {
   CaptainWorkMode,
   DocumentVerificationStatus,
   LaunchServiceType,
+  NotificationChannel,
+  NotificationType,
   Prisma,
   RiderStatus,
   TaxiApplicationStatus,
@@ -27,6 +29,7 @@ import { CaptainWorkStateService } from "../../common/services/captain-work-stat
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
 import { PrismaService } from "../../prisma/prisma.service";
 import { LaunchOperationsService } from "../launch-operations/launch-operations.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { captainServiceAreas } from "../platform/captain-catalog";
 import {
   captainIsApprovedForOperatingArea,
@@ -240,6 +243,7 @@ export class TaxiService {
     private readonly captainUploadStorage: CaptainUploadStorageService,
     private readonly applicationNotifications: ApplicationNotificationsService,
     private readonly captainWorkState: CaptainWorkStateService,
+    private readonly notifications: NotificationsService,
     private readonly launchOperations: LaunchOperationsService
   ) {}
 
@@ -844,7 +848,6 @@ export class TaxiService {
     this.assertTaxiStagingEnabled();
     await this.expireStaleTrips();
     const profile = await this.requireActiveTaxiDriverProfile(userId);
-    if (!profile.isAvailableForTaxi) return [];
     const trips = await this.prisma.taxiTrip.findMany({
       where: {
         driverProfileId: profile.id,
@@ -853,6 +856,19 @@ export class TaxiService {
       include: this.tripInclude(),
       orderBy: { createdAt: "asc" },
       take: 20
+    });
+    return trips.map((trip) => this.formatTrip(trip, { viewer: "driver" }));
+  }
+
+  async riderTaxiTrips(userId: string) {
+    this.assertTaxiStagingEnabled();
+    await this.expireStaleTrips();
+    const profile = await this.requireActiveTaxiDriverProfile(userId);
+    const trips = await this.prisma.taxiTrip.findMany({
+      where: { driverProfileId: profile.id },
+      include: this.tripInclude(),
+      orderBy: { createdAt: "desc" },
+      take: 100
     });
     return trips.map((trip) => this.formatTrip(trip, { viewer: "driver" }));
   }
@@ -1192,7 +1208,29 @@ export class TaxiService {
       driverProfileId: profile.id,
       productionMode: true
     });
+    await this.notifyRideAssignment(profile.user!.id, trip.id);
     return this.formatTrip(updated, { viewer: "admin" });
+  }
+
+  private async notifyRideAssignment(captainUserId: string, tripId: string) {
+    const notification = {
+      userId: captainUserId,
+      title: "New KariGO Ride",
+      message: "A new Ride has been assigned. Open KariGO Captain to review it.",
+      type: NotificationType.RIDER_ASSIGNED,
+      entityType: "TaxiTrip",
+      entityId: tripId,
+      metadata: { event: "RIDE_ASSIGNED", route: "/tabs/dashboard" }
+    };
+    const results = await Promise.allSettled([
+      this.notifications.createNotification(notification),
+      this.notifications.createNotification({ ...notification, channel: NotificationChannel.PUSH })
+    ]);
+    for (const result of results) {
+      if (result.status === "rejected") {
+        this.logger.warn(`Ride assignment notification failed tripId=${tripId}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
+      }
+    }
   }
 
   async adminCancelTrip(adminUserId: string, tripId: string, dto: TaxiCancelDto) {

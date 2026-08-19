@@ -679,8 +679,21 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   if (!["mock", "expo", "firebase"].includes(pushProvider)) {
     throw new Error("PUSH_PROVIDER must be mock, expo or firebase");
   }
-  if (pushProvider !== "mock") {
+  const pushNotificationsEnabled = booleanFlag(config.PUSH_NOTIFICATION_ENABLED, "PUSH_NOTIFICATION_ENABLED", false);
+  const expoPushUrl = typeof config.EXPO_PUSH_URL === "string" && config.EXPO_PUSH_URL.trim()
+    ? config.EXPO_PUSH_URL.trim()
+    : "https://exp.host/--/api/v2/push/send";
+  if (pushProvider !== "mock" && !pushNotificationsEnabled) {
     throw new Error("PUSH_PROVIDER must remain mock until push sandbox testing is approved");
+  }
+  if (pushProvider === "expo") {
+    requireValue(config, "EXPO_ACCESS_TOKEN");
+    if (!expoPushUrl.startsWith("https://")) {
+      throw new Error("EXPO_PUSH_URL must use HTTPS");
+    }
+  }
+  if (pushProvider === "firebase") {
+    throw new Error("PUSH_PROVIDER=firebase is not implemented; use mock or the approved Expo provider");
   }
   const ridesServiceEnabled = booleanAlias(
     config,
@@ -845,6 +858,9 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       ? config.WHATSAPP_API_VERSION.trim()
       : "v20.0",
     PUSH_PROVIDER: pushProvider,
+    PUSH_NOTIFICATION_ENABLED: pushNotificationsEnabled,
+    EXPO_ACCESS_TOKEN: typeof config.EXPO_ACCESS_TOKEN === "string" ? config.EXPO_ACCESS_TOKEN.trim() : "",
+    EXPO_PUSH_URL: expoPushUrl,
     RIDES_SERVICE_ENABLED: ridesServiceEnabled,
     RIDES_PRODUCTION_ENABLED: ridesProductionEnabled,
     LAUNCH_GLOBAL_KILL_SWITCH: booleanFlag(config.LAUNCH_GLOBAL_KILL_SWITCH, "LAUNCH_GLOBAL_KILL_SWITCH", false),

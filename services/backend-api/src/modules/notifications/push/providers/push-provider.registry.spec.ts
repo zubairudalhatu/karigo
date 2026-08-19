@@ -10,7 +10,7 @@ describe("PushProviderRegistry", () => {
     const registry = new PushProviderRegistry(
       new ConfigService({}) as ConfigService,
       mock,
-      new ExpoPushProvider(),
+      new ExpoPushProvider(new ConfigService({}) as ConfigService),
       new FirebasePushProvider()
     );
 

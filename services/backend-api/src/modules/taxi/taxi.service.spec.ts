@@ -5,6 +5,7 @@ import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { CaptainUploadStorageService } from "../riders/captain-upload-storage.service";
 import { TaxiService } from "./taxi.service";
 
@@ -242,6 +243,9 @@ describe("TaxiService", () => {
     releaseLock: jest.fn(),
     transitionLock: jest.fn()
   };
+  const notifications = {
+    createNotification: jest.fn()
+  };
   const launchOperations = {
     assertCustomerCanStart: jest.fn().mockResolvedValue({ available: true }),
     assertControlledSupplyCanReceive: jest.fn().mockResolvedValue(undefined),
@@ -255,6 +259,7 @@ describe("TaxiService", () => {
     captainUploadStorage as unknown as CaptainUploadStorageService,
     applicationNotifications as unknown as ApplicationNotificationsService,
     captainWorkState as unknown as CaptainWorkStateService,
+    notifications as unknown as NotificationsService,
     launchOperations as never
   );
 
@@ -341,6 +346,7 @@ describe("TaxiService", () => {
     applicationNotifications.rideWaitlistJoined.mockResolvedValue(undefined);
     applicationNotifications.rideCaptainApplicationSubmitted.mockResolvedValue(undefined);
     applicationNotifications.rideCaptainApplicationReviewed.mockResolvedValue(undefined);
+    notifications.createNotification.mockResolvedValue({ accepted: true });
   });
 
   it("creates a customer taxi waitlist entry with normalized Nigerian phone number", async () => {
@@ -875,8 +881,9 @@ describe("TaxiService", () => {
     expect(prisma.taxiTrip.create).not.toHaveBeenCalled();
   });
 
-  it("returns only manually assigned active ride trips to approved available Captains", async () => {
+  it("returns manually assigned active Ride trips after the Captain work lock marks the profile busy", async () => {
     enableTaxiStaging();
+    prisma.taxiDriverProfile.findUnique.mockResolvedValueOnce({ ...driverProfile, isAvailableForTaxi: false });
     prisma.taxiTrip.findMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
@@ -894,6 +901,25 @@ describe("TaxiService", () => {
     }));
     expect(result).toHaveLength(1);
     expect(result[0].status).toBe(TaxiTripStatus.DRIVER_ASSIGNED);
+  });
+
+  it("returns chronological Ride work history including terminal trips", async () => {
+    enableTaxiStaging();
+    prisma.taxiTrip.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { ...taxiTrip, driverProfileId: driverProfile.id, driverProfile, status: TaxiTripStatus.COMPLETED }
+      ]);
+
+    const result = await service.riderTaxiTrips("rider-user");
+
+    expect(prisma.taxiTrip.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { driverProfileId: driverProfile.id },
+      orderBy: { createdAt: "desc" },
+      take: 100
+    }));
+    expect(result[0].status).toBe(TaxiTripStatus.COMPLETED);
   });
 
   it("allows an approved available Ride Captain to accept a manually assigned trip", async () => {
@@ -962,6 +988,20 @@ describe("TaxiService", () => {
     }));
     expect(audit.record).toHaveBeenCalledWith("admin-user", "admin.taxi.trip.driver_assigned", "TaxiTrip", taxiTrip.id, expect.objectContaining({
       productionMode: true
+    }));
+    expect(notifications.createNotification).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "rider-user",
+      title: "New KariGO Ride",
+      type: "RIDER_ASSIGNED",
+      entityType: "TaxiTrip",
+      entityId: taxiTrip.id,
+      metadata: { event: "RIDE_ASSIGNED", route: "/tabs/dashboard" }
+    }));
+    expect(notifications.createNotification).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "rider-user",
+      channel: "PUSH",
+      entityType: "TaxiTrip",
+      entityId: taxiTrip.id
     }));
   });
 

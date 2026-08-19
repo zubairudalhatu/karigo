@@ -20,7 +20,7 @@ function categoryIcon(item: NotificationSummary): keyof typeof Feather.glyphMap 
 
 function targetFor(item: NotificationSummary): string {
   const source = `${item.type} ${item.entityType ?? ""}`.toUpperCase();
-  if (source.includes("RIDE") || source.includes("TAXI")) return "/taxi-readiness";
+  if (source.includes("RIDE") || source.includes("TAXI")) return "/tabs/dashboard";
   if (source.includes("DELIVERY") || source.includes("RIDER_ASSIGNED") || source.includes("ORDER")) {
     return item.entityType === "Order" && item.entityId ? `/jobs/${item.entityId}` : "/jobs";
   }

@@ -7,7 +7,7 @@ import { useAuth } from "../contexts/auth-context";
 
 const tabs = [
   { label: "Home", icon: "home", href: "/tabs/dashboard", match: ["/tabs/dashboard", "/application-status"] },
-  { label: "Deliveries", icon: "briefcase", href: "/jobs", match: ["/jobs"] },
+  { label: "Work", icon: "briefcase", href: "/jobs", match: ["/jobs"] },
   { label: "Earnings", icon: "credit-card", href: "/earnings", match: ["/earnings"] },
   { label: "Profile", icon: "user", href: "/profile", match: ["/profile", "/notifications"] }
 ] as const;

@@ -18,6 +18,7 @@ export const taxiApi = {
   updateAvailability: (body: { isAvailableForTaxi: boolean; latitude?: number; longitude?: number; accuracyMeters?: number | null }) =>
     api.patch<TaxiDriverProfile>("rider/taxi/availability", body),
   availableTrips: () => api.get<TaxiTrip[]>("rider/taxi/trips/available"),
+  trips: () => api.get<TaxiTrip[]>("rider/taxi/trips"),
   acceptTrip: (tripId: string) => api.post<TaxiTrip>(`rider/taxi/trips/${tripId}/accept`),
   declineTrip: (tripId: string, reason: string) => api.post<TaxiTrip>(`rider/taxi/trips/${tripId}/decline`, { reason }),
   arrivedPickup: (tripId: string) => api.post<TaxiTrip>(`rider/taxi/trips/${tripId}/arrived-pickup`),
