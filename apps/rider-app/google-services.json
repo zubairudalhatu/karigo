@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "716650171692",
+    "project_id": "karigo-c5ec4",
+    "storage_bucket": "karigo-c5ec4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:716650171692:android:5d41213e379cac611fb089",
+        "android_client_info": {
+          "package_name": "com.karigo.rider"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCQHgQfBD_zhaVXx6nQS3X0qfa2dwXt6MU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

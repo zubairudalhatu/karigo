@@ -6,6 +6,7 @@ node_modules/
 .env.*
 !.env.example
 !**/.env.example
+**/*firebase-adminsdk*.json
 
 # Build output and generated artifacts
 dist/

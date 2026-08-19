@@ -43,7 +43,7 @@ export default ({ config }: ExpoConfigInput) => {
   return {
     ...config,
     name: isStaging ? "KariGO Captain Staging" : "KariGO Captain",
-    version: "1.0.0",
+    version: "1.1.0",
     slug: "karigo-rider",
     scheme: isStaging ? "karigo-rider-staging" : "karigo-rider",
     plugins: [
@@ -75,6 +75,7 @@ export default ({ config }: ExpoConfigInput) => {
     },
     android: {
       ...config.android,
+      ...(isStaging ? {} : { googleServicesFile: "./google-services.json" }),
       blockedPermissions: [
         ...new Set([
           ...(Array.isArray(config.android?.blockedPermissions) ? config.android.blockedPermissions : []),
@@ -100,7 +101,7 @@ export default ({ config }: ExpoConfigInput) => {
         monochromeImage: "./assets/adaptive-icon-monochrome.png"
       },
       package: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider",
-      versionCode: isStaging ? 1 : 14
+      versionCode: isStaging ? 1 : 15
     },
     ios: {
       ...config.ios,
