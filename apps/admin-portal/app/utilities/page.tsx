@@ -11,6 +11,9 @@ const moneyKobo = (value: number) => `NGN ${(value / 100).toLocaleString()}`;
 const label = (value: string) => value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 const statuses: UtilityTransactionStatus[] = ["PENDING", "PROCESSING", "SUCCESSFUL", "FAILED", "CANCELLED"];
 const terminalStatuses: UtilityTransactionStatus[] = ["SUCCESSFUL", "FAILED", "CANCELLED"];
+const providerIpDenied = (transaction: AdminUtilityTransaction) =>
+  transaction.providerStatus === "ACCELERATE_ACCESS_DENIED_IP_ALLOWLIST" ||
+  transaction.providerStatus === "ACCELERATE_STATUS_IP_ALLOWLIST_REQUIRED";
 
 export default function AdminUtilitiesPage() {
   const [summary, setSummary] = useState<AdminUtilitySummary>({ totalTransactions: 0, pending: 0, successful: 0, failed: 0, totalTestValueKobo: 0 });
@@ -162,9 +165,10 @@ export default function AdminUtilitiesPage() {
           <div className="item"><span>Created</span><strong>{new Date(selected.createdAt).toLocaleString()}</strong></div>
           <div className="item"><span>Updated</span><strong>{new Date(selected.updatedAt).toLocaleString()}</strong></div>
           <textarea placeholder="Operations override note" value={note} onChange={(event) => setNote(event.target.value)} />
+          {providerIpDenied(selected) ? <p className="warning">Provider-denied transactions cannot be marked successful without an explicit audited override policy.</p> : null}
           <div className="actions">
             <button className="secondary" onClick={verifyProviderStatus} disabled={verifying || terminalStatuses.includes(selected.status)}>{verifying ? "Checking..." : "Verify provider status"}</button>
-            <button onClick={() => overrideStatus("SUCCESSFUL")}>Mark successful</button>
+            <button onClick={() => overrideStatus("SUCCESSFUL")} disabled={providerIpDenied(selected)}>Mark successful</button>
             <button onClick={() => overrideStatus("FAILED")}>Mark failed</button>
             <button className="secondary" onClick={() => overrideStatus("CANCELLED")}>Cancel</button>
           </div>

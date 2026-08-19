@@ -186,8 +186,11 @@ describe("AccelerateUtilityProvider", () => {
         CABLE_TV: "REACHABLE"
       }
     });
-    expect(fetchMock).toHaveBeenCalledTimes(5);
-    expect(fetchMock.mock.calls.slice(1).every((call) => (call[1] as RequestInit).method === "OPTIONS")).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock.mock.calls.slice(1, 5).every((call) => (call[1] as RequestInit).method === "OPTIONS")).toBe(true);
+    expect((fetchMock.mock.calls[5][1] as RequestInit).method).toBe("GET");
+    expect(String(fetchMock.mock.calls[5][0])).toContain("/merchants/requery?t_ref=KGO-IP-READINESS-NON-VEND");
+    expect(fetchMock.mock.calls.every((call) => (call[1] as RequestInit).method !== "POST")).toBe(true);
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual(expect.arrayContaining([
       "https://prod.airtime-data.irechargetech.com/api/v2/merchant/airtime/validate",
       "https://prod.airtime-data.irechargetech.com/api/v2/merchant/data/validate",
@@ -196,6 +199,25 @@ describe("AccelerateUtilityProvider", () => {
     ]));
     expect(JSON.stringify(result)).not.toContain("jwt-token");
     expect(JSON.stringify(result)).not.toContain("accelerate-private-key-placeholder");
+  });
+
+  it("requires protected verification when auth and OPTIONS succeed but requery is unavailable", async () => {
+    const fetchMock = jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce(response({ data: { access_token: "jwt-token" } }))
+      .mockResolvedValueOnce(response({}, true, 204))
+      .mockResolvedValueOnce(response({}, true, 204))
+      .mockResolvedValueOnce(response({}, true, 204))
+      .mockResolvedValueOnce(response({}, true, 204))
+      .mockResolvedValueOnce(response({ message: "Service unavailable" }, false, 503));
+    const provider = new AccelerateUtilityProvider(config);
+
+    const result = await provider.connectivityReadiness();
+
+    expect(result.ipAllowlist).toBe("VERIFICATION_REQUIRED");
+    expect(result.authentication).toBe("READY");
+    expect(Object.values(result.services)).toEqual(["REACHABLE", "REACHABLE", "REACHABLE", "REACHABLE"]);
+    expect(fetchMock.mock.calls.every((call) => (call[1] as RequestInit).method !== "POST")).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("jwt-token");
   });
 
   it("returns structured readiness when Accelerate credentials are missing", async () => {
@@ -242,7 +264,7 @@ describe("AccelerateUtilityProvider", () => {
 
     await expect(provider.connectivityReadiness()).resolves.toMatchObject({
       configuration: "READY",
-      ipAllowlist: "VERIFIED",
+      ipAllowlist: "VERIFICATION_REQUIRED",
       authentication: "READY",
       services: {
         AIRTIME: "FAILED",
@@ -256,14 +278,18 @@ describe("AccelerateUtilityProvider", () => {
   it("does not verify provider IP access when a probe returns the known IP denial", async () => {
     jest.spyOn(global, "fetch")
       .mockResolvedValueOnce(response({ data: { access_token: "jwt-token" } }))
-      .mockResolvedValue(response({ message: "Access denied: IP not allowed" }, false, 401));
+      .mockResolvedValueOnce(response({}, true, 204))
+      .mockResolvedValueOnce(response({}, true, 204))
+      .mockResolvedValueOnce(response({}, true, 204))
+      .mockResolvedValueOnce(response({}, true, 204))
+      .mockResolvedValueOnce(response({ message: "Access denied: IP not allowed" }, false, 401));
     const provider = new AccelerateUtilityProvider(config);
 
     const result = await provider.connectivityReadiness();
 
     expect(result.ipAllowlist).toBe("NOT_VERIFIED");
     expect(result.authentication).toBe("READY");
-    expect(Object.values(result.services)).toEqual(["FAILED", "FAILED", "FAILED", "FAILED"]);
-    expect(result.safeNote).toContain("must remain disabled");
+    expect(Object.values(result.services)).toEqual(["REACHABLE", "REACHABLE", "REACHABLE", "REACHABLE"]);
+    expect(result.safeNote).toBe("Accelerate rejected a protected production request from the current backend egress IP.");
   });
 });

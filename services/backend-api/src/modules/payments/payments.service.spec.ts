@@ -836,7 +836,7 @@ describe("PaymentsService", () => {
       utilitiesPaymentMethod: "WALLET"
     });
     expect(publicConfig.utilitiesStatusNote).toContain("KariGO Wallet");
-    expect(serialized).toContain("Provider IP access is VERIFIED only after the deployed backend completes a real, non-destructive request without an IP allowlist denial.");
+    expect(serialized).toContain("Provider IP access is VERIFIED only after the deployed backend completes a protected, non-vend transaction requery without an IP allowlist denial. Authentication and OPTIONS reachability alone require verification.");
     expect(serialized).not.toContain("accelerate-api-key-placeholder");
   });
 

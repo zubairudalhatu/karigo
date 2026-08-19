@@ -52,7 +52,19 @@ UTILITIES_LIVE_FULFILLMENT_ENABLED=false
 4. Confirm Environment is Live, Configuration and Authentication are Ready, and the four API routes are Reachable.
 5. Accept provider IP access only when the result is `VERIFIED`.
 
-The check authenticates from the deployed backend and sends authenticated `OPTIONS` probes to the existing validation routes. It does not validate customer data, debit a wallet, or vend a service. `VERIFIED` is returned only after actual provider responses contain no known IP allowlist denial. `NOT_VERIFIED` means customer-paid gates remain off.
+The check authenticates from the deployed backend, uses authenticated `OPTIONS` only for route reachability, and sends a `GET` to Accelerate's existing transaction requery route with a fixed non-vend readiness reference. It does not validate customer data, debit a wallet, or vend a service.
+
+IP readiness states are authoritative:
+
+- `VERIFIED`: the protected requery route responded without an IP allowlist denial.
+- `NOT_VERIFIED`: a protected readiness, validation, vend or requery request returned the mapped IP denial.
+- `VERIFICATION_REQUIRED`: authentication/OPTIONS/reachability evidence exists, but a protected non-vend request did not establish access.
+
+Successful authentication or `OPTIONS` responses never prove vend-path IP access.
+
+Render non-dedicated services may use any IP within the outbound ranges configured for that service. The owner must obtain the current ranges from **Render service → Connect → Outbound** and provide all required ranges to Accelerate. Do not hardcode Render outbound IPs or ranges in source control because platform ranges can change.
+
+If Accelerate cannot accept CIDR/range allowlisting, escalate for an approved dedicated outbound IP or static-egress proxy. Those are escalation options only: this runbook does not authorize a Render plan change, IP purchase or proxy deployment.
 
 Never copy keys, JWTs, Authorization headers, or raw provider payloads into screenshots, tickets, logs, or this runbook.
 

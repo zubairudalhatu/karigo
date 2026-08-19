@@ -48,6 +48,12 @@ function modeStatus(provider: PaymentProviderReadinessItem) {
   return modeRequirement.configured ? "Configured" : "Missing";
 }
 
+function ipAccessLabel(value: AdminUtilityReadinessCheck["connectivity"]["ipAllowlist"]) {
+  if (value === "VERIFIED") return "VERIFIED — protected provider access confirmed";
+  if (value === "NOT_VERIFIED") return "NOT_VERIFIED — protected request denied";
+  return "VERIFICATION_REQUIRED — auth/reachability evidence only";
+}
+
 function configuredRequirement(provider: PaymentProviderReadinessItem, name: string) {
   return provider.requirements.find((item) => item.name === name);
 }
@@ -264,7 +270,7 @@ export default function PaymentReadinessPage() {
                   <button className="secondary" onClick={checkUtilities} disabled={checkingUtilities}>Retry</button>
                 </div>
               ) : null}
-              <p className="muted">This authenticates from the deployed backend and probes validation routes with OPTIONS. It never validates a customer, debits a wallet, or vends a service.</p>
+              <p className="muted">This authenticates from the deployed backend, checks route reachability with OPTIONS, and uses the official transaction requery route with a non-vend reference to verify protected access. It never validates a customer, debits a wallet, or vends a service.</p>
                   <div className="item"><span>Backend utilities enabled</span><strong>{yesNo(readiness.utilityReadiness.enabled)}</strong></div>
                   <div className="item"><span>Test mode</span><strong>{yesNo(readiness.utilityReadiness.testMode)}</strong></div>
                   <div className="item"><span>Customer purchases</span><strong>{readiness.utilityReadiness.liveCustomerPurchaseStatus}</strong></div>
@@ -302,7 +308,7 @@ export default function PaymentReadinessPage() {
                   <h3>Latest backend connectivity check</h3>
                   <div className="item"><span>Configuration</span><strong>{utilityCheck.connectivity.configuration === "READY" ? "Ready" : "Missing configuration"}</strong></div>
                   <div className="item"><span>Environment</span><strong>{utilityCheck.connectivity.environment === "LIVE" ? "Live" : "Sandbox"}</strong></div>
-                  <div className="item"><span>Provider IP access</span><strong>{utilityCheck.connectivity.ipAllowlist}</strong></div>
+                  <div className="item"><span>Provider IP access</span><strong>{ipAccessLabel(utilityCheck.connectivity.ipAllowlist)}</strong></div>
                   <div className="item"><span>Authentication</span><strong>{utilityCheck.connectivity.authentication === "READY" ? "Ready" : utilityCheck.connectivity.authentication === "FAILED" ? "Failed" : "Not run"}</strong></div>
                   <div className="item"><span>Airtime API</span><strong>{utilityCheck.connectivity.services.AIRTIME === "REACHABLE" ? "Reachable" : utilityCheck.connectivity.services.AIRTIME === "FAILED" ? "Failed" : "Not run"}</strong></div>
                   <div className="item"><span>Data API</span><strong>{utilityCheck.connectivity.services.DATA === "REACHABLE" ? "Reachable" : utilityCheck.connectivity.services.DATA === "FAILED" ? "Failed" : "Not run"}</strong></div>

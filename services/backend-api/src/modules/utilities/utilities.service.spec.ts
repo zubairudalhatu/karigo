@@ -119,7 +119,8 @@ function serviceWith(options: {
     customerProfile: { findUnique: jest.fn().mockResolvedValue({ id: "customer-id" }) },
     utilityProvider: {
       findMany: jest.fn().mockResolvedValue([provider]),
-      findFirst: jest.fn().mockResolvedValue(provider)
+      findFirst: jest.fn().mockResolvedValue(provider),
+      update: jest.fn()
     },
     utilityProduct: {
       findMany: jest.fn().mockResolvedValue([product]),
@@ -235,6 +236,52 @@ describe("UtilitiesService", () => {
     expect(JSON.stringify(auditDetails)).not.toMatch(/credential|private.?key|public.?key|jwt|token/i);
     expect(accelerateProvider.purchase).not.toHaveBeenCalled();
     expect(tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("keeps persisted live IP denial authoritative when a new check has only reachability evidence", async () => {
+    const safeNote = "Accelerate rejected a protected production request from the current backend egress IP.";
+    const liveProvider = {
+      ...provider,
+      code: "MTN",
+      metadata: {
+        integration: "ACCELERATE",
+        catalogueMode: "LIVE",
+        accelerateIpReadiness: {
+          status: "NOT_VERIFIED",
+          checkedAt: new Date().toISOString(),
+          safeNote,
+          source: "LIVE_OPERATION"
+        }
+      }
+    };
+    const connectivity = {
+      provider: "accelerate" as const,
+      configuration: "READY" as const,
+      environment: "LIVE" as const,
+      ipAllowlist: "VERIFICATION_REQUIRED" as const,
+      authentication: "READY" as const,
+      services: {
+        AIRTIME: "REACHABLE" as const, DATA: "REACHABLE" as const,
+        ELECTRICITY: "REACHABLE" as const, CABLE_TV: "REACHABLE" as const
+      },
+      checkedAt: new Date().toISOString(),
+      safeNote: "Protected access requires verification."
+    };
+    const { service } = serviceWith({
+      prismaOverrides: {
+        utilityProvider: {
+          findMany: jest.fn().mockResolvedValue([liveProvider]),
+          findFirst: jest.fn().mockResolvedValue(liveProvider),
+          update: jest.fn()
+        }
+      },
+      accelerateProvider: { connectivityReadiness: jest.fn().mockResolvedValue(connectivity) }
+    });
+
+    const result = await service.adminConnectivityReadiness("78a90390-b713-4edf-86ca-862912859acd");
+
+    expect(result.connectivity).toMatchObject({ ipAllowlist: "NOT_VERIFIED", safeNote });
+    expect(result.gates.providerIpAccess).toBe("BLOCKED");
   });
 
   it("lists only active catalogue providers through the public catalogue path", async () => {
@@ -516,10 +563,10 @@ describe("UtilitiesService", () => {
       validateRecipient: jest.fn().mockResolvedValue({ isValid: true, normalizedRecipient: "+2348030000000" }),
       purchase: jest.fn().mockResolvedValue({
         status: UtilityTransactionStatus.FAILED,
-        providerStatus: "FAILED",
+        providerStatus: "ACCELERATE_ACCESS_DENIED_IP_ALLOWLIST",
         providerReference: "ACC-FAILED-123",
         failureReason: "Provider rejected transaction.",
-        metadata: { responseKeys: ["status", "reference"] }
+        metadata: { error: "provider_ip_allowlist_required", providerSafeNote: "Provider rejected request because backend IP is not allowlisted." }
       })
     };
     const { prisma, tx, service } = serviceWith({
@@ -541,7 +588,7 @@ describe("UtilitiesService", () => {
           recipient: "+2348030000000",
           recipientName: null,
           status: UtilityTransactionStatus.FAILED,
-          providerStatus: "FAILED",
+          providerStatus: "ACCELERATE_ACCESS_DENIED_IP_ALLOWLIST",
           providerReference: "ACC-FAILED-123",
           mockToken: null,
           customerNote: "Utility payment failed. Your wallet reversal will be confirmed if a debit was posted.",
@@ -552,7 +599,8 @@ describe("UtilitiesService", () => {
             paymentMethod: "WALLET",
             walletDebitLedgerEntryId: "ledger-debit",
             walletDebitReference: "KGO-UTIL-REFERENCE-WALLET-DEBIT",
-            walletDebitStatus: WalletLedgerEntryStatus.POSTED
+            walletDebitStatus: WalletLedgerEntryStatus.POSTED,
+            providerSafeNote: "Provider rejected request because backend IP is not allowlisted."
           },
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -605,6 +653,17 @@ describe("UtilitiesService", () => {
       walletDebitStatus: WalletLedgerEntryStatus.REVERSED,
       walletReversalReference: expect.stringContaining("-WALLET-REVERSAL")
     });
+    const reversalWrites = tx.customerWalletLedgerEntry.create.mock.calls.filter(([call]) => call.data.entryType === WalletLedgerEntryType.REVERSAL);
+    expect(prisma.utilityTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        providerStatus: "ACCELERATE_ACCESS_DENIED_IP_ALLOWLIST"
+      })
+    }));
+    expect(reversalWrites).toHaveLength(1);
+    expect(prisma.utilityProvider.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: provider.id },
+      data: { metadata: expect.objectContaining({ accelerateIpReadiness: expect.objectContaining({ status: "NOT_VERIFIED", source: "LIVE_OPERATION" }) }) }
+    }));
   });
 
   it("keeps provider-pending fulfilment pending without reversing the wallet", async () => {
@@ -781,6 +840,66 @@ describe("UtilitiesService", () => {
     }));
     expect(audit.record).toHaveBeenCalledWith("admin-id", "admin.utilities.provider_verify", "UtilityTransaction", "transaction-id", expect.any(Object));
     expect(result).toMatchObject({ status: UtilityTransactionStatus.SUCCESSFUL, providerMode: "accelerate" });
+  });
+
+  it("does not requery or re-vend a terminal provider-denied transaction", async () => {
+    const deniedTransaction = {
+      id: "transaction-id", reference: "KGO-UTIL-REFERENCE", customerId: "customer-id",
+      serviceType: provider.type, providerId: provider.id, productId: product.id,
+      amountKobo: 50000, convenienceFeeKobo: 0, totalKobo: 50000,
+      recipient: "+2348030000000", recipientName: null,
+      status: UtilityTransactionStatus.FAILED,
+      providerStatus: "ACCELERATE_ACCESS_DENIED_IP_ALLOWLIST",
+      providerReference: null, mockToken: null,
+      customerNote: "Utilities provider access is not fully enabled yet. Please try again later.",
+      failureReason: "Utilities provider access is not fully enabled yet. Please try again later.",
+      metadata: {
+        mode: "accelerate", testMode: false, paymentMethod: "WALLET",
+        walletDebitReference: "KGO-UTIL-REFERENCE-WALLET-DEBIT",
+        walletDebitStatus: WalletLedgerEntryStatus.REVERSED,
+        walletReversalReference: "KGO-UTIL-REFERENCE-WALLET-REVERSAL",
+        walletReversalStatus: WalletLedgerEntryStatus.POSTED,
+        providerSafeNote: "Provider rejected request because backend IP is not allowlisted."
+      },
+      createdAt: new Date(), updatedAt: new Date(), completedAt: new Date(), provider, product,
+      customer: { id: "customer-id", user: { id: "user-id", fullName: "Test Customer", phoneNumber: "+2348030000000", email: "customer@example.test" } }
+    };
+    const accelerateProvider = { checkStatus: jest.fn(), purchase: jest.fn() };
+    const { service } = serviceWith({
+      prismaOverrides: { utilityTransaction: { findUnique: jest.fn().mockResolvedValue(deniedTransaction) } },
+      accelerateProvider
+    });
+
+    const result = await service.adminVerifyProviderStatus("admin-id", "transaction-id");
+
+    expect(result).toMatchObject({
+      status: UtilityTransactionStatus.FAILED,
+      providerStatus: "ACCELERATE_ACCESS_DENIED_IP_ALLOWLIST",
+      walletDebitStatus: WalletLedgerEntryStatus.REVERSED,
+      walletReversalStatus: WalletLedgerEntryStatus.POSTED
+    });
+    expect(accelerateProvider.checkStatus).not.toHaveBeenCalled();
+    expect(accelerateProvider.purchase).not.toHaveBeenCalled();
+  });
+
+  it("blocks marking a provider-denied transaction successful without an audited override policy", async () => {
+    const deniedTransaction = {
+      id: "transaction-id", reference: "KGO-UTIL-REFERENCE", serviceType: provider.type,
+      provider, product, amountKobo: 50000, convenienceFeeKobo: 0, totalKobo: 50000,
+      recipient: "+2348030000000", recipientName: null, status: UtilityTransactionStatus.FAILED,
+      providerStatus: "ACCELERATE_ACCESS_DENIED_IP_ALLOWLIST", providerReference: null, mockToken: null,
+      customerNote: null, failureReason: null, metadata: { mode: "accelerate", testMode: false },
+      createdAt: new Date(), updatedAt: new Date(), completedAt: new Date(),
+      customer: { id: "customer-id", user: { id: "user-id", fullName: "Test Customer", phoneNumber: null, email: null } }
+    };
+    const { prisma, audit, service } = serviceWith({
+      prismaOverrides: { utilityTransaction: { findUnique: jest.fn().mockResolvedValue(deniedTransaction), update: jest.fn() } }
+    });
+
+    await expect(service.adminUpdateStatus("admin-id", "transaction-id", { status: UtilityTransactionStatus.SUCCESSFUL }))
+      .rejects.toThrow("Provider-denied utility transactions cannot be marked successful without an explicit audited override policy.");
+    expect(prisma.utilityTransaction.update).not.toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalled();
   });
 
   it("lets a customer cancel an eligible pending utility transaction", async () => {

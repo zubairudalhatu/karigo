@@ -71,6 +71,8 @@ const SERVICE_ENDPOINTS: Record<UtilityServiceType, {
   }
 };
 
+const READINESS_REQUERY_REFERENCE = "KGO-IP-READINESS-NON-VEND";
+
 @Injectable()
 export class AccelerateUtilityProvider implements UtilityProviderClient {
   private readonly logger = new Logger(AccelerateUtilityProvider.name);
@@ -127,20 +129,27 @@ export class AccelerateUtilityProvider implements UtilityProviderClient {
       services[serviceType] = result.reachable ? "REACHABLE" : "FAILED";
       ipDenied ||= result.ipDenied;
     }));
-    const allReachable = Object.values(services).every((status) => status === "REACHABLE");
+    const protectedAccess = ipDenied
+      ? "NOT_VERIFIED"
+      : await this.probeProtectedAccess(token);
+    const ipAllowlist = protectedAccess === "VERIFIED"
+      ? "VERIFIED"
+      : protectedAccess === "NOT_VERIFIED"
+        ? "NOT_VERIFIED"
+        : "VERIFICATION_REQUIRED";
     return {
       provider: "accelerate",
       configuration: "READY",
       environment: this.mode().toUpperCase() as "LIVE" | "SANDBOX",
-      ipAllowlist: ipDenied ? "NOT_VERIFIED" : "VERIFIED",
+      ipAllowlist,
       authentication: "READY",
       services,
       checkedAt,
-      safeNote: ipDenied
-        ? "Provider IP access is not verified. Customer-paid Utilities must remain disabled."
-        : allReachable
-          ? "Authentication and non-destructive endpoint probes completed without an IP allowlist denial."
-          : "Authentication succeeded and provider IP access was verified, but one or more service endpoints did not respond as reachable."
+      safeNote: ipAllowlist === "NOT_VERIFIED"
+        ? "Accelerate rejected a protected production request from the current backend egress IP."
+        : ipAllowlist === "VERIFIED"
+          ? "Protected provider access was verified with a non-vend transaction requery request. No utility was purchased."
+          : "Authentication and endpoint reachability were checked, but protected provider access still requires verification. No utility was purchased."
     };
   }
 
@@ -355,6 +364,25 @@ export class AccelerateUtilityProvider implements UtilityProviderClient {
       };
     } catch {
       return { reachable: false, ipDenied: false };
+    }
+  }
+
+  private async probeProtectedAccess(token: string): Promise<"VERIFIED" | "NOT_VERIFIED" | "VERIFICATION_REQUIRED"> {
+    try {
+      const path = SERVICE_ENDPOINTS.AIRTIME.requery.replace("{reference}", encodeURIComponent(READINESS_REQUERY_REFERENCE));
+      const response = await fetch(this.url("airtimeData", path), {
+        method: "GET",
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${token}`
+        }
+      });
+      const payload = await this.safeJson(response);
+      if (this.responseIsIpAllowlistDenied(response.status, payload)) return "NOT_VERIFIED";
+      if (response.status >= 500 || response.status === 401 || response.status === 403) return "VERIFICATION_REQUIRED";
+      return "VERIFIED";
+    } catch {
+      return "VERIFICATION_REQUIRED";
     }
   }
 

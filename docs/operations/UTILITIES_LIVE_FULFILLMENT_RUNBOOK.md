@@ -15,9 +15,12 @@ This runbook covers wallet-funded Utilities fulfilment through the approved prov
 
 ## Accelerate IP Allowlist Requirement
 
-- Accelerate may reject live provider requests with `Access denied: IP not allowed` until KariGO's backend outbound IP is allowlisted.
-- Prefer Render Dedicated IPs or another fixed outbound IP method for production Utilities fulfilment.
-- Share the production backend outbound IP with Accelerate before live wallet-funded testing.
+- Accelerate may reject live provider requests with `Access denied: IP not allowed` until KariGO's backend outbound ranges are allowlisted.
+- Authentication and `OPTIONS` reachability do not prove protected provider access. Require the protected, non-vend requery readiness check to report `VERIFIED`.
+- A live protected-request denial must set readiness to `NOT_VERIFIED`; a later genuine protected non-vend success may restore `VERIFIED`.
+- Do not hardcode Render IPs or outbound ranges in source control because those platform ranges can change.
+- If Accelerate cannot accept CIDR/range allowlisting, treat a dedicated outbound IP or approved static-egress proxy as an escalation option only; do not buy or deploy one without separate approval.
+- Render non-dedicated services may use any IP within their configured outbound ranges. Obtain the current ranges from **Render service → Connect → Outbound** and provide all required ranges to Accelerate.
 - Do not retry real customer fulfilment until provider IP allowlisting is confirmed.
 
 ## Accelerate Request Flow

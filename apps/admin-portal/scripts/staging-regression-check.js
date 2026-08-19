@@ -310,6 +310,10 @@ assert(paymentReadinessPage.includes("Accelerate readiness check could not be co
 assert(paymentReadinessPage.includes("setUtilityCheckError(accelerateReadinessCheckError(e))"), "Accelerate readiness failures must not use sandbox initialization error copy.");
 assert(paymentReadinessPage.includes(">Retry</button>"), "Accelerate readiness failures must expose Retry beside the error.");
 assert(paymentReadinessPage.includes("Provider IP access") && paymentReadinessPage.includes("ipAllowlist"), "Payment Readiness page must show evidence-based IP allowlist status.");
+assert(paymentReadinessPage.includes("VERIFIED — protected provider access confirmed"), "Payment Readiness must explain verified protected access.");
+assert(paymentReadinessPage.includes("NOT_VERIFIED — protected request denied"), "Payment Readiness must explain a protected-request IP denial.");
+assert(paymentReadinessPage.includes("VERIFICATION_REQUIRED — auth/reachability evidence only"), "Payment Readiness must not treat authentication or OPTIONS as verified protected access.");
+assert(paymentReadinessPage.includes("official transaction requery route with a non-vend reference"), "Payment Readiness must describe the authoritative non-vend protected-access check.");
 assert(paymentReadinessPage.includes("Airtime API") && paymentReadinessPage.includes("Data API") && paymentReadinessPage.includes("Electricity API") && paymentReadinessPage.includes("Cable TV API"), "Payment Readiness page must show all Accelerate service probes.");
 assert(paymentReadinessPage.includes("Utilities activation gates") && paymentReadinessPage.includes("Data catalogue") && paymentReadinessPage.includes("Cable TV catalogue"), "Payment Readiness page must show explicit utility and catalogue gates.");
 assert(paymentReadinessPage.includes("never validates a customer, debits a wallet, or vends a service"), "Accelerate readiness check must state its non-destructive boundary.");
@@ -575,6 +579,8 @@ assert(utilitiesPage.includes("Prepaid token / receipt"), "Admin utilities detai
 assert(utilitiesPage.includes("selected.createdAt") && utilitiesPage.includes("selected.updatedAt"), "Admin utilities detail must show created and updated timestamps.");
 assert(utilitiesPage.includes("Update this utility transaction status for operations review?"), "Admin utility status override must require confirmation.");
 assert(utilitiesPage.includes("Verify provider status"), "Admin utilities page must expose admin-only provider status verification.");
+assert(utilitiesPage.includes("Provider-denied transactions cannot be marked successful without an explicit audited override policy."), "Admin Utilities must explain why provider-denied transactions cannot be marked successful.");
+assert(utilitiesPage.includes('disabled={providerIpDenied(selected)}'), "Admin Utilities must disable Mark successful for provider-denied transactions.");
 assert(!utilitiesPage.includes("Fulfil") && !utilitiesPage.includes("Send token"), "Admin utilities page must not expose live fulfilment actions.");
 const utilitiesApi = read("src", "api", "utilities.api.ts");
 assert(utilitiesApi.includes("admin/utilities/summary"), "Admin utilities API must load summary.");

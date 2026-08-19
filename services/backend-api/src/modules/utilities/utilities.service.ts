@@ -16,7 +16,7 @@ import { CreateUtilityTransactionDto, UtilityQuoteDto } from "./dto/customer-uti
 import { ListUtilityTransactionsQueryDto } from "./dto/list-utility-transactions-query.dto";
 import { UtilityProductsQueryDto, UtilityProvidersQueryDto } from "./dto/utility-catalogue-query.dto";
 import { UpdateUtilityTransactionStatusDto } from "./dto/update-utility-status.dto";
-import { AccelerateUtilityProvider } from "./providers/accelerate-utility.provider";
+import { AccelerateConnectivityStatus, AccelerateUtilityProvider } from "./providers/accelerate-utility.provider";
 import { MockUtilityProvider } from "./providers/mock-utility.provider";
 import { UtilityProviderClient, UtilityPurchaseResult } from "./providers/utility-provider.interface";
 
@@ -38,6 +38,11 @@ const CUSTOMER_CANCELLABLE_STATUSES: UtilityTransactionStatus[] = [
 ];
 const UTILITY_WALLET_SOURCE_TYPE = "UTILITY_TRANSACTION";
 const UTILITY_WALLET_REVERSAL_SOURCE_TYPE = "UTILITY_TRANSACTION_REVERSAL";
+const ACCELERATE_IP_DENIAL_STATUSES = [
+  "ACCELERATE_ACCESS_DENIED_IP_ALLOWLIST",
+  "ACCELERATE_STATUS_IP_ALLOWLIST_REQUIRED"
+];
+const ACCELERATE_IP_DENIAL_NOTE = "Accelerate rejected a protected production request from the current backend egress IP.";
 
 @Injectable()
 export class UtilitiesService {
@@ -108,10 +113,18 @@ export class UtilitiesService {
   }
 
   async adminConnectivityReadiness(adminUserId: string) {
-    const [connectivity, catalogue] = await Promise.all([
+    const [providerConnectivity, catalogue, operationalProviders] = await Promise.all([
       this.accelerateProvider.connectivityReadiness(),
-      this.catalogueReadiness()
+      this.catalogueReadiness(),
+      this.accelerateOperationalProviders()
     ]);
+    const persistedIpReadiness = this.latestPersistedIpReadiness(operationalProviders);
+    const connectivity: AccelerateConnectivityStatus = providerConnectivity.ipAllowlist === "VERIFICATION_REQUIRED" && persistedIpReadiness?.status === "NOT_VERIFIED"
+      ? { ...providerConnectivity, ipAllowlist: "NOT_VERIFIED", safeNote: persistedIpReadiness.safeNote }
+      : providerConnectivity;
+    if (connectivity.ipAllowlist !== "VERIFICATION_REQUIRED") {
+      await this.persistAccelerateIpReadiness(operationalProviders, connectivity.ipAllowlist, connectivity.safeNote, "PROTECTED_REQUERY");
+    }
     const providerSelected = this.utilitiesProviderName() === "accelerate";
     const providerEnabled = this.utilitiesPlatformEnabled() && this.accelerateIntegrationEnabled();
     const result = {
@@ -409,6 +422,7 @@ export class UtilitiesService {
         reference,
         totalKobo: resolved.totalKobo
       });
+      await this.recordAccelerateOperationReadiness([resolved.provider], purchase);
     } catch {
       const reversed = await this.reverseWalletDebitIfNeeded(created.transaction.id, "Utilities provider could not be reached safely.");
       return this.customerTransaction(reversed ?? created.transaction);
@@ -431,6 +445,7 @@ export class UtilitiesService {
 
     const utilityProvider = this.providerForMode(this.transactionProviderMode(transaction.metadata));
     const purchase = await utilityProvider.client.checkStatus(transaction.providerReference ?? transaction.reference, transaction.serviceType);
+    await this.recordAccelerateOperationReadiness([transaction.provider], purchase);
     const updated = await this.applyProviderResult(transaction.id, purchase, this.adminInclude(true), transaction.metadata);
     if (purchase.status === UtilityTransactionStatus.FAILED) {
       const reversed = await this.reverseWalletDebitIfNeeded(transaction.id, purchase.failureReason ?? "Utilities provider reported a failed transaction.", true);
@@ -718,6 +733,9 @@ export class UtilitiesService {
       throw new ForbiddenException("Manual utility status override is disabled in production.");
     }
     const current = await this.adminDetail(transactionId);
+    if (dto.status === UtilityTransactionStatus.SUCCESSFUL && this.isAccelerateIpDenialStatus(current.providerStatus)) {
+      throw new ForbiddenException("Provider-denied utility transactions cannot be marked successful without an explicit audited override policy.");
+    }
     const updated = await this.prisma.utilityTransaction.update({
       where: { id: transactionId },
       data: {
@@ -887,6 +905,66 @@ export class UtilitiesService {
   private customerUtilityPurchasesFlagEnabled() {
     const primary = this.optionalFlagValue("UTILITIES_CUSTOMER_PURCHASE_ENABLED");
     return primary ?? this.flagValue("UTILITIES_CUSTOMER_PURCHASES_ENABLED", false);
+  }
+
+  private async accelerateOperationalProviders() {
+    const providers = await this.prisma.utilityProvider.findMany({
+      where: { isActive: true },
+      select: { id: true, metadata: true }
+    });
+    return providers.filter((provider) => {
+      const metadata = this.jsonObject(provider.metadata);
+      return typeof metadata.integration === "string" && metadata.integration.toUpperCase() === "ACCELERATE";
+    });
+  }
+
+  private latestPersistedIpReadiness(providers: Array<{ id: string; metadata: Prisma.JsonValue | null }>) {
+    return providers
+      .map((provider) => {
+        const readiness = this.jsonObject(this.jsonObject(provider.metadata).accelerateIpReadiness as Prisma.JsonValue | undefined);
+        const status = readiness.status;
+        const checkedAt = readiness.checkedAt;
+        const safeNote = readiness.safeNote;
+        if ((status !== "VERIFIED" && status !== "NOT_VERIFIED") || typeof checkedAt !== "string" || typeof safeNote !== "string") return null;
+        return { status, checkedAt, safeNote };
+      })
+      .filter((signal): signal is { status: "VERIFIED" | "NOT_VERIFIED"; checkedAt: string; safeNote: string } => Boolean(signal))
+      .sort((left, right) => Date.parse(right.checkedAt) - Date.parse(left.checkedAt))[0];
+  }
+
+  private async recordAccelerateOperationReadiness(
+    providers: Array<{ id: string; metadata: Prisma.JsonValue | null }>,
+    purchase: UtilityPurchaseResult
+  ) {
+    if (!this.isAccelerateIpDenialResult(purchase)) return;
+    await this.persistAccelerateIpReadiness(providers, "NOT_VERIFIED", ACCELERATE_IP_DENIAL_NOTE, "LIVE_OPERATION");
+  }
+
+  private async persistAccelerateIpReadiness(
+    providers: Array<{ id: string; metadata: Prisma.JsonValue | null }>,
+    status: "VERIFIED" | "NOT_VERIFIED",
+    safeNote: string,
+    source: "PROTECTED_REQUERY" | "LIVE_OPERATION"
+  ) {
+    const checkedAt = new Date().toISOString();
+    await Promise.allSettled(providers.map((provider) => this.prisma.utilityProvider.update({
+      where: { id: provider.id },
+      data: {
+        metadata: {
+          ...this.jsonObject(provider.metadata),
+          accelerateIpReadiness: { status, checkedAt, safeNote, source }
+        } as Prisma.InputJsonObject
+      }
+    })));
+  }
+
+  private isAccelerateIpDenialResult(purchase: UtilityPurchaseResult) {
+    const metadata = this.jsonObject(purchase.metadata as Prisma.JsonValue | undefined);
+    return this.isAccelerateIpDenialStatus(purchase.providerStatus) || metadata.error === "provider_ip_allowlist_required";
+  }
+
+  private isAccelerateIpDenialStatus(providerStatus: string | null | undefined) {
+    return typeof providerStatus === "string" && ACCELERATE_IP_DENIAL_STATUSES.includes(providerStatus);
   }
 
   private assertLiveCustomerPurchaseGate() {
