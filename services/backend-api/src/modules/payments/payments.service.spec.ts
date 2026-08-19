@@ -749,6 +749,49 @@ describe("PaymentsService", () => {
     expect(serialized).not.toContain("live-webhook-secret-placeholder");
   });
 
+  it("reports Stage B infrastructure as prepared while the singular Customer gate keeps purchases closed", () => {
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      const values: Record<string, string | boolean> = {
+        UTILITIES_PROVIDER: "accelerate",
+        UTILITIES_ENABLED: true,
+        UTILITIES_TEST_MODE: false,
+        UTILITIES_CUSTOMER_PURCHASE_ENABLED: false,
+        UTILITIES_CUSTOMER_PURCHASES_ENABLED: true,
+        UTILITIES_WALLET_PAYMENT_ENABLED: true,
+        UTILITIES_LIVE_FULFILLMENT_ENABLED: true,
+        ACCELERATE_ENABLED: true,
+        ACCELERATE_ENV: "live",
+        ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+        ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder"
+      };
+      return values[key] ?? fallback;
+    });
+
+    const readiness = service.providerReadiness();
+    const publicConfig = service.publicPaymentConfig();
+
+    expect(readiness.utilityReadiness).toMatchObject({
+      provider: "accelerate",
+      enabled: true,
+      testMode: false,
+      customerPurchaseEnabled: false,
+      customerPurchaseBlocked: true,
+      walletPaymentEnabled: true,
+      liveFulfillmentEnabled: true,
+      paymentMethod: "READINESS_ONLY",
+      liveCustomerPurchaseStatus: "Disabled or readiness-only"
+    });
+    expect(readiness.utilityReadiness.notes).toContain(
+      "Wallet and provider fulfilment are prepared, but Customer Utilities remain closed until the Customer purchase gate is enabled."
+    );
+    expect(publicConfig).toMatchObject({
+      utilitiesCustomerPurchaseEnabled: false,
+      utilitiesWalletPaymentEnabled: false,
+      utilitiesLiveFulfillmentEnabled: false,
+      utilitiesPaymentMethod: undefined
+    });
+  });
+
   it("returns public-safe wallet-funded utility readiness when live fulfilment gates are enabled", () => {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       const values: Record<string, string | boolean> = {

@@ -474,11 +474,8 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       throw new Error("UTILITIES_TEST_MODE=false requires UTILITIES_LIVE_FULFILLMENT_ENABLED=true");
     }
   }
-  if (utilitiesWalletPaymentEnabled && !utilitiesCustomerPurchaseEnabled) {
-    throw new Error("UTILITIES_WALLET_PAYMENT_ENABLED=true requires UTILITIES_CUSTOMER_PURCHASE_ENABLED=true");
-  }
-  if (utilitiesLiveFulfillmentEnabled && (!utilitiesCustomerPurchaseEnabled || !utilitiesWalletPaymentEnabled)) {
-    throw new Error("UTILITIES_LIVE_FULFILLMENT_ENABLED=true requires wallet-funded utility purchases to be enabled");
+  if (utilitiesLiveFulfillmentEnabled && !utilitiesWalletPaymentEnabled) {
+    throw new Error("UTILITIES_LIVE_FULFILLMENT_ENABLED=true requires UTILITIES_WALLET_PAYMENT_ENABLED=true");
   }
   const notificationProvider =
     typeof config.NOTIFICATION_PROVIDER === "string" ? config.NOTIFICATION_PROVIDER.toLowerCase() : "mock";

@@ -273,7 +273,9 @@ export default function PaymentReadinessPage() {
                   <div className="item"><span>Payment method</span><strong>{readiness.utilityReadiness.paymentMethod ?? "READINESS_ONLY"}</strong></div>
                   <div className="item"><span>Backend connectivity test available</span><strong>{yesNo(readiness.utilityReadiness.backendConnectivityTestAvailable)}</strong></div>
                   <div className="item"><span>Missing required keys</span><strong>{readiness.utilityReadiness.missingRequiredKeys.length}</strong></div>
-                  <p className="muted">{readiness.utilityReadiness.walletPaymentEnabled && readiness.utilityReadiness.liveFulfillmentEnabled
+                  <p className="muted">{readiness.utilityReadiness.walletPaymentEnabled && readiness.utilityReadiness.liveFulfillmentEnabled && !readiness.utilityReadiness.customerPurchaseEnabled
+                    ? "Wallet and provider fulfilment are prepared, but Customer Utilities remain closed until the Customer purchase gate is enabled."
+                    : readiness.utilityReadiness.walletPaymentEnabled && readiness.utilityReadiness.liveFulfillmentEnabled
                     ? "Wallet-to-utility payment is enabled for Utilities only. Backend balance checks, wallet ledger debit and automatic reversal controls are required for every provider request."
                     : "Wallet-to-utility payment remains disabled until Utilities customer purchases, wallet payment and live fulfilment flags are explicitly enabled."}</p>
                   <p className="muted">{accelerateIpAllowlistNote}</p>

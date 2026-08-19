@@ -556,27 +556,94 @@ describe("environment configuration", () => {
     expect(result.ACCELERATE_ENV).toBe("live");
   });
 
-  it("rejects utility wallet/live fulfilment flags unless customer purchases are enabled", () => {
-    expect(() => validateEnvironment({
+  it.each([
+    ["all paid gates off", "false", "false", "false"],
+    ["wallet prepared", "true", "false", "false"],
+    ["wallet and live fulfilment prepared", "true", "true", "false"],
+    ["customer purchases enabled", "true", "true", "true"]
+  ])("allows staged live Utilities activation with %s", (_label, walletEnabled, liveEnabled, customerEnabled) => {
+    const result = validateEnvironment({
       ...baseConfig(),
       UTILITIES_PROVIDER: "accelerate",
       UTILITIES_ENABLED: "true",
-      UTILITIES_WALLET_PAYMENT_ENABLED: "true",
+      UTILITIES_TEST_MODE: "false",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: customerEnabled,
+      UTILITIES_WALLET_PAYMENT_ENABLED: walletEnabled,
+      UTILITIES_LIVE_FULFILLMENT_ENABLED: liveEnabled,
       ACCELERATE_ENABLED: "true",
       ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
-      ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder"
-    })).toThrow("UTILITIES_WALLET_PAYMENT_ENABLED=true requires UTILITIES_CUSTOMER_PURCHASE_ENABLED=true");
+      ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder",
+      ACCELERATE_ENV: "live"
+    });
 
+    expect(result.UTILITIES_WALLET_PAYMENT_ENABLED).toBe(walletEnabled === "true");
+    expect(result.UTILITIES_LIVE_FULFILLMENT_ENABLED).toBe(liveEnabled === "true");
+    expect(result.UTILITIES_CUSTOMER_PURCHASE_ENABLED).toBe(customerEnabled === "true");
+  });
+
+  it("treats the singular Customer purchase flag as authoritative over the legacy alias", () => {
+    const result = validateEnvironment({
+      ...baseConfig(),
+      UTILITIES_PROVIDER: "accelerate",
+      UTILITIES_ENABLED: "true",
+      UTILITIES_TEST_MODE: "false",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "false",
+      UTILITIES_CUSTOMER_PURCHASES_ENABLED: "true",
+      UTILITIES_WALLET_PAYMENT_ENABLED: "true",
+      UTILITIES_LIVE_FULFILLMENT_ENABLED: "true",
+      ACCELERATE_ENABLED: "true",
+      ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+      ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder",
+      ACCELERATE_ENV: "live"
+    });
+
+    expect(result.UTILITIES_CUSTOMER_PURCHASE_ENABLED).toBe(false);
+    expect(result.UTILITIES_CUSTOMER_PURCHASES_ENABLED).toBe(false);
+  });
+
+  it("rejects live fulfilment without wallet preparation", () => {
     expect(() => validateEnvironment({
       ...baseConfig(),
       UTILITIES_PROVIDER: "accelerate",
       UTILITIES_ENABLED: "true",
-      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
+      UTILITIES_TEST_MODE: "false",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "false",
+      UTILITIES_WALLET_PAYMENT_ENABLED: "false",
       UTILITIES_LIVE_FULFILLMENT_ENABLED: "true",
       ACCELERATE_ENABLED: "true",
       ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
       ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder"
-    })).toThrow("UTILITIES_LIVE_FULFILLMENT_ENABLED=true requires wallet-funded utility purchases to be enabled");
+    })).toThrow("UTILITIES_LIVE_FULFILLMENT_ENABLED=true requires UTILITIES_WALLET_PAYMENT_ENABLED=true");
+  });
+
+  it("rejects live Customer purchases without wallet payment", () => {
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      UTILITIES_PROVIDER: "accelerate",
+      UTILITIES_ENABLED: "true",
+      UTILITIES_TEST_MODE: "false",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
+      UTILITIES_WALLET_PAYMENT_ENABLED: "false",
+      UTILITIES_LIVE_FULFILLMENT_ENABLED: "false",
+      ACCELERATE_ENABLED: "true",
+      ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+      ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder"
+    })).toThrow("UTILITIES_TEST_MODE=false requires UTILITIES_WALLET_PAYMENT_ENABLED=true");
+  });
+
+  it("rejects live Customer purchases without live fulfilment", () => {
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      UTILITIES_PROVIDER: "accelerate",
+      UTILITIES_ENABLED: "true",
+      UTILITIES_TEST_MODE: "false",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
+      UTILITIES_WALLET_PAYMENT_ENABLED: "true",
+      UTILITIES_LIVE_FULFILLMENT_ENABLED: "false",
+      ACCELERATE_ENABLED: "true",
+      ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+      ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder"
+    })).toThrow("UTILITIES_TEST_MODE=false requires UTILITIES_LIVE_FULFILLMENT_ENABLED=true");
   });
 
   it("rejects non-HTTPS Accelerate provider base URLs", () => {

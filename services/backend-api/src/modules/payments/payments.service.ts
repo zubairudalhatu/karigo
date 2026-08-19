@@ -392,9 +392,9 @@ export class PaymentsService {
       utilitiesProvider: utilityReadiness.provider,
       utilitiesProviderLabel: utilityReadiness.providerLabel,
       utilitiesTestMode: utilityReadiness.testMode,
-      utilitiesWalletPaymentEnabled: utilityReadiness.walletPaymentEnabled,
-      utilitiesLiveFulfillmentEnabled: utilityReadiness.liveFulfillmentEnabled,
-      utilitiesPaymentMethod: utilityReadiness.walletPaymentEnabled ? "WALLET" : undefined,
+      utilitiesWalletPaymentEnabled: utilityReadiness.customerPurchaseEnabled && utilityReadiness.walletPaymentEnabled,
+      utilitiesLiveFulfillmentEnabled: utilityReadiness.customerPurchaseEnabled && utilityReadiness.liveFulfillmentEnabled,
+      utilitiesPaymentMethod: utilityReadiness.customerPurchaseEnabled && utilityReadiness.walletPaymentEnabled ? "WALLET" : undefined,
       utilitiesStatusNote: utilityReadiness.customerPurchaseEnabled
         ? utilityReadiness.walletPaymentEnabled
           ? "Utilities are paid with KariGO Wallet. Your balance is debited by the backend before provider fulfilment and reversed automatically if fulfilment fails."
@@ -1022,8 +1022,8 @@ export class PaymentsService {
       testMode,
       customerPurchaseEnabled: utilitiesEnabled && customerPurchaseEnabled,
       customerPurchaseBlocked: !(utilitiesEnabled && customerPurchaseEnabled),
-      walletPaymentEnabled: utilitiesEnabled && customerPurchaseEnabled && walletPaymentEnabled,
-      liveFulfillmentEnabled: utilitiesEnabled && customerPurchaseEnabled && liveFulfillmentEnabled,
+      walletPaymentEnabled: utilitiesEnabled && walletPaymentEnabled,
+      liveFulfillmentEnabled: utilitiesEnabled && liveFulfillmentEnabled,
       paymentMethod: utilitiesEnabled && customerPurchaseEnabled && walletPaymentEnabled ? "WALLET" : "READINESS_ONLY",
       liveCustomerPurchaseStatus: utilitiesEnabled && customerPurchaseEnabled
         ? walletPaymentEnabled && liveFulfillmentEnabled && !testMode
@@ -1034,7 +1034,9 @@ export class PaymentsService {
       requiredEnv: requirements,
       missingRequiredKeys,
       notes: [
-        utilitiesEnabled && customerPurchaseEnabled && walletPaymentEnabled && liveFulfillmentEnabled && !testMode
+        utilitiesEnabled && walletPaymentEnabled && liveFulfillmentEnabled && !customerPurchaseEnabled
+          ? "Wallet and provider fulfilment are prepared, but Customer Utilities remain closed until the Customer purchase gate is enabled."
+          : utilitiesEnabled && customerPurchaseEnabled && walletPaymentEnabled && liveFulfillmentEnabled && !testMode
           ? "Customer Utilities can submit wallet-funded provider requests. Wallet debits are backend-controlled and reversed automatically if provider fulfilment fails."
           : utilitiesEnabled && customerPurchaseEnabled
             ? "Customer Utilities can submit provider-backed requests in controlled test/sandbox mode only."
@@ -1049,8 +1051,10 @@ export class PaymentsService {
   }
 
   private customerUtilityPurchasesEnabled(): boolean {
-    return this.flagValue("UTILITIES_CUSTOMER_PURCHASE_ENABLED", false) ||
-      this.flagValue("UTILITIES_CUSTOMER_PURCHASES_ENABLED", false);
+    const primary = this.optionalValue("UTILITIES_CUSTOMER_PURCHASE_ENABLED");
+    return primary === undefined
+      ? this.flagValue("UTILITIES_CUSTOMER_PURCHASES_ENABLED", false)
+      : ["true", "1", "yes", "on"].includes(primary.toLowerCase());
   }
 
   private providerReadinessRecord(

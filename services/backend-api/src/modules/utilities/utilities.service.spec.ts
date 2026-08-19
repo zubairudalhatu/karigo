@@ -206,12 +206,19 @@ describe("UtilitiesService", () => {
       configValues: {
         UTILITIES_PROVIDER: "accelerate",
         UTILITIES_ENABLED: true,
+        UTILITIES_TEST_MODE: false,
+        UTILITIES_CUSTOMER_PURCHASE_ENABLED: false,
+        UTILITIES_WALLET_PAYMENT_ENABLED: true,
+        UTILITIES_LIVE_FULFILLMENT_ENABLED: true,
         ACCELERATE_ENABLED: true
       },
       accelerateProvider: { connectivityReadiness: jest.fn().mockResolvedValue(connectivity) }
     });
 
-    await expect(service.adminConnectivityReadiness(adminUserId)).resolves.toMatchObject({ connectivity });
+    await expect(service.adminConnectivityReadiness(adminUserId)).resolves.toMatchObject({
+      connectivity,
+      gates: { walletPayment: "READY", liveFulfilment: "READY", customerPurchases: "NOT_ENABLED" }
+    });
 
     expect(audit.record).toHaveBeenCalledWith(
       adminUserId,
@@ -379,6 +386,45 @@ describe("UtilitiesService", () => {
     })).rejects.toThrow("Live Utilities require wallet payment and live fulfilment flags.");
 
     expect(tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+    expect(accelerateProvider.purchase).not.toHaveBeenCalled();
+  });
+
+  it("blocks Stage B quotes and transactions before wallet debit or provider fulfilment", async () => {
+    const accelerateProvider = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      validateRecipient: jest.fn(),
+      quote: jest.fn(),
+      purchase: jest.fn()
+    };
+    const { prisma, tx, service } = serviceWith({
+      configValues: {
+        UTILITIES_PROVIDER: "accelerate",
+        UTILITIES_ENABLED: true,
+        UTILITIES_TEST_MODE: false,
+        UTILITIES_CUSTOMER_PURCHASE_ENABLED: false,
+        UTILITIES_CUSTOMER_PURCHASES_ENABLED: true,
+        UTILITIES_WALLET_PAYMENT_ENABLED: true,
+        UTILITIES_LIVE_FULFILLMENT_ENABLED: true,
+        ACCELERATE_ENABLED: true
+      },
+      accelerateProvider
+    });
+    const request = {
+      serviceType: UtilityServiceType.AIRTIME,
+      providerId: provider.id,
+      amountKobo: 50000,
+      recipient: "08030000000"
+    };
+
+    await expect(service.quote("user-id", request)).rejects.toThrow(
+      "Customer Utilities remain closed until the Customer purchase gate is enabled."
+    );
+    await expect(service.createTransaction("user-id", request)).rejects.toThrow(
+      "Customer Utilities remain closed until the Customer purchase gate is enabled."
+    );
+    expect(prisma.utilityTransaction.create).not.toHaveBeenCalled();
+    expect(tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+    expect(accelerateProvider.quote).not.toHaveBeenCalled();
     expect(accelerateProvider.purchase).not.toHaveBeenCalled();
   });
 
@@ -1211,6 +1257,15 @@ describe("UtilitiesService", () => {
 
   it("makes Airtime catalogue ready with an active confirmed Accelerate provider while paid purchases stay disabled", async () => {
     const { accelerateProvider, service, tx } = serviceWith({
+      configValues: {
+        UTILITIES_PROVIDER: "accelerate",
+        UTILITIES_ENABLED: true,
+        UTILITIES_TEST_MODE: false,
+        UTILITIES_CUSTOMER_PURCHASE_ENABLED: false,
+        UTILITIES_WALLET_PAYMENT_ENABLED: true,
+        UTILITIES_LIVE_FULFILLMENT_ENABLED: true,
+        ACCELERATE_ENABLED: true
+      },
       prismaOverrides: {
         utilityProvider: {
           findMany: jest.fn().mockResolvedValue([

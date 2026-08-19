@@ -302,6 +302,7 @@ assert(paymentReadinessPage.includes("Accelerate.ng"), "Payment Readiness page m
 assert(paymentReadinessPage.includes("Customer utility processing remains controlled by explicit Utilities flags"), "Payment Readiness page must state utility purchases remain flag-controlled.");
 assert(paymentReadinessPage.includes("Wallet utility payment"), "Payment Readiness page must show wallet utility payment readiness.");
 assert(paymentReadinessPage.includes("Live provider fulfilment"), "Payment Readiness page must show utility live provider fulfilment readiness.");
+assert(paymentReadinessPage.includes("Wallet and provider fulfilment are prepared, but Customer Utilities remain closed until the Customer purchase gate is enabled."), "Payment Readiness page must explain staged Utilities preparation while Customer purchases remain closed.");
 assert(paymentReadinessPage.includes("Wallet-to-utility payment is enabled for Utilities only"), "Payment Readiness page must state wallet utility payment live guardrails.");
 assert(paymentReadinessPage.includes("Wallet-to-utility payment remains disabled until Utilities customer purchases"), "Payment Readiness page must state utility rollback guardrails when flags are disabled.");
 assert(paymentReadinessPage.includes("Run non-destructive Accelerate check"), "Payment Readiness page must expose the safe Accelerate connectivity check.");

@@ -196,6 +196,7 @@ export class UtilitiesService {
   }
 
   async quote(userId: string, dto: UtilityQuoteDto) {
+    this.assertLiveCustomerPurchaseGate();
     const customer = await this.requireCustomer(userId);
     const utilityProvider = this.activeUtilityProvider();
     const resolved = await this.resolveRequest(dto, utilityProvider.client);
@@ -231,6 +232,7 @@ export class UtilitiesService {
   }
 
   async createTransaction(userId: string, dto: CreateUtilityTransactionDto) {
+    this.assertLiveCustomerPurchaseGate();
     const customer = await this.requireCustomer(userId);
     const utilityProvider = this.activeUtilityProvider();
     if (this.walletUtilityPaymentEnabled(utilityProvider)) {
@@ -883,8 +885,28 @@ export class UtilitiesService {
   }
 
   private customerUtilityPurchasesFlagEnabled() {
-    return this.flagValue("UTILITIES_CUSTOMER_PURCHASE_ENABLED", false) ||
-      this.flagValue("UTILITIES_CUSTOMER_PURCHASES_ENABLED", false);
+    const primary = this.optionalFlagValue("UTILITIES_CUSTOMER_PURCHASE_ENABLED");
+    return primary ?? this.flagValue("UTILITIES_CUSTOMER_PURCHASES_ENABLED", false);
+  }
+
+  private assertLiveCustomerPurchaseGate() {
+    if (
+      this.utilitiesProviderName() === "accelerate" &&
+      this.utilitiesPlatformEnabled() &&
+      this.accelerateIntegrationEnabled() &&
+      !this.flagValue("UTILITIES_TEST_MODE", true) &&
+      !this.customerUtilityPurchasesFlagEnabled()
+    ) {
+      throw new ForbiddenException("Customer Utilities remain closed until the Customer purchase gate is enabled.");
+    }
+  }
+
+  private optionalFlagValue(key: string): boolean | undefined {
+    const value = this.config.get<unknown>(key);
+    if (value === undefined || value === null || value === "") return undefined;
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
+    return false;
   }
 
   private assertAccelerateLiveRequestAllowed(
@@ -950,11 +972,7 @@ export class UtilitiesService {
   }
 
   private flagValue(key: string, fallback: boolean): boolean {
-    const value = this.config.get<unknown>(key);
-    if (value === undefined || value === null || value === "") return fallback;
-    if (typeof value === "boolean") return value;
-    if (typeof value === "string") return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
-    return fallback;
+    return this.optionalFlagValue(key) ?? fallback;
   }
 
   private jsonObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
