@@ -77,6 +77,7 @@ assert(productionLaunchPage.includes("Quick Launch Identity Diagnostics") && pro
 assert(productionLaunchPage.includes("No matching KariGO account found. Check the name or phone number."), "Quick Launch must show an explicit no-match account-search state.");
 assert(productionLaunchPage.includes("selected.capabilityLabel") && productionLaunchPage.includes("selected.cityReadiness"), "Quick Launch must show human-readable capability and city readiness details.");
 assert(productionLaunchPage.includes("Review controlled test") && productionLaunchPage.includes("Start Controlled Test"), "Quick Launch must require a confirmation review before starting.");
+assert(productionLaunchPage.includes("Controlled activation summary") && productionLaunchPage.includes("Controlled Test Started"), "Quick Launch must preserve an unmistakable activation result and suppress duplicate starts.");
 assert(productionLaunchPage.includes("Pass Test") && productionLaunchPage.includes("Stop Test / Return Service OFF"), "Quick Launch must expose guided pass and safe OFF controls.");
 assert(productionLaunchPage.includes("Provider network access configured — production transaction verification pending"), "Accelerate verification must remain separate from initial controlled launch.");
 assert(!productionLaunchPage.includes('launchStage: "INVITE_ONLY"') && !productionLaunchPage.includes('launchStage: "LIMITED_PUBLIC"') && !productionLaunchPage.includes('launchStage: "CITY_WIDE"'), "Quick Launch must not promote public launch stages.");

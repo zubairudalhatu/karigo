@@ -186,7 +186,7 @@ export default function ProductionLaunchPage() {
     <ErrorMessage>{error}</ErrorMessage>
     {loading ? <Loading /> : null}
 
-    {!loading && view === "quick" ? <QuickLaunchView reload={load} /> : null}
+    {view === "quick" ? <QuickLaunchView reload={load} /> : null}
 
     {!loading && view === "command" && command ? <>
       <section className="grid">
@@ -467,7 +467,13 @@ function QuickLaunchView({ reload }: { reload: () => Promise<void> }) {
     setSaving(true); setError(""); setSuccess("");
     try {
       const next = await productionLaunchApi.startQuickLaunch({ city, serviceType, customerUserId: customerId, captainUserId: requirements.captain ? captainId : undefined, partnerVendorId: requirements.partner ? partnerId : undefined, reason, confirmed });
-      setSession(next); setReviewing(false); setConfirmed(false); setSuccess(`${label(serviceType)} is OPERATIONS ONLY in ${label(city)}. Guided controlled test started.`);
+      const controlledTestName = next.serviceType === "RIDES" ? "Ride" : label(next.serviceType);
+      setCity(next.city.code);
+      setServiceType(next.serviceType);
+      setSession(next);
+      setReviewing(false);
+      setConfirmed(false);
+      setSuccess(`${next.city.name} / ${label(next.serviceType)} is now OPERATIONS ONLY. Controlled ${controlledTestName} test started successfully.`);
       await reload();
     } catch (cause) { setError(friendlyError(cause, "form")); }
     finally { setSaving(false); }
@@ -503,8 +509,30 @@ function QuickLaunchView({ reload }: { reload: () => Promise<void> }) {
   if (session) {
     const finished = ["PASSED", "FAILED", "BLOCKED"].includes(session.drill.result);
     const allPassed = session.drill.steps.every((step) => step.status === "PASSED");
-    return <section className="section quick-launch"><h2>Quick Launch guided test</h2><p><Badge>{session.drill.result}</Badge> {session.city.name} · {label(session.serviceType)}</p>{success ? <p className="success">{success}</p> : null}<ErrorMessage>{error}</ErrorMessage>
-      <div className="quick-steps">{session.drill.steps.map((step) => <article className="card" key={step.id}><p><strong>{step.position}. {step.label}</strong></p><p><Badge>{step.status}</Badge></p>{!finished ? <div className="actions"><button disabled={saving || step.status === "PASSED"} onClick={() => void updateStep(step.id, "PASSED")}>Check / Pass</button><button className="secondary" disabled={saving} onClick={() => void updateStep(step.id, "FAILED")}>Record blocker</button></div> : null}</article>)}</div>
+    const controlledTestName = session.serviceType === "RIDES" ? "Ride" : label(session.serviceType);
+    const controlledSupplyLabel = requirements.captain ? "Controlled Captain" : "Controlled Partner";
+    const controlledSupplyName = selectedCaptain?.fullName ?? selectedCaptain?.captainName ?? selectedPartner?.businessName ?? selectedPartner?.tradingName ?? selectedPartner?.fullName ?? session.controlledGroup.name;
+    const drillReference = session.drill.relatedReference ?? session.drill.id;
+    const activationConfirmation = `${session.city.name} / ${label(session.serviceType)} is now OPERATIONS ONLY. Controlled ${controlledTestName} test started successfully.`;
+    return <section className="section quick-launch"><h2>Quick Launch guided test</h2>
+      <article className="card quick-activation-summary">
+        <h3>Controlled activation summary</h3>
+        {session.config.launchStage === "OPERATIONS_ONLY" ? <p className="success"><strong>{session.city.name} / {label(session.serviceType)} is now OPERATIONS ONLY.</strong><br />Controlled {controlledTestName} test started successfully.</p> : null}
+        <div className="grid">
+          <div><span className="muted">City</span><p><strong>{session.city.name}</strong></p></div>
+          <div><span className="muted">Service</span><p><strong>{label(session.serviceType)}</strong></p></div>
+          <div><span className="muted">Stage</span><p><Badge>{session.config.launchStage}</Badge></p></div>
+          <div><span className="muted">Controlled Customer</span><p><strong>{session.controlledCustomer.label}</strong></p></div>
+          <div><span className="muted">{controlledSupplyLabel}</span><p><strong>{controlledSupplyName}</strong></p></div>
+          <div><span className="muted">Capacity</span><p><strong>{session.config.maxConcurrentRequests ?? 1}</strong></p></div>
+          <div><span className="muted">Automatic matching</span><p><strong>Disabled</strong></p></div>
+          <div><span className="muted">Guided drill status</span><p><Badge>{session.drill.result}</Badge></p></div>
+        </div>
+        <p className="muted">Controlled session reference: {drillReference}</p>
+        <div className="actions"><button onClick={() => document.getElementById("quick-launch-guided-steps")?.scrollIntoView({ behavior: "smooth" })}>Continue controlled test</button><button className="secondary" disabled>Controlled Test Started</button></div>
+      </article>
+      {success && success !== activationConfirmation ? <p className="success">{success}</p> : null}<ErrorMessage>{error}</ErrorMessage>
+      <div className="quick-steps" id="quick-launch-guided-steps">{session.drill.steps.map((step) => <article className="card" key={step.id}><p><strong>{step.position}. {step.label}</strong></p><p><Badge>{step.status}</Badge></p>{!finished ? <div className="actions"><button disabled={saving || step.status === "PASSED"} onClick={() => void updateStep(step.id, "PASSED")}>Check / Pass</button><button className="secondary" disabled={saving} onClick={() => void updateStep(step.id, "FAILED")}>Record blocker</button></div> : null}</article>)}</div>
       {!finished ? <article className="card finish-controls"><h3>Finish controlled test</h3><label className="check-row"><input type="radio" checked={returnAfterPass} onChange={() => setReturnAfterPass(true)} />After passing, return this service OFF</label><label className="check-row"><input type="radio" checked={!returnAfterPass} onChange={() => setReturnAfterPass(false)} />After passing, keep OPERATIONS ONLY for another test</label><div className="actions"><button disabled={saving || !allPassed} onClick={() => void finish("PASSED")}>Pass Test</button></div><p className="muted">Every guided step must pass before the test can be passed.</p><label>Failure / stop reason<textarea value={stopReason} onChange={(event) => setStopReason(event.target.value)} placeholder="Record why the controlled test stopped. Do not enter secrets." /></label><button className="secondary" disabled={saving || !stopReason.trim()} onClick={() => void finish("STOPPED")}>Stop Test / Return Service OFF</button><p className="muted">Returning OFF blocks new demand and preserves any active transaction safely. Controlled records and audit history are retained.</p></article> : null}
     </section>;
   }
