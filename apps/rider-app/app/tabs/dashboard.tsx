@@ -16,8 +16,9 @@ import { notificationsApi } from "../../src/api/notifications.api";
 import { launchApi } from "../../src/api/launch.api";
 import { taxiApi } from "../../src/api/taxi.api";
 import { CaptainRideWorkspace } from "../../src/components/captain-ride-workspace";
+import { CaptainHomeCockpit, CaptainHomeSkeleton } from "../../src/components/captain-home-cockpit";
 import { disableActiveWorkBackgroundLocation, enableActiveWorkBackgroundLocation } from "../../src/lib/background-location";
-import { Button, Card, Loading, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
+import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError, money } from "../../src/lib/errors";
 import { CaptainLocation, distanceMeters, requestCaptainForegroundLocation, watchCaptainForegroundLocation } from "../../src/lib/location";
@@ -118,17 +119,17 @@ function locationSummary(access: CaptainAccess | null, profile: RiderProfile | n
     deviceLocation ? {
       coordinate: { latitude: deviceLocation.location.latitude, longitude: deviceLocation.location.longitude },
       lastSeen: deviceLocation.seenAt,
-      source: "Device GPS"
+      source: "Current location"
     } : null,
     hasValidCoordinate(deliveryLat, deliveryLng) ? {
       coordinate: { latitude: deliveryLat!, longitude: deliveryLng! },
       lastSeen: profile?.currentLocationUpdatedAt ?? null,
-      source: "Delivery GPS"
+      source: "Current location"
     } : null,
     hasValidCoordinate(rideLat, rideLng) ? {
       coordinate: { latitude: rideLat!, longitude: rideLng! },
       lastSeen: rideProfile?.lastSeenAt ?? null,
-      source: "Ride GPS"
+      source: "Current location"
     } : null
   ].filter((candidate): candidate is { coordinate: { latitude: number; longitude: number }; lastSeen: string | null; source: string } => Boolean(candidate))
     .sort((a, b) => timestampValue(b.lastSeen) - timestampValue(a.lastSeen));
@@ -136,7 +137,7 @@ function locationSummary(access: CaptainAccess | null, profile: RiderProfile | n
   return {
     coordinate: candidates[0]?.coordinate ?? null,
     source: candidates[0]?.source ?? null,
-    area: currentArea?.label ?? currentArea?.cityName ?? "Unavailable",
+    area: currentArea?.label ?? currentArea?.cityName ?? "Locating",
     lastSeen: candidates[0]?.lastSeen ?? profile?.currentLocationUpdatedAt ?? access?.rideCaptainProfile?.lastSeenAt ?? null
   };
 }
@@ -552,13 +553,14 @@ export default function RiderDashboard() {
 
   async function toggleOverallAvailability() {
     if (!workState || availabilityUpdating || workState.activeWorkMode) return;
-    const goOnline = !(workState.desiredDeliveryOnline && workState.desiredRideOnline);
+    const currentlyOnline = Boolean(workState.desiredDeliveryOnline || workState.desiredRideOnline);
+    const goOnline = !currentlyOnline;
     setAvailabilityUpdating(true);
     try {
       const currentLocation = goOnline ? await requestCaptainForegroundLocation(strongLocationAccuracy) : null;
       const updated = await captainAccessApi.updateAvailability({
-        deliveryOnline: goOnline,
-        rideOnline: goOnline,
+        ...(projection.delivery.active ? { deliveryOnline: goOnline } : {}),
+        ...(projection.ride.active ? { rideOnline: goOnline } : {}),
         ...(currentLocation ?? {})
       });
       if (currentLocation) {
@@ -567,7 +569,7 @@ export default function RiderDashboard() {
         setLocationAutoBlocked(false);
       }
       setWorkState(updated);
-      setMessage(goOnline ? "Online for Ride and Delivery." : "You are offline.");
+      setMessage(goOnline ? "You're online and ready for requests." : "You're offline.");
       setError("");
     } catch (e) {
       setError(captainRequestMessage(e, "critical"));
@@ -600,6 +602,20 @@ export default function RiderDashboard() {
     deliveryLaunch && !deliveryLaunch.available && projection.delivery.active ? `${deliveryLaunch.message} Your online preference is preserved; existing assignments remain available.` : null,
     rideLaunch && !rideLaunch.available && projection.ride.active ? `${rideLaunch.message} Your online preference is preserved; existing assignments remain available.` : null
   ].filter((value): value is string => Boolean(value)))];
+  const isOnline = Boolean(workState?.desiredDeliveryOnline || workState?.desiredRideOnline);
+  const canToggleMaster = isOnline
+    ? canToggle && !availabilityUpdating
+    : projection.delivery.active && projection.ride.active ? canToggleBoth : projection.ride.active ? canToggleRide : canToggleDelivery;
+  const masterStatusLabel = activeJob ? "BUSY • DELIVERY"
+    : workState?.desiredDeliveryOnline && workState?.desiredRideOnline ? "ONLINE • RIDE + DELIVERY"
+      : workState?.desiredRideOnline ? "ONLINE • RIDES"
+        : workState?.desiredDeliveryOnline ? "ONLINE • DELIVERY"
+          : "OFFLINE";
+  const completedJobs = (earnings?.completedDeliveriesCount ?? earnings?.completedJobs.length ?? 0) + (earnings?.completedRidesCount ?? earnings?.completedRides?.length ?? 0);
+  const serviceNotice = rideLaunch?.available && rideLaunch.launchStage === "OPERATIONS_ONLY" || deliveryLaunch?.available && deliveryLaunch.launchStage === "OPERATIONS_ONLY"
+    ? "Go online only during your scheduled operating window."
+    : rideLaunch && !rideLaunch.available && projection.ride.active ? `Rides are temporarily unavailable in ${mapState.area}.`
+      : deliveryLaunch && !deliveryLaunch.available && projection.delivery.active ? `Deliveries are temporarily unavailable in ${mapState.area}.` : null;
   const deliveryOperationsStatus = deliveryLaunch?.available === false ? "Unavailable" : projection.delivery.active ? "Available" : projection.delivery.operationsLabel;
   const rideOperationsStatus = rideLaunch?.available === false ? "Unavailable" : projection.ride.active ? "Available" : projection.ride.operationsLabel;
   const activeWork = activeWorkTitle(workState);
@@ -615,7 +631,7 @@ export default function RiderDashboard() {
 
 
   if (loading && !captainAccess) {
-    return <Protected><Loading label="Preparing your KariGO Captain access..." /></Protected>;
+    return <Protected><CaptainHomeSkeleton captainName={firstName(user?.fullName)} /></Protected>;
   }
 
 
@@ -636,6 +652,41 @@ export default function RiderDashboard() {
       {refreshNotice ? <Text style={styles.resyncNotice}>{refreshNotice}</Text> : null}
       <CaptainRideWorkspace trip={activeRide} captainCoordinate={mapState.coordinate} operatingArea={mapState.area} onUpdated={onRideUpdated} />
     </Screen></Protected>;
+  }
+
+  if (projection.hasAnyActiveMode) {
+    return <Protected><CaptainHomeCockpit
+      captainName={firstName(profile?.user?.fullName ?? captainAccess?.account.fullName ?? user?.fullName)}
+      coordinate={mapState.coordinate}
+      region={currentMapRegion}
+      area={mapState.area}
+      statusLabel={masterStatusLabel}
+      online={isOnline}
+      rideActive={projection.ride.active}
+      deliveryActive={projection.delivery.active}
+      rideOnline={Boolean(workState?.desiredRideOnline)}
+      deliveryOnline={Boolean(workState?.desiredDeliveryOnline)}
+      canToggleMaster={Boolean(canToggleMaster)}
+      canToggleRide={canToggleRide}
+      canToggleDelivery={canToggleDelivery}
+      availabilityUpdating={availabilityUpdating}
+      todayEarnings={earnings?.todayEarnings ?? 0}
+      completedJobs={completedJobs}
+      unread={unread}
+      activeDelivery={activeJob}
+      serviceNotice={serviceNotice}
+      refreshNotice={refreshNotice}
+      message={message}
+      error={error}
+      loading={loading}
+      locationAutoBlocked={locationAutoBlocked}
+      locationUpdating={locationUpdating}
+      onToggleMaster={() => void toggleOverallAvailability()}
+      onToggleRide={() => void toggleRide()}
+      onToggleDelivery={() => void toggleDelivery()}
+      onRetryLocation={() => void refreshGps()}
+      onRetrySync={() => void syncActiveWork("manual_refresh")}
+    /></Protected>;
   }
   return (
     <Protected><Screen refreshing={loading} onRefresh={load}>

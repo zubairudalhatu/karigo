@@ -47,21 +47,25 @@ export function CaptainRideWorkspace({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const mapRef = useRef<MapView | null>(null);
+  const cameraStateRef = useRef("");
   const pickup = coordinate(trip.pickupLatitude, trip.pickupLongitude);
   const destination = coordinate(trip.destinationLatitude, trip.destinationLongitude);
   const mapTarget = trip.status === "STARTED" || trip.status === "ARRIVED_DESTINATION" ? destination : pickup;
-  const visibleCoordinates = [captainCoordinate, mapTarget].filter((item): item is Coordinate => Boolean(item));
+  const visibleCoordinates = [captainCoordinate, pickup, destination].filter((item): item is Coordinate => Boolean(item));
   const copy = stateCopy(trip.status);
   const customerFirstName = trip.customer?.fullName?.trim().split(/\s+/)[0] || "Customer";
 
   useEffect(() => {
+    const cameraState = `${trip.id}:${trip.status}:${Boolean(captainCoordinate)}`;
+    if (cameraStateRef.current === cameraState) return;
+    cameraStateRef.current = cameraState;
     if (visibleCoordinates.length > 1) {
       mapRef.current?.fitToCoordinates(visibleCoordinates, {
         animated: true,
         edgePadding: { top: 70, right: 55, bottom: 190, left: 55 }
       });
     }
-  }, [captainCoordinate?.latitude, captainCoordinate?.longitude, mapTarget?.latitude, mapTarget?.longitude]);
+  }, [trip.id, trip.status, Boolean(captainCoordinate), Boolean(pickup), Boolean(destination)]);
 
   async function mutate(action: "accept" | "decline" | "arrived-pickup" | "start" | "arrived-destination" | "complete") {
     if (saving) return;
@@ -110,8 +114,8 @@ export function CaptainRideWorkspace({
         {captainCoordinate ? <Marker coordinate={captainCoordinate} title="Your location">
           <View style={styles.captainMarker}><Feather name="navigation" size={18} color={brand.colors.white} /></View>
         </Marker> : null}
-        {pickup && trip.status !== "STARTED" && trip.status !== "ARRIVED_DESTINATION" ? <Marker coordinate={pickup} title="Pickup" pinColor="#E31E24" /> : null}
-        {destination && (trip.status === "STARTED" || trip.status === "ARRIVED_DESTINATION") ? <Marker coordinate={destination} title="Destination" pinColor="#111111" /> : null}
+        {pickup ? <Marker coordinate={pickup} title="Pickup" pinColor="#E31E24" /> : null}
+        {destination ? <Marker coordinate={destination} title="Destination" pinColor="#111111" /> : null}
       </MapView> : <View style={styles.mapFallback}><Feather name="map-pin" size={30} color={brand.colors.primary} /><Text style={ui.muted}>Map coordinates are unavailable. Address details remain authoritative.</Text></View>}
       <View style={styles.mapTopBar}>
         <StatusBadge status={copy.eyebrow} />
@@ -162,16 +166,16 @@ export function CaptainRideWorkspace({
 
 const styles = StyleSheet.create({
   workspace: { flex: 1, gap: 0 },
-  mapShell: { backgroundColor: "#E5E7EB", borderRadius: 24, minHeight: 390, overflow: "hidden", position: "relative" },
-  map: { height: 390, width: "100%" },
-  mapFallback: { alignItems: "center", gap: 10, height: 390, justifyContent: "center", padding: 30 },
+  mapShell: { backgroundColor: "#E5E7EB", borderRadius: 24, minHeight: 470, overflow: "hidden", position: "relative" },
+  map: { height: 470, width: "100%" },
+  mapFallback: { alignItems: "center", gap: 10, height: 470, justifyContent: "center", padding: 30 },
   mapTopBar: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", left: 12, position: "absolute", right: 12, top: 12 },
   safetyButton: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.96)", borderRadius: 999, flexDirection: "row", gap: 6, paddingHorizontal: 12, paddingVertical: 9 },
   safetyText: { color: brand.colors.charcoal, fontWeight: "900" },
   captainMarker: { alignItems: "center", backgroundColor: brand.colors.primary, borderColor: brand.colors.white, borderRadius: 999, borderWidth: 3, height: 40, justifyContent: "center", width: 40 },
-  sheet: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 24, borderWidth: 1, gap: 12, marginTop: -34, padding: 18, paddingTop: 22 },
+  sheet: { backgroundColor: brand.colors.white, borderRadius: 28, gap: 12, marginTop: -58, padding: 18, paddingTop: 22, shadowColor: "#111827", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 16 },
   eyebrow: { color: brand.colors.primary, fontSize: 12, fontWeight: "900", letterSpacing: 1.4 },
-  title: { color: brand.colors.charcoal, fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
+  title: { color: brand.colors.charcoal, fontSize: 24, fontWeight: "900", letterSpacing: -0.4 },
   reference: { color: brand.colors.muted, fontSize: 12, fontWeight: "800" },
   customer: { color: brand.colors.charcoal, fontSize: 18, fontWeight: "900" },
   routeBlock: { backgroundColor: "#F9FAFB", borderRadius: 18, padding: 14 },

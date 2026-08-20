@@ -50,6 +50,7 @@ const locationHelper = read("src/lib/location.ts");
 const captainNotifications = read("src/lib/captain-notifications.ts");
 const backgroundLocation = read("src/lib/background-location.ts");
 const rideWorkspace = read("src/components/captain-ride-workspace.tsx");
+const captainHome = read("src/components/captain-home-cockpit.tsx");
 const launchApi = read("src/api/launch.api.ts");
 expect(launchApi.includes("launch/availability/me"), "Captain app must resolve city/service launch state from backend.");
 expect(dashboard.includes("Your online preference is preserved; existing assignments remain available."), "Captain app must preserve safe active-work continuity during a launch pause.");
@@ -225,20 +226,20 @@ expect(notificationsApi.includes("read-all") && notificationsApi.includes("/read
 expect(jobsIndex.includes('Screen title="Work"'), "Combined work tab heading must be Work.");
 expect(jobsIndex.includes("Active") && jobsIndex.includes("Work history"), "Work tab must expose active and chronological history sections.");
 expect(jobsIndex.includes("taxiApi.trips") && jobsIndex.includes("jobsApi.list"), "Work tab must combine Ride and Delivery authority.");
-expect(jobsIndex.includes("Open active Ride cockpit") && jobsIndex.includes("Open active Delivery"), "Work tab must route both active assignment modes.");
+expect(jobsIndex.includes('href="/tabs/dashboard"') && jobsIndex.includes('href={`/jobs/${activeDelivery.id}`}'), "Work tab must route both active assignment modes.");
 expect(jobsIndex.includes("Ride") && jobsIndex.includes("Delivery"), "Work tab must label both work types.");
 expect(jobDetail.includes("Accept job") && jobDetail.includes("Reject job"), "Delivery detail must support accept/reject actions.");
 expect(jobDetail.includes("Complete delivery") && jobDetail.includes("Delivery completed successfully."), "Delivery detail must support OTP completion.");
 
 expect(earnings.includes("projectCaptainOperationalState"), "Earnings must use state-aware Captain projection.");
-expect(earnings.includes("Track your KariGO Captain earnings."), "Earnings subtitle must use production Captain copy.");
-expect(earnings.includes("Total earnings") && earnings.includes("Pending payout") && earnings.includes("Paid") && earnings.includes("Ride earnings") && earnings.includes("Delivery earnings"), "Earnings must show combined Ride and Delivery totals.");
-expect(earnings.includes("Your earnings will appear here after you complete a Ride or Delivery."), "Earnings must have a clean zero state.");
+expect(earnings.includes("A clear view of your Captain income."), "Earnings subtitle must use concise production Captain copy.");
+expect(earnings.includes("Pending payout") && earnings.includes("Paid") && earnings.includes("Ride earnings") && earnings.includes("Delivery earnings"), "Earnings must show combined Ride and Delivery totals.");
+expect(earnings.includes("Completed Captain earnings will appear here."), "Earnings must have a clean zero state.");
 expect(earnings.includes("Earnings history"), "Earnings must present a combined history list.");
 expect(!earnings.includes("Earnings locked"), "Earnings must not be locked when any Captain mode is active.");
 expect(!earnings.includes("Track delivery earnings") && !earnings.includes("Completed delivery earnings"), "Earnings must not use Delivery-only copy.");
 
-expect(profile.includes("Captain access"), "Profile must show independent mode summary.");
+expect(profile.includes("workPreference") && profile.includes("projection.ride.active") && profile.includes("projection.delivery.active"), "Profile must show independent mode summary.");
 expect(profile.includes("captainVehicleTypes"), "Profile must humanise vehicle catalogue values.");
 expect(profile.includes("Notifications") && profile.includes("unread"), "Profile must include compact Notifications entry.");
 expect(profile.includes("setBiometricSignIn") && profile.includes("Privacy Policy") && profile.includes("Terms"), "Profile must include biometric controls and legal links.");
@@ -278,25 +279,28 @@ expect(!captainAccessApi.slice(captainAccessApi.indexOf("updateAvailability")).i
 expect(dashboard.includes("loadInFlightRef") && dashboard.includes("loadAbortRef") && dashboard.includes("controller.signal"), "Captain Home must deduplicate refresh calls and cancel stale requests on unmount.");
 expect(dashboard.includes("secondaryRefreshFailed") && dashboard.includes("captainRequestMessage(e, \"secondary\")"), "Captain Home must separate non-critical refresh failures from critical errors.");
 expect(dashboard.includes("lastLocationSuccessAtRef") && dashboard.includes('setRefreshNotice("")') && dashboard.includes('setMessage("Location refreshed.")'), "Successful GPS refresh must clear unrelated secondary timeout messaging.");
-expect(dashboard.includes("Operations status") && dashboard.includes("new Set(["), "Captain Home must consolidate launch/service notices into one compact Operations status block.");
-expect((dashboard.match(/<Text style=\{ui\.title\}>Operations status<\/Text>/g) || []).length === 1, "Captain Home must render only one Operations status banner.");
-expect(dashboard.indexOf("Live map") < dashboard.indexOf("Operations status"), "Captain Home must keep the live map ahead of secondary operational information.");
-expect(dashboard.includes("toggleOverallAvailability") && dashboard.includes("Online for both") && dashboard.includes("Ride only") && dashboard.includes("Delivery only"), "Captain Home must expose an overall control while preserving mode-specific state.");
-expect(dashboard.includes("availabilityUpdating") && dashboard.includes('title={availabilityUpdating ? "Updating..."'), "Captain availability controls must prevent repeated submissions.");
+expect(captainHome.includes("CaptainHomeCockpit") && captainHome.includes("MapView") && captainHome.indexOf("mapStage") < captainHome.indexOf("sheet"), "Captain Home must use a map-first cockpit with a contextual sheet.");
+expect(captainHome.includes("statusLabel") && captainHome.includes("Work preferences"), "Captain Home must expose one master status with compact preferences.");
+expect(captainHome.includes("Looking for requests...") && captainHome.includes("Go online when you're ready to work."), "Captain Home must provide one-glance online-idle and offline states.");
+expect(captainHome.includes('accessibilityRole="switch"') && captainHome.includes("accessibilityState"), "Captain Home preferences must expose accessible toggle semantics.");
+expect(captainHome.includes("availabilityUpdating") && captainHome.includes("UPDATING..."), "Captain availability controls must prevent repeated submissions.");
 expect(dashboard.includes("Today") && dashboard.includes("This week") && dashboard.includes('href="/earnings"'), "Captain Home must include a compact earnings shortcut backed by existing summary data.");
-expect(profile.includes("Captain identity") && profile.includes("Captain code") && profile.includes("Account status"), "Captain Profile must organize identity and account status clearly.");
-expect(profile.includes("Driver preferences") && profile.includes("Active vehicle") && profile.includes("Ride preference") && profile.includes("Delivery preference"), "Captain Profile must summarize supported driver preferences without inventing backend settings.");
-expect(profile.includes("Ride operating areas require review") && profile.includes("Delivery operating areas require review"), "Captain Profile operating-area review labels must be mode-specific.");
+expect(profile.includes("displayName") && profile.includes("captainCode") && profile.includes("projection.overallStatus"), "Captain Profile must organize identity and status clearly.");
+expect(profile.includes("Work preferences") && profile.includes("Ride on") && profile.includes("Delivery on"), "Captain Profile must summarize supported work preferences without inventing backend settings.");
+expect(profile.includes("approvedOperatingAreas"), "Captain Profile must project backend-approved operating areas.");
 expect(!profile.includes(">Operating areas require review<"), "Captain Profile must not show the old generic operating-area warning.");
-expect(profile.includes("Automatic matching and auto-accept remain disabled."), "Captain Profile must preserve manual controlled matching guardrails.");
-expect(profile.includes("Safety and support") && profile.includes("Report an issue"), "Captain Profile must expose clear safety and support actions.");
-expect(earnings.includes("Today") && earnings.includes("This week") && earnings.includes("Pending payout") && earnings.includes("Paid"), "Captain Earnings must preserve today, week, pending and paid settlement hierarchy.");
-expect(jobsIndex.includes("From:") && jobsIndex.includes("To:") && jobsIndex.includes("money("), "Captain Work history must show safe route and backend-supported amount summaries.");
+expect(profile.includes("Automatic matching and auto-accept remain off."), "Captain Profile must preserve manual controlled matching guardrails.");
+expect(profile.includes("Safety Centre") && profile.includes("Support") && profile.includes("Report an issue"), "Captain Profile must expose clear safety and support actions.");
+expect(earnings.includes("TODAY") && earnings.includes("THIS WEEK") && earnings.includes("Pending payout") && earnings.includes("Paid"), "Captain Earnings must preserve today, week, pending and paid settlement hierarchy.");
+expect(jobsIndex.includes("deliveryRoute") && jobsIndex.includes("→") && jobsIndex.includes("money("), "Captain Work history must show safe route and backend-supported amount summaries.");
 expect(jobDetail.includes("Payment method:") && jobDetail.includes("Activity") && jobDetail.includes("Contact KariGO Support"), "Captain work detail must preserve payment/lifecycle data and add a support action.");
 expect(jobDetail.includes("without sharing unnecessary Customer details"), "Captain support detail must reinforce Customer privacy.");
 expect(locationHelper.includes("timeInterval: 30_000") && (locationHelper.match(/watchPositionAsync/g) || []).length === 1, "Captain must preserve one throttled foreground watcher implementation.");
-expect(dashboard.includes("Current operating area: {mapState.area}"), "Captain Home must continue projecting the GPS-resolved operating area.");
-expect(profile.includes("Approved Ride operating areas") && profile.includes("Approved Delivery operating areas") && profile.includes("primary operating area"), "Captain Profile must preserve multi-city approved and primary areas per mode.");
+expect(captainHome.includes("props.area"), "Home must project the GPS-resolved operating area.");
+expect(captainHome.includes("Try location again"), "Home must retain a subtle diagnostics-only location retry.");
+expect(captainHome.includes("CaptainHomeSkeleton"), "Home must render a recognisable startup skeleton instead of a blank screen.");
+expect(profile.includes("rideProfile?.approvedOperatingAreas") && profile.includes("deliveryProfile?.approvedOperatingAreas"), "Profile must show approved operating areas per mode.");
+expect(profile.includes("rideProfile?.approvedOperatingAreas") && profile.includes("deliveryProfile?.approvedOperatingAreas"), "Captain Profile must preserve multi-city approved areas per mode.");
 
 
 if (failures.length) {
@@ -306,7 +310,3 @@ if (failures.length) {
 }
 
 console.log("Captain regression check passed.");
-expect(profile.includes("Approved Ride operating areas") && profile.includes("Approved Delivery operating areas"), "Profile must show approved operating areas per mode.");
-expect(profile.includes("primary operating area"), "Profile must show the primary operating-area preference.");
-expect(profile.includes("Ride operating areas require review") && profile.includes("Delivery operating areas require review"), "Profile must flag legacy applications per Captain mode.");
-expect(dashboard.includes("Current operating area:"), "Home map footer must label the current GPS area rather than residence.");
