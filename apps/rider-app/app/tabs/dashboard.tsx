@@ -715,7 +715,7 @@ export default function RiderDashboard() {
         setError("");
       } else if (next) {
         setMessage("");
-        setError(`Rides aren't open in ${mapState.area} yet.`);
+        setError(rideLaunch?.message ?? "Ride Captain access is not currently available.");
       } else {
         setMessage("Ride availability is offline.");
         setError("");
@@ -758,9 +758,9 @@ export default function RiderDashboard() {
         setMessage("");
         setError(goOnline
           ? rideLaunch?.available === false && projection.ride.active && deliveryLaunch?.available !== true
-            ? `Rides aren't open in ${mapState.area} yet.`
+            ? rideLaunch.message
             : deliveryLaunch?.available === false && projection.delivery.active && rideLaunch?.available !== true
-              ? `Deliveries aren't open in ${mapState.area} yet.`
+              ? deliveryLaunch.message
               : "We couldn't take you online. Please try again."
           : "We couldn't take you offline. Please try again.");
       }
@@ -816,8 +816,8 @@ export default function RiderDashboard() {
           : "OFFLINE";
   const serviceNotice = rideLaunch?.available && rideLaunch.launchStage === "OPERATIONS_ONLY" || deliveryLaunch?.available && deliveryLaunch.launchStage === "OPERATIONS_ONLY"
     ? "Go online only during your scheduled operating window."
-    : rideLaunch && !rideLaunch.available && projection.ride.active ? `Rides aren't open in ${mapState.area} yet.`
-      : deliveryLaunch && !deliveryLaunch.available && projection.delivery.active ? `Deliveries aren't open in ${mapState.area} yet.` : null;
+    : rideLaunch && !rideLaunch.available && projection.ride.active ? rideLaunch.message
+      : deliveryLaunch && !deliveryLaunch.available && projection.delivery.active ? deliveryLaunch.message : null;
   const deliveryOperationsStatus = deliveryLaunch?.available === false ? "Unavailable" : projection.delivery.active ? "Available" : projection.delivery.operationsLabel;
   const rideOperationsStatus = rideLaunch?.available === false ? "Unavailable" : projection.ride.active ? "Available" : projection.ride.operationsLabel;
   const activeWork = activeWorkTitle(workState);

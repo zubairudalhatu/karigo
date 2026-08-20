@@ -31,13 +31,13 @@ describe("LaunchOperationsService", () => {
     controlledSupplyGroup: { findFirst: jest.fn() },
     supportTicket: { create: jest.fn() },
     user: { findUnique: jest.fn() },
-    taxiDriverProfile: { count: jest.fn() },
+    taxiDriverProfile: { findMany: jest.fn() },
     taxiTrip: { count: jest.fn() },
     $transaction: jest.fn(async (callback: any) => typeof callback === "function" ? callback(prisma) : Promise.all(callback))
   };
   const config = { get: jest.fn((_key: string, fallback?: unknown) => fallback) };
   const audit = { record: jest.fn() };
-  const controlledSupply = { accountEligible: jest.fn(), assertOperationsReady: jest.fn() };
+  const controlledSupply = { accountEligible: jest.fn(), captainEligibility: jest.fn(), assertOperationsReady: jest.fn() };
   const service = new LaunchOperationsService(
     prisma as unknown as PrismaService,
     config as unknown as ConfigService,
@@ -79,10 +79,11 @@ describe("LaunchOperationsService", () => {
     config.get.mockImplementation((_key: string, fallback?: unknown) => fallback);
     prisma.user.findUnique.mockResolvedValue({ role: UserRole.CUSTOMER, accountStatus: AccountStatus.ACTIVE, deletedAt: null });
     prisma.launchCohortMember.findFirst.mockResolvedValue(null);
-    prisma.taxiDriverProfile.count.mockResolvedValue(0);
+    prisma.taxiDriverProfile.findMany.mockResolvedValue([]);
     prisma.taxiTrip.count.mockResolvedValue(0);
     prisma.launchReadinessItem.upsert.mockResolvedValue({ id: "readiness-id" });
     controlledSupply.accountEligible.mockResolvedValue(false);
+    controlledSupply.captainEligibility.mockResolvedValue([]);
     controlledSupply.assertOperationsReady.mockResolvedValue(undefined);
   });
 
@@ -113,6 +114,75 @@ describe("LaunchOperationsService", () => {
     prisma.launchCohortMember.findFirst.mockResolvedValue({ id: "member-id", status: LaunchCohortMemberStatus.ACTIVE });
     const result = await service.resolveEligibility({ city: "Kano", serviceType: LaunchServiceType.RIDES, userId: "user", enforceCapacity: false });
     expect(result.available).toBe(true);
+  });
+
+  it("allows a unified CUSTOMER-role account through verified controlled Ride Captain capability", async () => {
+    prisma.launchMarketConfig.findUnique.mockResolvedValue({ ...baseConfig, cityCode: "ABUJA", cityName: "Abuja", launchStage: LaunchStage.OPERATIONS_ONLY, minimumOnlineCaptainCount: 1 });
+    prisma.user.findUnique.mockResolvedValue({ role: UserRole.CUSTOMER, accountStatus: AccountStatus.ACTIVE, deletedAt: null });
+    controlledSupply.captainEligibility.mockResolvedValue([{
+      userId: "unified-captain",
+      blockers: [],
+      currentGpsArea: { id: "fct-abuja", cityCode: "ABUJA", cityName: "Abuja" },
+      controlledGroup: { id: "group-1", enabled: true, memberId: "member-1" }
+    }]);
+
+    const result = await service.resolveEligibility({ city: "Abuja", serviceType: LaunchServiceType.RIDES, userId: "unified-captain", actorContext: "CAPTAIN", enforceCapacity: false });
+
+    expect(result).toMatchObject({ launchStage: LaunchStage.OPERATIONS_ONLY, available: true, reasonCode: null });
+    expect(controlledSupply.captainEligibility).toHaveBeenCalledWith("Abuja", LaunchServiceType.RIDES);
+    expect(prisma.taxiDriverProfile.findMany).not.toHaveBeenCalled();
+  });
+
+  it("evaluates the same unified identity as a controlled Customer in Customer context", async () => {
+    prisma.launchMarketConfig.findUnique.mockResolvedValue({ ...baseConfig, launchStage: LaunchStage.OPERATIONS_ONLY });
+    prisma.user.findUnique.mockResolvedValue({ role: UserRole.CUSTOMER, accountStatus: AccountStatus.ACTIVE, deletedAt: null });
+    controlledSupply.accountEligible.mockResolvedValue(true);
+
+    await expect(service.assertCustomerCanStart({ city: "Kano", serviceType: LaunchServiceType.RIDES, userId: "unified-captain" })).resolves.toMatchObject({ available: true });
+
+    expect(controlledSupply.accountEligible).toHaveBeenCalledWith("Kano", LaunchServiceType.RIDES, "unified-captain", UserRole.CUSTOMER);
+    expect(controlledSupply.captainEligibility).not.toHaveBeenCalled();
+  });
+
+  it("blocks a non-controlled Captain with a precise safe reason", async () => {
+    prisma.launchMarketConfig.findUnique.mockResolvedValue({ ...baseConfig, cityCode: "ABUJA", cityName: "Abuja", launchStage: LaunchStage.OPERATIONS_ONLY });
+    controlledSupply.captainEligibility.mockResolvedValue([{
+      userId: "captain-user",
+      blockers: ["NOT_IN_CONTROLLED_GROUP"],
+      currentGpsArea: { id: "fct-abuja" },
+      controlledGroup: null
+    }]);
+
+    const result = await service.resolveEligibility({ city: "Abuja", serviceType: LaunchServiceType.RIDES, userId: "captain-user", actorContext: "CAPTAIN", enforceCapacity: false });
+
+    expect(result).toMatchObject({ available: false, reasonCode: "CONTROLLED_ACCESS_NOT_ENABLED", message: "Controlled Captain access is not enabled for this city and service." });
+  });
+
+  it.each([LaunchStage.INVITE_ONLY, LaunchStage.LIMITED_PUBLIC, LaunchStage.CITY_WIDE])("preserves %s Captain availability without controlled-membership gating", async (launchStage) => {
+    prisma.launchMarketConfig.findUnique.mockResolvedValue({ ...baseConfig, cityCode: "ABUJA", cityName: "Abuja", launchStage });
+    controlledSupply.captainEligibility.mockResolvedValue([{
+      userId: "captain-user",
+      blockers: ["NOT_IN_CONTROLLED_GROUP"],
+      currentGpsArea: { id: "fct-abuja" },
+      controlledGroup: null
+    }]);
+
+    const result = await service.resolveEligibility({ city: "Abuja", serviceType: LaunchServiceType.RIDES, userId: "captain-user", actorContext: "CAPTAIN", enforceCapacity: false });
+
+    expect(result.available).toBe(true);
+    expect(prisma.launchCohortMember.findFirst).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [LaunchStage.OFF, false, "SERVICE_OFF"],
+    [LaunchStage.PAUSED, false, "SERVICE_PAUSED"]
+  ])("blocks Captain availability when stage is %s", async (launchStage, isEnabled, reasonCode) => {
+    prisma.launchMarketConfig.findUnique.mockResolvedValue({ ...baseConfig, launchStage, isEnabled });
+
+    const result = await service.resolveEligibility({ city: "Kano", serviceType: LaunchServiceType.RIDES, userId: "captain-user", actorContext: "CAPTAIN", enforceCapacity: false });
+
+    expect(result).toMatchObject({ available: false, reasonCode });
+    expect(controlledSupply.captainEligibility).not.toHaveBeenCalled();
   });
 
   it("allows only a controlled Captain during operations-only access", async () => {
@@ -251,6 +321,33 @@ describe("LaunchOperationsService", () => {
     expect(prisma.launchCapacityDenial.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ cityCode: "KANO", serviceType: LaunchServiceType.RIDES, reasonCode: "CAPTAIN_SUPPLY_BELOW_MINIMUM" })
     });
+  });
+
+  it("counts an online Kano-resident Captain in Abuja from approved current GPS area", async () => {
+    prisma.launchMarketConfig.findUnique.mockResolvedValue({
+      ...baseConfig,
+      cityCode: "ABUJA",
+      cityName: "Abuja",
+      minimumOnlineCaptainCount: 1
+    });
+    prisma.taxiDriverProfile.findMany.mockResolvedValue([{
+      city: "Kano",
+      state: "Kano",
+      lastKnownLatitude: 9.0765,
+      lastKnownLongitude: 7.3986,
+      application: {
+        operatingAreaIds: ["kano-kano", "fct-abuja"],
+        primaryOperatingAreaId: "kano-kano",
+        city: "Kano",
+        state: "Kano"
+      }
+    }]);
+
+    const result = await service.resolveEligibility({ city: "Abuja", serviceType: LaunchServiceType.RIDES, userId: "customer-user" });
+
+    expect(result.available).toBe(true);
+    expect(prisma.taxiDriverProfile.findMany.mock.calls[0][0].where).not.toHaveProperty("city");
+    expect(prisma.launchCapacityDenial.create).not.toHaveBeenCalled();
   });
 
   it("enforces configured zone filtering without exposing the allowed zone list", async () => {

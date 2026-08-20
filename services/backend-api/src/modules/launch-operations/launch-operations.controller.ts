@@ -53,6 +53,15 @@ export class LaunchAvailabilityController {
     return { message: "Launch availability resolved", data: await this.launch.publicAvailability(query.city, query.zoneId) };
   }
 
+  @Get("availability/me/captain")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CUSTOMER, UserRole.RIDER, UserRole.VENDOR, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Resolve server-verified Captain launch availability" })
+  async myCaptainAvailability(@CurrentUser() user: AuthenticatedUser, @Query() query: LaunchAvailabilityQueryDto) {
+    return { message: "Captain launch availability resolved", data: await this.launch.captainAvailability(query.city, query.zoneId, user.id) };
+  }
+
   @Get("availability/me")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CUSTOMER, UserRole.RIDER, UserRole.VENDOR, UserRole.ADMIN)

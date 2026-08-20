@@ -44,6 +44,11 @@ import {
 } from "./dto/launch-operations.dto";
 import { LinkLaunchDrillFailureDto, ReopenLaunchDrillDto, UpdateLaunchDrillStepDto } from "./dto/launch-operations.dto";
 import { ControlledSupplyService } from "./controlled-supply.service";
+import {
+  captainIsApprovedForOperatingArea,
+  captainOperatingAreaFromCoordinates,
+  captainOperatingAreaFromText
+} from "../platform/captain-operating-areas";
 
 export const LAUNCH_CITIES = [
   { code: "KANO", name: "Kano" },
@@ -121,6 +126,7 @@ type EligibilityInput = {
   zoneId?: string;
   enforceCapacity?: boolean;
   participantRole?: UserRole;
+  actorContext?: "CAPTAIN";
 };
 
 @Injectable()
@@ -231,11 +237,29 @@ export class LaunchOperationsService {
     const cityFilter = { contains: config.cityName, mode: "insensitive" as const };
     const locationCutoff = new Date(Date.now() - (config.captainLocationFreshMinutes ?? 15) * 60_000);
     if (config.serviceType === LaunchServiceType.RIDES) {
-      const [onlineSupply, activeRequests, unassignedRequests] = await Promise.all([
-        this.prisma.taxiDriverProfile.count({ where: { city: cityFilter, status: TaxiDriverProfileStatus.ACTIVE, isAvailableForTaxi: true, lastSeenAt: { gte: locationCutoff } } }),
+      const [onlineProfiles, activeRequests, unassignedRequests] = await Promise.all([
+        this.prisma.taxiDriverProfile.findMany({
+          where: { status: TaxiDriverProfileStatus.ACTIVE, isAvailableForTaxi: true, lastSeenAt: { gte: locationCutoff } },
+          select: {
+            city: true,
+            state: true,
+            lastKnownLatitude: true,
+            lastKnownLongitude: true,
+            application: { select: { operatingAreaIds: true, primaryOperatingAreaId: true, city: true, state: true } }
+          }
+        }),
         this.prisma.taxiTrip.count({ where: { pickupAddress: cityFilter, status: { in: ACTIVE_TRIP_STATUSES } } }),
         this.prisma.taxiTrip.count({ where: { pickupAddress: cityFilter, status: TaxiTripStatus.REQUESTED, driverProfileId: null } })
       ]);
+      const targetArea = captainOperatingAreaFromText(config.cityName, config.cityCode);
+      const onlineSupply = targetArea ? onlineProfiles.filter((profile) => {
+        const currentArea = captainOperatingAreaFromCoordinates(Number(profile.lastKnownLatitude), Number(profile.lastKnownLongitude));
+        return currentArea?.id === targetArea.id && captainIsApprovedForOperatingArea(
+          profile.application,
+          targetArea.id,
+          { city: profile.city, state: profile.state }
+        );
+      }).length : 0;
       return this.capacityResult(config, onlineSupply, activeRequests, unassignedRequests, null);
     }
     if (config.serviceType === LaunchServiceType.SME_SERVICES) {
@@ -272,8 +296,8 @@ export class LaunchOperationsService {
     const config = await this.prisma.launchMarketConfig.findUnique({ where: { cityCode_serviceType: { cityCode: city.code, serviceType: input.serviceType } } });
     if (!config || this.launchKilled()) return this.safeEligibility(city, input.serviceType, LaunchStage.OFF, false, "SERVICE_OFF", null);
     const now = new Date();
-    if (!config.isEnabled || config.launchStage === LaunchStage.OFF || config.emergencyClosed) return this.safeEligibility(city, input.serviceType, config.launchStage, false, "SERVICE_OFF", config);
     if (config.launchStage === LaunchStage.PAUSED) return this.safeEligibility(city, input.serviceType, config.launchStage, false, "SERVICE_PAUSED", config);
+    if (!config.isEnabled || config.launchStage === LaunchStage.OFF || config.emergencyClosed) return this.safeEligibility(city, input.serviceType, config.launchStage, false, "SERVICE_OFF", config);
     if ((config.activeFrom && config.activeFrom > now) || (config.activeUntil && config.activeUntil < now)) return this.safeEligibility(city, input.serviceType, config.launchStage, false, "OUTSIDE_ACTIVE_DATES", config);
     const hours = this.operatingWindow(config);
     if (!hours.open) return this.safeEligibility(city, input.serviceType, config.launchStage, false, hours.reason ?? "OUTSIDE_OPERATING_HOURS", config);
@@ -281,6 +305,9 @@ export class LaunchOperationsService {
     if (zones.length && (!input.zoneId || !zones.includes(input.zoneId))) return this.safeEligibility(city, input.serviceType, config.launchStage, false, "ZONE_NOT_AVAILABLE", config);
     const user = input.userId ? await this.prisma.user.findUnique({ where: { id: input.userId }, select: { role: true, accountStatus: true, deletedAt: true } }) : null;
     if (input.userId && (!user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE)) return this.safeEligibility(city, input.serviceType, config.launchStage, false, "ACCOUNT_NOT_ELIGIBLE", config);
+    if (input.actorContext === "CAPTAIN") {
+      return this.resolveCaptainCapabilityEligibility({ city, config, serviceType: input.serviceType, userId: input.userId! });
+    }
     const cohortEligible = await this.cohortEligible(config, input.userId);
     if (config.launchStage === LaunchStage.OPERATIONS_ONLY) {
       const participantRole = input.participantRole ?? user?.role;
@@ -296,6 +323,49 @@ export class LaunchOperationsService {
       }
     }
     return this.safeEligibility(city, input.serviceType, config.launchStage, true, null, config);
+  }
+
+  private async resolveCaptainCapabilityEligibility(input: {
+    city: typeof LAUNCH_CITIES[number];
+    config: {
+      launchStage: LaunchStage;
+      customerMessage: string | null;
+      closedMessage: string | null;
+      timezone: string;
+      operatingHours: Prisma.JsonValue | null;
+    };
+    serviceType: LaunchServiceType;
+    userId: string;
+  }) {
+    if (!([LaunchServiceType.RIDES, LaunchServiceType.PARCEL_DELIVERY] as LaunchServiceType[]).includes(input.serviceType)) {
+      return this.safeEligibility(input.city, input.serviceType, input.config.launchStage, false, "CAPABILITY_NOT_AVAILABLE", input.config, "Captain capability is not available for this service.");
+    }
+    const candidate = (await this.controlledSupply.captainEligibility(input.city.name, input.serviceType))
+      .find((item) => item.userId === input.userId);
+    if (!candidate) {
+      return this.safeEligibility(input.city, input.serviceType, input.config.launchStage, false, "CAPABILITY_NOT_AVAILABLE", input.config, "Approved Captain access is not available for this service.");
+    }
+    const membershipBlockers = new Set(["NOT_IN_CONTROLLED_GROUP", "MEMBERSHIP_ACTIVATION_PENDING"]);
+    const blockers = candidate.blockers.filter((blocker) => input.config.launchStage === LaunchStage.OPERATIONS_ONLY || !membershipBlockers.has(blocker));
+    const targetArea = captainOperatingAreaFromText(input.city.name, input.city.code);
+    if (!targetArea || candidate.currentGpsArea?.id !== targetArea.id) blockers.unshift("CURRENT_AREA_MISMATCH");
+    const blocker = blockers[0];
+    if (!blocker) return this.safeEligibility(input.city, input.serviceType, input.config.launchStage, true, null, input.config);
+    const reason = this.captainDenial(blocker);
+    return this.safeEligibility(input.city, input.serviceType, input.config.launchStage, false, reason.reasonCode, input.config, reason.message);
+  }
+
+  private captainDenial(blocker: string) {
+    if (blocker === "NOT_IN_CONTROLLED_GROUP" || blocker === "MEMBERSHIP_ACTIVATION_PENDING") {
+      return { reasonCode: "CONTROLLED_ACCESS_NOT_ENABLED", message: "Controlled Captain access is not enabled for this city and service." };
+    }
+    if (blocker === "LOCATION_STALE") return { reasonCode: "LOCATION_NOT_CURRENT", message: "Captain location is no longer current. Refresh precise location and try again." };
+    if (blocker === "CURRENT_AREA_MISMATCH" || blocker === "CITY_MISMATCH") {
+      return { reasonCode: "OPERATING_AREA_NOT_APPROVED", message: "Your current area is not approved for this Captain service." };
+    }
+    if (blocker === "ACTIVE_ASSIGNMENT") return { reasonCode: "ACTIVE_WORK_CONFLICT", message: "Finish the active assignment before changing Captain availability." };
+    if (blocker === "SUSPENDED") return { reasonCode: "ACCOUNT_SUSPENDED", message: "Captain access is suspended." };
+    return { reasonCode: "CAPTAIN_NOT_READY", message: "Captain access is not ready for this service." };
   }
 
   async controlledSupplyAccountEligible(input: { city: string; serviceType: LaunchServiceType; userId?: string | null; participant?: "Captain" | "Partner" }) {
@@ -322,11 +392,13 @@ export class LaunchOperationsService {
       where: { cityCode_serviceType: { cityCode: city.code, serviceType: input.serviceType } }
     });
     const now = new Date();
-    const unavailableReason = !config || this.launchKilled() || !config.isEnabled || config.launchStage === LaunchStage.OFF || config.emergencyClosed
+    const unavailableReason = !config || this.launchKilled()
       ? "SERVICE_OFF"
       : config.launchStage === LaunchStage.PAUSED
         ? "SERVICE_PAUSED"
-        : (config.activeFrom && config.activeFrom > now) || (config.activeUntil && config.activeUntil < now)
+        : !config.isEnabled || config.launchStage === LaunchStage.OFF || config.emergencyClosed
+          ? "SERVICE_OFF"
+          : (config.activeFrom && config.activeFrom > now) || (config.activeUntil && config.activeUntil < now)
           ? "OUTSIDE_ACTIVE_DATES"
           : !this.operatingWindow(config).open
             ? "OUTSIDE_OPERATING_HOURS"
@@ -343,8 +415,9 @@ export class LaunchOperationsService {
     return { cityCode: city.code, cityName: city.name, serviceType: input.serviceType, launchStage: config!.launchStage };
   }
 
-  private safeEligibility(city: typeof LAUNCH_CITIES[number], serviceType: LaunchServiceType, stage: LaunchStage, available: boolean, reasonCode: string | null, config: { customerMessage: string | null; closedMessage: string | null; timezone: string; operatingHours: Prisma.JsonValue | null } | null) {
+  private safeEligibility(city: typeof LAUNCH_CITIES[number], serviceType: LaunchServiceType, stage: LaunchStage, available: boolean, reasonCode: string | null, config: { customerMessage: string | null; closedMessage: string | null; timezone: string; operatingHours: Prisma.JsonValue | null } | null, unavailableMessage?: string) {
     const message = available ? (config?.customerMessage || DEFAULT_CUSTOMER_MESSAGES[stage])
+      : unavailableMessage ? unavailableMessage
       : reasonCode === "AT_CAPACITY" ? "KariGO is currently at capacity in your area. Please try again shortly."
         : (config?.closedMessage || config?.customerMessage || DEFAULT_CUSTOMER_MESSAGES[stage]);
     return { cityCode: city.code, cityName: city.name, serviceType, launchStage: stage, available, reasonCode, message, timezone: config?.timezone ?? "Africa/Lagos", operatingHours: config?.operatingHours ?? null };
@@ -359,6 +432,16 @@ export class LaunchOperationsService {
   async publicAvailability(cityInput: string, zoneId?: string, userId?: string) {
     const city = this.normalizeCity(cityInput);
     const services = await Promise.all(LAUNCH_SERVICES.map((serviceType) => this.resolveEligibility({ city: city.name, serviceType, zoneId, userId, enforceCapacity: true })));
+    return { city: { code: city.code, name: city.name }, services, refreshedAt: new Date().toISOString() };
+  }
+
+  async captainAvailability(cityInput: string, zoneId: string | undefined, userId: string) {
+    const city = this.normalizeCity(cityInput);
+    const services = await Promise.all(LAUNCH_SERVICES.map((serviceType) => this.resolveEligibility({
+      city: city.name, serviceType, zoneId, userId,
+      enforceCapacity: false,
+      actorContext: "CAPTAIN"
+    })));
     return { city: { code: city.code, name: city.name }, services, refreshedAt: new Date().toISOString() };
   }
 
