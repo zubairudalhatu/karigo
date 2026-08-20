@@ -152,7 +152,7 @@ expect(locationHelper.includes("hasServicesEnabledAsync"), "Captain location hel
 expect(locationHelper.includes("watchCaptainForegroundLocation"), "Captain location helper must expose a foreground GPS watcher.");
 expect(locationHelper.includes("distanceMeters"), "Captain location helper must expose distance filtering for GPS uploads.");
 expect(locationHelper.includes("We could not confirm your current location."), "Captain location helper must use safe customer-facing GPS unavailable copy.");
-expect(locationHelper.includes("timeInterval: 30_000") && locationHelper.includes("distanceInterval: strongAccuracy ? 15 : 20"), "Captain GPS watcher must use the launch throttle floor.");
+expect(locationHelper.includes("timeInterval: 30_000") && locationHelper.includes("distanceInterval: strongAccuracy ? 15 : 25"), "Captain GPS watcher must preserve the active-work floor and use a battery-conscious local threshold.");
 
 expect(dashboard.includes("projectCaptainOperationalState"), "Home must use state-aware Captain projection.");
 expect(dashboard.includes("karigo-logo.png"), "Home must use compact KariGO branding.");
@@ -297,7 +297,7 @@ expect(jobDetail.includes("Payment method:") && jobDetail.includes("Activity") &
 expect(jobDetail.includes("without sharing unnecessary Customer details"), "Captain support detail must reinforce Customer privacy.");
 expect(locationHelper.includes("timeInterval: 30_000") && (locationHelper.match(/watchPositionAsync/g) || []).length === 1, "Captain must preserve one throttled foreground watcher implementation.");
 expect(captainHome.includes("props.area"), "Home must project the GPS-resolved operating area.");
-expect(captainHome.includes("Try location again"), "Home must retain a subtle diagnostics-only location retry.");
+expect(captainHome.includes("Recenter map on current location") && captainHome.includes("crosshair"), "Home must expose a compact local-only recenter control.");
 expect(captainHome.includes("CaptainHomeSkeleton"), "Home must render a recognisable startup skeleton instead of a blank screen.");
 expect(profile.includes("rideProfile?.approvedOperatingAreas") && profile.includes("deliveryProfile?.approvedOperatingAreas"), "Profile must show approved operating areas per mode.");
 expect(profile.includes("rideProfile?.approvedOperatingAreas") && profile.includes("deliveryProfile?.approvedOperatingAreas"), "Captain Profile must preserve multi-city approved areas per mode.");

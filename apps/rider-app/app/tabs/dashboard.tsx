@@ -21,7 +21,7 @@ import { disableActiveWorkBackgroundLocation, enableActiveWorkBackgroundLocation
 import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError, money } from "../../src/lib/errors";
-import { CaptainLocation, distanceMeters, requestCaptainForegroundLocation, watchCaptainForegroundLocation } from "../../src/lib/location";
+import { CaptainLocation, CaptainLocationError, captainLocationErrorMessage, distanceMeters, requestCaptainForegroundLocation, watchCaptainForegroundLocation } from "../../src/lib/location";
 import { captainRequestMessage } from "../../src/lib/network-errors";
 import {
   applicantReviewCopy,
@@ -39,6 +39,9 @@ const ACTIVE_DELIVERY_STATUSES = new Set([
   "ARRIVED_DESTINATION",
   "DELIVERED"
 ]);
+
+const LOCAL_MAP_FRESH_MS = 120_000;
+const ONLINE_LOCATION_REUSE_MS = 30_000;
 
 function firstName(fullName?: string | null) {
   const name = fullName?.trim();
@@ -115,24 +118,34 @@ function locationSummary(access: CaptainAccess | null, profile: RiderProfile | n
   const rideLat = coordinateNumber(rideProfile?.lastKnownLatitude);
   const rideLng = coordinateNumber(rideProfile?.lastKnownLongitude);
   const currentArea = workState?.currentGpsArea ?? access?.deliveryCaptainProfile?.currentGpsArea ?? rideProfile?.currentGpsArea;
+  const localFixIsFresh = Boolean(deviceLocation && Date.now() - timestampValue(deviceLocation.seenAt) <= LOCAL_MAP_FRESH_MS);
   const candidates = [
-    deviceLocation ? {
+    deviceLocation && localFixIsFresh ? {
       coordinate: { latitude: deviceLocation.location.latitude, longitude: deviceLocation.location.longitude },
       lastSeen: deviceLocation.seenAt,
-      source: "Current location"
+      source: "Current location",
+      priority: 0
     } : null,
     hasValidCoordinate(deliveryLat, deliveryLng) ? {
       coordinate: { latitude: deliveryLat!, longitude: deliveryLng! },
       lastSeen: profile?.currentLocationUpdatedAt ?? null,
-      source: "Current location"
+      source: "Last known location",
+      priority: 1
     } : null,
     hasValidCoordinate(rideLat, rideLng) ? {
       coordinate: { latitude: rideLat!, longitude: rideLng! },
       lastSeen: rideProfile?.lastSeenAt ?? null,
-      source: "Current location"
+      source: "Last known location",
+      priority: 1
+    } : null,
+    deviceLocation && !localFixIsFresh ? {
+      coordinate: { latitude: deviceLocation.location.latitude, longitude: deviceLocation.location.longitude },
+      lastSeen: deviceLocation.seenAt,
+      source: "Last known location",
+      priority: 2
     } : null
-  ].filter((candidate): candidate is { coordinate: { latitude: number; longitude: number }; lastSeen: string | null; source: string } => Boolean(candidate))
-    .sort((a, b) => timestampValue(b.lastSeen) - timestampValue(a.lastSeen));
+  ].filter((candidate): candidate is { coordinate: { latitude: number; longitude: number }; lastSeen: string | null; source: string; priority: number } => Boolean(candidate))
+    .sort((a, b) => a.priority - b.priority || timestampValue(b.lastSeen) - timestampValue(a.lastSeen));
 
   return {
     coordinate: candidates[0]?.coordinate ?? null,
@@ -176,7 +189,12 @@ export default function RiderDashboard() {
   const [deviceLocation, setDeviceLocation] = useState<{ location: CaptainLocation; seenAt: string } | null>(null);
   const [isForeground, setIsForeground] = useState(AppState.currentState === "active");
   const [locationUpdating, setLocationUpdating] = useState(false);
+  const [localLocationLoading, setLocalLocationLoading] = useState(false);
+  const [locationIssue, setLocationIssue] = useState("");
   const [locationAutoBlocked, setLocationAutoBlocked] = useState(false);
+  const deviceLocationRef = useRef<{ location: CaptainLocation; seenAt: string } | null>(null);
+  const localLocationRequestRef = useRef<Promise<CaptainLocation> | null>(null);
+  const operationalLocationRequiredRef = useRef(false);
   const watcherRef = useRef<{ remove: () => void } | null>(null);
   const watcherStartingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -305,12 +323,74 @@ export default function RiderDashboard() {
     }
   }
 
+  function recordLocalMapLocation(location: CaptainLocation) {
+    if (!mountedRef.current) return;
+    const record = { location, seenAt: new Date().toISOString() };
+    deviceLocationRef.current = record;
+    setDeviceLocation(record);
+    setLocationIssue(location.isApproximate ? "Allow precise location for Ride and Delivery work." : "");
+  }
+
+  function localFixIsAcceptable(maxAgeMs: number, requirePrecise: boolean) {
+    const record = deviceLocationRef.current;
+    if (!record) return null;
+    const ageMs = Date.now() - timestampValue(record.seenAt);
+    if (ageMs > maxAgeMs || requirePrecise && record.location.isApproximate) return null;
+    return record.location;
+  }
+
+  async function acquireLocalMapLocation(options: { strong?: boolean; allowCached?: boolean; manual?: boolean } = {}) {
+    const strong = options.strong ?? false;
+    if (options.allowCached) {
+      const cached = localFixIsAcceptable(strong ? ONLINE_LOCATION_REUSE_MS : LOCAL_MAP_FRESH_MS, strong);
+      if (cached) return cached;
+    }
+    if (localLocationRequestRef.current) {
+      const pending = await localLocationRequestRef.current;
+      if (!strong || !pending.isApproximate) return pending;
+    }
+
+    setLocalLocationLoading(true);
+    const request = requestCaptainForegroundLocation(strong);
+    localLocationRequestRef.current = request;
+    try {
+      const location = await request;
+      recordLocalMapLocation(location);
+      setLocationAutoBlocked(false);
+      return location;
+    } catch (cause) {
+      const message = captainLocationErrorMessage(cause);
+      if (mountedRef.current) {
+        setLocationIssue(message);
+        if (cause instanceof CaptainLocationError && (cause.code === "PERMISSION_DENIED" || cause.code === "SERVICES_DISABLED")) setLocationAutoBlocked(true);
+      }
+      throw cause;
+    } finally {
+      if (localLocationRequestRef.current === request) localLocationRequestRef.current = null;
+      if (mountedRef.current) setLocalLocationLoading(false);
+    }
+  }
+
+  async function localLocationForOnlineTransition() {
+    return localFixIsAcceptable(ONLINE_LOCATION_REUSE_MS, true)
+      ?? acquireLocalMapLocation({ strong: true, allowCached: true, manual: true });
+  }
+
+  async function recenterLocalMap() {
+    try {
+      return await acquireLocalMapLocation({ allowCached: true, manual: true });
+    } catch {
+      return null;
+    }
+  }
+
   useEffect(() => {
     mountedRef.current = true;
     void load();
     return () => {
       mountedRef.current = false;
       stopCaptainWatcher("unmount");
+      deviceLocationRef.current = null;
     };
   }, []);
   useEffect(() => {
@@ -347,12 +427,18 @@ export default function RiderDashboard() {
     workState?.activeWorkMode
   );
   const strongLocationAccuracy = Boolean(workState?.activeWorkMode);
-  const watcherShouldRun = operationalLocationRequired && isForeground && !locationAutoBlocked;
+  const watcherShouldRun = projection.hasAnyActiveMode && isForeground && !locationAutoBlocked;
 
   useEffect(() => {
     latestWorkStateRef.current = workState;
     latestProjectionRef.current = projection;
-  }, [projection, workState]);
+    operationalLocationRequiredRef.current = operationalLocationRequired;
+  }, [operationalLocationRequired, projection, workState]);
+
+  useEffect(() => {
+    if (!projection.hasAnyActiveMode || !isForeground) return;
+    void acquireLocalMapLocation().catch(() => undefined);
+  }, [isForeground, projection.hasAnyActiveMode]);
 
   useEffect(() => {
     const online = Boolean(workState?.desiredDeliveryOnline || workState?.desiredRideOnline);
@@ -386,6 +472,10 @@ export default function RiderDashboard() {
   async function uploadCaptainLocation(location: CaptainLocation, options: { force?: boolean; manual?: boolean } = {}) {
     const currentWorkState = latestWorkStateRef.current;
     if (!currentWorkState || uploadInFlightRef.current) return;
+    if (!operationalLocationRequiredRef.current) {
+      recordLocalMapLocation(location);
+      return;
+    }
     const now = Date.now();
     if (!options.manual && now < backoffUntilRef.current) {
       setDeviceLocation({ location, seenAt: new Date(now).toISOString() });
@@ -406,7 +496,7 @@ export default function RiderDashboard() {
       lastUploadedLocationRef.current = { location, uploadedAt: now };
       failureCountRef.current = 0;
       backoffUntilRef.current = 0;
-      setDeviceLocation({ location, seenAt: new Date(now).toISOString() });
+      recordLocalMapLocation(location);
       setWorkState(updated);
       if (latestProjectionRef.current?.delivery.active) {
         setProfile(await riderApi.profile().catch(() => null));
@@ -435,15 +525,14 @@ export default function RiderDashboard() {
   }
 
   async function refreshGps(options: { silent?: boolean; force?: boolean } = {}) {
-    if (!latestWorkStateRef.current) return;
+    if (!latestWorkStateRef.current || !operationalLocationRequiredRef.current) return;
     try {
-      const currentLocation = await requestCaptainForegroundLocation(strongLocationAccuracy);
+      const currentLocation = await acquireLocalMapLocation({ strong: true, manual: !options.silent });
       setLocationAutoBlocked(false);
       await uploadCaptainLocation(currentLocation, { force: options.force ?? true, manual: !options.silent });
-    } catch (e) {
-      setLocationAutoBlocked(true);
+    } catch (cause) {
       if (!options.silent) {
-        setError(friendlyError(e));
+        setError(captainLocationErrorMessage(cause));
         setMessage("");
       }
     }
@@ -469,9 +558,13 @@ export default function RiderDashboard() {
     if (!watcherRef.current && !watcherStartingRef.current) {
       watcherStartingRef.current = true;
       console.log("captain_gps_watcher_starting");
-      watchCaptainForegroundLocation((location) => {
-        void uploadCaptainLocation(location, { manual: false });
-      }, strongLocationAccuracy)
+      void acquireLocalMapLocation().catch(() => undefined).then(() => watchCaptainForegroundLocation((location) => {
+        recordLocalMapLocation(location);
+        if (operationalLocationRequiredRef.current && !location.isApproximate) void uploadCaptainLocation(location, { manual: false });
+        else if (operationalLocationRequiredRef.current && location.isApproximate) {
+          setLocationIssue("Allow precise location for Ride and Delivery work.");
+        }
+      }, strongLocationAccuracy))
         .then((subscription) => {
           if (cancelled || !mountedRef.current) {
             subscription.remove();
@@ -480,10 +573,10 @@ export default function RiderDashboard() {
           watcherRef.current = subscription;
           console.log("captain_gps_watcher_started");
         })
-        .catch((e) => {
-          setLocationAutoBlocked(true);
-          setError(e instanceof Error ? e.message : "Captain location is unavailable. Retry from Profile diagnostics.");
-          console.log(`captain_gps_watcher_unavailable reason=${e instanceof Error ? e.message : "unknown"}`);
+        .catch((cause) => {
+          setLocationIssue(captainLocationErrorMessage(cause));
+          if (cause instanceof CaptainLocationError && (cause.code === "PERMISSION_DENIED" || cause.code === "SERVICES_DISABLED")) setLocationAutoBlocked(true);
+          console.log(`captain_gps_watcher_unavailable reason=${cause instanceof CaptainLocationError ? cause.code : "unknown"}`);
         })
         .finally(() => {
           watcherStartingRef.current = false;
@@ -501,14 +594,14 @@ export default function RiderDashboard() {
     setAvailabilityUpdating(true);
     try {
       const next = !workState.desiredDeliveryOnline;
-      const currentLocation = next ? await requestCaptainForegroundLocation(strongLocationAccuracy) : null;
+      const currentLocation = next ? await localLocationForOnlineTransition() : null;
       const updated = await captainAccessApi.updateAvailability({
         deliveryOnline: next,
         ...(currentLocation ? currentLocation : {})
       });
       if (currentLocation) {
         lastUploadedLocationRef.current = { location: currentLocation, uploadedAt: Date.now() };
-        setDeviceLocation({ location: currentLocation, seenAt: new Date().toISOString() });
+        recordLocalMapLocation(currentLocation);
         setLocationAutoBlocked(false);
       }
       setWorkState(updated);
@@ -529,14 +622,14 @@ export default function RiderDashboard() {
     setAvailabilityUpdating(true);
     try {
       const next = !workState.desiredRideOnline;
-      const currentLocation = next ? await requestCaptainForegroundLocation(strongLocationAccuracy) : null;
+      const currentLocation = next ? await localLocationForOnlineTransition() : null;
       const updated = await captainAccessApi.updateAvailability({
         rideOnline: next,
         ...(currentLocation ? currentLocation : {})
       });
       if (currentLocation) {
         lastUploadedLocationRef.current = { location: currentLocation, uploadedAt: Date.now() };
-        setDeviceLocation({ location: currentLocation, seenAt: new Date().toISOString() });
+        recordLocalMapLocation(currentLocation);
         setLocationAutoBlocked(false);
       }
       setWorkState(updated);
@@ -557,7 +650,7 @@ export default function RiderDashboard() {
     const goOnline = !currentlyOnline;
     setAvailabilityUpdating(true);
     try {
-      const currentLocation = goOnline ? await requestCaptainForegroundLocation(strongLocationAccuracy) : null;
+      const currentLocation = goOnline ? await localLocationForOnlineTransition() : null;
       const updated = await captainAccessApi.updateAvailability({
         ...(projection.delivery.active ? { deliveryOnline: goOnline } : {}),
         ...(projection.ride.active ? { rideOnline: goOnline } : {}),
@@ -565,7 +658,7 @@ export default function RiderDashboard() {
       });
       if (currentLocation) {
         lastUploadedLocationRef.current = { location: currentLocation, uploadedAt: Date.now() };
-        setDeviceLocation({ location: currentLocation, seenAt: new Date().toISOString() });
+        recordLocalMapLocation(currentLocation);
         setLocationAutoBlocked(false);
       }
       setWorkState(updated);
@@ -679,12 +772,12 @@ export default function RiderDashboard() {
       message={message}
       error={error}
       loading={loading}
-      locationAutoBlocked={locationAutoBlocked}
-      locationUpdating={locationUpdating}
+      locationLabel={localLocationLoading ? "Locating..." : mapState.source ?? "Location unavailable"}
+      locationMessage={locationIssue}
       onToggleMaster={() => void toggleOverallAvailability()}
       onToggleRide={() => void toggleRide()}
       onToggleDelivery={() => void toggleDelivery()}
-      onRetryLocation={() => void refreshGps()}
+      onRecenter={recenterLocalMap}
       onRetrySync={() => void syncActiveWork("manual_refresh")}
     /></Protected>;
   }

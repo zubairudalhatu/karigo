@@ -4,54 +4,85 @@ export type CaptainLocation = {
   latitude: number;
   longitude: number;
   accuracyMeters?: number | null;
+  isApproximate?: boolean;
 };
 
-export const CAPTAIN_LOCATION_UNAVAILABLE_MESSAGE = "We could not confirm your current location. Turn on device location and try again.";
+export type CaptainLocationErrorCode = "PERMISSION_DENIED" | "PRECISE_REQUIRED" | "SERVICES_DISABLED" | "ACQUISITION_TIMEOUT" | "UNAVAILABLE";
 
-export async function requestCaptainForegroundLocation(strongAccuracy = false): Promise<CaptainLocation> {
-  const permission = await Location.requestForegroundPermissionsAsync();
-  if (!permission.granted) {
-    throw new Error(CAPTAIN_LOCATION_UNAVAILABLE_MESSAGE);
+const APPROXIMATE_ACCURACY_METERS = 250;
+const LOCATION_TIMEOUT_MS = 12_000;
+let foregroundPermissionPrompted = false;
+
+export const CAPTAIN_LOCATION_UNAVAILABLE_MESSAGE = "We could not confirm your current location. Turn on location and try again.";
+
+export class CaptainLocationError extends Error {
+  constructor(public readonly code: CaptainLocationErrorCode, message: string) {
+    super(message);
+    this.name = "CaptainLocationError";
   }
+}
 
-  const servicesEnabled = await Location.hasServicesEnabledAsync();
-  if (!servicesEnabled) {
-    throw new Error(CAPTAIN_LOCATION_UNAVAILABLE_MESSAGE);
+async function ensureForegroundLocationAccess() {
+  let permission = await Location.getForegroundPermissionsAsync();
+  if (!permission.granted && permission.canAskAgain && !foregroundPermissionPrompted) {
+    foregroundPermissionPrompted = true;
+    permission = await Location.requestForegroundPermissionsAsync();
   }
+  if (!permission.granted) throw new CaptainLocationError("PERMISSION_DENIED", "Turn on location permission to see where you are.");
+  if (!await Location.hasServicesEnabledAsync()) throw new CaptainLocationError("SERVICES_DISABLED", "Turn on device location to see where you are.");
+}
 
-  const position = await Location.getCurrentPositionAsync({
-    accuracy: strongAccuracy ? Location.Accuracy.High : Location.Accuracy.Balanced
-  });
+function captainLocationFromPosition(position: Location.LocationObject): CaptainLocation {
+  const accuracyMeters = position.coords.accuracy;
   return {
     latitude: position.coords.latitude,
     longitude: position.coords.longitude,
-    accuracyMeters: position.coords.accuracy
+    accuracyMeters,
+    isApproximate: accuracyMeters !== null && accuracyMeters > APPROXIMATE_ACCURACY_METERS
   };
 }
 
-export async function watchCaptainForegroundLocation(
-  onLocation: (location: CaptainLocation) => void,
-  strongAccuracy = false
-) {
-  const permission = await Location.requestForegroundPermissionsAsync();
-  if (!permission.granted) {
-    throw new Error(CAPTAIN_LOCATION_UNAVAILABLE_MESSAGE);
-  }
-  const servicesEnabled = await Location.hasServicesEnabledAsync();
-  if (!servicesEnabled) {
-    throw new Error(CAPTAIN_LOCATION_UNAVAILABLE_MESSAGE);
-  }
-  return Location.watchPositionAsync({
-    accuracy: strongAccuracy ? Location.Accuracy.High : Location.Accuracy.Balanced,
-    timeInterval: 30_000,
-    distanceInterval: strongAccuracy ? 15 : 20
-  }, (position) => {
-    onLocation({
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      accuracyMeters: position.coords.accuracy
+function withLocationTimeout<T>(promise: Promise<T>) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new CaptainLocationError("ACQUISITION_TIMEOUT", "Location is taking longer than expected. Try again in a moment.")), LOCATION_TIMEOUT_MS);
+    promise.then((value) => {
+      clearTimeout(timer);
+      resolve(value);
+    }, (cause) => {
+      clearTimeout(timer);
+      reject(cause);
     });
   });
+}
+
+export async function requestCaptainForegroundLocation(strongAccuracy = false): Promise<CaptainLocation> {
+  await ensureForegroundLocationAccess();
+  try {
+    const position = await withLocationTimeout(Location.getCurrentPositionAsync({ accuracy: strongAccuracy ? Location.Accuracy.High : Location.Accuracy.Balanced }));
+    const location = captainLocationFromPosition(position);
+    if (strongAccuracy && location.isApproximate) throw new CaptainLocationError("PRECISE_REQUIRED", "Allow precise location for Ride and Delivery work.");
+    return location;
+  } catch (cause) {
+    if (cause instanceof CaptainLocationError) throw cause;
+    throw new CaptainLocationError("UNAVAILABLE", CAPTAIN_LOCATION_UNAVAILABLE_MESSAGE);
+  }
+}
+
+export async function watchCaptainForegroundLocation(onLocation: (location: CaptainLocation) => void, strongAccuracy = false) {
+  await ensureForegroundLocationAccess();
+  try {
+    return await Location.watchPositionAsync({
+      accuracy: strongAccuracy ? Location.Accuracy.High : Location.Accuracy.Balanced,
+      timeInterval: 30_000,
+      distanceInterval: strongAccuracy ? 15 : 25
+    }, (position) => onLocation(captainLocationFromPosition(position)));
+  } catch {
+    throw new CaptainLocationError("UNAVAILABLE", CAPTAIN_LOCATION_UNAVAILABLE_MESSAGE);
+  }
+}
+
+export function captainLocationErrorMessage(cause: unknown) {
+  return cause instanceof CaptainLocationError ? cause.message : CAPTAIN_LOCATION_UNAVAILABLE_MESSAGE;
 }
 
 export function distanceMeters(a: CaptainLocation, b: CaptainLocation) {

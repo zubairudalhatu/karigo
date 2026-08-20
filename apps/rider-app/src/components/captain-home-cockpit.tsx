@@ -1,14 +1,18 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker, Region } from "react-native-maps";
 import type { RiderJob } from "../api/jobs.api";
 import { NavLink, Screen } from "./ui";
-import { money } from "../lib/errors";
 
 type Coordinate = { latitude: number; longitude: number };
+
+function compactNaira(value: string | number) {
+  const amount = Number(value);
+  return `₦${(Number.isFinite(amount) ? amount : 0).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
+}
 
 type Props = {
   captainName: string;
@@ -34,12 +38,12 @@ type Props = {
   message?: string;
   error?: string;
   loading?: boolean;
-  locationAutoBlocked: boolean;
-  locationUpdating: boolean;
+  locationLabel: "Locating..." | "Current location" | "Last known location" | "Location unavailable" | string;
+  locationMessage?: string;
   onToggleMaster: () => void;
   onToggleRide: () => void;
   onToggleDelivery: () => void;
-  onRetryLocation: () => void;
+  onRecenter: () => Promise<Coordinate | null>;
   onRetrySync: () => void;
 };
 
@@ -84,12 +88,33 @@ export function CaptainHomeSkeleton({ captainName }: { captainName: string }) {
 }
 
 export function CaptainHomeCockpit(props: Props) {
-  const [showPreferences, setShowPreferences] = useState(!props.online);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [recentering, setRecentering] = useState(false);
+  const mapRef = useRef<MapView | null>(null);
+  const firstFreshLocationCenteredRef = useRef(false);
   const modeLabel = props.rideOnline && props.deliveryOnline ? "Ride + Delivery" : props.rideOnline ? "Rides" : props.deliveryOnline ? "Delivery" : "Offline";
+
+  useEffect(() => {
+    if (props.locationLabel !== "Current location" || !props.coordinate || firstFreshLocationCenteredRef.current) return;
+    firstFreshLocationCenteredRef.current = true;
+    mapRef.current?.animateToRegion({ ...props.coordinate, latitudeDelta: 0.015, longitudeDelta: 0.015 }, 450);
+  }, [props.coordinate?.latitude, props.coordinate?.longitude, props.locationLabel]);
+
+  async function recenterMap() {
+    if (recentering) return;
+    setRecentering(true);
+    try {
+      const coordinate = await props.onRecenter();
+      if (coordinate) mapRef.current?.animateToRegion({ ...coordinate, latitudeDelta: 0.015, longitudeDelta: 0.015 }, 350);
+    } finally {
+      setRecentering(false);
+    }
+  }
 
   return <Screen refreshing={props.loading} onRefresh={props.onRetrySync}>
     <View style={styles.mapStage}>
       {props.region && props.coordinate ? <MapView
+        ref={mapRef}
         accessibilityLabel="Captain location map"
         initialRegion={props.region}
         pitchEnabled={false}
@@ -112,8 +137,8 @@ export function CaptainHomeCockpit(props: Props) {
             <View style={[styles.headerStatusDot, props.online ? styles.liveDotOnline : styles.liveDotOffline]} />
             <Text style={styles.headerStatusText}>{props.online ? "ONLINE" : "OFFLINE"}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Today's earnings ${money(props.todayEarnings)}`} onPress={() => router.push("/earnings")} style={styles.earningsShortcut}>
-            <Text style={styles.shortcutLabel}>TODAY</Text><Text style={styles.shortcutValue}>{money(props.todayEarnings)}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Today's earnings ${compactNaira(props.todayEarnings)}`} onPress={() => router.push("/earnings")} style={styles.earningsShortcut}>
+            <Text style={styles.shortcutLabel}>TODAY</Text><Text style={styles.shortcutValue}>{compactNaira(props.todayEarnings)}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={() => router.push("/notifications")} style={styles.iconButton}>
             <Feather name="bell" size={21} color={brand.colors.charcoal} />
@@ -123,10 +148,13 @@ export function CaptainHomeCockpit(props: Props) {
       </View>
 
       <View style={styles.mapBottomOverlay}>
-        <View style={styles.areaPill}><Feather name="map-pin" size={15} color={brand.colors.charcoal} /><Text style={styles.areaText}>{props.area}</Text></View>
-        {props.locationAutoBlocked ? <Pressable accessibilityRole="button" accessibilityLabel="Try location again" disabled={props.locationUpdating} onPress={props.onRetryLocation} style={styles.locationRetry}>
-          <Feather name="refresh-cw" size={15} color={brand.colors.primary} /><Text style={styles.locationRetryText}>{props.locationUpdating ? "Updating..." : "Try location again"}</Text>
-        </Pressable> : null}
+        <View style={styles.locationMeta}>
+          <View style={styles.areaPill}><Feather name="map-pin" size={15} color={brand.colors.charcoal} /><Text style={styles.areaText}>{props.area}</Text></View>
+          <View style={styles.locationPill}><View style={[styles.locationDot, props.locationLabel === "Current location" && styles.locationDotCurrent]} /><Text style={styles.locationLabel}>{props.locationLabel}</Text></View>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel={recentering ? "Locating" : "Recenter map on current location"} accessibilityState={{ disabled: recentering }} disabled={recentering} onPress={() => void recenterMap()} style={styles.recenterButton}>
+          <Feather name="crosshair" size={21} color={brand.colors.primary} />
+        </Pressable>
       </View>
     </View>
 
@@ -147,22 +175,23 @@ export function CaptainHomeCockpit(props: Props) {
         <Text style={styles.sheetTitle}>Looking for requests...</Text>
         <Text style={styles.body}>You're online for {modeLabel}. New work appears here automatically.</Text>
         <View style={styles.metrics}>
-          <View style={styles.metric}><Text style={styles.metricLabel}>TODAY'S EARNINGS</Text><Text style={styles.metricValue}>{money(props.todayEarnings)}</Text></View>
+          <View style={styles.metric}><Text style={styles.metricLabel}>TODAY'S EARNINGS</Text><Text style={styles.metricValue}>{compactNaira(props.todayEarnings)}</Text></View>
           <View style={styles.metric}><Text style={styles.metricLabel}>COMPLETED JOBS</Text><Text style={styles.metricValue}>{props.completedJobs}</Text></View>
         </View>
       </> : <>
         <Text style={styles.sheetTitle}>Go online when you're ready to work.</Text>
-        <Text style={styles.body}>Choose Ride, Delivery, or both. Your location updates automatically.</Text>
+        <Text style={styles.body}>Your map stays current while the app is open. Open work preferences to choose Ride, Delivery, or both.</Text>
       </>}
 
-      {showPreferences || !props.online ? <View style={styles.preferences}>
+      {showPreferences ? <View style={styles.preferences}>
         <View style={styles.preferenceHeading}><Text style={styles.preferenceTitle}>Work preferences</Text><Text style={styles.areaInline}>{props.area}</Text></View>
         <ModeToggle label="Ride" enabled={props.rideOnline} active={props.rideActive} disabled={!props.canToggleRide} onPress={props.onToggleRide} />
         <ModeToggle label="Delivery" enabled={props.deliveryOnline} active={props.deliveryActive} disabled={!props.canToggleDelivery} onPress={props.onToggleDelivery} />
       </View> : null}
 
+      {props.locationMessage ? <Text accessibilityLiveRegion="polite" style={styles.locationMessage}>{props.locationMessage}</Text> : null}
       {props.serviceNotice ? <View style={styles.notice}><Feather name="info" size={16} color="#9A3412" /><Text style={styles.noticeText}>{props.serviceNotice}</Text></View> : null}
-      {props.refreshNotice ? <Pressable accessibilityRole="button" accessibilityLabel="Retry live status update" onPress={props.onRetrySync} style={styles.syncHint}><Feather name="wifi-off" size={15} color={brand.colors.muted} /><Text style={styles.syncHintText}>Updating live status. Tap to retry.</Text></Pressable> : null}
+      {props.refreshNotice ? <Pressable accessibilityRole="button" accessibilityLabel="Retry live status update" onPress={props.onRetrySync} style={styles.syncHint}><Feather name="wifi-off" size={15} color={brand.colors.muted} /><Text style={styles.syncHintText}>Reconnecting... Tap to retry.</Text></Pressable> : null}
       {props.message ? <Text accessibilityLiveRegion="polite" style={styles.successText}>{props.message}</Text> : null}
       {props.error ? <Text accessibilityRole="alert" style={styles.errorText}>{props.error}</Text> : null}
 
@@ -191,11 +220,15 @@ const styles = StyleSheet.create({
   iconButton: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.97)", borderRadius: 15, height: 46, justifyContent: "center", width: 44 },
   unreadBadge: { alignItems: "center", backgroundColor: brand.colors.primary, borderRadius: 999, minWidth: 19, paddingHorizontal: 4, paddingVertical: 2, position: "absolute", right: -3, top: -3 },
   unreadText: { color: brand.colors.white, fontSize: 9, fontWeight: "900" },
-  mapBottomOverlay: { alignItems: "flex-end", bottom: 92, gap: 8, left: 16, position: "absolute", right: 16 },
+  mapBottomOverlay: { alignItems: "flex-end", bottom: 92, flexDirection: "row", justifyContent: "space-between", left: 16, position: "absolute", right: 16 },
+  locationMeta: { gap: 7 },
   areaPill: { alignItems: "center", alignSelf: "flex-start", backgroundColor: "rgba(255,255,255,0.97)", borderRadius: 999, flexDirection: "row", gap: 6, minHeight: 38, paddingHorizontal: 12 },
   areaText: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "900" },
-  locationRetry: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.97)", borderRadius: 999, flexDirection: "row", gap: 6, minHeight: 40, paddingHorizontal: 12 },
-  locationRetryText: { color: brand.colors.primary, fontSize: 12, fontWeight: "900" },
+  locationPill: { alignItems: "center", alignSelf: "flex-start", backgroundColor: "rgba(255,255,255,0.97)", borderRadius: 999, flexDirection: "row", gap: 6, minHeight: 36, paddingHorizontal: 11 },
+  locationDot: { backgroundColor: "#9CA3AF", borderRadius: 999, height: 7, width: 7 },
+  locationDotCurrent: { backgroundColor: "#16A34A" },
+  locationLabel: { color: brand.colors.charcoal, fontSize: 11, fontWeight: "900" },
+  recenterButton: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.97)", borderRadius: 999, height: 46, justifyContent: "center", width: 46 },
   captainMarker: { alignItems: "center", backgroundColor: brand.colors.primary, borderColor: brand.colors.white, borderRadius: 999, borderWidth: 3, height: 42, justifyContent: "center", width: 42 },
   sheet: { backgroundColor: brand.colors.white, borderRadius: 28, gap: 11, marginTop: -72, padding: 18, shadowColor: "#111827", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 16 },
   sheetHandle: { alignSelf: "center", backgroundColor: "#D1D5DB", borderRadius: 999, height: 4, marginBottom: 2, width: 42 },
@@ -229,6 +262,7 @@ const styles = StyleSheet.create({
   toggleTextOn: { color: brand.colors.white },
   notice: { alignItems: "flex-start", backgroundColor: "#FFF7ED", borderRadius: 12, flexDirection: "row", gap: 8, padding: 10 },
   noticeText: { color: "#9A3412", flex: 1, fontSize: 12, fontWeight: "700", lineHeight: 17 },
+  locationMessage: { color: brand.colors.muted, fontSize: 11.5, fontWeight: "700", lineHeight: 17 },
   syncHint: { alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 6, minHeight: 36 },
   syncHintText: { color: brand.colors.muted, fontSize: 12, fontWeight: "700" },
   successText: { color: "#166534", fontSize: 12, fontWeight: "800" },

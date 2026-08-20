@@ -54,11 +54,18 @@ export default function Work() {
     ...jobs.filter((job) => !ACTIVE_DELIVERY.has(job.orderStatus)).map((job) => ({ type: "Delivery" as const, id: job.id, date: job.updatedAt ?? job.createdAt, job }))
   ].filter((record) => activeFilter === "ALL" || (activeFilter === "RIDES" ? record.type === "Ride" : record.type === "Delivery"))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const isOnline = projection.effectiveRideOnline || projection.effectiveDeliveryOnline;
+  const workStatusTitle = workState?.activeWorkMode === "RIDE" ? "Ride in progress"
+    : workState?.activeWorkMode === "DELIVERY" ? "Delivery in progress"
+      : isOnline ? "Ready for work" : "Offline";
+  const workStatusSupport = workState?.activeWorkMode ? "Your active assignment remains available below."
+    : isOnline ? "Waiting for your next request."
+      : "Go online from Home when you're ready to receive requests.";
 
   return <Protected><Screen title="Work" subtitle="Your current assignment and completed work." refreshing={loading} onRefresh={load}>
     <Message error>{error}</Message>
     {!projection.hasAnyActiveMode ? <Card tone="soft"><Text style={ui.sectionTitle}>Captain activation pending</Text><Text style={ui.pageIntro}>Work becomes available after a Captain mode is activated.</Text><NavLink href="/application-status" label="View application status" /></Card> : <>
-      <View style={styles.statusSurface}><View><Text style={styles.kicker}>CURRENT STATUS</Text><Text style={styles.statusTitle}>{workState?.activeWorkMode ? "On an assignment" : "Ready for work"}</Text></View><StatusBadge status={workState?.activeWorkMode ? `Busy — ${workState.activeWorkMode === "RIDE" ? "Ride" : "Delivery"}` : projection.overallStatus} /></View>
+      <View style={styles.statusSurface}><View style={styles.statusCopy}><Text style={styles.kicker}>CURRENT STATUS</Text><Text style={styles.statusTitle}>{workStatusTitle}</Text><Text style={styles.statusSupport}>{workStatusSupport}</Text></View><StatusBadge status={workState?.activeWorkMode ? `Busy — ${workState.activeWorkMode === "RIDE" ? "Ride" : "Delivery"}` : projection.overallStatus} /></View>
 
       <Text style={ui.sectionTitle}>Active</Text>
       {activeRide ? <View style={styles.activeSurface}><WorkIcon mode="Ride" /><View style={styles.activeCopy}><Text style={styles.reference}>{activeRide.tripReference}</Text><Text numberOfLines={1} style={styles.route}>{activeRide.pickupAddress} → {activeRide.destinationAddress}</Text><StatusBadge status={activeRide.status} /></View><NavLink href="/tabs/dashboard" label="OPEN" /></View>
@@ -82,6 +89,8 @@ function WorkIcon({ mode }: { mode: "Ride" | "Delivery" }) { return <View style=
 const styles = StyleSheet.create({
   statusSurface: { alignItems: "center", backgroundColor: brand.colors.charcoal, borderRadius: 20, flexDirection: "row", justifyContent: "space-between", padding: 16 },
   kicker: { color: "#D1D5DB", fontSize: 9, fontWeight: "900", letterSpacing: 1 }, statusTitle: { color: brand.colors.white, fontSize: 19, fontWeight: "900", marginTop: 4 },
+  statusCopy: { flex: 1, gap: 3, paddingRight: 10 },
+  statusSupport: { color: "#D1D5DB", fontSize: 11.5, lineHeight: 16 },
   activeSurface: { alignItems: "center", backgroundColor: "#FFF7F4", borderRadius: 20, flexDirection: "row", gap: 11, padding: 14 }, activeCopy: { flex: 1, gap: 5 },
   emptyActive: { alignItems: "center", backgroundColor: "#F0FDF4", borderRadius: 16, flexDirection: "row", gap: 9, padding: 14 },
   icon: { alignItems: "center", backgroundColor: "#FFF1ED", borderRadius: 13, height: 42, justifyContent: "center", width: 42 },

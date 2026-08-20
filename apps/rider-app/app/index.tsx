@@ -1,12 +1,12 @@
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Link, Redirect } from "expo-router";
 import { brand } from "@karigo/config";
-import { Loading } from "../src/components/ui";
+import { CaptainHomeSkeleton } from "../src/components/captain-home-cockpit";
 import { useAuth } from "../src/contexts/auth-context";
 
 export default function CaptainWelcome() {
   const { user, loading } = useAuth();
-  if (loading) return <Loading label="Opening KariGO Captain..." />;
+  if (loading) return <CaptainHomeSkeleton captainName="Captain" />;
   if (user) return <Redirect href="/captain-access" />;
 
   return (
