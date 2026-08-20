@@ -7,6 +7,16 @@ export type CaptainLocation = {
   isApproximate?: boolean;
 };
 
+export type CaptainOperationalLocationPayload = Pick<CaptainLocation, "latitude" | "longitude" | "accuracyMeters">;
+
+export function toOperationalLocationPayload(location: CaptainLocation): CaptainOperationalLocationPayload {
+  return {
+    latitude: location.latitude,
+    longitude: location.longitude,
+    accuracyMeters: location.accuracyMeters
+  };
+}
+
 export type CaptainLocationErrorCode = "PERMISSION_DENIED" | "PRECISE_REQUIRED" | "SERVICES_DISABLED" | "ACQUISITION_TIMEOUT" | "UNAVAILABLE";
 
 const APPROXIMATE_ACCURACY_METERS = 250;
@@ -60,7 +70,7 @@ export async function requestCaptainForegroundLocation(strongAccuracy = false): 
   try {
     const position = await withLocationTimeout(Location.getCurrentPositionAsync({ accuracy: strongAccuracy ? Location.Accuracy.High : Location.Accuracy.Balanced }));
     const location = captainLocationFromPosition(position);
-    if (strongAccuracy && location.isApproximate) throw new CaptainLocationError("PRECISE_REQUIRED", "Allow precise location for Ride and Delivery work.");
+    if (strongAccuracy && location.isApproximate) throw new CaptainLocationError("PRECISE_REQUIRED", "Allow precise location to go online for Ride and Delivery work.");
     return location;
   } catch (cause) {
     if (cause instanceof CaptainLocationError) throw cause;

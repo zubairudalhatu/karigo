@@ -160,6 +160,10 @@ export class CaptainWorkStateService {
     if (!this.hasValidLocation(dto)) {
       throw new BadRequestException("Valid Captain location is required.");
     }
+    const approvedCaptain = this.deliveryEligibility(user).eligible || this.rideEligibility(user).eligible;
+    if (!approvedCaptain) {
+      throw new BadRequestException("Captain activation is required before readiness location can be verified.");
+    }
     await this.prisma.$transaction(async (tx) => {
       const now = new Date();
       await tx.captainWorkState.update({

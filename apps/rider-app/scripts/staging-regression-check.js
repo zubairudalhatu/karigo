@@ -177,7 +177,7 @@ expect(captainNotifications.includes("addNotificationReceivedListener") && capta
 expect(captainNotifications.includes("registerDeviceToken") && captainNotifications.includes("RIDER_APP"), "Captain app must register its authenticated Expo token.");
 expect(backgroundLocation.includes("hasStartedLocationUpdatesAsync") && backgroundLocation.includes("stopLocationUpdatesAsync"), "Background tracking must run only as one controlled active-work task.");
 expect(rideWorkspace.includes("NEW KARIGO RIDE") && rideWorkspace.includes("ACCEPT RIDE") && rideWorkspace.includes("PIN REQUIRED") && rideWorkspace.includes("COMPLETE RIDE"), "Ride takeover workspace must cover the full Captain lifecycle.");
-expect(dashboard.includes("captainAccessApi.updateAvailability({ ...location })"), "Home GPS refresh must submit location-only updates without mutating availability.");
+expect(dashboard.includes("captainAccessApi.updateAvailability(toOperationalLocationPayload(location))"), "Home GPS refresh must submit a sanitized location-only update without mutating availability.");
 expect(!dashboard.includes("deliveryOnline: currentWorkState.desiredDeliveryOnline") && !dashboard.includes("rideOnline: currentWorkState.desiredRideOnline"), "Home GPS refresh must not resend desired availability during location updates.");
 expect(dashboard.includes("reasonCode === \"LOCATION_STALE\""), "Home must allow stale-location recovery through the normal online toggle.");
 expect(dashboard.includes("disabled={!workState || locationUpdating}"), "Manual GPS refresh must remain available during active work while preventing duplicate submissions.");
@@ -279,9 +279,9 @@ expect(!captainAccessApi.slice(captainAccessApi.indexOf("updateAvailability")).i
 expect(dashboard.includes("loadInFlightRef") && dashboard.includes("loadAbortRef") && dashboard.includes("controller.signal"), "Captain Home must deduplicate refresh calls and cancel stale requests on unmount.");
 expect(dashboard.includes("secondaryRefreshFailed") && dashboard.includes("captainRequestMessage(e, \"secondary\")"), "Captain Home must separate non-critical refresh failures from critical errors.");
 expect(dashboard.includes("lastLocationSuccessAtRef") && dashboard.includes('setRefreshNotice("")') && dashboard.includes('setMessage("Location refreshed.")'), "Successful GPS refresh must clear unrelated secondary timeout messaging.");
-expect(captainHome.includes("CaptainHomeCockpit") && captainHome.includes("MapView") && captainHome.indexOf("mapStage") < captainHome.indexOf("sheet"), "Captain Home must use a map-first cockpit with a contextual sheet.");
-expect(captainHome.includes("statusLabel") && captainHome.includes("Work preferences"), "Captain Home must expose one master status with compact preferences.");
-expect(captainHome.includes("Looking for requests...") && captainHome.includes("Go online when you're ready to work."), "Captain Home must provide one-glance online-idle and offline states.");
+expect(captainHome.includes("CaptainHomeCockpit") && captainHome.includes("MapView") && captainHome.includes("StyleSheet.absoluteFillObject") && !captainHome.includes("<Screen"), "Captain Home must use a fixed map-first cockpit.");
+expect(captainHome.includes("showPreferences") && captainHome.includes("Work preferences") && captainHome.includes("preferencesSheet"), "Captain Home must expose preferences as a contextual overlay.");
+expect(captainHome.includes("LOOKING FOR REQUESTS") && captainHome.includes("GO ONLINE") && captainHome.includes("GO OFFLINE"), "Captain Home must provide fixed one-glance online and offline actions.");
 expect(captainHome.includes('accessibilityRole="switch"') && captainHome.includes("accessibilityState"), "Captain Home preferences must expose accessible toggle semantics.");
 expect(captainHome.includes("availabilityUpdating") && captainHome.includes("UPDATING..."), "Captain availability controls must prevent repeated submissions.");
 expect(dashboard.includes("Today") && dashboard.includes("This week") && dashboard.includes('href="/earnings"'), "Captain Home must include a compact earnings shortcut backed by existing summary data.");

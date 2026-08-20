@@ -101,7 +101,7 @@ export class QuickLaunchService {
       PROFILE_INCOMPLETE: `${participant} profile is incomplete`,
       CAPABILITY_NOT_FOUND: `${participant} capability is unavailable for the selected service`,
       CITY_MISMATCH: `${participant} is not approved for ${selectedCity}`,
-      LOCATION_STALE: "Refresh Captain GPS",
+      LOCATION_STALE: "GPS stale",
       ACTIVE_ASSIGNMENT: "Captain has a conflicting assignment",
       NO_ACTIVE_PRODUCT: "Partner has no active product",
       NO_ACTIVE_SERVICE: "Partner has no active service",
@@ -125,6 +125,11 @@ export class QuickLaunchService {
   private quickCandidate(candidate: BaseCandidate, participant: "Captain" | "Partner", serviceType: LaunchServiceType, selectedCity: string) {
     const setupOnly = new Set(["NOT_IN_CONTROLLED_GROUP", "MEMBERSHIP_ACTIVATION_PENDING"]);
     const blockingCodes = candidate.blockers.filter((code) => !setupOnly.has(code));
+    const gpsArea = candidate.currentGpsArea && typeof candidate.currentGpsArea === "object"
+      ? String((candidate.currentGpsArea as { cityName?: string }).cityName ?? selectedCity)
+      : selectedCity;
+    const online = candidate.onlineState === "ONLINE";
+    const locationReady = participant !== "Captain" || Boolean(candidate.lastGpsUpdate) && !blockingCodes.includes("LOCATION_STALE");
     return {
       userId: candidate.userId,
       vendorId: candidate.vendorId,
@@ -145,6 +150,10 @@ export class QuickLaunchService {
         ? serviceType === LaunchServiceType.RIDES ? "Ride Captain" : "Delivery Captain"
         : candidate.capability === "BOTH" ? "Product Seller and Service Provider" : candidate.capability === "SERVICE_PROVIDER" ? "Service Provider" : "Product Seller",
       statusLabel: blockingCodes.length ? this.quickBlocker(blockingCodes[0], participant, selectedCity) : "Operational access ready",
+      locationReadiness: participant === "Captain" ? locationReady ? online ? `Online — ${gpsArea}` : "Location verified — Offline" : "GPS stale" : undefined,
+      accountReadiness: blockingCodes.some((code) => ["SUSPENDED", "LOGIN_NOT_READY", "TRASHED"].includes(code)) ? "Account blocked" : "Account ready",
+      capabilityReadiness: blockingCodes.some((code) => ["APPLICATION_NOT_APPROVED", "DOCUMENTS_NOT_APPROVED", "ACTIVATION_PENDING", "PROFILE_INACTIVE", "PROFILE_INCOMPLETE", "CAPABILITY_NOT_FOUND", "CAPABILITY_MISMATCH"].includes(code)) ? "Capability blocked" : "Capability ready",
+      assignmentReadiness: blockingCodes.includes("ACTIVE_ASSIGNMENT") ? "Assignment active" : "Assignment clear",
       ready: blockingCodes.length === 0,
       blockerCodes: [...new Set(blockingCodes)],
       diagnosticCodes: this.diagnosticCodes(blockingCodes),

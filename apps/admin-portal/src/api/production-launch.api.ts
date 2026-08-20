@@ -94,6 +94,10 @@ export interface QuickLaunchCandidate {
   capabilityLabel?: string;
   statusLabel?: string;
   cityReadiness?: string;
+  locationReadiness?: string;
+  accountReadiness?: string;
+  capabilityReadiness?: string;
+  assignmentReadiness?: string;
   diagnosticCodes?: string[];
   rideCapability?: boolean;
   deliveryCapability?: boolean;

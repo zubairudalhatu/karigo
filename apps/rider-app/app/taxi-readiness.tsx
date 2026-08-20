@@ -8,7 +8,8 @@ import { Button, Card, Field, Message, Protected, Screen, StatusBadge, ui } from
 import { useAuth } from "../src/contexts/auth-context";
 import { ridesProductionEnabled } from "../src/lib/captain-modes";
 import { friendlyError } from "../src/lib/errors";
-import { requestCaptainForegroundLocation } from "../src/lib/location";
+import { requestCaptainForegroundLocation, toOperationalLocationPayload } from "../src/lib/location";
+import { captainAvailabilityErrorMessage } from "../src/lib/network-errors";
 
 const rideOperationsNotice = "Manage current availability and assigned Ride requests.";
 const blockedRideOperationsCopy = "Ride Captain activation is pending.";
@@ -55,17 +56,19 @@ export default function TaxiReadiness() {
   async function toggleTaxiAvailability() {
     if (!profile) return;
     try {
+      setError("");
       const next = !profile.isAvailableForTaxi;
-      const location = next ? await requestCaptainForegroundLocation() : null;
+      const location = next ? await requestCaptainForegroundLocation(true) : null;
       const updated = await taxiApi.updateAvailability({
         isAvailableForTaxi: next,
-        ...(location ? location : {})
+        ...(location ? toOperationalLocationPayload(location) : {})
       });
       setProfile(updated);
       setMessage(updated.isAvailableForTaxi ? "Ride availability enabled and your live location was shared with KariGO Operations." : "Ride availability disabled.");
       setTrips(await taxiApi.availableTrips());
     } catch (e) {
-      setError(friendlyError(e));
+      setError(captainAvailabilityErrorMessage(e, { service: "Ride", area: profile.city }));
+      setMessage("");
     }
   }
 

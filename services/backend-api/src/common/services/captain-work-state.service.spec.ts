@@ -204,6 +204,24 @@ describe("CaptainWorkStateService", () => {
     expect(audit.record).not.toHaveBeenCalled();
   });
 
+  it("rejects readiness location updates for an account without an approved active Captain profile", async () => {
+    const user = userWithModes({
+      riderStatus: RiderStatus.PENDING_APPROVAL,
+      rideStatus: TaxiDriverProfileStatus.PENDING_ACTIVATION,
+      desiredDeliveryOnline: false,
+      desiredRideOnline: false
+    });
+    prisma.user.findUnique.mockResolvedValueOnce(user);
+    prisma.captainWorkState.findUnique.mockResolvedValueOnce(user.captainWorkState);
+
+    await expect(service.updateAvailability("captain-user", {
+      latitude: 9.0765,
+      longitude: 7.3986
+    })).rejects.toThrow("Captain activation is required before readiness location can be verified.");
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("allows Ride and Delivery online in Abuja when approved areas also include Kano", async () => {
     const user = userWithModes();
     const updatedState = { ...user.captainWorkState, desiredDeliveryOnline: true, desiredRideOnline: true, lastLocationAt: new Date() };

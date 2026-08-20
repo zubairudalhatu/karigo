@@ -125,7 +125,7 @@ describe("QuickLaunchService", () => {
     });
     controlled.captainEligibility.mockResolvedValue([{
       userId: "captain-1", captainName: "Ready Captain", phoneNumber: "+2348000000002", captainCode: "KGO-CAP-1",
-      blockers: ["NOT_IN_CONTROLLED_GROUP"], city: "Kano"
+      blockers: ["NOT_IN_CONTROLLED_GROUP"], city: "Kano", lastGpsUpdate: new Date(), currentGpsArea: { cityName: "Kano" }, onlineState: "OFFLINE"
     }]);
     controlled.partnerEligibility.mockResolvedValue([{
       userId: "partner-user", vendorId: "partner-1", businessName: "Ready Partner", phoneNumber: "+2348000000003", partnerCode: "KGO-PAR-1",
@@ -262,14 +262,14 @@ describe("QuickLaunchService", () => {
 
   it("turns setup-only Captain blockers into READY while keeping operational blockers visible", async () => {
     const ready = await service.captainCandidates("Kano", LaunchServiceType.RIDES, "Ready");
-    expect(ready[0]).toMatchObject({ ready: true, blockerMessages: [] });
+    expect(ready[0]).toMatchObject({ ready: true, blockerMessages: [], locationReadiness: "Location verified — Offline", accountReadiness: "Account ready", capabilityReadiness: "Capability ready", assignmentReadiness: "Assignment clear" });
     expect(ready[0]).not.toHaveProperty("blockers");
     expect(ready[0]).not.toHaveProperty("eligibility");
 
     adminOperations.riders.mockResolvedValueOnce([riderSource("captain-2", "Stale Captain", "0802")]);
     controlled.captainEligibility.mockResolvedValueOnce([{ userId: "captain-2", captainName: "Stale Captain", phoneNumber: "0802", blockers: ["LOCATION_STALE"] }]);
     const blocked = await service.captainCandidates("Kano", LaunchServiceType.RIDES);
-    expect(blocked[0]).toMatchObject({ ready: false, blockerMessages: ["Refresh Captain GPS"] });
+    expect(blocked[0]).toMatchObject({ ready: false, locationReadiness: "GPS stale", blockerMessages: ["GPS stale"] });
   });
 
   it("keeps Captain profile activation pending as a blocker", async () => {
@@ -369,7 +369,7 @@ describe("QuickLaunchService", () => {
     adminOperations.riders.mockResolvedValueOnce([riderSource("multi-blocked", "Multi Blocked", "+2348030000003", "Kano")]);
     controlled.captainEligibility.mockResolvedValueOnce([{ userId: "multi-blocked", captainName: "Multi Blocked", phoneNumber: "+2348030000003", city: "Kano", blockers: ["CITY_MISMATCH", "LOCATION_STALE", "NOT_IN_CONTROLLED_GROUP"] }]);
     const result = await service.captainCandidates("Abuja", LaunchServiceType.RIDES, "Multi Blocked");
-    expect(result[0]).toMatchObject({ ready: false, diagnosticCodes: ["CITY_MISMATCH", "LOCATION_STALE"], blockerMessages: ["Captain is not approved for Abuja", "Refresh Captain GPS"] });
+    expect(result[0]).toMatchObject({ ready: false, diagnosticCodes: ["CITY_MISMATCH", "LOCATION_STALE"], blockerMessages: ["Captain is not approved for Abuja", "GPS stale"] });
   });
 
   it("supports browse pagination and reserves IDENTITY_NOT_FOUND for genuine absence", async () => {

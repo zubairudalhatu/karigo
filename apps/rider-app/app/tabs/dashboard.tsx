@@ -20,9 +20,9 @@ import { CaptainHomeCockpit, CaptainHomeSkeleton } from "../../src/components/ca
 import { disableActiveWorkBackgroundLocation, enableActiveWorkBackgroundLocation } from "../../src/lib/background-location";
 import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
-import { friendlyError, money } from "../../src/lib/errors";
-import { CaptainLocation, CaptainLocationError, captainLocationErrorMessage, distanceMeters, requestCaptainForegroundLocation, watchCaptainForegroundLocation } from "../../src/lib/location";
-import { captainRequestMessage } from "../../src/lib/network-errors";
+import { money } from "../../src/lib/errors";
+import { CaptainLocation, CaptainLocationError, captainLocationErrorMessage, distanceMeters, requestCaptainForegroundLocation, toOperationalLocationPayload, watchCaptainForegroundLocation } from "../../src/lib/location";
+import { captainAvailabilityErrorMessage, captainRequestMessage } from "../../src/lib/network-errors";
 import {
   applicantReviewCopy,
   classifyCaptainApplication,
@@ -42,6 +42,8 @@ const ACTIVE_DELIVERY_STATUSES = new Set([
 
 const LOCAL_MAP_FRESH_MS = 120_000;
 const ONLINE_LOCATION_REUSE_MS = 30_000;
+const READINESS_HEARTBEAT_INTERVAL_MS = 10 * 60_000;
+const READINESS_AREA_CHANGE_METERS = 5_000;
 
 function firstName(fullName?: string | null) {
   const name = fullName?.trim();
@@ -195,6 +197,8 @@ export default function RiderDashboard() {
   const deviceLocationRef = useRef<{ location: CaptainLocation; seenAt: string } | null>(null);
   const localLocationRequestRef = useRef<Promise<CaptainLocation> | null>(null);
   const operationalLocationRequiredRef = useRef(false);
+  const readinessHeartbeatRef = useRef<{ location: CaptainLocation; sentAt: number } | null>(null);
+  const readinessHeartbeatInFlightRef = useRef<Promise<void> | null>(null);
   const watcherRef = useRef<{ remove: () => void } | null>(null);
   const watcherStartingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -328,7 +332,7 @@ export default function RiderDashboard() {
     const record = { location, seenAt: new Date().toISOString() };
     deviceLocationRef.current = record;
     setDeviceLocation(record);
-    setLocationIssue(location.isApproximate ? "Allow precise location for Ride and Delivery work." : "");
+    setLocationIssue(location.isApproximate ? "Allow precise location to go online for Ride and Delivery work." : "");
   }
 
   function localFixIsAcceptable(maxAgeMs: number, requirePrecise: boolean) {
@@ -384,6 +388,37 @@ export default function RiderDashboard() {
     }
   }
 
+  function promoteReadinessLocation(location: CaptainLocation) {
+    if (location.isApproximate || operationalLocationRequiredRef.current || !latestProjectionRef.current?.hasAnyActiveMode) return;
+    if (readinessHeartbeatInFlightRef.current) return;
+    const now = Date.now();
+    const previous = readinessHeartbeatRef.current;
+    const movedArea = Boolean(previous && distanceMeters(previous.location, location) >= READINESS_AREA_CHANGE_METERS);
+    const previousIsRecent = Boolean(previous && now - previous.sentAt < READINESS_HEARTBEAT_INTERVAL_MS);
+    const backendLocationAt = timestampValue(latestWorkStateRef.current?.lastLocationAt);
+    const backendLocationIsStale = !backendLocationAt || now - backendLocationAt >= READINESS_HEARTBEAT_INTERVAL_MS;
+    if ((!backendLocationIsStale || previousIsRecent) && !movedArea) return;
+
+    const request = (async () => {
+      try {
+        const updated = await captainAccessApi.updateAvailability(toOperationalLocationPayload(location));
+        if (!mountedRef.current) return;
+        readinessHeartbeatRef.current = { location, sentAt: Date.now() };
+        latestWorkStateRef.current = updated;
+        setWorkState(updated);
+        console.log("captain_readiness_location_updated");
+      } catch (cause) {
+        console.warn("captain_readiness_location_failed", {
+          kind: cause instanceof Error ? cause.name : "unknown"
+        });
+      }
+    })();
+    readinessHeartbeatInFlightRef.current = request;
+    void request.finally(() => {
+      if (readinessHeartbeatInFlightRef.current === request) readinessHeartbeatInFlightRef.current = null;
+    });
+  }
+
   useEffect(() => {
     mountedRef.current = true;
     void load();
@@ -437,7 +472,9 @@ export default function RiderDashboard() {
 
   useEffect(() => {
     if (!projection.hasAnyActiveMode || !isForeground) return;
-    void acquireLocalMapLocation().catch(() => undefined);
+    void acquireLocalMapLocation()
+      .then(promoteReadinessLocation)
+      .catch(() => undefined);
   }, [isForeground, projection.hasAnyActiveMode]);
 
   useEffect(() => {
@@ -492,7 +529,7 @@ export default function RiderDashboard() {
     uploadInFlightRef.current = true;
     setLocationUpdating(true);
     try {
-      const updated = await captainAccessApi.updateAvailability({ ...location });
+      const updated = await captainAccessApi.updateAvailability(toOperationalLocationPayload(location));
       lastUploadedLocationRef.current = { location, uploadedAt: now };
       failureCountRef.current = 0;
       backoffUntilRef.current = 0;
@@ -510,7 +547,7 @@ export default function RiderDashboard() {
       const backoffMs = Math.min(300_000, 30_000 * (2 ** Math.min(4, failureCountRef.current - 1)));
       backoffUntilRef.current = Date.now() + backoffMs;
       if (options.manual) {
-        setError(friendlyError(e));
+        setError(captainAvailabilityErrorMessage(e, { area: latestWorkStateRef.current?.currentGpsArea?.cityName ?? undefined, service: "work" }));
         lastLocationSuccessAtRef.current = Date.now();
         setRefreshNotice("");
         setMessage("");
@@ -560,9 +597,10 @@ export default function RiderDashboard() {
       console.log("captain_gps_watcher_starting");
       void acquireLocalMapLocation().catch(() => undefined).then(() => watchCaptainForegroundLocation((location) => {
         recordLocalMapLocation(location);
-        if (operationalLocationRequiredRef.current && !location.isApproximate) void uploadCaptainLocation(location, { manual: false });
-        else if (operationalLocationRequiredRef.current && location.isApproximate) {
-          setLocationIssue("Allow precise location for Ride and Delivery work.");
+        if (!operationalLocationRequiredRef.current) promoteReadinessLocation(location);
+        else if (!location.isApproximate) void uploadCaptainLocation(location, { manual: false });
+        else {
+          setLocationIssue("Allow precise location to go online for Ride and Delivery work.");
         }
       }, strongLocationAccuracy))
         .then((subscription) => {
@@ -597,7 +635,7 @@ export default function RiderDashboard() {
       const currentLocation = next ? await localLocationForOnlineTransition() : null;
       const updated = await captainAccessApi.updateAvailability({
         deliveryOnline: next,
-        ...(currentLocation ? currentLocation : {})
+        ...(currentLocation ? toOperationalLocationPayload(currentLocation) : {})
       });
       if (currentLocation) {
         lastUploadedLocationRef.current = { location: currentLocation, uploadedAt: Date.now() };
@@ -609,7 +647,7 @@ export default function RiderDashboard() {
       setMessage(next ? "Delivery availability is online." : "Delivery availability is offline.");
       setError("");
     } catch (e) {
-      setError(captainRequestMessage(e, "critical"));
+      setError(captainAvailabilityErrorMessage(e, { area: mapState.area, service: "Delivery" }));
       setMessage("");
     } finally {
       setAvailabilityUpdating(false);
@@ -625,7 +663,7 @@ export default function RiderDashboard() {
       const currentLocation = next ? await localLocationForOnlineTransition() : null;
       const updated = await captainAccessApi.updateAvailability({
         rideOnline: next,
-        ...(currentLocation ? currentLocation : {})
+        ...(currentLocation ? toOperationalLocationPayload(currentLocation) : {})
       });
       if (currentLocation) {
         lastUploadedLocationRef.current = { location: currentLocation, uploadedAt: Date.now() };
@@ -636,7 +674,7 @@ export default function RiderDashboard() {
       setMessage(next ? "Ride availability is online." : "Ride availability is offline.");
       setError("");
     } catch (e) {
-      setError(captainRequestMessage(e, "critical"));
+      setError(captainAvailabilityErrorMessage(e, { area: mapState.area, service: "Ride" }));
       setMessage("");
     } finally {
       setAvailabilityUpdating(false);
@@ -652,9 +690,9 @@ export default function RiderDashboard() {
     try {
       const currentLocation = goOnline ? await localLocationForOnlineTransition() : null;
       const updated = await captainAccessApi.updateAvailability({
-        ...(projection.delivery.active ? { deliveryOnline: goOnline } : {}),
-        ...(projection.ride.active ? { rideOnline: goOnline } : {}),
-        ...(currentLocation ?? {})
+        ...(projection.delivery.active && (!goOnline || canToggleDelivery) ? { deliveryOnline: goOnline } : {}),
+        ...(projection.ride.active && (!goOnline || canToggleRide) ? { rideOnline: goOnline } : {}),
+        ...(currentLocation ? toOperationalLocationPayload(currentLocation) : {})
       });
       if (currentLocation) {
         lastUploadedLocationRef.current = { location: currentLocation, uploadedAt: Date.now() };
@@ -665,7 +703,7 @@ export default function RiderDashboard() {
       setMessage(goOnline ? "You're online and ready for requests." : "You're offline.");
       setError("");
     } catch (e) {
-      setError(captainRequestMessage(e, "critical"));
+      setError(captainAvailabilityErrorMessage(e, { area: mapState.area, service: "work" }));
       setMessage("");
     } finally {
       setAvailabilityUpdating(false);
@@ -698,17 +736,16 @@ export default function RiderDashboard() {
   const isOnline = Boolean(workState?.desiredDeliveryOnline || workState?.desiredRideOnline);
   const canToggleMaster = isOnline
     ? canToggle && !availabilityUpdating
-    : projection.delivery.active && projection.ride.active ? canToggleBoth : projection.ride.active ? canToggleRide : canToggleDelivery;
+    : canToggleRide || canToggleDelivery;
   const masterStatusLabel = activeJob ? "BUSY • DELIVERY"
     : workState?.desiredDeliveryOnline && workState?.desiredRideOnline ? "ONLINE • RIDE + DELIVERY"
       : workState?.desiredRideOnline ? "ONLINE • RIDES"
         : workState?.desiredDeliveryOnline ? "ONLINE • DELIVERY"
           : "OFFLINE";
-  const completedJobs = (earnings?.completedDeliveriesCount ?? earnings?.completedJobs.length ?? 0) + (earnings?.completedRidesCount ?? earnings?.completedRides?.length ?? 0);
   const serviceNotice = rideLaunch?.available && rideLaunch.launchStage === "OPERATIONS_ONLY" || deliveryLaunch?.available && deliveryLaunch.launchStage === "OPERATIONS_ONLY"
     ? "Go online only during your scheduled operating window."
-    : rideLaunch && !rideLaunch.available && projection.ride.active ? `Rides are temporarily unavailable in ${mapState.area}.`
-      : deliveryLaunch && !deliveryLaunch.available && projection.delivery.active ? `Deliveries are temporarily unavailable in ${mapState.area}.` : null;
+    : rideLaunch && !rideLaunch.available && projection.ride.active ? `Rides aren't open in ${mapState.area} yet.`
+      : deliveryLaunch && !deliveryLaunch.available && projection.delivery.active ? `Deliveries aren't open in ${mapState.area} yet.` : null;
   const deliveryOperationsStatus = deliveryLaunch?.available === false ? "Unavailable" : projection.delivery.active ? "Available" : projection.delivery.operationsLabel;
   const rideOperationsStatus = rideLaunch?.available === false ? "Unavailable" : projection.ride.active ? "Available" : projection.ride.operationsLabel;
   const activeWork = activeWorkTitle(workState);
@@ -753,6 +790,10 @@ export default function RiderDashboard() {
       coordinate={mapState.coordinate}
       region={currentMapRegion}
       area={mapState.area}
+      approvedAreas={[...new Set([
+        ...(captainAccess?.rideCaptainProfile?.approvedOperatingAreas ?? []),
+        ...(captainAccess?.deliveryCaptainProfile?.approvedOperatingAreas ?? [])
+      ].map((area) => area.cityName).filter((value): value is string => Boolean(value)))]}
       statusLabel={masterStatusLabel}
       online={isOnline}
       rideActive={projection.ride.active}
@@ -764,7 +805,6 @@ export default function RiderDashboard() {
       canToggleDelivery={canToggleDelivery}
       availabilityUpdating={availabilityUpdating}
       todayEarnings={earnings?.todayEarnings ?? 0}
-      completedJobs={completedJobs}
       unread={unread}
       activeDelivery={activeJob}
       serviceNotice={serviceNotice}
