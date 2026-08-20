@@ -25,12 +25,15 @@ type Props = {
   online: boolean;
   rideActive: boolean;
   deliveryActive: boolean;
-  rideOnline: boolean;
-  deliveryOnline: boolean;
+  rideDesiredOnline: boolean;
+  deliveryDesiredOnline: boolean;
+  rideEffectiveOnline: boolean;
+  deliveryEffectiveOnline: boolean;
   canToggleMaster: boolean;
   canToggleRide: boolean;
   canToggleDelivery: boolean;
   availabilityUpdating: boolean;
+  availabilityChecking: boolean;
   todayEarnings: string | number;
   unread: number;
   activeDelivery?: RiderJob | null;
@@ -48,11 +51,13 @@ type Props = {
   onRetrySync: () => void;
 };
 
-function ModeToggle({ label, enabled, active, disabled, onPress }: { label: string; enabled: boolean; active: boolean; disabled: boolean; onPress: () => void }) {
+function ModeToggle({ label, enabled, effective, active, disabled, onPress }: { label: string; enabled: boolean; effective: boolean; active: boolean; disabled: boolean; onPress: () => void }) {
   return <View style={styles.modeRow}>
     <View style={styles.modeCopy}>
       <Text style={styles.modeTitle}>{label}</Text>
-      <Text style={styles.modeHint}>{active ? enabled ? "Receiving requests" : "Not receiving requests" : "Activation pending"}</Text>
+      <Text style={styles.modeHint}>{active
+        ? effective ? "Receiving requests" : enabled ? "Preference saved — unavailable" : "Not receiving requests"
+        : "Activation pending"}</Text>
     </View>
     <Pressable accessibilityRole="switch" accessibilityLabel={`${label} work preference`} accessibilityState={{ checked: enabled, disabled }} disabled={disabled} onPress={onPress} style={[styles.toggle, enabled && styles.toggleOn, disabled && styles.disabled]}>
       <View style={[styles.toggleKnob, enabled && styles.toggleKnobOn]} />
@@ -148,12 +153,12 @@ export function CaptainHomeCockpit(props: Props) {
         <View style={styles.actionHeading}><View style={styles.liveDotOnline} /><Text style={styles.actionEyebrow}>ACTIVE DELIVERY</Text></View>
         <View style={styles.activeWorkRow}><View><Text style={styles.actionTitle}>Continue your delivery</Text><Text style={styles.reference}>{props.activeDelivery.orderNumber}</Text></View><NavLink href={`/jobs/${props.activeDelivery.id}`} label="OPEN" /></View>
       </> : props.online ? <>
-        <View style={styles.onlineRow}><View style={styles.actionHeading}><View style={styles.liveDotOnline} /><View><Text style={styles.actionEyebrow}>LOOKING FOR REQUESTS</Text><Text style={styles.actionSupport}>{props.rideOnline && props.deliveryOnline ? "Ride + Delivery" : props.rideOnline ? "Rides" : "Delivery"}</Text></View></View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Go offline" accessibilityState={{ disabled: !props.canToggleMaster || props.availabilityUpdating }} disabled={!props.canToggleMaster || props.availabilityUpdating} onPress={props.onToggleMaster} style={[styles.offlineButton, (!props.canToggleMaster || props.availabilityUpdating) && styles.disabled]}><Text style={styles.offlineButtonText}>{props.availabilityUpdating ? "UPDATING" : "GO OFFLINE"}</Text></Pressable>
+        <View style={styles.onlineRow}><View style={styles.actionHeading}><View style={styles.liveDotOnline} /><View><Text style={styles.actionEyebrow}>LOOKING FOR REQUESTS</Text><Text style={styles.actionSupport}>{props.rideEffectiveOnline && props.deliveryEffectiveOnline ? "Ride + Delivery" : props.rideEffectiveOnline ? "Rides" : "Delivery"}</Text></View></View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Go offline" accessibilityState={{ disabled: !props.canToggleMaster || props.availabilityUpdating }} disabled={!props.canToggleMaster || props.availabilityUpdating} onPress={props.onToggleMaster} style={[styles.offlineButton, (!props.canToggleMaster || props.availabilityUpdating) && styles.disabled]}><Text style={styles.offlineButtonText}>{props.availabilityUpdating ? "UPDATING..." : "GO OFFLINE"}</Text></Pressable>
         </View>
       </> : <View style={styles.offlineRow}>
         <Pressable accessibilityRole="button" accessibilityLabel={`${props.statusLabel}. Open work preferences`} onPress={() => setShowPreferences(true)} style={styles.preferencesButton}><Feather name="sliders" size={21} color={brand.colors.charcoal} /></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Go online" accessibilityState={{ disabled: !props.canToggleMaster || props.availabilityUpdating }} disabled={!props.canToggleMaster || props.availabilityUpdating} onPress={props.onToggleMaster} style={[styles.onlineButton, (!props.canToggleMaster || props.availabilityUpdating) && styles.disabled]}><Text style={styles.onlineButtonText}>{props.availabilityUpdating ? "UPDATING..." : "GO ONLINE"}</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Go online" accessibilityState={{ disabled: !props.canToggleMaster || props.availabilityUpdating }} disabled={!props.canToggleMaster || props.availabilityUpdating} onPress={props.onToggleMaster} style={[styles.onlineButton, (!props.canToggleMaster || props.availabilityUpdating) && styles.disabled]}><Text numberOfLines={1} style={styles.onlineButtonText}>{props.availabilityUpdating ? "UPDATING..." : props.availabilityChecking ? "CHECKING AVAILABILITY..." : "GO ONLINE"}</Text></Pressable>
       </View>}
     </View>
 
@@ -161,8 +166,8 @@ export function CaptainHomeCockpit(props: Props) {
       <Pressable accessibilityRole="button" accessibilityLabel="Close work preferences" onPress={() => setShowPreferences(false)} style={StyleSheet.absoluteFillObject} />
       <View style={[styles.preferencesSheet, { bottom: navClearance }]}>
         <View style={styles.preferenceHeading}><View><Text style={styles.preferenceTitle}>Work preferences</Text><Text style={styles.preferenceSubtitle}>Choose the requests you want to receive.</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Close work preferences" onPress={() => setShowPreferences(false)} style={styles.closeButton}><Feather name="x" size={21} color={brand.colors.charcoal} /></Pressable></View>
-        <ModeToggle label="Ride" enabled={props.rideOnline} active={props.rideActive} disabled={!props.canToggleRide} onPress={props.onToggleRide} />
-        <ModeToggle label="Delivery" enabled={props.deliveryOnline} active={props.deliveryActive} disabled={!props.canToggleDelivery} onPress={props.onToggleDelivery} />
+        <ModeToggle label="Ride" enabled={props.rideDesiredOnline} effective={props.rideEffectiveOnline} active={props.rideActive} disabled={!props.canToggleRide} onPress={props.onToggleRide} />
+        <ModeToggle label="Delivery" enabled={props.deliveryDesiredOnline} effective={props.deliveryEffectiveOnline} active={props.deliveryActive} disabled={!props.canToggleDelivery} onPress={props.onToggleDelivery} />
         <View style={styles.areaDetails}><Text style={styles.areaDetailLabel}>Current area</Text><Text style={styles.areaDetailValue}>{props.area}</Text><Text style={styles.areaDetailLabel}>Approved areas</Text><Text style={styles.areaDetailValue}>{props.approvedAreas.length ? props.approvedAreas.join(", ") : "Confirming approved areas"}</Text></View>
       </View>
     </View> : null}

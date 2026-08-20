@@ -54,7 +54,7 @@ const captainHome = read("src/components/captain-home-cockpit.tsx");
 const launchApi = read("src/api/launch.api.ts");
 expect(launchApi.includes("launch/availability/me"), "Captain app must resolve city/service launch state from backend.");
 expect(dashboard.includes("Your online preference is preserved; existing assignments remain available."), "Captain app must preserve safe active-work continuity during a launch pause.");
-expect(dashboard.includes("deliveryLaunch?.available !== false") && dashboard.includes("rideLaunch?.available !== false"), "Captain availability toggles must respect backend launch state.");
+expect(dashboard.includes("deliveryLaunch?.available === true") && dashboard.includes("rideLaunch?.available === true") && !dashboard.includes("available !== false"), "Captain availability toggles must fail closed until backend launch state explicitly allows them.");
 
 const stagingProfile = easJson.build?.["rider-staging"];
 const productionProfile = easJson.build?.["captain-production"];

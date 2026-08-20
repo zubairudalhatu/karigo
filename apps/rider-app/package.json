@@ -11,6 +11,7 @@
     "test:regression": "node scripts/staging-regression-check.js",
     "test:location-regression": "node scripts/location-cockpit-regression-check.js",
     "test:h8-h2": "node scripts/h8-h2-regression-check.js",
+    "test:h8-h3": "node scripts/h8-h3-regression-check.js",
     "audit:production-copy": "node scripts/production-copy-audit.js"
   },
   "dependencies": {
