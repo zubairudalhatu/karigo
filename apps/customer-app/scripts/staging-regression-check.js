@@ -246,8 +246,8 @@ assert(taxiRequest.includes("Intercity KariGO Rides are not available yet"), "Ri
 assert(taxiRequest.includes("Kano") && taxiRequest.includes("Abuja") && taxiRequest.includes("routeCityIssue"), "Ride request flow must support Kano and Abuja city detection.");
 assert(taxiRequest.includes("fareRange(category.fareRangeKobo)"), "Ride request flow must show fare ranges for categories.");
 const ridesFormat = read("src", "lib", "rides-format.ts");
-assert(ridesFormat.includes("formatRideFareKobo") && ridesFormat.includes("numeric / 100"), "Ride fares must use a shared kobo-to-naira formatter.");
-assert(ridesFormat.includes("\\u20A6") && ridesFormat.includes("\\u2013"), "Ride request fares must use compact naira range formatting.");
+assert(ridesFormat.includes("formatRideFareKobo") && ridesFormat.includes("formatKobo(value, fallback)"), "Ride fares must use the authoritative shared Kobo formatter.");
+assert(ridesFormat.includes("\\u2013"), "Ride request fares must preserve compact range formatting.");
 assert(taxiRequest.includes("formatRideFareKobo") && taxiRequest.includes("formatRideFareRangeKobo"), "Ride request screen must use the shared ride fare formatter.");
 assert(taxiRequest.includes("taxiApi.rideCategories"), "Ride request flow must load backend ride categories.");
 assert(taxiRequest.includes("taxiApi.fareEstimate"), "Ride request flow must quote through the backend.");

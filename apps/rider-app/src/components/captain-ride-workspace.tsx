@@ -1,13 +1,13 @@
 import { brand } from "@karigo/config";
-import type { TaxiTrip } from "@karigo/shared-types";
+import { formatKobo, type TaxiTrip } from "@karigo/shared-types";
 import { Feather } from "@expo/vector-icons";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import { useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
 import { taxiApi } from "../api/taxi.api";
 import { Button, Field, Message, StatusBadge, ui } from "./ui";
-import { friendlyError, money } from "../lib/errors";
+import { friendlyError } from "../lib/errors";
 
 type Coordinate = { latitude: number; longitude: number };
 type DriverTrip = TaxiTrip & {
@@ -102,6 +102,34 @@ export function CaptainRideWorkspace({
     void Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${mapTarget.latitude},${mapTarget.longitude}`);
   }
 
+  async function callInKariGO() {
+    try {
+      const readiness = await taxiApi.callSession(trip.id);
+      Alert.alert("Call in KariGO", readiness.reason);
+    } catch (cause) {
+      setError(friendlyError(cause));
+    }
+  }
+
+  async function callByPhone() {
+    try {
+      const options = await taxiApi.contactOptions(trip.id);
+      if (!options.phoneFallbackAvailable || !options.phoneNumber) throw new Error("Phone fallback is not available for this Ride.");
+      await Linking.openURL(`tel:${options.phoneNumber}`);
+    } catch (cause) {
+      setError(friendlyError(cause));
+    }
+  }
+
+  function openContact() {
+    Alert.alert("Contact Customer", "Choose a Ride-scoped contact option.", [
+      { text: "Chat in KariGO", onPress: () => router.push(`/ride-chat/${trip.id}` as never) },
+      { text: "Call in KariGO", onPress: () => void callInKariGO() },
+      { text: "Call by phone", onPress: () => void callByPhone() },
+      { text: "Close", style: "cancel" }
+    ]);
+  }
+
   return <View style={styles.workspace}>
     <View style={styles.mapShell}>
       {visibleCoordinates[0] ? <MapView
@@ -119,7 +147,7 @@ export function CaptainRideWorkspace({
       </MapView> : <View style={styles.mapFallback}><Feather name="map-pin" size={30} color={brand.colors.primary} /><Text style={ui.muted}>Map coordinates are unavailable. Address details remain authoritative.</Text></View>}
       <View style={styles.mapTopBar}>
         <StatusBadge status={copy.eyebrow} />
-        <Pressable accessibilityRole="button" accessibilityLabel="Open Safety and support" onPress={() => router.push("/profile")} style={styles.safetyButton}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Open Safety and support" onPress={() => router.push("/ride-safety" as never)} style={styles.safetyButton}>
           <Feather name="shield" size={18} color={brand.colors.charcoal} /><Text style={styles.safetyText}>Safety</Text>
         </Pressable>
       </View>
@@ -140,7 +168,7 @@ export function CaptainRideWorkspace({
       <View style={styles.metrics}>
         <View style={styles.metric}><Text style={styles.metricLabel}>Distance</Text><Text style={styles.metricValue}>{Number(trip.estimatedDistanceKm ?? 0).toFixed(1)} km</Text></View>
         <View style={styles.metric}><Text style={styles.metricLabel}>Estimate</Text><Text style={styles.metricValue}>{trip.estimatedDurationMin ? `${trip.estimatedDurationMin} min` : "—"}</Text></View>
-        <View style={styles.metric}><Text style={styles.metricLabel}>Fare</Text><Text style={styles.metricValue}>{money(trip.estimatedFareKobo)}</Text></View>
+        <View style={styles.metric}><Text style={styles.metricLabel}>Fare</Text><Text style={styles.metricValue}>{formatKobo(trip.estimatedFareKobo)}</Text></View>
       </View>
 
       {trip.status === "ARRIVED_PICKUP" ? <>
@@ -157,8 +185,12 @@ export function CaptainRideWorkspace({
         <Button title={saving ? "UPDATING..." : copy.action} disabled={saving || (trip.status === "ARRIVED_PICKUP" && pin.length !== 6)} onPress={() => void primaryAction()} />
       </>}
 
-      {mapTarget ? <Button title="OPEN NAVIGATION" tone="muted" onPress={openNavigation} /> : null}
-      {trip.customer?.phoneNumber && trip.status !== "DRIVER_ASSIGNED" ? <Button title="CALL CUSTOMER" tone="muted" onPress={() => void Linking.openURL(`tel:${trip.customer?.phoneNumber}`)} /> : null}
+      <View style={styles.quickActions}>
+        <Pressable accessibilityRole="button" onPress={() => router.push(`/ride-chat/${trip.id}` as never)} style={styles.quickAction}><Feather name="message-circle" size={18} /><Text style={styles.quickActionText}>Chat</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={openContact} style={styles.quickAction}><Feather name="phone" size={18} /><Text style={styles.quickActionText}>Call</Text></Pressable>
+        {mapTarget ? <Pressable accessibilityRole="button" onPress={openNavigation} style={styles.quickAction}><Feather name="navigation" size={18} /><Text style={styles.quickActionText}>Navigation</Text></Pressable> : null}
+        <Pressable accessibilityRole="button" onPress={() => router.push("/ride-safety" as never)} style={styles.quickAction}><Feather name="shield" size={18} /><Text style={styles.quickActionText}>Safety</Text></Pressable>
+      </View>
       <Message error>{error}</Message>
     </View>
   </View>;
@@ -190,5 +222,8 @@ const styles = StyleSheet.create({
   metric: { backgroundColor: "#F9FAFB", borderRadius: 14, flex: 1, gap: 3, padding: 10 },
   metricLabel: { color: brand.colors.muted, fontSize: 10, fontWeight: "800" },
   metricValue: { color: brand.colors.charcoal, fontSize: 13, fontWeight: "900" },
+  quickActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  quickAction: { alignItems: "center", backgroundColor: "#F3F4F6", borderRadius: 14, flexDirection: "row", gap: 6, paddingHorizontal: 11, paddingVertical: 10 },
+  quickActionText: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "900" },
   pinGuide: { color: brand.colors.primary, fontSize: 14, fontWeight: "900", letterSpacing: 1 }
 });

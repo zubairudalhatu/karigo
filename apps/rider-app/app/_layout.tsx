@@ -41,6 +41,8 @@ export default function RootLayout() {
           <Stack.Screen name="jobs/index" options={backOnlyHeader} />
           <Stack.Screen name="jobs/[id]" options={backOnlyHeader} />
           <Stack.Screen name="earnings" options={backOnlyHeader} />
+          <Stack.Screen name="ride-chat/[tripId]" options={backOnlyHeader} />
+          <Stack.Screen name="ride-safety" options={backOnlyHeader} />
           <Stack.Screen name="notifications" options={backOnlyHeader} />
           <Stack.Screen name="profile" options={backOnlyHeader} />
           <Stack.Screen name="account-deletion" options={backOnlyHeader} />

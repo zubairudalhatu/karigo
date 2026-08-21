@@ -1,8 +1,8 @@
+import { formatKobo } from "@karigo/shared-types";
+
 export function formatRideFareKobo(value?: number | string | null, fallback = "Fare pending") {
   if (value === null || value === undefined || value === "") return fallback;
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return fallback;
-  return `\u20A6${Math.round(numeric / 100).toLocaleString()}`;
+  return formatKobo(value, fallback);
 }
 
 export function formatRideFareRangeKobo(range?: { min: number; max: number } | null) {

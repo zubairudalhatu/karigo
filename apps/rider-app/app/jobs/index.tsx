@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
-import type { TaxiTrip } from "@karigo/shared-types";
+import { formatKobo, formatNaira, type TaxiTrip } from "@karigo/shared-types";
 import { Link } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -9,7 +9,7 @@ import { captainAccessApi } from "../../src/api/captain-access.api";
 import { jobsApi, RiderJob } from "../../src/api/jobs.api";
 import { taxiApi } from "../../src/api/taxi.api";
 import { Card, Empty, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
-import { friendlyError, money } from "../../src/lib/errors";
+import { friendlyError } from "../../src/lib/errors";
 import { projectCaptainOperationalState } from "../../src/lib/captain-operational-state";
 
 const ACTIVE_DELIVERY = new Set(["RIDER_ASSIGNED", "RIDER_ARRIVING_PICKUP", "PICKED_UP", "ON_THE_WAY", "ARRIVED_DESTINATION", "DELIVERED"]);
@@ -77,7 +77,7 @@ export default function Work() {
 
       {!chronological.length ? <Empty message="Completed and cancelled work will appear here." /> : <View style={styles.historySurface}>{chronological.map((record, index) => {
         const row = record.type === "Ride" ? { reference: record.ride.tripReference, route: `${record.ride.pickupAddress} → ${record.ride.destinationAddress}`, status: record.ride.status, amount: record.ride.finalFareKobo ?? record.ride.estimatedFareKobo } : { reference: record.job.orderNumber, route: deliveryRoute(record.job), status: record.job.orderStatus, amount: record.job.deliveryFee };
-        const content = <View style={[styles.historyRow, index < chronological.length - 1 && styles.rowDivider]}><WorkIcon mode={record.type} /><View style={styles.historyCopy}><View style={styles.referenceLine}><Text style={styles.rowReference}>{row.reference}</Text><Text style={styles.amount}>{money(row.amount)}</Text></View><Text numberOfLines={1} style={styles.route}>{row.route}</Text><View style={styles.metaLine}><StatusBadge status={row.status} /><Text style={styles.date}>{new Date(record.date).toLocaleDateString()}</Text></View></View></View>;
+        const content = <View style={[styles.historyRow, index < chronological.length - 1 && styles.rowDivider]}><WorkIcon mode={record.type} /><View style={styles.historyCopy}><View style={styles.referenceLine}><Text style={styles.rowReference}>{row.reference}</Text><Text style={styles.amount}>{record.type === "Ride" ? formatKobo(row.amount) : formatNaira(row.amount)}</Text></View><Text numberOfLines={1} style={styles.route}>{row.route}</Text><View style={styles.metaLine}><StatusBadge status={row.status} /><Text style={styles.date}>{new Date(record.date).toLocaleDateString()}</Text></View></View></View>;
         return record.type === "Delivery" ? <Link key={`delivery-${record.id}`} href={`/jobs/${record.job.id}` as never} asChild><Pressable accessibilityRole="button" accessibilityLabel={`Open Delivery ${row.reference}`}>{content}</Pressable></Link> : <View key={`ride-${record.id}`}>{content}</View>;
       })}</View>}
     </>}

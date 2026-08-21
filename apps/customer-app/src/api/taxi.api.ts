@@ -1,4 +1,8 @@
 import {
+  RideContactOptions,
+  RideCallSessionSummary,
+  RideConversationPage,
+  RideMessage,
   TaxiFareEstimate,
   TaxiFareEstimateInput,
   TaxiPlaceAutocompleteQuery,
@@ -40,5 +44,10 @@ export const taxiApi = {
     api.post<TaxiTrip>("customer/taxi/trips", body),
   trips: () => api.get<TaxiTrip[]>("customer/taxi/trips"),
   trip: (tripId: string) => api.get<TaxiTrip>(`customer/taxi/trips/${tripId}`),
+  messages: (tripId: string, before?: string) => api.get<RideConversationPage>(`customer/taxi/trips/${tripId}/messages${before ? `?before=${encodeURIComponent(before)}` : ""}`),
+  sendMessage: (tripId: string, message: string) => api.post<RideMessage>(`customer/taxi/trips/${tripId}/messages`, { message }),
+  markMessagesRead: (tripId: string, lastMessageId: string) => api.post<{ readAt: string }>(`customer/taxi/trips/${tripId}/messages/read`, { lastMessageId }),
+  contactOptions: (tripId: string) => api.get<RideContactOptions>(`customer/taxi/trips/${tripId}/contact-options`),
+  callSession: (tripId: string) => api.post<RideCallSessionSummary>(`customer/taxi/trips/${tripId}/call-session`),
   cancelTrip: (tripId: string, reason?: string) => api.post<TaxiTrip>(`customer/taxi/trips/${tripId}/cancel`, { reason })
 };

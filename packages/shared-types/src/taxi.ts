@@ -498,6 +498,7 @@ export interface TaxiFareEstimate {
   distanceFareKobo?: number;
   waitingChargeKobo?: number;
   estimatedFareKobo: number;
+  monetaryUnit: "KOBO";
   karigoCommissionKobo?: number;
   captainNetEstimateKobo?: number;
   currency: "NGN";
@@ -573,6 +574,7 @@ export interface TaxiTrip {
   estimatedDistanceKm?: unknown;
   estimatedDurationMin?: number | null;
   estimatedFareKobo: number;
+  monetaryUnit: "KOBO";
   finalFareKobo?: number | null;
   status: TaxiTripStatus;
   tripPinLastFour?: string | null;
@@ -607,6 +609,8 @@ export interface TaxiTrip {
   createdAt: string;
   updatedAt?: string | null;
   driver?: TaxiDriverProfile | null;
+  conversationSummary?: RideConversationSummary;
+  callSessionSummary?: RideCallSessionSummary;
   events?: Array<{
     id: string;
     actorType: "CUSTOMER" | "DRIVER" | "ADMIN" | "SYSTEM";
@@ -617,4 +621,52 @@ export interface TaxiTrip {
   }>;
   launchNotice: string;
   testModeNotice?: string;
+}
+
+export type RideMessageSenderRole = "CUSTOMER" | "CAPTAIN";
+export interface RideMessage {
+  id: string;
+  rideId: string;
+  senderRole: RideMessageSenderRole;
+  senderLabel: string;
+  message: string;
+  deliveryState: "DELIVERED";
+  readAt?: string | null;
+  createdAt: string;
+}
+
+export interface RideConversationSummary {
+  exists: boolean;
+  messageCount: number;
+  lastMessageAt?: string | null;
+  readOnly: boolean;
+}
+
+export interface RideConversationPage extends RideConversationSummary {
+  rideId: string;
+  rideReference: string;
+  participantLabel: string;
+  messages: RideMessage[];
+  nextBefore?: string | null;
+  retentionEndsAt?: string | null;
+}
+
+export interface RideContactOptions {
+  rideId: string;
+  chatAvailable: boolean;
+  inAppCall: RideCallSessionSummary;
+  phoneFallbackAvailable: boolean;
+  phoneNumber?: string | null;
+  phoneFallbackLabel: "Call by phone";
+  maskedNumberProviderRequiredForPublicLaunch: boolean;
+}
+
+export interface RideCallSessionSummary {
+  enabled: boolean;
+  requestedEnabled?: boolean;
+  provider?: string | null;
+  state?: "DISABLED" | "AVAILABLE" | "ACTIVE" | "ENDED";
+  recordingEnabled: boolean;
+  reason: string;
+  providerRequirements?: string[];
 }

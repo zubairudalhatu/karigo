@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { TaxiCancelDto } from "./dto/taxi-cancel.dto";
 import { TaxiDriverAvailabilityDto } from "./dto/taxi-driver-availability.dto";
+import { CreateRideMessageDto, ListRideMessagesQueryDto, MarkRideMessagesReadDto } from "./dto/ride-message.dto";
 import { TaxiStartTripDto } from "./dto/taxi-start-trip.dto";
 import { TaxiService } from "./taxi.service";
 
@@ -38,6 +39,34 @@ export class RiderTaxiController {
     return { message: "Ride work history retrieved", data: await this.taxi.riderTaxiTrips(user.id) };
   }
 
+
+  @Get("trips/:tripId/messages")
+  @ApiOperation({ summary: "List the assigned Ride conversation" })
+  async messages(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Query() query: ListRideMessagesQueryDto) {
+    return { message: "Ride conversation retrieved", data: await this.taxi.riderRideMessages(user.id, tripId, query) };
+  }
+
+  @Post("trips/:tripId/messages")
+  async sendMessage(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: CreateRideMessageDto) {
+    return { message: "Ride message sent", data: await this.taxi.riderSendRideMessage(user.id, tripId, dto) };
+  }
+
+  @Post("trips/:tripId/messages/read")
+  async markMessagesRead(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: MarkRideMessagesReadDto) {
+    return { message: "Ride messages marked read", data: await this.taxi.riderMarkRideMessagesRead(user.id, tripId, dto) };
+  }
+
+  @Get("trips/:tripId/contact-options")
+  @ApiOperation({ summary: "Get controlled Customer contact options" })
+  async contactOptions(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {
+    return { message: "Ride contact options retrieved", data: await this.taxi.riderRideContactOptions(user.id, tripId) };
+  }
+
+  @Post("trips/:tripId/call-session")
+  @ApiOperation({ summary: "Request a provider-backed in-app Ride call session" })
+  async callSession(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {
+    return { message: "Ride call readiness retrieved", data: await this.taxi.riderRideCallSession(user.id, tripId) };
+  }
 
   @Post("trips/:tripId/accept")
   async accept(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {

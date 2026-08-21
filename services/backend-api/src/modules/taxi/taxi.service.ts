@@ -45,6 +45,13 @@ import { CaptainApplicationTrashDto } from "../riders/dto/captain-application-tr
 import { ReviewCaptainApplicationDocumentDto } from "../riders/dto/review-captain-application-document.dto";
 import { AdminAssignTaxiDriverDto } from "./dto/admin-assign-taxi-driver.dto";
 import { UpdateTaxiDriverProfileStatusDto } from "./dto/admin-taxi-profile.dto";
+import { CreateRideMessageDto, ListRideMessagesQueryDto, MarkRideMessagesReadDto } from "./dto/ride-message.dto";
+import {
+  RIDE_CALL_EVENT_PREFIX,
+  RIDE_MESSAGE_EVENT,
+  RIDE_MESSAGE_READ_EVENT,
+  RideCommunicationsService
+} from "./ride-communications.service";
 import { CreateTaxiDriverApplicationDto } from "./dto/create-taxi-driver-application.dto";
 import { CreateTaxiTripDto } from "./dto/create-taxi-trip.dto";
 import { CreateTaxiWaitlistDto } from "./dto/create-taxi-waitlist.dto";
@@ -141,6 +148,8 @@ const TAXI_TRIP_INCLUDE = {
 
 type TaxiTripWithRelations = Prisma.TaxiTripGetPayload<{ include: typeof TAXI_TRIP_INCLUDE }>;
 type TaxiTripViewer = "customer" | "driver" | "admin" | "internal";
+const PRIVATE_RIDE_EVENT_TYPES = new Set([RIDE_MESSAGE_EVENT, RIDE_MESSAGE_READ_EVENT]);
+
 
 type TaxiDriverProfileForResponse = {
   id: string;
@@ -244,7 +253,8 @@ export class TaxiService {
     private readonly applicationNotifications: ApplicationNotificationsService,
     private readonly captainWorkState: CaptainWorkStateService,
     private readonly notifications: NotificationsService,
-    private readonly launchOperations: LaunchOperationsService
+    private readonly launchOperations: LaunchOperationsService,
+    private readonly rideCommunications: RideCommunicationsService
   ) {}
 
   async joinWaitlist(dto: CreateTaxiWaitlistDto) {
@@ -769,6 +779,27 @@ export class TaxiService {
     return this.formatTrip(trip, { viewer: "customer" });
   }
 
+  async customerRideMessages(userId: string, tripId: string, query: ListRideMessagesQueryDto) {
+    const trip = await this.requireCustomerTrip(userId, tripId);
+    return this.rideCommunications.listMessages(trip, "CUSTOMER", query);
+  }
+  async customerSendRideMessage(userId: string, tripId: string, dto: CreateRideMessageDto) {
+    const trip = await this.requireCustomerTrip(userId, tripId);
+    return this.rideCommunications.sendMessage(trip, userId, "CUSTOMER", dto);
+  }
+  async customerMarkRideMessagesRead(userId: string, tripId: string, dto: MarkRideMessagesReadDto) {
+    const trip = await this.requireCustomerTrip(userId, tripId);
+    return this.rideCommunications.markRead(trip, userId, "CUSTOMER", dto);
+  }
+  async customerRideContactOptions(userId: string, tripId: string) {
+    const trip = await this.requireCustomerTrip(userId, tripId);
+    return this.rideCommunications.contactOptions(trip, "CUSTOMER");
+  }
+  async customerRideCallSession(userId: string, tripId: string) {
+    const trip = await this.requireCustomerTrip(userId, tripId);
+    return this.rideCommunications.callSession(trip, userId, "CUSTOMER");
+  }
+
   async customerCancelTrip(userId: string, tripId: string, dto: TaxiCancelDto) {
     this.assertTaxiStagingEnabled();
     const customer = await this.requireCustomer(userId);
@@ -871,6 +902,27 @@ export class TaxiService {
       take: 100
     });
     return trips.map((trip) => this.formatTrip(trip, { viewer: "driver" }));
+  }
+
+  async riderRideMessages(userId: string, tripId: string, query: ListRideMessagesQueryDto) {
+    const { trip } = await this.requireDriverTrip(userId, tripId);
+    return this.rideCommunications.listMessages(trip, "CAPTAIN", query);
+  }
+  async riderSendRideMessage(userId: string, tripId: string, dto: CreateRideMessageDto) {
+    const { trip } = await this.requireDriverTrip(userId, tripId);
+    return this.rideCommunications.sendMessage(trip, userId, "CAPTAIN", dto);
+  }
+  async riderMarkRideMessagesRead(userId: string, tripId: string, dto: MarkRideMessagesReadDto) {
+    const { trip } = await this.requireDriverTrip(userId, tripId);
+    return this.rideCommunications.markRead(trip, userId, "CAPTAIN", dto);
+  }
+  async riderRideContactOptions(userId: string, tripId: string) {
+    const { trip } = await this.requireDriverTrip(userId, tripId);
+    return this.rideCommunications.contactOptions(trip, "CAPTAIN");
+  }
+  async riderRideCallSession(userId: string, tripId: string) {
+    const { trip } = await this.requireDriverTrip(userId, tripId);
+    return this.rideCommunications.callSession(trip, userId, "CAPTAIN");
   }
 
   async acceptTaxiTrip(userId: string, tripId: string) {
@@ -1492,6 +1544,7 @@ export class TaxiService {
       karigoCommissionKobo,
       captainNetEstimateKobo,
       currency: "NGN",
+      monetaryUnit: "KOBO" as const,
       selectedRideCategory: this.formatRideCategory(selectedCategory, estimatedFareKobo),
       rideCategories: categories.map((category) => this.formatRideCategory(category, Math.round(baseFareKobo * category.fareMultiplier))),
       formula: {
@@ -1595,6 +1648,14 @@ export class TaxiService {
     }
   }
 
+  private async requireCustomerTrip(userId: string, tripId: string) {
+    this.assertTaxiStagingEnabled();
+    const customer = await this.requireCustomer(userId);
+    const trip = await this.prisma.taxiTrip.findFirst({ where: { id: tripId, customerId: customer.id }, include: this.tripInclude() });
+    if (!trip) throw new NotFoundException("Ride request not found");
+    return trip;
+  }
+
   private async requireCustomer(userId: string) {
     const customer = await this.prisma.customerProfile.findUnique({ where: { userId } });
     if (!customer) throw new NotFoundException("Customer profile not found");
@@ -1646,6 +1707,7 @@ export class TaxiService {
   }
 
   private async requireDriverTrip(userId: string, tripId: string) {
+    this.assertTaxiStagingEnabled();
     const profile = await this.requireActiveTaxiDriverProfile(userId);
     const trip = await this.prisma.taxiTrip.findFirst({
       where: { id: tripId, driverProfileId: profile.id },
@@ -1842,6 +1904,7 @@ export class TaxiService {
       estimatedDurationMin: trip.estimatedDurationMin,
       estimatedFareKobo: trip.estimatedFareKobo,
       finalFareKobo: trip.finalFareKobo,
+      monetaryUnit: "KOBO" as const,
       status: trip.status,
       tripPinLastFour: viewer === "admin" || lifecycle.pickupPinVisible ? trip.tripPinLastFour : null,
       ...(tripPin ? { tripPin } : {}),
@@ -1867,10 +1930,26 @@ export class TaxiService {
       customer: trip.customer ? {
         id: trip.customer.id,
         fullName: trip.customer.user.fullName,
-        phoneNumber: trip.customer.user.phoneNumber
+        phoneNumber: viewer === "admin" || viewer === "internal" ? trip.customer.user.phoneNumber : null
       } : null,
-      driver: trip.driverProfile ? this.formatDriverProfile(trip.driverProfile) : null,
-      events: trip.events.map((event) => ({
+      driver: (viewer === "admin" || viewer === "internal") && trip.driverProfile ? this.formatDriverProfile(trip.driverProfile) : null,
+      conversationSummary: (() => {
+        const messages = trip.events.filter((event) => event.eventType === RIDE_MESSAGE_EVENT);
+        return {
+          exists: messages.length > 0,
+          messageCount: messages.length,
+          lastMessageAt: messages.at(-1)?.createdAt.toISOString() ?? null,
+          readOnly: CLOSED_TAXI_TRIP_STATUSES.includes(trip.status)
+        };
+      })(),
+      callSessionSummary: (() => {
+        const readiness = this.rideCommunications.callReadiness();
+        const calls = trip.events.filter((event) => event.eventType.startsWith(RIDE_CALL_EVENT_PREFIX));
+        const state = calls.some((event) => event.eventType.endsWith(".active")) ? "ACTIVE"
+          : calls.length ? "ENDED" : readiness.enabled ? "AVAILABLE" : "DISABLED";
+        return { ...readiness, state };
+      })(),
+      events: trip.events.filter((event) => !PRIVATE_RIDE_EVENT_TYPES.has(event.eventType) && !event.eventType.startsWith(RIDE_CALL_EVENT_PREFIX)).map((event) => ({
         id: event.id,
         actorType: event.actorType,
         actorId: event.actorId,
@@ -2040,8 +2119,8 @@ export class TaxiService {
       verified: profile.status === TaxiDriverProfileStatus.ACTIVE,
       publicRating: null,
       completedTripCount: null,
-      contactAvailable: Boolean(profile.phoneNumber),
-      contactPhoneNumber: profile.phoneNumber || null,
+      contactAvailable: Boolean(profile.userId),
+      contactPhoneNumber: null,
       location: this.formatCaptainLocation(profile)
     };
   }

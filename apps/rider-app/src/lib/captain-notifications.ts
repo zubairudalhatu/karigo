@@ -5,6 +5,8 @@ import { Platform } from "react-native";
 import { notificationsApi } from "../api/notifications.api";
 
 const ASSIGNMENT_ENTITY_TYPES = new Set(["TaxiTrip", "Order"]);
+let presenceNotificationId: string | null = null;
+
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -21,10 +23,20 @@ function notificationData(notification: Notifications.Notification) {
 
 export function isCaptainAssignmentNotification(notification: Notifications.Notification) {
   const data = notificationData(notification);
-  return data.type === "RIDER_ASSIGNED" ||
+  return data.event === "CAPTAIN_PRESENCE" ||
+    data.type === "RIDER_ASSIGNED" ||
     data.event === "RIDE_ASSIGNED" ||
     (typeof data.entityType === "string" && ASSIGNMENT_ENTITY_TYPES.has(data.entityType));
 }
+function rideMessageTarget(notification: Notifications.Notification) {
+  const data = notificationData(notification);
+  const metadata = data.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata)
+    ? data.metadata as Record<string, unknown> : data;
+  return typeof metadata.rideId === "string" && typeof metadata.messageEventId === "string"
+    ? { rideId: metadata.rideId, messageEventId: metadata.messageEventId }
+    : undefined;
+}
+
 
 export async function registerCaptainPushNotifications() {
   if (!Device.isDevice || (Platform.OS !== "android" && Platform.OS !== "ios")) return null;
@@ -55,6 +67,48 @@ export async function registerCaptainPushNotifications() {
   });
 }
 
+export async function updateCaptainPresenceNotification(input: {
+  online: boolean;
+  activeRide: boolean;
+  city: string;
+  rideMode: boolean;
+  deliveryMode: boolean;
+}) {
+  if (Platform.OS !== "android") return;
+  if (!input.online && !input.activeRide) {
+    if (presenceNotificationId) await Notifications.dismissNotificationAsync(presenceNotificationId).catch(() => undefined);
+    presenceNotificationId = null;
+    return;
+  }
+  await Notifications.setNotificationChannelAsync("captain-presence", {
+    name: "Captain online status",
+    importance: Notifications.AndroidImportance.LOW,
+    lightColor: "#E31E24",
+    sound: null,
+    vibrationPattern: null
+  });
+  if (presenceNotificationId) await Notifications.dismissNotificationAsync(presenceNotificationId).catch(() => undefined);
+  const modes = input.rideMode && input.deliveryMode ? "Ride + Delivery" : input.rideMode ? "Ride" : "Delivery";
+  presenceNotificationId = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: input.activeRide ? "Ride in progress" : "KariGO Captain",
+      body: input.activeRide ? "Open KariGO Captain to continue" : `Online in ${input.city} · ${modes}`,
+      data: { event: "CAPTAIN_PRESENCE", safeRoute: "/tabs/dashboard" },
+      sticky: true,
+      autoDismiss: false,
+      priority: Notifications.AndroidNotificationPriority.LOW,
+      sound: false
+    },
+    trigger: null
+  });
+}
+
+export async function dismissCaptainPresenceNotification() {
+  if (!presenceNotificationId) return;
+  await Notifications.dismissNotificationAsync(presenceNotificationId).catch(() => undefined);
+  presenceNotificationId = null;
+}
+
 export async function deactivateCaptainPushNotifications() {
   const tokens = await notificationsApi.listDeviceTokens();
   const activeCaptainTokens = tokens.filter((token) => token.appSurface === "RIDER_APP" && token.isActive);
@@ -63,16 +117,16 @@ export async function deactivateCaptainPushNotifications() {
   ));
 }
 
-export function subscribeToCaptainAssignmentNotifications(onAssignment: () => void) {
+export function subscribeToCaptainAssignmentNotifications(onAssignment: (messageTarget?: { rideId: string; messageEventId: string }) => void) {
   const received = Notifications.addNotificationReceivedListener((notification) => {
     if (isCaptainAssignmentNotification(notification)) onAssignment();
   });
   const responded = Notifications.addNotificationResponseReceivedListener((response) => {
-    if (isCaptainAssignmentNotification(response.notification)) onAssignment();
+    if (isCaptainAssignmentNotification(response.notification)) onAssignment(rideMessageTarget(response.notification));
   });
 
   void Notifications.getLastNotificationResponseAsync().then((response) => {
-    if (response && isCaptainAssignmentNotification(response.notification)) onAssignment();
+    if (response && isCaptainAssignmentNotification(response.notification)) onAssignment(rideMessageTarget(response.notification));
   }).catch(() => undefined);
 
   return () => {

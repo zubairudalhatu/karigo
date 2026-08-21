@@ -100,6 +100,7 @@ export * from "./api";
 export * from "./auth";
 export * from "./captain-catalog";
 export * from "./notifications";
+export * from "./money";
 export * from "./nigeria-states";
 export * from "./orders";
 export * from "./payments";

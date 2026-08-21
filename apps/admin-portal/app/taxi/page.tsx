@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { taxiApi, AdminTaxiDriverApplication, EligibleRideCaptain } from "../../src/api/taxi.api";
 import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
 import { friendlyError } from "../../src/lib/errors";
-import { TaxiApplicationStatus, TaxiDriverProfile, TaxiDriverProfileStatus, TaxiRidePricingDefaults, TaxiTrip, TaxiWaitlistEntry, TaxiWaitlistStatus } from "@karigo/shared-types";
+import { formatKobo, TaxiApplicationStatus, TaxiDriverProfile, TaxiDriverProfileStatus, TaxiRidePricingDefaults, TaxiTrip, TaxiWaitlistEntry, TaxiWaitlistStatus } from "@karigo/shared-types";
 
 const applicationStatuses: Array<TaxiApplicationStatus | "ALL"> = ["ALL", "SUBMITTED", "UNDER_REVIEW", "CHANGES_REQUESTED", "PROVISIONALLY_APPROVED", "APPROVED", "REJECTED"];
 const reviewStatuses: TaxiApplicationStatus[] = ["UNDER_REVIEW", "CHANGES_REQUESTED", "PROVISIONALLY_APPROVED", "APPROVED", "REJECTED"];
@@ -32,8 +32,6 @@ type RideSummary = {
   launchNotice?: string;
   testModeNotice?: string;
 };
-
-const money = (kobo: number) => `NGN ${Math.round(kobo / 100).toLocaleString()}`;
 
 export default function AdminTaxiPage() {
   const [activeTab, setActiveTab] = useState<Tab>("applications");
@@ -332,11 +330,15 @@ export default function AdminTaxiPage() {
         {trips.length ? trips.map((trip) => <article className="card" key={trip.id}>
           <strong>{trip.tripReference}</strong>
           <p>{trip.pickupAddress} to {trip.destinationAddress}</p>
-          <p className="muted">Fare estimate: NGN {Math.round(trip.estimatedFareKobo / 100).toLocaleString()} - PIN last four: {trip.tripPinLastFour ?? "hidden"}</p>
+          <p className="muted">Fare estimate: {formatKobo(trip.estimatedFareKobo)} - PIN last four: {trip.tripPinLastFour ?? "hidden"}</p>
           <p><Badge>{trip.status}</Badge></p>
           <p className="muted">{trip.driver ? `Ride Captain: ${trip.driver.fullName}` : "No Ride Captain assigned"}</p>
           <div className="filters">
             <button disabled={actioning === `${trip.id}:eligible`} onClick={() => void loadEligibleCaptains(trip.id)}>Show eligible Captains</button>
+          <p className="muted">Conversation: {trip.conversationSummary?.exists ? `${trip.conversationSummary.messageCount} message${trip.conversationSummary.messageCount === 1 ? "" : "s"}` : "No messages"}{trip.conversationSummary?.lastMessageAt ? ` - last ${new Date(trip.conversationSummary.lastMessageAt).toLocaleString()}` : ""}</p>
+          <p className="muted">Call in KariGO: {trip.callSessionSummary?.state ?? "DISABLED"}</p>
+          <p className="muted">Private message content is available only through audited support access.</p>
+
             <button className="secondary" onClick={() => void assignDriver(trip.id)}>Assign by ID</button>
             <button className="secondary" onClick={() => void cancelTrip(trip.id)}>Cancel Ride</button>
           </div>
@@ -380,10 +382,10 @@ export default function AdminTaxiPage() {
             <p className="muted">Read-only launch defaults for Kano and Abuja. This visibility does not activate automatic dispatch, ride payment collection or payout automation.</p>
             <div className="grid">
               <div className="item"><span>Launch cities</span><strong>{summary.pricingDefaults.launchCities.join(", ")}</strong></div>
-              <div className="item"><span>Passenger charge</span><strong>{money(summary.pricingDefaults.perKmKobo)} / km</strong></div>
+              <div className="item"><span>Passenger charge</span><strong>{formatKobo(summary.pricingDefaults.perKmKobo)} / km</strong></div>
               <div className="item"><span>Captain commission</span><strong>{summary.pricingDefaults.karigoCommissionPercent}% KariGO commission</strong></div>
-              <div className="item"><span>Waiting charge</span><strong>{money(summary.pricingDefaults.waitingChargeKoboPerMinute)} / minute after {summary.pricingDefaults.waitingGraceMinutes} minutes</strong></div>
-              <div className="item"><span>Tax/VAT line</span><strong>{summary.pricingDefaults.vatTaxConfigured ? money(summary.pricingDefaults.vatTaxKobo) : "Not configured"}</strong></div>
+              <div className="item"><span>Waiting charge</span><strong>{formatKobo(summary.pricingDefaults.waitingChargeKoboPerMinute)} / minute after {summary.pricingDefaults.waitingGraceMinutes} minutes</strong></div>
+              <div className="item"><span>Tax/VAT line</span><strong>{summary.pricingDefaults.vatTaxConfigured ? formatKobo(summary.pricingDefaults.vatTaxKobo) : "Not configured"}</strong></div>
               <div className="item"><span>Ride dispatch flag</span><strong>{summary.pricingDefaults.dispatchEnabled ? "Enabled" : "Disabled"}</strong></div>
             </div>
             <p className="muted">{summary.launchNotice ?? summary.testModeNotice}</p>

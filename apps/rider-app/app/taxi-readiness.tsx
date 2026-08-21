@@ -1,4 +1,4 @@
-import { TaxiDriverApplicationStatus, TaxiDriverProfile, TaxiTrip } from "@karigo/shared-types";
+import { formatKobo, TaxiDriverApplicationStatus, TaxiDriverProfile, TaxiTrip } from "@karigo/shared-types";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
@@ -14,8 +14,6 @@ import { captainAvailabilityErrorMessage } from "../src/lib/network-errors";
 const rideOperationsNotice = "Manage current availability and assigned Ride requests.";
 const blockedRideOperationsCopy = "Ride Captain activation is pending.";
 const closedTripStatuses = new Set(["COMPLETED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_DRIVER", "CANCELLED_BY_ADMIN", "EXPIRED"]);
-
-const money = (kobo?: number | null) => `NGN ${Math.round(Number(kobo ?? 0) / 100).toLocaleString()}`;
 
 export default function TaxiReadiness() {
   const { user } = useAuth();
@@ -111,7 +109,7 @@ export default function TaxiReadiness() {
       {trips.map((trip) => <Card key={trip.id}>
         <Text style={ui.sectionTitle}>{trip.tripReference}</Text>
         <Text>{trip.pickupAddress} to {trip.destinationAddress}</Text>
-        <Text>{money(trip.estimatedFareKobo)}</Text>
+        <Text>{formatKobo(trip.estimatedFareKobo)}</Text>
         <StatusBadge status={trip.status} />
         {trip.status === "DRIVER_ASSIGNED" ? <>
           <Button title="Accept assigned ride" onPress={() => updateTrip(trip.id, "accept")} />

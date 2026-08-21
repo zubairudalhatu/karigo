@@ -13,6 +13,7 @@ import { TaxiPlaceAutocompleteQueryDto } from "./dto/taxi-place-autocomplete-que
 import { TaxiPlaceDetailsQueryDto } from "./dto/taxi-place-details-query.dto";
 import { TaxiRoutePreviewDto } from "./dto/taxi-route-preview.dto";
 import { TaxiMapsService } from "./taxi-maps.service";
+import { CreateRideMessageDto, ListRideMessagesQueryDto, MarkRideMessagesReadDto } from "./dto/ride-message.dto";
 import { TaxiService } from "./taxi.service";
 
 @ApiTags("Customer KariGO Rides")
@@ -78,5 +79,34 @@ export class CustomerTaxiController {
   @ApiOperation({ summary: "Cancel my KariGO Rides trip" })
   async cancel(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: TaxiCancelDto) {
     return { message: "KariGO Rides trip cancelled", data: await this.taxi.customerCancelTrip(user.id, tripId, dto) };
+  }
+  @Get("trips/:tripId/messages")
+  @ApiOperation({ summary: "List my Ride conversation" })
+  async messages(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Query() query: ListRideMessagesQueryDto) {
+    return { message: "Ride conversation retrieved", data: await this.taxi.customerRideMessages(user.id, tripId, query) };
+  }
+
+  @Post("trips/:tripId/messages")
+  @ApiOperation({ summary: "Send a message to my assigned Ride Captain" })
+  async sendMessage(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: CreateRideMessageDto) {
+    return { message: "Ride message sent", data: await this.taxi.customerSendRideMessage(user.id, tripId, dto) };
+  }
+
+  @Post("trips/:tripId/messages/read")
+  @ApiOperation({ summary: "Mark Ride messages as read" })
+  async markMessagesRead(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: MarkRideMessagesReadDto) {
+    return { message: "Ride messages marked read", data: await this.taxi.customerMarkRideMessagesRead(user.id, tripId, dto) };
+  }
+
+  @Get("trips/:tripId/contact-options")
+  @ApiOperation({ summary: "Get controlled Ride Captain contact options" })
+  async contactOptions(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {
+    return { message: "Ride contact options retrieved", data: await this.taxi.customerRideContactOptions(user.id, tripId) };
+  }
+
+  @Post("trips/:tripId/call-session")
+  @ApiOperation({ summary: "Request a provider-backed in-app Ride call session" })
+  async callSession(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {
+    return { message: "Ride call readiness retrieved", data: await this.taxi.customerRideCallSession(user.id, tripId) };
   }
 }

@@ -19,6 +19,7 @@ function categoryIcon(item: NotificationSummary): keyof typeof Feather.glyphMap 
 }
 
 function targetFor(item: NotificationSummary): string {
+  if (item.type === "SYSTEM_ALERT" && item.entityType === "TaxiTrip" && item.entityId) return `/ride-chat/${item.entityId}`;
   const source = `${item.type} ${item.entityType ?? ""}`.toUpperCase();
   if (source.includes("RIDE") || source.includes("TAXI")) return "/tabs/dashboard";
   if (source.includes("DELIVERY") || source.includes("RIDER_ASSIGNED") || source.includes("ORDER")) {

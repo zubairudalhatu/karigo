@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
+import { formatNaira } from "@karigo/shared-types";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { CaptainAccess, CaptainWorkState } from "../src/api/captain-access.api";
@@ -7,7 +8,7 @@ import { captainAccessApi } from "../src/api/captain-access.api";
 import type { EarningsSummary } from "../src/api/earnings.api";
 import { earningsApi } from "../src/api/earnings.api";
 import { Card, Empty, Message, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
-import { friendlyError, money } from "../src/lib/errors";
+import { friendlyError } from "../src/lib/errors";
 import { projectCaptainOperationalState } from "../src/lib/captain-operational-state";
 
 type EarningsFilter = "ALL" | "RIDES" | "DELIVERIES";
@@ -63,19 +64,19 @@ export default function Earnings() {
     <Message error>{error}</Message>
     {!projection.hasAnyActiveMode ? <Card tone="soft"><Text style={ui.sectionTitle}>Activation pending</Text><Text style={ui.pageIntro}>Earnings unlock when a Captain mode is active.</Text></Card> : <>
       <View style={styles.hero}>
-        <View style={styles.heroMetric}><Text style={styles.kicker}>TODAY</Text><Text style={styles.heroValue}>{money(data?.todayEarnings ?? 0)}</Text></View>
+        <View style={styles.heroMetric}><Text style={styles.kicker}>TODAY</Text><Text style={styles.heroValue}>{formatNaira(data?.todayEarnings ?? 0)}</Text></View>
         <View style={styles.heroDivider} />
-        <View style={styles.heroMetric}><Text style={styles.kicker}>THIS WEEK</Text><Text style={styles.heroValue}>{money(data?.thisWeekEarnings ?? 0)}</Text></View>
+        <View style={styles.heroMetric}><Text style={styles.kicker}>THIS WEEK</Text><Text style={styles.heroValue}>{formatNaira(data?.thisWeekEarnings ?? 0)}</Text></View>
       </View>
 
       <View style={styles.compactGrid}>
-        <Metric label="Pending payout" value={money(data?.pendingEarnings ?? 0)} icon="clock" />
-        <Metric label="Paid" value={money(data?.paidEarnings ?? 0)} icon="check-circle" />
-        <Metric label="Ride earnings" value={money(amountTotal(rideRecords))} icon="navigation" />
-        <Metric label="Delivery earnings" value={money(amountTotal(deliveryRecords))} icon="package" />
+        <Metric label="Pending payout" value={formatNaira(data?.pendingEarnings ?? 0)} icon="clock" />
+        <Metric label="Paid" value={formatNaira(data?.paidEarnings ?? 0)} icon="check-circle" />
+        <Metric label="Ride earnings" value={formatNaira(amountTotal(rideRecords))} icon="navigation" />
+        <Metric label="Delivery earnings" value={formatNaira(amountTotal(deliveryRecords))} icon="package" />
       </View>
 
-      <View style={styles.sectionHeading}><Text style={ui.sectionTitle}>Earnings history</Text><Text style={styles.totalLabel}>{money(data?.totalEarnings ?? 0)} total</Text></View>
+      <View style={styles.sectionHeading}><Text style={ui.sectionTitle}>Earnings history</Text><Text style={styles.totalLabel}>{formatNaira(data?.totalEarnings ?? 0)} total</Text></View>
       <View accessibilityRole="tablist" style={styles.filterRow}>
         {availableFilters.map((item) => <Pressable key={item} accessibilityRole="tab" accessibilityLabel={`Show ${item.toLowerCase()} earnings`} accessibilityState={{ selected: activeFilter === item }} onPress={() => setFilter(item)} style={[styles.filterChip, activeFilter === item && styles.filterChipActive]}>
           <Text style={[styles.filterText, activeFilter === item && styles.filterTextActive]}>{item === "ALL" ? "All" : item === "RIDES" ? "Rides" : "Deliveries"}</Text>
@@ -86,7 +87,7 @@ export default function Earnings() {
         {historyRecords.map((item, index) => <View key={item.id} style={[styles.historyRow, index < historyRecords.length - 1 && styles.rowDivider]}>
           <View style={styles.historyIcon}><Feather name={item.mode === "Ride" ? "navigation" : "package"} size={17} color={brand.colors.primary} /></View>
           <View style={styles.historyCopy}><Text style={styles.reference}>{item.reference}</Text><Text style={styles.meta}>{item.mode} • {new Date(item.occurredAt).toLocaleDateString()}</Text></View>
-          <View style={styles.historyAmount}><Text style={styles.amount}>{money(item.amount)}</Text><StatusBadge status={item.payoutStatus} /></View>
+          <View style={styles.historyAmount}><Text style={styles.amount}>{formatNaira(item.amount)}</Text><StatusBadge status={item.payoutStatus} /></View>
         </View>)}
       </View>}
     </>}

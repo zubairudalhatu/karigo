@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import MapView, { Marker, Region } from "react-native-maps";
 import { brand } from "@karigo/config";
 import type { CaptainAccess, CaptainWorkState } from "../../src/api/captain-access.api";
-import type { LaunchAvailabilityResponse, TaxiTrip } from "@karigo/shared-types";
+import { formatNaira, type LaunchAvailabilityResponse, type TaxiTrip } from "@karigo/shared-types";
 import { captainAccessApi } from "../../src/api/captain-access.api";
 import { riderApi, RiderProfile } from "../../src/api/rider.api";
 import { jobsApi, RiderJob } from "../../src/api/jobs.api";
@@ -20,7 +20,6 @@ import { CaptainHomeCockpit, CaptainHomeSkeleton } from "../../src/components/ca
 import { disableActiveWorkBackgroundLocation, enableActiveWorkBackgroundLocation } from "../../src/lib/background-location";
 import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
-import { money } from "../../src/lib/errors";
 import { CaptainLocation, CaptainLocationError, captainLocationErrorMessage, distanceMeters, requestCaptainForegroundLocation, toOperationalLocationPayload, watchCaptainForegroundLocation } from "../../src/lib/location";
 import { captainAvailabilityErrorMessage, captainRequestMessage } from "../../src/lib/network-errors";
 import {
@@ -29,7 +28,7 @@ import {
   hasSubmittedCaptainApplication
 } from "../../src/lib/captain-application-status";
 import { CaptainModeProjection, projectCaptainOperationalState } from "../../src/lib/captain-operational-state";
-import { registerCaptainPushNotifications, subscribeToCaptainAssignmentNotifications } from "../../src/lib/captain-notifications";
+import { dismissCaptainPresenceNotification, registerCaptainPushNotifications, subscribeToCaptainAssignmentNotifications, updateCaptainPresenceNotification } from "../../src/lib/captain-notifications";
 
 const ACTIVE_DELIVERY_STATUSES = new Set([
   "RIDER_ASSIGNED",
@@ -465,8 +464,9 @@ export default function RiderDashboard() {
 
   useEffect(() => {
     void registerCaptainPushNotifications().catch(() => undefined);
-    return subscribeToCaptainAssignmentNotifications(() => {
+    return subscribeToCaptainAssignmentNotifications((messageTarget) => {
       void syncActiveWork("notification");
+      if (messageTarget) router.push(`/ride-chat/${messageTarget.rideId}` as never);
     });
   }, []);
   useEffect(() => NetInfo.addEventListener((state) => {
@@ -484,6 +484,7 @@ export default function RiderDashboard() {
     }
   }, [message, projection.effectiveDeliveryOnline, projection.effectiveRideOnline]);
   const activeJob = useMemo(() => jobs.find((job) => ACTIVE_DELIVERY_STATUSES.has(job.orderStatus)), [jobs]);
+  const activeRide = useMemo(() => rideTrips.find((trip) => !["COMPLETED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_DRIVER", "CANCELLED_BY_ADMIN", "EXPIRED"].includes(trip.status)) ?? null, [rideTrips]);
   const mapState = locationSummary(captainAccess, profile, workState, deviceLocation);
   const hasMapCoordinate = Boolean(mapState.coordinate);
   const currentMapRegion = mapRegion(mapState.coordinate);
@@ -525,6 +526,21 @@ export default function RiderDashboard() {
       void disableActiveWorkBackgroundLocation().catch(() => undefined);
     }
   }, [workState?.activeWorkMode]);
+
+  useEffect(() => {
+    void updateCaptainPresenceNotification({
+      online: Boolean(projection.effectiveDeliveryOnline || projection.effectiveRideOnline),
+      activeRide: Boolean(activeRide),
+      city: workState?.currentGpsArea?.cityName ?? captainAccess?.rideCaptainProfile?.city ?? "your area",
+      rideMode: projection.effectiveRideOnline || Boolean(activeRide),
+      deliveryMode: projection.effectiveDeliveryOnline
+    }).catch(() => undefined);
+    return () => {
+      if (!projection.effectiveDeliveryOnline && !projection.effectiveRideOnline && !activeRide) {
+        void dismissCaptainPresenceNotification();
+      }
+    };
+  }, [activeRide?.id, captainAccess?.rideCaptainProfile?.city, projection.effectiveDeliveryOnline, projection.effectiveRideOnline, workState?.currentGpsArea?.cityName]);
 
   function backendLocationAgeMs() {
     const timestamp = latestWorkStateRef.current?.lastLocationAt ?? mapState.lastSeen;
@@ -821,8 +837,6 @@ export default function RiderDashboard() {
   const deliveryOperationsStatus = deliveryLaunch?.available === false ? "Unavailable" : projection.delivery.active ? "Available" : projection.delivery.operationsLabel;
   const rideOperationsStatus = rideLaunch?.available === false ? "Unavailable" : projection.ride.active ? "Available" : projection.ride.operationsLabel;
   const activeWork = activeWorkTitle(workState);
-  const activeRide = rideTrips.find((trip) => !["COMPLETED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_DRIVER", "CANCELLED_BY_ADMIN", "EXPIRED"].includes(trip.status)) ?? null;
-
   async function onRideUpdated(updated: TaxiTrip) {
     const next = rideTripsRef.current.map((trip) => trip.id === updated.id ? updated : trip);
     if (!next.some((trip) => trip.id === updated.id)) next.unshift(updated);
@@ -1024,8 +1038,8 @@ export default function RiderDashboard() {
             <NavLink href="/earnings" label="View earnings" />
           </View>
           <View style={styles.earningsRow}>
-            <View style={styles.earningMetric}><Text style={ui.muted}>Today</Text><Text style={styles.earningValue}>{money(earnings?.todayEarnings ?? 0)}</Text></View>
-            <View style={styles.earningMetric}><Text style={ui.muted}>This week</Text><Text style={styles.earningValue}>{money(earnings?.thisWeekEarnings ?? 0)}</Text></View>
+            <View style={styles.earningMetric}><Text style={ui.muted}>Today</Text><Text style={styles.earningValue}>{formatNaira(earnings?.todayEarnings ?? 0)}</Text></View>
+            <View style={styles.earningMetric}><Text style={ui.muted}>This week</Text><Text style={styles.earningValue}>{formatNaira(earnings?.thisWeekEarnings ?? 0)}</Text></View>
           </View>
         </Card>
       </> : <>

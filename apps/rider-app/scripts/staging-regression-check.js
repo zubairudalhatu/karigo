@@ -292,7 +292,7 @@ expect(!profile.includes(">Operating areas require review<"), "Captain Profile m
 expect(profile.includes("Automatic matching and auto-accept remain off."), "Captain Profile must preserve manual controlled matching guardrails.");
 expect(profile.includes("Safety Centre") && profile.includes("Support") && profile.includes("Report an issue"), "Captain Profile must expose clear safety and support actions.");
 expect(earnings.includes("TODAY") && earnings.includes("THIS WEEK") && earnings.includes("Pending payout") && earnings.includes("Paid"), "Captain Earnings must preserve today, week, pending and paid settlement hierarchy.");
-expect(jobsIndex.includes("deliveryRoute") && jobsIndex.includes("→") && jobsIndex.includes("money("), "Captain Work history must show safe route and backend-supported amount summaries.");
+expect(jobsIndex.includes("deliveryRoute") && jobsIndex.includes("→") && jobsIndex.includes("formatKobo(row.amount)") && jobsIndex.includes("formatNaira(row.amount)"), "Captain Work history must show safe routes with explicit Ride Kobo and Delivery Naira amounts.");
 expect(jobDetail.includes("Payment method:") && jobDetail.includes("Activity") && jobDetail.includes("Contact KariGO Support"), "Captain work detail must preserve payment/lifecycle data and add a support action.");
 expect(jobDetail.includes("without sharing unnecessary Customer details"), "Captain support detail must reinforce Customer privacy.");
 expect(locationHelper.includes("timeInterval: 30_000") && (locationHelper.match(/watchPositionAsync/g) || []).length === 1, "Captain must preserve one throttled foreground watcher implementation.");

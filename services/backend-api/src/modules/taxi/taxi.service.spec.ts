@@ -252,6 +252,15 @@ describe("TaxiService", () => {
     assertCaptainCanReceive: jest.fn().mockResolvedValue(undefined),
     controlledSupplyAccountEligible: jest.fn().mockResolvedValue(true)
   };
+  const rideCommunications = {
+    listMessages: jest.fn(),
+    sendMessage: jest.fn(),
+    markRead: jest.fn(),
+    contactOptions: jest.fn(),
+    callSession: jest.fn(),
+    callReadiness: jest.fn(() => ({ enabled: false, provider: null, recordingEnabled: false, reason: "Disabled" }))
+  };
+
   const service = new TaxiService(
     prisma as unknown as PrismaService,
     audit as unknown as AdminAuditService,
@@ -260,7 +269,8 @@ describe("TaxiService", () => {
     applicationNotifications as unknown as ApplicationNotificationsService,
     captainWorkState as unknown as CaptainWorkStateService,
     notifications as unknown as NotificationsService,
-    launchOperations as never
+    launchOperations as never,
+    rideCommunications as never
   );
 
   function enableTaxiStaging() {
@@ -289,6 +299,7 @@ describe("TaxiService", () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    rideCommunications.callReadiness.mockReturnValue({ enabled: false, provider: null, recordingEnabled: false, reason: "Disabled" });
     prisma.user.findUnique.mockResolvedValue({
       id: "rider-user",
       role: UserRole.RIDER,

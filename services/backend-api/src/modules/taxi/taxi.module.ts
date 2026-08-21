@@ -1,3 +1,4 @@
+import { RideCommunicationsService } from "./ride-communications.service";
 import { Module } from "@nestjs/common";
 import { AdminAuditModule } from "../../common/services/admin-audit.module";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
@@ -7,6 +8,7 @@ import { CaptainUploadStorageService } from "../riders/captain-upload-storage.se
 import { AdminTaxiController } from "./admin-taxi.controller";
 import { CustomerTaxiController } from "./customer-taxi.controller";
 import { RiderTaxiController } from "./rider-taxi.controller";
+import { RideCallService } from "./ride-call.service";
 import { TaxiMapsService } from "./taxi-maps.service";
 import { TaxiController } from "./taxi.controller";
 import { TaxiService } from "./taxi.service";
@@ -14,7 +16,7 @@ import { TaxiService } from "./taxi.service";
 @Module({
   imports: [PrismaModule, AdminAuditModule],
   controllers: [TaxiController, CustomerTaxiController, RiderTaxiController, AdminTaxiController],
-  providers: [TaxiService, TaxiMapsService, CaptainUploadStorageService, ApplicationNotificationsService, CaptainWorkStateService],
+  providers: [TaxiService, TaxiMapsService, RideCallService, RideCommunicationsService, CaptainUploadStorageService, ApplicationNotificationsService, CaptainWorkStateService],
   exports: [TaxiService]
 })
 export class TaxiModule {}

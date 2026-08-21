@@ -1,7 +1,7 @@
 import * as Location from "expo-location";
 import { router, Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, AppState, BackHandler, Keyboard, Linking, PanResponder, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Animated, AppState, BackHandler, Keyboard, Linking, PanResponder, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import MapView, { Marker, Polyline, Region } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -64,7 +64,6 @@ const defaultRideRegion: Region = {
   longitudeDelta: 0.08
 };
 
-const money = formatRideFareKobo;
 const fareRange = formatRideFareRangeKobo;
 
 function placeFromAddress(address: Address): RidePlace {
@@ -1744,7 +1743,7 @@ function RideBookingDetails({
           <Text style={styles.sheetEyebrow}>Confirm request</Text>
           <Text style={styles.sheetTitle}>{selectedCategory?.name ?? "Selected ride"}</Text>
         </View>
-        <Text style={styles.finalFare}>{money(estimate?.estimatedFareKobo)}</Text>
+        <Text style={styles.finalFare}>{formatRideFareKobo(estimate?.estimatedFareKobo)}</Text>
       </View>
       {activeTripCount > 0 ? <View style={styles.activeNotice}>
         <Text style={styles.activeNoticeTitle}>{activeTripCount === 1 ? "Active ride already open" : `${activeTripCount} active ride requests`}</Text>
@@ -1770,7 +1769,7 @@ function RideBookingDetails({
       </> : null}
     </ScrollView>
     <View style={[styles.stickyActionFooter, { paddingBottom: Math.max(bottomInset, 12) }]}>
-      <Text style={styles.stickyActionSummary} numberOfLines={1}>{selectedCategory?.name ?? "KariGO Ride"} - {money(estimate?.estimatedFareKobo)}</Text>
+      <Text style={styles.stickyActionSummary} numberOfLines={1}>{selectedCategory?.name ?? "KariGO Ride"} - {formatRideFareKobo(estimate?.estimatedFareKobo)}</Text>
       <Button title={loading ? "Requesting..." : scheduleForLater ? `Schedule ${selectedCategory?.name ?? "ride"}` : `Request ${selectedCategory?.name ?? "ride"}`} disabled={requestDisabled} onPress={onRequest} />
       {!canCreateTrip ? <Text style={styles.stickyActionHint}>Refresh the route and fare if pickup, destination or ride category changed.</Text> : null}
       {activeTripCount > 0 ? <Text style={styles.stickyActionHint}>Active request must be completed or cancelled first.</Text> : null}
@@ -1855,12 +1854,35 @@ function RideTracking({
   const captain = lifecycle.captainVisible ? captainForTrip(trip) : null;
   const vehicle = lifecycle.vehicleVisible ? vehicleForTrip(trip) : null;
   const showPin = Boolean(trip.tripPin && lifecycle.pickupPinVisible && captain);
-  const canCallCaptain = Boolean(captain?.contactAvailable && captain.contactPhoneNumber && !terminal);
+  const canContactCaptain = Boolean(captain && !terminal);
+  const canChatCaptain = Boolean(captain);
   const showReceipt = lifecycle.receiptAvailable || terminal;
   const shareRide = () => void Share.share({ message: safeShareRideText(trip) });
-  const callCaptain = () => {
-    if (!captain?.contactPhoneNumber) return;
-    void Linking.openURL(`tel:${captain.contactPhoneNumber}`);
+  const chatCaptain = () => router.push(`/taxi/chat/${trip.id}` as never);
+  const callInKariGO = async () => {
+    try {
+      const readiness = await taxiApi.callSession(trip.id);
+      Alert.alert("Call in KariGO", readiness.reason);
+    } catch (cause) {
+      Alert.alert("Call unavailable", friendlyError(cause));
+    }
+  };
+  const callByPhone = async () => {
+    try {
+      const options = await taxiApi.contactOptions(trip.id);
+      if (!options.phoneFallbackAvailable || !options.phoneNumber) throw new Error("Phone fallback is not available for this Ride.");
+      await Linking.openURL(`tel:${options.phoneNumber}`);
+    } catch (cause) {
+      Alert.alert("Call unavailable", friendlyError(cause));
+    }
+  };
+  const openContact = () => {
+    Alert.alert("Contact Captain", "Choose a Ride-scoped contact option.", [
+      { text: "Chat in KariGO", onPress: chatCaptain },
+      { text: "Call in KariGO", onPress: () => void callInKariGO() },
+      { text: "Call by phone", onPress: () => void callByPhone() },
+      { text: "Close", style: "cancel" }
+    ]);
   };
   return <Card>
     <Text style={ui.cardTitle}>{rideTrackingTitle(trip)}</Text>
@@ -1879,7 +1901,7 @@ function RideTracking({
     </View>
     <View style={styles.metrics}>
       <Metric label="Ride" value={tripCategoryLabel(trip)} />
-      <Metric label={trip.status === "COMPLETED" ? "Fare" : "Estimate"} value={money(trip.finalFareKobo ?? trip.estimatedFareKobo)} />
+      <Metric label={trip.status === "COMPLETED" ? "Fare" : "Estimate"} value={formatRideFareKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)} />
     </View>
     {captain || vehicle ? <CaptainVehicleCard captain={captain} vehicle={vehicle} status={trip.status} /> : null}
     {captain && ["DRIVER_ASSIGNED", "ACCEPTED"].includes(trip.status) ? <Text style={ui.muted}>
@@ -1903,7 +1925,8 @@ function RideTracking({
     {lifecycle.customerCancellationAllowed ? <Button title={loading ? "Cancelling..." : "Cancel ride request"} tone="muted" disabled={loading} onPress={onCancel} /> : null}
     <View style={styles.inlineActions}>
       <Button title="Share Ride" tone="muted" onPress={shareRide} />
-      {canCallCaptain ? <Button title="Call Captain" tone="muted" onPress={callCaptain} /> : null}
+      {canChatCaptain ? <Button title="Chat with Captain" tone="muted" onPress={chatCaptain} /> : null}
+      {canContactCaptain ? <Button title="Contact Captain" tone="muted" onPress={openContact} /> : null}
     </View>
     {terminal ? <View style={styles.inlineActions}>
       <Button title={trip.status === "EXPIRED" ? "Retry ride request" : "Book another ride"} onPress={onBookAnother} />
@@ -1987,7 +2010,7 @@ function RideReceipt({ trip }: { trip: TaxiTrip }) {
     <ReceiptRow label="Duration" value={trip.estimatedDurationMin ? `${trip.estimatedDurationMin} min` : "Pending"} />
     <ReceiptRow label="Captain" value={captain?.displayName ?? "Not assigned"} />
     <ReceiptRow label="Vehicle" value={vehicle ? [vehicle.colour, vehicle.make, vehicle.model].filter(Boolean).join(" ") || "Pending" : "Not assigned"} />
-    <ReceiptRow label={fareLabel} value={money(trip.finalFareKobo ?? trip.estimatedFareKobo)} />
+    <ReceiptRow label={fareLabel} value={formatRideFareKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)} />
     <ReceiptRow label="Payment" value="Cash" />
     <ReceiptRow label="Requested" value={formatDateTime(trip.requestedAt)} />
     {trip.acceptedAt ? <ReceiptRow label="Accepted" value={formatDateTime(trip.acceptedAt)} /> : null}
