@@ -701,10 +701,11 @@ describe("TaxiService", () => {
 
     expect(result.estimatedFareKobo).toBe(190000);
     expect(result.minimumFareApplied).toBe(true);
+    expect(result.selectedRideCategory?.fareRangeKobo).toEqual({ min: 190000, max: 190000 });
     expect(result.rideCategories.every((category) =>
-      category.fareEstimateKobo! >= 190000
-      && category.fareRangeKobo!.min >= 190000
-      && category.fareRangeKobo!.max >= 190000
+      category.fareEstimateKobo === 190000
+      && category.fareRangeKobo!.min === 190000
+      && category.fareRangeKobo!.max === 190000
     )).toBe(true);
   });
 

@@ -1650,10 +1650,11 @@ export class TaxiService {
       captainNetEstimateKobo,
       currency: "NGN",
       monetaryUnit: "KOBO" as const,
-      selectedRideCategory: this.formatRideCategory(selectedCategory, estimatedFareKobo, pricing.minimumRideFareKobo),
+      selectedRideCategory: this.formatRideCategory(selectedCategory, estimatedFareKobo, pricing.minimumRideFareKobo, categoryFareKobo, waitingChargeKobo),
       rideCategories: categories.map((category) => {
-        const fare = applyMinimumRideFare(Math.round(distanceFareKobo * category.fareMultiplier), pricing.minimumRideFareKobo).rideFareKobo + waitingChargeKobo;
-        return this.formatRideCategory(category, fare, pricing.minimumRideFareKobo);
+        const rawRideFareKobo = Math.round(distanceFareKobo * category.fareMultiplier);
+        const fare = applyMinimumRideFare(rawRideFareKobo, pricing.minimumRideFareKobo).rideFareKobo + waitingChargeKobo;
+        return this.formatRideCategory(category, fare, pricing.minimumRideFareKobo, rawRideFareKobo, waitingChargeKobo);
       }),
       formula: {
         perKmKobo: pricing.perKmKobo,
@@ -1675,9 +1676,15 @@ export class TaxiService {
     return RIDE_CATEGORIES;
   }
 
-  private formatRideCategory(category: (typeof RIDE_CATEGORIES)[number], fareEstimateKobo?: number, minimumFareKobo = MINIMUM_RIDE_FARE_KOBO) {
-    const fareMin = fareEstimateKobo ? Math.max(minimumFareKobo, Math.round(fareEstimateKobo * 0.95)) : undefined;
-    const fareMax = fareEstimateKobo ? Math.max(minimumFareKobo, Math.round(fareEstimateKobo * 1.08)) : undefined;
+  private formatRideCategory(
+    category: (typeof RIDE_CATEGORIES)[number],
+    fareEstimateKobo?: number,
+    minimumFareKobo = MINIMUM_RIDE_FARE_KOBO,
+    rawRideFareKobo = fareEstimateKobo,
+    waitingChargeKobo = 0
+  ) {
+    const fareMin = rawRideFareKobo ? Math.max(minimumFareKobo, Math.round(rawRideFareKobo * 0.95)) + waitingChargeKobo : undefined;
+    const fareMax = rawRideFareKobo ? Math.max(minimumFareKobo, Math.round(rawRideFareKobo * 1.08)) + waitingChargeKobo : undefined;
     return {
       id: category.id,
       name: category.name,

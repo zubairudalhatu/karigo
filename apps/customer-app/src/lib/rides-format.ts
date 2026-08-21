@@ -7,6 +7,7 @@ export function formatRideFareKobo(value?: number | string | null, fallback = "F
 
 export function formatRideFareRangeKobo(range?: { min: number; max: number } | null) {
   if (!range) return "Estimate pending";
+  if (range.min === range.max) return formatRideFareKobo(range.min);
   return `${formatRideFareKobo(range.min)}\u2013${formatRideFareKobo(range.max)}`;
 }
 
