@@ -17,5 +17,36 @@ export const services = [
   { title: "Cable TV", icon: "cable", description: "Cable TV payment integrations are being prepared.", status: "Preparing" }
 ];
 
+export const serviceGroups = [
+  {
+    id: "everyday-delivery",
+    eyebrow: "Everyday Delivery",
+    title: "Food, essentials and parcels.",
+    description: "Order from local businesses or move everyday items with clear availability status.",
+    serviceTitles: ["Food Delivery", "Groceries", "Market Items", "Parcel Delivery", "Pharmacy"]
+  },
+  {
+    id: "mobility",
+    eyebrow: "Mobility",
+    title: "KariGO Rides.",
+    description: "Ride Captain onboarding and controlled operations remain clearly separated from public availability.",
+    serviceTitles: ["KariGO Rides"]
+  },
+  {
+    id: "local-services",
+    eyebrow: "Local",
+    title: "Trusted help for homes and businesses.",
+    description: "Find approved skilled providers through KariGO SME Services.",
+    serviceTitles: ["SME Services"]
+  },
+  {
+    id: "utilities",
+    eyebrow: "Utilities",
+    title: "Everyday bills, introduced carefully.",
+    description: "Provider and operational readiness remain visible before any utility is presented as active.",
+    serviceTitles: ["Airtime", "Data", "Electricity", "Cable TV"]
+  }
+];
+
 export const liveServices = ["Food Delivery", "Groceries", "Market Items", "Parcel Delivery", "SME Services"];
 export const preparingServices = ["KariGO Rides", "Pharmacy", "Airtime", "Data", "Electricity", "Cable TV"];

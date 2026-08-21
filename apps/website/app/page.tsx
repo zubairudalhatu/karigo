@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ServiceCard } from "../src/components/service-card";
-import { services } from "../src/lib/site";
+import { serviceGroups, services } from "../src/lib/site";
 
 export default function HomePage() {
   return (
@@ -13,9 +13,7 @@ export default function HomePage() {
           <p className="tagline">Food, groceries, market items, parcels, SME Services and everyday support across Kano and Abuja.</p>
           <div className="actions">
             <a className="button" href="#download">Download the App</a>
-            <Link className="button secondary" href="/vendors/apply">Become a Vendor</Link>
-            <a className="button secondary" href="https://vendor.karigo.com.ng/register">Become a Service Provider</a>
-            <Link className="button secondary" href="/app">Open Customer Web Portal</Link>
+            <Link className="button secondary" href="/vendors/apply">Become a Partner</Link>
           </div>
         </div>
         <div className="app-visual" aria-label="KariGO app-style preview">
@@ -48,7 +46,15 @@ export default function HomePage() {
           </div>
           <p>Services under provider or operations approval are clearly marked before activation.</p>
         </div>
-        <div className="service-grid">{services.map((service) => <ServiceCard key={service.title} service={service} />)}</div>
+        <div className="service-groups">
+          {serviceGroups.map((group) => <section className="service-group" id={group.id} key={group.id}>
+            <header className="service-group-heading">
+              <div><p className="eyebrow">{group.eyebrow}</p><h3>{group.title}</h3></div>
+              <p>{group.description}</p>
+            </header>
+            <div className={`service-grid service-grid-${group.id}`}>{services.filter((service) => group.serviceTitles.includes(service.title)).map((service) => <ServiceCard key={service.title} service={service} />)}</div>
+          </section>)}
+        </div>
       </section>
 
       <section className="section soft">

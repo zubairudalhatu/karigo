@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -p 3002",
     "typecheck": "tsc --noEmit",
-    "test:regression": "node scripts/staging-regression-check.js"
+    "test:regression": "node scripts/staging-regression-check.js",
+    "test:visual": "node scripts/visual-consolidation-regression-check.js"
   },
   "dependencies": {
     "@karigo/config": "*",

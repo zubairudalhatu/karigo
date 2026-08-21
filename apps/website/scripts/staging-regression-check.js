@@ -9,8 +9,7 @@ const home = read("app", "page.tsx");
 assert(home.includes("Everything you need, delivered."), "Homepage must use approved hero headline.");
 assert(home.includes("Order food, shop groceries and market items"), "Homepage must use approved subheadline.");
 assert(home.includes("Download the App"), "Homepage must include Download App CTA.");
-assert(home.includes("Open Customer Web Portal"), "Homepage must include Customer Web Portal CTA.");
-assert(home.includes("Become a Vendor"), "Homepage must include Become a Vendor CTA.");
+assert(home.includes("Become a Partner"), "Homepage must include the priority Partner CTA.");
 assert(home.includes("Become a Service Provider"), "Homepage must include SME Services provider application CTA.");
 assert(home.includes("https://vendor.karigo.com.ng/register"), "Homepage service-provider CTA must route to unified partner onboarding.");
 assert(home.includes("KariGO is preparing secure merchant integrations"), "Bills provider-review copy must be present.");
@@ -168,11 +167,12 @@ assert(!paymentReturnBridge.includes("secret"), "Flutterwave return bridge must 
 
 const header = read("src", "components", "site-header.tsx");
 assert(header.includes("menu-toggle"), "Website header must include mobile menu control.");
-assert(header.includes("Become a Vendor"), "Mobile navigation must include vendor application access.");
+assert(header.includes("Become a Partner"), "Mobile navigation must include partner application access.");
+assert(header.includes("/vendors/apply"), "Partner application access must preserve the existing route.");
 assert(header.includes("Customer App"), "Website header must include Customer App portal access.");
 assert(header.includes("/app"), "Website header must link to the Customer Web Portal.");
-assert(header.includes("Vendor Login"), "Website header must include vendor login access.");
-assert(header.includes("https://vendor.karigo.com.ng"), "Vendor login must point to branded vendor dashboard domain.");
+assert(header.includes("Partner Login"), "Website header must include partner login access.");
+assert(header.includes("https://vendor.karigo.com.ng"), "Partner login must preserve the branded vendor dashboard domain.");
 
 const footer = read("src", "components", "site-footer.tsx");
 assert(footer.includes("&copy; 2026 KariGO Express Limited"), "Footer must include legal copyright text.");

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ServiceCard } from "../../src/components/service-card";
-import { liveServices, preparingServices, services } from "../../src/lib/site";
+import { liveServices, preparingServices, serviceGroups, services } from "../../src/lib/site";
 
 export const metadata: Metadata = {
   title: "Services",
@@ -25,7 +25,15 @@ export default function ServicesPage() {
         </article>
         <article className="info-card"><h2>Preparing Launch</h2><ul className="list">{preparingServices.map((service) => <li key={service}>{service}</li>)}</ul><p>KariGO Rides is being prepared with Ride Captain onboarding, vehicle checks, fare controls and safety review.</p><Link className="button secondary" href="/riders#ride-waitlist">Join Ride Waitlist</Link></article>
       </section>
-      <section className="section"><div className="service-grid">{services.map((service) => <ServiceCard key={service.title} service={service} />)}</div></section>
+      <section className="section service-groups">
+        {serviceGroups.map((group) => <section className="service-group" id={group.id} key={group.id}>
+          <header className="service-group-heading">
+            <div><p className="eyebrow">{group.eyebrow}</p><h2>{group.title}</h2></div>
+            <p>{group.description}</p>
+          </header>
+          <div className={`service-grid service-grid-${group.id}`}>{services.filter((service) => group.serviceTitles.includes(service.title)).map((service) => <ServiceCard key={service.title} service={service} />)}</div>
+        </section>)}
+      </section>
     </main>
   );
 }

@@ -178,7 +178,7 @@ export default function ProductionLaunchPage() {
   return <PortalShell>
     <h1>Production Launch</h1>
     <p className="muted">Kano and Abuja operations control. All city/service records default to OFF. No stage advances automatically, active work is not cancelled, and customer demand remains server-gated by stage, account eligibility, hours, zone and capacity.</p>
-    <div className="actions">
+    <div className="actions launch-tabs" aria-label="Production Launch views">
       {(["quick", "command", "controlled", "checklist", "readiness", "supply", "cohorts", "incidents", "support", "drills", "reports", "history"] as View[]).map((item) => <button key={item} className={view === item ? "" : "secondary"} onClick={() => setView(item)}>{item === "quick" ? "Quick Launch" : label(item)}</button>)}
       <button className="secondary" onClick={() => void load()}>Refresh</button>
     </div>

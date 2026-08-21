@@ -8,7 +8,8 @@
     "start": "next start -p 3001",
     "typecheck": "tsc --noEmit",
     "test:regression": "node scripts/staging-regression-check.js && node scripts/bff-query-regression-check.js && node scripts/quick-launch-result-regression-check.js",
-    "test:quick-launch": "node scripts/quick-launch-result-regression-check.js"
+    "test:quick-launch": "node scripts/quick-launch-result-regression-check.js",
+    "test:visual": "node scripts/workspace-visual-regression-check.js"
   },
   "dependencies": {
     "@karigo/config": "*",
