@@ -177,7 +177,7 @@ expect(captainNotifications.includes("addNotificationReceivedListener") && capta
 expect(captainNotifications.includes("registerDeviceToken") && captainNotifications.includes("RIDER_APP"), "Captain app must register its authenticated Expo token.");
 expect(backgroundLocation.includes("hasStartedLocationUpdatesAsync") && backgroundLocation.includes("stopLocationUpdatesAsync"), "Background tracking must run only as one controlled active-work task.");
 expect(rideWorkspace.includes("NEW KARIGO RIDE") && rideWorkspace.includes("ACCEPT RIDE") && rideWorkspace.includes("PIN REQUIRED") && rideWorkspace.includes("COMPLETE RIDE"), "Ride takeover workspace must cover the full Captain lifecycle.");
-expect(dashboard.includes("captainAccessApi.updateAvailability(toOperationalLocationPayload(location))"), "Home GPS refresh must submit a sanitized location-only update without mutating availability.");
+expect(dashboard.includes("toOperationalLocationPayload(location)") && dashboard.includes("tracePoints: [foregroundRideTracePoint(location)]"), "Home GPS refresh must submit sanitized location and bounded Ride trace evidence without mutating availability.");
 expect(!dashboard.includes("deliveryOnline: currentWorkState.desiredDeliveryOnline") && !dashboard.includes("rideOnline: currentWorkState.desiredRideOnline"), "Home GPS refresh must not resend desired availability during location updates.");
 expect(dashboard.includes("reasonCode === \"LOCATION_STALE\""), "Home must allow stale-location recovery through the normal online toggle.");
 expect(dashboard.includes("disabled={!workState || locationUpdating}"), "Manual GPS refresh must remain available during active work while preventing duplicate submissions.");

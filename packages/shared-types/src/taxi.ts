@@ -523,6 +523,8 @@ export interface TaxiRidePricingDefaults {
   karigoCommissionPercent: number;
   waitingChargeKoboPerMinute: number;
   waitingGraceMinutes: number;
+  minimumRideFareKobo: number;
+  freePickupWaitSeconds: number;
   vatTaxKobo: number;
   vatTaxConfigured: boolean;
   dispatchEnabled: boolean;
@@ -562,6 +564,57 @@ export interface TaxiDriverProfile {
   testModeOnly?: boolean;
 }
 
+export interface RideWaitingSummary {
+  totalWaitingSeconds: number;
+  freeWaitingSeconds: number;
+  billableWaitingSeconds: number;
+  freeWaitingRemainingSeconds: number;
+  waitingChargeKobo: number;
+  rateKoboPerMinute: number;
+  state: "NOT_STARTED" | "FREE" | "PAID" | "STOPPED";
+}
+
+export interface RideReceipt {
+  id: string;
+  tripId: string;
+  receiptNumber: string;
+  currency: "NGN" | string;
+  pickupAddress: string;
+  destinationAddress: string;
+  city?: string | null;
+  rideCategory: string;
+  captainName?: string | null;
+  vehicleDescription?: string | null;
+  vehiclePlateNumber?: string | null;
+  plannedDistanceKm?: number | null;
+  actualDistanceKm?: number | null;
+  durationSeconds?: number | null;
+  rideFareKobo: number;
+  minimumFareApplied: boolean;
+  totalWaitingSeconds: number;
+  freeWaitingSeconds: number;
+  billableWaitingSeconds: number;
+  waitingChargeKobo: number;
+  platformFeeKobo: number;
+  discountKobo: number;
+  totalFareKobo: number;
+  paymentMethod: string;
+  completedAt: string;
+  createdAt: string;
+}
+
+export interface RideEvidenceSummary {
+  pickupArrivalVerified: boolean;
+  pickupOverrideUsed: boolean;
+  pinIssued: boolean;
+  pinVerified: boolean;
+  pinFailureCount: number;
+  destinationArrivalVerified: boolean;
+  destinationOverrideUsed: boolean;
+  tracePointCount: number;
+  actualDistanceKm?: number | null;
+}
+
 export interface TaxiTrip {
   id: string;
   tripReference: string;
@@ -575,6 +628,9 @@ export interface TaxiTrip {
   estimatedDurationMin?: number | null;
   estimatedFareKobo: number;
   monetaryUnit: "KOBO";
+  waitingSummary?: RideWaitingSummary;
+  receipt?: RideReceipt | null;
+  evidenceSummary?: RideEvidenceSummary;
   finalFareKobo?: number | null;
   status: TaxiTripStatus;
   tripPinLastFour?: string | null;

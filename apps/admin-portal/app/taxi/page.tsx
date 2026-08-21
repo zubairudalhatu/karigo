@@ -331,6 +331,15 @@ export default function AdminTaxiPage() {
           <strong>{trip.tripReference}</strong>
           <p>{trip.pickupAddress} to {trip.destinationAddress}</p>
           <p className="muted">Fare estimate: {formatKobo(trip.estimatedFareKobo)} - PIN last four: {trip.tripPinLastFour ?? "hidden"}</p>
+          {trip.finalFareKobo ? <p className="muted">Final fare: {formatKobo(trip.finalFareKobo)}{trip.receipt ? ` · Receipt ${trip.receipt.receiptNumber}` : ""}</p> : null}
+          {trip.waitingSummary ? <p className="muted">Pickup waiting: {trip.waitingSummary.totalWaitingSeconds}s · {formatKobo(trip.waitingSummary.waitingChargeKobo)}</p> : null}
+          {trip.evidenceSummary ? <p className="muted">
+            Integrity: pickup {trip.evidenceSummary.pickupOverrideUsed ? "override" : trip.evidenceSummary.pickupArrivalVerified ? "verified" : "pending"}
+            {" · "}PIN {trip.evidenceSummary.pinVerified ? "verified" : "pending"}
+            {" · "}destination {trip.evidenceSummary.destinationOverrideUsed ? "override" : trip.evidenceSummary.destinationArrivalVerified ? "verified" : "pending"}
+            {" · "}{trip.evidenceSummary.tracePointCount} trace points
+            {trip.evidenceSummary.actualDistanceKm !== null && trip.evidenceSummary.actualDistanceKm !== undefined ? ` · ${trip.evidenceSummary.actualDistanceKm} km actual` : ""}
+          </p> : null}
           <p><Badge>{trip.status}</Badge></p>
           <p className="muted">{trip.driver ? `Ride Captain: ${trip.driver.fullName}` : "No Ride Captain assigned"}</p>
           <div className="filters">
@@ -385,6 +394,8 @@ export default function AdminTaxiPage() {
               <div className="item"><span>Passenger charge</span><strong>{formatKobo(summary.pricingDefaults.perKmKobo)} / km</strong></div>
               <div className="item"><span>Captain commission</span><strong>{summary.pricingDefaults.karigoCommissionPercent}% KariGO commission</strong></div>
               <div className="item"><span>Waiting charge</span><strong>{formatKobo(summary.pricingDefaults.waitingChargeKoboPerMinute)} / minute after {summary.pricingDefaults.waitingGraceMinutes} minutes</strong></div>
+              <div className="item"><span>Minimum Ride fare</span><strong>{formatKobo(summary.pricingDefaults.minimumRideFareKobo)}</strong></div>
+              <div className="item"><span>Free pickup wait</span><strong>{summary.pricingDefaults.freePickupWaitSeconds} seconds</strong></div>
               <div className="item"><span>Tax/VAT line</span><strong>{summary.pricingDefaults.vatTaxConfigured ? formatKobo(summary.pricingDefaults.vatTaxKobo) : "Not configured"}</strong></div>
               <div className="item"><span>Ride dispatch flag</span><strong>{summary.pricingDefaults.dispatchEnabled ? "Enabled" : "Disabled"}</strong></div>
             </div>

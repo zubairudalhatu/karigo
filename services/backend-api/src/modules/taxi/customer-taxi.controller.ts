@@ -74,6 +74,12 @@ export class CustomerTaxiController {
   async trip(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {
     return { message: "KariGO Rides trip retrieved", data: await this.taxi.customerTrip(user.id, tripId) };
   }
+  @Get("trips/:tripId/receipt")
+  @ApiOperation({ summary: "Get the permanent receipt for my completed KariGO Ride" })
+  async receipt(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {
+    return { message: "KariGO Ride receipt retrieved", data: await this.taxi.customerRideReceipt(user.id, tripId) };
+  }
+
 
   @Post("trips/:tripId/cancel")
   @ApiOperation({ summary: "Cancel my KariGO Rides trip" })

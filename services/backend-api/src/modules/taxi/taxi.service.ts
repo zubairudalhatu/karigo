@@ -61,6 +61,8 @@ import { TaxiCancelDto } from "./dto/taxi-cancel.dto";
 import { TaxiDriverAvailabilityDto } from "./dto/taxi-driver-availability.dto";
 import { TaxiFareEstimateDto } from "./dto/taxi-fare-estimate.dto";
 import { TaxiStartTripDto } from "./dto/taxi-start-trip.dto";
+import { RideLocationEvidenceDto } from "./dto/ride-location-evidence.dto";
+import { applyMinimumRideFare, calculatePickupWaiting, evaluateRideGeofence, FREE_PICKUP_WAIT_SECONDS, MINIMUM_RIDE_FARE_KOBO, traceDistanceKm, WAITING_CHARGE_KOBO_PER_MINUTE } from "./ride-integrity";
 import { TaxiApplicationStatusQueryDto } from "./dto/taxi-application-status-query.dto";
 import { UpdateTaxiWaitlistStatusDto } from "./dto/update-taxi-waitlist-status.dto";
 import {
@@ -143,7 +145,9 @@ const TAXI_WAITLIST_SELECT = {
 const TAXI_TRIP_INCLUDE = {
   customer: { include: { user: { select: { id: true, fullName: true, phoneNumber: true } } } },
   driverProfile: true,
-  events: { orderBy: { createdAt: "asc" as const } }
+  events: { orderBy: { createdAt: "asc" as const } },
+  receipt: true,
+  tracePoints: { orderBy: { recordedAt: "asc" as const }, take: 5_000 }
 } satisfies Prisma.TaxiTripInclude;
 
 type TaxiTripWithRelations = Prisma.TaxiTripGetPayload<{ include: typeof TAXI_TRIP_INCLUDE }>;
@@ -686,7 +690,8 @@ export class TaxiService {
     if (!launchCity) throw new BadRequestException("Choose a pickup within Kano or Abuja");
     await this.launchOperations.assertCustomerCanStart({ city: launchCity, serviceType: LaunchServiceType.RIDES, userId });
     const customer = await this.requireCustomer(userId);
-    const estimate = this.calculateFare(dto);
+    // Pickup waiting is measured from the server-side arrival timestamp; a request cannot pre-bill waiting.
+    const estimate = this.calculateFare({ ...dto, waitingMinutes: 0 });
     const tripPin = randomInt(100000, 1000000).toString();
     const tripPinHash = await bcrypt.hash(tripPin, 10);
     const tripReference = await this.nextTripReference();
@@ -741,6 +746,8 @@ export class TaxiService {
             isTestMode: false,
             dispatchMode: this.rideDispatchMode(),
             estimatedFareKobo: estimate.estimatedFareKobo,
+            rideFareKobo: estimate.rideFareKobo,
+            minimumFareApplied: estimate.minimumFareApplied,
             rideCategory: dto.rideCategory?.trim() || "ECONOMY",
             paymentMethod: dto.paymentMethod?.trim() || "Cash",
             scheduledPickupAt: dto.scheduledPickupAt?.trim() || null,
@@ -750,6 +757,15 @@ export class TaxiService {
         }
       });
       return created;
+      await tx.taxiTripEvent.create({
+        data: {
+          tripId: created.id,
+          actorType: TaxiTripActorType.SYSTEM,
+          eventType: "RIDE_PIN_ISSUED",
+          note: "Protected pickup PIN issued",
+          metadata: { pinLength: 6, isTestMode: false } as Prisma.InputJsonValue
+        }
+      });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     return this.formatTrip(trip, { viewer: "customer" });
@@ -777,6 +793,14 @@ export class TaxiService {
     });
     if (!trip) throw new NotFoundException("Ride request not found");
     return this.formatTrip(trip, { viewer: "customer" });
+  }
+
+  async customerRideReceipt(userId: string, tripId: string) {
+    const trip = await this.requireCustomerTrip(userId, tripId);
+    if (trip.status !== TaxiTripStatus.COMPLETED) throw new BadRequestException("Ride receipt is available after the Ride is completed");
+    const receipt = trip.receipt ?? await this.prisma.taxiRideReceipt.findUnique({ where: { tripId } });
+    if (!receipt) throw new NotFoundException("Ride receipt is not available");
+    return this.formatRideReceipt(receipt);
   }
 
   async customerRideMessages(userId: string, tripId: string, query: ListRideMessagesQueryDto) {
@@ -984,8 +1008,19 @@ export class TaxiService {
     return this.formatTrip(updated, { viewer: "driver" });
   }
 
-  async riderArrivedPickup(userId: string, tripId: string) {
-    return this.riderTripTransition(userId, tripId, TaxiTripStatus.ACCEPTED, TaxiTripStatus.ARRIVED_PICKUP, "taxi.trip.arrived_pickup", { arrivedAtPickupAt: new Date() });
+  async riderArrivedPickup(userId: string, tripId: string, dto: RideLocationEvidenceDto) {
+    this.assertTaxiStagingEnabled();
+    const { trip } = await this.requireDriverTrip(userId, tripId);
+    if (trip.status !== TaxiTripStatus.ACCEPTED) throw new BadRequestException("Only an accepted Ride can record pickup arrival");
+    const evidence = this.assertRideLocationEvidence(trip, dto, "pickup");
+    const arrivedAt = new Date();
+    const updated = await this.updateTripWithEvent(trip.id, {
+      status: TaxiTripStatus.ARRIVED_PICKUP,
+      arrivedAtPickupAt: arrivedAt
+    }, userId, TaxiTripActorType.DRIVER, evidence.overrideUsed ? "RIDE_PICKUP_GEOFENCE_OVERRIDE" : "RIDE_PICKUP_ARRIVAL_VERIFIED", "Ride Captain arrived at pickup; free waiting started", {
+      metadata: { ...evidence, serverRecordedAt: arrivedAt.toISOString(), freePickupWaitSeconds: this.ridePricingDefaults().freePickupWaitSeconds }
+    });
+    return this.formatTrip(updated, { viewer: "driver" });
   }
 
   async riderStartTrip(userId: string, tripId: string, dto: TaxiStartTripDto) {
@@ -993,42 +1028,109 @@ export class TaxiService {
     const { profile, trip } = await this.requireDriverTrip(userId, tripId);
     if (trip.status !== TaxiTripStatus.ARRIVED_PICKUP) throw new BadRequestException("Ride Captain must arrive at pickup before starting the trip");
     if (!trip.tripPinHash || !(await bcrypt.compare(dto.tripPin, trip.tripPinHash))) {
+      await this.prisma.taxiTripEvent.create({
+        data: { tripId: trip.id, actorType: TaxiTripActorType.DRIVER, actorId: userId, eventType: "RIDE_PIN_VERIFICATION_FAILED", note: "Protected pickup PIN verification failed", metadata: { attemptedAt: new Date().toISOString() } as Prisma.InputJsonValue }
+      });
       throw new BadRequestException("Invalid trip PIN");
     }
+    const startedAt = new Date();
+    const waiting = calculatePickupWaiting(trip.arrivedAtPickupAt, startedAt, this.ridePricingDefaults().freePickupWaitSeconds, this.ridePricingDefaults().waitingChargeKoboPerMinute);
     const updated = await this.updateTripWithEvent(trip.id, {
       status: TaxiTripStatus.STARTED,
-      startedAt: new Date(),
+      startedAt,
       tripPinHash: null,
       tripPinEncrypted: null
-    }, userId, TaxiTripActorType.DRIVER, "taxi.trip.started", `Ride Captain ${profile.fullName} started ride request`, {
+    }, userId, TaxiTripActorType.DRIVER, "RIDE_PIN_VERIFIED_AND_TRIP_STARTED", `Ride Captain ${profile.fullName} verified the PIN and started the Ride`, {
+      metadata: { ...waiting, serverRecordedAt: startedAt.toISOString() },
       beforeUpdate: (tx) => this.captainWorkState.transitionLock(tx, userId, CaptainWorkMode.RIDE, trip.id, CaptainWorkLockStage.IN_PROGRESS)
     });
     return this.formatTrip(updated, { viewer: "driver" });
   }
 
-  async riderArrivedDestination(userId: string, tripId: string) {
-    return this.riderTripTransition(userId, tripId, TaxiTripStatus.STARTED, TaxiTripStatus.ARRIVED_DESTINATION, "taxi.trip.arrived_destination", { arrivedAtDestinationAt: new Date() });
+  async riderArrivedDestination(userId: string, tripId: string, dto: RideLocationEvidenceDto) {
+    this.assertTaxiStagingEnabled();
+    const { trip } = await this.requireDriverTrip(userId, tripId);
+    if (trip.status !== TaxiTripStatus.STARTED) throw new BadRequestException("Ride must be in progress before destination arrival");
+    const evidence = this.assertRideLocationEvidence(trip, dto, "destination");
+    const arrivedAt = new Date();
+    const updated = await this.updateTripWithEvent(trip.id, { status: TaxiTripStatus.ARRIVED_DESTINATION, arrivedAtDestinationAt: arrivedAt }, userId, TaxiTripActorType.DRIVER, evidence.overrideUsed ? "RIDE_DESTINATION_GEOFENCE_OVERRIDE" : "RIDE_DESTINATION_ARRIVAL_VERIFIED", "Ride destination arrival recorded", {
+      metadata: { ...evidence, serverRecordedAt: arrivedAt.toISOString(), customerNotificationRequired: evidence.overrideUsed }
+    });
+    if (evidence.overrideUsed) {
+      const notice = {
+        userId: trip.customer.user.id,
+        title: "Ride destination updated",
+        message: "Your Captain recorded arrival at a different safe drop-off point. Open the Ride timeline for details.",
+        type: NotificationType.SYSTEM_ALERT,
+        entityType: "TaxiTrip",
+        entityId: trip.id,
+        metadata: { event: "RIDE_DESTINATION_GEOFENCE_OVERRIDE", route: `/taxi/request?tripId=${trip.id}` }
+      };
+      await Promise.allSettled([
+        this.notifications.createNotification(notice),
+        this.notifications.createNotification({ ...notice, channel: NotificationChannel.PUSH })
+      ]);
+    }
+    return this.formatTrip(updated, { viewer: "driver" });
   }
 
   async riderCompleteTrip(userId: string, tripId: string) {
     this.assertTaxiStagingEnabled();
-    const { trip } = await this.requireDriverTrip(userId, tripId);
+    const { profile, trip } = await this.requireDriverTrip(userId, tripId);
+    if (trip.status === TaxiTripStatus.COMPLETED) return this.formatTrip(trip, { viewer: "driver" });
     if (trip.status !== TaxiTripStatus.ARRIVED_DESTINATION) throw new BadRequestException("Ride Captain must arrive at destination before completing the trip");
+    const completedAt = new Date();
+    const pricing = this.ridePricingDefaults();
+    const waiting = calculatePickupWaiting(trip.arrivedAtPickupAt, trip.startedAt ?? completedAt, pricing.freePickupWaitSeconds, pricing.waitingChargeKoboPerMinute);
+    const requestMetadata = this.tripRequestMetadata(trip);
+    const flooredRideFare = applyMinimumRideFare(trip.estimatedFareKobo, pricing.minimumRideFareKobo);
+    const rideFare = { ...flooredRideFare, minimumFareApplied: requestMetadata.minimumFareApplied === true || flooredRideFare.minimumFareApplied };
+    const finalFareKobo = rideFare.rideFareKobo + waiting.waitingChargeKobo;
+    const journeyTrace = trip.tracePoints.filter((point) => (!trip.startedAt || point.recordedAt >= trip.startedAt) && point.recordedAt <= completedAt);
+    const actualDistanceKm = journeyTrace.length >= 2
+      ? traceDistanceKm(journeyTrace.map((point) => ({ latitude: Number(point.latitude), longitude: Number(point.longitude), recordedAt: point.recordedAt })))
+      : null;
     const updated = await this.updateTripWithEvent(trip.id, {
       status: TaxiTripStatus.COMPLETED,
-      completedAt: new Date(),
-      finalFareKobo: trip.estimatedFareKobo,
+      completedAt,
+      finalFareKobo,
       tripPinHash: null,
       tripPinEncrypted: null
-    }, userId, TaxiTripActorType.DRIVER, "taxi.trip.completed", "Ride request completed", {
-      afterUpdate: (tx) => this.captainWorkState.releaseLock(tx, {
-        userId,
-        mode: CaptainWorkMode.RIDE,
-        workId: trip.id,
-        actorId: userId
-      })
+    }, userId, TaxiTripActorType.DRIVER, "RIDE_COMPLETED_AND_FARE_FINALISED", "Ride completed and authoritative fare finalised", {
+      metadata: { rideFareKobo: rideFare.rideFareKobo, minimumFareApplied: rideFare.minimumFareApplied, ...waiting, finalFareKobo, actualDistanceKm, tracePointCount: journeyTrace.length, serverRecordedAt: completedAt.toISOString() },
+      afterUpdate: async (tx) => {
+        await tx.taxiRideReceipt.upsert({
+          where: { tripId: trip.id },
+          update: {},
+          create: {
+            tripId: trip.id,
+            receiptNumber: `KGR-${trip.tripReference}`,
+            pickupAddress: trip.pickupAddress,
+            destinationAddress: trip.destinationAddress,
+            city: this.tripPickupServiceArea(trip),
+            rideCategory: typeof requestMetadata.rideCategory === "string" ? requestMetadata.rideCategory : "ECONOMY",
+            captainName: profile.fullName,
+            vehicleDescription: [profile.vehicleColour, profile.vehicleYear, profile.vehicleMake, profile.vehicleModel].filter(Boolean).join(" ") || null,
+            vehiclePlateNumber: profile.vehiclePlateNumber,
+            plannedDistanceKm: trip.estimatedDistanceKm,
+            actualDistanceKm: actualDistanceKm === null ? null : new Prisma.Decimal(actualDistanceKm),
+            durationSeconds: trip.startedAt ? Math.max(0, Math.floor((completedAt.getTime() - trip.startedAt.getTime()) / 1000)) : null,
+            rideFareKobo: rideFare.rideFareKobo,
+            minimumFareApplied: rideFare.minimumFareApplied,
+            totalWaitingSeconds: waiting.totalWaitingSeconds,
+            freeWaitingSeconds: waiting.freeWaitingSeconds,
+            billableWaitingSeconds: waiting.billableWaitingSeconds,
+            waitingChargeKobo: waiting.waitingChargeKobo,
+            totalFareKobo: finalFareKobo,
+            paymentMethod: typeof requestMetadata.paymentMethod === "string" ? requestMetadata.paymentMethod : "CASH",
+            completedAt
+          }
+        });
+        await this.captainWorkState.releaseLock(tx, { userId, mode: CaptainWorkMode.RIDE, workId: trip.id, actorId: userId });
+      }
     });
-    return this.formatTrip(updated, { viewer: "driver" });
+    const finalTrip = await this.prisma.taxiTrip.findUnique({ where: { id: updated.id }, include: this.tripInclude() });
+    return this.formatTrip(finalTrip ?? updated, { viewer: "driver" });
   }
 
   async riderCancelTrip(userId: string, tripId: string, dto: TaxiCancelDto) {
@@ -1526,8 +1628,9 @@ export class TaxiService {
     const billableWaitingMinutes = Math.max(0, waitingMinutes - pricing.waitingGraceMinutes);
     const distanceFareKobo = Math.round(distance * pricing.perKmKobo);
     const waitingChargeKobo = billableWaitingMinutes * pricing.waitingChargeKoboPerMinute;
-    const baseFareKobo = distanceFareKobo + waitingChargeKobo;
-    const estimatedFareKobo = Math.round(baseFareKobo * selectedCategory.fareMultiplier);
+    const categoryFareKobo = Math.round(distanceFareKobo * selectedCategory.fareMultiplier);
+    const minimumFare = applyMinimumRideFare(categoryFareKobo, pricing.minimumRideFareKobo);
+    const estimatedFareKobo = minimumFare.rideFareKobo + waitingChargeKobo;
     const karigoCommissionKobo = Math.round(estimatedFareKobo * (pricing.karigoCommissionPercent / 100));
     const captainNetEstimateKobo = Math.max(0, estimatedFareKobo - karigoCommissionKobo);
 
@@ -1539,18 +1642,25 @@ export class TaxiService {
       waitingMinutes,
       billableWaitingMinutes,
       distanceFareKobo,
+      rideFareKobo: minimumFare.rideFareKobo,
+      minimumFareApplied: minimumFare.minimumFareApplied,
       waitingChargeKobo,
       estimatedFareKobo,
       karigoCommissionKobo,
       captainNetEstimateKobo,
       currency: "NGN",
       monetaryUnit: "KOBO" as const,
-      selectedRideCategory: this.formatRideCategory(selectedCategory, estimatedFareKobo),
-      rideCategories: categories.map((category) => this.formatRideCategory(category, Math.round(baseFareKobo * category.fareMultiplier))),
+      selectedRideCategory: this.formatRideCategory(selectedCategory, estimatedFareKobo, pricing.minimumRideFareKobo),
+      rideCategories: categories.map((category) => {
+        const fare = applyMinimumRideFare(Math.round(distanceFareKobo * category.fareMultiplier), pricing.minimumRideFareKobo).rideFareKobo + waitingChargeKobo;
+        return this.formatRideCategory(category, fare, pricing.minimumRideFareKobo);
+      }),
       formula: {
         perKmKobo: pricing.perKmKobo,
         waitingChargeKoboPerMinute: pricing.waitingChargeKoboPerMinute,
         waitingGraceMinutes: pricing.waitingGraceMinutes,
+        freePickupWaitSeconds: pricing.freePickupWaitSeconds,
+        minimumRideFareKobo: pricing.minimumRideFareKobo,
         karigoCommissionPercent: pricing.karigoCommissionPercent,
         vatTaxKobo: pricing.vatTaxKobo,
         vatTaxConfigured: pricing.vatTaxConfigured
@@ -1565,9 +1675,9 @@ export class TaxiService {
     return RIDE_CATEGORIES;
   }
 
-  private formatRideCategory(category: (typeof RIDE_CATEGORIES)[number], fareEstimateKobo?: number) {
-    const fareMin = fareEstimateKobo ? Math.round(fareEstimateKobo * 0.95) : undefined;
-    const fareMax = fareEstimateKobo ? Math.round(fareEstimateKobo * 1.08) : undefined;
+  private formatRideCategory(category: (typeof RIDE_CATEGORIES)[number], fareEstimateKobo?: number, minimumFareKobo = MINIMUM_RIDE_FARE_KOBO) {
+    const fareMin = fareEstimateKobo ? Math.max(minimumFareKobo, Math.round(fareEstimateKobo * 0.95)) : undefined;
+    const fareMax = fareEstimateKobo ? Math.max(minimumFareKobo, Math.round(fareEstimateKobo * 1.08)) : undefined;
     return {
       id: category.id,
       name: category.name,
@@ -1595,12 +1705,19 @@ export class TaxiService {
 
   private ridePricingDefaults() {
     const vatTaxKobo = this.config.get<number>("RIDE_VAT_TAX_KOBO", 0);
+    const freePickupWaitSeconds = Math.max(
+      FREE_PICKUP_WAIT_SECONDS,
+      this.config.get<number>("RIDE_FREE_PICKUP_WAIT_SECONDS", FREE_PICKUP_WAIT_SECONDS),
+      this.config.get<number>("RIDE_WAITING_GRACE_MINUTES", FREE_PICKUP_WAIT_SECONDS / 60) * 60
+    );
     return {
       launchCities: activeRideServiceAreas(this.config).map((area) => area.city),
       perKmKobo: this.config.get<number>("RIDE_PER_KM_KOBO", 40000),
+      minimumRideFareKobo: Math.max(MINIMUM_RIDE_FARE_KOBO, this.config.get<number>("RIDE_MINIMUM_FARE_KOBO", MINIMUM_RIDE_FARE_KOBO)),
       karigoCommissionPercent: this.config.get<number>("RIDE_CAPTAIN_COMMISSION_PERCENT", 10),
-      waitingChargeKoboPerMinute: this.config.get<number>("RIDE_WAITING_CHARGE_KOBO_PER_MINUTE", 500),
-      waitingGraceMinutes: this.config.get<number>("RIDE_WAITING_GRACE_MINUTES", 5),
+      waitingChargeKoboPerMinute: Math.max(WAITING_CHARGE_KOBO_PER_MINUTE, this.config.get<number>("RIDE_WAITING_CHARGE_KOBO_PER_MINUTE", WAITING_CHARGE_KOBO_PER_MINUTE)),
+      waitingGraceMinutes: freePickupWaitSeconds / 60,
+      freePickupWaitSeconds,
       vatTaxKobo,
       vatTaxConfigured: vatTaxKobo > 0,
       dispatchEnabled: this.config.get<boolean>("RIDES_PRODUCTION_ENABLED", this.config.get<boolean>("RIDES_CONTROLLED_PILOT_ENABLED", this.config.get<boolean>("TAXI_STAGING_DISPATCH_ENABLED", false))),
@@ -1841,6 +1958,7 @@ export class TaxiService {
     hooks: {
       beforeUpdate?: (tx: Prisma.TransactionClient) => Promise<void>;
       afterUpdate?: (tx: Prisma.TransactionClient, updated: TaxiTripWithRelations) => Promise<void>;
+      metadata?: Record<string, unknown>;
     } = {}
   ) {
     return this.prisma.$transaction(async (tx) => {
@@ -1857,12 +1975,107 @@ export class TaxiService {
           actorId,
           eventType,
           note,
-          metadata: { isTestMode: false, dispatchMode: this.rideDispatchMode() } as Prisma.InputJsonValue
+          metadata: { isTestMode: false, dispatchMode: this.rideDispatchMode(), ...hooks.metadata } as Prisma.InputJsonValue
         }
       });
       await hooks.afterUpdate?.(tx, updated);
       return updated;
     });
+  }
+
+  private assertRideLocationEvidence(trip: TaxiTripWithRelations, dto: RideLocationEvidenceDto, target: "pickup" | "destination") {
+    const recordedAt = new Date(dto.recordedAt);
+    const ageMs = Date.now() - recordedAt.getTime();
+    if (!Number.isFinite(recordedAt.getTime()) || ageMs > 120_000 || ageMs < -30_000) {
+      throw new BadRequestException("Refresh Captain GPS before recording this Ride milestone.");
+    }
+    const targetLatitude = Number(target === "pickup" ? trip.pickupLatitude : trip.destinationLatitude);
+    const targetLongitude = Number(target === "pickup" ? trip.pickupLongitude : trip.destinationLongitude);
+    if (!Number.isFinite(targetLatitude) || !Number.isFinite(targetLongitude)) {
+      throw new BadRequestException(`The requested ${target} location is unavailable. Contact Operations before continuing.`);
+    }
+    const configuredRadius = this.config.get<number>(target === "pickup" ? "RIDE_PICKUP_GEOFENCE_METERS" : "RIDE_DESTINATION_GEOFENCE_METERS", target === "pickup" ? 250 : 300);
+    const { measuredDistanceMeters, allowedRadiusMeters, inside } = evaluateRideGeofence({
+      latitude: dto.latitude, longitude: dto.longitude, targetLatitude, targetLongitude, configuredRadiusMeters: configuredRadius, accuracyMeters: dto.accuracyMeters
+    });
+    const outside = !inside;
+    if (outside && !dto.overrideConfirmed) {
+      throw new BadRequestException({
+        message: target === "pickup"
+          ? "Move closer to the requested pickup before confirming arrival."
+          : "Move closer to the requested destination before confirming arrival.",
+        errorCode: target === "pickup" ? "RIDE_PICKUP_PROXIMITY_REQUIRED" : "RIDE_DESTINATION_PROXIMITY_REQUIRED",
+        distanceMeters: measuredDistanceMeters,
+        allowedRadiusMeters,
+        overrideAvailable: true
+      });
+    }
+    if (outside && (!dto.overrideReason || (dto.overrideNote?.trim().length ?? 0) < 5)) {
+      throw new BadRequestException("Select an override reason and add a clear note before continuing.");
+    }
+    return {
+      target,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+      accuracyMeters: dto.accuracyMeters ?? null,
+      deviceRecordedAt: recordedAt.toISOString(),
+      distanceMeters: measuredDistanceMeters,
+      allowedRadiusMeters,
+      overrideUsed: outside,
+      overrideReason: outside ? dto.overrideReason : null,
+      overrideNote: outside ? dto.overrideNote?.trim() : null
+    };
+  }
+
+  private tripRequestMetadata(trip: TaxiTripWithRelations) {
+    const metadata = trip.events.find((event) => event.eventType === "taxi.trip.requested")?.metadata;
+    return metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata as Record<string, unknown> : {};
+  }
+
+  private formatRideReceipt(receipt: Prisma.TaxiRideReceiptGetPayload<Record<string, never>>) {
+    return {
+      id: receipt.id,
+      tripId: receipt.tripId,
+      receiptNumber: receipt.receiptNumber,
+      currency: receipt.currency,
+      pickupAddress: receipt.pickupAddress,
+      destinationAddress: receipt.destinationAddress,
+      city: receipt.city,
+      rideCategory: receipt.rideCategory,
+      captainName: receipt.captainName,
+      vehicleDescription: receipt.vehicleDescription,
+      vehiclePlateNumber: receipt.vehiclePlateNumber,
+      plannedDistanceKm: receipt.plannedDistanceKm === null ? null : Number(receipt.plannedDistanceKm),
+      actualDistanceKm: receipt.actualDistanceKm === null ? null : Number(receipt.actualDistanceKm),
+      durationSeconds: receipt.durationSeconds,
+      rideFareKobo: receipt.rideFareKobo,
+      minimumFareApplied: receipt.minimumFareApplied,
+      totalWaitingSeconds: receipt.totalWaitingSeconds,
+      freeWaitingSeconds: receipt.freeWaitingSeconds,
+      billableWaitingSeconds: receipt.billableWaitingSeconds,
+      waitingChargeKobo: receipt.waitingChargeKobo,
+      platformFeeKobo: receipt.platformFeeKobo,
+      discountKobo: receipt.discountKobo,
+      totalFareKobo: receipt.totalFareKobo,
+      paymentMethod: receipt.paymentMethod,
+      completedAt: receipt.completedAt.toISOString(),
+      createdAt: receipt.createdAt.toISOString()
+    };
+  }
+
+  private rideEvidenceSummary(trip: TaxiTripWithRelations) {
+    const eventTypes = new Set(trip.events.map((event) => event.eventType));
+    return {
+      pickupArrivalVerified: eventTypes.has("RIDE_PICKUP_ARRIVAL_VERIFIED"),
+      pickupOverrideUsed: eventTypes.has("RIDE_PICKUP_GEOFENCE_OVERRIDE"),
+      pinIssued: eventTypes.has("RIDE_PIN_ISSUED"),
+      pinVerified: eventTypes.has("RIDE_PIN_VERIFIED_AND_TRIP_STARTED"),
+      pinFailureCount: trip.events.filter((event) => event.eventType === "RIDE_PIN_VERIFICATION_FAILED").length,
+      destinationArrivalVerified: eventTypes.has("RIDE_DESTINATION_ARRIVAL_VERIFIED"),
+      destinationOverrideUsed: eventTypes.has("RIDE_DESTINATION_GEOFENCE_OVERRIDE"),
+      tracePointCount: trip.tracePoints.length,
+      actualDistanceKm: trip.receipt?.actualDistanceKm === null || trip.receipt?.actualDistanceKm === undefined ? null : Number(trip.receipt.actualDistanceKm)
+    };
   }
 
   private tripInclude() {
@@ -1890,6 +2103,22 @@ export class TaxiService {
       cancelledAt: trip.cancelledAt?.toISOString() ?? null,
       expiredAt: trip.status === TaxiTripStatus.EXPIRED ? trip.updatedAt.toISOString() : null
     };
+    const activeWaiting = calculatePickupWaiting(
+      trip.arrivedAtPickupAt,
+      trip.startedAt ?? new Date(),
+      this.ridePricingDefaults().freePickupWaitSeconds,
+      this.ridePricingDefaults().waitingChargeKoboPerMinute
+    );
+    const waitingSummary = trip.receipt ? {
+      totalWaitingSeconds: trip.receipt.totalWaitingSeconds,
+      freeWaitingSeconds: trip.receipt.freeWaitingSeconds,
+      billableWaitingSeconds: trip.receipt.billableWaitingSeconds,
+      freeWaitingRemainingSeconds: 0,
+      waitingChargeKobo: trip.receipt.waitingChargeKobo,
+      rateKoboPerMinute: this.ridePricingDefaults().waitingChargeKoboPerMinute,
+      state: "STOPPED" as const
+    } : { ...activeWaiting, state: trip.startedAt ? "STOPPED" as const : activeWaiting.state };
+
 
     return {
       id: trip.id,
@@ -1905,6 +2134,9 @@ export class TaxiService {
       estimatedFareKobo: trip.estimatedFareKobo,
       finalFareKobo: trip.finalFareKobo,
       monetaryUnit: "KOBO" as const,
+      waitingSummary,
+      receipt: trip.receipt ? this.formatRideReceipt(trip.receipt) : null,
+      evidenceSummary: viewer === "admin" || viewer === "internal" ? this.rideEvidenceSummary(trip) : undefined,
       status: trip.status,
       tripPinLastFour: viewer === "admin" || lifecycle.pickupPinVisible ? trip.tripPinLastFour : null,
       ...(tripPin ? { tripPin } : {}),

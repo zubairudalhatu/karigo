@@ -236,6 +236,15 @@ function vehicleForTrip(trip: TaxiTrip) {
   };
 }
 
+function humanVehicleValue(value?: string | null) {
+  if (!value) return null;
+  return value.replaceAll("_", " ").trim().toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function humanVehicleDescription(vehicle: ReturnType<typeof vehicleForTrip>) {
+  return vehicle ? [vehicle.colour, vehicle.make, vehicle.model].map(humanVehicleValue).filter(Boolean).join(" ") || null : null;
+}
+
 function rideStatusCopy(trip?: TaxiTrip | null) {
   if (!trip) return "Ride request status unavailable.";
   if (trip.assignmentIncomplete) return "KariGO Operations is confirming the Ride Captain assignment.";
@@ -263,7 +272,7 @@ function safeShareRideText(trip: TaxiTrip) {
     `Pickup: ${trip.pickupAddress}`,
     `Destination: ${trip.destinationAddress}`,
     captain ? `Captain: ${captain.displayName}` : null,
-    vehicle ? `Vehicle: ${[vehicle.colour, vehicle.make, vehicle.model].filter(Boolean).join(" ") || "Details pending"}` : null,
+    vehicle ? `Vehicle: ${humanVehicleDescription(vehicle) || "Details pending"}` : null,
     vehicle?.registrationNumber ? `Registration: ${vehicle.registrationNumber}` : null
   ].filter(Boolean).join("\n");
 }
@@ -1903,6 +1912,12 @@ function RideTracking({
       <Metric label="Ride" value={tripCategoryLabel(trip)} />
       <Metric label={trip.status === "COMPLETED" ? "Fare" : "Estimate"} value={formatRideFareKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)} />
     </View>
+    {trip.status === "ARRIVED_PICKUP" && trip.waitingSummary ? <View style={styles.activeNotice}>
+      <Text style={styles.activeNoticeTitle}>{trip.waitingSummary.state === "FREE"
+        ? `Free pickup wait · ${Math.ceil(trip.waitingSummary.freeWaitingRemainingSeconds / 60)} min remaining`
+        : `Paid pickup wait · ${formatRideFareKobo(trip.waitingSummary.waitingChargeKobo)}`}</Text>
+      <Text style={styles.activeNoticeText}>The first 5 minutes are free. After that, waiting is billed at ₦5 per minute, proportional to elapsed seconds.</Text>
+    </View> : null}
     {captain || vehicle ? <CaptainVehicleCard captain={captain} vehicle={vehicle} status={trip.status} /> : null}
     {captain && ["DRIVER_ASSIGNED", "ACCEPTED"].includes(trip.status) ? <Text style={ui.muted}>
       {captain.location?.freshness === "fresh" ? "Captain location is updating." : "Location updating. Captain movement appears only when verified location is available."}
@@ -1955,9 +1970,9 @@ function CaptainVehicleCard({ captain, vehicle, status }: { captain: ReturnType<
     </> : <Text style={ui.muted}>Captain details will appear after KariGO confirms assignment.</Text>}
     {vehicle ? <View style={styles.vehiclePanel}>
       <Text style={styles.vehicleTitle}>Vehicle</Text>
-      <Text style={styles.captainText}>{[vehicle.colour, vehicle.make, vehicle.model].filter(Boolean).join(" ") || "Vehicle details pending"}</Text>
+      <Text style={styles.captainText}>{humanVehicleDescription(vehicle) || "Vehicle details pending"}</Text>
       <Text style={ui.muted}>{vehicle.registrationNumber ? `Registration: ${vehicle.registrationNumber}` : "Registration pending"}</Text>
-      <Text style={ui.muted}>{vehicle.category ? `${vehicle.category.replaceAll("_", " ")}${vehicle.seatCapacity ? ` · ${vehicle.seatCapacity} seats` : ""}` : "Ride category vehicle"}</Text>
+      <Text style={ui.muted}>{vehicle.category ? `${humanVehicleValue(vehicle.category)}${vehicle.seatCapacity ? ` · ${vehicle.seatCapacity} seats` : ""}` : "Ride category vehicle"}</Text>
     </View> : null}
   </View>;
 }
@@ -1998,20 +2013,27 @@ function SafetyPanel({ trip, onShare }: { trip: TaxiTrip; onShare: () => void })
 function RideReceipt({ trip }: { trip: TaxiTrip }) {
   const captain = captainForTrip(trip);
   const vehicle = vehicleForTrip(trip);
+  const receipt = trip.receipt;
   const fareLabel = trip.status === "COMPLETED" && trip.finalFareKobo ? "Final fare" : "Estimated fare";
   return <View style={styles.receiptCard}>
     <Text style={styles.receiptTitle}>{trip.status === "COMPLETED" ? "Ride receipt" : "Ride record"}</Text>
     <ReceiptRow label="Reference" value={trip.tripReference} />
+    {receipt ? <ReceiptRow label="Receipt" value={receipt.receiptNumber} /> : null}
     <ReceiptRow label="Status" value={rideTrackingTitle(trip)} />
     <ReceiptRow label="Ride" value={tripCategoryLabel(trip)} />
     <ReceiptRow label="Pickup" value={trip.pickupAddress} />
     <ReceiptRow label="Destination" value={trip.destinationAddress} />
-    <ReceiptRow label="Distance" value={trip.estimatedDistanceKm ? `${Number(trip.estimatedDistanceKm).toLocaleString()} km` : "Pending"} />
-    <ReceiptRow label="Duration" value={trip.estimatedDurationMin ? `${trip.estimatedDurationMin} min` : "Pending"} />
-    <ReceiptRow label="Captain" value={captain?.displayName ?? "Not assigned"} />
-    <ReceiptRow label="Vehicle" value={vehicle ? [vehicle.colour, vehicle.make, vehicle.model].filter(Boolean).join(" ") || "Pending" : "Not assigned"} />
-    <ReceiptRow label={fareLabel} value={formatRideFareKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)} />
-    <ReceiptRow label="Payment" value="Cash" />
+    <ReceiptRow label="Distance" value={receipt ? [receipt.plannedDistanceKm !== null && receipt.plannedDistanceKm !== undefined ? `Planned ${receipt.plannedDistanceKm} km` : null, receipt.actualDistanceKm !== null && receipt.actualDistanceKm !== undefined ? `Actual ${receipt.actualDistanceKm} km` : null].filter(Boolean).join(" · ") || "Unavailable" : trip.estimatedDistanceKm ? `${Number(trip.estimatedDistanceKm).toLocaleString()} km` : "Pending"} />
+    <ReceiptRow label="Duration" value={receipt?.durationSeconds !== null && receipt?.durationSeconds !== undefined ? `${Math.ceil(receipt.durationSeconds / 60)} min` : trip.estimatedDurationMin ? `${trip.estimatedDurationMin} min` : "Pending"} />
+    <ReceiptRow label="Captain" value={receipt?.captainName ?? captain?.displayName ?? "Not assigned"} />
+    <ReceiptRow label="Vehicle" value={humanVehicleValue(receipt?.vehicleDescription) ?? humanVehicleDescription(vehicle) ?? "Not assigned"} />
+    {receipt ? <ReceiptRow label="Ride fare" value={formatRideFareKobo(receipt.rideFareKobo)} /> : <ReceiptRow label={fareLabel} value={formatRideFareKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)} />}
+    {receipt?.minimumFareApplied ? <Text style={ui.muted}>Minimum Ride fare applied.</Text> : null}
+    {receipt ? <ReceiptRow label="Waiting" value={`${Math.floor(receipt.totalWaitingSeconds / 60)}m ${receipt.totalWaitingSeconds % 60}s · ${formatRideFareKobo(receipt.waitingChargeKobo)}`} /> : null}
+    {receipt && receipt.platformFeeKobo ? <ReceiptRow label="Platform fee" value={formatRideFareKobo(receipt.platformFeeKobo)} /> : null}
+    {receipt && receipt.discountKobo ? <ReceiptRow label="Discount" value={`−${formatRideFareKobo(receipt.discountKobo)}`} /> : null}
+    {receipt ? <ReceiptRow label="Total" value={formatRideFareKobo(receipt.totalFareKobo)} /> : null}
+    <ReceiptRow label="Payment" value={receipt?.paymentMethod ?? "Cash"} />
     <ReceiptRow label="Requested" value={formatDateTime(trip.requestedAt)} />
     {trip.acceptedAt ? <ReceiptRow label="Accepted" value={formatDateTime(trip.acceptedAt)} /> : null}
     {trip.arrivedAtPickupAt ? <ReceiptRow label="Pickup arrival" value={formatDateTime(trip.arrivedAtPickupAt)} /> : null}

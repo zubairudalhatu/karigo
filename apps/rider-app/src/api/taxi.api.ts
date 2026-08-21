@@ -10,6 +10,17 @@ import {
 } from "@karigo/shared-types";
 import { api } from "./client";
 
+export interface RideLocationEvidenceInput {
+  latitude: number;
+  longitude: number;
+  accuracyMeters?: number | null;
+  recordedAt: string;
+  overrideConfirmed?: boolean;
+  overrideReason?: "CUSTOMER_REQUEST" | "ROAD_ACCESS" | "DESTINATION_INACCESSIBLE" | "SAFETY" | "GPS_ACCURACY" | "EMERGENCY" | "OTHER";
+  overrideNote?: string;
+}
+
+
 export const taxiApi = {
   submitDriverApplication: (body: TaxiDriverApplicationInput) =>
     api.post<TaxiDriverApplicationStatus>("taxi/driver-applications", body, { authenticated: false }),
@@ -30,9 +41,9 @@ export const taxiApi = {
   callSession: (tripId: string) => api.post<RideCallSessionSummary>(`rider/taxi/trips/${tripId}/call-session`),
   acceptTrip: (tripId: string) => api.post<TaxiTrip>(`rider/taxi/trips/${tripId}/accept`),
   declineTrip: (tripId: string, reason: string) => api.post<TaxiTrip>(`rider/taxi/trips/${tripId}/decline`, { reason }),
-  arrivedPickup: (tripId: string) => api.post<TaxiTrip>(`rider/taxi/trips/${tripId}/arrived-pickup`),
+  arrivedPickup: (tripId: string, body: RideLocationEvidenceInput) => api.post<TaxiTrip>(`rider/taxi/trips/${tripId}/arrived-pickup`, body),
   startTrip: (tripId: string, tripPin: string) => api.post<TaxiTrip>(`rider/taxi/trips/${tripId}/start`, { tripPin }),
-  arrivedDestination: (tripId: string) => api.post<TaxiTrip>(`rider/taxi/trips/${tripId}/arrived-destination`),
+  arrivedDestination: (tripId: string, body: RideLocationEvidenceInput) => api.post<TaxiTrip>(`rider/taxi/trips/${tripId}/arrived-destination`, body),
   completeTrip: (tripId: string) => api.post<TaxiTrip>(`rider/taxi/trips/${tripId}/complete`),
   cancelTrip: (tripId: string, reason?: string) => api.post<TaxiTrip>(`rider/taxi/trips/${tripId}/cancel`, { reason })
 };

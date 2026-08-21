@@ -75,9 +75,13 @@ export default function TaxiReadiness() {
       setError("");
       if (action === "accept") await taxiApi.acceptTrip(tripId);
       if (action === "decline") await taxiApi.declineTrip(tripId, declineReason.trim());
-      if (action === "arrivedPickup") await taxiApi.arrivedPickup(tripId);
+      const location = action === "arrivedPickup" || action === "arrivedDestination"
+        ? await requestCaptainForegroundLocation(true)
+        : null;
+      const evidence = location ? { ...toOperationalLocationPayload(location), recordedAt: location.recordedAt } : null;
+      if (action === "arrivedPickup" && evidence) await taxiApi.arrivedPickup(tripId, evidence);
       if (action === "start") await taxiApi.startTrip(tripId, tripPin);
-      if (action === "arrivedDestination") await taxiApi.arrivedDestination(tripId);
+      if (action === "arrivedDestination" && evidence) await taxiApi.arrivedDestination(tripId, evidence);
       if (action === "complete") await taxiApi.completeTrip(tripId);
       if (action === "cancel") await taxiApi.cancelTrip(tripId, "Ride Captain cancelled assigned Ride request");
       setTripPin("");

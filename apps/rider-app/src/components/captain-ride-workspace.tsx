@@ -8,6 +8,7 @@ import { router } from "expo-router";
 import { taxiApi } from "../api/taxi.api";
 import { Button, Field, Message, StatusBadge, ui } from "./ui";
 import { friendlyError } from "../lib/errors";
+import { CaptainLocation } from "../lib/location";
 
 type Coordinate = { latitude: number; longitude: number };
 type DriverTrip = TaxiTrip & {
@@ -33,12 +34,12 @@ function stateCopy(status: TaxiTrip["status"]) {
 
 export function CaptainRideWorkspace({
   trip,
-  captainCoordinate,
+  captainLocation,
   operatingArea,
   onUpdated
 }: {
   trip: DriverTrip;
-  captainCoordinate: Coordinate | null;
+  captainLocation: CaptainLocation | null;
   operatingArea: string;
   onUpdated: (trip: TaxiTrip) => Promise<void>;
 }) {
@@ -46,6 +47,11 @@ export function CaptainRideWorkspace({
   const [declineReason, setDeclineReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [overrideMode, setOverrideMode] = useState(false);
+  const [overrideNote, setOverrideNote] = useState("");
+  const [clock, setClock] = useState(Date.now());
+  const captainCoordinate = captainLocation ? { latitude: captainLocation.latitude, longitude: captainLocation.longitude } : null;
+
   const mapRef = useRef<MapView | null>(null);
   const cameraStateRef = useRef("");
   const pickup = coordinate(trip.pickupLatitude, trip.pickupLongitude);
@@ -67,19 +73,46 @@ export function CaptainRideWorkspace({
     }
   }, [trip.id, trip.status, Boolean(captainCoordinate), Boolean(pickup), Boolean(destination)]);
 
+  useEffect(() => {
+    if (trip.status !== "ARRIVED_PICKUP") return;
+    setClock(Date.now());
+    const timer = setInterval(() => setClock(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, [trip.status, trip.arrivedAtPickupAt]);
+
+  const arrivalTime = trip.arrivedAtPickupAt ? new Date(trip.arrivedAtPickupAt).getTime() : 0;
+  const waitingTotalSeconds = arrivalTime ? Math.max(0, Math.floor((clock - arrivalTime) / 1000)) : 0;
+  const freeWaitingRemaining = Math.max(0, 300 - waitingTotalSeconds);
+  const billableWaitingSeconds = Math.max(0, waitingTotalSeconds - 300);
+  const liveWaitingChargeKobo = Math.round((billableWaitingSeconds * 500) / 60);
+
+
   async function mutate(action: "accept" | "decline" | "arrived-pickup" | "start" | "arrived-destination" | "complete") {
     if (saving) return;
     setSaving(true);
     setError("");
     try {
+      const locationEvidence = () => {
+        if (!captainLocation) throw new Error("Refresh Captain GPS before recording this Ride milestone.");
+        if (overrideMode && overrideNote.trim().length < 5) throw new Error("Add a clear override reason before continuing.");
+        return {
+          latitude: captainLocation.latitude,
+          longitude: captainLocation.longitude,
+          accuracyMeters: captainLocation.accuracyMeters,
+          recordedAt: captainLocation.recordedAt,
+          ...(overrideMode ? { overrideConfirmed: true, overrideReason: "OTHER" as const, overrideNote: overrideNote.trim() } : {})
+        };
+      };
       const updated = action === "accept" ? await taxiApi.acceptTrip(trip.id)
         : action === "decline" ? await taxiApi.declineTrip(trip.id, declineReason.trim())
-          : action === "arrived-pickup" ? await taxiApi.arrivedPickup(trip.id)
+          : action === "arrived-pickup" ? await taxiApi.arrivedPickup(trip.id, locationEvidence())
             : action === "start" ? await taxiApi.startTrip(trip.id, pin)
-              : action === "arrived-destination" ? await taxiApi.arrivedDestination(trip.id)
+              : action === "arrived-destination" ? await taxiApi.arrivedDestination(trip.id, locationEvidence())
                 : await taxiApi.completeTrip(trip.id);
       setPin("");
       setDeclineReason("");
+      setOverrideMode(false);
+      setOverrideNote("");
       await onUpdated(updated);
     } catch (cause) {
       setError(friendlyError(cause));
@@ -171,6 +204,19 @@ export function CaptainRideWorkspace({
         <View style={styles.metric}><Text style={styles.metricLabel}>Fare</Text><Text style={styles.metricValue}>{formatKobo(trip.estimatedFareKobo)}</Text></View>
       </View>
 
+      {trip.status === "ARRIVED_PICKUP" ? <View style={styles.waitingCard}>
+        <Text style={styles.waitingTitle}>{freeWaitingRemaining > 0 ? `Free wait · ${Math.floor(freeWaitingRemaining / 60)}:${String(freeWaitingRemaining % 60).padStart(2, "0")}` : `Paid wait · ${formatKobo(liveWaitingChargeKobo)}`}</Text>
+        <Text style={ui.muted}>{freeWaitingRemaining > 0 ? "Paid waiting begins after 5:00." : "Waiting is billed at ₦5 per minute, proportional to elapsed seconds."}</Text>
+      </View> : null}
+
+      {trip.status === "ACCEPTED" || trip.status === "STARTED" ? <View style={styles.waitingCard}>
+        <Text style={styles.waitingTitle}>Location integrity</Text>
+        <Text style={ui.muted}>Confirm only at the requested {trip.status === "ACCEPTED" ? "pickup" : "destination"}. Refresh GPS if your location is stale.</Text>
+        <Button title={overrideMode ? "CANCEL LOCATION OVERRIDE" : "USE LOCATION OVERRIDE"} tone="muted" onPress={() => setOverrideMode((value) => !value)} />
+        {overrideMode ? <Field placeholder="Required override reason" value={overrideNote} onChangeText={setOverrideNote} /> : null}
+        {overrideMode ? <Text style={ui.muted}>This records your current coordinates, reason and timestamp in the Ride audit trail.</Text> : null}
+      </View> : null}
+
       {trip.status === "ARRIVED_PICKUP" ? <>
         <Text style={styles.pinGuide}>PIN REQUIRED</Text>
         <Text style={ui.muted}>Ask the customer for the protected 6-digit PIN before starting the Ride.</Text>
@@ -182,7 +228,7 @@ export function CaptainRideWorkspace({
         <Field placeholder="Reason for declining" value={declineReason} onChangeText={setDeclineReason} />
         <Button title={saving ? "UPDATING..." : "DECLINE"} tone="muted" disabled={saving || declineReason.trim().length < 5} onPress={() => void mutate("decline")} />
       </> : <>
-        <Button title={saving ? "UPDATING..." : copy.action} disabled={saving || (trip.status === "ARRIVED_PICKUP" && pin.length !== 6)} onPress={() => void primaryAction()} />
+        <Button title={saving ? "UPDATING..." : copy.action} disabled={saving || (trip.status === "ARRIVED_PICKUP" && pin.length !== 6) || ((trip.status === "ACCEPTED" || trip.status === "STARTED") && (!captainLocation || (overrideMode && overrideNote.trim().length < 5)))} onPress={() => void primaryAction()} />
       </>}
 
       <View style={styles.quickActions}>
@@ -225,5 +271,7 @@ const styles = StyleSheet.create({
   quickActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   quickAction: { alignItems: "center", backgroundColor: "#F3F4F6", borderRadius: 14, flexDirection: "row", gap: 6, paddingHorizontal: 11, paddingVertical: 10 },
   quickActionText: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "900" },
-  pinGuide: { color: brand.colors.primary, fontSize: 14, fontWeight: "900", letterSpacing: 1 }
+  pinGuide: { color: brand.colors.primary, fontSize: 14, fontWeight: "900", letterSpacing: 1 },
+  waitingCard: { backgroundColor: "#FFF7ED", borderColor: "#FDBA74", borderRadius: 14, borderWidth: 1, gap: 7, padding: 12 },
+  waitingTitle: { color: brand.colors.charcoal, fontSize: 14, fontWeight: "900" }
 });

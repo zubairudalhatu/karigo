@@ -1103,45 +1103,100 @@ model TaxiDriverProfile {
 }
 
 model TaxiTrip {
-  id                     String             @id @default(uuid()) @db.Uuid
-  tripReference          String             @unique
-  customerId             String             @db.Uuid
-  driverProfileId        String?            @db.Uuid
+  id                     String               @id @default(uuid()) @db.Uuid
+  tripReference          String               @unique
+  customerId             String               @db.Uuid
+  driverProfileId        String?              @db.Uuid
   pickupAddress          String
-  pickupLatitude         Decimal?           @db.Decimal(10, 7)
-  pickupLongitude        Decimal?           @db.Decimal(10, 7)
+  pickupLatitude         Decimal?             @db.Decimal(10, 7)
+  pickupLongitude        Decimal?             @db.Decimal(10, 7)
   destinationAddress     String
-  destinationLatitude    Decimal?           @db.Decimal(10, 7)
-  destinationLongitude   Decimal?           @db.Decimal(10, 7)
-  estimatedDistanceKm    Decimal?           @db.Decimal(8, 2)
+  destinationLatitude    Decimal?             @db.Decimal(10, 7)
+  destinationLongitude   Decimal?             @db.Decimal(10, 7)
+  estimatedDistanceKm    Decimal?             @db.Decimal(8, 2)
   estimatedDurationMin   Int?
   estimatedFareKobo      Int
   finalFareKobo          Int?
-  status                 TaxiTripStatus     @default(REQUESTED)
+  status                 TaxiTripStatus       @default(REQUESTED)
   tripPinHash            String?
   tripPinEncrypted       String?
   tripPinLastFour        String?
   cancellationReason     String?
   customerNote           String?
   driverNote             String?
-  isTestMode             Boolean            @default(false)
-  requestedAt            DateTime           @default(now())
+  isTestMode             Boolean              @default(false)
+  requestedAt            DateTime             @default(now())
   acceptedAt             DateTime?
   arrivedAtPickupAt      DateTime?
   startedAt              DateTime?
   arrivedAtDestinationAt DateTime?
   completedAt            DateTime?
   cancelledAt            DateTime?
-  createdAt              DateTime           @default(now())
-  updatedAt              DateTime           @updatedAt
-  customer               CustomerProfile    @relation(fields: [customerId], references: [id])
-  driverProfile          TaxiDriverProfile? @relation(fields: [driverProfileId], references: [id])
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  customer               CustomerProfile      @relation(fields: [customerId], references: [id])
+  driverProfile          TaxiDriverProfile?   @relation(fields: [driverProfileId], references: [id])
   events                 TaxiTripEvent[]
+  tracePoints            TaxiRideTracePoint[]
+  receipt                TaxiRideReceipt?
 
   @@index([customerId, createdAt])
   @@index([driverProfileId, status])
   @@index([status, createdAt])
   @@map("taxi_trips")
+}
+
+model TaxiRideTracePoint {
+  id                   String   @id @default(uuid()) @db.Uuid
+  tripId               String   @db.Uuid
+  clientPointId        String
+  latitude             Decimal  @db.Decimal(10, 7)
+  longitude            Decimal  @db.Decimal(10, 7)
+  accuracyMeters       Decimal? @db.Decimal(8, 2)
+  speedMetersPerSecond Decimal? @db.Decimal(8, 2)
+  headingDegrees       Decimal? @db.Decimal(6, 2)
+  recordedAt           DateTime
+  receivedAt           DateTime @default(now())
+  source               String   @default("FOREGROUND")
+  trip                 TaxiTrip @relation(fields: [tripId], references: [id])
+
+  @@unique([tripId, clientPointId])
+  @@index([tripId, recordedAt])
+  @@map("taxi_ride_trace_points")
+}
+
+model TaxiRideReceipt {
+  id                     String   @id @default(uuid()) @db.Uuid
+  tripId                 String   @unique @db.Uuid
+  receiptNumber          String   @unique
+  currency               String   @default("NGN")
+  pickupAddress          String
+  destinationAddress     String
+  city                   String?
+  rideCategory           String
+  captainName            String?
+  vehicleDescription     String?
+  vehiclePlateNumber     String?
+  plannedDistanceKm      Decimal? @db.Decimal(8, 2)
+  actualDistanceKm       Decimal? @db.Decimal(8, 2)
+  durationSeconds        Int?
+  rideFareKobo           Int
+  minimumFareApplied     Boolean  @default(false)
+  totalWaitingSeconds    Int      @default(0)
+  freeWaitingSeconds     Int      @default(0)
+  billableWaitingSeconds Int      @default(0)
+  waitingChargeKobo      Int      @default(0)
+  platformFeeKobo        Int      @default(0)
+  discountKobo           Int      @default(0)
+  totalFareKobo          Int
+  paymentMethod          String   @default("CASH")
+  completedAt            DateTime
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  trip                   TaxiTrip @relation(fields: [tripId], references: [id])
+
+  @@index([completedAt])
+  @@map("taxi_ride_receipts")
 }
 
 model TaxiTripEvent {

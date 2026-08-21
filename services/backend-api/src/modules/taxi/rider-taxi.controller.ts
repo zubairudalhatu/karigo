@@ -7,6 +7,7 @@ import { TaxiCancelDto } from "./dto/taxi-cancel.dto";
 import { TaxiDriverAvailabilityDto } from "./dto/taxi-driver-availability.dto";
 import { CreateRideMessageDto, ListRideMessagesQueryDto, MarkRideMessagesReadDto } from "./dto/ride-message.dto";
 import { TaxiStartTripDto } from "./dto/taxi-start-trip.dto";
+import { RideLocationEvidenceDto } from "./dto/ride-location-evidence.dto";
 import { TaxiService } from "./taxi.service";
 
 @ApiTags("Captain Ride Operations")
@@ -79,8 +80,8 @@ export class RiderTaxiController {
   }
 
   @Post("trips/:tripId/arrived-pickup")
-  async arrivedPickup(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {
-    return { message: "Ride pickup arrival recorded", data: await this.taxi.riderArrivedPickup(user.id, tripId) };
+  async arrivedPickup(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: RideLocationEvidenceDto) {
+    return { message: "Ride pickup arrival recorded", data: await this.taxi.riderArrivedPickup(user.id, tripId, dto) };
   }
 
   @Post("trips/:tripId/start")
@@ -89,8 +90,8 @@ export class RiderTaxiController {
   }
 
   @Post("trips/:tripId/arrived-destination")
-  async arrivedDestination(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {
-    return { message: "Ride destination arrival recorded", data: await this.taxi.riderArrivedDestination(user.id, tripId) };
+  async arrivedDestination(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: RideLocationEvidenceDto) {
+    return { message: "Ride destination arrival recorded", data: await this.taxi.riderArrivedDestination(user.id, tripId, dto) };
   }
 
   @Post("trips/:tripId/complete")

@@ -106,9 +106,10 @@ function RideDetails({ trip, canBookAnother, onClose, onBookAnother }: { trip: T
   const closedAt = terminalTime(trip);
   const lifecycle = lifecycleForTrip(trip);
   const fareLabel = trip.status === "COMPLETED" && trip.finalFareKobo ? "Final fare" : "Estimated fare";
+  const receipt = trip.receipt;
   return <Card>
     <View style={ui.spaceBetween}>
-      <Text style={ui.cardTitle}>{lifecycle.receiptAvailable ? "Ride record" : "Ride details"}</Text>
+      <Text style={ui.cardTitle}>{receipt ? "Ride receipt" : lifecycle.receiptAvailable ? "Ride record" : "Ride details"}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Close ride details" onPress={onClose}>
         <Text style={styles.link}>Close</Text>
       </Pressable>
@@ -119,14 +120,17 @@ function RideDetails({ trip, canBookAnother, onClose, onBookAnother }: { trip: T
     <View style={styles.receiptBox}>
       <ReceiptRow label="Ride" value={rideCategoryLabel(trip)} />
       <ReceiptRow label="Pickup" value={trip.pickupAddress} />
+      {receipt ? <ReceiptRow label="Receipt" value={receipt.receiptNumber} /> : null}
       <ReceiptRow label="Destination" value={trip.destinationAddress} />
-      <ReceiptRow label="Distance" value={trip.estimatedDistanceKm ? `${Number(trip.estimatedDistanceKm).toLocaleString()} km` : "Pending"} />
-      <ReceiptRow label="Duration" value={trip.estimatedDurationMin ? `${trip.estimatedDurationMin} min` : "Pending"} />
-      <ReceiptRow label="Captain" value={captainName(trip) ?? "Not assigned"} />
-      <ReceiptRow label="Vehicle" value={vehicleDescription(trip) ?? "Not assigned"} />
+      <ReceiptRow label="Distance" value={receipt ? [receipt.plannedDistanceKm !== null && receipt.plannedDistanceKm !== undefined ? `Planned ${receipt.plannedDistanceKm} km` : null, receipt.actualDistanceKm !== null && receipt.actualDistanceKm !== undefined ? `Actual ${receipt.actualDistanceKm} km` : null].filter(Boolean).join(" · ") || "Unavailable" : trip.estimatedDistanceKm ? `${Number(trip.estimatedDistanceKm).toLocaleString()} km` : "Pending"} />
+      <ReceiptRow label="Duration" value={receipt?.durationSeconds !== null && receipt?.durationSeconds !== undefined ? `${Math.ceil(receipt.durationSeconds / 60)} min` : trip.estimatedDurationMin ? `${trip.estimatedDurationMin} min` : "Pending"} />
+      <ReceiptRow label="Captain" value={receipt?.captainName ?? captainName(trip) ?? "Not assigned"} />
+      <ReceiptRow label="Vehicle" value={receipt?.vehicleDescription ?? vehicleDescription(trip) ?? "Not assigned"} />
       {vehicleRegistration(trip) ? <ReceiptRow label="Registration" value={vehicleRegistration(trip)!} /> : null}
-      <ReceiptRow label={fareLabel} value={formatRideFareKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)} />
-      <ReceiptRow label="Payment" value={ridePaymentPreference(trip)} />
+      {receipt ? <ReceiptRow label="Ride fare" value={formatRideFareKobo(receipt.rideFareKobo)} /> : <ReceiptRow label={fareLabel} value={formatRideFareKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)} />}
+      {receipt ? <ReceiptRow label="Waiting" value={`${Math.floor(receipt.totalWaitingSeconds / 60)}m ${receipt.totalWaitingSeconds % 60}s · ${formatRideFareKobo(receipt.waitingChargeKobo)}`} /> : null}
+      {receipt ? <ReceiptRow label="Total" value={formatRideFareKobo(receipt.totalFareKobo)} /> : null}
+      <ReceiptRow label="Payment" value={receipt?.paymentMethod ?? ridePaymentPreference(trip)} />
       <ReceiptRow label="Requested" value={rideDate(trip)} />
       {trip.acceptedAt ? <ReceiptRow label="Accepted" value={dateTime(trip.acceptedAt)} /> : null}
       {trip.arrivedAtPickupAt ? <ReceiptRow label="Pickup arrival" value={dateTime(trip.arrivedAtPickupAt)} /> : null}

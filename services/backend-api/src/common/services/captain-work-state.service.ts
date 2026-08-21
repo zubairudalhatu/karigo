@@ -33,6 +33,16 @@ export interface CaptainAvailabilityUpdate {
   latitude?: number;
   longitude?: number;
   accuracyMeters?: number;
+  tracePoints?: Array<{
+    clientPointId: string;
+    latitude: number;
+    longitude: number;
+    accuracyMeters?: number;
+    speedMetersPerSecond?: number;
+    headingDegrees?: number;
+    recordedAt: string;
+    source?: "FOREGROUND" | "BACKGROUND" | "OFFLINE_BUFFER";
+  }>;
 }
 
 type CaptainAvailabilityReasonCode =
@@ -193,6 +203,35 @@ export class CaptainWorkStateService {
             lastSeenAt: now
           }
         });
+      }
+      const activeRideTripId = user.captainWorkState?.activeWorkMode === CaptainWorkMode.RIDE
+        ? user.captainWorkState.activeRideTripId
+        : null;
+      if (activeRideTripId && dto.tracePoints?.length) {
+        const earliest = Date.now() - 24 * 60 * 60 * 1000;
+        const latest = Date.now() + 5 * 60 * 1000;
+        const points = dto.tracePoints.filter((point) => {
+          const recordedAt = new Date(point.recordedAt).getTime();
+          return Number.isFinite(recordedAt) && recordedAt >= earliest && recordedAt <= latest
+            && point.latitude >= -90 && point.latitude <= 90
+            && point.longitude >= -180 && point.longitude <= 180;
+        });
+        if (points.length) {
+          await tx.taxiRideTracePoint.createMany({
+            data: points.map((point) => ({
+              tripId: activeRideTripId,
+              clientPointId: point.clientPointId,
+              latitude: new Prisma.Decimal(point.latitude),
+              longitude: new Prisma.Decimal(point.longitude),
+              accuracyMeters: point.accuracyMeters === undefined ? null : new Prisma.Decimal(point.accuracyMeters),
+              speedMetersPerSecond: point.speedMetersPerSecond === undefined ? null : new Prisma.Decimal(point.speedMetersPerSecond),
+              headingDegrees: point.headingDegrees === undefined ? null : new Prisma.Decimal(point.headingDegrees),
+              recordedAt: new Date(point.recordedAt),
+              source: point.source ?? "FOREGROUND"
+            })),
+            skipDuplicates: true
+          });
+        }
       }
     });
     return this.getForUser(userId);

@@ -5,6 +5,9 @@ export type CaptainLocation = {
   longitude: number;
   accuracyMeters?: number | null;
   isApproximate?: boolean;
+  recordedAt: string;
+  speedMetersPerSecond?: number | null;
+  headingDegrees?: number | null;
 };
 
 export type CaptainOperationalLocationPayload = Pick<CaptainLocation, "latitude" | "longitude" | "accuracyMeters">;
@@ -48,7 +51,10 @@ function captainLocationFromPosition(position: Location.LocationObject): Captain
     latitude: position.coords.latitude,
     longitude: position.coords.longitude,
     accuracyMeters,
-    isApproximate: accuracyMeters !== null && accuracyMeters > APPROXIMATE_ACCURACY_METERS
+    isApproximate: accuracyMeters !== null && accuracyMeters > APPROXIMATE_ACCURACY_METERS,
+    recordedAt: new Date(position.timestamp).toISOString(),
+    speedMetersPerSecond: position.coords.speed,
+    headingDegrees: position.coords.heading
   };
 }
 

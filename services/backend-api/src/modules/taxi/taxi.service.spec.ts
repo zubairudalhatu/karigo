@@ -174,7 +174,9 @@ const taxiTrip = {
     user: { id: "customer-user", fullName: "Demo Customer", phoneNumber: "+2348030000001" }
   },
   driverProfile: null,
-  events: []
+  events: [],
+  receipt: null,
+  tracePoints: []
 };
 
 describe("TaxiService", () => {
@@ -688,6 +690,24 @@ describe("TaxiService", () => {
     expect(result.launchNotice).toContain("KariGO Rides is live");
   });
 
+  it("never quotes a Ride or category range below the NGN 1,900 minimum", () => {
+    enableTaxiStaging();
+    const result = service.fareEstimate({
+      pickupAddress: "Wuse, Abuja",
+      destinationAddress: "Maitama, Abuja",
+      estimatedDistanceKm: 1,
+      estimatedDurationMin: 5
+    });
+
+    expect(result.estimatedFareKobo).toBe(190000);
+    expect(result.minimumFareApplied).toBe(true);
+    expect(result.rideCategories.every((category) =>
+      category.fareEstimateKobo! >= 190000
+      && category.fareRangeKobo!.min >= 190000
+      && category.fareRangeKobo!.max >= 190000
+    )).toBe(true);
+  });
+
   it("returns ride categories and applies the selected category multiplier to fare estimates", () => {
     enableTaxiStaging();
 
@@ -706,7 +726,7 @@ describe("TaxiService", () => {
       expect.objectContaining({ id: "COMFORT", name: "KariGO Comfort" })
     ]));
     expect(result.selectedRideCategory).toMatchObject({ id: "COMFORT", name: "KariGO Comfort" });
-    expect(result.estimatedFareKobo).toBe(326875);
+    expect(result.estimatedFareKobo).toBe(326500);
     expect(result.rideCategories).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: "ECONOMY",
@@ -714,7 +734,7 @@ describe("TaxiService", () => {
       }),
       expect.objectContaining({
         id: "COMFORT",
-        fareEstimateKobo: 326875
+        fareEstimateKobo: 326500
       })
     ]));
   });

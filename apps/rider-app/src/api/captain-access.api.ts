@@ -137,5 +137,15 @@ export const captainAccessApi = {
     latitude?: number;
     longitude?: number;
     accuracyMeters?: number | null;
+    tracePoints?: Array<{
+      clientPointId: string;
+      latitude: number;
+      longitude: number;
+      accuracyMeters?: number | null;
+      speedMetersPerSecond?: number | null;
+      headingDegrees?: number | null;
+      recordedAt: string;
+      source?: "FOREGROUND" | "BACKGROUND" | "OFFLINE_BUFFER";
+    }>;
   }) => api.patch<CaptainWorkState>("captain/availability", body)
 };

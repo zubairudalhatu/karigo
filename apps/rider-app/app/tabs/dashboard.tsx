@@ -18,6 +18,7 @@ import { taxiApi } from "../../src/api/taxi.api";
 import { CaptainRideWorkspace } from "../../src/components/captain-ride-workspace";
 import { CaptainHomeCockpit, CaptainHomeSkeleton } from "../../src/components/captain-home-cockpit";
 import { disableActiveWorkBackgroundLocation, enableActiveWorkBackgroundLocation } from "../../src/lib/background-location";
+import { foregroundRideTracePoint } from "../../src/lib/ride-trace-buffer";
 import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { CaptainLocation, CaptainLocationError, captainLocationErrorMessage, distanceMeters, requestCaptainForegroundLocation, toOperationalLocationPayload, watchCaptainForegroundLocation } from "../../src/lib/location";
@@ -422,7 +423,7 @@ export default function RiderDashboard() {
 
     const request = (async () => {
       try {
-        const updated = await captainAccessApi.updateAvailability(toOperationalLocationPayload(location));
+        const updated = await captainAccessApi.updateAvailability({ ...toOperationalLocationPayload(location), tracePoints: [foregroundRideTracePoint(location)] });
         if (!mountedRef.current) return;
         readinessHeartbeatRef.current = { location, sentAt: Date.now() };
         latestWorkStateRef.current = updated;
@@ -576,7 +577,7 @@ export default function RiderDashboard() {
     uploadInFlightRef.current = true;
     setLocationUpdating(true);
     try {
-      const updated = await captainAccessApi.updateAvailability(toOperationalLocationPayload(location));
+      const updated = await captainAccessApi.updateAvailability({ ...toOperationalLocationPayload(location), tracePoints: [foregroundRideTracePoint(location)] });
       lastUploadedLocationRef.current = { location, uploadedAt: now };
       failureCountRef.current = 0;
       backoffUntilRef.current = 0;
@@ -866,7 +867,7 @@ export default function RiderDashboard() {
       <Message>{message}</Message>
       <Message error>{error}</Message>
       {refreshNotice ? <Text style={styles.resyncNotice}>{refreshNotice}</Text> : null}
-      <CaptainRideWorkspace trip={activeRide} captainCoordinate={mapState.coordinate} operatingArea={mapState.area} onUpdated={onRideUpdated} />
+      <CaptainRideWorkspace trip={activeRide} captainLocation={deviceLocation?.location ?? null} operatingArea={mapState.area} onUpdated={onRideUpdated} />
     </Screen></Protected>;
   }
 
