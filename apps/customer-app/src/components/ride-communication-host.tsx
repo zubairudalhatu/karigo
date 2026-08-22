@@ -113,7 +113,12 @@ export function RideCommunicationHost() {
             data: { event: "RIDE_MESSAGE_FOREGROUND_SOUND", rideId: message.rideId, messageEventId: message.id },
             sound: "karigo_message.wav"
           },
-          trigger: null
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: 1,
+            repeats: false,
+            channelId: "ride-messages-v2"
+          }
         }).catch(() => undefined);
         if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
         bannerTimerRef.current = setTimeout(() => setBanner(null), 4_500);
@@ -129,7 +134,12 @@ export function RideCommunicationHost() {
             data: { event: "RIDE_CALL_INCOMING", rideId: call.rideId, callSessionId: call.id },
             sound: "karigo_ride_call.wav"
           },
-          trigger: null
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: 1,
+            repeats: false,
+            channelId: "ride-calls-v2"
+          }
         }).then((id) => {
           if (incomingCallIdRef.current === call.id) incomingNotificationRef.current = id;
           else void Notifications.dismissNotificationAsync(id).catch(() => undefined);
