@@ -40,7 +40,7 @@ describe("RideCommunicationsService", () => {
     readiness: jest.fn(() => ({ enabled: false, provider: null, recordingEnabled: false, reason: "No approved provider" })),
     initiate: jest.fn(() => Promise.resolve({ enabled: false, provider: null, recordingEnabled: false, reason: "No approved provider" }))
   };
-  const realtime: any = { emitToRide: jest.fn() };
+  const realtime: any = { emitToRide: jest.fn(), emitToRideAndUser: jest.fn() };
   const service = new RideCommunicationsService(prisma, config, notifications, calls, realtime);
 
   beforeEach(() => {
@@ -67,13 +67,15 @@ describe("RideCommunicationsService", () => {
       expect(notification.metadata).toEqual({ event: "RIDE_MESSAGE", rideId: activeTrip.id, messageEventId: customerMessage.id, senderLabel: "Ride Captain" });
       expect(JSON.stringify(notification)).not.toContain("I've arrived");
     }
-    expect(realtime.emitToRide).toHaveBeenCalledWith(activeTrip.id, "ride.message.new", expect.objectContaining({ deliveryState: "SENT" }));
+    expect(realtime.emitToRideAndUser).toHaveBeenCalledWith(activeTrip.id, "customer-user", "ride.message.new", expect.objectContaining({ deliveryState: "SENT" }));
+    expect(realtime.emitToRide).not.toHaveBeenCalledWith(activeTrip.id, "ride.message.new", expect.anything());
   });
 
   it("persists a Customer message and safely targets the assigned Captain", async () => {
     await service.sendMessage(activeTrip, "customer-user", "CUSTOMER", { message: "I'm outside" });
 
     expect(notifications.createNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: "captain-user" }));
+    expect(realtime.emitToRideAndUser).toHaveBeenCalledWith(activeTrip.id, "captain-user", "ride.message.new", expect.objectContaining({ senderRole: "CUSTOMER" }));
   });
   it("marks a received message DELIVERED only after the recipient socket acknowledgement", async () => {
     prisma.taxiTripEvent.findFirst.mockResolvedValue(customerMessage);

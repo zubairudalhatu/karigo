@@ -6,6 +6,7 @@ export interface CustomerProfile {
   phoneNumber: string;
   email?: string | null;
   profilePhotoUrl?: string | null;
+  requireRidePin: boolean;
 }
 
 export interface RetentionSummary {
@@ -19,6 +20,6 @@ export interface RetentionSummary {
 
 export const customerApi = {
   profile: () => api.get<CustomerProfile>("customers/me"),
-  update: (body: { fullName?: string; email?: string; profilePhotoUrl?: string | null }) => api.patch<CustomerProfile>("customers/me", body),
+  update: (body: { fullName?: string; email?: string; profilePhotoUrl?: string | null; requireRidePin?: boolean }) => api.patch<CustomerProfile>("customers/me", body),
   retention: () => api.get<RetentionSummary>("customers/me/retention-summary")
 };

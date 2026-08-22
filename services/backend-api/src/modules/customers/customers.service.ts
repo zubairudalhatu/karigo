@@ -21,19 +21,25 @@ export class CustomersService {
       throw new NotFoundException("Customer profile not found");
     }
 
-    return customer;
+    return this.customerResponse(customer);
   }
 
   async update(userId: string, dto: UpdateCustomerProfileDto) {
     try {
-      return await this.prisma.user.update({
+      const { requireRidePin, ...userFields } = dto;
+      const customer = await this.prisma.user.update({
         where: { id: userId },
-        data: dto,
+        data: {
+          ...userFields,
+          ...(requireRidePin === undefined ? {} : { customerProfile: { update: { requireRidePin } } })
+        },
         select: {
           ...publicUserSelect,
           customerProfile: true
         }
       });
+      if (!customer.customerProfile) throw new NotFoundException("Customer profile not found");
+      return this.customerResponse(customer);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         throw new ConflictException("Email address is already registered");
@@ -59,6 +65,14 @@ export class CustomersService {
       lastOrderDate: lastOrder?.createdAt ?? null,
       promoUsageCount,
       isRepeatCustomer: completedOrders > 1
+    };
+  }
+
+  private customerResponse<T extends { customerProfile: { requireRidePin: boolean } | null }>(customer: T) {
+    if (!customer.customerProfile) throw new NotFoundException("Customer profile not found");
+    return {
+      ...customer,
+      requireRidePin: customer.customerProfile.requireRidePin
     };
   }
 }

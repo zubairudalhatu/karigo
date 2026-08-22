@@ -1,14 +1,15 @@
-import type { RideIncomingCallEvent } from "@karigo/shared-types";
+import type { RideIncomingCallEvent, RideMessage } from "@karigo/shared-types";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { Modal, Platform, StyleSheet, Text, Vibration, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Modal, Platform, Pressable, StyleSheet, Text, Vibration, View } from "react-native";
 import { notificationsApi } from "../api/notifications.api";
 import { taxiApi } from "../api/taxi.api";
 import { useAuth } from "../contexts/auth-context";
-import { disconnectRideRealtime, isActiveRideConversation, subscribePersonalRideRealtime } from "../lib/ride-realtime";
+import { claimRideMessageEvent, hasHandledRideMessageEvent, incrementRideUnread } from "../lib/ride-alert-state";
+import { acknowledgeRideMessageDelivered, disconnectRideRealtime, isActiveRideConversation, subscribePersonalRideRealtime } from "../lib/ride-realtime";
 import { Button, Card, ui } from "./ui";
 
 type IncomingNotice = Pick<RideIncomingCallEvent, "id" | "rideId" | "rideReference" | "callerLabel">;
@@ -23,12 +24,17 @@ function notificationMetadata(notification: Notifications.Notification) {
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const metadata = notificationMetadata(notification);
+    if (metadata.event === "RIDE_MESSAGE_FOREGROUND_SOUND") {
+      return { shouldPlaySound: true, shouldSetBadge: false, shouldShowBanner: false, shouldShowList: false };
+    }
     const quietConversation = metadata.event === "RIDE_MESSAGE" && isActiveRideConversation(metadata.rideId);
+    const duplicateMessage = metadata.event === "RIDE_MESSAGE" && hasHandledRideMessageEvent(metadata.messageEventId);
+    const quiet = quietConversation || duplicateMessage;
     return {
-      shouldPlaySound: !quietConversation,
+      shouldPlaySound: !quiet,
       shouldSetBadge: false,
-      shouldShowBanner: !quietConversation,
-      shouldShowList: !quietConversation
+      shouldShowBanner: !quiet,
+      shouldShowList: !quiet
     };
   }
 });
@@ -36,14 +42,14 @@ Notifications.setNotificationHandler({
 async function registerCustomerPush() {
   if (!Device.isDevice || (Platform.OS !== "android" && Platform.OS !== "ios")) return;
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("ride-calls", {
+    await Notifications.setNotificationChannelAsync("ride-calls-v2", {
       name: "KariGO Ride calls",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 500, 250, 500, 250, 800],
       sound: "karigo_ride_call.wav",
       lightColor: "#D90000"
     });
-    await Notifications.setNotificationChannelAsync("ride-messages", {
+    await Notifications.setNotificationChannelAsync("ride-messages-v2", {
       name: "KariGO Ride messages",
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 150],
@@ -69,8 +75,20 @@ async function registerCustomerPush() {
 export function RideCommunicationHost() {
   const { user } = useAuth();
   const router = useRouter();
+  const incomingCallIdRef = useRef<string | null>(null);
+  const incomingNotificationRef = useRef<string | null>(null);
+  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [incoming, setIncoming] = useState<IncomingNotice | null>(null);
   const [responding, setResponding] = useState(false);
+  const [banner, setBanner] = useState<{ rideId: string; senderLabel: string } | null>(null);
+
+  function stopIncomingAlert() {
+    Vibration.cancel();
+    incomingCallIdRef.current = null;
+    const id = incomingNotificationRef.current;
+    incomingNotificationRef.current = null;
+    if (id) void Notifications.dismissNotificationAsync(id).catch(() => undefined);
+  }
 
   useEffect(() => {
     if (!user) {
@@ -81,7 +99,27 @@ export function RideCommunicationHost() {
     let unsubscribe: (() => void) | undefined;
     void registerCustomerPush().catch(() => undefined);
     void subscribePersonalRideRealtime({
+      "ride.message.new": (message: RideMessage) => {
+        if (message.senderRole !== "CAPTAIN") return;
+        void acknowledgeRideMessageDelivered(message.rideId, message.id);
+        if (isActiveRideConversation(message.rideId) || !claimRideMessageEvent(message.id)) return;
+        incrementRideUnread(message.rideId);
+        setBanner({ rideId: message.rideId, senderLabel: "Ride Captain" });
+        Vibration.vibrate(140);
+        void Notifications.scheduleNotificationAsync({
+          content: {
+            title: "New Ride message",
+            body: "Ride Captain sent you a message",
+            data: { event: "RIDE_MESSAGE_FOREGROUND_SOUND", rideId: message.rideId, messageEventId: message.id },
+            sound: "karigo_message.wav"
+          },
+          trigger: null
+        }).catch(() => undefined);
+        if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+        bannerTimerRef.current = setTimeout(() => setBanner(null), 4_500);
+      },
       "ride.call.incoming": (call) => {
+        incomingCallIdRef.current = call.id;
         setIncoming(call);
         Vibration.vibrate([0, 500, 250, 500, 250, 800]);
         void Notifications.scheduleNotificationAsync({
@@ -92,11 +130,14 @@ export function RideCommunicationHost() {
             sound: "karigo_ride_call.wav"
           },
           trigger: null
+        }).then((id) => {
+          if (incomingCallIdRef.current === call.id) incomingNotificationRef.current = id;
+          else void Notifications.dismissNotificationAsync(id).catch(() => undefined);
         }).catch(() => undefined);
       },
-      "ride.call.declined": (call) => setIncoming((current) => current?.id === call.id ? null : current),
-      "ride.call.missed": (call) => setIncoming((current) => current?.id === call.id ? null : current),
-      "ride.call.remote_ended": (call) => setIncoming((current) => current?.id === call.id ? null : current)
+      "ride.call.declined": (call) => { setIncoming((current) => current?.id === call.id ? null : current); stopIncomingAlert(); },
+      "ride.call.missed": (call) => { setIncoming((current) => current?.id === call.id ? null : current); stopIncomingAlert(); },
+      "ride.call.remote_ended": (call) => { setIncoming((current) => current?.id === call.id ? null : current); stopIncomingAlert(); }
     }).then((cleanup) => { unsubscribe = cleanup; }).catch(() => undefined);
 
     const response = Notifications.addNotificationResponseReceivedListener(({ notification }) => {
@@ -107,7 +148,13 @@ export function RideCommunicationHost() {
         router.push(`/taxi/chat/${metadata.rideId}` as never);
       }
     });
-    return () => { unsubscribe?.(); response.remove(); };
+    const received = Notifications.addNotificationReceivedListener((notification) => {
+      const metadata = notificationMetadata(notification);
+      if (metadata.event === "RIDE_MESSAGE" && typeof metadata.rideId === "string" && typeof metadata.messageEventId === "string" && claimRideMessageEvent(metadata.messageEventId)) {
+        incrementRideUnread(metadata.rideId);
+      }
+    });
+    return () => { unsubscribe?.(); response.remove(); received.remove(); stopIncomingAlert(); if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current); };
   }, [user?.id]);
 
   async function decline() {
@@ -116,7 +163,7 @@ export function RideCommunicationHost() {
     try {
       await taxiApi.declineCall(incoming.rideId, incoming.id);
       setIncoming(null);
-      Vibration.cancel();
+      stopIncomingAlert();
     } finally {
       setResponding(false);
     }
@@ -126,11 +173,16 @@ export function RideCommunicationHost() {
     if (!incoming || responding) return;
     const current = incoming;
     setIncoming(null);
-    Vibration.cancel();
+    stopIncomingAlert();
     router.push(`/taxi/call/${current.rideId}?mode=accept&sessionId=${current.id}` as never);
   }
 
-  return <Modal visible={Boolean(incoming)} transparent animationType="fade" onRequestClose={() => void decline()}>
+  return <>
+    {banner ? <Pressable accessibilityRole="button" accessibilityLabel="Open new Ride message" onPress={() => { const current = banner; setBanner(null); router.push(`/taxi/chat/${current.rideId}` as never); }} style={styles.banner}>
+      <Text style={styles.bannerTitle}>New Ride message</Text>
+      <Text style={styles.bannerBody}>{banner.senderLabel} sent you a message</Text>
+    </Pressable> : null}
+    <Modal visible={Boolean(incoming)} transparent animationType="fade" onRequestClose={() => void decline()}>
     <View style={styles.backdrop}><Card><View style={styles.card}>
       <Text style={styles.title}>Incoming KariGO Ride call</Text>
       <Text style={styles.caller}>{incoming?.callerLabel ?? "Ride participant"}</Text>
@@ -141,7 +193,8 @@ export function RideCommunicationHost() {
         <Button title="Accept" disabled={responding} onPress={accept} />
       </View>
     </View></Card></View>
-  </Modal>;
+    </Modal>
+  </>;
 }
 
 const styles = StyleSheet.create({
@@ -149,5 +202,8 @@ const styles = StyleSheet.create({
   card: { gap: 12 },
   title: { fontSize: 22, fontWeight: "900" },
   caller: { fontSize: 30, fontWeight: "900" },
-  actions: { gap: 10, marginTop: 10 }
+  actions: { gap: 10, marginTop: 10 },
+  banner: { backgroundColor: "#1F2937", borderLeftColor: "#D90000", borderLeftWidth: 5, borderRadius: 14, elevation: 8, gap: 3, left: 18, padding: 14, position: "absolute", right: 18, top: 56, zIndex: 1000 },
+  bannerTitle: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
+  bannerBody: { color: "#F3F4F6", fontSize: 13 }
 });

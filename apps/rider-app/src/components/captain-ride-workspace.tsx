@@ -9,6 +9,7 @@ import { taxiApi } from "../api/taxi.api";
 import { Button, Field, Message, StatusBadge, ui } from "./ui";
 import { friendlyError } from "../lib/errors";
 import { acknowledgeRideMessageDelivered, subscribeRideRealtime } from "../lib/ride-realtime";
+import { useRideUnreadCount } from "../lib/ride-alert-state";
 import { CaptainLocation } from "../lib/location";
 
 type Coordinate = { latitude: number; longitude: number };
@@ -62,6 +63,7 @@ export function CaptainRideWorkspace({
   const visibleCoordinates = [captainCoordinate, pickup, destination].filter((item): item is Coordinate => Boolean(item));
   const copy = stateCopy(trip.status);
   const customerFirstName = trip.customer?.fullName?.trim().split(/\s+/)[0] || "Customer";
+  const unreadCount = useRideUnreadCount(trip.id, trip.conversationSummary?.unreadCount ?? 0);
 
   useEffect(() => {
     const cameraState = `${trip.id}:${trip.status}:${Boolean(captainCoordinate)}`;
@@ -95,7 +97,7 @@ export function CaptainRideWorkspace({
         void acknowledgeRideMessageDelivered(trip.id, message.id);
         void refreshTrip();
       }
-    }).then((unsubscribe) => { cleanup = unsubscribe; }).catch(() => undefined);
+    }, () => void refreshTrip()).then((unsubscribe) => { cleanup = unsubscribe; }).catch(() => undefined);
     return () => cleanup?.();
   }, [trip.id, trip.updatedAt]);
 
@@ -125,7 +127,7 @@ export function CaptainRideWorkspace({
       const updated = action === "accept" ? await taxiApi.acceptTrip(trip.id)
         : action === "decline" ? await taxiApi.declineTrip(trip.id, declineReason.trim())
           : action === "arrived-pickup" ? await taxiApi.arrivedPickup(trip.id, locationEvidence())
-            : action === "start" ? await taxiApi.startTrip(trip.id, pin)
+            : action === "start" ? await taxiApi.startTrip(trip.id, trip.ridePinRequired ? pin : undefined)
               : action === "arrived-destination" ? await taxiApi.arrivedDestination(trip.id, locationEvidence())
                 : await taxiApi.completeTrip(trip.id);
       setPin("");
@@ -232,7 +234,7 @@ export function CaptainRideWorkspace({
         {overrideAvailable && overrideMode ? <Text style={ui.muted}>This records your current coordinates, reason and timestamp in the Ride audit trail.</Text> : null}
       </View> : null}
 
-      {trip.status === "ARRIVED_PICKUP" ? <>
+      {trip.status === "ARRIVED_PICKUP" && trip.ridePinRequired ? <>
         <Text style={styles.pinGuide}>PIN REQUIRED</Text>
         <Text style={ui.muted}>Ask the customer for the protected 6-digit PIN before starting the Ride.</Text>
         <Field placeholder="Customer trip PIN" value={pin} onChangeText={(value) => setPin(value.replace(/\D/g, "").slice(0, 6))} keyboardType="number-pad" />
@@ -243,11 +245,11 @@ export function CaptainRideWorkspace({
         <Field placeholder="Reason for declining" value={declineReason} onChangeText={setDeclineReason} />
         <Button title={saving ? "UPDATING..." : "DECLINE"} tone="muted" disabled={saving || declineReason.trim().length < 5} onPress={() => void mutate("decline")} />
       </> : <>
-        <Button title={saving ? "UPDATING..." : copy.action} disabled={saving || (trip.status === "ARRIVED_PICKUP" && pin.length !== 6) || ((trip.status === "ACCEPTED" || trip.status === "STARTED") && (!captainLocation || (overrideMode && overrideNote.trim().length < 5)))} onPress={() => void primaryAction()} />
+        <Button title={saving ? "UPDATING..." : copy.action} disabled={saving || (trip.status === "ARRIVED_PICKUP" && trip.ridePinRequired && pin.length !== 6) || ((trip.status === "ACCEPTED" || trip.status === "STARTED") && (!captainLocation || (overrideMode && overrideNote.trim().length < 5)))} onPress={() => void primaryAction()} />
       </>}
 
       <View style={styles.quickActions}>
-        <Pressable accessibilityRole="button" onPress={() => router.push(`/ride-chat/${trip.id}` as never)} style={styles.quickAction}><Feather name="message-circle" size={18} /><Text style={styles.quickActionText}>Chat{trip.conversationSummary?.unreadCount ? ` (${trip.conversationSummary.unreadCount})` : ""}</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => router.push(`/ride-chat/${trip.id}` as never)} style={styles.quickAction}><Feather name="message-circle" size={18} /><Text style={styles.quickActionText}>Chat{unreadCount ? ` • ${unreadCount}` : ""}</Text></Pressable>
         <Pressable accessibilityRole="button" onPress={callInKariGO} style={styles.quickAction}><Feather name="phone" size={18} /><Text style={styles.quickActionText}>Call</Text></Pressable>
         {mapTarget ? <Pressable accessibilityRole="button" onPress={openNavigation} style={styles.quickAction}><Feather name="navigation" size={18} /><Text style={styles.quickActionText}>Navigation</Text></Pressable> : null}
         <Pressable accessibilityRole="button" onPress={() => router.push("/ride-safety" as never)} style={styles.quickAction}><Feather name="shield" size={18} /><Text style={styles.quickActionText}>Safety</Text></Pressable>

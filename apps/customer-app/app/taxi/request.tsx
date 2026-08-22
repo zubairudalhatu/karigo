@@ -17,6 +17,7 @@ import {
 } from "@karigo/shared-types";
 import { brand } from "@karigo/config";
 import { Address, addressesApi } from "../../src/api/addresses.api";
+import { customerApi } from "../../src/api/customer.api";
 import { taxiApi } from "../../src/api/taxi.api";
 import { Button, Card, Empty, Field, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError } from "../../src/lib/errors";
@@ -24,6 +25,7 @@ import { formatRideFareKobo, formatRideFareRangeKobo } from "../../src/lib/rides
 import { ridesProductionEnabled } from "../../src/lib/rides-flags";
 
 import { acknowledgeRideMessageDelivered, subscribeRideRealtime } from "../../src/lib/ride-realtime";
+import { useRideUnreadCount } from "../../src/lib/ride-alert-state";
 type BookingStep = "HOME" | "ROUTE" | "CONFIRM" | "DETAILS" | "TRACKING";
 type PlaceField = "pickup" | "destination" | "stop";
 type RidePanelState = "expanded" | "half" | "collapsed";
@@ -399,6 +401,7 @@ export default function TaxiRequest() {
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [selectedCategory, setSelectedCategory] = useState("ECONOMY");
   const [categories, setCategories] = useState<TaxiRideCategory[]>([]);
+  const [requireRidePin, setRequireRidePin] = useState(false);
   const [estimate, setEstimate] = useState<TaxiFareEstimate | null>(null);
   const [routePreview, setRoutePreview] = useState<TaxiRoutePreview | null>(null);
   const [routeError, setRouteError] = useState("");
@@ -440,7 +443,7 @@ export default function TaxiRequest() {
       .slice(0, 3);
   }, [trips]);
   const routePoints = useMemo(() => decodePolyline(routePreview?.encodedPolyline), [routePreview?.encodedPolyline]);
-  const categoryOptions = estimate?.rideCategories?.length ? estimate.rideCategories : categories;
+  const categoryOptions = estimate?.rideCategories ?? [];
   const selectedCategoryDetail = categoryOptions.find((category) => category.id === selectedCategory) ?? categoryOptions[0];
   const canCreateTrip = estimateMatchesRoute(estimate, routePreview, selectedCategory);
   const activeTrips = useMemo(() => sortActiveTrips(trips.filter((trip) => isActiveTaxiTripStatus(trip.status))), [trips]);
@@ -477,12 +480,14 @@ export default function TaxiRequest() {
     if (step !== "TRACKING") setEntryStatus("checking");
     try {
       const history = await taxiApi.trips();
-      const [saved, rideCategories] = await Promise.all([
+      const [saved, rideCategories, customerProfile] = await Promise.all([
         addressesApi.list().catch(() => []),
-        taxiApi.rideCategories(activeRideCity ?? rideServiceAreaLabel).catch(() => [])
+        taxiApi.rideCategories(activeRideCity ?? rideServiceAreaLabel).catch(() => []),
+        customerApi.profile()
       ]);
       setAddresses(saved);
       setCategories(rideCategories);
+      setRequireRidePin(customerProfile.requireRidePin);
       setTrips(history);
       setCreated((current) => current ? history.find((trip) => trip.id === current.id) ?? current : current);
       const preferred = reconcileRideEntry(history);
@@ -590,7 +595,7 @@ export default function TaxiRequest() {
           }
         } : current);
       }
-    }).then((cleanup) => { unsubscribeRealtime = cleanup; }).catch(() => undefined);
+    }, () => void refreshActiveTrip()).then((cleanup) => { unsubscribeRealtime = cleanup; }).catch(() => undefined);
     recoveryInterval = setInterval(() => void refreshActiveTrip(), 60_000);
     void refreshActiveTrip();
 
@@ -1380,6 +1385,7 @@ export default function TaxiRequest() {
             selectedCategory={selectedCategoryDetail}
             estimate={estimate}
             paymentMethod={paymentMethod}
+            requireRidePin={requireRidePin}
             scheduleForLater={scheduleForLater}
             scheduledPickupAt={scheduledPickupAt}
             pickupInstruction={pickupInstruction}
@@ -1698,9 +1704,12 @@ function RideOptionsPanel({
         <Metric label="Duration" value={routePreview?.durationMin ? `${routePreview.durationMin} min` : "Pending"} />
       </View>
       {scheduleForLater ? <Text style={styles.scheduleNote}>Scheduled ride: {scheduledPickupAt || "Set pickup time before request."}</Text> : null}
-      {categoryOptions.length === 0 ? <Empty message="No ride category is available in this area yet." /> : categoryOptions.map((category) => (
+      {loading && categoryOptions.length === 0
+        ? <Text style={ui.muted}>Loading all available category prices…</Text>
+        : categoryOptions.length === 0 ? <Empty message="Category quotes are currently unavailable. Refresh the route to try again." /> : categoryOptions.map((category) => (
         <RideCategoryCard key={category.id} category={category} selected={selectedCategory === category.id} onPress={() => onCategory(category.id)} />
       ))}
+      <Text style={ui.muted}>Minimum fare applies. Pickup waiting is free for 5 minutes, then ₦5/min.</Text>
     </ScrollView>
     <View style={[styles.stickyActionFooter, { paddingBottom: Math.max(bottomInset, 12) }]}>
       {selectedCategoryDetail ? <Text style={styles.stickyActionSummary} numberOfLines={1}>{selectedCategoryDetail.name} - {fareRange(selectedCategoryDetail.fareRangeKobo)}</Text> : null}
@@ -1726,6 +1735,7 @@ function RideBookingDetails({
   selectedCategory,
   estimate,
   paymentMethod,
+  requireRidePin,
   scheduleForLater,
   scheduledPickupAt,
   pickupInstruction,
@@ -1746,6 +1756,7 @@ function RideBookingDetails({
   selectedCategory?: TaxiRideCategory;
   estimate: TaxiFareEstimate | null;
   paymentMethod: string;
+  requireRidePin: boolean;
   scheduleForLater: boolean;
   scheduledPickupAt: string;
   pickupInstruction: string;
@@ -1786,6 +1797,10 @@ function RideBookingDetails({
         ))}
       </View>
       <Text style={ui.muted}>{paymentCopy(paymentMethod)}</Text>
+      <View style={styles.ridePinSummary}>
+        <Text style={styles.ridePinSummaryTitle}>Ride PIN protection: {requireRidePin ? "On" : "Off"}</Text>
+        <Text style={ui.muted}>{requireRidePin ? "Your Captain must verify your PIN at pickup." : "You can enable this for future Rides in Profile → Ride Safety."}</Text>
+      </View>
       <Button title={scheduleForLater ? "Use immediate ride" : "Schedule for later"} tone="muted" onPress={onScheduleToggle} />
       {scheduleForLater ? <Field placeholder="Pickup time, e.g. 2026-08-01T18:30:00" value={scheduledPickupAt} onChangeText={onScheduledPickupAt} /> : null}
       <Pressable accessibilityRole="button" onPress={onDetailsExpanded} style={styles.detailsToggle}>
@@ -1881,7 +1896,8 @@ function RideTracking({
   const terminal = isTerminalTaxiTripStatus(trip.status);
   const captain = lifecycle.captainVisible ? captainForTrip(trip) : null;
   const vehicle = lifecycle.vehicleVisible ? vehicleForTrip(trip) : null;
-  const showPin = Boolean(trip.tripPin && lifecycle.pickupPinVisible && captain);
+  const unreadCount = useRideUnreadCount(trip.id, trip.conversationSummary?.unreadCount ?? 0);
+  const showPin = Boolean(trip.ridePinRequired && trip.tripPin && lifecycle.pickupPinVisible && captain);
   const canContactCaptain = Boolean(captain && !terminal);
   const canChatCaptain = Boolean(captain);
   const showReceipt = lifecycle.receiptAvailable || terminal;
@@ -1937,7 +1953,7 @@ function RideTracking({
     {showPin && trip.tripPin ? <>
       <Text style={ui.otpCode}>{trip.tripPin.slice(0, 3)} {trip.tripPin.slice(3)}</Text>
       <Text style={styles.pinWarning}>Share this PIN only with your approved KariGO Ride Captain at pickup.</Text>
-    </> : lifecycle.captainVisible && !terminal ? <>
+    </> : trip.ridePinRequired && lifecycle.captainVisible && !terminal ? <>
       <Text style={styles.maskedPin}>••• •••</Text>
       <Text style={ui.muted}>Your Ride PIN will appear when your approved Captain reaches pickup.</Text>
     </> : null}
@@ -1949,13 +1965,14 @@ function RideTracking({
       <Text style={styles.activeNoticeTitle}>{otherActiveCount} other active ride {otherActiveCount === 1 ? "request" : "requests"}</Text>
       <Text style={styles.activeNoticeText}>Manage legacy active rides from Orders.</Text>
     </View> : null}
-    {lifecycle.customerCancellationAllowed ? <Button title={loading ? "Cancelling..." : "Cancel ride request"} tone="muted" disabled={loading} onPress={onCancel} /> : null}
-    <View style={styles.inlineActions}>
-      <Button title="Share Ride" tone="muted" onPress={shareRide} />
-      {canChatCaptain ? <Button title={`Chat${trip.conversationSummary?.unreadCount ? ` (${trip.conversationSummary.unreadCount})` : ""}`} tone="muted" onPress={chatCaptain} /> : null}
+    <View style={styles.primaryRideActions}>
+      {canChatCaptain ? <Button title={`Chat${unreadCount ? ` • ${unreadCount}` : ""}`} tone="muted" onPress={chatCaptain} /> : null}
       {canContactCaptain ? <Button title="Call" tone="muted" onPress={callInKariGO} /> : null}
-      {canContactCaptain ? <Button title="Phone fallback" tone="muted" onPress={openContact} /> : null}
+      <Button title="Safety" tone="muted" onPress={() => Alert.alert("Ride Safety", "Verify your Captain and vehicle. Use Share to send safe Ride details to someone you trust.")} />
+      <Button title="Share" tone="muted" onPress={shareRide} />
     </View>
+    {lifecycle.customerCancellationAllowed ? <Button title={loading ? "Cancelling..." : "Cancel ride request"} tone="muted" disabled={loading} onPress={onCancel} /> : null}
+    {canContactCaptain ? <Button title="Phone fallback" tone="muted" onPress={openContact} /> : null}
     {terminal ? <View style={styles.inlineActions}>
       <Button title={trip.status === "EXPIRED" ? "Retry ride request" : "Book another ride"} onPress={onBookAnother} />
       <Button title="Back to KariGO Home" tone="muted" onPress={onBackHome} />
@@ -2018,7 +2035,7 @@ function SafetyPanel({ trip, onShare }: { trip: TaxiTrip; onShare: () => void })
     <Text style={ui.muted}>Verify the Captain name and vehicle before entering.</Text>
     {captain ? <Text style={ui.muted}>Captain: {captain.displayName}</Text> : null}
     {vehicle?.registrationNumber ? <Text style={ui.muted}>Registration: {vehicle.registrationNumber}</Text> : null}
-    <Text style={ui.muted}>{trip.status === "ARRIVED_PICKUP" ? "Share the Ride PIN only at pickup." : "Do not share your Ride PIN before pickup."}</Text>
+    {trip.ridePinRequired ? <Text style={ui.muted}>{trip.status === "ARRIVED_PICKUP" ? "Share the Ride PIN only at pickup." : "Do not share your Ride PIN before pickup."}</Text> : null}
     <Button title="Share safe ride details" tone="muted" onPress={onShare} />
   </View>;
 }
@@ -2159,6 +2176,9 @@ const styles = StyleSheet.create({
   metricValue: { color: brand.colors.charcoal, fontSize: 15, fontWeight: "900" },
   metrics: { flexDirection: "row", gap: 10 },
   paymentGrid: { flexDirection: "row", gap: 8 },
+  primaryRideActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  ridePinSummary: { backgroundColor: "#F9FAFB", borderColor: brand.colors.border, borderRadius: 14, borderWidth: 1, gap: 4, padding: 12 },
+  ridePinSummaryTitle: { color: brand.colors.charcoal, fontWeight: "900" },
   paymentOption: { borderColor: brand.colors.border, borderRadius: 16, borderWidth: 1, flex: 1, gap: 2, padding: 10 },
   paymentOptionActive: { backgroundColor: "#FEF2F2", borderColor: "#FCA5A5" },
   paymentOptionDisabled: { opacity: 0.55 },

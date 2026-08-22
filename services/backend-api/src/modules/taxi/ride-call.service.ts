@@ -138,9 +138,10 @@ export class RideCallService {
     if (current.recipientUserId !== participantUserId) throw new ForbiddenException("Only the called Ride participant may decline this call");
     if (current.state === "DECLINED") return this.sessionForParticipant(current, participantUserId, false);
     if (current.state !== "RINGING") throw new BadRequestException("This Ride call can no longer be declined");
-    const session = await this.transition(current, "DECLINED", participantUserId, current.recipientRole as RideCallParticipantRole, {
+    const { session, transitioned } = await this.terminalParticipantTransition(current, ["RINGING"], "DECLINED", participantUserId, current.recipientRole as RideCallParticipantRole, {
       declinedAt: new Date(), endedAt: new Date(), endedByUserId: participantUserId, endReason: "DECLINED"
     }, "declined");
+    if (transitioned) this.emitState(session, "ride.call.declined");
     return this.sessionForParticipant(session, participantUserId, false);
   }
 
@@ -148,12 +149,13 @@ export class RideCallService {
     const current = await this.requireSession(sessionId, participantUserId, tripId);
     if (TERMINAL_CALL_STATES.includes(current.state as RideCallState)) return this.sessionForParticipant(current, participantUserId, false);
     const endedAt = new Date();
-    const session = await this.transition(current, "ENDED", participantUserId, this.participantRole(current, participantUserId), {
+    const { session, transitioned } = await this.terminalParticipantTransition(current, LIVE_CALL_STATES, "ENDED", participantUserId, this.participantRole(current, participantUserId), {
       endedAt,
       endedByUserId: participantUserId,
       endReason: this.safeReason(reason),
       durationSeconds: current.connectedAt ? Math.max(0, Math.floor((endedAt.getTime() - current.connectedAt.getTime()) / 1000)) : 0
     }, "ended");
+    if (transitioned) this.emitState(session, "ride.call.remote_ended");
     return this.sessionForParticipant(session, participantUserId, false);
   }
 
@@ -171,12 +173,12 @@ export class RideCallService {
     for (const session of sessions) {
       const endedAt = new Date();
       const safeReason = this.safeReason(reason);
-      const updated = await this.systemTransition(session, "ENDED", {
+      const result = await this.systemTransition(session, "ENDED", {
         endedAt,
         endReason: safeReason,
         durationSeconds: session.connectedAt ? Math.max(0, Math.floor((endedAt.getTime() - session.connectedAt.getTime()) / 1000)) : 0
       }, "ended", { endReason: safeReason });
-      this.emitState(updated, "ride.call.remote_ended");
+      if (result.transitioned) this.emitState(result.session, "ride.call.remote_ended");
     }
   }
 
@@ -195,6 +197,32 @@ export class RideCallService {
     });
     this.emitState(updated, event === "ended" ? "ride.call.remote_ended" : `ride.call.${event}`);
     return updated;
+  }
+
+  private async terminalParticipantTransition(
+    current: TaxiRideCallSession,
+    allowedStates: RideCallState[],
+    state: RideCallState,
+    actorUserId: string,
+    actorRole: RideCallParticipantRole,
+    data: Prisma.TaxiRideCallSessionUpdateManyMutationInput,
+    event: string
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const result = await tx.taxiRideCallSession.updateMany({
+        where: { id: current.id, state: { in: allowedStates } },
+        data: { ...data, state }
+      });
+      const session = await tx.taxiRideCallSession.findUniqueOrThrow({ where: { id: current.id } });
+      if (result.count === 1) {
+        await this.audit(tx, session, actorUserId, actorRole, event, {
+          state,
+          endReason: session.endReason,
+          durationSeconds: session.durationSeconds
+        });
+      }
+      return { session, transitioned: result.count === 1 };
+    });
   }
 
   private async requireSession(sessionId: string, participantUserId: string, tripId?: string) {
@@ -249,6 +277,7 @@ export class RideCallService {
     const payload = this.formatSession(session);
     this.realtime.emitToUser(session.initiatorUserId, event, payload);
     this.realtime.emitToUser(session.recipientUserId, event, payload);
+    this.realtime.emitToRide(session.tripId, event, payload);
   }
 
   private async notifyIncomingCall(request: RideCallSessionRequest, sessionId: string) {
@@ -279,33 +308,39 @@ export class RideCallService {
     });
     for (const session of sessions) {
       const missedAt = new Date();
-      const updated = await this.systemTransition(session, "MISSED", {
+      const result = await this.systemTransition(session, "MISSED", {
         missedAt, endedAt: missedAt, endReason: "MISSED", durationSeconds: 0
       }, "missed", { endReason: "MISSED" });
-      this.emitState(updated, "ride.call.missed");
+      if (result.transitioned) this.emitState(result.session, "ride.call.missed");
     }
   }
 
   private async systemTransition(
     session: TaxiRideCallSession,
     state: RideCallState,
-    data: Prisma.TaxiRideCallSessionUpdateInput,
+    data: Prisma.TaxiRideCallSessionUpdateManyMutationInput,
     event: string,
     metadata: Record<string, unknown>
   ) {
     return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.taxiRideCallSession.update({ where: { id: session.id }, data: { ...data, state } });
-      await tx.taxiTripEvent.create({
-        data: {
-          tripId: updated.tripId,
-          actorType: TaxiTripActorType.SYSTEM,
-          actorId: null,
-          eventType: `taxi.trip.call.${event}`,
-          note: `Ride call ${event}`,
-          metadata: { callSessionId: updated.id, state, ...metadata } as Prisma.InputJsonValue
-        }
+      const result = await tx.taxiRideCallSession.updateMany({
+        where: { id: session.id, state: { in: LIVE_CALL_STATES } },
+        data: { ...data, state }
       });
-      return updated;
+      const updated = await tx.taxiRideCallSession.findUniqueOrThrow({ where: { id: session.id } });
+      if (result.count === 1) {
+        await tx.taxiTripEvent.create({
+          data: {
+            tripId: updated.tripId,
+            actorType: TaxiTripActorType.SYSTEM,
+            actorId: null,
+            eventType: `taxi.trip.call.${event}`,
+            note: `Ride call ${event}`,
+            metadata: { callSessionId: updated.id, state, ...metadata } as Prisma.InputJsonValue
+          }
+        });
+      }
+      return { session: updated, transitioned: result.count === 1 };
     });
   }
 

@@ -8,7 +8,7 @@ import { Button, Card, Message, Protected, Screen, ui } from "../../../src/compo
 import { friendlyError } from "../../../src/lib/errors";
 import { subscribeRideRealtime } from "../../../src/lib/ride-realtime";
 
-type CallStatus = "Preparing" | "Ringing" | "Connecting" | "Connected" | "Reconnecting" | "Ended";
+type CallStatus = "Preparing…" | "Calling…" | "Ringing…" | "Connecting…" | "Connected" | "Reconnecting…" | "Call ended";
 
 async function requestMicrophone() {
   if (Platform.OS !== "android") return true;
@@ -34,8 +34,11 @@ export default function CustomerRideCall() {
   const handlerRef = useRef<IRtcEngineEventHandler | null>(null);
   const sessionRef = useRef<RideCallSession | null>(null);
   const endedRef = useRef(false);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [session, setSession] = useState<RideCallSession | null>(null);
-  const [status, setStatus] = useState<CallStatus>("Preparing");
+  const [status, setStatus] = useState<CallStatus>("Preparing…");
+  const [participantLabel, setParticipantLabel] = useState("Ride Captain");
   const [error, setError] = useState("");
   const [muted, setMuted] = useState(false);
   const [speaker, setSpeaker] = useState(false);
@@ -50,6 +53,29 @@ export default function CustomerRideCall() {
     engine.release();
     engineRef.current = null;
     handlerRef.current = null;
+  }
+
+  function clearReconnectGrace() {
+    if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    reconnectTimerRef.current = null;
+  }
+
+  function finishCall(updated?: RideCallSession | null) {
+    if (updated && sessionRef.current && updated.id !== sessionRef.current.id) return;
+    endedRef.current = true;
+    clearReconnectGrace();
+    if (updated) {
+      sessionRef.current = updated;
+      setSession(updated);
+    }
+    releaseEngine();
+    setStatus("Call ended");
+    if (!dismissTimerRef.current) {
+      dismissTimerRef.current = setTimeout(() => {
+        dismissTimerRef.current = null;
+        router.replace(`/taxi/request?tripId=${params.tripId}` as never);
+      }, 1_500);
+    }
   }
 
   async function reportConnected(current: RideCallSession) {
@@ -77,13 +103,28 @@ export default function CustomerRideCall() {
     if (!current.credential) throw new Error("KariGO could not prepare secure call credentials. Please try again.");
     const engine = createAgoraRtcEngine();
     const handler: IRtcEngineEventHandler = {
-      onJoinChannelSuccess: () => setStatus(current.state === "RINGING" ? "Ringing" : "Connecting"),
+      onJoinChannelSuccess: () => setStatus(current.state === "RINGING" ? "Ringing…" : "Connecting…"),
       onUserJoined: () => {
+        clearReconnectGrace();
         setStatus("Connected");
         setConnectedAt((value) => value ?? Date.now());
         void reportConnected(sessionRef.current ?? current);
       },
-      onUserOffline: () => setStatus("Reconnecting"),
+      onUserOffline: () => {
+        setStatus("Reconnecting…");
+        clearReconnectGrace();
+        reconnectTimerRef.current = setTimeout(() => {
+          reconnectTimerRef.current = null;
+          void taxiApi.activeCallSession(current.rideId).then((authoritative) => {
+            if (!authoritative || ["DECLINED", "MISSED", "ENDED", "FAILED"].includes(authoritative.state)) {
+              finishCall(authoritative ?? sessionRef.current);
+              return;
+            }
+            sessionRef.current = authoritative;
+            setSession(authoritative);
+          }).catch((cause) => setError(friendlyError(cause)));
+        }, 4_000);
+      },
       onTokenPrivilegeWillExpire: () => void renew(sessionRef.current ?? current),
       onRequestToken: () => void renew(sessionRef.current ?? current),
       onError: (_code, message) => setError(message || "The Ride call connection failed.")
@@ -113,6 +154,7 @@ export default function CustomerRideCall() {
     let active = true;
     let unsubscribe: (() => void) | undefined;
     void (async () => {
+      void taxiApi.trip(params.tripId).then((trip) => setParticipantLabel(trip.captain?.displayName || "Ride Captain")).catch(() => undefined);
       if (!await requestMicrophone()) throw new Error("Microphone permission is required only while making a KariGO Ride call.");
       const current = params.mode === "accept" && params.sessionId
         ? await taxiApi.acceptCall(params.tripId, params.sessionId)
@@ -120,44 +162,50 @@ export default function CustomerRideCall() {
       if (!active) return;
       sessionRef.current = current;
       setSession(current);
-      setStatus(current.state === "RINGING" ? "Ringing" : "Connecting");
-      await join(current);
+      setStatus(current.participant === "initiator" && current.state === "RINGING" ? "Calling…" : "Connecting…");
       unsubscribe = await subscribeRideRealtime(params.tripId, {
-        "ride.call.accepted": (updated) => { sessionRef.current = updated; setSession(updated); setStatus("Connecting"); },
+        "ride.call.accepted": (updated) => { sessionRef.current = updated; setSession(updated); setStatus("Connecting…"); },
         "ride.call.connected": (updated) => { sessionRef.current = updated; setSession(updated); setStatus("Connected"); setConnectedAt((value) => value ?? Date.now()); },
-        "ride.call.declined": (updated) => { sessionRef.current = updated; setSession(updated); setStatus("Ended"); releaseEngine(); },
-        "ride.call.missed": (updated) => { sessionRef.current = updated; setSession(updated); setStatus("Ended"); releaseEngine(); },
-        "ride.call.remote_ended": (updated) => { sessionRef.current = updated; setSession(updated); setStatus("Ended"); releaseEngine(); }
-      });
+        "ride.call.declined": finishCall,
+        "ride.call.missed": finishCall,
+        "ride.call.remote_ended": finishCall
+      }, () => void taxiApi.activeCallSession(params.tripId).then((authoritative) => {
+        if (!authoritative || ["DECLINED", "MISSED", "ENDED", "FAILED"].includes(authoritative.state)) {
+          finishCall(authoritative ?? sessionRef.current);
+          return;
+        }
+        sessionRef.current = authoritative;
+        setSession(authoritative);
+      }).catch((cause) => setError(friendlyError(cause))));
+      await join(current);
     })().catch((cause) => setError(friendlyError(cause)));
-    return () => { active = false; unsubscribe?.(); releaseEngine(); };
+    return () => { active = false; unsubscribe?.(); clearReconnectGrace(); if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current); releaseEngine(); };
   }, [params.tripId, params.sessionId, params.mode]);
 
   async function endCall() {
     if (endedRef.current) return;
     endedRef.current = true;
     try {
-      if (sessionRef.current) await taxiApi.endCall(params.tripId, sessionRef.current.id);
+      const ended = sessionRef.current ? await taxiApi.endCall(params.tripId, sessionRef.current.id) : null;
+      finishCall(ended);
     } catch (cause) {
       setError(friendlyError(cause));
-    } finally {
-      releaseEngine();
-      setStatus("Ended");
+      finishCall(sessionRef.current);
     }
   }
 
-  return <Protected><Screen title="KariGO Ride call">
+  return <Protected><Screen title={`${participantLabel} — Ride call`}>
     <Text style={ui.muted}>Private, Ride-scoped audio call</Text>
     <Message error>{error}</Message>
     <Card>
       <Text style={styles.status}>{status}</Text>
-      <Text style={styles.timer}>{elapsedText(connectedAt, clock)}</Text>
-      <Text style={ui.muted}>Ride audio is not recorded. The microphone is used only during this call.</Text>
+      {connectedAt ? <Text style={styles.timer}>{elapsedText(connectedAt, clock)}</Text> : null}
+      <Text style={ui.muted}>Audio only · Calls are not recorded</Text>
     </Card>
     <View style={styles.controls}>
-      <Button title={muted ? "Unmute" : "Mute"} tone="muted" disabled={!engineRef.current || status === "Ended"} onPress={() => { const next = !muted; engineRef.current?.muteLocalAudioStream(next); setMuted(next); }} />
-      <Button title={speaker ? "Use earpiece" : "Use speaker"} tone="muted" disabled={!engineRef.current || status === "Ended"} onPress={() => { const next = !speaker; engineRef.current?.setEnableSpeakerphone(next); setSpeaker(next); }} />
-      <Button title={status === "Ended" ? "Close" : "End call"} onPress={() => status === "Ended" ? router.back() : void endCall()} />
+      <Button title={muted ? "Unmute" : "Mute"} tone="muted" disabled={!engineRef.current || status === "Call ended"} onPress={() => { const next = !muted; engineRef.current?.muteLocalAudioStream(next); setMuted(next); }} />
+      <Button title={speaker ? "Earpiece" : "Speaker"} tone="muted" disabled={!engineRef.current || status === "Call ended"} onPress={() => { const next = !speaker; engineRef.current?.setEnableSpeakerphone(next); setSpeaker(next); }} />
+      <Button title={status === "Call ended" ? "Close" : "End call"} onPress={() => status === "Call ended" ? router.replace(`/taxi/request?tripId=${params.tripId}` as never) : void endCall()} />
     </View>
   </Screen></Protected>;
 }

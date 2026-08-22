@@ -40,8 +40,8 @@ describe("ExpoPushProvider", () => {
 
 
   it.each([
-    ["RIDE_CALL_INCOMING", "ride-calls", "karigo_ride_call.wav", "Incoming KariGO Ride call"],
-    ["RIDE_MESSAGE", "ride-messages", "karigo_message.wav", "New Ride message"]
+    ["RIDE_CALL_INCOMING", "ride-calls-v2", "karigo_ride_call.wav", "Incoming KariGO Ride call"],
+    ["RIDE_MESSAGE", "ride-messages-v2", "karigo_message.wav", "New Ride message"]
   ] as const)("routes %s through the safe Ride notification presentation", async (event, channelId, sound, title) => {
     const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue({
       ok: true,

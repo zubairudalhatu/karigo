@@ -44,7 +44,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
       "expo-notifications",
       {
         color: "#D90000",
-        defaultChannel: "ride-messages",
+        defaultChannel: "ride-messages-v2",
         sounds: ["./assets/sounds/karigo_ride_call.wav", "./assets/sounds/karigo_message.wav"]
       }
     ],

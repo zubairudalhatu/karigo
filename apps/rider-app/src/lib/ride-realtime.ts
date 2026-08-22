@@ -64,7 +64,8 @@ export function disconnectRideRealtime() {
 
 export async function subscribeRideRealtime<K extends EventName>(
   rideId: string,
-  handlers: Partial<{ [P in K]: (payload: RideRealtimeEvents[P]) => void }>
+  handlers: Partial<{ [P in K]: (payload: RideRealtimeEvents[P]) => void }>,
+  onReconnect?: () => void
 ) {
   const client = await connectRideRealtime();
   const registrations: Array<[string, (payload: any) => void]> = [];
@@ -76,9 +77,17 @@ export async function subscribeRideRealtime<K extends EventName>(
     registrations.push([event, scoped]);
     client.on(event, scoped);
   });
-  client.emit("ride.subscribe", { rideId });
+  let joined = false;
+  const joinAuthorizedRide = () => {
+    client.emit("ride.subscribe", { rideId });
+    if (joined) onReconnect?.();
+    joined = true;
+  };
+  client.on("connect", joinAuthorizedRide);
+  if (client.connected) joinAuthorizedRide();
   return () => {
     registrations.forEach(([event, handler]) => client.off(event, handler));
+    client.off("connect", joinAuthorizedRide);
     client.emit("ride.unsubscribe", { rideId });
   };
 }

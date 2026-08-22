@@ -3,7 +3,7 @@ import { brand } from "@karigo/config";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { CustomerProfile, customerApi, RetentionSummary } from "../src/api/customer.api";
 import { KariGoAppTopBar } from "../src/components/kari-go-app-top-bar";
 import { Button, Card, Field, Loading, Message, Protected, Screen, ui } from "../src/components/ui";
@@ -120,6 +120,7 @@ export default function Profile() {
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
   const [photoSaving, setPhotoSaving] = useState(false);
+  const [rideSafetySaving, setRideSafetySaving] = useState(false);
 
   useEffect(() => {
     Promise.all([customerApi.profile(), customerApi.retention().catch(() => null)])
@@ -208,6 +209,24 @@ export default function Profile() {
     }
   }
 
+  async function updateRidePinPreference(requireRidePin: boolean) {
+    if (!profile || rideSafetySaving) return;
+    const previous = profile.requireRidePin;
+    setProfile({ ...profile, requireRidePin });
+    setRideSafetySaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      setProfile(await customerApi.update({ requireRidePin }));
+      setSuccess(`Ride PIN protection is ${requireRidePin ? "on" : "off"} for future Rides.`);
+    } catch (e) {
+      setProfile({ ...profile, requireRidePin: previous });
+      setError(friendlyError(e));
+    } finally {
+      setRideSafetySaving(false);
+    }
+  }
+
   if (!profile && !error) return <Loading />;
 
   return <Protected>
@@ -261,6 +280,18 @@ export default function Profile() {
             autoCapitalize="none"
           />
           <Button title={saving ? "Saving..." : "Save profile"} disabled={saving} onPress={saveProfile} />
+        </Card>
+
+        <Card>
+          <View style={styles.safetyPreferenceRow}>
+            <View style={styles.safetyPreferenceCopy}>
+              <Text style={ui.cardTitle}>Ride Safety</Text>
+              <Text style={styles.safetyPreferenceTitle}>Require Ride PIN</Text>
+              <Text style={ui.muted}>Require a PIN before my Ride starts.</Text>
+            </View>
+            <Switch accessibilityLabel="Require Ride PIN" disabled={rideSafetySaving} value={profile.requireRidePin} onValueChange={(value) => void updateRidePinPreference(value)} trackColor={{ false: "#D1D5DB", true: "#FCA5A5" }} thumbColor={profile.requireRidePin ? brand.colors.primary : "#F9FAFB"} />
+          </View>
+          <Text style={ui.muted}>When enabled, your Captain must verify your Ride PIN at pickup before starting the trip. Changes apply to future Ride requests only.</Text>
         </Card>
 
         <Card>
@@ -327,5 +358,8 @@ const styles = StyleSheet.create({
   statLabel: { color: brand.colors.muted, fontSize: 11, fontWeight: "800", textAlign: "center" },
   statPill: { alignItems: "center", backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 18, borderWidth: 1, flex: 1, gap: 2, padding: 12 },
   statValue: { color: brand.colors.charcoal, fontSize: 18, fontWeight: "900" },
-  statsRow: { flexDirection: "row", gap: 10 }
+  statsRow: { flexDirection: "row", gap: 10 },
+  safetyPreferenceCopy: { flex: 1, gap: 4 },
+  safetyPreferenceRow: { alignItems: "center", flexDirection: "row", gap: 16, justifyContent: "space-between" },
+  safetyPreferenceTitle: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "900" }
 });

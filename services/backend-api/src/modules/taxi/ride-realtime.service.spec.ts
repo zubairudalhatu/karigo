@@ -12,6 +12,22 @@ describe("RideRealtimeService", () => {
     expect(to).toHaveBeenNthCalledWith(2, "user:user-id");
   });
 
+  it("uses a Socket.IO room union so one recipient socket gets one message event", () => {
+    const emit = jest.fn();
+    const union = { to: jest.fn(), emit } as any;
+    union.to.mockReturnValue(union);
+    const serverTo = jest.fn(() => union);
+    const service = new RideRealtimeService();
+    service.attach({ to: serverTo } as any);
+
+    service.emitToRideAndUser("ride-id", "recipient-id", "ride.message.new", { id: "message-id" });
+
+    expect(serverTo).toHaveBeenCalledWith("ride:ride-id");
+    expect(union.to).toHaveBeenCalledWith("user:recipient-id");
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledWith("ride.message.new", { id: "message-id" });
+  });
+
   it("emits the free and paid waiting boundary without client polling", () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date("2026-08-22T10:00:00.000Z"));

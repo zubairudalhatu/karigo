@@ -696,8 +696,11 @@ export class TaxiService {
     const customer = await this.requireCustomer(userId);
     // Pickup waiting is measured from the server-side arrival timestamp; a request cannot pre-bill waiting.
     const estimate = this.calculateFare({ ...dto, waitingMinutes: 0 });
-    const tripPin = randomInt(100000, 1000000).toString();
-    const tripPinHash = await bcrypt.hash(tripPin, 10);
+    const ridePinRequired = customer.requireRidePin;
+    const tripPin = ridePinRequired ? randomInt(100000, 1000000).toString() : null;
+    const tripPinHash = tripPin ? await bcrypt.hash(tripPin, 10) : null;
+    const tripPinEncrypted = tripPin ? this.encryptTripPin(tripPin) : null;
+    const tripPinLastFour = tripPin ? tripPin.slice(-4) : null;
     const tripReference = await this.nextTripReference();
     const now = new Date();
 
@@ -730,9 +733,10 @@ export class TaxiService {
           estimatedDistanceKm: this.decimalOrUndefined(estimate.estimatedDistanceKm),
           estimatedDurationMin: estimate.estimatedDurationMin,
           estimatedFareKobo: estimate.estimatedFareKobo,
+          ridePinRequired,
           tripPinHash,
-          tripPinEncrypted: this.encryptTripPin(tripPin),
-          tripPinLastFour: tripPin.slice(-4),
+          tripPinEncrypted,
+          tripPinLastFour,
           customerNote: this.composeTripCustomerNote(dto),
           isTestMode: false,
           requestedAt: now
@@ -756,20 +760,23 @@ export class TaxiService {
             paymentMethod: dto.paymentMethod?.trim() || "Cash",
             scheduledPickupAt: dto.scheduledPickupAt?.trim() || null,
             clientRequestId: dto.clientRequestId?.trim() || null,
-            pricing: estimate.pricing
+            pricing: estimate.pricing,
+            ridePinRequired
           } as Prisma.InputJsonValue
         }
       });
+      if (ridePinRequired) {
+        await tx.taxiTripEvent.create({
+          data: {
+            tripId: created.id,
+            actorType: TaxiTripActorType.SYSTEM,
+            eventType: "RIDE_PIN_ISSUED",
+            note: "Protected pickup PIN issued",
+            metadata: { pinLength: 6, isTestMode: false } as Prisma.InputJsonValue
+          }
+        });
+      }
       return created;
-      await tx.taxiTripEvent.create({
-        data: {
-          tripId: created.id,
-          actorType: TaxiTripActorType.SYSTEM,
-          eventType: "RIDE_PIN_ISSUED",
-          note: "Protected pickup PIN issued",
-          metadata: { pinLength: 6, isTestMode: false } as Prisma.InputJsonValue
-        }
-      });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     return this.formatTrip(trip, { viewer: "customer" });
@@ -1079,20 +1086,26 @@ export class TaxiService {
     this.assertTaxiStagingEnabled();
     const { profile, trip } = await this.requireDriverTrip(userId, tripId);
     if (trip.status !== TaxiTripStatus.ARRIVED_PICKUP) throw new BadRequestException("Ride Captain must arrive at pickup before starting the trip");
-    if (!trip.tripPinHash || !(await bcrypt.compare(dto.tripPin, trip.tripPinHash))) {
-      await this.prisma.taxiTripEvent.create({
-        data: { tripId: trip.id, actorType: TaxiTripActorType.DRIVER, actorId: userId, eventType: "RIDE_PIN_VERIFICATION_FAILED", note: "Protected pickup PIN verification failed", metadata: { attemptedAt: new Date().toISOString() } as Prisma.InputJsonValue }
-      });
-      throw new BadRequestException("Invalid trip PIN");
+    if (trip.ridePinRequired) {
+      if (!dto.tripPin || !trip.tripPinHash || !(await bcrypt.compare(dto.tripPin, trip.tripPinHash))) {
+        await this.prisma.taxiTripEvent.create({
+          data: { tripId: trip.id, actorType: TaxiTripActorType.DRIVER, actorId: userId, eventType: "RIDE_PIN_VERIFICATION_FAILED", note: "Protected pickup PIN verification failed", metadata: { attemptedAt: new Date().toISOString() } as Prisma.InputJsonValue }
+        });
+        throw new BadRequestException("Invalid trip PIN");
+      }
     }
     const startedAt = new Date();
     const waiting = calculatePickupWaiting(trip.arrivedAtPickupAt, startedAt, this.ridePricingDefaults().freePickupWaitSeconds, this.ridePricingDefaults().waitingChargeKoboPerMinute);
+    const eventType = trip.ridePinRequired ? "RIDE_PIN_VERIFIED_AND_TRIP_STARTED" : "RIDE_STARTED_WITHOUT_PIN";
+    const note = trip.ridePinRequired
+      ? `Ride Captain ${profile.fullName} verified the PIN and started the Ride`
+      : `Ride Captain ${profile.fullName} started the Ride after verified pickup arrival`;
     const updated = await this.updateTripWithEvent(trip.id, {
       status: TaxiTripStatus.STARTED,
       startedAt,
       tripPinHash: null,
       tripPinEncrypted: null
-    }, userId, TaxiTripActorType.DRIVER, "RIDE_PIN_VERIFIED_AND_TRIP_STARTED", `Ride Captain ${profile.fullName} verified the PIN and started the Ride`, {
+    }, userId, TaxiTripActorType.DRIVER, eventType, note, {
       metadata: { ...waiting, serverRecordedAt: startedAt.toISOString() },
       beforeUpdate: (tx) => this.captainWorkState.transitionLock(tx, userId, CaptainWorkMode.RIDE, trip.id, CaptainWorkLockStage.IN_PROGRESS)
     });
@@ -2157,9 +2170,10 @@ export class TaxiService {
   private rideEvidenceSummary(trip: TaxiTripWithRelations) {
     const eventTypes = new Set(trip.events.map((event) => event.eventType));
     return {
+      pinRequired: trip.ridePinRequired,
       pickupArrivalVerified: eventTypes.has("RIDE_PICKUP_ARRIVAL_VERIFIED"),
       pickupOverrideUsed: eventTypes.has("RIDE_PICKUP_GEOFENCE_OVERRIDE"),
-      pinIssued: eventTypes.has("RIDE_PIN_ISSUED"),
+      pinIssued: trip.ridePinRequired && eventTypes.has("RIDE_PIN_ISSUED"),
       pinVerified: eventTypes.has("RIDE_PIN_VERIFIED_AND_TRIP_STARTED"),
       pinFailureCount: trip.events.filter((event) => event.eventType === "RIDE_PIN_VERIFICATION_FAILED").length,
       destinationArrivalVerified: eventTypes.has("RIDE_DESTINATION_ARRIVAL_VERIFIED"),
@@ -2183,7 +2197,7 @@ export class TaxiService {
       this.logger.warn(`Ride assignment incomplete tripId=${trip.id} status=${trip.status}`);
     }
     const showPublicCaptain = Boolean(lifecycle.captainVisible && trip.driverProfile && !assignmentIncomplete);
-    const tripPin = viewer === "customer" && lifecycle.pickupPinVisible ? this.decryptTripPin(trip) : undefined;
+    const tripPin = viewer === "customer" && trip.ridePinRequired && lifecycle.pickupPinVisible ? this.decryptTripPin(trip) : undefined;
     const assignedAt = this.tripEventTime(trip, "taxi.trip.driver_assigned");
     const lifecycleTimestamps = {
       requestedAt: trip.requestedAt?.toISOString() ?? null,
@@ -2232,7 +2246,8 @@ export class TaxiService {
       receipt: trip.receipt ? this.formatRideReceipt(trip.receipt) : null,
       evidenceSummary: viewer === "admin" || viewer === "internal" ? this.rideEvidenceSummary(trip) : undefined,
       status: trip.status,
-      tripPinLastFour: viewer === "admin" || lifecycle.pickupPinVisible ? trip.tripPinLastFour : null,
+      ridePinRequired: trip.ridePinRequired,
+      tripPinLastFour: viewer === "customer" && trip.ridePinRequired && lifecycle.pickupPinVisible ? trip.tripPinLastFour : null,
       ...(tripPin ? { tripPin } : {}),
       lifecycle,
       captain: showPublicCaptain && trip.driverProfile ? this.formatCaptainSummary(trip.driverProfile) : null,

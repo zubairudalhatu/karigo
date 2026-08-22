@@ -121,7 +121,9 @@ export class RideCommunicationsService {
       }
     });
     const formatted = this.formatMessage(event, []);
-    this.realtime.emitToRide(trip.id, "ride.message.new", formatted);
+    const recipientUserId = this.recipientUserId(trip, senderRole);
+    if (recipientUserId) this.realtime.emitToRideAndUser(trip.id, recipientUserId, "ride.message.new", formatted);
+    else this.realtime.emitToRide(trip.id, "ride.message.new", formatted);
     await this.notifyRecipient(trip, senderRole, event.id);
     return formatted;
   }
@@ -284,7 +286,7 @@ export class RideCommunicationsService {
   }
 
   private async notifyRecipient(trip: RideCommunicationTrip, senderRole: RideMessageSenderRole, messageEventId: string) {
-    const recipientUserId = senderRole === "CUSTOMER" ? trip.driverProfile?.userId : trip.customer.user.id;
+    const recipientUserId = this.recipientUserId(trip, senderRole);
     if (!recipientUserId) return;
     const senderLabel = senderRole === "CUSTOMER" ? "Customer" : "Ride Captain";
     const notification = {
@@ -303,6 +305,10 @@ export class RideCommunicationsService {
     if (results.some((result) => result.status === "rejected")) {
       this.logger.warn(`Ride message notification failed tripId=${trip.id} eventId=${messageEventId}`);
     }
+  }
+
+  private recipientUserId(trip: RideCommunicationTrip, senderRole: RideMessageSenderRole) {
+    return senderRole === "CUSTOMER" ? trip.driverProfile?.userId : trip.customer.user.id;
   }
 
   private formatMessage(event: RideEvent, receipts: RideEvent[]) {

@@ -330,12 +330,13 @@ export default function AdminTaxiPage() {
         {trips.length ? trips.map((trip) => <article className="card" key={trip.id}>
           <strong>{trip.tripReference} · {trip.rideCategory ?? "ECONOMY"}</strong>
           <p>{trip.pickupAddress} to {trip.destinationAddress}</p>
-          <p className="muted">Fare estimate: {formatKobo(trip.estimatedFareKobo)} - PIN last four: {trip.tripPinLastFour ?? "hidden"}</p>
+          <p className="muted">Fare estimate: {formatKobo(trip.estimatedFareKobo)}</p>
+          <p className="muted">PIN required: {trip.ridePinRequired ? "Yes" : "No"} · PIN verified: {trip.evidenceSummary?.pinVerified ? "Yes" : "No"}</p>
           {trip.finalFareKobo ? <p className="muted">Final fare: {formatKobo(trip.finalFareKobo)}{trip.receipt ? ` · Receipt ${trip.receipt.receiptNumber}` : ""}</p> : null}
           {trip.waitingSummary ? <p className="muted">Pickup waiting: {trip.waitingSummary.totalWaitingSeconds}s · {formatKobo(trip.waitingSummary.waitingChargeKobo)}</p> : null}
           {trip.evidenceSummary ? <p className="muted">
             Integrity: pickup {trip.evidenceSummary.pickupOverrideUsed ? "override" : trip.evidenceSummary.pickupArrivalVerified ? "verified" : "pending"}
-            {" · "}PIN {trip.evidenceSummary.pinVerified ? "verified" : "pending"}
+            {" · "}PIN {trip.evidenceSummary.pinRequired ? trip.evidenceSummary.pinVerified ? "verified" : "required" : "not required"}
             {" · "}destination {trip.evidenceSummary.destinationOverrideUsed ? "override" : trip.evidenceSummary.destinationArrivalVerified ? "verified" : "pending"}
             {" · "}{trip.evidenceSummary.tracePointCount} trace points
             {trip.evidenceSummary.actualDistanceKm !== null && trip.evidenceSummary.actualDistanceKm !== undefined ? ` · ${trip.evidenceSummary.actualDistanceKm} km actual` : ""}

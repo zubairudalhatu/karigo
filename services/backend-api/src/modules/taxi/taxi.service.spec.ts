@@ -100,7 +100,8 @@ const waitlistEntry = {
 
 const customerProfile = {
   id: "00000000-0000-0000-0000-00000000c001",
-  userId: "customer-user"
+  userId: "customer-user",
+  requireRidePin: false
 };
 
 const driverProfile = {
@@ -153,6 +154,7 @@ const taxiTrip = {
   estimatedFareKobo: 304500,
   finalFareKobo: null,
   status: TaxiTripStatus.REQUESTED,
+  ridePinRequired: false,
   tripPinHash: "$2b$10$hash",
   tripPinEncrypted: null,
   tripPinLastFour: "3456",
@@ -766,7 +768,7 @@ describe("TaxiService", () => {
     })).toThrow(BadRequestException);
   });
 
-  it("creates production Ride trips with a unique reference and protected trip PIN", async () => {
+  it("creates production Ride trips with a unique reference and PIN off by default", async () => {
     enableTaxiStaging();
     prisma.taxiTrip.findUnique.mockResolvedValue(null);
 
@@ -795,9 +797,10 @@ describe("TaxiService", () => {
     expect(createCall.data.customerNote).toContain("Payment preference: CASH_ON_DELIVERY");
     expect(createCall.data.customerNote).toContain("Pickup instruction: Meet at the main gate");
     expect((result as { tripPin?: string }).tripPin).toBeUndefined();
-    expect(createCall.data.tripPinHash).toBeTruthy();
-    expect(createCall.data.tripPinEncrypted).toMatch(/^v1:/);
-    expect(createCall.data.tripPinLastFour).toMatch(/^\d{4}$/);
+    expect(createCall.data.ridePinRequired).toBe(false);
+    expect(createCall.data.tripPinHash).toBeNull();
+    expect(createCall.data.tripPinEncrypted).toBeNull();
+    expect(createCall.data.tripPinLastFour).toBeNull();
     expect(prisma.taxiTripEvent.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         eventType: "taxi.trip.requested",
@@ -807,6 +810,9 @@ describe("TaxiService", () => {
           scheduledPickupAt: "2026-07-28T09:30:00.000Z"
         })
       })
+    }));
+    expect(prisma.taxiTripEvent.create).not.toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ eventType: "RIDE_PIN_ISSUED" })
     }));
   });
 
@@ -832,6 +838,7 @@ describe("TaxiService", () => {
 
   it("reveals the protected pickup PIN only to the owning customer at ARRIVED_PICKUP", async () => {
     enableTaxiStaging();
+    prisma.customerProfile.findUnique.mockResolvedValueOnce({ ...customerProfile, requireRidePin: true });
     await service.createCustomerTrip("customer-user", {
       pickupAddress: "Tarauni, Kano",
       pickupLatitude: 12.0022,
@@ -847,6 +854,7 @@ describe("TaxiService", () => {
     prisma.taxiTrip.findFirst.mockResolvedValueOnce({
       ...taxiTrip,
       status: TaxiTripStatus.ARRIVED_PICKUP,
+      ridePinRequired: true,
       driverProfileId: driverProfile.id,
       driverProfile,
       tripPinHash: createCall.data.tripPinHash,
@@ -855,6 +863,8 @@ describe("TaxiService", () => {
 
     const result = await service.customerTrip("customer-user", taxiTrip.id);
 
+    expect(createCall.data.ridePinRequired).toBe(true);
+    expect(createCall.data.tripPinEncrypted).toMatch(/^v1:/);
     expect(result.tripPin).toMatch(/^\d{6}$/);
     expect(await bcrypt.compare(result.tripPin!, createCall.data.tripPinHash)).toBe(true);
     expect(result.captain).toMatchObject({ displayName: driverProfile.fullName, verified: true });
@@ -1000,6 +1010,7 @@ describe("TaxiService", () => {
     enableTaxiStaging();
     prisma.taxiTrip.findFirst.mockResolvedValueOnce({
       ...taxiTrip,
+      ridePinRequired: true,
       driverProfileId: driverProfile.id,
       driverProfile,
       status: TaxiTripStatus.ARRIVED_PICKUP,
@@ -1008,6 +1019,27 @@ describe("TaxiService", () => {
 
     await expect(service.riderStartTrip("rider-user", taxiTrip.id, { tripPin: "000000" })).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.taxiTrip.update).not.toHaveBeenCalled();
+  });
+
+  it("starts a PIN-off Ride after verified pickup without generating or verifying a PIN", async () => {
+    enableTaxiStaging();
+    prisma.taxiTrip.findFirst.mockResolvedValueOnce({
+      ...taxiTrip,
+      ridePinRequired: false,
+      driverProfileId: driverProfile.id,
+      driverProfile,
+      status: TaxiTripStatus.ARRIVED_PICKUP,
+      arrivedAtPickupAt: new Date(Date.now() - 60_000),
+      tripPinHash: null,
+      tripPinEncrypted: null,
+      tripPinLastFour: null
+    });
+
+    await expect(service.riderStartTrip("rider-user", taxiTrip.id, {})).resolves.toMatchObject({ status: TaxiTripStatus.STARTED });
+    expect(prisma.taxiTripEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ eventType: "RIDE_STARTED_WITHOUT_PIN" })
+    }));
+    expect(JSON.stringify(prisma.taxiTripEvent.create.mock.calls)).not.toContain("RIDE_PIN_VERIFICATION_FAILED");
   });
 
   it("lets admins assign and cancel production Ride trips with audit records", async () => {

@@ -47,21 +47,24 @@ describe("RideCallService", () => {
     taxiRideCallSession: {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
-      update: jest.fn()
+      update: jest.fn(),
+      updateMany: jest.fn()
     },
     taxiTripEvent: { create: jest.fn() },
     $transaction: jest.fn()
   };
   const notifications: any = { createNotification: jest.fn() };
-  const realtime: any = { emitToUser: jest.fn() };
+  const realtime: any = { emitToUser: jest.fn(), emitToRide: jest.fn() };
   let service: RideCallService;
 
   beforeEach(() => {
     jest.clearAllMocks();
     stored = { ...baseSession };
     prisma.taxiRideCallSession.findUnique.mockImplementation(async () => stored);
+    prisma.taxiRideCallSession.findUniqueOrThrow.mockImplementation(async () => stored);
     prisma.taxiRideCallSession.findMany.mockResolvedValue([]);
     prisma.taxiRideCallSession.findFirst.mockResolvedValue(null);
     prisma.taxiRideCallSession.create.mockImplementation(async ({ data }: any) => {
@@ -71,6 +74,12 @@ describe("RideCallService", () => {
     prisma.taxiRideCallSession.update.mockImplementation(async ({ data }: any) => {
       stored = { ...stored, ...data, updatedAt: now };
       return stored;
+    });
+    prisma.taxiRideCallSession.updateMany.mockImplementation(async ({ where, data }: any) => {
+      const allowedStates = Array.isArray(where.state?.in) ? where.state.in : [where.state];
+      if (!allowedStates.includes(stored.state)) return { count: 0 };
+      stored = { ...stored, ...data, updatedAt: now };
+      return { count: 1 };
     });
     prisma.taxiTripEvent.create.mockResolvedValue({ id: "audit" });
     prisma.$transaction.mockImplementation(async (operation: any) => operation(prisma));
@@ -135,6 +144,20 @@ describe("RideCallService", () => {
     expect(repeated.state).toBe("ENDED");
     expect(prisma.taxiTripEvent.create).toHaveBeenCalledTimes(1);
     expect(realtime.emitToUser).toHaveBeenCalledWith("captain-user", "ride.call.remote_ended", expect.objectContaining({ state: "ENDED" }));
+    expect(realtime.emitToRide).toHaveBeenCalledWith(stored.tripId, "ride.call.remote_ended", expect.objectContaining({ state: "ENDED" }));
+  });
+
+  it("keeps simultaneous End requests idempotent with one authoritative audit and endedAt", async () => {
+    stored = { ...stored, state: "CONNECTED", connectedAt: new Date(Date.now() - 5_000) };
+    const [customerResult, captainResult] = await Promise.all([
+      service.end(stored.id, "customer-user", "ENDED_BY_CUSTOMER"),
+      service.end(stored.id, "captain-user", "ENDED_BY_CAPTAIN")
+    ]);
+    expect(customerResult.state).toBe("ENDED");
+    expect(captainResult.state).toBe("ENDED");
+    expect(customerResult.endedAt).toBe(captainResult.endedAt);
+    expect(prisma.taxiTripEvent.create).toHaveBeenCalledTimes(1);
+    expect(realtime.emitToUser).toHaveBeenCalledWith("customer-user", "ride.call.remote_ended", expect.objectContaining({ state: "ENDED" }));
   });
 
   it("declines an incoming call idempotently without minting credentials", async () => {

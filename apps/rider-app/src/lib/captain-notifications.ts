@@ -4,6 +4,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { notificationsApi } from "../api/notifications.api";
 
+import { hasHandledRideMessageEvent } from "./ride-alert-state";
 import { isActiveRideConversation } from "./ride-realtime";
 const ASSIGNMENT_ENTITY_TYPES = new Set(["TaxiTrip", "Order"]);
 let presenceNotificationId: string | null = null;
@@ -14,7 +15,12 @@ Notifications.setNotificationHandler({
     ...(() => {
       const data = notificationData(notification);
       const metadata = data.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata) ? data.metadata as Record<string, unknown> : data;
-      const quiet = metadata.event === "RIDE_MESSAGE" && isActiveRideConversation(metadata.rideId);
+      if (metadata.event === "RIDE_MESSAGE_FOREGROUND_SOUND") {
+        return { shouldPlaySound: true, shouldShowBanner: false, shouldShowList: false };
+      }
+      const quiet = metadata.event === "RIDE_MESSAGE" && (
+        isActiveRideConversation(metadata.rideId) || hasHandledRideMessageEvent(metadata.messageEventId)
+      );
       return { shouldPlaySound: !quiet, shouldShowBanner: !quiet, shouldShowList: !quiet };
     })(),
     shouldSetBadge: false,
@@ -53,14 +59,14 @@ export async function registerCaptainPushNotifications() {
       lightColor: "#E31E24",
       sound: "karigo_ride_call.wav"
     });
-    await Notifications.setNotificationChannelAsync("ride-calls", {
+    await Notifications.setNotificationChannelAsync("ride-calls-v2", {
       name: "KariGO Ride calls",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 500, 250, 500, 250, 800],
       lightColor: "#E31E24",
       sound: "karigo_ride_call.wav"
     });
-    await Notifications.setNotificationChannelAsync("ride-messages", {
+    await Notifications.setNotificationChannelAsync("ride-messages-v2", {
       name: "KariGO Ride messages",
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 150],

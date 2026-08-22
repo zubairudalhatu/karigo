@@ -18,6 +18,10 @@ export class RideRealtimeService {
     this.server?.to(this.userRoom(userId)).emit(event, payload);
   }
 
+  emitToRideAndUser(rideId: string, userId: string, event: string, payload: unknown) {
+    this.server?.to(this.rideRoom(rideId)).to(this.userRoom(userId)).emit(event, payload);
+  }
+
   schedulePaidWaiting(rideId: string, arrivedAt: Date, freeSeconds: number) {
     this.stopWaitingTimer(rideId);
     const paidWaitingStartsAt = new Date(arrivedAt.getTime() + freeSeconds * 1000);

@@ -1118,6 +1118,7 @@ model TaxiTrip {
   estimatedFareKobo      Int
   finalFareKobo          Int?
   status                 TaxiTripStatus        @default(REQUESTED)
+  ridePinRequired        Boolean               @default(false)
   tripPinHash            String?
   tripPinEncrypted       String?
   tripPinLastFour        String?
@@ -1272,6 +1273,7 @@ model CustomerProfile {
   loyaltyBalance          Decimal                     @default(0) @db.Decimal(12, 2)
   totalOrders             Int                         @default(0)
   averageRating           Decimal?                    @db.Decimal(3, 2)
+  requireRidePin          Boolean                     @default(false)
   createdAt               DateTime                    @default(now())
   updatedAt               DateTime                    @updatedAt
   user                    User                        @relation(fields: [userId], references: [id])

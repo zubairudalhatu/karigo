@@ -606,6 +606,7 @@ export interface RideReceipt {
 }
 
 export interface RideEvidenceSummary {
+  pinRequired: boolean;
   pickupArrivalVerified: boolean;
   pickupOverrideUsed: boolean;
   pinIssued: boolean;
@@ -636,6 +637,7 @@ export interface TaxiTrip {
   evidenceSummary?: RideEvidenceSummary;
   finalFareKobo?: number | null;
   status: TaxiTripStatus;
+  ridePinRequired: boolean;
   tripPinLastFour?: string | null;
   tripPin?: string;
   lifecycle?: TaxiTripLifecycleDefinition;
@@ -665,6 +667,11 @@ export interface TaxiTrip {
   arrivedAtDestinationAt?: string | null;
   completedAt?: string | null;
   cancelledAt?: string | null;
+  customer?: {
+    id: string;
+    fullName: string;
+    phoneNumber?: string | null;
+  } | null;
   createdAt: string;
   updatedAt?: string | null;
   driver?: TaxiDriverProfile | null;

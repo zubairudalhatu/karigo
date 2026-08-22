@@ -1,5 +1,5 @@
 import { Transform } from "class-transformer";
-import { IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength } from "class-validator";
+import { IsBoolean, IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength } from "class-validator";
 
 export class UpdateCustomerProfileDto {
   @IsOptional()
@@ -22,4 +22,8 @@ export class UpdateCustomerProfileDto {
   })
   @Transform(({ value }) => (value ? String(value).trim() : null))
   profilePhotoUrl?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  requireRidePin?: boolean;
 }
