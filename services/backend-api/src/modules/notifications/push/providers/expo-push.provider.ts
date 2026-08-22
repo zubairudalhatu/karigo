@@ -37,10 +37,10 @@ export class ExpoPushProvider implements PushProvider {
     const presentation = (message: PushMessage) => {
       const event = typeof message.metadata?.event === "string" ? message.metadata.event : "";
       if (event === "RIDE_CALL_INCOMING") {
-        return { sound: "karigo-ride-call.wav", channelId: "ride-calls" };
+        return { sound: "karigo_ride_call.wav", channelId: "ride-calls" };
       }
       if (event === "RIDE_MESSAGE") {
-        return { sound: "karigo-message.wav", channelId: "ride-messages" };
+        return { sound: "karigo_message.wav", channelId: "ride-messages" };
       }
       return { sound: "default", channelId: "captain-assignments" };
     };

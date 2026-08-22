@@ -17,9 +17,11 @@ const blockedPermissions = config.slice(config.indexOf("blockedPermissions"), co
 if (blockedPermissions.includes("RECORD_AUDIO")) throw new Error("Captain RECORD_AUDIO remains blocked");
 if (!config.includes('"android.permission.RECORD_AUDIO"')) throw new Error("Captain generated manifest would not request RECORD_AUDIO");
 if (!config.includes("NSMicrophoneUsageDescription") || !config.includes('versionCode: isStaging ? 1 : 16')) throw new Error("Captain native call configuration is incomplete");
-if (!config.includes("karigo-ride-call.wav") || !config.includes("karigo-message.wav")) throw new Error("Captain notification sounds are not registered with Expo");
+if (!config.includes("karigo_ride_call.wav") || !config.includes("karigo_message.wav")) throw new Error("Captain notification sounds are not registered with Expo");
 if (config.includes("EXPO_PUBLIC_AGORA_APP_CERTIFICATE")) throw new Error("Agora Certificate must never be public");
-for (const file of ["assets/sounds/karigo-ride-call.wav", "assets/sounds/karigo-message.wav"]) {
+for (const file of ["assets/sounds/karigo_ride_call.wav", "assets/sounds/karigo_message.wav"]) {
+  const basename = path.basename(file, ".wav");
+  if (path.extname(file) !== ".wav" || !/^[a-z0-9_]+$/.test(basename)) throw new Error(`Captain sound resource name is not Android-safe: ${file}`);
   if (!fs.existsSync(path.join(root, file)) || fs.statSync(path.join(root, file)).size < 1_000) throw new Error(`Missing Captain sound asset: ${file}`);
 }
 for (const expected of ["createAgoraRtcEngine", "requestMicrophone", "onTokenPrivilegeWillExpire", "muteLocalAudioStream", "setEnableSpeakerphone", "endCall"]) {
@@ -30,5 +32,5 @@ for (const expected of ["ride.message.new", "ride.message.delivered", "ride.mess
 }
 if (!workspace.includes("overrideAvailable") || !workspace.includes("move closer to the requested")) throw new Error("Captain exception-only geofence override is missing");
 if (!workspace.includes("conversationSummary?.unreadCount")) throw new Error("Captain Ride unread badge is missing");
-if (!host.includes("RIDE_CALL_INCOMING") || !host.includes("Vibration.vibrate") || !host.includes("karigo-ride-call.wav")) throw new Error("Captain incoming-call alert contract is missing");
+if (!host.includes("RIDE_CALL_INCOMING") || !host.includes("Vibration.vibrate") || !host.includes("karigo_ride_call.wav")) throw new Error("Captain incoming-call alert contract is missing");
 console.log("Captain H10.1 realtime/call regression checks passed.");

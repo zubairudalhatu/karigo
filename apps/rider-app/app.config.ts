@@ -58,7 +58,7 @@ export default ({ config }: ExpoConfigInput) => {
       ["expo-notifications", {
         color: "#E31E24",
         defaultChannel: "captain-assignments",
-        sounds: ["./assets/sounds/karigo-ride-call.wav", "./assets/sounds/karigo-message.wav"]
+        sounds: ["./assets/sounds/karigo_ride_call.wav", "./assets/sounds/karigo_message.wav"]
       }],
       "@react-native-community/datetimepicker",
       ["expo-build-properties", androidApi36BuildProperties],

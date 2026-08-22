@@ -40,14 +40,14 @@ async function registerCustomerPush() {
       name: "KariGO Ride calls",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 500, 250, 500, 250, 800],
-      sound: "karigo-ride-call.wav",
+      sound: "karigo_ride_call.wav",
       lightColor: "#D90000"
     });
     await Notifications.setNotificationChannelAsync("ride-messages", {
       name: "KariGO Ride messages",
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 150],
-      sound: "karigo-message.wav",
+      sound: "karigo_message.wav",
       lightColor: "#D90000"
     });
   }
@@ -89,7 +89,7 @@ export function RideCommunicationHost() {
             title: "Incoming KariGO Ride call",
             body: `Ride ${call.rideReference} · ${call.callerLabel}`,
             data: { event: "RIDE_CALL_INCOMING", rideId: call.rideId, callSessionId: call.id },
-            sound: "karigo-ride-call.wav"
+            sound: "karigo_ride_call.wav"
           },
           trigger: null
         }).catch(() => undefined);

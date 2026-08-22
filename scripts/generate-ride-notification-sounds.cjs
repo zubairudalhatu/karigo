@@ -60,8 +60,8 @@ const messageNotes = [
 for (const app of ["customer-app", "rider-app"]) {
   const directory = path.join(__dirname, "..", "apps", app, "assets", "sounds");
   fs.mkdirSync(directory, { recursive: true });
-  fs.writeFileSync(path.join(directory, "karigo-ride-call.wav"), tone(8, callNotes));
-  fs.writeFileSync(path.join(directory, "karigo-message.wav"), tone(0.42, messageNotes));
+  fs.writeFileSync(path.join(directory, "karigo_ride_call.wav"), tone(8, callNotes));
+  fs.writeFileSync(path.join(directory, "karigo_message.wav"), tone(0.42, messageNotes));
 }
 
 process.stdout.write("Generated original KariGO Ride call and message notification sounds.\n");

@@ -51,21 +51,21 @@ export async function registerCaptainPushNotifications() {
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 150, 250],
       lightColor: "#E31E24",
-      sound: "karigo-ride-call.wav"
+      sound: "karigo_ride_call.wav"
     });
     await Notifications.setNotificationChannelAsync("ride-calls", {
       name: "KariGO Ride calls",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 500, 250, 500, 250, 800],
       lightColor: "#E31E24",
-      sound: "karigo-ride-call.wav"
+      sound: "karigo_ride_call.wav"
     });
     await Notifications.setNotificationChannelAsync("ride-messages", {
       name: "KariGO Ride messages",
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 150],
       lightColor: "#E31E24",
-      sound: "karigo-message.wav"
+      sound: "karigo_message.wav"
     });
   }
 

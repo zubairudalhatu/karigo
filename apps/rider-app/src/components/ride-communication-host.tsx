@@ -41,7 +41,7 @@ export function RideCommunicationHost() {
             title: "Incoming KariGO Ride call",
             body: `Ride ${call.rideReference} · ${call.callerLabel}`,
             data: { event: "RIDE_CALL_INCOMING", rideId: call.rideId, callSessionId: call.id },
-            sound: "karigo-ride-call.wav"
+            sound: "karigo_ride_call.wav"
           },
           trigger: null
         }).catch(() => undefined);

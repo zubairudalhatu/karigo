@@ -45,7 +45,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
       {
         color: "#D90000",
         defaultChannel: "ride-messages",
-        sounds: ["./assets/sounds/karigo-ride-call.wav", "./assets/sounds/karigo-message.wav"]
+        sounds: ["./assets/sounds/karigo_ride_call.wav", "./assets/sounds/karigo_message.wav"]
       }
     ],
     [
