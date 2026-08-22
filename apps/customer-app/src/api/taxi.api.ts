@@ -1,6 +1,6 @@
 import {
   RideContactOptions,
-  RideCallSessionSummary,
+  RideCallSession,
   RideConversationPage,
   RideMessage,
   RideReceipt,
@@ -50,6 +50,12 @@ export const taxiApi = {
   sendMessage: (tripId: string, message: string) => api.post<RideMessage>(`customer/taxi/trips/${tripId}/messages`, { message }),
   markMessagesRead: (tripId: string, lastMessageId: string) => api.post<{ readAt: string }>(`customer/taxi/trips/${tripId}/messages/read`, { lastMessageId }),
   contactOptions: (tripId: string) => api.get<RideContactOptions>(`customer/taxi/trips/${tripId}/contact-options`),
-  callSession: (tripId: string) => api.post<RideCallSessionSummary>(`customer/taxi/trips/${tripId}/call-session`),
+  callSession: (tripId: string) => api.post<RideCallSession>(`customer/taxi/trips/${tripId}/call-session`),
+  activeCallSession: (tripId: string) => api.get<RideCallSession | null>(`customer/taxi/trips/${tripId}/call-session/active`),
+  acceptCall: (tripId: string, sessionId: string) => api.post<RideCallSession>(`customer/taxi/trips/${tripId}/call-sessions/${sessionId}/accept`),
+  connectCall: (tripId: string, sessionId: string) => api.post<RideCallSession>(`customer/taxi/trips/${tripId}/call-sessions/${sessionId}/connected`),
+  declineCall: (tripId: string, sessionId: string) => api.post<RideCallSession>(`customer/taxi/trips/${tripId}/call-sessions/${sessionId}/decline`),
+  endCall: (tripId: string, sessionId: string, reason?: string) => api.post<RideCallSession>(`customer/taxi/trips/${tripId}/call-sessions/${sessionId}/end`, { reason }),
+  renewCallToken: (tripId: string, sessionId: string) => api.post<RideCallSession>(`customer/taxi/trips/${tripId}/call-sessions/${sessionId}/token/renew`),
   cancelTrip: (tripId: string, reason?: string) => api.post<TaxiTrip>(`customer/taxi/trips/${tripId}/cancel`, { reason })
 };

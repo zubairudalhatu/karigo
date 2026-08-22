@@ -38,6 +38,30 @@ describe("ExpoPushProvider", () => {
     expect((request.headers as Record<string, string>).authorization).toBe("Bearer test-access-token");
   });
 
+
+  it.each([
+    ["RIDE_CALL_INCOMING", "ride-calls", "karigo-ride-call.wav", "Incoming KariGO Ride call"],
+    ["RIDE_MESSAGE", "ride-messages", "karigo-message.wav", "New Ride message"]
+  ] as const)("routes %s through the safe Ride notification presentation", async (event, channelId, sound, title) => {
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [{ status: "ok", id: "ticket-ride" }] })
+    } as Response);
+    await provider.sendPushNotification({
+      toDeviceToken: "ExponentPushToken[synthetic_device_token]",
+      title,
+      body: "Open KariGO to view it.",
+      metadata: { event, rideId: "safe-ride-id", callSessionId: event === "RIDE_CALL_INCOMING" ? "safe-call-id" : undefined }
+    });
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const payload = JSON.parse(String(request.body))[0];
+    expect(payload).toMatchObject({ channelId, sound, body: "Open KariGO to view it." });
+    expect(payload.data.metadata).toMatchObject({ event, rideId: "safe-ride-id" });
+    expect(JSON.stringify(payload)).not.toContain("pickupAddress");
+    expect(JSON.stringify(payload)).not.toContain("phoneNumber");
+  });
+
   it("rejects malformed device tokens without making a provider request", async () => {
     const fetchMock = jest.spyOn(global, "fetch");
     await expect(provider.sendPushNotification({

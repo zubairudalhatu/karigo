@@ -23,6 +23,7 @@ import { friendlyError } from "../../src/lib/errors";
 import { formatRideFareKobo, formatRideFareRangeKobo } from "../../src/lib/rides-format";
 import { ridesProductionEnabled } from "../../src/lib/rides-flags";
 
+import { acknowledgeRideMessageDelivered, subscribeRideRealtime } from "../../src/lib/ride-realtime";
 type BookingStep = "HOME" | "ROUTE" | "CONFIRM" | "DETAILS" | "TRACKING";
 type PlaceField = "pickup" | "destination" | "stop";
 type RidePanelState = "expanded" | "half" | "collapsed";
@@ -40,6 +41,10 @@ interface RidePlace {
   distanceKm?: number;
   source: "current" | "saved" | "recent" | "manual" | "search" | "map" | "stop";
 }
+const formatReceiptKobo = (kobo?: number | null) => typeof kobo === "number"
+  ? `₦${(kobo / 100).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  : "₦0.00";
+
 
 const rideServiceAreaLabel = process.env.EXPO_PUBLIC_RIDES_SERVICE_AREA_LABEL || "Abuja";
 const serviceAreaCenters = {
@@ -542,9 +547,9 @@ export default function TaxiRequest() {
     if (step !== "TRACKING" || !created || !isActiveTaxiTripStatus(created.status)) return;
     let appState = AppState.currentState;
     let cancelled = false;
-    let interval: ReturnType<typeof setInterval> | null = null;
+    let recoveryInterval: ReturnType<typeof setInterval> | null = null;
+    let unsubscribeRealtime: (() => void) | undefined;
     const currentStatus = created.status;
-    const pollMs = Math.max(5000, lifecycleForTrip(created).pollingIntervalMs || 25_000);
 
     async function refreshActiveTrip() {
       if (!created || pollingInFlight.current || appState !== "active") return;
@@ -558,10 +563,6 @@ export default function TaxiRequest() {
         if (fresh.status !== currentStatus) {
           setMessage(`Ride status updated: ${rideTrackingTitle(fresh)}.`);
         }
-        if (isTerminalTaxiTripStatus(fresh.status) && interval) {
-          clearInterval(interval);
-          interval = null;
-        }
       } catch {
         // Keep the current tracking state and allow manual refresh.
       } finally {
@@ -573,14 +574,32 @@ export default function TaxiRequest() {
       appState = nextState;
       if (nextState === "active") void refreshActiveTrip();
     });
-    interval = setInterval(() => void refreshActiveTrip(), pollMs);
+    void subscribeRideRealtime(created.id, {
+      "ride.lifecycle.updated": () => void refreshActiveTrip(),
+      "ride.message.new": (rideMessage) => {
+        if (rideMessage.senderRole !== "CAPTAIN") return;
+        void acknowledgeRideMessageDelivered(created.id, rideMessage.id);
+        setCreated((current) => current?.id === created.id ? {
+          ...current,
+          conversationSummary: {
+            exists: true,
+            messageCount: (current.conversationSummary?.messageCount ?? 0) + 1,
+            unreadCount: (current.conversationSummary?.unreadCount ?? 0) + 1,
+            lastMessageAt: rideMessage.createdAt,
+            readOnly: false
+          }
+        } : current);
+      }
+    }).then((cleanup) => { unsubscribeRealtime = cleanup; }).catch(() => undefined);
+    recoveryInterval = setInterval(() => void refreshActiveTrip(), 60_000);
     void refreshActiveTrip();
 
     return () => {
       cancelled = true;
       trackingRequestToken.current += 1;
       subscription.remove();
-      if (interval) clearInterval(interval);
+      unsubscribeRealtime?.();
+      if (recoveryInterval) clearInterval(recoveryInterval);
     };
   }, [created?.id, created?.status, step]);
 
@@ -1868,14 +1887,7 @@ function RideTracking({
   const showReceipt = lifecycle.receiptAvailable || terminal;
   const shareRide = () => void Share.share({ message: safeShareRideText(trip) });
   const chatCaptain = () => router.push(`/taxi/chat/${trip.id}` as never);
-  const callInKariGO = async () => {
-    try {
-      const readiness = await taxiApi.callSession(trip.id);
-      Alert.alert("Call in KariGO", readiness.reason);
-    } catch (cause) {
-      Alert.alert("Call unavailable", friendlyError(cause));
-    }
-  };
+  const callInKariGO = () => router.push(`/taxi/call/${trip.id}?mode=outgoing` as never);
   const callByPhone = async () => {
     try {
       const options = await taxiApi.contactOptions(trip.id);
@@ -1940,8 +1952,9 @@ function RideTracking({
     {lifecycle.customerCancellationAllowed ? <Button title={loading ? "Cancelling..." : "Cancel ride request"} tone="muted" disabled={loading} onPress={onCancel} /> : null}
     <View style={styles.inlineActions}>
       <Button title="Share Ride" tone="muted" onPress={shareRide} />
-      {canChatCaptain ? <Button title="Chat with Captain" tone="muted" onPress={chatCaptain} /> : null}
-      {canContactCaptain ? <Button title="Contact Captain" tone="muted" onPress={openContact} /> : null}
+      {canChatCaptain ? <Button title={`Chat${trip.conversationSummary?.unreadCount ? ` (${trip.conversationSummary.unreadCount})` : ""}`} tone="muted" onPress={chatCaptain} /> : null}
+      {canContactCaptain ? <Button title="Call" tone="muted" onPress={callInKariGO} /> : null}
+      {canContactCaptain ? <Button title="Phone fallback" tone="muted" onPress={openContact} /> : null}
     </View>
     {terminal ? <View style={styles.inlineActions}>
       <Button title={trip.status === "EXPIRED" ? "Retry ride request" : "Book another ride"} onPress={onBookAnother} />
@@ -2027,12 +2040,12 @@ function RideReceipt({ trip }: { trip: TaxiTrip }) {
     <ReceiptRow label="Duration" value={receipt?.durationSeconds !== null && receipt?.durationSeconds !== undefined ? `${Math.ceil(receipt.durationSeconds / 60)} min` : trip.estimatedDurationMin ? `${trip.estimatedDurationMin} min` : "Pending"} />
     <ReceiptRow label="Captain" value={receipt?.captainName ?? captain?.displayName ?? "Not assigned"} />
     <ReceiptRow label="Vehicle" value={humanVehicleValue(receipt?.vehicleDescription) ?? humanVehicleDescription(vehicle) ?? "Not assigned"} />
-    {receipt ? <ReceiptRow label="Ride fare" value={formatRideFareKobo(receipt.rideFareKobo)} /> : <ReceiptRow label={fareLabel} value={formatRideFareKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)} />}
+    {receipt ? <ReceiptRow label="Ride fare" value={formatReceiptKobo(receipt.rideFareKobo)} /> : <ReceiptRow label={fareLabel} value={formatReceiptKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)} />}
     {receipt?.minimumFareApplied ? <Text style={ui.muted}>Minimum Ride fare applied.</Text> : null}
-    {receipt ? <ReceiptRow label="Waiting" value={`${Math.floor(receipt.totalWaitingSeconds / 60)}m ${receipt.totalWaitingSeconds % 60}s · ${formatRideFareKobo(receipt.waitingChargeKobo)}`} /> : null}
-    {receipt && receipt.platformFeeKobo ? <ReceiptRow label="Platform fee" value={formatRideFareKobo(receipt.platformFeeKobo)} /> : null}
-    {receipt && receipt.discountKobo ? <ReceiptRow label="Discount" value={`−${formatRideFareKobo(receipt.discountKobo)}`} /> : null}
-    {receipt ? <ReceiptRow label="Total" value={formatRideFareKobo(receipt.totalFareKobo)} /> : null}
+    {receipt ? <ReceiptRow label="Waiting" value={`${Math.floor(receipt.totalWaitingSeconds / 60)}m ${receipt.totalWaitingSeconds % 60}s · ${formatReceiptKobo(receipt.waitingChargeKobo)}`} /> : null}
+    {receipt && receipt.platformFeeKobo ? <ReceiptRow label="Platform fee" value={formatReceiptKobo(receipt.platformFeeKobo)} /> : null}
+    {receipt && receipt.discountKobo ? <ReceiptRow label="Discount" value={`−${formatReceiptKobo(receipt.discountKobo)}`} /> : null}
+    {receipt ? <ReceiptRow label="Total" value={formatReceiptKobo(receipt.totalFareKobo)} /> : null}
     <ReceiptRow label="Payment" value={receipt?.paymentMethod ?? "Cash"} />
     <ReceiptRow label="Requested" value={formatDateTime(trip.requestedAt)} />
     {trip.acceptedAt ? <ReceiptRow label="Accepted" value={formatDateTime(trip.acceptedAt)} /> : null}

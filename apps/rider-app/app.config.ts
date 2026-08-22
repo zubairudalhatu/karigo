@@ -43,7 +43,7 @@ export default ({ config }: ExpoConfigInput) => {
   return {
     ...config,
     name: isStaging ? "KariGO Captain Staging" : "KariGO Captain",
-    version: "1.1.0",
+    version: "1.2.0",
     slug: "karigo-rider",
     scheme: isStaging ? "karigo-rider-staging" : "karigo-rider",
     plugins: [
@@ -57,7 +57,8 @@ export default ({ config }: ExpoConfigInput) => {
       }],
       ["expo-notifications", {
         color: "#E31E24",
-        defaultChannel: "captain-assignments"
+        defaultChannel: "captain-assignments",
+        sounds: ["./assets/sounds/karigo-ride-call.wav", "./assets/sounds/karigo-message.wav"]
       }],
       "@react-native-community/datetimepicker",
       ["expo-build-properties", androidApi36BuildProperties],
@@ -76,10 +77,15 @@ export default ({ config }: ExpoConfigInput) => {
     android: {
       ...config.android,
       ...(isStaging ? {} : { googleServicesFile: "./google-services.json" }),
+      permissions: [
+        ...new Set([
+          ...(Array.isArray(config.android?.permissions) ? config.android.permissions : []),
+          "android.permission.RECORD_AUDIO"
+        ])
+      ],
       blockedPermissions: [
         ...new Set([
           ...(Array.isArray(config.android?.blockedPermissions) ? config.android.blockedPermissions : []),
-          "android.permission.RECORD_AUDIO",
           "android.permission.SYSTEM_ALERT_WINDOW"
         ])
       ],
@@ -101,11 +107,15 @@ export default ({ config }: ExpoConfigInput) => {
         monochromeImage: "./assets/adaptive-icon-monochrome.png"
       },
       package: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider",
-      versionCode: isStaging ? 1 : 15
+      versionCode: isStaging ? 1 : 16
     },
     ios: {
       ...config.ios,
-      bundleIdentifier: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider"
+      bundleIdentifier: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider",
+      infoPlist: {
+        ...objectValue(config.ios?.infoPlist),
+        NSMicrophoneUsageDescription: "KariGO Captain uses your microphone only when you make or receive an in-app Ride call."
+      }
     },
     extra: {
       ...extra,

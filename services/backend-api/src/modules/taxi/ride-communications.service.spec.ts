@@ -10,7 +10,7 @@ const customerMessage = {
   actorId: "customer-user",
   eventType: "taxi.trip.message",
   note: "I'm at the pickup entrance",
-  metadata: { deliveryState: "DELIVERED", senderRole: "CUSTOMER" },
+  metadata: { deliveryState: "SENT", senderRole: "CUSTOMER" },
   createdAt: now
 };
 const activeTrip: any = {
@@ -26,6 +26,7 @@ const activeTrip: any = {
 
 describe("RideCommunicationsService", () => {
   const prisma: any = {
+    taxiTrip: { findFirst: jest.fn() },
     taxiTripEvent: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -37,9 +38,10 @@ describe("RideCommunicationsService", () => {
   const notifications: any = { createNotification: jest.fn() };
   const calls: any = {
     readiness: jest.fn(() => ({ enabled: false, provider: null, recordingEnabled: false, reason: "No approved provider" })),
-    createSession: jest.fn(() => Promise.resolve({ enabled: false, provider: null, recordingEnabled: false, reason: "No approved provider" }))
+    initiate: jest.fn(() => Promise.resolve({ enabled: false, provider: null, recordingEnabled: false, reason: "No approved provider" }))
   };
-  const service = new RideCommunicationsService(prisma, config, notifications, calls);
+  const realtime: any = { emitToRide: jest.fn() };
+  const service = new RideCommunicationsService(prisma, config, notifications, calls, realtime);
 
   beforeEach(() => {
     jest.resetAllMocks();
@@ -49,26 +51,58 @@ describe("RideCommunicationsService", () => {
     prisma.taxiTripEvent.create.mockImplementation(async ({ data }: any) => ({ ...customerMessage, ...data, id: customerMessage.id, createdAt: now }));
     notifications.createNotification.mockResolvedValue({ accepted: true });
     calls.readiness.mockReturnValue({ enabled: false, provider: null, recordingEnabled: false, reason: "No approved provider" });
-    calls.createSession.mockResolvedValue({ enabled: false, provider: null, recordingEnabled: false, reason: "No approved provider" });
+    calls.initiate.mockResolvedValue({ enabled: false, provider: null, recordingEnabled: false, reason: "No approved provider" });
+    prisma.taxiTrip.findFirst.mockResolvedValue(activeTrip);
   });
 
   it("persists a Captain message and creates safe Customer in-app and push events", async () => {
     const result = await service.sendMessage(activeTrip, "captain-user", "CAPTAIN", { message: "I've arrived" });
-    expect(result).toMatchObject({ senderRole: "CAPTAIN", deliveryState: "DELIVERED", message: "I've arrived" });
+    expect(result).toMatchObject({ senderRole: "CAPTAIN", deliveryState: "SENT", message: "I've arrived" });
     expect(prisma.taxiTripEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
       tripId: activeTrip.id, actorType: TaxiTripActorType.DRIVER, actorId: "captain-user", eventType: "taxi.trip.message"
     }) }));
     expect(notifications.createNotification).toHaveBeenCalledTimes(2);
     for (const [notification] of notifications.createNotification.mock.calls) {
       expect(notification).toMatchObject({ userId: "customer-user", entityId: activeTrip.id });
-      expect(notification.metadata).toEqual({ rideId: activeTrip.id, messageEventId: customerMessage.id, senderLabel: "Ride Captain" });
+      expect(notification.metadata).toEqual({ event: "RIDE_MESSAGE", rideId: activeTrip.id, messageEventId: customerMessage.id, senderLabel: "Ride Captain" });
       expect(JSON.stringify(notification)).not.toContain("I've arrived");
     }
+    expect(realtime.emitToRide).toHaveBeenCalledWith(activeTrip.id, "ride.message.new", expect.objectContaining({ deliveryState: "SENT" }));
   });
 
   it("persists a Customer message and safely targets the assigned Captain", async () => {
     await service.sendMessage(activeTrip, "customer-user", "CUSTOMER", { message: "I'm outside" });
+
     expect(notifications.createNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: "captain-user" }));
+  });
+  it("marks a received message DELIVERED only after the recipient socket acknowledgement", async () => {
+    prisma.taxiTripEvent.findFirst.mockResolvedValue(customerMessage);
+    const result = await service.acknowledgeDelivered("captain-user", activeTrip.id, customerMessage.id);
+    expect(result).toEqual({ rideId: activeTrip.id, messageId: customerMessage.id, deliveredAt: now.toISOString() });
+    expect(prisma.taxiTripEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ eventType: "taxi.trip.message_delivered", actorId: "captain-user" })
+    }));
+    expect(realtime.emitToRide).toHaveBeenCalledWith(activeTrip.id, "ride.message.delivered", result);
+  });
+
+  it("makes delivery acknowledgements idempotent", async () => {
+    prisma.taxiTripEvent.findFirst.mockResolvedValue(customerMessage);
+    prisma.taxiTripEvent.findMany.mockResolvedValue([{
+      ...customerMessage,
+      id: "receipt-id",
+      actorId: "captain-user",
+      eventType: "taxi.trip.message.delivered",
+      metadata: { messageId: customerMessage.id }
+    }]);
+    await service.acknowledgeDelivered("captain-user", activeTrip.id, customerMessage.id);
+    expect(prisma.taxiTripEvent.create).not.toHaveBeenCalled();
+  });
+
+  it("publishes READ only after the recipient explicitly marks the conversation read", async () => {
+    prisma.taxiTripEvent.findFirst.mockResolvedValue(customerMessage);
+    const result = await service.markRead(activeTrip, "captain-user", "CAPTAIN", { lastMessageId: customerMessage.id });
+    expect(result).toEqual({ rideId: activeTrip.id, lastMessageId: customerMessage.id, readAt: now.toISOString() });
+    expect(realtime.emitToRide).toHaveBeenCalledWith(activeTrip.id, "ride.message.read", result);
   });
 
   it("returns paginated Ride-only history", async () => {
@@ -98,6 +132,12 @@ describe("RideCommunicationsService", () => {
 
   it("returns disabled in-app call readiness without fabricating a provider", async () => {
     await expect(service.callSession(activeTrip, "captain-user", "CAPTAIN")).resolves.toMatchObject({ enabled: false, provider: null });
+  });
+
+  it("does not initiate an in-app call after the Ride is closed", async () => {
+    const completed = { ...activeTrip, status: TaxiTripStatus.COMPLETED };
+    expect(() => service.callSession(completed, "customer-user", "CUSTOMER")).toThrow(BadRequestException);
+    expect(calls.initiate).not.toHaveBeenCalled();
   });
 
   it("keeps phone fallback behind an explicit contact request", () => {

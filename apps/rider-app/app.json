@@ -1,11 +1,19 @@
 {
   "expo": {
     "name": "KariGO Captain",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "slug": "karigo-rider",
     "scheme": "karigo-rider",
     "plugins": [
       "expo-router",
+      [
+        "expo-notifications",
+        {
+          "color": "#E31E24",
+          "defaultChannel": "captain-assignments",
+          "sounds": ["./assets/sounds/karigo-ride-call.wav", "./assets/sounds/karigo-message.wav"]
+        }
+      ],
       [
         "expo-build-properties",
         {
@@ -32,8 +40,10 @@
     },
     "android": {
       "blockedPermissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
       ],
       "allowBackup": false,
       "icon": "./assets/icon.png",
@@ -41,6 +51,11 @@
         "foregroundImage": "./assets/adaptive-icon-foreground.png",
         "backgroundColor": "#111111",
         "monochromeImage": "./assets/adaptive-icon-monochrome.png"
+      }
+    },
+    "ios": {
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "KariGO Captain uses your microphone only when you make or receive an in-app Ride call."
       }
     }
   }

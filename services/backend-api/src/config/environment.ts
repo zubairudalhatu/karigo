@@ -733,6 +733,32 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   if (ridesPaymentEnabled) {
     throw new Error("RIDES_PAYMENT_ENABLED must remain false until Ride payment automation is approved");
   }
+  if (typeof config.EXPO_PUBLIC_AGORA_APP_CERTIFICATE === "string" && config.EXPO_PUBLIC_AGORA_APP_CERTIFICATE.trim()) {
+    throw new Error("EXPO_PUBLIC_AGORA_APP_CERTIFICATE is forbidden; AGORA_APP_CERTIFICATE must remain server-only");
+  }
+  const rideInAppCallEnabled = booleanFlag(config.RIDE_IN_APP_CALL_ENABLED, "RIDE_IN_APP_CALL_ENABLED", false);
+  const rideCallProvider = typeof config.RIDE_CALL_PROVIDER === "string"
+    ? config.RIDE_CALL_PROVIDER.trim().toLowerCase()
+    : "disabled";
+  if (!["disabled", "agora"].includes(rideCallProvider)) {
+    throw new Error("RIDE_CALL_PROVIDER must be disabled or agora");
+  }
+  const agoraAppId = typeof config.AGORA_APP_ID === "string" ? config.AGORA_APP_ID.trim() : "";
+  const agoraAppCertificate = typeof config.AGORA_APP_CERTIFICATE === "string" ? config.AGORA_APP_CERTIFICATE.trim() : "";
+  if (rideInAppCallEnabled && rideCallProvider !== "agora") {
+    throw new Error("RIDE_IN_APP_CALL_ENABLED=true requires RIDE_CALL_PROVIDER=agora");
+  }
+  if (rideInAppCallEnabled && (!agoraAppId || !agoraAppCertificate)) {
+    throw new Error("Agora Ride calling requires AGORA_APP_ID and AGORA_APP_CERTIFICATE");
+  }
+  const agoraRtcTokenTtlSeconds = positiveInteger(config.AGORA_RTC_TOKEN_TTL_SECONDS, "AGORA_RTC_TOKEN_TTL_SECONDS", 900);
+  if (agoraRtcTokenTtlSeconds < 300 || agoraRtcTokenTtlSeconds > 3600) {
+    throw new Error("AGORA_RTC_TOKEN_TTL_SECONDS must be between 300 and 3600 seconds");
+  }
+  const rideCallRingTimeoutSeconds = positiveInteger(config.RIDE_CALL_RING_TIMEOUT_SECONDS, "RIDE_CALL_RING_TIMEOUT_SECONDS", 45);
+  if (rideCallRingTimeoutSeconds < 20 || rideCallRingTimeoutSeconds > 120) {
+    throw new Error("RIDE_CALL_RING_TIMEOUT_SECONDS must be between 20 and 120 seconds");
+  }
 
   return {
     ...config,
@@ -863,6 +889,12 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     EXPO_PUSH_URL: expoPushUrl,
     RIDES_SERVICE_ENABLED: ridesServiceEnabled,
     RIDES_PRODUCTION_ENABLED: ridesProductionEnabled,
+    RIDE_IN_APP_CALL_ENABLED: rideInAppCallEnabled,
+    RIDE_CALL_PROVIDER: rideCallProvider,
+    AGORA_APP_ID: agoraAppId,
+    AGORA_APP_CERTIFICATE: agoraAppCertificate,
+    AGORA_RTC_TOKEN_TTL_SECONDS: agoraRtcTokenTtlSeconds,
+    RIDE_CALL_RING_TIMEOUT_SECONDS: rideCallRingTimeoutSeconds,
     LAUNCH_GLOBAL_KILL_SWITCH: booleanFlag(config.LAUNCH_GLOBAL_KILL_SWITCH, "LAUNCH_GLOBAL_KILL_SWITCH", false),
     RIDES_DISPATCH_MODE: ridesDispatchMode,
     RIDES_ACTIVE_SERVICE_AREAS: typeof config.RIDES_ACTIVE_SERVICE_AREAS === "string" && config.RIDES_ACTIVE_SERVICE_AREAS.trim()

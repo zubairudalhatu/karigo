@@ -2,6 +2,7 @@ import type { RideConversationPage, RideMessage } from "@karigo/shared-types";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { acknowledgeRideMessageDelivered, setActiveRideConversation, subscribeRideRealtime } from "../../src/lib/ride-realtime";
 import { taxiApi } from "../../src/api/taxi.api";
 import { Button, Card, Field, Message, Protected, Screen, ui } from "../../src/components/ui";
 import { friendlyError } from "../../src/lib/errors";
@@ -9,6 +10,15 @@ import { friendlyError } from "../../src/lib/errors";
 const quickReplies = ["I'm on my way", "I've arrived", "I'll arrive in 2 min", "Please share your exact location"];
 
 export default function CaptainRideChat() {
+function mergeMessage(current: RideConversationPage | null, message: RideMessage) {
+  if (!current) return current;
+  const existing = current.messages.findIndex((item) => item.id === message.id);
+  const messages = existing >= 0
+    ? current.messages.map((item) => item.id === message.id ? { ...item, ...message } : item)
+    : [...current.messages, message];
+  return { ...current, messages, messageCount: Math.max(current.messageCount, messages.length) };
+}
+
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const [conversation, setConversation] = useState<RideConversationPage | null>(null);
   const [draft, setDraft] = useState("");
@@ -37,9 +47,9 @@ export default function CaptainRideChat() {
     if (!tripId || !text || saving || conversation?.readOnly) return;
     setSaving(true);
     try {
-      await taxiApi.sendMessage(tripId, text);
+      const sent = await taxiApi.sendMessage(tripId, text);
+      setConversation((current) => mergeMessage(current, sent));
       setDraft("");
-      await load();
     } catch (cause) {
       setError(friendlyError(cause));
     } finally {
@@ -47,7 +57,41 @@ export default function CaptainRideChat() {
     }
   }
 
-  useEffect(() => { void load(); }, [tripId]);
+  useEffect(() => {
+    void load();
+    if (!tripId) return;
+    setActiveRideConversation(tripId);
+    let cleanup: (() => void) | undefined;
+    void subscribeRideRealtime(tripId, {
+      "ride.message.new": (message) => {
+        setConversation((current) => mergeMessage(current, message));
+        if (message.senderRole === "CUSTOMER") {
+          void acknowledgeRideMessageDelivered(tripId, message.id);
+          void taxiApi.markMessagesRead(tripId, message.id);
+        }
+      },
+      "ride.message.delivered": ({ messageId, deliveredAt }) => {
+        setConversation((current) => current ? {
+          ...current,
+          messages: current.messages.map((item) => item.id === messageId ? { ...item, deliveryState: "DELIVERED", deliveredAt } : item)
+        } : current);
+      },
+      "ride.message.read": ({ lastMessageId, readAt }) => {
+        setConversation((current) => {
+          if (!current) return current;
+          const boundary = current.messages.find((item) => item.id === lastMessageId)?.createdAt;
+          return {
+            ...current,
+            unreadCount: 0,
+            messages: current.messages.map((item) => !boundary || item.createdAt <= boundary
+              ? { ...item, deliveryState: "READ", readAt }
+              : item)
+          };
+        });
+      }
+    }).then((unsubscribe) => { cleanup = unsubscribe; }).catch((cause) => setError(friendlyError(cause)));
+    return () => { setActiveRideConversation(null); cleanup?.(); };
+  }, [tripId]);
 
   return <Protected><Screen title={conversation?.participantLabel || "Customer chat"} subtitle={conversation ? `Ride ${conversation.rideReference}` : "Ride-scoped conversation"} refreshing={loading} onRefresh={() => load()}>
     <Message error>{error}</Message>

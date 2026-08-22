@@ -1,9 +1,23 @@
-import { applyMinimumRideFare, calculatePickupWaiting, distanceMeters, evaluateRideGeofence, traceDistanceKm } from "./ride-integrity";
+import { calculatePickupWaiting, distanceMeters, evaluateRideGeofence, traceDistanceKm } from "./ride-integrity";
+import { applyCategoryMinimumRideFare, rideCategoryMinimumFareKobo } from "./ride-pricing-policy";
 
 describe("Task 209B H10 Ride integrity policy", () => {
-  it("applies the NGN 1,900 minimum before confirmation", () => {
-    expect(applyMinimumRideFare(120_000)).toEqual({ rideFareKobo: 190_000, minimumFareApplied: true });
-    expect(applyMinimumRideFare(250_000)).toEqual({ rideFareKobo: 250_000, minimumFareApplied: false });
+  it.each([
+    ["ECONOMY", 170_000],
+    ["COMFORT", 230_000],
+    ["EXECUTIVE", 270_000],
+    ["XL", 320_000]
+  ])("applies the approved %s minimum", (category, minimumFareKobo) => {
+    expect(applyCategoryMinimumRideFare(90_000, category, "Abuja")).toMatchObject({
+      rideFareKobo: minimumFareKobo,
+      minimumFareApplied: true,
+      minimumFareKobo
+    });
+    expect(rideCategoryMinimumFareKobo(category, "Kano")).toBe(minimumFareKobo);
+  });
+
+  it("does not cap fares above the selected category floor", () => {
+    expect(applyCategoryMinimumRideFare(460_000, "XL", "Abuja")).toMatchObject({ rideFareKobo: 460_000, minimumFareApplied: false });
   });
 
   it("keeps five pickup minutes free and bills paid waiting proportionally", () => {

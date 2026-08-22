@@ -4,6 +4,7 @@ import { AuthProvider } from "../src/contexts/auth-context";
 import { CartProvider } from "../src/contexts/cart-context";
 import { CartNotice, CustomerBottomNav } from "../src/components/customer-navigation";
 import { CustomerOtaUpdateGate } from "../src/components/customer-ota-update-gate";
+import { RideCommunicationHost } from "../src/components/ride-communication-host";
 
 const headerless = { headerShown: false };
 const backOnly = { headerTitle: "", title: "", headerBackTitle: "Back" };
@@ -24,6 +25,7 @@ export default function RootLayout() {
     <Stack.Screen name="tabs/home" options={headerless} />
     <Stack.Screen name="vendors/[id]" options={backOnly} />
     <Stack.Screen name="catalogue/[category]" options={backOnly} />
+    <Stack.Screen name="taxi/call/[tripId]" options={backOnly} />
     <Stack.Screen name="products/[id]" options={backOnly} />
     <Stack.Screen name="taxi/chat/[tripId]" options={backOnly} />
     <Stack.Screen name="readiness/[service]" options={backOnly} />
@@ -59,5 +61,5 @@ export default function RootLayout() {
     <Stack.Screen name="sme-services/requests/index" options={backOnly} />
     <Stack.Screen name="sme-services/requests/[id]" options={backOnly} />
     <Stack.Screen name="notifications" options={headerless} />
-  </Stack><CustomerOtaUpdateGate /><CustomerBottomNav /><CartNotice /></></CartProvider></AuthProvider>;
+  </Stack><RideCommunicationHost /><CustomerOtaUpdateGate /><CustomerBottomNav /><CartNotice /></></CartProvider></AuthProvider>;
 }

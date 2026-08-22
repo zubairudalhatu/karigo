@@ -1,16 +1,23 @@
 {
   "expo": {
     "name": "KariGO",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "slug": "karigo-customer",
     "scheme": "karigo-customer",
     "plugins": [
       "expo-router",
       [
+        "expo-notifications",
+        {
+          "color": "#D90000",
+          "defaultChannel": "ride-messages",
+          "sounds": ["./assets/sounds/karigo-ride-call.wav", "./assets/sounds/karigo-message.wav"]
+        }
+      ],
+      [
         "expo-image-picker",
         {
-          "photosPermission": "KariGO uses photo library access only when you choose a customer profile photo.",
-          "microphonePermission": false
+          "photosPermission": "KariGO uses photo library access only when you choose a customer profile photo."
         }
       ],
       [
@@ -37,9 +44,11 @@
     "android": {
       "blockedPermissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
       ],
       "allowBackup": false,
       "icon": "./assets/icon.png",
@@ -47,6 +56,11 @@
         "foregroundImage": "./assets/adaptive-icon-foreground.png",
         "backgroundColor": "#D90000",
         "monochromeImage": "./assets/adaptive-icon-monochrome.png"
+      }
+    },
+    "ios": {
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "KariGO uses your microphone only when you make or receive an in-app Ride call."
       }
     }
   }

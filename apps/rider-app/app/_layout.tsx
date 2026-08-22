@@ -3,6 +3,7 @@ import { brand } from "@karigo/config";
 import { AuthProvider } from "../src/contexts/auth-context";
 import { CaptainBottomNav } from "../src/components/rider-navigation";
 import "../src/lib/background-location";
+import { RideCommunicationHost } from "../src/components/ride-communication-host";
 
 const hiddenHeader = {
   headerShown: false
@@ -43,6 +44,7 @@ export default function RootLayout() {
           <Stack.Screen name="earnings" options={backOnlyHeader} />
           <Stack.Screen name="ride-chat/[tripId]" options={backOnlyHeader} />
           <Stack.Screen name="ride-safety" options={backOnlyHeader} />
+          <Stack.Screen name="ride-call/[tripId]" options={backOnlyHeader} />
           <Stack.Screen name="notifications" options={backOnlyHeader} />
           <Stack.Screen name="profile" options={backOnlyHeader} />
           <Stack.Screen name="account-deletion" options={backOnlyHeader} />
@@ -50,6 +52,7 @@ export default function RootLayout() {
           <Stack.Screen name="legal/terms" options={backOnlyHeader} />
           <Stack.Screen name="taxi-readiness" options={backOnlyHeader} />
         </Stack>
+        <RideCommunicationHost />
         <CaptainBottomNav />
       </>
     </AuthProvider>

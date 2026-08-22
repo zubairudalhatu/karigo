@@ -9,7 +9,7 @@ const chat = read("app/taxi/chat/[tripId].tsx");
 
 if (!formatter.includes("formatKobo(value, fallback)")) throw new Error("Customer Ride fare must use the shared Kobo contract.");
 if (formatter.includes("numeric / 100")) throw new Error("Customer fare formatter still performs local ambiguous conversion.");
-for (const text of ["Chat with Captain", "Contact Captain", "Call in KariGO", "Call by phone"]) {
+for (const text of ["chatCaptain", "Contact Captain", "Call in KariGO", "Call by phone"]) {
   if (!tracking.includes(text)) throw new Error(`Missing Customer Ride contact UX: ${text}`);
 }
 if (/tel:\$\{captain\.contactPhoneNumber/.test(tracking)) throw new Error("Customer tracking exposes the Captain number directly.");

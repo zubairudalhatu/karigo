@@ -8,6 +8,7 @@ import { router } from "expo-router";
 import { taxiApi } from "../api/taxi.api";
 import { Button, Field, Message, StatusBadge, ui } from "./ui";
 import { friendlyError } from "../lib/errors";
+import { acknowledgeRideMessageDelivered, subscribeRideRealtime } from "../lib/ride-realtime";
 import { CaptainLocation } from "../lib/location";
 
 type Coordinate = { latitude: number; longitude: number };
@@ -49,6 +50,7 @@ export function CaptainRideWorkspace({
   const [error, setError] = useState("");
   const [overrideMode, setOverrideMode] = useState(false);
   const [overrideNote, setOverrideNote] = useState("");
+  const [overrideAvailable, setOverrideAvailable] = useState(false);
   const [clock, setClock] = useState(Date.now());
   const captainCoordinate = captainLocation ? { latitude: captainLocation.latitude, longitude: captainLocation.longitude } : null;
 
@@ -79,6 +81,23 @@ export function CaptainRideWorkspace({
     const timer = setInterval(() => setClock(Date.now()), 1_000);
     return () => clearInterval(timer);
   }, [trip.status, trip.arrivedAtPickupAt]);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    const refreshTrip = () => taxiApi.trips().then((rides) => {
+      const updated = rides.find((ride) => ride.id === trip.id);
+      if (updated) return onUpdated(updated);
+    }).catch(() => undefined);
+    void subscribeRideRealtime(trip.id, {
+      "ride.lifecycle.updated": () => void refreshTrip(),
+      "ride.message.new": (message) => {
+        if (message.senderRole !== "CUSTOMER") return;
+        void acknowledgeRideMessageDelivered(trip.id, message.id);
+        void refreshTrip();
+      }
+    }).then((unsubscribe) => { cleanup = unsubscribe; }).catch(() => undefined);
+    return () => cleanup?.();
+  }, [trip.id, trip.updatedAt]);
 
   const arrivalTime = trip.arrivedAtPickupAt ? new Date(trip.arrivedAtPickupAt).getTime() : 0;
   const waitingTotalSeconds = arrivalTime ? Math.max(0, Math.floor((clock - arrivalTime) / 1000)) : 0;
@@ -112,10 +131,13 @@ export function CaptainRideWorkspace({
       setPin("");
       setDeclineReason("");
       setOverrideMode(false);
+      setOverrideAvailable(false);
       setOverrideNote("");
       await onUpdated(updated);
     } catch (cause) {
-      setError(friendlyError(cause));
+      const message = friendlyError(cause);
+      if (/move closer to the requested (pickup|destination)/i.test(message)) setOverrideAvailable(true);
+      setError(message);
     } finally {
       setSaving(false);
     }
@@ -135,14 +157,7 @@ export function CaptainRideWorkspace({
     void Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${mapTarget.latitude},${mapTarget.longitude}`);
   }
 
-  async function callInKariGO() {
-    try {
-      const readiness = await taxiApi.callSession(trip.id);
-      Alert.alert("Call in KariGO", readiness.reason);
-    } catch (cause) {
-      setError(friendlyError(cause));
-    }
-  }
+  function callInKariGO() { router.push(`/ride-call/${trip.id}?mode=outgoing` as never); }
 
   async function callByPhone() {
     try {
@@ -211,10 +226,10 @@ export function CaptainRideWorkspace({
 
       {trip.status === "ACCEPTED" || trip.status === "STARTED" ? <View style={styles.waitingCard}>
         <Text style={styles.waitingTitle}>Location integrity</Text>
-        <Text style={ui.muted}>Confirm only at the requested {trip.status === "ACCEPTED" ? "pickup" : "destination"}. Refresh GPS if your location is stale.</Text>
-        <Button title={overrideMode ? "CANCEL LOCATION OVERRIDE" : "USE LOCATION OVERRIDE"} tone="muted" onPress={() => setOverrideMode((value) => !value)} />
-        {overrideMode ? <Field placeholder="Required override reason" value={overrideNote} onChangeText={setOverrideNote} /> : null}
-        {overrideMode ? <Text style={ui.muted}>This records your current coordinates, reason and timestamp in the Ride audit trail.</Text> : null}
+        <Text style={ui.muted}>Confirm only at the requested {trip.status === "ACCEPTED" ? "pickup" : "destination"}. A documented override appears only after proximity verification fails.</Text>
+        {overrideAvailable ? <Button title={overrideMode ? "CANCEL LOCATION OVERRIDE" : "USE LOCATION OVERRIDE"} tone="muted" onPress={() => setOverrideMode((value) => !value)} /> : null}
+        {overrideAvailable && overrideMode ? <Field placeholder="Required override reason" value={overrideNote} onChangeText={setOverrideNote} /> : null}
+        {overrideAvailable && overrideMode ? <Text style={ui.muted}>This records your current coordinates, reason and timestamp in the Ride audit trail.</Text> : null}
       </View> : null}
 
       {trip.status === "ARRIVED_PICKUP" ? <>
@@ -232,8 +247,8 @@ export function CaptainRideWorkspace({
       </>}
 
       <View style={styles.quickActions}>
-        <Pressable accessibilityRole="button" onPress={() => router.push(`/ride-chat/${trip.id}` as never)} style={styles.quickAction}><Feather name="message-circle" size={18} /><Text style={styles.quickActionText}>Chat</Text></Pressable>
-        <Pressable accessibilityRole="button" onPress={openContact} style={styles.quickAction}><Feather name="phone" size={18} /><Text style={styles.quickActionText}>Call</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => router.push(`/ride-chat/${trip.id}` as never)} style={styles.quickAction}><Feather name="message-circle" size={18} /><Text style={styles.quickActionText}>Chat{trip.conversationSummary?.unreadCount ? ` (${trip.conversationSummary.unreadCount})` : ""}</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={callInKariGO} style={styles.quickAction}><Feather name="phone" size={18} /><Text style={styles.quickActionText}>Call</Text></Pressable>
         {mapTarget ? <Pressable accessibilityRole="button" onPress={openNavigation} style={styles.quickAction}><Feather name="navigation" size={18} /><Text style={styles.quickActionText}>Navigation</Text></Pressable> : null}
         <Pressable accessibilityRole="button" onPress={() => router.push("/ride-safety" as never)} style={styles.quickAction}><Feather name="shield" size={18} /><Text style={styles.quickActionText}>Safety</Text></Pressable>
       </View>

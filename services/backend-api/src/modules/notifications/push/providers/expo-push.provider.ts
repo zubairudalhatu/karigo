@@ -34,6 +34,16 @@ export class ExpoPushProvider implements PushProvider {
 
     const url = this.config.get<string>("EXPO_PUSH_URL", this.defaultUrl).trim();
     const accessToken = this.config.get<string>("EXPO_ACCESS_TOKEN")?.trim();
+    const presentation = (message: PushMessage) => {
+      const event = typeof message.metadata?.event === "string" ? message.metadata.event : "";
+      if (event === "RIDE_CALL_INCOMING") {
+        return { sound: "karigo-ride-call.wav", channelId: "ride-calls" };
+      }
+      if (event === "RIDE_MESSAGE") {
+        return { sound: "karigo-message.wav", channelId: "ride-messages" };
+      }
+      return { sound: "default", channelId: "captain-assignments" };
+    };
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -45,9 +55,9 @@ export class ExpoPushProvider implements PushProvider {
         to: message.toDeviceToken,
         title: message.title,
         body: message.body,
-        sound: "default",
+        sound: presentation(message).sound,
         priority: "high",
-        channelId: "captain-assignments",
+        channelId: presentation(message).channelId,
         data: {
           ...(message.data ?? {}),
           ...(message.metadata ? { metadata: message.metadata } : {})

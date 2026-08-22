@@ -328,7 +328,7 @@ export default function AdminTaxiPage() {
       </section> : null}
       {activeTab === "trips" ? <section className="section">
         {trips.length ? trips.map((trip) => <article className="card" key={trip.id}>
-          <strong>{trip.tripReference}</strong>
+          <strong>{trip.tripReference} · {trip.rideCategory ?? "ECONOMY"}</strong>
           <p>{trip.pickupAddress} to {trip.destinationAddress}</p>
           <p className="muted">Fare estimate: {formatKobo(trip.estimatedFareKobo)} - PIN last four: {trip.tripPinLastFour ?? "hidden"}</p>
           {trip.finalFareKobo ? <p className="muted">Final fare: {formatKobo(trip.finalFareKobo)}{trip.receipt ? ` · Receipt ${trip.receipt.receiptNumber}` : ""}</p> : null}
@@ -394,7 +394,11 @@ export default function AdminTaxiPage() {
               <div className="item"><span>Passenger charge</span><strong>{formatKobo(summary.pricingDefaults.perKmKobo)} / km</strong></div>
               <div className="item"><span>Captain commission</span><strong>{summary.pricingDefaults.karigoCommissionPercent}% KariGO commission</strong></div>
               <div className="item"><span>Waiting charge</span><strong>{formatKobo(summary.pricingDefaults.waitingChargeKoboPerMinute)} / minute after {summary.pricingDefaults.waitingGraceMinutes} minutes</strong></div>
-              <div className="item"><span>Minimum Ride fare</span><strong>{formatKobo(summary.pricingDefaults.minimumRideFareKobo)}</strong></div>
+              {Object.entries(summary.pricingDefaults.categoryMinimumFaresKobo).map(([category, minimum]) =>
+                <div className="item" key={category}>
+                  <span>{category.replaceAll("_", " ")} minimum</span><strong>{formatKobo(minimum)}</strong>
+                </div>
+              )}
               <div className="item"><span>Free pickup wait</span><strong>{summary.pricingDefaults.freePickupWaitSeconds} seconds</strong></div>
               <div className="item"><span>Tax/VAT line</span><strong>{summary.pricingDefaults.vatTaxConfigured ? formatKobo(summary.pricingDefaults.vatTaxKobo) : "Not configured"}</strong></div>
               <div className="item"><span>Ride dispatch flag</span><strong>{summary.pricingDefaults.dispatchEnabled ? "Enabled" : "Disabled"}</strong></div>

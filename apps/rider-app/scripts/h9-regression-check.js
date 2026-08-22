@@ -13,7 +13,8 @@ function requireText(source, text, message) {
 
 requireText(workspace, "formatKobo(trip.estimatedFareKobo)", "Captain Ride fare must use explicit Kobo formatting.");
 if (workspace.includes("money(trip.estimatedFareKobo)")) throw new Error("Captain Ride fare still uses ambiguous money().");
-for (const action of ["Chat", "Call", "Navigation", "Safety"]) requireText(workspace, `>${action}<`, `Missing active Ride ${action} action.`);
+requireText(workspace, "conversationSummary?.unreadCount", "Missing active Ride Chat action and unread state.");
+for (const action of ["Call", "Navigation", "Safety"]) requireText(workspace, `>${action}<`, `Missing active Ride ${action} action.`);
 requireText(workspace, "contactOptions(trip.id)", "Phone fallback must be fetched through the controlled Ride endpoint.");
 if (/tel:\$\{trip\.customer/.test(workspace)) throw new Error("Captain workspace exposes the Customer number directly.");
 for (const reply of ["I'm on my way", "I've arrived", "I'll arrive in 2 min", "Please share your exact location"]) requireText(chat, reply, `Missing Captain quick reply: ${reply}`);

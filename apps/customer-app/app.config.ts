@@ -18,7 +18,7 @@ const googleMapsAndroidApiKey =
   process.env.GOOGLE_MAPS_ANDROID_API_KEY ??
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY;
 
-const customerAppVersion = "1.0.0";
+const customerAppVersion = "1.1.0";
 const apiBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ??
   process.env.EXPO_PUBLIC_API_URL ??
@@ -37,8 +37,15 @@ export default ({ config }: { config: Record<string, any> }) => ({
     [
       "expo-image-picker",
       {
-        photosPermission: "KariGO uses photo library access only when you choose a customer profile photo.",
-        microphonePermission: false
+        photosPermission: "KariGO uses photo library access only when you choose a customer profile photo."
+      }
+    ],
+    [
+      "expo-notifications",
+      {
+        color: "#D90000",
+        defaultChannel: "ride-messages",
+        sounds: ["./assets/sounds/karigo-ride-call.wav", "./assets/sounds/karigo-message.wav"]
       }
     ],
     [
@@ -65,11 +72,16 @@ export default ({ config }: { config: Record<string, any> }) => ({
   },
   android: {
     ...config.android,
+    permissions: [
+      ...new Set([
+        ...(config.android?.permissions ?? []),
+        "android.permission.RECORD_AUDIO"
+      ])
+    ],
     blockedPermissions: [
       ...new Set([
         ...(config.android?.blockedPermissions ?? []),
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ])
@@ -92,11 +104,15 @@ export default ({ config }: { config: Record<string, any> }) => ({
       monochromeImage: "./assets/adaptive-icon-monochrome.png"
     },
     package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer",
-    versionCode: isStaging ? 1 : 16
+    versionCode: isStaging ? 1 : 17
   },
   ios: {
     ...config.ios,
-    bundleIdentifier: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer"
+    bundleIdentifier: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer",
+    infoPlist: {
+      ...(config.ios?.infoPlist ?? {}),
+      NSMicrophoneUsageDescription: "KariGO uses your microphone only when you make or receive an in-app Ride call."
+    }
   },
   extra: {
     ...config.extra,

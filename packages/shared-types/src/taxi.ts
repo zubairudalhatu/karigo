@@ -478,6 +478,7 @@ export interface TaxiRideCategory {
   description: string;
   passengerCapacity: number;
   arrivalEstimateMinutes: number;
+  minimumFareKobo: number;
   fareEstimateKobo?: number;
   fareRangeKobo?: {
     min: number;
@@ -519,11 +520,12 @@ export interface TaxiFareEstimate {
 
 export interface TaxiRidePricingDefaults {
   launchCities: string[];
+  serviceArea?: string | null;
   perKmKobo: number;
   karigoCommissionPercent: number;
   waitingChargeKoboPerMinute: number;
   waitingGraceMinutes: number;
-  minimumRideFareKobo: number;
+  categoryMinimumFaresKobo: Record<"ECONOMY" | "COMFORT" | "EXECUTIVE" | "XL", number>;
   freePickupWaitSeconds: number;
   vatTaxKobo: number;
   vatTaxConfigured: boolean;
@@ -627,6 +629,7 @@ export interface TaxiTrip {
   estimatedDistanceKm?: unknown;
   estimatedDurationMin?: number | null;
   estimatedFareKobo: number;
+  rideCategory: string;
   monetaryUnit: "KOBO";
   waitingSummary?: RideWaitingSummary;
   receipt?: RideReceipt | null;
@@ -686,7 +689,8 @@ export interface RideMessage {
   senderRole: RideMessageSenderRole;
   senderLabel: string;
   message: string;
-  deliveryState: "DELIVERED";
+  deliveryState: "SENT" | "DELIVERED" | "READ";
+  deliveredAt?: string | null;
   readAt?: string | null;
   createdAt: string;
 }
@@ -694,6 +698,7 @@ export interface RideMessage {
 export interface RideConversationSummary {
   exists: boolean;
   messageCount: number;
+  unreadCount: number;
   lastMessageAt?: string | null;
   readOnly: boolean;
 }
@@ -725,4 +730,46 @@ export interface RideCallSessionSummary {
   recordingEnabled: boolean;
   reason: string;
   providerRequirements?: string[];
+}
+
+export type RideCallState = "RINGING" | "ACCEPTED" | "CONNECTED" | "DECLINED" | "MISSED" | "ENDED" | "FAILED";
+
+export interface RideCallCredential {
+  appId: string;
+  channel: string;
+  uid: number;
+  token: string;
+  expiresAt: string;
+}
+
+export interface RideCallSession {
+  id: string;
+  rideId: string;
+  provider: "AGORA";
+  state: RideCallState;
+  recordingEnabled: false;
+  participant?: "initiator" | "recipient";
+  credential?: RideCallCredential;
+  ringingAt: string;
+  acceptedAt?: string | null;
+  connectedAt?: string | null;
+  declinedAt?: string | null;
+  missedAt?: string | null;
+  endedAt?: string | null;
+  endReason?: string | null;
+  durationSeconds?: number | null;
+  providerChannelReference: string;
+}
+
+export interface RideIncomingCallEvent extends RideCallSession {
+  rideReference: string;
+  callerLabel: string;
+}
+
+export interface RideLifecycleRealtimeEvent {
+  rideId: string;
+  status: TaxiTripStatus;
+  eventType: string;
+  updatedAt: string;
+  receiptReady: boolean;
 }

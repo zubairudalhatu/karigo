@@ -260,7 +260,11 @@ describe("TaxiService", () => {
     markRead: jest.fn(),
     contactOptions: jest.fn(),
     callSession: jest.fn(),
-    callReadiness: jest.fn(() => ({ enabled: false, provider: null, recordingEnabled: false, reason: "Disabled" }))
+    callReadiness: jest.fn(() => ({ enabled: false, provider: null, recordingEnabled: false, reason: "Disabled" })),
+    endCallsForTerminalRide: jest.fn().mockResolvedValue(undefined)
+  };
+  const rideRealtime = {
+    emitToRide: jest.fn(), schedulePaidWaiting: jest.fn(), stopWaiting: jest.fn()
   };
 
   const service = new TaxiService(
@@ -272,7 +276,8 @@ describe("TaxiService", () => {
     captainWorkState as unknown as CaptainWorkStateService,
     notifications as unknown as NotificationsService,
     launchOperations as never,
-    rideCommunications as never
+    rideCommunications as never,
+    rideRealtime as never
   );
 
   function enableTaxiStaging() {
@@ -302,6 +307,7 @@ describe("TaxiService", () => {
   beforeEach(() => {
     jest.resetAllMocks();
     rideCommunications.callReadiness.mockReturnValue({ enabled: false, provider: null, recordingEnabled: false, reason: "Disabled" });
+    rideCommunications.endCallsForTerminalRide.mockResolvedValue(undefined);
     prisma.user.findUnique.mockResolvedValue({
       id: "rider-user",
       role: UserRole.RIDER,
@@ -690,7 +696,7 @@ describe("TaxiService", () => {
     expect(result.launchNotice).toContain("KariGO Rides is live");
   });
 
-  it("never quotes a Ride or category range below the NGN 1,900 minimum", () => {
+  it("never quotes a Ride or category range below the approved category minimum", () => {
     enableTaxiStaging();
     const result = service.fareEstimate({
       pickupAddress: "Wuse, Abuja",
@@ -699,14 +705,20 @@ describe("TaxiService", () => {
       estimatedDurationMin: 5
     });
 
-    expect(result.estimatedFareKobo).toBe(190000);
+    expect(result.estimatedFareKobo).toBe(170000);
     expect(result.minimumFareApplied).toBe(true);
-    expect(result.selectedRideCategory?.fareRangeKobo).toEqual({ min: 190000, max: 190000 });
-    expect(result.rideCategories.every((category) =>
-      category.fareEstimateKobo === 190000
-      && category.fareRangeKobo!.min === 190000
-      && category.fareRangeKobo!.max === 190000
-    )).toBe(true);
+    expect(result.selectedRideCategory?.fareRangeKobo).toEqual({ min: 170000, max: 170000 });
+    expect(result.rideCategories.map((category) => ({
+      id: category.id,
+      minimumFareKobo: category.minimumFareKobo,
+      fareEstimateKobo: category.fareEstimateKobo,
+      fareRangeKobo: category.fareRangeKobo
+    }))).toEqual([
+      { id: "ECONOMY", minimumFareKobo: 170000, fareEstimateKobo: 170000, fareRangeKobo: { min: 170000, max: 170000 } },
+      { id: "COMFORT", minimumFareKobo: 230000, fareEstimateKobo: 230000, fareRangeKobo: { min: 230000, max: 230000 } },
+      { id: "EXECUTIVE", minimumFareKobo: 270000, fareEstimateKobo: 270000, fareRangeKobo: { min: 270000, max: 270000 } },
+      { id: "XL", minimumFareKobo: 320000, fareEstimateKobo: 320000, fareRangeKobo: { min: 320000, max: 320000 } }
+    ]);
   });
 
   it("returns ride categories and applies the selected category multiplier to fare estimates", () => {

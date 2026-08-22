@@ -1,14 +1,5 @@
-export const MINIMUM_RIDE_FARE_KOBO = 190_000;
 export const FREE_PICKUP_WAIT_SECONDS = 300;
 export const WAITING_CHARGE_KOBO_PER_MINUTE = 500;
-
-export function applyMinimumRideFare(fareKobo: number, minimumFareKobo = MINIMUM_RIDE_FARE_KOBO) {
-  const rounded = Math.max(0, Math.round(fareKobo));
-  return {
-    rideFareKobo: Math.max(rounded, minimumFareKobo),
-    minimumFareApplied: rounded < minimumFareKobo
-  };
-}
 
 export function calculatePickupWaiting(
   arrivedAt: Date | null | undefined,

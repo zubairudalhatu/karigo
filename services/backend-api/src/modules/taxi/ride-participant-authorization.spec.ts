@@ -19,7 +19,7 @@ describe("Ride participant communication authorization", () => {
   };
   const communications: any = { listMessages: jest.fn() };
   const service = new TaxiService(
-    prisma, {} as any, config, {} as any, {} as any, {} as any, {} as any, {} as any, communications
+    prisma, {} as any, config, {} as any, {} as any, {} as any, {} as any, {} as any, communications, {} as any
   );
 
   beforeEach(() => {

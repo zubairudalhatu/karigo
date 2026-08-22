@@ -9,6 +9,8 @@ import { AdminTaxiController } from "./admin-taxi.controller";
 import { CustomerTaxiController } from "./customer-taxi.controller";
 import { RiderTaxiController } from "./rider-taxi.controller";
 import { RideCallService } from "./ride-call.service";
+import { RideRealtimeGateway } from "./ride-realtime.gateway";
+import { RideRealtimeService } from "./ride-realtime.service";
 import { TaxiMapsService } from "./taxi-maps.service";
 import { TaxiController } from "./taxi.controller";
 import { TaxiService } from "./taxi.service";
@@ -16,7 +18,17 @@ import { TaxiService } from "./taxi.service";
 @Module({
   imports: [PrismaModule, AdminAuditModule],
   controllers: [TaxiController, CustomerTaxiController, RiderTaxiController, AdminTaxiController],
-  providers: [TaxiService, TaxiMapsService, RideCallService, RideCommunicationsService, CaptainUploadStorageService, ApplicationNotificationsService, CaptainWorkStateService],
+  providers: [
+    TaxiService,
+    TaxiMapsService,
+    RideCallService,
+    RideCommunicationsService,
+    RideRealtimeService,
+    RideRealtimeGateway,
+    CaptainUploadStorageService,
+    ApplicationNotificationsService,
+    CaptainWorkStateService
+  ],
   exports: [TaxiService]
 })
 export class TaxiModule {}

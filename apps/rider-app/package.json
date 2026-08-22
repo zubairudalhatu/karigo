@@ -8,7 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "typecheck": "tsc --noEmit",
-    "test:regression": "node scripts/staging-regression-check.js && node scripts/h9-regression-check.js && node scripts/h10-regression-check.js",
+    "test:regression": "node scripts/staging-regression-check.js && node scripts/h9-regression-check.js && node scripts/h10-regression-check.js && node scripts/h10-1-regression-check.js",
     "test:location-regression": "node scripts/location-cockpit-regression-check.js",
     "test:h8-h2": "node scripts/h8-h2-regression-check.js",
     "test:h8-h3": "node scripts/h8-h3-regression-check.js",
@@ -37,9 +37,11 @@
     "expo-updates": "~0.28.18",
     "react": "19.0.0",
     "react-native": "^0.79.6",
+    "react-native-agora": "^4.6.2",
     "react-native-maps": "1.20.1",
     "react-native-safe-area-context": "5.4.0",
-    "react-native-screens": "~4.11.1"
+    "react-native-screens": "~4.11.1",
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@types/react": "~19.0.0",

@@ -4,16 +4,20 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { notificationsApi } from "../api/notifications.api";
 
+import { isActiveRideConversation } from "./ride-realtime";
 const ASSIGNMENT_ENTITY_TYPES = new Set(["TaxiTrip", "Order"]);
 let presenceNotificationId: string | null = null;
 
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: true,
+  handleNotification: async (notification) => ({
+    ...(() => {
+      const data = notificationData(notification);
+      const metadata = data.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata) ? data.metadata as Record<string, unknown> : data;
+      const quiet = metadata.event === "RIDE_MESSAGE" && isActiveRideConversation(metadata.rideId);
+      return { shouldPlaySound: !quiet, shouldShowBanner: !quiet, shouldShowList: !quiet };
+    })(),
     shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true
   })
 });
 
@@ -47,7 +51,21 @@ export async function registerCaptainPushNotifications() {
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 150, 250],
       lightColor: "#E31E24",
-      sound: "default"
+      sound: "karigo-ride-call.wav"
+    });
+    await Notifications.setNotificationChannelAsync("ride-calls", {
+      name: "KariGO Ride calls",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 500, 250, 500, 250, 800],
+      lightColor: "#E31E24",
+      sound: "karigo-ride-call.wav"
+    });
+    await Notifications.setNotificationChannelAsync("ride-messages", {
+      name: "KariGO Ride messages",
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 150],
+      lightColor: "#E31E24",
+      sound: "karigo-message.wav"
     });
   }
 

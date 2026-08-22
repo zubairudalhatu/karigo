@@ -6,6 +6,7 @@ import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.in
 import { TaxiCancelDto } from "./dto/taxi-cancel.dto";
 import { TaxiDriverAvailabilityDto } from "./dto/taxi-driver-availability.dto";
 import { CreateRideMessageDto, ListRideMessagesQueryDto, MarkRideMessagesReadDto } from "./dto/ride-message.dto";
+import { EndRideCallDto } from "./dto/ride-call.dto";
 import { TaxiStartTripDto } from "./dto/taxi-start-trip.dto";
 import { RideLocationEvidenceDto } from "./dto/ride-location-evidence.dto";
 import { TaxiService } from "./taxi.service";
@@ -67,6 +68,36 @@ export class RiderTaxiController {
   @ApiOperation({ summary: "Request a provider-backed in-app Ride call session" })
   async callSession(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {
     return { message: "Ride call readiness retrieved", data: await this.taxi.riderRideCallSession(user.id, tripId) };
+  }
+
+  @Get("trips/:tripId/call-session/active")
+  async activeCallSession(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {
+    return { message: "Active Ride call session retrieved", data: await this.taxi.riderActiveRideCallSession(user.id, tripId) };
+  }
+
+  @Post("trips/:tripId/call-sessions/:sessionId/accept")
+  async acceptCall(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Param("sessionId", ParseUUIDPipe) sessionId: string) {
+    return { message: "Ride call accepted", data: await this.taxi.riderAcceptRideCall(user.id, tripId, sessionId) };
+  }
+
+  @Post("trips/:tripId/call-sessions/:sessionId/connected")
+  async connectCall(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Param("sessionId", ParseUUIDPipe) sessionId: string) {
+    return { message: "Ride call connected", data: await this.taxi.riderConnectRideCall(user.id, tripId, sessionId) };
+  }
+
+  @Post("trips/:tripId/call-sessions/:sessionId/decline")
+  async declineCall(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Param("sessionId", ParseUUIDPipe) sessionId: string) {
+    return { message: "Ride call declined", data: await this.taxi.riderDeclineRideCall(user.id, tripId, sessionId) };
+  }
+
+  @Post("trips/:tripId/call-sessions/:sessionId/end")
+  async endCall(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Param("sessionId", ParseUUIDPipe) sessionId: string, @Body() dto: EndRideCallDto) {
+    return { message: "Ride call ended", data: await this.taxi.riderEndRideCall(user.id, tripId, sessionId, dto.reason) };
+  }
+
+  @Post("trips/:tripId/call-sessions/:sessionId/token/renew")
+  async renewCallToken(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Param("sessionId", ParseUUIDPipe) sessionId: string) {
+    return { message: "Ride call token renewed", data: await this.taxi.riderRenewRideCallToken(user.id, tripId, sessionId) };
   }
 
   @Post("trips/:tripId/accept")
