@@ -17,6 +17,7 @@ import { CaptainApplicationTrashDto } from "../riders/dto/captain-application-tr
 import { TaxiCancelDto } from "./dto/taxi-cancel.dto";
 import { UpdateTaxiWaitlistStatusDto } from "./dto/update-taxi-waitlist-status.dto";
 import { AllocateRideRefundResponsibilityDto, CreateRideFinancialAdjustmentDto, CreateRideRefundDto, ListRideFinanceQueryDto, OpenRideFinancialDisputeDto, RecordRideCommissionRemittanceDto, ResolveRideFinancialDisputeDto, SettleCashRideRefundDto } from "./dto/ride-finance.dto";
+import { RideCommissionPaymentService } from "../payments/ride-commission-payment.service";
 import { RideFinanceService } from "./ride-finance.service";
 import { TaxiService } from "./taxi.service";
 
@@ -34,7 +35,7 @@ const TAXI_ADMINS = [
 @Roles(UserRole.ADMIN)
 @AdminRoles(...TAXI_ADMINS)
 export class AdminTaxiController {
-  constructor(private readonly taxi: TaxiService, private readonly finance: RideFinanceService) {}
+  constructor(private readonly taxi: TaxiService, private readonly finance: RideFinanceService, private readonly commissionPayments: RideCommissionPaymentService) {}
 
   @Get("finance/summary")
   @AdminRoles(...TAXI_ADMINS, AdminRole.FINANCE_OFFICER)
@@ -47,6 +48,10 @@ export class AdminTaxiController {
   @Get("finance/captains")
   @AdminRoles(...TAXI_ADMINS, AdminRole.FINANCE_OFFICER)
   async financeCaptains(@Query() query: ListRideFinanceQueryDto) { return { message: "Ride Captain finance summaries retrieved", data: await this.finance.adminCaptainSummaries(query) }; }
+
+  @Get("finance/commission-payments")
+  @AdminRoles(...TAXI_ADMINS, AdminRole.FINANCE_OFFICER)
+  async commissionPaymentHistory() { return { message: "Ride commission payment history retrieved", data: await this.commissionPayments.adminHistory() }; }
 
   @Get("finance/export")
   @AdminRoles(AdminRole.SUPER_ADMIN, AdminRole.FINANCE_OFFICER)

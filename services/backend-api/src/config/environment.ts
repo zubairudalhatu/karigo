@@ -213,8 +213,10 @@ function validateFlutterwaveLivePaymentGate(config: Record<string, unknown>, pay
     "Live Flutterwave payments require FLUTTERWAVE_SECRET_HASH or FLUTTERWAVE_WEBHOOK_SECRET"
   );
 
-  if (!booleanFlag(config.FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED, "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED", false)) {
-    throw new Error("Live Flutterwave payments require FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED=true");
+  const customerCheckoutEnabled = booleanFlag(config.FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED, "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED", false);
+  const captainCommissionPaymentEnabled = booleanFlag(config.RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED, "RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED", false);
+  if (!customerCheckoutEnabled && !captainCommissionPaymentEnabled) {
+    throw new Error("Live Flutterwave payments require FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED=true or RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED=true for an explicitly approved payment purpose");
   }
 }
 
@@ -756,6 +758,22 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     canonicalRideCommissionConfigured ? "RIDE_KARIGO_COMMISSION_PERCENT" : "RIDE_CAPTAIN_COMMISSION_PERCENT",
     10
   );
+  const rideCaptainCommissionPaymentEnabled = booleanFlag(config.RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED, "RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED", false);
+  const rideCaptainCommissionPaymentProvider = typeof config.RIDE_CAPTAIN_COMMISSION_PAYMENT_PROVIDER === "string" && config.RIDE_CAPTAIN_COMMISSION_PAYMENT_PROVIDER.trim()
+    ? config.RIDE_CAPTAIN_COMMISSION_PAYMENT_PROVIDER.trim().toLowerCase()
+    : "flutterwave";
+  const rideCaptainCommissionWarningThresholdKobo = positiveInteger(config.RIDE_CAPTAIN_COMMISSION_WARNING_THRESHOLD_KOBO, "RIDE_CAPTAIN_COMMISSION_WARNING_THRESHOLD_KOBO", 800000);
+  const rideCaptainCommissionUrgentThresholdKobo = positiveInteger(config.RIDE_CAPTAIN_COMMISSION_URGENT_THRESHOLD_KOBO, "RIDE_CAPTAIN_COMMISSION_URGENT_THRESHOLD_KOBO", 900000);
+  const rideCaptainCommissionBlockThresholdKobo = positiveInteger(config.RIDE_CAPTAIN_COMMISSION_BLOCK_THRESHOLD_KOBO, "RIDE_CAPTAIN_COMMISSION_BLOCK_THRESHOLD_KOBO", 1000000);
+  if (!(rideCaptainCommissionWarningThresholdKobo < rideCaptainCommissionUrgentThresholdKobo && rideCaptainCommissionUrgentThresholdKobo < rideCaptainCommissionBlockThresholdKobo)) {
+    throw new Error("Ride Captain commission thresholds must increase from warning to urgent to block");
+  }
+  if (rideCaptainCommissionPaymentProvider !== "flutterwave") {
+    throw new Error("RIDE_CAPTAIN_COMMISSION_PAYMENT_PROVIDER must be flutterwave");
+  }
+  if (rideCaptainCommissionPaymentEnabled && (!paymentsLiveEnabled || paymentProvider !== "flutterwave")) {
+    throw new Error("Captain commission payment requires PAYMENTS_LIVE_ENABLED=true and PAYMENTS_PROVIDER=flutterwave");
+  }
   const rideCustomerCancellationFeeEnabled = booleanFlag(config.RIDE_CUSTOMER_CANCELLATION_FEE_ENABLED, "RIDE_CUSTOMER_CANCELLATION_FEE_ENABLED", false);
   const rideNoShowFeeEnabled = booleanFlag(config.RIDE_NO_SHOW_FEE_ENABLED, "RIDE_NO_SHOW_FEE_ENABLED", false);
   if (ridesProductionEnabled && !ridesServiceEnabled) {
@@ -949,6 +967,11 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     RIDES_AUTO_DISPATCH_ENABLED: ridesAutoDispatchEnabled,
     RIDES_PAYMENT_ENABLED: ridesPaymentEnabled,
     RIDE_KARIGO_COMMISSION_PERCENT: rideKarigoCommissionPercent,
+    RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED: rideCaptainCommissionPaymentEnabled,
+    RIDE_CAPTAIN_COMMISSION_PAYMENT_PROVIDER: rideCaptainCommissionPaymentProvider,
+    RIDE_CAPTAIN_COMMISSION_WARNING_THRESHOLD_KOBO: rideCaptainCommissionWarningThresholdKobo,
+    RIDE_CAPTAIN_COMMISSION_URGENT_THRESHOLD_KOBO: rideCaptainCommissionUrgentThresholdKobo,
+    RIDE_CAPTAIN_COMMISSION_BLOCK_THRESHOLD_KOBO: rideCaptainCommissionBlockThresholdKobo,
     RIDE_CUSTOMER_CANCELLATION_FEE_ENABLED: rideCustomerCancellationFeeEnabled,
     RIDE_NO_SHOW_FEE_ENABLED: rideNoShowFeeEnabled,
     TAXI_SERVICE_ENABLED: ridesServiceEnabled,

@@ -2,14 +2,14 @@ import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import { formatNaira } from "@karigo/shared-types";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import type { CaptainAccess, CaptainWorkState } from "../src/api/captain-access.api";
 import { captainAccessApi } from "../src/api/captain-access.api";
 import type { EarningsSummary, RideEarningRecord } from "../src/api/earnings.api";
 import { earningsApi } from "../src/api/earnings.api";
 import type { CaptainRideStatement } from "../src/api/taxi.api";
 import { taxiApi } from "../src/api/taxi.api";
-import { Card, Empty, Message, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
+import { Button, Card, Empty, Message, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
 import { friendlyError } from "../src/lib/errors";
 import { projectCaptainOperationalState } from "../src/lib/captain-operational-state";
 
@@ -28,6 +28,9 @@ export default function Earnings() {
   const [filter, setFilter] = useState<EarningsFilter>("ALL");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState("");
+  const [pendingPaymentReference, setPendingPaymentReference] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -56,6 +59,46 @@ export default function Earnings() {
   }
 
   useEffect(() => { void load(); }, []);
+
+  async function payKarigoFee() {
+    if (paymentBusy) return;
+    setPaymentBusy(true);
+    setError("");
+    setPaymentMessage("");
+    try {
+      const result = await taxiApi.initializeCommissionPayment();
+      const url = result.authorization.authorizationUrl ?? result.authorization.checkoutUrl;
+      if (!url) throw new Error("Flutterwave checkout link was not returned.");
+      const parsed = new URL(url);
+      if (parsed.protocol !== "https:" || !(parsed.hostname === "flutterwave.com" || parsed.hostname.endsWith(".flutterwave.com"))) {
+        throw new Error("Payment provider returned an invalid checkout link.");
+      }
+      setPendingPaymentReference(result.authorization.transactionReference);
+      await Linking.openURL(parsed.toString());
+      setPaymentMessage("Flutterwave checkout opened. Return here and verify payment after completing it.");
+    } catch (cause) {
+      setError(friendlyError(cause));
+    } finally {
+      setPaymentBusy(false);
+    }
+  }
+
+  async function verifyKarigoFee() {
+    if (!pendingPaymentReference || paymentBusy) return;
+    setPaymentBusy(true);
+    setError("");
+    try {
+      const result = await taxiApi.verifyCommissionPayment(pendingPaymentReference);
+      if (result.payment.status !== "SUCCESSFUL") throw new Error("Payment has not been verified yet.");
+      setPaymentMessage("Payment verified. Your Ride eligibility has been recalculated automatically.");
+      setPendingPaymentReference(null);
+      await load();
+    } catch (cause) {
+      setError(friendlyError(cause));
+    } finally {
+      setPaymentBusy(false);
+    }
+  }
 
   const projection = useMemo(() => projectCaptainOperationalState(access, workState), [access, workState]);
   const deliveryRecords = data?.completedJobs ?? [];
@@ -104,7 +147,21 @@ export default function Earnings() {
           <View style={styles.historyAmount}><Text style={styles.amount}>{formatNaira(item.amount)}</Text><StatusBadge status={item.payoutStatus} /></View>
         </View>)}
       </View>}
-      {projection.hasActiveRideMode ? <Card tone="soft"><Text style={ui.sectionTitle}>KariGO commission statement</Text><Text style={ui.pageIntro}>Cash fares stay with you. Only the KariGO service fee is due for reconciliation; this is not a payout.</Text><ReceiptLine label="Remitted" value={formatNaira((rideStatement?.karigoCommissionRemittedKobo ?? 0) / 100)} /><ReceiptLine label="Outstanding" value={formatNaira((rideStatement?.karigoCommissionDueKobo ?? 0) / 100)} />{rideStatement?.remittances.length ? rideStatement.remittances.map((item) => <View key={item.id} style={styles.remittance}><Text style={styles.reference}>{item.reference}</Text><Text style={styles.meta}>{new Date(item.remittedAt).toLocaleDateString()} · {item.method}</Text><Text style={styles.financeStrong}>{formatNaira(item.amountKobo / 100)}</Text></View>) : <Text style={ui.muted}>No commission remittances recorded yet.</Text>}</Card> : null}
+      {projection.hasActiveRideMode ? <Card tone="soft">
+        <Text style={ui.sectionTitle}>{rideStatement?.financialEligibility.level === "BLOCKED" ? "Ride requests paused" : "KariGO commission statement"}</Text>
+        <Text style={ui.pageIntro}>{rideStatement?.financialEligibility.level === "BLOCKED" ? `Your outstanding KariGO service fee has reached the ${formatNaira(rideStatement.financialEligibility.thresholds.blockKobo / 100)} settlement limit. Settle your KariGO fee to continue receiving Ride requests. This is not an account suspension.` : "Cash fares stay with you. Only the KariGO service fee is due for reconciliation; this is not a payout."}</Text>
+        {rideStatement?.financialEligibility.level === "WARNING" || rideStatement?.financialEligibility.level === "URGENT" ? <Text style={styles.warningText}>{rideStatement.financialEligibility.message}</Text> : null}
+        <ReceiptLine label="Current Ride eligibility" value={rideStatement?.financialEligibility.rideEligible ? "Eligible" : "Paused"} />
+        <ReceiptLine label="Remitted" value={formatNaira((rideStatement?.karigoCommissionRemittedKobo ?? 0) / 100)} />
+        <ReceiptLine label="Outstanding" value={formatNaira((rideStatement?.karigoCommissionDueKobo ?? 0) / 100)} />
+        {rideStatement?.financialEligibility.paymentEnabled && (rideStatement?.karigoCommissionDueKobo ?? 0) > 0 ? <Button title={paymentBusy ? "Starting secure checkout..." : "Pay KariGO fee"} disabled={paymentBusy} onPress={payKarigoFee} /> : null}
+        {pendingPaymentReference ? <Button title={paymentBusy ? "Verifying..." : "Verify completed payment"} tone="muted" disabled={paymentBusy} onPress={verifyKarigoFee} /> : null}
+        {paymentMessage ? <Text style={styles.successText}>{paymentMessage}</Text> : null}
+        <Text style={styles.subheading}>Recent verified commission payments</Text>
+        {rideStatement?.commissionPayments.length ? rideStatement.commissionPayments.map((item) => <View key={item.id} style={styles.remittance}><Text style={styles.reference}>{item.reference}</Text><Text style={styles.meta}>{new Date(item.verifiedAt ?? item.initiatedAt).toLocaleDateString()} · {item.provider.toUpperCase()} · {item.status}</Text><Text style={styles.financeStrong}>{formatNaira(item.amountKobo / 100)}</Text></View>) : <Text style={ui.muted}>No provider commission payments recorded yet.</Text>}
+        <Text style={styles.subheading}>Commission remittance history</Text>
+        {rideStatement?.remittances.length ? rideStatement.remittances.map((item) => <View key={item.id} style={styles.remittance}><Text style={styles.reference}>{item.reference}</Text><Text style={styles.meta}>{new Date(item.remittedAt).toLocaleDateString()} · {item.source === "PROVIDER_VERIFIED" ? "Provider verified" : "Manual finance override"} · {item.method}</Text><Text style={styles.financeStrong}>{formatNaira(item.amountKobo / 100)}</Text></View>) : <Text style={ui.muted}>No commission remittances recorded yet.</Text>}
+      </Card> : null}
     </>}
   </Screen></Protected>;
 }
@@ -147,4 +204,7 @@ const styles = StyleSheet.create({
   financeStrong: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "900" },
   statementLine: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   remittance: { borderTopColor: brand.colors.border, borderTopWidth: 1, gap: 3, paddingTop: 9 },
+  subheading: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "900", marginTop: 8 },
+  warningText: { color: "#9A6700", fontSize: 12, fontWeight: "800" },
+  successText: { color: "#137333", fontSize: 12, fontWeight: "800" },
 });

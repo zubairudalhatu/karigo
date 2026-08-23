@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   NotificationChannel,
@@ -11,6 +11,7 @@ import {
   TaxiRideLedgerDirection,
   TaxiRideLedgerEntryType,
   TaxiRideRefundStatus,
+  TaxiRideCommissionRemittanceSource,
   TaxiRideSettlementDirection,
   TaxiRideSettlementStatus,
   TaxiTripActorType
@@ -26,6 +27,14 @@ import {
   RecordRideCommissionRemittanceDto,
   SettleCashRideRefundDto
 } from "./dto/ride-finance.dto";
+import {
+  captainCommissionObligationKobo,
+  captainCommissionOutstandingKobo,
+  DEFAULT_RIDE_COMMISSION_BLOCK_THRESHOLD_KOBO,
+  DEFAULT_RIDE_COMMISSION_URGENT_THRESHOLD_KOBO,
+  DEFAULT_RIDE_COMMISSION_WARNING_THRESHOLD_KOBO,
+  evaluateRideCommissionEligibility
+} from "./ride-commission-policy";
 
 const MONEY_LIMIT_KOBO = 1_000_000_000;
 
@@ -79,6 +88,40 @@ export class RideFinanceService {
 
   commissionRateBasisPoints() {
     return Math.round(this.commissionRatePercent() * 100);
+  }
+
+  commissionThresholds() {
+    return {
+      warningKobo: this.config.get<number>("RIDE_CAPTAIN_COMMISSION_WARNING_THRESHOLD_KOBO", DEFAULT_RIDE_COMMISSION_WARNING_THRESHOLD_KOBO),
+      urgentKobo: this.config.get<number>("RIDE_CAPTAIN_COMMISSION_URGENT_THRESHOLD_KOBO", DEFAULT_RIDE_COMMISSION_URGENT_THRESHOLD_KOBO),
+      blockKobo: this.config.get<number>("RIDE_CAPTAIN_COMMISSION_BLOCK_THRESHOLD_KOBO", DEFAULT_RIDE_COMMISSION_BLOCK_THRESHOLD_KOBO)
+    };
+  }
+
+  async captainFinancialEligibility(userId: string) {
+    const profile = await this.prisma.taxiDriverProfile.findUnique({ where: { userId }, select: { id: true } });
+    if (!profile) throw new NotFoundException("Ride Captain finance profile not found.");
+    const settlements = await this.prisma.taxiRideSettlement.findMany({
+      where: {
+        driverProfileId: profile.id,
+        financialOutcome: TaxiRideFinancialOutcome.NORMAL_COMPLETION,
+        settlementDirection: TaxiRideSettlementDirection.CAPTAIN_TO_PLATFORM,
+        status: { in: [TaxiRideSettlementStatus.PENDING, TaxiRideSettlementStatus.PARTIALLY_RECONCILED] }
+      },
+      include: { refunds: { select: { platformResponsibilityKobo: true } } }
+    });
+    const outstandingKobo = settlements.reduce((sum, item) => sum + captainCommissionOutstandingKobo(item), 0);
+    return {
+      ...evaluateRideCommissionEligibility(outstandingKobo, this.commissionThresholds()),
+      paymentEnabled: this.config.get<boolean>("RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED", false),
+      paymentProvider: this.config.get<string>("RIDE_CAPTAIN_COMMISSION_PAYMENT_PROVIDER", "flutterwave")
+    };
+  }
+
+  async assertCaptainFinanciallyEligible(userId: string) {
+    const eligibility = await this.captainFinancialEligibility(userId);
+    if (!eligibility.rideEligible) throw new ForbiddenException(eligibility.message);
+    return eligibility;
   }
 
   async createCompletedSettlement(tx: Prisma.TransactionClient, input: CompletedRideSettlementInput) {
@@ -168,7 +211,7 @@ export class RideFinanceService {
   async captainStatement(userId: string) {
     const profile = await this.prisma.taxiDriverProfile.findUnique({ where: { userId }, select: { id: true, fullName: true } });
     if (!profile) throw new NotFoundException("Ride Captain finance profile not found.");
-    const [settlements, remittances] = await Promise.all([
+    const [settlements, remittances, payments] = await Promise.all([
       this.prisma.taxiRideSettlement.findMany({
         where: { driverProfileId: profile.id },
         include: { refunds: { orderBy: { createdAt: "desc" } } },
@@ -176,6 +219,9 @@ export class RideFinanceService {
       }),
       this.prisma.taxiRideCommissionRemittance.findMany({
         where: { driverProfileId: profile.id }, include: { allocations: true }, orderBy: { remittedAt: "desc" }, take: 250
+      }),
+      this.prisma.taxiRideCommissionPayment.findMany({
+        where: { driverProfileId: profile.id }, orderBy: { createdAt: "desc" }, take: 50
       })
     ]);
     const normal = settlements.filter((item) => item.financialOutcome === TaxiRideFinancialOutcome.NORMAL_COMPLETION);
@@ -184,15 +230,27 @@ export class RideFinanceService {
     const week = new Date(today); week.setDate(today.getDate() - today.getDay());
     const month = new Date(now.getFullYear(), now.getMonth(), 1);
     const sumSince = (from: Date) => normal.filter((item) => item.finalizedAt >= from).reduce((sum, item) => sum + item.captainNetEarningKobo + item.captainAdjustmentKobo, 0);
+    const collectible = normal.filter((item) => item.status === TaxiRideSettlementStatus.PENDING || item.status === TaxiRideSettlementStatus.PARTIALLY_RECONCILED);
+    const outstandingKobo = collectible.reduce((sum, item) => sum + this.outstandingPlatform(item), 0);
     return {
       captain: { id: profile.id, fullName: profile.fullName },
+      financialEligibility: {
+        ...evaluateRideCommissionEligibility(outstandingKobo, this.commissionThresholds()),
+        paymentEnabled: this.config.get<boolean>("RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED", false),
+        paymentProvider: this.config.get<string>("RIDE_CAPTAIN_COMMISSION_PAYMENT_PROVIDER", "flutterwave")
+      },
       todayEarningsKobo: sumSince(today), thisWeekEarningsKobo: sumSince(week), thisMonthEarningsKobo: sumSince(month),
       totalEarningsKobo: normal.reduce((sum, item) => sum + item.captainNetEarningKobo + item.captainAdjustmentKobo, 0),
       cashCollectedKobo: normal.reduce((sum, item) => sum + item.cashCollectedKobo, 0),
-      karigoCommissionDueKobo: normal.reduce((sum, item) => sum + this.outstandingPlatform(item), 0),
+      karigoCommissionDueKobo: outstandingKobo,
       karigoCommissionRemittedKobo: normal.reduce((sum, item) => sum + item.remittedKobo, 0),
       settlements: normal.map((item) => this.captainSettlement(item)),
-      remittances: remittances.map((item) => ({ id: item.id, reference: item.reference, amountKobo: item.amountKobo, method: item.method, note: item.note, remittedAt: item.remittedAt.toISOString(), allocatedKobo: item.allocations.reduce((sum, allocation) => sum + allocation.amountKobo, 0) }))
+      remittances: remittances.map((item) => ({ id: item.id, reference: item.reference, amountKobo: item.amountKobo, method: item.method, source: item.source, note: item.note, remittedAt: item.remittedAt.toISOString(), allocatedKobo: item.allocations.reduce((sum, allocation) => sum + allocation.amountKobo, 0) })),
+      commissionPayments: payments.map((item) => ({
+        id: item.id, reference: item.transactionReference, provider: item.provider, providerReference: item.providerTransactionReference,
+        amountKobo: item.amountKobo, currency: item.currency, status: item.status,
+        initiatedAt: item.initiatedAt.toISOString(), verifiedAt: item.verifiedAt?.toISOString() ?? null
+      }))
     };
   }
 
@@ -233,20 +291,24 @@ export class RideFinanceService {
       commissionReconciledKobo: normal.reduce((sum, item) => sum + item.remittedKobo, 0),
       refundsApprovedKobo: items.reduce((sum, item) => sum + item.refundedKobo, 0),
       refundsPendingKobo: items.flatMap((item) => item.refunds).filter((refund) => refund.status === TaxiRideRefundStatus.CASH_REFUND_DUE).reduce((sum, refund) => sum + refund.amountKobo, 0),
+      platformFundedRefundsKobo: items.flatMap((item) => item.refunds).filter((refund) => refund.responsibility === TaxiRideFinancialResponsibility.PLATFORM).reduce((sum, refund) => sum + refund.amountKobo, 0),
+      captainFundedRefundsKobo: items.flatMap((item) => item.refunds).filter((refund) => refund.responsibility === TaxiRideFinancialResponsibility.CAPTAIN).reduce((sum, refund) => sum + refund.amountKobo, 0),
+      sharedRefundsKobo: items.flatMap((item) => item.refunds).filter((refund) => refund.responsibility === TaxiRideFinancialResponsibility.SHARED).reduce((sum, refund) => sum + refund.amountKobo, 0),
+      unresolvedRefundResponsibilityKobo: items.flatMap((item) => item.refunds).filter((refund) => refund.responsibility === TaxiRideFinancialResponsibility.REVIEW_REQUIRED).reduce((sum, refund) => sum + refund.amountKobo, 0),
       unresolvedAdjustments: items.reduce((sum, item) => sum + item.ledgerEntries.filter((entry) => entry.entryType === TaxiRideLedgerEntryType.CREDIT || entry.entryType === TaxiRideLedgerEntryType.DEBIT_ADJUSTMENT).length, 0),
       disputedBalanceKobo: items.filter((item) => item.status === TaxiRideSettlementStatus.DISPUTED).reduce((sum, item) => sum + this.outstandingPlatform(item), 0)
     };
   }
 
   async adminCaptainSummaries(query: ListRideFinanceQueryDto) {
-    const items = await this.prisma.taxiRideSettlement.findMany({ where: this.financeWhere(query), include: { driverProfile: { select: { id: true, fullName: true } } } });
+    const items = await this.prisma.taxiRideSettlement.findMany({ where: this.financeWhere(query), include: { driverProfile: { select: { id: true, fullName: true } }, refunds: { select: { platformResponsibilityKobo: true } } } });
     const grouped = new Map<string, { driverProfileId: string; captainName: string; grossFaresKobo: number; captainEarningsKobo: number; karigoCommissionDueKobo: number; commissionRemittedKobo: number; outstandingKobo: number; refundsKobo: number }>();
     for (const item of items) {
       if (!item.driverProfileId) continue;
       const value = grouped.get(item.driverProfileId) ?? { driverProfileId: item.driverProfileId, captainName: item.driverProfile?.fullName ?? item.captainName ?? "Ride Captain", grossFaresKobo: 0, captainEarningsKobo: 0, karigoCommissionDueKobo: 0, commissionRemittedKobo: 0, outstandingKobo: 0, refundsKobo: 0 };
       value.grossFaresKobo += item.finalCustomerFareKobo;
       value.captainEarningsKobo += item.captainNetEarningKobo + item.captainAdjustmentKobo;
-      value.karigoCommissionDueKobo += item.platformReceivableKobo + item.platformAdjustmentKobo;
+      value.karigoCommissionDueKobo += captainCommissionObligationKobo(item);
       value.commissionRemittedKobo += item.remittedKobo;
       value.outstandingKobo += this.outstandingPlatform(item);
       value.refundsKobo += item.refundedKobo;
@@ -265,11 +327,11 @@ export class RideFinanceService {
         if (!profile) throw new NotFoundException("Ride Captain profile not found.");
         const settlements = await tx.taxiRideSettlement.findMany({
           where: { driverProfileId: profile.id, settlementDirection: TaxiRideSettlementDirection.CAPTAIN_TO_PLATFORM, status: { in: [TaxiRideSettlementStatus.PENDING, TaxiRideSettlementStatus.PARTIALLY_RECONCILED] } },
-          orderBy: { finalizedAt: "asc" }
+          include: { refunds: { select: { platformResponsibilityKobo: true } } }, orderBy: { finalizedAt: "asc" }
         });
         const totalOutstanding = settlements.reduce((sum, item) => sum + this.outstandingPlatform(item), 0);
         if (dto.amountKobo > totalOutstanding) throw new BadRequestException("Commission remittance cannot exceed the Captain's undisputed outstanding KariGO balance.");
-        const remittance = await tx.taxiRideCommissionRemittance.create({ data: { driverProfileId: profile.id, reference, amountKobo: dto.amountKobo, method: dto.method.trim().toUpperCase(), note: dto.note?.trim(), remittedAt: dto.remittedAt ? new Date(dto.remittedAt) : new Date(), recordedByUserId: adminUserId } });
+        const remittance = await tx.taxiRideCommissionRemittance.create({ data: { driverProfileId: profile.id, reference, amountKobo: dto.amountKobo, method: dto.method.trim().toUpperCase(), source: TaxiRideCommissionRemittanceSource.MANUAL_OVERRIDE, note: [dto.reason.trim(), dto.note?.trim()].filter(Boolean).join(" — "), remittedAt: dto.remittedAt ? new Date(dto.remittedAt) : new Date(), recordedByUserId: adminUserId } });
         let remaining = dto.amountKobo;
         for (const settlement of settlements) {
           if (remaining <= 0) break;
@@ -278,14 +340,14 @@ export class RideFinanceService {
           const allocated = Math.min(due, remaining);
           await tx.taxiRideCommissionRemittanceAllocation.create({ data: { remittanceId: remittance.id, settlementId: settlement.id, amountKobo: allocated } });
           const remittedKobo = settlement.remittedKobo + allocated;
-          const outstanding = Math.max(0, settlement.platformReceivableKobo + settlement.platformAdjustmentKobo - remittedKobo);
+          const outstanding = captainCommissionOutstandingKobo({ ...settlement, remittedKobo });
           await tx.taxiRideSettlement.update({ where: { id: settlement.id }, data: { remittedKobo, status: outstanding === 0 ? TaxiRideSettlementStatus.RECONCILED : TaxiRideSettlementStatus.PARTIALLY_RECONCILED, reconciledAt: outstanding === 0 ? new Date() : null, reconciliationReference: outstanding === 0 ? reference : null, reconciliationNote: dto.note?.trim() } });
-          await tx.taxiRideFinancialLedgerEntry.create({ data: this.ledger(settlement.id, settlement.tripId, `ride-finance:remittance:${remittance.id}:${settlement.id}`, TaxiRideLedgerEntryType.COMMISSION_REMITTANCE, TaxiRideLedgerDirection.PLATFORM_RECEIVABLE_DECREASE, allocated, adminUserId, TaxiTripActorType.ADMIN, `KariGO commission remittance ${reference} recorded`, reference) });
+          await tx.taxiRideFinancialLedgerEntry.create({ data: this.ledger(settlement.id, settlement.tripId, `ride-finance:remittance:${remittance.id}:${settlement.id}`, TaxiRideLedgerEntryType.COMMISSION_REMITTANCE, TaxiRideLedgerDirection.PLATFORM_RECEIVABLE_DECREASE, allocated, adminUserId, TaxiTripActorType.ADMIN, `Manual finance override: ${dto.reason.trim()}`, reference) });
           remaining -= allocated;
         }
         return { remittance, profile, outstandingKobo: totalOutstanding - dto.amountKobo };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-      await this.audit.record(adminUserId, "admin.taxi.finance.commission_remittance_recorded", "TaxiRideCommissionRemittance", result.remittance.id, { driverProfileId: dto.driverProfileId, amountKobo: dto.amountKobo, reference });
+      await this.audit.record(adminUserId, "admin.taxi.finance.manual_commission_override_recorded", "TaxiRideCommissionRemittance", result.remittance.id, { driverProfileId: dto.driverProfileId, amountKobo: dto.amountKobo, reference, method: dto.method.trim().toUpperCase(), reason: dto.reason.trim() });
       if (result.profile.userId) await this.notify(result.profile.userId, "KariGO commission remittance recorded", `${this.money(dto.amountKobo)} was applied. Outstanding KariGO balance: ${this.money(result.outstandingKobo)}.`, "RIDE_COMMISSION_REMITTANCE", result.remittance.id);
       return result;
     } catch (error) {
@@ -321,7 +383,7 @@ export class RideFinanceService {
 
   async settleCashRefund(adminUserId: string, refundId: string, dto: SettleCashRideRefundDto) {
     const result = await this.prisma.$transaction(async (tx) => {
-      const refund = await tx.taxiRideRefund.findUnique({ where: { id: refundId }, include: { settlement: { include: { trip: { include: { customer: { select: { userId: true } }, driverProfile: { select: { userId: true } } } } } } } });
+      const refund = await tx.taxiRideRefund.findUnique({ where: { id: refundId }, include: { settlement: { include: { refunds: true, trip: { include: { customer: { select: { userId: true } }, driverProfile: { select: { userId: true } } } } } } } });
       if (!refund) throw new NotFoundException("Ride refund not found.");
       const reference = dto.reference.trim().toUpperCase();
       if (refund.status === TaxiRideRefundStatus.CASH_REFUND_SETTLED) {
@@ -378,6 +440,7 @@ export class RideFinanceService {
           captainAdjustmentKobo: { increment: -allocation.captain },
           status,
           disputeResolvedAt: otherUnallocated ? null : new Date(),
+          disputeReason: otherUnallocated ? refund.settlement.disputeReason : null,
           reconciliationNote: dto.resolutionNote.trim(),
           reconciledAt: status === TaxiRideSettlementStatus.RECONCILED ? new Date() : null
         }
@@ -461,11 +524,11 @@ export class RideFinanceService {
     return { settlementId, tripId, idempotencyKey, entryType, direction, amountKobo, actorUserId, actorType, reason, reference };
   }
 
-  private outstandingPlatform(settlement: { platformReceivableKobo: number; platformAdjustmentKobo: number; remittedKobo: number }) {
-    return Math.max(0, settlement.platformReceivableKobo + settlement.platformAdjustmentKobo - settlement.remittedKobo);
+  private outstandingPlatform(settlement: { platformReceivableKobo: number; platformAdjustmentKobo: number; remittedKobo: number; refunds?: Array<{ platformResponsibilityKobo: number }> }) {
+    return captainCommissionOutstandingKobo(settlement);
   }
 
-  private reconciliationState(settlement: { platformReceivableKobo: number; platformAdjustmentKobo: number; remittedKobo: number; financialOutcome: TaxiRideFinancialOutcome }) {
+  private reconciliationState(settlement: { platformReceivableKobo: number; platformAdjustmentKobo: number; remittedKobo: number; financialOutcome: TaxiRideFinancialOutcome; refunds?: Array<{ platformResponsibilityKobo: number }> }) {
     if (settlement.financialOutcome !== TaxiRideFinancialOutcome.NORMAL_COMPLETION) return TaxiRideSettlementStatus.CANCELLED;
     if (this.outstandingPlatform(settlement) === 0) return TaxiRideSettlementStatus.RECONCILED;
     return settlement.remittedKobo > 0 ? TaxiRideSettlementStatus.PARTIALLY_RECONCILED : TaxiRideSettlementStatus.PENDING;
@@ -497,7 +560,13 @@ export class RideFinanceService {
   }
 
   private adminSettlement(settlement: any) {
-    return { id: settlement.id, tripId: settlement.tripId, tripReference: settlement.tripReference, finalizedAt: settlement.finalizedAt.toISOString(), captain: settlement.driverProfile, customerName: settlement.customer.user.fullName, serviceArea: settlement.serviceArea, rideCategory: settlement.rideCategory, paymentMethod: settlement.paymentMethod, financialOutcome: settlement.financialOutcome, finalCustomerFareKobo: settlement.finalCustomerFareKobo, rideFareKobo: settlement.rideFareKobo, waitingChargeKobo: settlement.waitingChargeKobo, discountKobo: settlement.discountKobo, commissionRateBasisPoints: settlement.commissionRateBasisPoints, karigoCommissionKobo: settlement.karigoCommissionKobo, captainNetEarningKobo: settlement.captainNetEarningKobo + settlement.captainAdjustmentKobo, cashCollectedKobo: settlement.cashCollectedKobo, platformReceivableKobo: settlement.platformReceivableKobo + settlement.platformAdjustmentKobo, remittedKobo: settlement.remittedKobo, outstandingPlatformKobo: this.outstandingPlatform(settlement), refundedKobo: settlement.refundedKobo, settlementDirection: settlement.settlementDirection, status: settlement.status, disputeReason: settlement.disputeReason, refunds: settlement.refunds.map((refund: any) => ({ id: refund.id, amountKobo: refund.amountKobo, status: refund.status, responsibility: refund.responsibility, approvedAt: refund.approvedAt.toISOString(), settledAt: refund.settledAt?.toISOString() ?? null })) };
+    const refundBreakdown = settlement.refunds.reduce((result: { platform: number; captain: number; unresolved: number }, refund: any) => {
+      result.platform += refund.platformResponsibilityKobo;
+      result.captain += refund.captainResponsibilityKobo;
+      if (refund.responsibility === TaxiRideFinancialResponsibility.REVIEW_REQUIRED) result.unresolved += refund.amountKobo;
+      return result;
+    }, { platform: 0, captain: 0, unresolved: 0 });
+    return { id: settlement.id, tripId: settlement.tripId, tripReference: settlement.tripReference, finalizedAt: settlement.finalizedAt.toISOString(), captain: settlement.driverProfile, customerName: settlement.customer.user.fullName, serviceArea: settlement.serviceArea, rideCategory: settlement.rideCategory, paymentMethod: settlement.paymentMethod, financialOutcome: settlement.financialOutcome, finalCustomerFareKobo: settlement.finalCustomerFareKobo, rideFareKobo: settlement.rideFareKobo, waitingChargeKobo: settlement.waitingChargeKobo, discountKobo: settlement.discountKobo, commissionRateBasisPoints: settlement.commissionRateBasisPoints, karigoCommissionKobo: settlement.karigoCommissionKobo, originalCommissionEarnedKobo: settlement.karigoCommissionKobo, captainNetEarningKobo: settlement.captainNetEarningKobo + settlement.captainAdjustmentKobo, cashCollectedKobo: settlement.cashCollectedKobo, platformReceivableKobo: captainCommissionObligationKobo(settlement), remittedKobo: settlement.remittedKobo, outstandingPlatformKobo: this.outstandingPlatform(settlement), refundedKobo: settlement.refundedKobo, platformFundedRefundsKobo: refundBreakdown.platform, captainFundedRefundsKobo: refundBreakdown.captain, unresolvedRefundResponsibilityKobo: refundBreakdown.unresolved, settlementDirection: settlement.settlementDirection, status: settlement.status, disputeReason: settlement.status === TaxiRideSettlementStatus.DISPUTED ? settlement.disputeReason : null, refunds: settlement.refunds.map((refund: any) => ({ id: refund.id, amountKobo: refund.amountKobo, status: refund.status, responsibility: refund.responsibility, platformResponsibilityKobo: refund.platformResponsibilityKobo, captainResponsibilityKobo: refund.captainResponsibilityKobo, approvedAt: refund.approvedAt.toISOString(), settledAt: refund.settledAt?.toISOString() ?? null })) };
   }
 
   private async notify(userId: string, title: string, message: string, event: string, entityId: string) {

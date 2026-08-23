@@ -135,7 +135,7 @@ describe("RideFinanceService", () => {
       taxiRideFinancialLedgerEntry: { create: jest.fn().mockResolvedValue({}) }
     };
     prisma.$transaction.mockImplementation(async (work: (transaction: any) => unknown) => work(tx));
-    const result = await service.recordRemittance("admin-1", { driverProfileId: "driver-1", amountKobo: 70_000, reference: "bank-209b", method: "bank transfer" });
+    const result = await service.recordRemittance("admin-1", { driverProfileId: "driver-1", amountKobo: 70_000, reference: "bank-209b", method: "bank transfer", reason: "Verified exceptional finance evidence" });
     expect(result.outstandingKobo).toBe(30_000);
     expect(tx.taxiRideCommissionRemittanceAllocation.create.mock.calls.map((call: any[]) => call[0].data.amountKobo)).toEqual([40_000, 30_000]);
     expect(tx.taxiRideSettlement.update).toHaveBeenNthCalledWith(1, expect.objectContaining({ data: expect.objectContaining({ remittedKobo: 40_000, status: TaxiRideSettlementStatus.RECONCILED }) }));
@@ -145,7 +145,7 @@ describe("RideFinanceService", () => {
   it("rejects a duplicate remittance reference before any allocation", async () => {
     const tx: any = { taxiRideCommissionRemittance: { findUnique: jest.fn().mockResolvedValue({ id: "existing" }) } };
     prisma.$transaction.mockImplementation(async (work: (transaction: any) => unknown) => work(tx));
-    await expect(service.recordRemittance("admin-1", { driverProfileId: "driver-1", amountKobo: 1_000, reference: "same-ref", method: "cash" })).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.recordRemittance("admin-1", { driverProfileId: "driver-1", amountKobo: 1_000, reference: "same-ref", method: "cash", reason: "Verified exceptional finance evidence" })).rejects.toBeInstanceOf(ConflictException);
   });
 
   it("rejects remittance above the undisputed outstanding balance", async () => {
@@ -155,7 +155,7 @@ describe("RideFinanceService", () => {
       taxiRideSettlement: { findMany: jest.fn().mockResolvedValue([{ ...baseSettlement, platformReceivableKobo: 4_000 }]) }
     };
     prisma.$transaction.mockImplementation(async (work: (transaction: any) => unknown) => work(tx));
-    await expect(service.recordRemittance("admin-1", { driverProfileId: "driver-1", amountKobo: 4_001, reference: "too-much", method: "cash" })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.recordRemittance("admin-1", { driverProfileId: "driver-1", amountKobo: 4_001, reference: "too-much", method: "cash", reason: "Verified exceptional finance evidence" })).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it("creates a partial Cash refund obligation under review without mutating the original receipt", async () => {

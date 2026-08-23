@@ -22,6 +22,7 @@ export type CaptainAvailabilityReasonCode =
   | "LOCATION_STALE"
   | "ACTIVE_DELIVERY_LOCK"
   | "ACTIVE_RIDE_LOCK"
+  | "FINANCIAL_SETTLEMENT_REQUIRED"
   | "SUSPENDED";
 
 export interface CaptainWorkState {

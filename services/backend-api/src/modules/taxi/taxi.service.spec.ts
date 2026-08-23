@@ -280,7 +280,9 @@ describe("TaxiService", () => {
     commissionRatePercent: jest.fn(() => 10),
     createCompletedSettlement: jest.fn().mockResolvedValue({ id: "ride-settlement-id" }),
     createClosedRideOutcome: jest.fn().mockResolvedValue({ id: "ride-cancellation-outcome-id" }),
-    notifyEarningFinalized: jest.fn().mockResolvedValue(undefined)
+    notifyEarningFinalized: jest.fn().mockResolvedValue(undefined),
+    captainFinancialEligibility: jest.fn(),
+    assertCaptainFinanciallyEligible: jest.fn()
   };
 
   const service = new TaxiService(
@@ -386,6 +388,8 @@ describe("TaxiService", () => {
     rideFinance.createCompletedSettlement.mockResolvedValue({ id: "ride-settlement-id" });
     rideFinance.createClosedRideOutcome.mockResolvedValue({ id: "ride-cancellation-outcome-id" });
     rideFinance.notifyEarningFinalized.mockResolvedValue(undefined);
+    rideFinance.captainFinancialEligibility.mockResolvedValue({ outstandingKobo: 0, rideEligible: true });
+    rideFinance.assertCaptainFinanciallyEligible.mockResolvedValue({ outstandingKobo: 0, rideEligible: true });
     applicationNotifications.rideWaitlistJoined.mockResolvedValue(undefined);
     applicationNotifications.rideCaptainApplicationSubmitted.mockResolvedValue(undefined);
     applicationNotifications.rideCaptainApplicationReviewed.mockResolvedValue(undefined);
@@ -1010,6 +1014,38 @@ describe("TaxiService", () => {
       })
     }));
     expect(result.status).toBe(TaxiTripStatus.ACCEPTED);
+  });
+
+  it("blocks an old Captain client from accepting a new assigned Ride at the commission limit", async () => {
+    enableTaxiStaging();
+    prisma.taxiTrip.findUnique.mockResolvedValue({ ...taxiTrip, driverProfileId: driverProfile.id, status: TaxiTripStatus.DRIVER_ASSIGNED });
+    rideFinance.assertCaptainFinanciallyEligible.mockRejectedValue(new ForbiddenException("Outstanding KariGO service fees must be settled before receiving another Ride."));
+
+    await expect(service.acceptTaxiTrip("rider-user", taxiTrip.id))
+      .rejects.toThrow("Outstanding KariGO service fees must be settled before receiving another Ride.");
+    expect(prisma.taxiTrip.update).not.toHaveBeenCalled();
+  });
+
+  it("does not interrupt an already accepted Ride when the Captain crosses the threshold", async () => {
+    enableTaxiStaging();
+    const accepted = { ...taxiTrip, driverProfileId: driverProfile.id, driverProfile, status: TaxiTripStatus.ACCEPTED };
+    prisma.taxiTrip.findUnique.mockResolvedValue(accepted);
+    prisma.taxiTrip.findUniqueOrThrow.mockResolvedValue(accepted);
+    rideFinance.assertCaptainFinanciallyEligible.mockRejectedValue(new ForbiddenException("threshold crossed"));
+
+    await expect(service.acceptTaxiTrip("rider-user", taxiTrip.id)).resolves.toMatchObject({ status: TaxiTripStatus.ACCEPTED });
+    expect(rideFinance.assertCaptainFinanciallyEligible).not.toHaveBeenCalled();
+    expect(prisma.taxiTrip.update).not.toHaveBeenCalled();
+  });
+
+  it("requires financial eligibility for Operations assignment", async () => {
+    enableTaxiStaging();
+    prisma.taxiTrip.findUnique.mockResolvedValueOnce(taxiTrip);
+    prisma.taxiDriverProfile.findUnique.mockResolvedValueOnce({ ...driverProfile, lastSeenAt: new Date() });
+    rideFinance.assertCaptainFinanciallyEligible.mockRejectedValue(new ForbiddenException("Outstanding KariGO service fees must be settled before receiving another Ride."));
+
+    await expect(service.adminAssignDriver("admin-user", taxiTrip.id, { driverProfileId: driverProfile.id })).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.taxiTrip.update).not.toHaveBeenCalled();
   });
 
   it("atomically creates one immutable receipt and automatic email boundary without duplicating repeated completion", async () => {

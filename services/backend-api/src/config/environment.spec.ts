@@ -451,6 +451,25 @@ describe("environment configuration", () => {
     const result = validateEnvironment({ DATABASE_URL: testDatabaseUrl, JWT_SECRET: "test-secret" });
     expect(result.RIDE_CUSTOMER_CANCELLATION_FEE_ENABLED).toBe(false);
     expect(result.RIDE_NO_SHOW_FEE_ENABLED).toBe(false);
+    expect(result.RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED).toBe(false);
+    expect(result.RIDE_CAPTAIN_COMMISSION_PAYMENT_PROVIDER).toBe("flutterwave");
+    expect(result.RIDE_CAPTAIN_COMMISSION_WARNING_THRESHOLD_KOBO).toBe(800_000);
+    expect(result.RIDE_CAPTAIN_COMMISSION_URGENT_THRESHOLD_KOBO).toBe(900_000);
+    expect(result.RIDE_CAPTAIN_COMMISSION_BLOCK_THRESHOLD_KOBO).toBe(1_000_000);
+  });
+
+  it("rejects unsafe Captain commission threshold ordering and keeps provider settlement explicitly gated", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      RIDE_CAPTAIN_COMMISSION_WARNING_THRESHOLD_KOBO: "1000000",
+      RIDE_CAPTAIN_COMMISSION_URGENT_THRESHOLD_KOBO: "900000"
+    })).toThrow("Ride Captain commission thresholds must increase from warning to urgent to block");
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED: "true"
+    })).toThrow("Captain commission payment requires PAYMENTS_LIVE_ENABLED=true and PAYMENTS_PROVIDER=flutterwave");
   });
 
   it("rejects live Flutterwave payments without a webhook secret", () => {
@@ -496,6 +515,16 @@ describe("environment configuration", () => {
     expect(() => validateEnvironment(flutterwaveLiveConfig({
       FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "false"
     }))).toThrow("Live Flutterwave payments require FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED=true");
+  });
+
+  it("allows the separately approved Captain commission purpose without enabling customer checkout", () => {
+    const result = validateEnvironment(flutterwaveLiveConfig({
+      FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "false",
+      RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED: "true"
+    }));
+
+    expect(result.RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED).toBe(true);
+    expect(result.FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED).toBe(false);
   });
 
   it("allows approved live Flutterwave payment configuration", () => {

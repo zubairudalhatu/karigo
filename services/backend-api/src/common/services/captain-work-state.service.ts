@@ -8,10 +8,20 @@ import {
   Prisma,
   RiderStatus,
   TaxiApplicationStatus,
-  TaxiDriverProfileStatus
+  TaxiDriverProfileStatus,
+  TaxiRideFinancialOutcome,
+  TaxiRideSettlementDirection,
+  TaxiRideSettlementStatus
 } from "@prisma/client";
 import { AdminAuditService } from "./admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import {
+  captainCommissionOutstandingKobo,
+  DEFAULT_RIDE_COMMISSION_BLOCK_THRESHOLD_KOBO,
+  DEFAULT_RIDE_COMMISSION_URGENT_THRESHOLD_KOBO,
+  DEFAULT_RIDE_COMMISSION_WARNING_THRESHOLD_KOBO,
+  evaluateRideCommissionEligibility
+} from "../../modules/taxi/ride-commission-policy";
 import { LaunchOperationsService } from "../../modules/launch-operations/launch-operations.service";
 import { captainIsApprovedForOperatingArea, captainOperatingAreaFromCoordinates, captainOperatingAreaSummary } from "../../modules/platform/captain-operating-areas";
 
@@ -53,6 +63,7 @@ type CaptainAvailabilityReasonCode =
   | "LOCATION_STALE"
   | "ACTIVE_DELIVERY_LOCK"
   | "ACTIVE_RIDE_LOCK"
+  | "FINANCIAL_SETTLEMENT_REQUIRED"
   | "SUSPENDED";
 
 export interface AcquireCaptainWorkLockInput {
@@ -82,7 +93,8 @@ export class CaptainWorkStateService {
   async getForUser(userId: string) {
     const user = await this.loadUser(userId);
     const state = await this.ensureState(this.prisma, userId, user);
-    return this.formatState(state, user);
+    const financialEligibility = user.taxiDriverProfiles[0] ? await this.rideFinancialEligibility(this.prisma, user.taxiDriverProfiles[0].id) : null;
+    return this.formatState(state, user, financialEligibility);
   }
 
   async updateAvailability(userId: string, dto: CaptainAvailabilityUpdate) {
@@ -105,6 +117,7 @@ export class CaptainWorkStateService {
       throw new BadRequestException(rideEligibility.reason ?? "Ride availability is not available for this account.");
     }
 
+    if (dto.rideOnline === true && user.taxiDriverProfiles[0]) await this.assertRideFinancialEligibility(this.prisma, user.taxiDriverProfiles[0].id);
     if (dto.deliveryOnline === true) await this.assertOperatingAreaCanGoOnline(user, CaptainWorkMode.DELIVERY, dto);
     if (dto.rideOnline === true) await this.assertOperatingAreaCanGoOnline(user, CaptainWorkMode.RIDE, dto);
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -370,7 +383,8 @@ export class CaptainWorkStateService {
     }
     const rideProfile = user.taxiDriverProfiles[0];
     if (rideProfile) {
-      const rideOnline = accountActive && rideProfile.status === TaxiDriverProfileStatus.ACTIVE && !state.activeWorkMode && state.desiredRideOnline;
+      const financialEligibility = await this.rideFinancialEligibility(tx, rideProfile.id);
+      const rideOnline = accountActive && rideProfile.status === TaxiDriverProfileStatus.ACTIVE && !state.activeWorkMode && state.desiredRideOnline && financialEligibility.rideEligible;
       await tx.taxiDriverProfile.update({
         where: { id: rideProfile.id },
         data: { isAvailableForTaxi: rideOnline }
@@ -492,9 +506,12 @@ export class CaptainWorkStateService {
     });
   }
 
-  private formatState(state: Awaited<ReturnType<CaptainWorkStateService["ensureState"]>>, user: WorkStateUser) {
+  private formatState(state: Awaited<ReturnType<CaptainWorkStateService["ensureState"]>>, user: WorkStateUser, financialEligibility: Awaited<ReturnType<CaptainWorkStateService["rideFinancialEligibility"]>> | null = null) {
     const deliveryEligibility = this.modeEligibilityWithState(this.deliveryEligibility(user), state, CaptainWorkMode.DELIVERY);
-    const rideEligibility = this.modeEligibilityWithState(this.rideEligibility(user), state, CaptainWorkMode.RIDE);
+    const baseRideEligibility = this.modeEligibilityWithState(this.rideEligibility(user), state, CaptainWorkMode.RIDE);
+    const rideEligibility = baseRideEligibility.eligible && financialEligibility && !financialEligibility.rideEligible
+      ? { eligible: false, reasonCode: "FINANCIAL_SETTLEMENT_REQUIRED" as const, reason: financialEligibility.message, financialEligibility }
+      : { ...baseRideEligibility, financialEligibility };
     const currentArea = captainOperatingAreaFromCoordinates(
       Number(user.rider?.currentLatitude ?? user.taxiDriverProfiles[0]?.lastKnownLatitude),
       Number(user.rider?.currentLongitude ?? user.taxiDriverProfiles[0]?.lastKnownLongitude)
@@ -555,6 +572,34 @@ export class CaptainWorkStateService {
   private configuredLocationStaleMs() {
     const seconds = Number(process.env.CAPTAIN_LOCATION_STALE_SECONDS ?? process.env.RIDES_CAPTAIN_LOCATION_STALE_SECONDS ?? 90);
     return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 90_000;
+  }
+
+  private async assertRideFinancialEligibility(tx: PrismaTx, driverProfileId: string) {
+    const eligibility = await this.rideFinancialEligibility(tx, driverProfileId);
+    if (!eligibility.rideEligible) throw new BadRequestException(eligibility.message);
+    return eligibility;
+  }
+
+  private async rideFinancialEligibility(tx: PrismaTx, driverProfileId: string) {
+    const settlements = await tx.taxiRideSettlement.findMany({
+      where: {
+        driverProfileId,
+        financialOutcome: TaxiRideFinancialOutcome.NORMAL_COMPLETION,
+        settlementDirection: TaxiRideSettlementDirection.CAPTAIN_TO_PLATFORM,
+        status: { in: [TaxiRideSettlementStatus.PENDING, TaxiRideSettlementStatus.PARTIALLY_RECONCILED] }
+      },
+      include: { refunds: { select: { platformResponsibilityKobo: true } } }
+    });
+    const outstandingKobo = settlements.reduce((sum, settlement) => sum + captainCommissionOutstandingKobo(settlement), 0);
+    const threshold = (name: string, fallback: number) => {
+      const value = Number(process.env[name] ?? fallback);
+      return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+    };
+    return evaluateRideCommissionEligibility(outstandingKobo, {
+      warningKobo: threshold("RIDE_CAPTAIN_COMMISSION_WARNING_THRESHOLD_KOBO", DEFAULT_RIDE_COMMISSION_WARNING_THRESHOLD_KOBO),
+      urgentKobo: threshold("RIDE_CAPTAIN_COMMISSION_URGENT_THRESHOLD_KOBO", DEFAULT_RIDE_COMMISSION_URGENT_THRESHOLD_KOBO),
+      blockKobo: threshold("RIDE_CAPTAIN_COMMISSION_BLOCK_THRESHOLD_KOBO", DEFAULT_RIDE_COMMISSION_BLOCK_THRESHOLD_KOBO)
+    });
   }
 
   private hasValidLocation(dto: CaptainAvailabilityUpdate): dto is CaptainAvailabilityUpdate & { latitude: number; longitude: number } {

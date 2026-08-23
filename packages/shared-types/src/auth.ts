@@ -7,6 +7,7 @@ export interface AuthenticatedUser {
   email?: string | null;
   profilePhotoUrl?: string | null;
   role: UserRole;
+  adminRole?: string | null;
 }
 
 export interface LoginRequest {

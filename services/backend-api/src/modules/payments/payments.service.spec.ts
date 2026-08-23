@@ -63,12 +63,14 @@ describe("PaymentsService", () => {
   const config = {
     get: jest.fn((_: string, fallback?: unknown) => fallback)
   };
+  const rideCommissionPayments = { exists: jest.fn().mockResolvedValue(false), processWebhook: jest.fn() };
   const service = new PaymentsService(
     prisma as unknown as PrismaService,
     registry as unknown as PaymentProviderRegistry,
     audit as never,
     notifications as never,
-    config as never
+    config as never,
+    rideCommissionPayments as never
   );
 
   beforeEach(() => {
@@ -78,6 +80,7 @@ describe("PaymentsService", () => {
     registry.customerCheckoutProviders.mockReturnValue(["mock", "monnify", "paystack"]);
     registry.get.mockReturnValue(mockProvider);
     config.get.mockImplementation((_: string, fallback?: unknown) => fallback);
+    rideCommissionPayments.exists.mockResolvedValue(false);
     prisma.$transaction.mockImplementation((callback) => callback(tx));
   });
 

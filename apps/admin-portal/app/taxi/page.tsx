@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { taxiApi, AdminTaxiDriverApplication, EligibleRideCaptain, RideCaptainFinanceSummary, RideFinanceSettlement, RideFinanceSummary } from "../../src/api/taxi.api";
+import { taxiApi, AdminTaxiDriverApplication, EligibleRideCaptain, RideCaptainFinanceSummary, RideCommissionPaymentHistory, RideFinanceSettlement, RideFinanceSummary } from "../../src/api/taxi.api";
 import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
+import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 import { formatKobo, TaxiApplicationStatus, TaxiDriverProfile, TaxiDriverProfileStatus, TaxiRidePricingDefaults, TaxiTrip, TaxiWaitlistEntry, TaxiWaitlistStatus } from "@karigo/shared-types";
 
@@ -43,6 +44,8 @@ function nairaInputToKobo(value: string) {
 
 
 export default function AdminTaxiPage() {
+  const { user } = useAuth();
+  const canManualFinanceOverride = user?.adminRole === "SUPER_ADMIN" || user?.adminRole === "FINANCE_OFFICER";
   const [activeTab, setActiveTab] = useState<Tab>("applications");
   const [applicationStatus, setApplicationStatus] = useState<TaxiApplicationStatus | "ALL">("ALL");
   const [waitlistStatus, setWaitlistStatus] = useState<TaxiWaitlistStatus | "ALL">("ALL");
@@ -57,6 +60,7 @@ export default function AdminTaxiPage() {
   const [financeSummary, setFinanceSummary] = useState<RideFinanceSummary | null>(null);
   const [financeSettlements, setFinanceSettlements] = useState<RideFinanceSettlement[]>([]);
   const [financeCaptains, setFinanceCaptains] = useState<RideCaptainFinanceSummary[]>([]);
+  const [commissionPayments, setCommissionPayments] = useState<RideCommissionPaymentHistory[]>([]);
   const [financeDateFrom, setFinanceDateFrom] = useState(() => new Date().toISOString().slice(0, 10));
   const [financeDateTo, setFinanceDateTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [error, setError] = useState("");
@@ -67,7 +71,7 @@ export default function AdminTaxiPage() {
     setLoading(true);
     setError("");
     try {
-      const [applicationData, waitlistData, profileData, tripData, trashData, summaryData, financeSummaryData, settlementData, captainFinanceData] = await Promise.all([
+      const [applicationData, waitlistData, profileData, tripData, trashData, summaryData, financeSummaryData, settlementData, captainFinanceData, commissionPaymentData] = await Promise.all([
         taxiApi.driverApplications(applicationStatus),
         taxiApi.waitlist(waitlistStatus),
         taxiApi.driverProfiles().catch(() => []),
@@ -76,7 +80,8 @@ export default function AdminTaxiPage() {
         taxiApi.summary().catch(() => null),
         taxiApi.financeSummary(financeDateFrom, financeDateTo).catch(() => null),
         taxiApi.financeSettlements(financeDateFrom, financeDateTo).catch(() => []),
-        taxiApi.financeCaptains(financeDateFrom, financeDateTo).catch(() => [])
+        taxiApi.financeCaptains(financeDateFrom, financeDateTo).catch(() => []),
+        taxiApi.commissionPaymentHistory().catch(() => [])
       ]);
       setApplications(applicationData);
       setWaitlist(waitlistData);
@@ -87,6 +92,7 @@ export default function AdminTaxiPage() {
       setFinanceSummary(financeSummaryData);
       setFinanceSettlements(settlementData);
       setFinanceCaptains(captainFinanceData);
+      setCommissionPayments(commissionPaymentData);
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -295,10 +301,11 @@ export default function AdminTaxiPage() {
     if (!amountKobo) return setError("Enter a valid positive remittance amount with at most two decimal places.");
     const reference = window.prompt("Unique bank/cash remittance reference")?.trim();
     const method = window.prompt("Method (for example BANK_TRANSFER or CASH)", "BANK_TRANSFER")?.trim();
+    const reason = window.prompt("Required exceptional override reason")?.trim();
     const note = window.prompt("Finance note (optional)")?.trim();
-    if (!reference || !method) return setError("A unique reference and remittance method are required.");
-    if (!window.confirm(`Record ${formatKobo(amountKobo)} against ${captain.captainName}'s KariGO commission balance? This creates an immutable ledger entry.`)) return;
-    await runFinanceAction(`remittance:${captain.driverProfileId}`, "Commission remittance recorded and allocated to the oldest undisputed Ride balances.", () => taxiApi.recordCommissionRemittance({ driverProfileId: captain.driverProfileId, amountKobo, reference, method, note }));
+    if (!reference || !method || !reason || reason.length < 5) return setError("Evidence reference, method and a clear exceptional override reason are required.");
+    if (!window.confirm(`Manual finance override: record ${formatKobo(amountKobo)} against ${captain.captainName}'s KariGO commission balance? Confirm the external evidence before continuing.`)) return;
+    await runFinanceAction(`remittance:${captain.driverProfileId}`, "Manual finance override recorded and allocated to the oldest undisputed Ride balances.", () => taxiApi.recordCommissionRemittance({ driverProfileId: captain.driverProfileId, amountKobo, reference, method, reason, note }));
   }
 
   async function approveCashRefund(settlement: RideFinanceSettlement) {
@@ -537,6 +544,10 @@ export default function AdminTaxiPage() {
               ["Commission reconciled", formatKobo(financeSummary.commissionReconciledKobo)],
               ["Refunds approved", formatKobo(financeSummary.refundsApprovedKobo)],
               ["Cash refunds pending", formatKobo(financeSummary.refundsPendingKobo)],
+              ["Platform-funded refunds", formatKobo(financeSummary.platformFundedRefundsKobo)],
+              ["Captain-funded refunds", formatKobo(financeSummary.captainFundedRefundsKobo)],
+              ["Shared refunds", formatKobo(financeSummary.sharedRefundsKobo)],
+              ["Unresolved refund responsibility", formatKobo(financeSummary.unresolvedRefundResponsibilityKobo)],
               ["Disputed balance", formatKobo(financeSummary.disputedBalanceKobo)]
             ].map(([label, value]) => <article className="card" key={label}><span className="muted">{label}</span><p className="metric">{value}</p></article>)}
           </div>
@@ -547,20 +558,30 @@ export default function AdminTaxiPage() {
           <strong>{captain.captainName}</strong>
           <p className="muted">Cash fares {formatKobo(captain.grossFaresKobo)} · Captain earnings {formatKobo(captain.captainEarningsKobo)}</p>
           <p>KariGO commission due: <strong>{formatKobo(captain.karigoCommissionDueKobo)}</strong> · Remitted: <strong>{formatKobo(captain.commissionRemittedKobo)}</strong> · Outstanding: <strong>{formatKobo(captain.outstandingKobo)}</strong></p>
-          <button disabled={Boolean(actioning) || captain.outstandingKobo <= 0} onClick={() => void recordCommissionRemittance(captain)}>Record commission remittance</button>
+          {canManualFinanceOverride ? <button className="secondary" disabled={Boolean(actioning) || captain.outstandingKobo <= 0} onClick={() => void recordCommissionRemittance(captain)}>Manual finance override</button> : null}
         </article>) : <Empty>No Captain settlement positions in this period.</Empty>}
+        <h2>Provider commission payments</h2>
+        <p className="muted">Normal production settlement is posted only after signed webhook handling and independent provider verification. Redirect success is not proof of payment.</p>
+        {commissionPayments.length ? commissionPayments.map((payment) => <article className="card" key={payment.id}>
+          <div className="filters"><strong>{payment.captain.fullName}</strong><Badge>{payment.status}</Badge><Badge>{payment.provider.toUpperCase()}</Badge></div>
+          <p>{formatKobo(payment.amountKobo)} · KariGO reference <strong>{payment.reference}</strong></p>
+          <p className="muted">Provider reference: {payment.providerReference ?? "Pending verification"} · {new Date(payment.verifiedAt ?? payment.initiatedAt).toLocaleString()}</p>
+        </article>) : <Empty>No provider commission payment attempts recorded.</Empty>}
         <h2>Ride settlements</h2>
         {financeSettlements.length ? financeSettlements.map((settlement) => <article className="card" key={settlement.id}>
           <div className="filters"><strong>{settlement.tripReference}</strong><Badge>{settlement.status}</Badge><Badge>{settlement.settlementDirection}</Badge></div>
           <p className="muted">{new Date(settlement.finalizedAt).toLocaleString()} · {settlement.captain?.fullName ?? "No Captain"} · {settlement.rideCategory.replaceAll("_", " ")} · {settlement.serviceArea ?? "Service area unavailable"}</p>
           <div className="grid">
             <div className="item"><span>Customer fare</span><strong>{formatKobo(settlement.finalCustomerFareKobo)}</strong></div>
-            <div className="item"><span>KariGO commission ({(settlement.commissionRateBasisPoints / 100).toFixed(2)}%)</span><strong>{formatKobo(settlement.karigoCommissionKobo)}</strong></div>
+            <div className="item"><span>Original KariGO commission ({(settlement.commissionRateBasisPoints / 100).toFixed(2)}%)</span><strong>{formatKobo(settlement.originalCommissionEarnedKobo)}</strong></div>
             <div className="item"><span>Captain earning</span><strong>{formatKobo(settlement.captainNetEarningKobo)}</strong></div>
             <div className="item"><span>Cash collected</span><strong>{formatKobo(settlement.cashCollectedKobo)}</strong></div>
             <div className="item"><span>Remitted</span><strong>{formatKobo(settlement.remittedKobo)}</strong></div>
             <div className="item"><span>Outstanding</span><strong>{formatKobo(settlement.outstandingPlatformKobo)}</strong></div>
             <div className="item"><span>Refunded</span><strong>{formatKobo(settlement.refundedKobo)}</strong></div>
+            <div className="item"><span>Platform-funded refunds</span><strong>{formatKobo(settlement.platformFundedRefundsKobo)}</strong></div>
+            <div className="item"><span>Captain-funded refunds</span><strong>{formatKobo(settlement.captainFundedRefundsKobo)}</strong></div>
+            <div className="item"><span>Unresolved responsibility</span><strong>{formatKobo(settlement.unresolvedRefundResponsibilityKobo)}</strong></div>
             <div className="item"><span>Payment</span><strong>{settlement.paymentMethod}</strong></div>
           </div>
           {settlement.disputeReason ? <div className="warning"><strong>Financial review</strong><p>{settlement.disputeReason}</p></div> : null}

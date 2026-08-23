@@ -33,6 +33,7 @@ import {
   PaymentProviderInitializationException,
   paymentInitializationDiagnostic
 } from "./providers/payment-provider-diagnostics";
+import { RideCommissionPaymentService } from "./ride-commission-payment.service";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { NotificationsService } from "../notifications/notifications.service";
 
@@ -56,7 +57,8 @@ export class PaymentsService {
     private readonly providerRegistry: PaymentProviderRegistry,
     private readonly audit: AdminAuditService,
     private readonly notifications: NotificationsService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly rideCommissionPayments: RideCommissionPaymentService
   ) {}
 
   async initiate(userId: string, dto: InitiatePaymentDto) {
@@ -471,6 +473,9 @@ export class PaymentsService {
   async webhook(gateway: string, payload: Record<string, unknown>, context?: PaymentWebhookContext) {
     const provider = this.providerRegistry.get(gateway);
     const result = await provider.parseWebhook(payload, context);
+    if (result.transactionReference && await this.rideCommissionPayments.exists(result.transactionReference)) {
+      return this.rideCommissionPayments.processWebhook(provider, result);
+    }
 
     try {
       return await this.prisma.$transaction(async (tx) => {

@@ -74,6 +74,7 @@ describe("CaptainWorkStateService", () => {
     },
     rider: { update: jest.fn(), updateMany: jest.fn() },
     taxiDriverProfile: { update: jest.fn(), updateMany: jest.fn() },
+    taxiRideSettlement: { findMany: jest.fn() },
     $transaction: jest.fn()
   };
   const audit = { record: jest.fn() };
@@ -83,6 +84,7 @@ describe("CaptainWorkStateService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.CAPTAIN_LOCATION_STALE_SECONDS = "120";
+    prisma.taxiRideSettlement.findMany.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -111,6 +113,31 @@ describe("CaptainWorkStateService", () => {
     });
     expect(result.effectiveDeliveryOnline).toBe(false);
     expect(result.effectiveRideOnline).toBe(true);
+  });
+
+  it("pauses only new Ride eligibility at the financial limit while keeping account work-state access", async () => {
+    const user = userWithModes({ desiredRideOnline: true });
+    prisma.user.findUnique.mockResolvedValueOnce(user);
+    prisma.captainWorkState.findUnique.mockResolvedValueOnce(user.captainWorkState);
+    prisma.taxiRideSettlement.findMany.mockResolvedValueOnce([{
+      platformReceivableKobo: 1_000_000,
+      platformAdjustmentKobo: 0,
+      remittedKobo: 0,
+      refunds: []
+    }]);
+
+    const result = await service.getForUser("captain-user");
+
+    expect(result).toMatchObject({
+      activeWorkMode: null,
+      desiredRideOnline: true,
+      effectiveRideOnline: false,
+      rideEligibility: {
+        eligible: false,
+        reasonCode: "FINANCIAL_SETTLEMENT_REQUIRED",
+        financialEligibility: { outstandingKobo: 1_000_000, rideEligible: false }
+      }
+    });
   });
 
   it("pauses Delivery with an explicit reason while a Ride assignment is active", async () => {

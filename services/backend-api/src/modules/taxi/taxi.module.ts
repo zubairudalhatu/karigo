@@ -4,6 +4,7 @@ import { AdminAuditModule } from "../../common/services/admin-audit.module";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
 import { PrismaModule } from "../../prisma/prisma.module";
+import { PaymentsModule } from "../payments/payments.module";
 import { CaptainUploadStorageService } from "../riders/captain-upload-storage.service";
 import { AdminTaxiController } from "./admin-taxi.controller";
 import { CustomerTaxiController } from "./customer-taxi.controller";
@@ -18,7 +19,7 @@ import { TaxiController } from "./taxi.controller";
 import { TaxiService } from "./taxi.service";
 
 @Module({
-  imports: [PrismaModule, AdminAuditModule],
+  imports: [PrismaModule, AdminAuditModule, PaymentsModule],
   controllers: [TaxiController, CustomerTaxiController, RiderTaxiController, AdminTaxiController],
   providers: [
     TaxiService,

@@ -21,6 +21,15 @@ export interface RideLocationEvidenceInput {
 }
 
 export interface CaptainRideStatement {
+  financialEligibility: {
+    outstandingKobo: number;
+    level: "ELIGIBLE" | "WARNING" | "URGENT" | "BLOCKED";
+    rideEligible: boolean;
+    message: string;
+    thresholds: { warningKobo: number; urgentKobo: number; blockKobo: number };
+    paymentEnabled: boolean;
+    paymentProvider: string;
+  };
   captain: { id: string; fullName: string };
   todayEarningsKobo: number;
   thisWeekEarningsKobo: number;
@@ -46,7 +55,25 @@ export interface CaptainRideStatement {
     direction: string;
     refundedKobo: number;
   }>;
-  remittances: Array<{ id: string; reference: string; amountKobo: number; method: string; note?: string | null; remittedAt: string; allocatedKobo: number }>;
+  remittances: Array<{ id: string; reference: string; amountKobo: number; method: string; source: "MANUAL_OVERRIDE" | "PROVIDER_VERIFIED"; note?: string | null; remittedAt: string; allocatedKobo: number }>;
+  commissionPayments: RideCommissionPayment[];
+}
+
+export interface RideCommissionPayment {
+  id: string;
+  reference: string;
+  provider: string;
+  providerReference?: string | null;
+  amountKobo: number;
+  currency: string;
+  status: string;
+  initiatedAt: string;
+  verifiedAt?: string | null;
+}
+
+export interface RideCommissionPaymentInitialization {
+  payment: RideCommissionPayment;
+  authorization: { transactionReference: string; reference: string; amountKobo: number; amount: number; currency: string; provider: string; authorizationUrl?: string | null; checkoutUrl?: string | null };
 }
 
 
@@ -62,6 +89,8 @@ export const taxiApi = {
   updateAvailability: (body: { isAvailableForTaxi: boolean; latitude?: number; longitude?: number; accuracyMeters?: number | null }) =>
     api.patch<TaxiDriverProfile>("rider/taxi/availability", body),
   earningsStatement: () => api.get<CaptainRideStatement>("rider/taxi/earnings/statement"),
+  initializeCommissionPayment: () => api.post<RideCommissionPaymentInitialization>("rider/taxi/commission-payments"),
+  verifyCommissionPayment: (reference: string) => api.get<{ payment: RideCommissionPayment; alreadyProcessed: boolean; eligibility: CaptainRideStatement["financialEligibility"] }>(`rider/taxi/commission-payments/${encodeURIComponent(reference)}/verify`),
   availableTrips: () => api.get<TaxiTrip[]>("rider/taxi/trips/available"),
   trips: () => api.get<TaxiTrip[]>("rider/taxi/trips"),
   messages: (tripId: string, before?: string) => api.get<RideConversationPage>(`rider/taxi/trips/${tripId}/messages${before ? `?before=${encodeURIComponent(before)}` : ""}`),

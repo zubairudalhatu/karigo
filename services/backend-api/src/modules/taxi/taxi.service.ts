@@ -899,7 +899,8 @@ export class TaxiService {
       include: { application: true }
     });
     if (!profile) throw new NotFoundException("Ride Captain profile not found");
-    return this.formatDriverProfile(profile);
+    const financialEligibility = await this.rideFinance.captainFinancialEligibility(userId);
+    return { ...this.formatDriverProfile(profile), financialEligibility };
   }
 
   async updateRiderTaxiAvailability(userId: string, dto: TaxiDriverAvailabilityDto) {
@@ -918,6 +919,7 @@ export class TaxiService {
       }
     }
     if (dto.isAvailableForTaxi) {
+      await this.rideFinance.assertCaptainFinanciallyEligible(userId);
       if (!validRideCoordinate(dto.latitude, dto.longitude)) {
         throw new BadRequestException("Current foreground location is required before going online for KariGO Rides.");
       }
@@ -1041,6 +1043,7 @@ export class TaxiService {
     if (trip.status !== TaxiTripStatus.DRIVER_ASSIGNED) {
       throw new BadRequestException("Ride request must be assigned before it can be accepted");
     }
+    await this.rideFinance.assertCaptainFinanciallyEligible(userId);
     const updated = await this.updateTripWithEvent(trip.id, {
       status: TaxiTripStatus.ACCEPTED,
       acceptedAt: new Date()
@@ -1389,7 +1392,9 @@ export class TaxiService {
       const activeOtherWork = Boolean(workState?.activeWorkMode);
       const desiredRideOnline = workState?.desiredRideOnline ?? profile.isAvailableForTaxi;
       const controlledSupplyEligible = await this.launchOperations.controlledSupplyAccountEligible({ city: pickupCity ?? profileCity ?? profile.city, serviceType: LaunchServiceType.RIDES, userId: profile.userId, participant: "Captain" });
-      const eligible = !activeTrip && !activeOtherWork && desiredRideOnline && serviceAreaMatch && gpsAreaMatch && locationFreshness === "fresh" && controlledSupplyEligible;
+      const financialEligibility = profile.userId ? await this.rideFinance.captainFinancialEligibility(profile.userId) : null;
+      const financiallyEligible = financialEligibility?.rideEligible ?? false;
+      const eligible = !activeTrip && !activeOtherWork && desiredRideOnline && serviceAreaMatch && gpsAreaMatch && locationFreshness === "fresh" && controlledSupplyEligible && financiallyEligible;
       const distanceToPickupKm = this.distanceToPickupKm(profile, trip);
       candidates.push({
         id: profile.id,
@@ -1414,6 +1419,7 @@ export class TaxiService {
           activeOtherWork ? `Captain is busy with ${workState?.activeWorkMode === "DELIVERY" ? "Delivery" : "Ride"}.` : null,
           !desiredRideOnline ? "Captain is not online for Ride assignments." : null,
           !controlledSupplyEligible ? "Captain is not in active controlled Ride supply." : null,
+          !financiallyEligible ? "Outstanding KariGO service fees must be settled before receiving another Ride." : null,
           !serviceAreaMatch ? "Captain operating area does not match pickup area." : null,
           serviceAreaMatch && !gpsAreaMatch ? "Captain GPS is not in the Ride pickup area." : null,
           locationFreshness !== "fresh" ? "Captain location is stale or unavailable." : null
@@ -1440,6 +1446,7 @@ export class TaxiService {
     if (!this.isCaptainLocationFresh(profile)) {
       throw new BadRequestException("Ride Captain location is stale or unavailable. Ask the Captain to refresh online status.");
     }
+    await this.rideFinance.assertCaptainFinanciallyEligible(profile.user!.id);
     const pickupCity = this.tripPickupServiceArea(trip as TaxiTripWithRelations);
     const pickupArea = captainOperatingAreaFromText(pickupCity);
     if (!pickupArea || profile.application?.status !== TaxiApplicationStatus.APPROVED || !captainIsApprovedForOperatingArea(profile.application, pickupArea.id, profile)) {

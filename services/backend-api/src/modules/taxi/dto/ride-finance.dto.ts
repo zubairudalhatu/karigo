@@ -37,6 +37,10 @@ export class RecordRideCommissionRemittanceDto {
   @Length(2, 60)
   method!: string;
 
+  @IsString()
+  @Length(5, 500)
+  reason!: string;
+
   @IsOptional()
   @IsDateString()
   remittedAt?: string;

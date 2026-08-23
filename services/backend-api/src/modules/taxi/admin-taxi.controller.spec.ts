@@ -25,7 +25,7 @@ describe("AdminTaxiController receipt email authorization", () => {
     expect(roles).not.toContain(AdminRole.SUPPORT_AGENT);
   });
 
-  it.each(["financeSummary", "financeSettlements", "financeCaptains"] as const)("allows controlled read-only Ride finance access through %s", (method) => {
+  it.each(["financeSummary", "financeSettlements", "financeCaptains", "commissionPaymentHistory"] as const)("allows controlled read-only Ride finance access through %s", (method) => {
     const roles = Reflect.getMetadata(ADMIN_ROLES_KEY, AdminTaxiController.prototype[method]) as AdminRole[];
     expect(roles).toContain(AdminRole.FINANCE_OFFICER);
     expect(roles).toContain(AdminRole.OPERATIONS_ADMIN);

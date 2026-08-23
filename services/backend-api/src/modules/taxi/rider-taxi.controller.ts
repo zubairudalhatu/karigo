@@ -11,17 +11,30 @@ import { TaxiStartTripDto } from "./dto/taxi-start-trip.dto";
 import { RideLocationEvidenceDto } from "./dto/ride-location-evidence.dto";
 import { RideFinanceService } from "./ride-finance.service";
 import { TaxiService } from "./taxi.service";
+import { RideCommissionPaymentService } from "../payments/ride-commission-payment.service";
 
 @ApiTags("Captain Ride Operations")
 @ApiBearerAuth()
 @Controller("rider/taxi")
 @UseGuards(JwtAuthGuard)
 export class RiderTaxiController {
-  constructor(private readonly taxi: TaxiService, private readonly finance: RideFinanceService) {}
+  constructor(private readonly taxi: TaxiService, private readonly finance: RideFinanceService, private readonly commissionPayments: RideCommissionPaymentService) {}
 
   @Get("earnings/statement")
   async earningsStatement(@CurrentUser() user: AuthenticatedUser) {
     return { message: "Ride Captain financial statement retrieved", data: await this.finance.captainStatement(user.id) };
+  }
+
+  @Post("commission-payments")
+  @ApiOperation({ summary: "Initialize an authoritative Captain-to-KariGO commission payment" })
+  async initializeCommissionPayment(@CurrentUser() user: AuthenticatedUser) {
+    return { message: "KariGO service fee checkout initialized", data: await this.commissionPayments.initialize(user.id) };
+  }
+
+  @Get("commission-payments/:transactionReference/verify")
+  @ApiOperation({ summary: "Independently verify an owned Captain commission payment" })
+  async verifyCommissionPayment(@CurrentUser() user: AuthenticatedUser, @Param("transactionReference") transactionReference: string) {
+    return { message: "KariGO service fee payment verification completed", data: await this.commissionPayments.verifyOwned(user.id, transactionReference) };
   }
 
   @Get("profile")

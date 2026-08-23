@@ -821,6 +821,26 @@ enum TaxiRideFinancialBalanceTarget {
   CAPTAIN_EARNING
 }
 
+enum TaxiRideCommissionRemittanceSource {
+  MANUAL_OVERRIDE
+  PROVIDER_VERIFIED
+}
+
+enum TaxiRideCommissionPaymentPurpose {
+  RIDE_COMMISSION_REMITTANCE
+}
+
+enum TaxiRideCommissionPaymentStatus {
+  PENDING
+  INITIALIZED
+  SUCCESSFUL
+  FAILED
+  VERIFICATION_FAILED
+  REVIEW_REQUIRED
+  EXPIRED
+  CANCELLED
+}
+
 model User {
   id                                  String                               @id @default(uuid()) @db.Uuid
   fullName                            String
@@ -1182,6 +1202,7 @@ model TaxiDriverProfile {
   trips                 TaxiTrip[]
   rideSettlements       TaxiRideSettlement[]
   commissionRemittances TaxiRideCommissionRemittance[]
+  commissionPayments    TaxiRideCommissionPayment[]
 
   @@index([status, isAvailableForTaxi])
   @@index([city, state])
@@ -1402,6 +1423,7 @@ model TaxiRideCommissionRemittance {
   reference        String                                   @unique
   amountKobo       Int
   method           String
+  source           TaxiRideCommissionRemittanceSource       @default(MANUAL_OVERRIDE)
   note             String?
   remittedAt       DateTime
   recordedByUserId String                                   @db.Uuid
@@ -1409,6 +1431,7 @@ model TaxiRideCommissionRemittance {
   driverProfile    TaxiDriverProfile                        @relation(fields: [driverProfileId], references: [id])
   recordedBy       User                                     @relation("TaxiRideCommissionRemittanceRecordedBy", fields: [recordedByUserId], references: [id])
   allocations      TaxiRideCommissionRemittanceAllocation[]
+  providerPayment  TaxiRideCommissionPayment?
 
   @@index([driverProfileId, remittedAt])
   @@index([recordedByUserId, createdAt])
@@ -1427,6 +1450,34 @@ model TaxiRideCommissionRemittanceAllocation {
   @@unique([remittanceId, settlementId])
   @@index([settlementId, createdAt])
   @@map("taxi_ride_commission_remittance_allocations")
+}
+
+model TaxiRideCommissionPayment {
+  id                           String                           @id @default(uuid()) @db.Uuid
+  driverProfileId              String                           @db.Uuid
+  purpose                      TaxiRideCommissionPaymentPurpose @default(RIDE_COMMISSION_REMITTANCE)
+  provider                     String
+  transactionReference         String                           @unique
+  providerTransactionReference String?                          @unique
+  amountKobo                   Int
+  currency                     String                           @default("NGN")
+  status                       TaxiRideCommissionPaymentStatus  @default(PENDING)
+  remittanceId                 String?                          @unique @db.Uuid
+  failureReason                String?
+  initiatedAt                  DateTime                         @default(now())
+  initializedAt                DateTime?
+  verifiedAt                   DateTime?
+  failedAt                     DateTime?
+  expiresAt                    DateTime?
+  createdAt                    DateTime                         @default(now())
+  updatedAt                    DateTime                         @updatedAt
+  driverProfile                TaxiDriverProfile                @relation(fields: [driverProfileId], references: [id])
+  remittance                   TaxiRideCommissionRemittance?    @relation(fields: [remittanceId], references: [id])
+
+  @@index([driverProfileId, createdAt])
+  @@index([status, createdAt])
+  @@index([provider, status, createdAt])
+  @@map("taxi_ride_commission_payments")
 }
 
 model TaxiRideRefund {
