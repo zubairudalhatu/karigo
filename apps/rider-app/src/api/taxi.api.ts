@@ -20,6 +20,35 @@ export interface RideLocationEvidenceInput {
   overrideNote?: string;
 }
 
+export interface CaptainRideStatement {
+  captain: { id: string; fullName: string };
+  todayEarningsKobo: number;
+  thisWeekEarningsKobo: number;
+  thisMonthEarningsKobo: number;
+  totalEarningsKobo: number;
+  cashCollectedKobo: number;
+  karigoCommissionDueKobo: number;
+  karigoCommissionRemittedKobo: number;
+  settlements: Array<{
+    id: string;
+    tripId: string;
+    tripReference: string;
+    finalizedAt: string;
+    rideCategory: string;
+    grossCustomerFareKobo: number;
+    karigoCommissionKobo: number;
+    captainAdjustmentKobo: number;
+    captainEarningKobo: number;
+    cashCollectedKobo: number;
+    commissionRemittedKobo: number;
+    outstandingKarigoCommissionKobo: number;
+    status: string;
+    direction: string;
+    refundedKobo: number;
+  }>;
+  remittances: Array<{ id: string; reference: string; amountKobo: number; method: string; note?: string | null; remittedAt: string; allocatedKobo: number }>;
+}
+
 
 export const taxiApi = {
   submitDriverApplication: (body: TaxiDriverApplicationInput) =>
@@ -32,6 +61,7 @@ export const taxiApi = {
   profile: () => api.get<TaxiDriverProfile>("rider/taxi/profile"),
   updateAvailability: (body: { isAvailableForTaxi: boolean; latitude?: number; longitude?: number; accuracyMeters?: number | null }) =>
     api.patch<TaxiDriverProfile>("rider/taxi/availability", body),
+  earningsStatement: () => api.get<CaptainRideStatement>("rider/taxi/earnings/statement"),
   availableTrips: () => api.get<TaxiTrip[]>("rider/taxi/trips/available"),
   trips: () => api.get<TaxiTrip[]>("rider/taxi/trips"),
   messages: (tripId: string, before?: string) => api.get<RideConversationPage>(`rider/taxi/trips/${tripId}/messages${before ? `?before=${encodeURIComponent(before)}` : ""}`),

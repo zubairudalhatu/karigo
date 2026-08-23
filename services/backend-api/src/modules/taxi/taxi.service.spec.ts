@@ -276,6 +276,12 @@ describe("TaxiService", () => {
     enqueueAutomatic: jest.fn(),
     processPendingSoon: jest.fn()
   };
+  const rideFinance = {
+    commissionRatePercent: jest.fn(() => 10),
+    createCompletedSettlement: jest.fn().mockResolvedValue({ id: "ride-settlement-id" }),
+    createClosedRideOutcome: jest.fn().mockResolvedValue({ id: "ride-cancellation-outcome-id" }),
+    notifyEarningFinalized: jest.fn().mockResolvedValue(undefined)
+  };
 
   const service = new TaxiService(
     prisma as unknown as PrismaService,
@@ -288,7 +294,8 @@ describe("TaxiService", () => {
     launchOperations as never,
     rideCommunications as never,
     rideRealtime as never,
-    receiptEmails as never
+    receiptEmails as never,
+    rideFinance as never
   );
 
   function enableTaxiStaging() {
@@ -361,8 +368,9 @@ describe("TaxiService", () => {
       driverProfile: null,
       events: []
     }));
-    prisma.taxiTrip.update.mockImplementation(async ({ data }: any) => ({
+    prisma.taxiTrip.update.mockImplementation(async ({ data, where }: any) => ({
       ...taxiTrip,
+      id: where.id,
       ...data,
       driverProfile: data.driverProfile ? driverProfile : taxiTrip.driverProfile,
       status: data.status ?? taxiTrip.status,
@@ -374,6 +382,10 @@ describe("TaxiService", () => {
     prisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<unknown>) => callback(prisma));
     audit.record.mockResolvedValue({});
     config.get.mockImplementation((_key: string, fallback?: unknown) => fallback);
+    rideFinance.commissionRatePercent.mockReturnValue(10);
+    rideFinance.createCompletedSettlement.mockResolvedValue({ id: "ride-settlement-id" });
+    rideFinance.createClosedRideOutcome.mockResolvedValue({ id: "ride-cancellation-outcome-id" });
+    rideFinance.notifyEarningFinalized.mockResolvedValue(undefined);
     applicationNotifications.rideWaitlistJoined.mockResolvedValue(undefined);
     applicationNotifications.rideCaptainApplicationSubmitted.mockResolvedValue(undefined);
     applicationNotifications.rideCaptainApplicationReviewed.mockResolvedValue(undefined);
@@ -1027,6 +1039,13 @@ describe("TaxiService", () => {
       "customer@example.test"
     );
     expect(receiptEmails.processPendingSoon).toHaveBeenCalledTimes(1);
+    expect(rideFinance.createCompletedSettlement).toHaveBeenCalledWith(prisma, expect.objectContaining({
+      tripId: taxiTrip.id,
+      finalCustomerFareKobo: expect.any(Number),
+      paymentMethod: "CASH",
+      waitingChargeKobo: expect.any(Number)
+    }));
+    expect(rideFinance.notifyEarningFinalized).toHaveBeenCalledWith(taxiTrip.id);
 
     jest.clearAllMocks();
     enableTaxiStaging();
@@ -1036,6 +1055,8 @@ describe("TaxiService", () => {
     expect(prisma.taxiRideReceipt.upsert).not.toHaveBeenCalled();
     expect(receiptEmails.enqueueAutomatic).not.toHaveBeenCalled();
   });
+    expect(rideFinance.createCompletedSettlement).not.toHaveBeenCalled();
+    expect(rideFinance.notifyEarningFinalized).not.toHaveBeenCalled();
 
   it("blocks Captains from self-claiming unassigned ride requests", async () => {
     enableTaxiStaging();
@@ -1091,7 +1112,9 @@ describe("TaxiService", () => {
 
   it("lets admins assign and cancel production Ride trips with audit records", async () => {
     enableTaxiStaging();
-    prisma.taxiTrip.findUnique.mockResolvedValueOnce(taxiTrip).mockResolvedValueOnce({ ...taxiTrip, status: TaxiTripStatus.DRIVER_ASSIGNED });
+    prisma.taxiTrip.findUnique.mockResolvedValueOnce(taxiTrip)
+      .mockResolvedValueOnce({ ...taxiTrip, status: TaxiTripStatus.DRIVER_ASSIGNED })
+      .mockResolvedValueOnce({ ...taxiTrip, status: TaxiTripStatus.DRIVER_ASSIGNED });
     prisma.taxiDriverProfile.findUnique.mockResolvedValueOnce({ ...driverProfile, lastSeenAt: new Date() });
 
     await service.adminAssignDriver("admin-user", taxiTrip.id, { driverProfileId: driverProfile.id });
@@ -1180,6 +1203,7 @@ describe("TaxiService", () => {
     const selectedTrip = { ...taxiTrip, id: "00000000-0000-0000-0000-00000000e002", tripReference: "KGO-TAXI-TRIP-2026-SELECTED" };
     prisma.taxiTrip.findFirst.mockResolvedValueOnce(selectedTrip);
 
+    prisma.taxiTrip.findUnique.mockResolvedValueOnce(selectedTrip);
     await service.customerCancelTrip("customer-user", selectedTrip.id, { reason: "Changed pickup plan" });
 
     expect(prisma.taxiTrip.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -1189,6 +1213,11 @@ describe("TaxiService", () => {
         cancellationReason: "Changed pickup plan",
         tripPinHash: null
       })
+    }));
+    expect(rideFinance.createClosedRideOutcome).toHaveBeenCalledWith(prisma, expect.objectContaining({
+      tripId: selectedTrip.id,
+      reviewRequired: false,
+      reason: expect.stringContaining("Zero-fee Ride cancellation")
     }));
   });
 

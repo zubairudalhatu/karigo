@@ -753,6 +753,74 @@ enum TaxiRideReceiptEmailKind {
   CUSTOMER_RESEND
 }
 
+enum TaxiRideSettlementDirection {
+  CAPTAIN_TO_PLATFORM
+  PLATFORM_TO_CAPTAIN
+  NONE
+}
+
+enum TaxiRideSettlementStatus {
+  PENDING
+  PARTIALLY_RECONCILED
+  RECONCILED
+  DISPUTED
+  REFUND_PENDING
+  CANCELLED
+}
+
+enum TaxiRideFinancialOutcome {
+  NORMAL_COMPLETION
+  ZERO_VALUE_CANCELLATION
+  FINANCIAL_REVIEW_REQUIRED
+}
+
+enum TaxiRideLedgerEntryType {
+  RIDE_FARE_FINALIZED
+  CAPTAIN_EARNING_CREATED
+  KARIGO_COMMISSION_CREATED
+  CASH_COLLECTED
+  COMMISSION_REMITTANCE
+  REFUND_APPROVED
+  REFUND_SETTLED
+  CREDIT
+  DEBIT_ADJUSTMENT
+  DISPUTE_OPENED
+  DISPUTE_RESOLVED
+  ZERO_VALUE_CANCELLATION
+}
+
+enum TaxiRideLedgerDirection {
+  PLATFORM_RECEIVABLE_INCREASE
+  PLATFORM_RECEIVABLE_DECREASE
+  CAPTAIN_EARNING_INCREASE
+  CAPTAIN_EARNING_DECREASE
+  CASH_POSITION
+  CUSTOMER_REFUND_OBLIGATION
+  NONE
+}
+
+enum TaxiRideRefundStatus {
+  CASH_REFUND_DUE
+  CASH_REFUND_SETTLED
+}
+
+enum TaxiRideFinancialResponsibility {
+  PLATFORM
+  CAPTAIN
+  SHARED
+  REVIEW_REQUIRED
+}
+
+enum TaxiRideAdjustmentDirection {
+  CREDIT
+  DEBIT
+}
+
+enum TaxiRideFinancialBalanceTarget {
+  PLATFORM_RECEIVABLE
+  CAPTAIN_EARNING
+}
+
 model User {
   id                                  String                               @id @default(uuid()) @db.Uuid
   fullName                            String
@@ -811,6 +879,10 @@ model User {
   createdVendorActivationInvitations  VendorAccountActivation[]            @relation("VendorActivationCreatedBy")
   reviewedAdCampaigns                 AdCampaign[]                         @relation("AdCampaignReviewedBy")
   captainWorkState                    CaptainWorkState?
+  rideFinancialLedgerEntries          TaxiRideFinancialLedgerEntry[]       @relation("TaxiRideFinancialLedgerActor")
+  recordedRideCommissionRemittances   TaxiRideCommissionRemittance[]       @relation("TaxiRideCommissionRemittanceRecordedBy")
+  approvedTaxiRideRefunds             TaxiRideRefund[]                     @relation("TaxiRideRefundApprovedBy")
+  settledTaxiRideRefunds              TaxiRideRefund[]                     @relation("TaxiRideRefundSettledBy")
 
   @@map("users")
 }
@@ -1085,29 +1157,31 @@ model TaxiWaitlistEntry {
 }
 
 model TaxiDriverProfile {
-  id                 String                  @id @default(uuid()) @db.Uuid
-  userId             String?                 @unique @db.Uuid
-  applicationId      String?                 @unique @db.Uuid
-  fullName           String
-  phoneNumber        String
-  city               String
-  state              String
-  vehicleMake        String?
-  vehicleModel       String?
-  vehicleYear        Int?
-  vehicleColour      String?
-  vehiclePlateNumber String?
-  vehicleType        TaxiVehicleType?
-  status             TaxiDriverProfileStatus @default(PENDING_ACTIVATION)
-  isAvailableForTaxi Boolean                 @default(false)
-  lastKnownLatitude  Decimal?                @db.Decimal(10, 7)
-  lastKnownLongitude Decimal?                @db.Decimal(10, 7)
-  lastSeenAt         DateTime?
-  createdAt          DateTime                @default(now())
-  updatedAt          DateTime                @updatedAt
-  user               User?                   @relation(fields: [userId], references: [id])
-  application        TaxiDriverApplication?  @relation(fields: [applicationId], references: [id])
-  trips              TaxiTrip[]
+  id                    String                         @id @default(uuid()) @db.Uuid
+  userId                String?                        @unique @db.Uuid
+  applicationId         String?                        @unique @db.Uuid
+  fullName              String
+  phoneNumber           String
+  city                  String
+  state                 String
+  vehicleMake           String?
+  vehicleModel          String?
+  vehicleYear           Int?
+  vehicleColour         String?
+  vehiclePlateNumber    String?
+  vehicleType           TaxiVehicleType?
+  status                TaxiDriverProfileStatus        @default(PENDING_ACTIVATION)
+  isAvailableForTaxi    Boolean                        @default(false)
+  lastKnownLatitude     Decimal?                       @db.Decimal(10, 7)
+  lastKnownLongitude    Decimal?                       @db.Decimal(10, 7)
+  lastSeenAt            DateTime?
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+  user                  User?                          @relation(fields: [userId], references: [id])
+  application           TaxiDriverApplication?         @relation(fields: [applicationId], references: [id])
+  trips                 TaxiTrip[]
+  rideSettlements       TaxiRideSettlement[]
+  commissionRemittances TaxiRideCommissionRemittance[]
 
   @@index([status, isAvailableForTaxi])
   @@index([city, state])
@@ -1155,6 +1229,8 @@ model TaxiTrip {
   receipt                TaxiRideReceipt?
   receiptEmailDeliveries TaxiRideReceiptEmailDelivery[]
   callSessions           TaxiRideCallSession[]
+  settlement             TaxiRideSettlement?
+  financialLedgerEntries TaxiRideFinancialLedgerEntry[]
 
   @@index([customerId, createdAt])
   @@index([driverProfileId, status])
@@ -1243,6 +1319,144 @@ model TaxiRideReceiptEmailDelivery {
   @@map("taxi_ride_receipt_email_deliveries")
 }
 
+model TaxiRideSettlement {
+  id                        String                                   @id @default(uuid()) @db.Uuid
+  tripId                    String                                   @unique @db.Uuid
+  driverProfileId           String?                                  @db.Uuid
+  customerId                String                                   @db.Uuid
+  tripReference             String
+  captainName               String?
+  serviceArea               String?
+  rideCategory              String
+  paymentMethod             String                                   @default("CASH")
+  financialOutcome          TaxiRideFinancialOutcome                 @default(NORMAL_COMPLETION)
+  grossFareKobo             Int
+  rideFareKobo              Int
+  waitingChargeKobo         Int                                      @default(0)
+  discountKobo              Int                                      @default(0)
+  finalCustomerFareKobo     Int
+  commissionRateBasisPoints Int
+  karigoCommissionKobo      Int
+  captainGrossEarningKobo   Int
+  captainNetEarningKobo     Int
+  cashCollectedKobo         Int                                      @default(0)
+  platformReceivableKobo    Int                                      @default(0)
+  captainReceivableKobo     Int                                      @default(0)
+  remittedKobo              Int                                      @default(0)
+  refundedKobo              Int                                      @default(0)
+  platformAdjustmentKobo    Int                                      @default(0)
+  captainAdjustmentKobo     Int                                      @default(0)
+  settlementDirection       TaxiRideSettlementDirection
+  status                    TaxiRideSettlementStatus                 @default(PENDING)
+  disputeReason             String?
+  disputeOpenedAt           DateTime?
+  disputeResolvedAt         DateTime?
+  reconciledAt              DateTime?
+  reconciliationReference   String?
+  reconciliationNote        String?
+  finalizedAt               DateTime
+  createdAt                 DateTime                                 @default(now())
+  updatedAt                 DateTime                                 @updatedAt
+  trip                      TaxiTrip                                 @relation(fields: [tripId], references: [id])
+  driverProfile             TaxiDriverProfile?                       @relation(fields: [driverProfileId], references: [id])
+  customer                  CustomerProfile                          @relation(fields: [customerId], references: [id])
+  ledgerEntries             TaxiRideFinancialLedgerEntry[]
+  remittanceAllocations     TaxiRideCommissionRemittanceAllocation[]
+  refunds                   TaxiRideRefund[]
+
+  @@index([driverProfileId, finalizedAt])
+  @@index([customerId, finalizedAt])
+  @@index([status, finalizedAt])
+  @@index([settlementDirection, status])
+  @@map("taxi_ride_settlements")
+}
+
+model TaxiRideFinancialLedgerEntry {
+  id                      String                           @id @default(uuid()) @db.Uuid
+  settlementId            String                           @db.Uuid
+  tripId                  String                           @db.Uuid
+  idempotencyKey          String                           @unique
+  entryType               TaxiRideLedgerEntryType
+  direction               TaxiRideLedgerDirection
+  amountKobo              Int
+  actorUserId             String?                          @db.Uuid
+  actorType               TaxiTripActorType
+  reference               String?
+  reason                  String
+  financialResponsibility TaxiRideFinancialResponsibility?
+  metadata                Json?
+  createdAt               DateTime                         @default(now())
+  settlement              TaxiRideSettlement               @relation(fields: [settlementId], references: [id])
+  trip                    TaxiTrip                         @relation(fields: [tripId], references: [id])
+  actor                   User?                            @relation("TaxiRideFinancialLedgerActor", fields: [actorUserId], references: [id])
+
+  @@index([settlementId, createdAt])
+  @@index([tripId, createdAt])
+  @@index([entryType, createdAt])
+  @@map("taxi_ride_financial_ledger_entries")
+}
+
+model TaxiRideCommissionRemittance {
+  id               String                                   @id @default(uuid()) @db.Uuid
+  driverProfileId  String                                   @db.Uuid
+  reference        String                                   @unique
+  amountKobo       Int
+  method           String
+  note             String?
+  remittedAt       DateTime
+  recordedByUserId String                                   @db.Uuid
+  createdAt        DateTime                                 @default(now())
+  driverProfile    TaxiDriverProfile                        @relation(fields: [driverProfileId], references: [id])
+  recordedBy       User                                     @relation("TaxiRideCommissionRemittanceRecordedBy", fields: [recordedByUserId], references: [id])
+  allocations      TaxiRideCommissionRemittanceAllocation[]
+
+  @@index([driverProfileId, remittedAt])
+  @@index([recordedByUserId, createdAt])
+  @@map("taxi_ride_commission_remittances")
+}
+
+model TaxiRideCommissionRemittanceAllocation {
+  id           String                       @id @default(uuid()) @db.Uuid
+  remittanceId String                       @db.Uuid
+  settlementId String                       @db.Uuid
+  amountKobo   Int
+  createdAt    DateTime                     @default(now())
+  remittance   TaxiRideCommissionRemittance @relation(fields: [remittanceId], references: [id])
+  settlement   TaxiRideSettlement           @relation(fields: [settlementId], references: [id])
+
+  @@unique([remittanceId, settlementId])
+  @@index([settlementId, createdAt])
+  @@map("taxi_ride_commission_remittance_allocations")
+}
+
+model TaxiRideRefund {
+  id                         String                          @id @default(uuid()) @db.Uuid
+  settlementId               String                          @db.Uuid
+  idempotencyKey             String                          @unique
+  amountKobo                 Int
+  status                     TaxiRideRefundStatus            @default(CASH_REFUND_DUE)
+  responsibility             TaxiRideFinancialResponsibility @default(REVIEW_REQUIRED)
+  platformResponsibilityKobo Int                             @default(0)
+  captainResponsibilityKobo  Int                             @default(0)
+  reason                     String
+  method                     String?
+  externalReference          String?                         @unique
+  note                       String?
+  approvedByUserId           String                          @db.Uuid
+  approvedAt                 DateTime                        @default(now())
+  settledByUserId            String?                         @db.Uuid
+  settledAt                  DateTime?
+  createdAt                  DateTime                        @default(now())
+  updatedAt                  DateTime                        @updatedAt
+  settlement                 TaxiRideSettlement              @relation(fields: [settlementId], references: [id])
+  approvedBy                 User                            @relation("TaxiRideRefundApprovedBy", fields: [approvedByUserId], references: [id])
+  settledBy                  User?                           @relation("TaxiRideRefundSettledBy", fields: [settledByUserId], references: [id])
+
+  @@index([settlementId, status, createdAt])
+  @@index([approvedByUserId, createdAt])
+  @@map("taxi_ride_refunds")
+}
+
 model TaxiRideCallSession {
   id                  String    @id @default(uuid()) @db.Uuid
   tripId              String    @db.Uuid
@@ -1327,6 +1541,7 @@ model CustomerProfile {
   promoCodeUsages         PromoCodeUsage[]
   utilityTransactions     UtilityTransaction[]
   taxiTrips               TaxiTrip[]
+  rideSettlements         TaxiRideSettlement[]
   serviceProviderRequests ServiceProviderRequest[]
   wallet                  CustomerWallet?
   walletLedgerEntries     CustomerWalletLedgerEntry[]

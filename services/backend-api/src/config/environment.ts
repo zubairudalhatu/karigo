@@ -26,6 +26,15 @@ function positiveInteger(value: unknown, key: string, fallback: number): number 
   return parsed;
 }
 
+function percentage(value: unknown, key: string, fallback: number): number {
+  if (value === undefined || value === "") return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+    throw new Error(`${key} must be a percentage between 0 and 100`);
+  }
+  return parsed;
+}
+
 export function normalizeApiPrefix(prefix: string): string {
   const normalized = prefix.trim().replace(/^\/+|\/+$/g, "");
   return normalized || "api/v1";
@@ -741,6 +750,14 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   }
   const ridesAutoDispatchEnabled = booleanFlag(config.RIDES_AUTO_DISPATCH_ENABLED, "RIDES_AUTO_DISPATCH_ENABLED", false);
   const ridesPaymentEnabled = booleanFlag(config.RIDES_PAYMENT_ENABLED, "RIDES_PAYMENT_ENABLED", false);
+  const canonicalRideCommissionConfigured = config.RIDE_KARIGO_COMMISSION_PERCENT !== undefined && config.RIDE_KARIGO_COMMISSION_PERCENT !== "";
+  const rideKarigoCommissionPercent = percentage(
+    canonicalRideCommissionConfigured ? config.RIDE_KARIGO_COMMISSION_PERCENT : config.RIDE_CAPTAIN_COMMISSION_PERCENT,
+    canonicalRideCommissionConfigured ? "RIDE_KARIGO_COMMISSION_PERCENT" : "RIDE_CAPTAIN_COMMISSION_PERCENT",
+    10
+  );
+  const rideCustomerCancellationFeeEnabled = booleanFlag(config.RIDE_CUSTOMER_CANCELLATION_FEE_ENABLED, "RIDE_CUSTOMER_CANCELLATION_FEE_ENABLED", false);
+  const rideNoShowFeeEnabled = booleanFlag(config.RIDE_NO_SHOW_FEE_ENABLED, "RIDE_NO_SHOW_FEE_ENABLED", false);
   if (ridesProductionEnabled && !ridesServiceEnabled) {
     throw new Error("RIDES_PRODUCTION_ENABLED=true requires RIDES_SERVICE_ENABLED=true");
   }
@@ -931,6 +948,9 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     RIDES_CONTROLLED_PILOT_ENABLED: false,
     RIDES_AUTO_DISPATCH_ENABLED: ridesAutoDispatchEnabled,
     RIDES_PAYMENT_ENABLED: ridesPaymentEnabled,
+    RIDE_KARIGO_COMMISSION_PERCENT: rideKarigoCommissionPercent,
+    RIDE_CUSTOMER_CANCELLATION_FEE_ENABLED: rideCustomerCancellationFeeEnabled,
+    RIDE_NO_SHOW_FEE_ENABLED: rideNoShowFeeEnabled,
     TAXI_SERVICE_ENABLED: ridesServiceEnabled,
     TAXI_STAGING_DISPATCH_ENABLED: false,
     TAXI_BASE_FARE_KOBO: positiveInteger(config.TAXI_BASE_FARE_KOBO, "TAXI_BASE_FARE_KOBO", 70000),

@@ -67,6 +67,7 @@ import { calculatePickupWaiting, evaluateRideGeofence, FREE_PICKUP_WAIT_SECONDS,
 import { applyCategoryMinimumRideFare, normalizeRideCategory, rideCategoryMinimumsForServiceArea } from "./ride-pricing-policy";
 import { RideRealtimeService } from "./ride-realtime.service";
 import { RideReceiptEmailService } from "./ride-receipt-email.service";
+import { RideFinanceService } from "./ride-finance.service";
 import { TaxiApplicationStatusQueryDto } from "./dto/taxi-application-status-query.dto";
 import { UpdateTaxiWaitlistStatusDto } from "./dto/update-taxi-waitlist-status.dto";
 import {
@@ -151,6 +152,7 @@ const TAXI_TRIP_INCLUDE = {
   driverProfile: true,
   events: { orderBy: { createdAt: "asc" as const } },
   receipt: { include: { emailDeliveries: { orderBy: { createdAt: "desc" as const } } } },
+  settlement: { include: { refunds: { orderBy: { approvedAt: "desc" as const } } } },
   tracePoints: { orderBy: { recordedAt: "asc" as const }, take: 5_000 }
 } satisfies Prisma.TaxiTripInclude;
 
@@ -264,7 +266,8 @@ export class TaxiService {
     private readonly launchOperations: LaunchOperationsService,
     private readonly rideCommunications: RideCommunicationsService,
     private readonly rideRealtime: RideRealtimeService,
-    private readonly receiptEmails: RideReceiptEmailService
+    private readonly receiptEmails: RideReceiptEmailService,
+    private readonly rideFinance: RideFinanceService
   ) {}
 
   async joinWaitlist(dto: CreateTaxiWaitlistDto) {
@@ -1163,6 +1166,7 @@ export class TaxiService {
     const rideCategory = normalizeRideCategory(typeof requestMetadata.rideCategory === "string" ? requestMetadata.rideCategory : undefined);
     const serviceArea = this.tripPickupServiceArea(trip);
     const pricing = this.ridePricingDefaults(serviceArea);
+    const paymentMethod = typeof requestMetadata.paymentMethod === "string" ? requestMetadata.paymentMethod : "CASH";
     const waiting = calculatePickupWaiting(trip.arrivedAtPickupAt, trip.startedAt ?? completedAt, pricing.freePickupWaitSeconds, pricing.waitingChargeKoboPerMinute);
     const flooredRideFare = applyCategoryMinimumRideFare(trip.estimatedFareKobo, rideCategory, serviceArea);
     const rideFare = { ...flooredRideFare, minimumFareApplied: requestMetadata.minimumFareApplied === true || flooredRideFare.minimumFareApplied };
@@ -1203,15 +1207,32 @@ export class TaxiService {
             billableWaitingSeconds: waiting.billableWaitingSeconds,
             waitingChargeKobo: waiting.waitingChargeKobo,
             totalFareKobo: finalFareKobo,
-            paymentMethod: typeof requestMetadata.paymentMethod === "string" ? requestMetadata.paymentMethod : "CASH",
+            paymentMethod,
             completedAt
           }
+        });
+        await this.rideFinance.createCompletedSettlement(tx, {
+          tripId: trip.id,
+          tripReference: trip.tripReference,
+          driverProfileId: profile.id,
+          customerId: trip.customerId,
+          captainName: profile.fullName,
+          serviceArea,
+          rideCategory,
+          paymentMethod,
+          rideFareKobo: rideFare.rideFareKobo,
+          waitingChargeKobo: waiting.waitingChargeKobo,
+          discountKobo: 0,
+          finalCustomerFareKobo: finalFareKobo,
+          finalizedAt: completedAt,
+          actorUserId: userId
         });
         await this.receiptEmails.enqueueAutomatic(tx, receipt, trip.customer.user.email);
         await this.captainWorkState.releaseLock(tx, { userId, mode: CaptainWorkMode.RIDE, workId: trip.id, actorId: userId });
       }
     });
     this.receiptEmails.processPendingSoon();
+    await this.rideFinance.notifyEarningFinalized(trip.id).catch(() => undefined);
     const finalTrip = await this.prisma.taxiTrip.findUnique({ where: { id: updated.id }, include: this.tripInclude() });
     return this.formatTrip(finalTrip ?? updated, { viewer: "driver" });
   }
@@ -1220,6 +1241,9 @@ export class TaxiService {
     this.assertTaxiStagingEnabled();
     const { trip } = await this.requireDriverTrip(userId, tripId);
     if (CLOSED_TAXI_TRIP_STATUSES.includes(trip.status)) throw new BadRequestException("Ride request is already closed");
+    if (trip.status === TaxiTripStatus.STARTED || trip.status === TaxiTripStatus.ARRIVED_DESTINATION) {
+      throw new BadRequestException("A Ride that has started requires KariGO Operations and financial review before cancellation.");
+    }
     return this.cancelTrip(trip.id, TaxiTripStatus.CANCELLED_BY_DRIVER, userId, TaxiTripActorType.DRIVER, dto.reason, "driver");
   }
 
@@ -1810,7 +1834,7 @@ export class TaxiService {
       serviceArea: serviceArea ?? null,
       perKmKobo: this.config.get<number>("RIDE_PER_KM_KOBO", 40000),
       categoryMinimumFaresKobo,
-      karigoCommissionPercent: this.config.get<number>("RIDE_CAPTAIN_COMMISSION_PERCENT", 10),
+      karigoCommissionPercent: this.rideFinance.commissionRatePercent(),
       waitingChargeKoboPerMinute: Math.max(WAITING_CHARGE_KOBO_PER_MINUTE, this.config.get<number>("RIDE_WAITING_CHARGE_KOBO_PER_MINUTE", WAITING_CHARGE_KOBO_PER_MINUTE)),
       waitingGraceMinutes: freePickupWaitSeconds / 60,
       freePickupWaitSeconds,
@@ -2030,14 +2054,33 @@ export class TaxiService {
   }
 
   private async cancelTrip(tripId: string, status: TaxiTripStatus, actorId: string, actorType: TaxiTripActorType, reason?: string, viewer: TaxiTripViewer = "internal") {
+    const original = await this.prisma.taxiTrip.findUnique({ where: { id: tripId }, include: this.tripInclude() });
+    if (!original) throw new NotFoundException("Ride request not found");
+    const requestMetadata = this.tripRequestMetadata(original);
+    const cancelledAt = new Date();
+    const reviewRequired = original.status === TaxiTripStatus.STARTED || original.status === TaxiTripStatus.ARRIVED_DESTINATION;
     const updated = await this.updateTripWithEvent(tripId, {
       status,
       cancellationReason: reason?.trim() || "Ride request cancelled",
-      cancelledAt: new Date(),
+      cancelledAt,
       tripPinHash: null,
       tripPinEncrypted: null
     }, actorId, actorType, "taxi.trip.cancelled", reason || "Ride request cancelled", {
       afterUpdate: async (tx, trip) => {
+        await this.rideFinance.createClosedRideOutcome(tx, {
+          tripId: trip.id,
+          tripReference: trip.tripReference,
+          customerId: trip.customerId,
+          driverProfileId: trip.driverProfileId,
+          captainName: trip.driverProfile?.fullName,
+          serviceArea: this.tripPickupServiceArea(trip),
+          rideCategory: normalizeRideCategory(typeof requestMetadata.rideCategory === "string" ? requestMetadata.rideCategory : undefined),
+          paymentMethod: typeof requestMetadata.paymentMethod === "string" ? requestMetadata.paymentMethod : "CASH",
+          finalizedAt: cancelledAt,
+          actorUserId: actorId,
+          actorType, reviewRequired,
+          reason: reviewRequired ? `Started Ride cancelled for operational/financial review: ${reason || "No reason supplied"}` : "Zero-fee Ride cancellation; no Captain earning or KariGO commission created"
+        });
         if (trip.driverProfile?.userId) {
           await this.captainWorkState.releaseLock(tx, {
             userId: trip.driverProfile.userId,
@@ -2261,6 +2304,7 @@ export class TaxiService {
       monetaryUnit: "KOBO" as const,
       waitingSummary,
       receipt: trip.receipt ? this.formatRideReceipt(trip.receipt, viewer === "customer" && this.receiptEmails.canResend(trip.customer.user.email)) : null,
+      financialSummary: trip.settlement ? (viewer === "customer" ? this.customerFinancialSummary(trip.settlement) : this.operationalFinancialSummary(trip.settlement)) : null,
       evidenceSummary: viewer === "admin" || viewer === "internal" ? this.rideEvidenceSummary(trip) : undefined,
       status: trip.status,
       ridePinRequired: trip.ridePinRequired,
@@ -2334,6 +2378,34 @@ export class TaxiService {
       })),
       launchNotice: this.launchNotice(),
       testModeNotice: this.launchNotice()
+    };
+  }
+
+  private customerFinancialSummary(settlement: NonNullable<TaxiTripWithRelations["settlement"]>) {
+    const pending = settlement.refunds.some((refund) => refund.status === "CASH_REFUND_DUE");
+    return {
+      originalTotalKobo: settlement.finalCustomerFareKobo,
+      refundedKobo: settlement.refundedKobo,
+      currentNetChargedKobo: Math.max(0, settlement.finalCustomerFareKobo - settlement.refundedKobo),
+      refundStatus: settlement.refundedKobo === 0 ? "NONE" : pending ? "CASH_REFUND_DUE" : "CASH_REFUND_SETTLED",
+      refunds: settlement.refunds.map((refund) => ({ id: refund.id, amountKobo: refund.amountKobo, status: refund.status, approvedAt: refund.approvedAt.toISOString(), settledAt: refund.settledAt?.toISOString() ?? null }))
+    };
+  }
+
+  private operationalFinancialSummary(settlement: NonNullable<TaxiTripWithRelations["settlement"]>) {
+    return {
+      id: settlement.id, financialOutcome: settlement.financialOutcome, paymentMethod: settlement.paymentMethod,
+      finalCustomerFareKobo: settlement.finalCustomerFareKobo,
+      commissionRateBasisPoints: settlement.commissionRateBasisPoints,
+      karigoCommissionKobo: settlement.karigoCommissionKobo,
+      captainNetEarningKobo: settlement.captainNetEarningKobo + settlement.captainAdjustmentKobo,
+      cashCollectedKobo: settlement.cashCollectedKobo,
+      platformReceivableKobo: settlement.platformReceivableKobo + settlement.platformAdjustmentKobo,
+      remittedKobo: settlement.remittedKobo,
+      outstandingPlatformKobo: Math.max(0, settlement.platformReceivableKobo + settlement.platformAdjustmentKobo - settlement.remittedKobo),
+      refundedKobo: settlement.refundedKobo,
+      settlementDirection: settlement.settlementDirection,
+      status: settlement.status
     };
   }
 

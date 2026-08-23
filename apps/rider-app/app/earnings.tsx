@@ -5,14 +5,16 @@ import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { CaptainAccess, CaptainWorkState } from "../src/api/captain-access.api";
 import { captainAccessApi } from "../src/api/captain-access.api";
-import type { EarningsSummary } from "../src/api/earnings.api";
+import type { EarningsSummary, RideEarningRecord } from "../src/api/earnings.api";
 import { earningsApi } from "../src/api/earnings.api";
+import type { CaptainRideStatement } from "../src/api/taxi.api";
+import { taxiApi } from "../src/api/taxi.api";
 import { Card, Empty, Message, Protected, Screen, StatusBadge, ui } from "../src/components/ui";
 import { friendlyError } from "../src/lib/errors";
 import { projectCaptainOperationalState } from "../src/lib/captain-operational-state";
 
 type EarningsFilter = "ALL" | "RIDES" | "DELIVERIES";
-type EarningsHistoryRecord = { id: string; mode: "Ride" | "Delivery"; reference: string; amount: string | number; payoutStatus: string; occurredAt: string };
+type EarningsHistoryRecord = { id: string; mode: "Ride" | "Delivery"; reference: string; amount: string | number; payoutStatus: string; occurredAt: string; ride?: RideEarningRecord };
 
 function amountTotal(records: Array<{ riderPayout: string | number }>) {
   return records.reduce((total, record) => total + Number(record.riderPayout ?? 0), 0);
@@ -20,6 +22,7 @@ function amountTotal(records: Array<{ riderPayout: string | number }>) {
 
 export default function Earnings() {
   const [data, setData] = useState<EarningsSummary | null>(null);
+  const [rideStatement, setRideStatement] = useState<CaptainRideStatement | null>(null);
   const [access, setAccess] = useState<CaptainAccess | null>(null);
   const [workState, setWorkState] = useState<CaptainWorkState | null>(null);
   const [filter, setFilter] = useState<EarningsFilter>("ALL");
@@ -37,7 +40,13 @@ export default function Earnings() {
         setError("");
         return;
       }
-      setData(await earningsApi.summary());
+      const projection = projectCaptainOperationalState(resolvedAccess, state);
+      const [summary, statement] = await Promise.all([
+        earningsApi.summary(),
+        projection.hasActiveRideMode ? taxiApi.earningsStatement().catch(() => null) : Promise.resolve(null)
+      ]);
+      setData(summary);
+      setRideStatement(statement);
       setError("");
     } catch (e) {
       setError(friendlyError(e));
@@ -55,7 +64,7 @@ export default function Earnings() {
     ? ["ALL", "RIDES", "DELIVERIES"] : projection.hasActiveRideMode ? ["RIDES"] : projection.hasActiveDeliveryMode ? ["DELIVERIES"] : [];
   const activeFilter = availableFilters.includes(filter) ? filter : availableFilters[0] ?? "ALL";
   const historyRecords: EarningsHistoryRecord[] = [
-    ...rideRecords.map((item) => ({ id: `ride-${item.id}`, mode: "Ride" as const, reference: item.trip?.tripReference ?? item.tripReference, amount: item.riderPayout, payoutStatus: item.payoutStatus, occurredAt: item.trip?.completedAt ?? item.createdAt })),
+    ...rideRecords.map((item) => ({ id: `ride-${item.id}`, mode: "Ride" as const, reference: item.trip?.tripReference ?? item.tripReference, amount: item.riderPayout, payoutStatus: item.payoutStatus, occurredAt: item.trip?.completedAt ?? item.createdAt, ride: item })),
     ...deliveryRecords.map((item) => ({ id: `delivery-${item.id}`, mode: "Delivery" as const, reference: item.order.orderNumber, amount: item.riderPayout, payoutStatus: item.payoutStatus, occurredAt: item.order.completedAt ?? item.createdAt }))
   ].filter((item) => activeFilter === "ALL" || (activeFilter === "RIDES" ? item.mode === "Ride" : item.mode === "Delivery"))
     .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
@@ -70,10 +79,12 @@ export default function Earnings() {
       </View>
 
       <View style={styles.compactGrid}>
-        <Metric label="Pending payout" value={formatNaira(data?.pendingEarnings ?? 0)} icon="clock" />
-        <Metric label="Paid" value={formatNaira(data?.paidEarnings ?? 0)} icon="check-circle" />
+        <Metric label="Pending payout (Delivery)" value={formatNaira(data?.pendingEarnings ?? 0)} icon="clock" />
+        <Metric label="Paid (Delivery)" value={formatNaira(data?.paidEarnings ?? 0)} icon="check-circle" />
         <Metric label="Ride earnings" value={formatNaira(amountTotal(rideRecords))} icon="navigation" />
         <Metric label="Delivery earnings" value={formatNaira(amountTotal(deliveryRecords))} icon="package" />
+        {projection.hasActiveRideMode ? <Metric label="Cash fares collected" value={formatNaira((rideStatement?.cashCollectedKobo ?? 0) / 100)} icon="briefcase" /> : null}
+        {projection.hasActiveRideMode ? <Metric label="KariGO fee outstanding" value={formatNaira((rideStatement?.karigoCommissionDueKobo ?? 0) / 100)} icon="alert-circle" /> : null}
       </View>
 
       <View style={styles.sectionHeading}><Text style={ui.sectionTitle}>Earnings history</Text><Text style={styles.totalLabel}>{formatNaira(data?.totalEarnings ?? 0)} total</Text></View>
@@ -86,16 +97,24 @@ export default function Earnings() {
       {!historyRecords.length ? <Empty message="Completed Captain earnings will appear here." /> : <View style={styles.historySurface}>
         {historyRecords.map((item, index) => <View key={item.id} style={[styles.historyRow, index < historyRecords.length - 1 && styles.rowDivider]}>
           <View style={styles.historyIcon}><Feather name={item.mode === "Ride" ? "navigation" : "package"} size={17} color={brand.colors.primary} /></View>
-          <View style={styles.historyCopy}><Text style={styles.reference}>{item.reference}</Text><Text style={styles.meta}>{item.mode} • {new Date(item.occurredAt).toLocaleDateString()}</Text></View>
+          <View style={styles.historyCopy}>
+            <Text style={styles.reference}>{item.reference}</Text><Text style={styles.meta}>{item.mode}{item.ride ? ` · ${item.ride.rideCategory.replaceAll("_", " ")}` : ""} • {new Date(item.occurredAt).toLocaleDateString()}</Text>
+            {item.ride ? <><Text style={styles.financeLine}>Fare collected: {formatNaira(item.ride.grossCustomerFareKobo / 100)}</Text><Text style={styles.financeLine}>KariGO service fee: {formatNaira(item.ride.karigoCommissionKobo / 100)}</Text>{item.ride.captainAdjustmentKobo !== 0 ? <Text style={styles.financeLine}>Financial adjustment: {formatNaira(item.ride.captainAdjustmentKobo / 100)}</Text> : null}<Text style={styles.financeStrong}>Your earnings: {formatNaira(item.ride.captainEarningKobo / 100)}</Text></> : null}
+          </View>
           <View style={styles.historyAmount}><Text style={styles.amount}>{formatNaira(item.amount)}</Text><StatusBadge status={item.payoutStatus} /></View>
         </View>)}
       </View>}
+      {projection.hasActiveRideMode ? <Card tone="soft"><Text style={ui.sectionTitle}>KariGO commission statement</Text><Text style={ui.pageIntro}>Cash fares stay with you. Only the KariGO service fee is due for reconciliation; this is not a payout.</Text><ReceiptLine label="Remitted" value={formatNaira((rideStatement?.karigoCommissionRemittedKobo ?? 0) / 100)} /><ReceiptLine label="Outstanding" value={formatNaira((rideStatement?.karigoCommissionDueKobo ?? 0) / 100)} />{rideStatement?.remittances.length ? rideStatement.remittances.map((item) => <View key={item.id} style={styles.remittance}><Text style={styles.reference}>{item.reference}</Text><Text style={styles.meta}>{new Date(item.remittedAt).toLocaleDateString()} · {item.method}</Text><Text style={styles.financeStrong}>{formatNaira(item.amountKobo / 100)}</Text></View>) : <Text style={ui.muted}>No commission remittances recorded yet.</Text>}</Card> : null}
     </>}
   </Screen></Protected>;
 }
 
 function Metric({ label, value, icon }: { label: string; value: string; icon: keyof typeof Feather.glyphMap }) {
   return <View style={styles.metric}><Feather name={icon} size={17} color={brand.colors.primary} /><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View>;
+}
+
+function ReceiptLine({ label, value }: { label: string; value: string }) {
+  return <View style={styles.statementLine}><Text style={styles.meta}>{label}</Text><Text style={styles.financeStrong}>{value}</Text></View>;
 }
 
 const styles = StyleSheet.create({
@@ -123,5 +142,9 @@ const styles = StyleSheet.create({
   reference: { color: brand.colors.charcoal, fontSize: 14, fontWeight: "900" },
   meta: { color: brand.colors.muted, fontSize: 11.5 },
   historyAmount: { alignItems: "flex-end", gap: 5 },
-  amount: { color: brand.colors.charcoal, fontSize: 14, fontWeight: "900" }
+  amount: { color: brand.colors.charcoal, fontSize: 14, fontWeight: "900" },
+  financeLine: { color: brand.colors.muted, fontSize: 11.5, lineHeight: 16 },
+  financeStrong: { color: brand.colors.charcoal, fontSize: 12, fontWeight: "900" },
+  statementLine: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  remittance: { borderTopColor: brand.colors.border, borderTopWidth: 1, gap: 3, paddingTop: 9 },
 });

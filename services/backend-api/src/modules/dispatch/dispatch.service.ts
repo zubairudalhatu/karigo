@@ -12,6 +12,7 @@ import {
   RiderStatus,
   SettlementStatus,
   TaxiDriverProfileStatus,
+  TaxiRideFinancialOutcome,
   TaxiTripStatus,
   LaunchServiceType
 } from "@prisma/client";
@@ -411,18 +412,26 @@ export class DispatchService {
           })
         : Promise.resolve([]),
       rideProfile
-        ? this.prisma.taxiTrip.findMany({
-            where: { driverProfileId: rideProfile.id, status: TaxiTripStatus.COMPLETED },
+        ? this.prisma.taxiRideSettlement.findMany({
+            where: { driverProfileId: rideProfile.id, financialOutcome: TaxiRideFinancialOutcome.NORMAL_COMPLETION },
             select: {
               id: true,
+              tripId: true,
               tripReference: true,
-              finalFareKobo: true,
-              estimatedFareKobo: true,
-              completedAt: true,
-              createdAt: true,
-              status: true
+              rideCategory: true,
+              finalCustomerFareKobo: true,
+              karigoCommissionKobo: true,
+              captainNetEarningKobo: true,
+              captainAdjustmentKobo: true,
+              cashCollectedKobo: true,
+              remittedKobo: true,
+              platformReceivableKobo: true,
+              platformAdjustmentKobo: true,
+              finalizedAt: true,
+              status: true,
+              settlementDirection: true
             },
-            orderBy: { completedAt: "desc" }
+            orderBy: { finalizedAt: "desc" }
           })
         : Promise.resolve([])
     ]);
@@ -430,37 +439,54 @@ export class DispatchService {
     startOfToday.setHours(0, 0, 0, 0);
     const startOfWeek = new Date(startOfToday);
     startOfWeek.setDate(startOfToday.getDate() - startOfToday.getDay());
+    const startOfMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);
     const sum = (statuses?: SettlementStatus[]) =>
       records
         .filter((record) => !statuses || statuses.includes(record.payoutStatus))
         .reduce((total, record) => total.add(record.riderPayout), new Prisma.Decimal(0));
-    const rideAmount = (fareKobo?: number | null) => new Prisma.Decimal(fareKobo ?? 0).div(100);
-    const rideTotal = rideRecords.reduce((total, trip) => total.add(rideAmount(trip.finalFareKobo ?? trip.estimatedFareKobo)), new Prisma.Decimal(0));
+    const koboToNaira = (amountKobo: number) => new Prisma.Decimal(amountKobo).div(100);
+    const rideEarningKobo = (settlement: typeof rideRecords[number]) => settlement.captainNetEarningKobo + settlement.captainAdjustmentKobo;
+    const outstandingCommissionKobo = (settlement: typeof rideRecords[number]) => Math.max(0, settlement.platformReceivableKobo + settlement.platformAdjustmentKobo - settlement.remittedKobo);
+    const rideTotal = rideRecords.reduce((total, settlement) => total.add(koboToNaira(rideEarningKobo(settlement))), new Prisma.Decimal(0));
     const recordDate = (value?: Date | null) => value ?? new Date(0);
     const deliveryToday = records.filter((record) => recordDate(record.order.completedAt ?? record.createdAt) >= startOfToday);
     const deliveryThisWeek = records.filter((record) => recordDate(record.order.completedAt ?? record.createdAt) >= startOfWeek);
-    const ridesToday = rideRecords.filter((trip) => recordDate(trip.completedAt ?? trip.createdAt) >= startOfToday);
-    const ridesThisWeek = rideRecords.filter((trip) => recordDate(trip.completedAt ?? trip.createdAt) >= startOfWeek);
+    const ridesToday = rideRecords.filter((settlement) => settlement.finalizedAt >= startOfToday);
+    const ridesThisWeek = rideRecords.filter((settlement) => settlement.finalizedAt >= startOfWeek);
+    const ridesThisMonth = rideRecords.filter((settlement) => settlement.finalizedAt >= startOfMonth);
     const sumDeliveryRecords = (items: typeof records) => items.reduce((total, record) => total.add(record.riderPayout), new Prisma.Decimal(0));
-    const sumRideRecords = (items: typeof rideRecords) => items.reduce((total, trip) => total.add(rideAmount(trip.finalFareKobo ?? trip.estimatedFareKobo)), new Prisma.Decimal(0));
+    const sumRideRecords = (items: typeof rideRecords) => items.reduce((total, settlement) => total.add(koboToNaira(rideEarningKobo(settlement))), new Prisma.Decimal(0));
     return {
       totalEarnings: sum().add(rideTotal),
       todayEarnings: sumDeliveryRecords(deliveryToday).add(sumRideRecords(ridesToday)),
       thisWeekEarnings: sumDeliveryRecords(deliveryThisWeek).add(sumRideRecords(ridesThisWeek)),
+      thisMonthRideEarnings: sumRideRecords(ridesThisMonth),
       pendingEarnings: sum([SettlementStatus.PENDING, SettlementStatus.PROCESSING]),
       paidEarnings: sum([SettlementStatus.PAID]),
+      rideCashCollectedKobo: rideRecords.reduce((sum, settlement) => sum + settlement.cashCollectedKobo, 0),
+      karigoCommissionOutstandingKobo: rideRecords.reduce((sum, settlement) => sum + outstandingCommissionKobo(settlement), 0),
+      karigoCommissionRemittedKobo: rideRecords.reduce((sum, settlement) => sum + settlement.remittedKobo, 0),
       completedDeliveriesCount: records.length,
       completedRidesCount: rideRecords.length,
       completedJobs: records,
-      completedRides: rideRecords.map((trip) => ({
-        id: trip.id,
-        tripReference: trip.tripReference,
-        riderPayout: rideAmount(trip.finalFareKobo ?? trip.estimatedFareKobo),
-        payoutStatus: "RECORDED",
-        createdAt: (trip.completedAt ?? trip.createdAt).toISOString(),
+      completedRides: rideRecords.map((settlement) => ({
+        id: settlement.id,
+        tripReference: settlement.tripReference,
+        grossCustomerFareKobo: settlement.finalCustomerFareKobo,
+        karigoCommissionKobo: settlement.karigoCommissionKobo,
+        captainAdjustmentKobo: settlement.captainAdjustmentKobo,
+        captainEarningKobo: rideEarningKobo(settlement),
+        cashCollectedKobo: settlement.cashCollectedKobo,
+        commissionRemittedKobo: settlement.remittedKobo,
+        outstandingKarigoCommissionKobo: outstandingCommissionKobo(settlement),
+        riderPayout: koboToNaira(rideEarningKobo(settlement)),
+        payoutStatus: settlement.status,
+        settlementDirection: settlement.settlementDirection,
+        rideCategory: settlement.rideCategory,
+        createdAt: settlement.finalizedAt.toISOString(),
         trip: {
-          tripReference: trip.tripReference,
-          completedAt: trip.completedAt?.toISOString() ?? null
+          tripReference: settlement.tripReference,
+          completedAt: settlement.finalizedAt.toISOString()
         }
       }))
     };

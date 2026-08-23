@@ -7,7 +7,9 @@ import {
   RiderStatus,
   SettlementStatus,
   TaxiDriverProfileStatus,
-  TaxiTripStatus
+  TaxiRideFinancialOutcome,
+  TaxiRideSettlementDirection,
+  TaxiRideSettlementStatus
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
@@ -29,7 +31,7 @@ describe("DispatchService", () => {
   const prisma = {
     rider: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn() },
     taxiDriverProfile: { findUnique: jest.fn() },
-    taxiTrip: { findMany: jest.fn() },
+    taxiRideSettlement: { findMany: jest.fn() },
     order: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn() },
     riderEarning: { findMany: jest.fn() },
     captainWorkState: { updateMany: jest.fn() },
@@ -274,13 +276,13 @@ describe("DispatchService", () => {
       id: "ride-profile-1",
       status: TaxiDriverProfileStatus.ACTIVE
     });
-    prisma.taxiTrip.findMany.mockResolvedValue([]);
+    prisma.taxiRideSettlement.findMany.mockResolvedValue([]);
 
     const summary = await service.earnings("ride-user-1");
 
     expect(prisma.riderEarning.findMany).not.toHaveBeenCalled();
-    expect(prisma.taxiTrip.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { driverProfileId: "ride-profile-1", status: TaxiTripStatus.COMPLETED }
+    expect(prisma.taxiRideSettlement.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { driverProfileId: "ride-profile-1", financialOutcome: TaxiRideFinancialOutcome.NORMAL_COMPLETION }
     }));
     expect(summary.completedRidesCount).toBe(0);
     expect(summary.completedDeliveriesCount).toBe(0);
@@ -294,24 +296,36 @@ describe("DispatchService", () => {
       id: "ride-profile-1",
       status: TaxiDriverProfileStatus.ACTIVE
     });
-    prisma.taxiTrip.findMany.mockResolvedValue([{
-      id: "trip-1",
+    prisma.taxiRideSettlement.findMany.mockResolvedValue([{
+      id: "settlement-1",
+      tripId: "trip-1",
       tripReference: "KGO-RIDE-1",
-      finalFareKobo: 350000,
-      estimatedFareKobo: 330000,
-      completedAt,
-      createdAt: completedAt,
-      status: TaxiTripStatus.COMPLETED
+      rideCategory: "ECONOMY",
+      finalCustomerFareKobo: 350000,
+      karigoCommissionKobo: 35000,
+      captainNetEarningKobo: 315000,
+      captainAdjustmentKobo: 0,
+      cashCollectedKobo: 350000,
+      remittedKobo: 10000,
+      platformReceivableKobo: 35000,
+      platformAdjustmentKobo: 0,
+      finalizedAt: completedAt,
+      status: TaxiRideSettlementStatus.PARTIALLY_RECONCILED,
+      settlementDirection: TaxiRideSettlementDirection.CAPTAIN_TO_PLATFORM
     }]);
 
     const summary = await service.earnings("ride-user-1");
 
     expect(summary.completedRidesCount).toBe(1);
     expect(summary.completedRides[0]).toMatchObject({
-      id: "trip-1",
+      id: "settlement-1",
       tripReference: "KGO-RIDE-1",
-      payoutStatus: "RECORDED"
+      grossCustomerFareKobo: 350000,
+      karigoCommissionKobo: 35000,
+      captainEarningKobo: 315000,
+      outstandingKarigoCommissionKobo: 25000,
+      payoutStatus: TaxiRideSettlementStatus.PARTIALLY_RECONCILED
     });
-    expect(String(summary.totalEarnings)).toBe("3500");
+    expect(String(summary.totalEarnings)).toBe("3150");
   });
 });

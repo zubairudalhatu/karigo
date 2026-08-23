@@ -16,6 +16,8 @@ import { ReviewCaptainApplicationDocumentDto } from "../riders/dto/review-captai
 import { CaptainApplicationTrashDto } from "../riders/dto/captain-application-trash.dto";
 import { TaxiCancelDto } from "./dto/taxi-cancel.dto";
 import { UpdateTaxiWaitlistStatusDto } from "./dto/update-taxi-waitlist-status.dto";
+import { AllocateRideRefundResponsibilityDto, CreateRideFinancialAdjustmentDto, CreateRideRefundDto, ListRideFinanceQueryDto, OpenRideFinancialDisputeDto, RecordRideCommissionRemittanceDto, ResolveRideFinancialDisputeDto, SettleCashRideRefundDto } from "./dto/ride-finance.dto";
+import { RideFinanceService } from "./ride-finance.service";
 import { TaxiService } from "./taxi.service";
 
 const TAXI_ADMINS = [
@@ -32,7 +34,51 @@ const TAXI_ADMINS = [
 @Roles(UserRole.ADMIN)
 @AdminRoles(...TAXI_ADMINS)
 export class AdminTaxiController {
-  constructor(private readonly taxi: TaxiService) {}
+  constructor(private readonly taxi: TaxiService, private readonly finance: RideFinanceService) {}
+
+  @Get("finance/summary")
+  @AdminRoles(...TAXI_ADMINS, AdminRole.FINANCE_OFFICER)
+  async financeSummary(@Query() query: ListRideFinanceQueryDto) { return { message: "Ride finance summary retrieved", data: await this.finance.adminSummary(query) }; }
+
+  @Get("finance/settlements")
+  @AdminRoles(...TAXI_ADMINS, AdminRole.FINANCE_OFFICER)
+  async financeSettlements(@Query() query: ListRideFinanceQueryDto) { return { message: "Ride settlements retrieved", data: await this.finance.adminSettlements(query) }; }
+
+  @Get("finance/captains")
+  @AdminRoles(...TAXI_ADMINS, AdminRole.FINANCE_OFFICER)
+  async financeCaptains(@Query() query: ListRideFinanceQueryDto) { return { message: "Ride Captain finance summaries retrieved", data: await this.finance.adminCaptainSummaries(query) }; }
+
+  @Get("finance/export")
+  @AdminRoles(AdminRole.SUPER_ADMIN, AdminRole.FINANCE_OFFICER)
+  async financeExport(@Query() query: ListRideFinanceQueryDto) { return { message: "Ride finance CSV prepared", data: await this.finance.exportCsv(query) }; }
+
+  @Post("finance/remittances")
+  @AdminRoles(AdminRole.SUPER_ADMIN, AdminRole.FINANCE_OFFICER)
+  async recordRemittance(@CurrentUser() user: AuthenticatedUser, @Body() dto: RecordRideCommissionRemittanceDto) { return { message: "Commission remittance recorded", data: await this.finance.recordRemittance(user.id, dto) }; }
+
+  @Post("trips/:tripId/refunds")
+  @AdminRoles(AdminRole.SUPER_ADMIN, AdminRole.FINANCE_OFFICER)
+  async approveRefund(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: CreateRideRefundDto) { return { message: "Cash Ride refund approved", data: await this.finance.approveRefund(user.id, tripId, dto) }; }
+
+  @Post("refunds/:refundId/settle")
+  @AdminRoles(AdminRole.SUPER_ADMIN, AdminRole.FINANCE_OFFICER)
+  async settleRefund(@CurrentUser() user: AuthenticatedUser, @Param("refundId", ParseUUIDPipe) refundId: string, @Body() dto: SettleCashRideRefundDto) { return { message: "Cash Ride refund settled", data: await this.finance.settleCashRefund(user.id, refundId, dto) }; }
+
+  @Patch("refunds/:refundId/responsibility")
+  @AdminRoles(AdminRole.SUPER_ADMIN, AdminRole.FINANCE_OFFICER)
+  async allocateRefundResponsibility(@CurrentUser() user: AuthenticatedUser, @Param("refundId", ParseUUIDPipe) refundId: string, @Body() dto: AllocateRideRefundResponsibilityDto) { return { message: "Ride refund responsibility allocated", data: await this.finance.allocateRefundResponsibility(user.id, refundId, dto) }; }
+
+  @Post("trips/:tripId/adjustments")
+  @AdminRoles(AdminRole.SUPER_ADMIN, AdminRole.FINANCE_OFFICER)
+  async createAdjustment(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: CreateRideFinancialAdjustmentDto) { return { message: "Ride financial adjustment recorded", data: await this.finance.createAdjustment(user.id, tripId, dto) }; }
+
+  @Post("trips/:tripId/dispute")
+  @AdminRoles(AdminRole.SUPER_ADMIN, AdminRole.FINANCE_OFFICER)
+  async openDispute(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: OpenRideFinancialDisputeDto) { return { message: "Ride financial review opened", data: await this.finance.openDispute(user.id, tripId, dto.reason, dto.note) }; }
+
+  @Post("trips/:tripId/dispute/resolve")
+  @AdminRoles(AdminRole.SUPER_ADMIN, AdminRole.FINANCE_OFFICER)
+  async resolveDispute(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string, @Body() dto: ResolveRideFinancialDisputeDto) { return { message: "Ride financial review resolved", data: await this.finance.resolveDispute(user.id, tripId, dto.resolutionNote) }; }
 
   @Get("driver-applications")
   @ApiOperation({ summary: "List Ride Captain applications" })

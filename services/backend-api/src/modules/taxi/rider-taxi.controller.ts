@@ -9,6 +9,7 @@ import { CreateRideMessageDto, ListRideMessagesQueryDto, MarkRideMessagesReadDto
 import { EndRideCallDto } from "./dto/ride-call.dto";
 import { TaxiStartTripDto } from "./dto/taxi-start-trip.dto";
 import { RideLocationEvidenceDto } from "./dto/ride-location-evidence.dto";
+import { RideFinanceService } from "./ride-finance.service";
 import { TaxiService } from "./taxi.service";
 
 @ApiTags("Captain Ride Operations")
@@ -16,7 +17,12 @@ import { TaxiService } from "./taxi.service";
 @Controller("rider/taxi")
 @UseGuards(JwtAuthGuard)
 export class RiderTaxiController {
-  constructor(private readonly taxi: TaxiService) {}
+  constructor(private readonly taxi: TaxiService, private readonly finance: RideFinanceService) {}
+
+  @Get("earnings/statement")
+  async earningsStatement(@CurrentUser() user: AuthenticatedUser) {
+    return { message: "Ride Captain financial statement retrieved", data: await this.finance.captainStatement(user.id) };
+  }
 
   @Get("profile")
   @ApiOperation({ summary: "Get production Ride Captain profile" })

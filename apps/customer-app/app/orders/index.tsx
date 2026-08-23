@@ -107,6 +107,8 @@ function RideDetails({ trip, canBookAnother, onClose, onBookAnother }: { trip: T
   const lifecycle = lifecycleForTrip(trip);
   const fareLabel = trip.status === "COMPLETED" && trip.finalFareKobo ? "Final fare" : "Estimated fare";
   const receipt = trip.receipt;
+  const finance = trip.financialSummary;
+  const hasRefund = Boolean(finance?.refundedKobo);
   return <Card>
     <View style={ui.spaceBetween}>
       <Text style={ui.cardTitle}>{receipt ? "Ride receipt" : lifecycle.receiptAvailable ? "Ride record" : "Ride details"}</Text>
@@ -129,7 +131,10 @@ function RideDetails({ trip, canBookAnother, onClose, onBookAnother }: { trip: T
       {vehicleRegistration(trip) ? <ReceiptRow label="Registration" value={vehicleRegistration(trip)!} /> : null}
       {receipt ? <ReceiptRow label="Ride fare" value={formatRideFareKobo(receipt.rideFareKobo)} /> : <ReceiptRow label={fareLabel} value={formatRideFareKobo(trip.finalFareKobo ?? trip.estimatedFareKobo)} />}
       {receipt ? <ReceiptRow label="Waiting" value={`${Math.floor(receipt.totalWaitingSeconds / 60)}m ${receipt.totalWaitingSeconds % 60}s · ${formatRideFareKobo(receipt.waitingChargeKobo)}`} /> : null}
-      {receipt ? <ReceiptRow label="Total" value={formatRideFareKobo(receipt.totalFareKobo)} /> : null}
+      {receipt ? <ReceiptRow label={hasRefund ? "Original total" : "Total"} value={formatRideFareKobo(receipt.totalFareKobo)} /> : null}
+      {hasRefund ? <ReceiptRow label="Refunded" value={`−${formatRideFareKobo(finance!.refundedKobo)}`} /> : null}
+      {hasRefund ? <ReceiptRow label="Current net" value={formatRideFareKobo(finance!.currentNetChargedKobo ?? 0)} /> : null}
+      {hasRefund ? <ReceiptRow label="Refund status" value={finance!.refundStatus === "CASH_REFUND_DUE" ? "Cash refund pending" : "Cash refund settled"} /> : null}
       <ReceiptRow label="Payment" value={receipt?.paymentMethod ?? ridePaymentPreference(trip)} />
       <ReceiptRow label="Requested" value={rideDate(trip)} />
       {trip.acceptedAt ? <ReceiptRow label="Accepted" value={dateTime(trip.acceptedAt)} /> : null}

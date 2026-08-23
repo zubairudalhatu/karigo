@@ -15,6 +15,7 @@ import { TaxiRoutePreviewDto } from "./dto/taxi-route-preview.dto";
 import { TaxiMapsService } from "./taxi-maps.service";
 import { CreateRideMessageDto, ListRideMessagesQueryDto, MarkRideMessagesReadDto } from "./dto/ride-message.dto";
 import { EndRideCallDto } from "./dto/ride-call.dto";
+import { RideFinanceService } from "./ride-finance.service";
 import { TaxiService } from "./taxi.service";
 
 @ApiTags("Customer KariGO Rides")
@@ -25,8 +26,14 @@ import { TaxiService } from "./taxi.service";
 export class CustomerTaxiController {
   constructor(
     private readonly taxi: TaxiService,
-    private readonly maps: TaxiMapsService
+    private readonly maps: TaxiMapsService,
+    private readonly finance: RideFinanceService
   ) {}
+
+  @Get("trips/:tripId/finance")
+  async tripFinance(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {
+    return { message: "Ride financial outcome retrieved", data: await this.finance.customerTripSummary(user.id, tripId) };
+  }
 
   @Get("ride-categories")
   @ApiOperation({ summary: "List KariGO Rides categories available for booking" })

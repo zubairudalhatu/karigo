@@ -2093,6 +2093,8 @@ function RideReceipt({ trip }: { trip: TaxiTrip }) {
   const captain = captainForTrip(trip);
   const vehicle = vehicleForTrip(trip);
   const receipt = trip.receipt;
+  const finance = trip.financialSummary;
+  const hasRefund = Boolean(finance?.refundedKobo);
   const [emailDelivery, setEmailDelivery] = useState(receipt?.emailDelivery);
   const [emailing, setEmailing] = useState(false);
   const [emailMessage, setEmailMessage] = useState("");
@@ -2143,7 +2145,10 @@ function RideReceipt({ trip }: { trip: TaxiTrip }) {
     {receipt ? <ReceiptRow label="Waiting" value={`${Math.floor(receipt.totalWaitingSeconds / 60)}m ${receipt.totalWaitingSeconds % 60}s · ${formatReceiptKobo(receipt.waitingChargeKobo)}`} /> : null}
     {receipt && receipt.platformFeeKobo ? <ReceiptRow label="Platform fee" value={formatReceiptKobo(receipt.platformFeeKobo)} /> : null}
     {receipt && receipt.discountKobo ? <ReceiptRow label="Discount" value={`−${formatReceiptKobo(receipt.discountKobo)}`} /> : null}
-    {receipt ? <ReceiptRow label="Total" value={formatReceiptKobo(receipt.totalFareKobo)} /> : null}
+    {receipt ? <ReceiptRow label={hasRefund ? "Original total" : "Total"} value={formatReceiptKobo(receipt.totalFareKobo)} /> : null}
+    {hasRefund ? <ReceiptRow label="Refunded" value={`−${formatReceiptKobo(finance!.refundedKobo)}`} /> : null}
+    {hasRefund ? <ReceiptRow label="Current net" value={formatReceiptKobo(finance!.currentNetChargedKobo ?? 0)} /> : null}
+    {hasRefund ? <ReceiptRow label="Refund status" value={finance!.refundStatus === "CASH_REFUND_DUE" ? "Refund approved · Cash refund pending" : "Cash refund settled"} /> : null}
     <ReceiptRow label="Payment" value={receipt?.paymentMethod ?? "Cash"} />
     <ReceiptRow label="Requested" value={formatDateTime(trip.requestedAt)} />
     {trip.acceptedAt ? <ReceiptRow label="Accepted" value={formatDateTime(trip.acceptedAt)} /> : null}

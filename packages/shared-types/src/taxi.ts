@@ -627,6 +627,33 @@ export interface RideEvidenceSummary {
   actualDistanceKm?: number | null;
 }
 
+export interface TaxiRideFinancialSummary {
+  originalTotalKobo?: number;
+  refundedKobo: number;
+  currentNetChargedKobo?: number;
+  refundStatus?: "NONE" | "CASH_REFUND_DUE" | "CASH_REFUND_SETTLED";
+  refunds?: Array<{
+    id: string;
+    amountKobo: number;
+    status: "CASH_REFUND_DUE" | "CASH_REFUND_SETTLED";
+    approvedAt: string;
+    settledAt?: string | null;
+  }>;
+  id?: string;
+  financialOutcome?: "NORMAL_COMPLETION" | "ZERO_VALUE_CANCELLATION" | "FINANCIAL_REVIEW_REQUIRED";
+  paymentMethod?: string;
+  finalCustomerFareKobo?: number;
+  commissionRateBasisPoints?: number;
+  karigoCommissionKobo?: number;
+  captainNetEarningKobo?: number;
+  cashCollectedKobo?: number;
+  platformReceivableKobo?: number;
+  remittedKobo?: number;
+  outstandingPlatformKobo?: number;
+  settlementDirection?: "CAPTAIN_TO_PLATFORM" | "PLATFORM_TO_CAPTAIN" | "NONE";
+  status?: "PENDING" | "PARTIALLY_RECONCILED" | "RECONCILED" | "DISPUTED" | "REFUND_PENDING" | "CANCELLED";
+}
+
 export interface TaxiTrip {
   id: string;
   tripReference: string;
@@ -643,6 +670,7 @@ export interface TaxiTrip {
   monetaryUnit: "KOBO";
   waitingSummary?: RideWaitingSummary;
   receipt?: RideReceipt | null;
+  financialSummary?: TaxiRideFinancialSummary | null;
   evidenceSummary?: RideEvidenceSummary;
   finalFareKobo?: number | null;
   status: TaxiTripStatus;

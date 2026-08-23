@@ -430,6 +430,29 @@ describe("environment configuration", () => {
     })).toThrow("RIDE_RECEIPT_EMAIL_PROVIDER must be mock or resend");
   });
 
+  it("normalizes canonical KariGO Ride commission with legacy fallback and safe default", () => {
+    expect(validateEnvironment({ DATABASE_URL: testDatabaseUrl, JWT_SECRET: "test-secret" }).RIDE_KARIGO_COMMISSION_PERCENT).toBe(10);
+    expect(validateEnvironment({ DATABASE_URL: testDatabaseUrl, JWT_SECRET: "test-secret", RIDE_CAPTAIN_COMMISSION_PERCENT: "12.5" }).RIDE_KARIGO_COMMISSION_PERCENT).toBe(12.5);
+    expect(validateEnvironment({ DATABASE_URL: testDatabaseUrl, JWT_SECRET: "test-secret", RIDE_KARIGO_COMMISSION_PERCENT: "", RIDE_CAPTAIN_COMMISSION_PERCENT: "12.5" }).RIDE_KARIGO_COMMISSION_PERCENT).toBe(12.5);
+    expect(validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      RIDE_KARIGO_COMMISSION_PERCENT: "8.25",
+      RIDE_CAPTAIN_COMMISSION_PERCENT: "12.5"
+    }).RIDE_KARIGO_COMMISSION_PERCENT).toBe(8.25);
+  });
+
+  it("rejects an invalid KariGO Ride commission and keeps cancellation/no-show fees safely off", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      RIDE_KARIGO_COMMISSION_PERCENT: "101"
+    })).toThrow("RIDE_KARIGO_COMMISSION_PERCENT must be a percentage between 0 and 100");
+    const result = validateEnvironment({ DATABASE_URL: testDatabaseUrl, JWT_SECRET: "test-secret" });
+    expect(result.RIDE_CUSTOMER_CANCELLATION_FEE_ENABLED).toBe(false);
+    expect(result.RIDE_NO_SHOW_FEE_ENABLED).toBe(false);
+  });
+
   it("rejects live Flutterwave payments without a webhook secret", () => {
     expect(() => validateEnvironment(flutterwaveLiveConfig({
       FLUTTERWAVE_SECRET_HASH: "",

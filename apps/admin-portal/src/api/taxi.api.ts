@@ -114,6 +114,77 @@ export interface EligibleRideCaptain {
   ineligibilityReasons: string[];
 }
 
+export interface RideFinanceSummary {
+  effectiveKarigoCommissionPercent: number;
+  completedRides: number;
+  grossRideFaresKobo: number;
+  karigoCommissionKobo: number;
+  captainEarningsKobo: number;
+  cashCollectedByCaptainsKobo: number;
+  platformCommissionOutstandingKobo: number;
+  commissionReconciledKobo: number;
+  refundsApprovedKobo: number;
+  refundsPendingKobo: number;
+  unresolvedAdjustments: number;
+  disputedBalanceKobo: number;
+}
+
+export interface RideFinanceRefund {
+  id: string;
+  amountKobo: number;
+  status: "CASH_REFUND_DUE" | "CASH_REFUND_SETTLED";
+  responsibility: "PLATFORM" | "CAPTAIN" | "SHARED" | "REVIEW_REQUIRED";
+  approvedAt: string;
+  settledAt?: string | null;
+}
+
+export interface RideFinanceSettlement {
+  id: string;
+  tripId: string;
+  tripReference: string;
+  finalizedAt: string;
+  captain?: { id: string; fullName: string } | null;
+  customerName: string;
+  serviceArea?: string | null;
+  rideCategory: string;
+  paymentMethod: string;
+  financialOutcome: string;
+  finalCustomerFareKobo: number;
+  rideFareKobo: number;
+  waitingChargeKobo: number;
+  discountKobo: number;
+  commissionRateBasisPoints: number;
+  karigoCommissionKobo: number;
+  captainNetEarningKobo: number;
+  cashCollectedKobo: number;
+  platformReceivableKobo: number;
+  remittedKobo: number;
+  outstandingPlatformKobo: number;
+  refundedKobo: number;
+  settlementDirection: string;
+  status: string;
+  disputeReason?: string | null;
+  refunds: RideFinanceRefund[];
+}
+
+export interface RideCaptainFinanceSummary {
+  driverProfileId: string;
+  captainName: string;
+  grossFaresKobo: number;
+  captainEarningsKobo: number;
+  karigoCommissionDueKobo: number;
+  commissionRemittedKobo: number;
+  outstandingKobo: number;
+  refundsKobo: number;
+}
+
+function financeQuery(dateFrom?: string, dateTo?: string) {
+  const query = new URLSearchParams();
+  if (dateFrom) query.set("dateFrom", `${dateFrom}T00:00:00+01:00`);
+  if (dateTo) query.set("dateTo", `${dateTo}T23:59:59.999+01:00`);
+  return query.size ? `?${query.toString()}` : "";
+}
+
 export const taxiApi = {
   driverApplications: (status?: TaxiApplicationStatus | "ALL") => {
     const query = status && status !== "ALL" ? `?status=${encodeURIComponent(status)}` : "";
@@ -162,5 +233,16 @@ export const taxiApi = {
     pricingDefaults: TaxiRidePricingDefaults;
     launchNotice?: string;
     testModeNotice?: string;
-  }>("admin/taxi/summary")
+  }>("admin/taxi/summary"),
+  financeSummary: (dateFrom?: string, dateTo?: string) => api.get<RideFinanceSummary>(`admin/taxi/finance/summary${financeQuery(dateFrom, dateTo)}`),
+  financeSettlements: (dateFrom?: string, dateTo?: string) => api.get<RideFinanceSettlement[]>(`admin/taxi/finance/settlements${financeQuery(dateFrom, dateTo)}`),
+  financeCaptains: (dateFrom?: string, dateTo?: string) => api.get<RideCaptainFinanceSummary[]>(`admin/taxi/finance/captains${financeQuery(dateFrom, dateTo)}`),
+  financeExport: (dateFrom?: string, dateTo?: string) => api.get<{ fileName: string; csv: string }>(`admin/taxi/finance/export${financeQuery(dateFrom, dateTo)}`),
+  recordCommissionRemittance: (body: { driverProfileId: string; amountKobo: number; reference: string; method: string; remittedAt?: string; note?: string }) => api.post("admin/taxi/finance/remittances", body),
+  approveCashRefund: (tripId: string, body: { amountKobo: number; idempotencyKey: string; reason: string; responsibility?: "PLATFORM" | "CAPTAIN" | "SHARED" | "REVIEW_REQUIRED"; platformResponsibilityKobo?: number; captainResponsibilityKobo?: number; note?: string }) => api.post<RideFinanceRefund>(`admin/taxi/trips/${tripId}/refunds`, body),
+  settleCashRefund: (refundId: string, body: { reference: string; method: string; note?: string }) => api.post<RideFinanceRefund>(`admin/taxi/refunds/${refundId}/settle`, body),
+  allocateRefundResponsibility: (refundId: string, body: { responsibility: "PLATFORM" | "CAPTAIN" | "SHARED"; platformResponsibilityKobo?: number; captainResponsibilityKobo?: number; resolutionNote: string }) => api.patch<RideFinanceRefund>(`admin/taxi/refunds/${refundId}/responsibility`, body),
+  createFinancialAdjustment: (tripId: string, body: { amountKobo: number; direction: "CREDIT" | "DEBIT"; target: "PLATFORM_RECEIVABLE" | "CAPTAIN_EARNING"; responsibility: "PLATFORM" | "CAPTAIN" | "SHARED" | "REVIEW_REQUIRED"; idempotencyKey: string; reason: string; note?: string }) => api.post(`admin/taxi/trips/${tripId}/adjustments`, body),
+  openFinancialDispute: (tripId: string, reason: string, note?: string) => api.post(`admin/taxi/trips/${tripId}/dispute`, { reason, note }),
+  resolveFinancialDispute: (tripId: string, resolutionNote: string) => api.post(`admin/taxi/trips/${tripId}/dispute/resolve`, { resolutionNote })
 };

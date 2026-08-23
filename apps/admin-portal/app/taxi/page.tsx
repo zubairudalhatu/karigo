@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { taxiApi, AdminTaxiDriverApplication, EligibleRideCaptain } from "../../src/api/taxi.api";
+import { taxiApi, AdminTaxiDriverApplication, EligibleRideCaptain, RideCaptainFinanceSummary, RideFinanceSettlement, RideFinanceSummary } from "../../src/api/taxi.api";
 import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
 import { friendlyError } from "../../src/lib/errors";
 import { formatKobo, TaxiApplicationStatus, TaxiDriverProfile, TaxiDriverProfileStatus, TaxiRidePricingDefaults, TaxiTrip, TaxiWaitlistEntry, TaxiWaitlistStatus } from "@karigo/shared-types";
@@ -11,12 +11,13 @@ const reviewStatuses: TaxiApplicationStatus[] = ["UNDER_REVIEW", "CHANGES_REQUES
 const waitlistStatuses: Array<TaxiWaitlistStatus | "ALL"> = ["ALL", "SUBMITTED", "CONTACTED", "INTERESTED", "NOT_INTERESTED", "CONVERTED"];
 const profileStatuses: TaxiDriverProfileStatus[] = ["PENDING_ACTIVATION", "ACTIVE", "SUSPENDED", "DEACTIVATED"];
 
-type Tab = "applications" | "waitlist" | "profiles" | "trips" | "trash" | "summary";
+type Tab = "applications" | "waitlist" | "profiles" | "trips" | "finance" | "trash" | "summary";
 const tabLabels: Record<Tab, string> = {
   applications: "Ride Applications",
   waitlist: "Customer Waitlist",
   profiles: "Ride Captain Profiles",
   trips: "Ride Dispatch",
+  finance: "Ride Finance",
   trash: "Application Trash",
   summary: "Ride Summary"
 };
@@ -32,6 +33,14 @@ type RideSummary = {
   launchNotice?: string;
   testModeNotice?: string;
 };
+function nairaInputToKobo(value: string) {
+  const normalized = value.trim().replaceAll(",", "");
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
+  const [whole, fraction = ""] = normalized.split(".");
+  const kobo = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  return Number.isSafeInteger(kobo) && kobo > 0 ? kobo : null;
+}
+
 
 export default function AdminTaxiPage() {
   const [activeTab, setActiveTab] = useState<Tab>("applications");
@@ -45,6 +54,11 @@ export default function AdminTaxiPage() {
   const [eligibleByTrip, setEligibleByTrip] = useState<Record<string, EligibleRideCaptain[]>>({});
   const [summary, setSummary] = useState<RideSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [financeSummary, setFinanceSummary] = useState<RideFinanceSummary | null>(null);
+  const [financeSettlements, setFinanceSettlements] = useState<RideFinanceSettlement[]>([]);
+  const [financeCaptains, setFinanceCaptains] = useState<RideCaptainFinanceSummary[]>([]);
+  const [financeDateFrom, setFinanceDateFrom] = useState(() => new Date().toISOString().slice(0, 10));
+  const [financeDateTo, setFinanceDateTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [actioning, setActioning] = useState("");
@@ -53,13 +67,16 @@ export default function AdminTaxiPage() {
     setLoading(true);
     setError("");
     try {
-      const [applicationData, waitlistData, profileData, tripData, trashData, summaryData] = await Promise.all([
+      const [applicationData, waitlistData, profileData, tripData, trashData, summaryData, financeSummaryData, settlementData, captainFinanceData] = await Promise.all([
         taxiApi.driverApplications(applicationStatus),
         taxiApi.waitlist(waitlistStatus),
         taxiApi.driverProfiles().catch(() => []),
         taxiApi.trips().catch(() => []),
         taxiApi.driverApplicationsTrash().catch(() => []),
-        taxiApi.summary().catch(() => null)
+        taxiApi.summary().catch(() => null),
+        taxiApi.financeSummary(financeDateFrom, financeDateTo).catch(() => null),
+        taxiApi.financeSettlements(financeDateFrom, financeDateTo).catch(() => []),
+        taxiApi.financeCaptains(financeDateFrom, financeDateTo).catch(() => [])
       ]);
       setApplications(applicationData);
       setWaitlist(waitlistData);
@@ -67,6 +84,9 @@ export default function AdminTaxiPage() {
       setTrips(tripData);
       setTrashedApplications(trashData);
       setSummary(summaryData);
+      setFinanceSummary(financeSummaryData);
+      setFinanceSettlements(settlementData);
+      setFinanceCaptains(captainFinanceData);
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -74,7 +94,7 @@ export default function AdminTaxiPage() {
     }
   }
 
-  useEffect(() => { void load(); }, [applicationStatus, waitlistStatus]);
+  useEffect(() => { void load(); }, [applicationStatus, waitlistStatus, financeDateFrom, financeDateTo]);
 
   async function reviewApplication(id: string, status: TaxiApplicationStatus) {
     const applicantVisibleNote = window.prompt("Applicant-visible note optional") ?? undefined;
@@ -254,6 +274,115 @@ export default function AdminTaxiPage() {
       setActioning("");
     }
   }
+  async function runFinanceAction(key: string, success: string, action: () => Promise<unknown>) {
+    if (actioning) return;
+    setActioning(key);
+    setError("");
+    setMessage("");
+    try {
+      await action();
+      setMessage(success);
+      await load();
+    } catch (cause) {
+      setError(friendlyError(cause));
+    } finally {
+      setActioning("");
+    }
+  }
+
+  async function recordCommissionRemittance(captain: RideCaptainFinanceSummary) {
+    const amountKobo = nairaInputToKobo(window.prompt(`Amount remitted by ${captain.captainName} in naira`) ?? "");
+    if (!amountKobo) return setError("Enter a valid positive remittance amount with at most two decimal places.");
+    const reference = window.prompt("Unique bank/cash remittance reference")?.trim();
+    const method = window.prompt("Method (for example BANK_TRANSFER or CASH)", "BANK_TRANSFER")?.trim();
+    const note = window.prompt("Finance note (optional)")?.trim();
+    if (!reference || !method) return setError("A unique reference and remittance method are required.");
+    if (!window.confirm(`Record ${formatKobo(amountKobo)} against ${captain.captainName}'s KariGO commission balance? This creates an immutable ledger entry.`)) return;
+    await runFinanceAction(`remittance:${captain.driverProfileId}`, "Commission remittance recorded and allocated to the oldest undisputed Ride balances.", () => taxiApi.recordCommissionRemittance({ driverProfileId: captain.driverProfileId, amountKobo, reference, method, note }));
+  }
+
+  async function approveCashRefund(settlement: RideFinanceSettlement) {
+    const amountKobo = nairaInputToKobo(window.prompt(`Cash refund amount for ${settlement.tripReference} in naira`) ?? "");
+    if (!amountKobo) return setError("Enter a valid positive refund amount with at most two decimal places.");
+    const reason = window.prompt("Refund reason (required)")?.trim();
+    if (!reason || reason.length < 5) return setError("A clear refund reason is required.");
+    if (!window.confirm(`Approve ${formatKobo(amountKobo)} as a Cash refund obligation? No gateway refund will run. Responsibility will remain under Finance review until allocated.`)) return;
+    await runFinanceAction(`refund:${settlement.tripId}`, "Cash refund approved. The Customer can now see that the refund is pending.", () => taxiApi.approveCashRefund(settlement.tripId, { amountKobo, reason, idempotencyKey: `admin-cash-refund:${settlement.tripId}:${Date.now()}` }));
+  }
+
+  async function settleCashRefund(refundId: string) {
+    const reference = window.prompt("Customer refund confirmation/reference")?.trim();
+    const method = window.prompt("How did the Customer receive the Cash refund?", "CASH")?.trim();
+    const note = window.prompt("Confirmation note (optional)")?.trim();
+    if (!reference || !method) return setError("A refund confirmation reference and method are required.");
+    if (!window.confirm("Confirm that the Customer actually received this refund? This does not contact a payment gateway.")) return;
+    await runFinanceAction(`refund-settle:${refundId}`, "Cash refund marked as received by the Customer.", () => taxiApi.settleCashRefund(refundId, { reference, method, note }));
+  }
+
+  async function allocateRefund(refund: RideFinanceSettlement["refunds"][number]) {
+    const responsibility = window.prompt("Responsibility: PLATFORM, CAPTAIN or SHARED")?.trim().toUpperCase();
+    if (responsibility !== "PLATFORM" && responsibility !== "CAPTAIN" && responsibility !== "SHARED") return setError("Choose PLATFORM, CAPTAIN or SHARED.");
+    const resolutionNote = window.prompt("Finance allocation resolution note")?.trim();
+    if (!resolutionNote || resolutionNote.length < 5) return setError("A clear allocation resolution note is required.");
+    let platformResponsibilityKobo: number | undefined;
+    let captainResponsibilityKobo: number | undefined;
+    if (responsibility === "SHARED") {
+      platformResponsibilityKobo = nairaInputToKobo(window.prompt("Platform responsibility in naira") ?? "") ?? undefined;
+      captainResponsibilityKobo = nairaInputToKobo(window.prompt("Captain responsibility in naira") ?? "") ?? undefined;
+      if (!platformResponsibilityKobo || !captainResponsibilityKobo || platformResponsibilityKobo + captainResponsibilityKobo !== refund.amountKobo) return setError("Shared allocations must be positive and equal the full refund amount.");
+    }
+    if (!window.confirm(`Allocate this refund to ${responsibility}? The original Ride receipt remains unchanged.`)) return;
+    await runFinanceAction(`refund-allocation:${refund.id}`, "Refund responsibility allocated.", () => taxiApi.allocateRefundResponsibility(refund.id, { responsibility, platformResponsibilityKobo, captainResponsibilityKobo, resolutionNote }));
+  }
+
+  async function createAdjustment(settlement: RideFinanceSettlement) {
+    const amountKobo = nairaInputToKobo(window.prompt("Adjustment amount in naira") ?? "");
+    const direction = window.prompt("Direction: CREDIT or DEBIT")?.trim().toUpperCase();
+    const target = window.prompt("Target: PLATFORM_RECEIVABLE or CAPTAIN_EARNING")?.trim().toUpperCase();
+    const responsibility = window.prompt("Responsibility: PLATFORM, CAPTAIN, SHARED or REVIEW_REQUIRED", "REVIEW_REQUIRED")?.trim().toUpperCase();
+    const reason = window.prompt("Adjustment reason")?.trim();
+    const note = window.prompt("Finance note (optional)")?.trim();
+    if (!amountKobo || (direction !== "CREDIT" && direction !== "DEBIT") || (target !== "PLATFORM_RECEIVABLE" && target !== "CAPTAIN_EARNING") || !["PLATFORM", "CAPTAIN", "SHARED", "REVIEW_REQUIRED"].includes(responsibility ?? "") || !reason || reason.length < 5) return setError("Complete all adjustment fields with valid controlled values.");
+    if (!window.confirm(`Create an immutable ${direction} adjustment of ${formatKobo(amountKobo)} for ${settlement.tripReference}?`)) return;
+    await runFinanceAction(`adjustment:${settlement.tripId}`, "Financial adjustment recorded.", () => taxiApi.createFinancialAdjustment(settlement.tripId, { amountKobo, direction, target, responsibility: responsibility as "PLATFORM" | "CAPTAIN" | "SHARED" | "REVIEW_REQUIRED", idempotencyKey: `admin-ride-adjustment:${settlement.tripId}:${Date.now()}`, reason, note }));
+  }
+
+  async function openFinancialDispute(settlement: RideFinanceSettlement) {
+    const reason = window.prompt("Financial review reason")?.trim();
+    const note = window.prompt("Internal review note (optional)")?.trim();
+    if (!reason || reason.length < 5) return setError("A clear financial review reason is required.");
+    if (!window.confirm(`Place ${settlement.tripReference} into financial review? Remittance will not be applied while disputed.`)) return;
+    await runFinanceAction(`dispute:${settlement.tripId}`, "Ride settlement placed into financial review.", () => taxiApi.openFinancialDispute(settlement.tripId, reason, note));
+  }
+
+  async function resolveFinancialDispute(settlement: RideFinanceSettlement) {
+    const note = window.prompt("Required financial resolution note")?.trim();
+    if (!note || note.length < 5) return setError("A clear resolution note is required.");
+    if (!window.confirm(`Resolve financial review for ${settlement.tripReference}? Unallocated refund responsibility will block this action.`)) return;
+    await runFinanceAction(`dispute-resolve:${settlement.tripId}`, "Financial review resolved.", () => taxiApi.resolveFinancialDispute(settlement.tripId, note));
+  }
+
+  async function exportFinanceCsv() {
+    setActioning("finance-export");
+    setError("");
+    try {
+      const result = await taxiApi.financeExport(financeDateFrom, financeDateTo);
+      const url = URL.createObjectURL(new Blob([result.csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = result.fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setMessage("Ride finance CSV exported without GPS, PIN or private communication data.");
+    } catch (cause) {
+      setError(friendlyError(cause));
+    } finally {
+      setActioning("");
+    }
+  }
+
 
   return <PortalShell>
     <h1>KariGO Ride Dispatch</h1>
@@ -265,7 +394,7 @@ export default function AdminTaxiPage() {
     {message ? <p className="success">{message}</p> : null}
     <ErrorMessage>{error}</ErrorMessage>
     <div className="filters">
-      {(["applications", "waitlist", "profiles", "trips", "trash", "summary"] as Tab[]).map((tab) => <button key={tab} className={activeTab === tab ? "" : "secondary"} onClick={() => setActiveTab(tab)}>{tabLabels[tab]}</button>)}
+      {(["applications", "waitlist", "profiles", "trips", "finance", "trash", "summary"] as Tab[]).map((tab) => <button key={tab} className={activeTab === tab ? "" : "secondary"} onClick={() => setActiveTab(tab)}>{tabLabels[tab]}</button>)}
       <button className="secondary" onClick={() => void load()}>Refresh</button>
     </div>
     {loading ? <Loading /> : <>
@@ -385,6 +514,69 @@ export default function AdminTaxiPage() {
           </div> : null}
           <details><summary>Timeline/events</summary>{trip.events?.map((event) => <p key={event.id}>{event.createdAt} - {event.eventType} - {event.note}</p>)}</details>
         </article>) : <Empty>No Ride requests yet.</Empty>}
+      </section> : null}
+      {activeTab === "finance" ? <section className="section">
+        <div className="notice">
+          <strong>Cash Ride reconciliation</strong>
+          <p>Captains already hold the passenger Cash fare. KariGO records only the commission due from Captain to platform; no Captain payout, gateway refund or automatic transfer is created here.</p>
+        </div>
+        <div className="filters">
+          <label>From<input type="date" value={financeDateFrom} onChange={(event) => setFinanceDateFrom(event.target.value)} /></label>
+          <label>To<input type="date" value={financeDateTo} onChange={(event) => setFinanceDateTo(event.target.value)} /></label>
+          <button className="secondary" disabled={actioning === "finance-export"} onClick={() => void exportFinanceCsv()}>{actioning === "finance-export" ? "Exporting..." : "Export safe CSV"}</button>
+        </div>
+        {financeSummary ? <>
+          <div className="grid">
+            {[
+              ["Completed Rides", String(financeSummary.completedRides)],
+              ["Gross Ride fares", formatKobo(financeSummary.grossRideFaresKobo)],
+              ["KariGO commission earned", formatKobo(financeSummary.karigoCommissionKobo)],
+              ["Captain earnings", formatKobo(financeSummary.captainEarningsKobo)],
+              ["Cash collected by Captains", formatKobo(financeSummary.cashCollectedByCaptainsKobo)],
+              ["Commission outstanding", formatKobo(financeSummary.platformCommissionOutstandingKobo)],
+              ["Commission reconciled", formatKobo(financeSummary.commissionReconciledKobo)],
+              ["Refunds approved", formatKobo(financeSummary.refundsApprovedKobo)],
+              ["Cash refunds pending", formatKobo(financeSummary.refundsPendingKobo)],
+              ["Disputed balance", formatKobo(financeSummary.disputedBalanceKobo)]
+            ].map(([label, value]) => <article className="card" key={label}><span className="muted">{label}</span><p className="metric">{value}</p></article>)}
+          </div>
+          <p className="muted">Effective configured KariGO commission: {financeSummary.effectiveKarigoCommissionPercent}% · Unresolved adjustments: {financeSummary.unresolvedAdjustments}</p>
+        </> : <Empty>No Ride finance summary is available for this period.</Empty>}
+        <h2>Captain reconciliation</h2>
+        {financeCaptains.length ? financeCaptains.map((captain) => <article className="card" key={captain.driverProfileId}>
+          <strong>{captain.captainName}</strong>
+          <p className="muted">Cash fares {formatKobo(captain.grossFaresKobo)} · Captain earnings {formatKobo(captain.captainEarningsKobo)}</p>
+          <p>KariGO commission due: <strong>{formatKobo(captain.karigoCommissionDueKobo)}</strong> · Remitted: <strong>{formatKobo(captain.commissionRemittedKobo)}</strong> · Outstanding: <strong>{formatKobo(captain.outstandingKobo)}</strong></p>
+          <button disabled={Boolean(actioning) || captain.outstandingKobo <= 0} onClick={() => void recordCommissionRemittance(captain)}>Record commission remittance</button>
+        </article>) : <Empty>No Captain settlement positions in this period.</Empty>}
+        <h2>Ride settlements</h2>
+        {financeSettlements.length ? financeSettlements.map((settlement) => <article className="card" key={settlement.id}>
+          <div className="filters"><strong>{settlement.tripReference}</strong><Badge>{settlement.status}</Badge><Badge>{settlement.settlementDirection}</Badge></div>
+          <p className="muted">{new Date(settlement.finalizedAt).toLocaleString()} · {settlement.captain?.fullName ?? "No Captain"} · {settlement.rideCategory.replaceAll("_", " ")} · {settlement.serviceArea ?? "Service area unavailable"}</p>
+          <div className="grid">
+            <div className="item"><span>Customer fare</span><strong>{formatKobo(settlement.finalCustomerFareKobo)}</strong></div>
+            <div className="item"><span>KariGO commission ({(settlement.commissionRateBasisPoints / 100).toFixed(2)}%)</span><strong>{formatKobo(settlement.karigoCommissionKobo)}</strong></div>
+            <div className="item"><span>Captain earning</span><strong>{formatKobo(settlement.captainNetEarningKobo)}</strong></div>
+            <div className="item"><span>Cash collected</span><strong>{formatKobo(settlement.cashCollectedKobo)}</strong></div>
+            <div className="item"><span>Remitted</span><strong>{formatKobo(settlement.remittedKobo)}</strong></div>
+            <div className="item"><span>Outstanding</span><strong>{formatKobo(settlement.outstandingPlatformKobo)}</strong></div>
+            <div className="item"><span>Refunded</span><strong>{formatKobo(settlement.refundedKobo)}</strong></div>
+            <div className="item"><span>Payment</span><strong>{settlement.paymentMethod}</strong></div>
+          </div>
+          {settlement.disputeReason ? <div className="warning"><strong>Financial review</strong><p>{settlement.disputeReason}</p></div> : null}
+          {settlement.refunds.map((refund) => <div className="notice" key={refund.id}>
+            <p><strong>{formatKobo(refund.amountKobo)} refund</strong> <Badge>{refund.status}</Badge> <Badge>{refund.responsibility}</Badge></p>
+            <div className="filters">
+              {refund.responsibility === "REVIEW_REQUIRED" ? <button disabled={Boolean(actioning)} onClick={() => void allocateRefund(refund)}>Allocate responsibility</button> : null}
+              {refund.status === "CASH_REFUND_DUE" ? <button disabled={Boolean(actioning)} onClick={() => void settleCashRefund(refund.id)}>Confirm Cash refund received</button> : null}
+            </div>
+          </div>)}
+          <div className="filters">
+            <button disabled={Boolean(actioning) || settlement.financialOutcome !== "NORMAL_COMPLETION"} onClick={() => void approveCashRefund(settlement)}>Approve Cash refund</button>
+            <button className="secondary" disabled={Boolean(actioning)} onClick={() => void createAdjustment(settlement)}>Create adjustment</button>
+            {settlement.status === "DISPUTED" ? <button className="secondary" disabled={Boolean(actioning)} onClick={() => void resolveFinancialDispute(settlement)}>Resolve review</button> : <button className="secondary" disabled={Boolean(actioning)} onClick={() => void openFinancialDispute(settlement)}>Open financial review</button>}
+          </div>
+        </article>) : <Empty>No Ride settlements in this period. H11 does not fabricate historical Ride finance records.</Empty>}
       </section> : null}
       {activeTab === "trash" ? <section className="section">
         {trashedApplications.length ? trashedApplications.map((application) => <article className="card" key={application.id}>
