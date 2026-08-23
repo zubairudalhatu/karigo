@@ -22,7 +22,7 @@ import { foregroundRideTracePoint } from "../../src/lib/ride-trace-buffer";
 import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { CaptainLocation, CaptainLocationError, captainLocationErrorMessage, distanceMeters, requestCaptainForegroundLocation, toOperationalLocationPayload, watchCaptainForegroundLocation } from "../../src/lib/location";
-import { captainAvailabilityErrorMessage, captainRequestMessage } from "../../src/lib/network-errors";
+import { captainAvailabilityErrorMessage, captainKnownAvailabilityDenial, captainRequestMessage } from "../../src/lib/network-errors";
 import {
   applicantReviewCopy,
   classifyCaptainApplication,
@@ -697,7 +697,12 @@ export default function RiderDashboard() {
         setError("");
       } else if (next) {
         setMessage("");
-        setError("Delivery isn't available for requests yet.");
+        setError(captainKnownAvailabilityDenial([
+          { message: deliveryLaunch?.available === false ? deliveryLaunch.message : null },
+          updated.deliveryEligibility
+        ], { area: mapState.area, service: "Delivery" })
+          ?? deliveryLaunch?.message
+          ?? "Delivery isn't available for requests yet.");
       } else {
         setMessage("Delivery availability is offline.");
         setError("");
@@ -732,7 +737,12 @@ export default function RiderDashboard() {
         setError("");
       } else if (next) {
         setMessage("");
-        setError(rideLaunch?.message ?? "Ride Captain access is not currently available.");
+        setError(captainKnownAvailabilityDenial([
+          { message: rideLaunch?.available === false ? rideLaunch.message : null },
+          updated.rideEligibility
+        ], { area: mapState.area, service: "Ride" })
+          ?? rideLaunch?.message
+          ?? "Ride Captain access is not currently available.");
       } else {
         setMessage("Ride availability is offline.");
         setError("");
@@ -774,11 +784,17 @@ export default function RiderDashboard() {
       } else {
         setMessage("");
         setError(goOnline
-          ? rideLaunch?.available === false && projection.ride.active && deliveryLaunch?.available !== true
+          ? captainKnownAvailabilityDenial([
+            { message: rideLaunch?.available === false && projection.ride.active ? rideLaunch.message : null },
+            { message: deliveryLaunch?.available === false && projection.delivery.active ? deliveryLaunch.message : null },
+            updated.rideEligibility,
+            updated.deliveryEligibility
+          ], { area: mapState.area, service: "work" }) ?? (
+            rideLaunch?.available === false && projection.ride.active && deliveryLaunch?.available !== true
             ? rideLaunch.message
             : deliveryLaunch?.available === false && projection.delivery.active && rideLaunch?.available !== true
               ? deliveryLaunch.message
-              : "We couldn't take you online. Please try again."
+              : "We couldn't take you online. Please try again.")
           : "We couldn't take you offline. Please try again.");
       }
     } catch (e) {

@@ -29,6 +29,8 @@ import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
 import { LaunchOperationsService } from "../launch-operations/launch-operations.service";
 import { captainIsApprovedForOperatingArea, captainOperatingAreaFromCoordinates, captainOperatingAreaFromText } from "../platform/captain-operating-areas";
+import { captainCommissionOutstandingKobo } from "../taxi/ride-commission-policy";
+import { deriveRideEarningPresentation } from "./ride-earning-presentation";
 
 const CLOSED_JOB_STATUSES = [
   OrderStatus.COMPLETED,
@@ -424,12 +426,14 @@ export class DispatchService {
               captainNetEarningKobo: true,
               captainAdjustmentKobo: true,
               cashCollectedKobo: true,
+              paymentMethod: true,
               remittedKobo: true,
               platformReceivableKobo: true,
               platformAdjustmentKobo: true,
               finalizedAt: true,
               status: true,
-              settlementDirection: true
+              settlementDirection: true,
+              refunds: { select: { platformResponsibilityKobo: true } }
             },
             orderBy: { finalizedAt: "desc" }
           })
@@ -446,7 +450,7 @@ export class DispatchService {
         .reduce((total, record) => total.add(record.riderPayout), new Prisma.Decimal(0));
     const koboToNaira = (amountKobo: number) => new Prisma.Decimal(amountKobo).div(100);
     const rideEarningKobo = (settlement: typeof rideRecords[number]) => settlement.captainNetEarningKobo + settlement.captainAdjustmentKobo;
-    const outstandingCommissionKobo = (settlement: typeof rideRecords[number]) => Math.max(0, settlement.platformReceivableKobo + settlement.platformAdjustmentKobo - settlement.remittedKobo);
+    const outstandingCommissionKobo = (settlement: typeof rideRecords[number]) => captainCommissionOutstandingKobo(settlement);
     const rideTotal = rideRecords.reduce((total, settlement) => total.add(koboToNaira(rideEarningKobo(settlement))), new Prisma.Decimal(0));
     const recordDate = (value?: Date | null) => value ?? new Date(0);
     const deliveryToday = records.filter((record) => recordDate(record.order.completedAt ?? record.createdAt) >= startOfToday);
@@ -469,7 +473,14 @@ export class DispatchService {
       completedDeliveriesCount: records.length,
       completedRidesCount: rideRecords.length,
       completedJobs: records,
-      completedRides: rideRecords.map((settlement) => ({
+      completedRides: rideRecords.map((settlement) => {
+        const outstandingKarigoCommissionKobo = outstandingCommissionKobo(settlement);
+        const presentation = deriveRideEarningPresentation({
+          paymentMethod: settlement.paymentMethod,
+          outstandingKarigoCommissionKobo,
+          settlementStatus: settlement.status
+        });
+        return {
         id: settlement.id,
         tripReference: settlement.tripReference,
         grossCustomerFareKobo: settlement.finalCustomerFareKobo,
@@ -478,9 +489,11 @@ export class DispatchService {
         captainEarningKobo: rideEarningKobo(settlement),
         cashCollectedKobo: settlement.cashCollectedKobo,
         commissionRemittedKobo: settlement.remittedKobo,
-        outstandingKarigoCommissionKobo: outstandingCommissionKobo(settlement),
+        outstandingKarigoCommissionKobo,
         riderPayout: koboToNaira(rideEarningKobo(settlement)),
         payoutStatus: settlement.status,
+        paymentMethod: settlement.paymentMethod,
+        ...presentation,
         settlementDirection: settlement.settlementDirection,
         rideCategory: settlement.rideCategory,
         createdAt: settlement.finalizedAt.toISOString(),
@@ -488,7 +501,8 @@ export class DispatchService {
           tripReference: settlement.tripReference,
           completedAt: settlement.finalizedAt.toISOString()
         }
-      }))
+        };
+      })
     };
   }
 

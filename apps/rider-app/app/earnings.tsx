@@ -14,7 +14,7 @@ import { friendlyError } from "../src/lib/errors";
 import { projectCaptainOperationalState } from "../src/lib/captain-operational-state";
 
 type EarningsFilter = "ALL" | "RIDES" | "DELIVERIES";
-type EarningsHistoryRecord = { id: string; mode: "Ride" | "Delivery"; reference: string; amount: string | number; payoutStatus: string; occurredAt: string; ride?: RideEarningRecord };
+type EarningsHistoryRecord = { id: string; mode: "Ride" | "Delivery"; reference: string; amount: string | number; displayStatus: string; secondaryStatus?: string | null; occurredAt: string; ride?: RideEarningRecord };
 
 function amountTotal(records: Array<{ riderPayout: string | number }>) {
   return records.reduce((total, record) => total + Number(record.riderPayout ?? 0), 0);
@@ -107,8 +107,8 @@ export default function Earnings() {
     ? ["ALL", "RIDES", "DELIVERIES"] : projection.hasActiveRideMode ? ["RIDES"] : projection.hasActiveDeliveryMode ? ["DELIVERIES"] : [];
   const activeFilter = availableFilters.includes(filter) ? filter : availableFilters[0] ?? "ALL";
   const historyRecords: EarningsHistoryRecord[] = [
-    ...rideRecords.map((item) => ({ id: `ride-${item.id}`, mode: "Ride" as const, reference: item.trip?.tripReference ?? item.tripReference, amount: item.riderPayout, payoutStatus: item.payoutStatus, occurredAt: item.trip?.completedAt ?? item.createdAt, ride: item })),
-    ...deliveryRecords.map((item) => ({ id: `delivery-${item.id}`, mode: "Delivery" as const, reference: item.order.orderNumber, amount: item.riderPayout, payoutStatus: item.payoutStatus, occurredAt: item.order.completedAt ?? item.createdAt }))
+    ...rideRecords.map((item) => ({ id: `ride-${item.id}`, mode: "Ride" as const, reference: item.trip?.tripReference ?? item.tripReference, amount: item.riderPayout, displayStatus: item.displayStatus, secondaryStatus: item.secondaryDisplayStatus, occurredAt: item.trip?.completedAt ?? item.createdAt, ride: item })),
+    ...deliveryRecords.map((item) => ({ id: `delivery-${item.id}`, mode: "Delivery" as const, reference: item.order.orderNumber, amount: item.riderPayout, displayStatus: item.payoutStatus, occurredAt: item.order.completedAt ?? item.createdAt }))
   ].filter((item) => activeFilter === "ALL" || (activeFilter === "RIDES" ? item.mode === "Ride" : item.mode === "Delivery"))
     .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
 
@@ -144,7 +144,7 @@ export default function Earnings() {
             <Text style={styles.reference}>{item.reference}</Text><Text style={styles.meta}>{item.mode}{item.ride ? ` · ${item.ride.rideCategory.replaceAll("_", " ")}` : ""} • {new Date(item.occurredAt).toLocaleDateString()}</Text>
             {item.ride ? <><Text style={styles.financeLine}>Fare collected: {formatNaira(item.ride.grossCustomerFareKobo / 100)}</Text><Text style={styles.financeLine}>KariGO service fee: {formatNaira(item.ride.karigoCommissionKobo / 100)}</Text>{item.ride.captainAdjustmentKobo !== 0 ? <Text style={styles.financeLine}>Financial adjustment: {formatNaira(item.ride.captainAdjustmentKobo / 100)}</Text> : null}<Text style={styles.financeStrong}>Your earnings: {formatNaira(item.ride.captainEarningKobo / 100)}</Text></> : null}
           </View>
-          <View style={styles.historyAmount}><Text style={styles.amount}>{formatNaira(item.amount)}</Text><StatusBadge status={item.payoutStatus} /></View>
+          <View style={styles.historyAmount}><Text style={styles.amount}>{formatNaira(item.amount)}</Text><StatusBadge status={item.displayStatus} />{item.secondaryStatus === "KARIGO_FEE_DUE" ? <Text style={ui.muted}>KariGO fee due</Text> : null}</View>
         </View>)}
       </View>}
       {projection.hasActiveRideMode ? <Card tone="soft">

@@ -306,12 +306,14 @@ describe("DispatchService", () => {
       captainNetEarningKobo: 315000,
       captainAdjustmentKobo: 0,
       cashCollectedKobo: 350000,
+      paymentMethod: "CASH",
       remittedKobo: 10000,
       platformReceivableKobo: 35000,
       platformAdjustmentKobo: 0,
       finalizedAt: completedAt,
       status: TaxiRideSettlementStatus.PARTIALLY_RECONCILED,
-      settlementDirection: TaxiRideSettlementDirection.CAPTAIN_TO_PLATFORM
+      settlementDirection: TaxiRideSettlementDirection.CAPTAIN_TO_PLATFORM,
+      refunds: []
     }]);
 
     const summary = await service.earnings("ride-user-1");
@@ -324,8 +326,13 @@ describe("DispatchService", () => {
       karigoCommissionKobo: 35000,
       captainEarningKobo: 315000,
       outstandingKarigoCommissionKobo: 25000,
-      payoutStatus: TaxiRideSettlementStatus.PARTIALLY_RECONCILED
+      payoutStatus: TaxiRideSettlementStatus.PARTIALLY_RECONCILED,
+      paymentCollectionState: "CASH_COLLECTED",
+      captainSettlementState: "KARIGO_FEE_DUE",
+      captainPayoutState: "NOT_APPLICABLE",
+      displayStatus: "CASH_COLLECTED"
     });
+    expect(tx.riderEarning.upsert).not.toHaveBeenCalled();
     expect(String(summary.totalEarnings)).toBe("3150");
   });
 });

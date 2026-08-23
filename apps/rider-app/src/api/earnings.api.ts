@@ -6,6 +6,12 @@ export interface RideEarningRecord {
   id: string;
   tripReference: string;
   riderPayout: string | number;
+  paymentMethod: string;
+  paymentCollectionState: "CASH_COLLECTED" | "ELECTRONIC_COLLECTED";
+  captainSettlementState: "KARIGO_FEE_DUE" | "RECONCILED" | "PAYOUT_PENDING" | "PAID";
+  captainPayoutState: "NOT_APPLICABLE" | "PENDING" | "PAID";
+  displayStatus: "CASH_COLLECTED" | "RECONCILED" | "PAYOUT_PENDING" | "PAID";
+  secondaryDisplayStatus: "KARIGO_FEE_DUE" | null;
   payoutStatus: string;
   createdAt: string;
   rideCategory: string;
