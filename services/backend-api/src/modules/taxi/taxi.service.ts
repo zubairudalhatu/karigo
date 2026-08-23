@@ -66,6 +66,7 @@ import { RideLocationEvidenceDto } from "./dto/ride-location-evidence.dto";
 import { calculatePickupWaiting, evaluateRideGeofence, FREE_PICKUP_WAIT_SECONDS, traceDistanceKm, WAITING_CHARGE_KOBO_PER_MINUTE } from "./ride-integrity";
 import { applyCategoryMinimumRideFare, normalizeRideCategory, rideCategoryMinimumsForServiceArea } from "./ride-pricing-policy";
 import { RideRealtimeService } from "./ride-realtime.service";
+import { RideReceiptEmailService } from "./ride-receipt-email.service";
 import { TaxiApplicationStatusQueryDto } from "./dto/taxi-application-status-query.dto";
 import { UpdateTaxiWaitlistStatusDto } from "./dto/update-taxi-waitlist-status.dto";
 import {
@@ -146,10 +147,10 @@ const TAXI_WAITLIST_SELECT = {
 } satisfies Prisma.TaxiWaitlistEntrySelect;
 
 const TAXI_TRIP_INCLUDE = {
-  customer: { include: { user: { select: { id: true, fullName: true, phoneNumber: true } } } },
+  customer: { include: { user: { select: { id: true, fullName: true, phoneNumber: true, email: true } } } },
   driverProfile: true,
   events: { orderBy: { createdAt: "asc" as const } },
-  receipt: true,
+  receipt: { include: { emailDeliveries: { orderBy: { createdAt: "desc" as const } } } },
   tracePoints: { orderBy: { recordedAt: "asc" as const }, take: 5_000 }
 } satisfies Prisma.TaxiTripInclude;
 
@@ -262,7 +263,8 @@ export class TaxiService {
     private readonly notifications: NotificationsService,
     private readonly launchOperations: LaunchOperationsService,
     private readonly rideCommunications: RideCommunicationsService,
-    private readonly rideRealtime: RideRealtimeService
+    private readonly rideRealtime: RideRealtimeService,
+    private readonly receiptEmails: RideReceiptEmailService
   ) {}
 
   async joinWaitlist(dto: CreateTaxiWaitlistDto) {
@@ -809,9 +811,19 @@ export class TaxiService {
   async customerRideReceipt(userId: string, tripId: string) {
     const trip = await this.requireCustomerTrip(userId, tripId);
     if (trip.status !== TaxiTripStatus.COMPLETED) throw new BadRequestException("Ride receipt is available after the Ride is completed");
-    const receipt = trip.receipt ?? await this.prisma.taxiRideReceipt.findUnique({ where: { tripId } });
+    const receipt = trip.receipt;
     if (!receipt) throw new NotFoundException("Ride receipt is not available");
-    return this.formatRideReceipt(receipt);
+    return this.formatRideReceipt(receipt, this.receiptEmails.canResend(trip.customer.user.email));
+  }
+
+  async customerResendRideReceipt(userId: string, tripId: string) {
+    return this.receiptEmails.requestCustomerResend(userId, tripId);
+  }
+
+  async adminRetryRideReceiptEmail(adminUserId: string, tripId: string) {
+    const result = await this.receiptEmails.retryFailed(adminUserId, tripId);
+    await this.audit.record(adminUserId, "admin.taxi.ride_receipt_email.retry_requested", "TaxiTrip", tripId, { status: result.status, attemptCount: result.attemptCount });
+    return result;
   }
 
   async customerRideMessages(userId: string, tripId: string, query: ListRideMessagesQueryDto) {
@@ -1064,6 +1076,8 @@ export class TaxiService {
         actorId: userId
       })
     });
+    await this.rideCommunications.endCallsForTerminalRide(trip.id, "RIDE_ASSIGNMENT_DECLINED").catch(() => undefined);
+    this.rideRealtime.revokeRideAccess(trip.id, userId);
     return this.formatTrip(updated, { viewer: "driver" });
   }
 
@@ -1166,7 +1180,7 @@ export class TaxiService {
     }, userId, TaxiTripActorType.DRIVER, "RIDE_COMPLETED_AND_FARE_FINALISED", "Ride completed and authoritative fare finalised", {
       metadata: { rideFareKobo: rideFare.rideFareKobo, minimumFareApplied: rideFare.minimumFareApplied, ...waiting, finalFareKobo, actualDistanceKm, tracePointCount: journeyTrace.length, serverRecordedAt: completedAt.toISOString() },
       afterUpdate: async (tx) => {
-        await tx.taxiRideReceipt.upsert({
+        const receipt = await tx.taxiRideReceipt.upsert({
           where: { tripId: trip.id },
           update: {},
           create: {
@@ -1193,9 +1207,11 @@ export class TaxiService {
             completedAt
           }
         });
+        await this.receiptEmails.enqueueAutomatic(tx, receipt, trip.customer.user.email);
         await this.captainWorkState.releaseLock(tx, { userId, mode: CaptainWorkMode.RIDE, workId: trip.id, actorId: userId });
       }
     });
+    this.receiptEmails.processPendingSoon();
     const finalTrip = await this.prisma.taxiTrip.findUnique({ where: { id: updated.id }, include: this.tripInclude() });
     return this.formatTrip(finalTrip ?? updated, { viewer: "driver" });
   }
@@ -2136,7 +2152,7 @@ export class TaxiService {
     return metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata as Record<string, unknown> : {};
   }
 
-  private formatRideReceipt(receipt: Prisma.TaxiRideReceiptGetPayload<Record<string, never>>) {
+  private formatRideReceipt(receipt: NonNullable<TaxiTripWithRelations["receipt"]>, canResend = false) {
     return {
       id: receipt.id,
       tripId: receipt.tripId,
@@ -2163,7 +2179,8 @@ export class TaxiService {
       totalFareKobo: receipt.totalFareKobo,
       paymentMethod: receipt.paymentMethod,
       completedAt: receipt.completedAt.toISOString(),
-      createdAt: receipt.createdAt.toISOString()
+      createdAt: receipt.createdAt.toISOString(),
+      emailDelivery: this.receiptEmails.deliverySummary(receipt.emailDeliveries, canResend)
     };
   }
 
@@ -2243,7 +2260,7 @@ export class TaxiService {
       finalFareKobo: trip.finalFareKobo,
       monetaryUnit: "KOBO" as const,
       waitingSummary,
-      receipt: trip.receipt ? this.formatRideReceipt(trip.receipt) : null,
+      receipt: trip.receipt ? this.formatRideReceipt(trip.receipt, viewer === "customer" && this.receiptEmails.canResend(trip.customer.user.email)) : null,
       evidenceSummary: viewer === "admin" || viewer === "internal" ? this.rideEvidenceSummary(trip) : undefined,
       status: trip.status,
       ridePinRequired: trip.ridePinRequired,

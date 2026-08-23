@@ -240,6 +240,21 @@ export default function AdminTaxiPage() {
     await load();
   }
 
+  async function retryReceiptEmail(tripId: string) {
+    if (!window.confirm("Retry this failed Ride receipt email? A successful delivery cannot be retried.")) return;
+    setActioning(`${tripId}:receipt-email`);
+    setError("");
+    try {
+      await taxiApi.retryReceiptEmail(tripId);
+      setMessage("Ride receipt email retry requested.");
+      await load();
+    } catch (cause) {
+      setError(friendlyError(cause));
+    } finally {
+      setActioning("");
+    }
+  }
+
   return <PortalShell>
     <h1>KariGO Ride Dispatch</h1>
     <p className="muted">KariGO Rides uses manual Operations dispatch for launch. Admin assigns approved online Ride Captains and monitors status history; automatic matching, online Ride payment and payout automation remain disabled.</p>
@@ -333,6 +348,11 @@ export default function AdminTaxiPage() {
           <p className="muted">Fare estimate: {formatKobo(trip.estimatedFareKobo)}</p>
           <p className="muted">PIN required: {trip.ridePinRequired ? "Yes" : "No"} · PIN verified: {trip.evidenceSummary?.pinVerified ? "Yes" : "No"}</p>
           {trip.finalFareKobo ? <p className="muted">Final fare: {formatKobo(trip.finalFareKobo)}{trip.receipt ? ` · Receipt ${trip.receipt.receiptNumber}` : ""}</p> : null}
+          {trip.receipt?.emailDelivery ? <p className="muted">Receipt email: {trip.receipt.emailDelivery.status.replaceAll("_", " ")}
+            {trip.receipt.emailDelivery.maskedRecipientEmail ? ` · ${trip.receipt.emailDelivery.maskedRecipientEmail}` : ""}
+            {trip.receipt.emailDelivery.sentAt ? ` · sent ${new Date(trip.receipt.emailDelivery.sentAt).toLocaleString()}` : ""}
+            {` · ${trip.receipt.emailDelivery.attemptCount} attempt${trip.receipt.emailDelivery.attemptCount === 1 ? "" : "s"}`}
+          </p> : null}
           {trip.waitingSummary ? <p className="muted">Pickup waiting: {trip.waitingSummary.totalWaitingSeconds}s · {formatKobo(trip.waitingSummary.waitingChargeKobo)}</p> : null}
           {trip.evidenceSummary ? <p className="muted">
             Integrity: pickup {trip.evidenceSummary.pickupOverrideUsed ? "override" : trip.evidenceSummary.pickupArrivalVerified ? "verified" : "pending"}
@@ -351,6 +371,7 @@ export default function AdminTaxiPage() {
 
             <button className="secondary" onClick={() => void assignDriver(trip.id)}>Assign by ID</button>
             <button className="secondary" onClick={() => void cancelTrip(trip.id)}>Cancel Ride</button>
+            {trip.receipt?.emailDelivery?.status === "FAILED" ? <button className="secondary" disabled={actioning === `${trip.id}:receipt-email`} onClick={() => void retryReceiptEmail(trip.id)}>Retry receipt email</button> : null}
           </div>
           {eligibleByTrip[trip.id]?.length ? <div className="notice">
             <strong>Eligible Ride Captains</strong>

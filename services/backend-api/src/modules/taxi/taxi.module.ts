@@ -11,6 +11,7 @@ import { RiderTaxiController } from "./rider-taxi.controller";
 import { RideCallService } from "./ride-call.service";
 import { RideRealtimeGateway } from "./ride-realtime.gateway";
 import { RideRealtimeService } from "./ride-realtime.service";
+import { RideReceiptEmailService } from "./ride-receipt-email.service";
 import { TaxiMapsService } from "./taxi-maps.service";
 import { TaxiController } from "./taxi.controller";
 import { TaxiService } from "./taxi.service";
@@ -24,6 +25,7 @@ import { TaxiService } from "./taxi.service";
     RideCallService,
     RideCommunicationsService,
     RideRealtimeService,
+    RideReceiptEmailService,
     RideRealtimeGateway,
     CaptainUploadStorageService,
     ApplicationNotificationsService,

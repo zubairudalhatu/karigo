@@ -513,6 +513,29 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       requireValue(config, "RESEND_FROM_EMAIL");
     }
   }
+  const rideReceiptEmailEnabled = booleanFlag(
+    config.RIDE_RECEIPT_EMAIL_ENABLED,
+    "RIDE_RECEIPT_EMAIL_ENABLED",
+    false
+  );
+  const rideReceiptEmailProvider =
+    typeof config.RIDE_RECEIPT_EMAIL_PROVIDER === "string" && config.RIDE_RECEIPT_EMAIL_PROVIDER.trim()
+      ? config.RIDE_RECEIPT_EMAIL_PROVIDER.trim().toLowerCase()
+      : "mock";
+  if (!["mock", "resend"].includes(rideReceiptEmailProvider)) {
+    throw new Error("RIDE_RECEIPT_EMAIL_PROVIDER must be mock or resend");
+  }
+  if (rideReceiptEmailEnabled && appEnvironment === "production" && rideReceiptEmailProvider !== "resend") {
+    throw new Error("Production Ride receipt email requires RIDE_RECEIPT_EMAIL_PROVIDER=resend");
+  }
+  if (rideReceiptEmailEnabled && rideReceiptEmailProvider === "resend") {
+    const resendBaseUrl = typeof config.RESEND_BASE_URL === "string" && config.RESEND_BASE_URL.trim()
+      ? config.RESEND_BASE_URL.trim()
+      : "https://api.resend.com";
+    if (!resendBaseUrl.startsWith("https://")) throw new Error("RESEND_BASE_URL must use HTTPS");
+    requireValue(config, "RESEND_API_KEY");
+    requireValue(config, "RESEND_FROM_EMAIL");
+  }
   const karigoEmailLogoUrl = typeof config.KARIGO_EMAIL_LOGO_URL === "string"
     ? config.KARIGO_EMAIL_LOGO_URL.trim()
     : "";
@@ -848,6 +871,8 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       : "support@karigo.com.ng",
     ACCOUNT_ACTIVATION_EMAIL_ENABLED: accountActivationEmailEnabled,
     ACCOUNT_ACTIVATION_EMAIL_PROVIDER: accountActivationEmailProvider,
+    RIDE_RECEIPT_EMAIL_ENABLED: rideReceiptEmailEnabled,
+    RIDE_RECEIPT_EMAIL_PROVIDER: rideReceiptEmailProvider,
     RESEND_BASE_URL: typeof config.RESEND_BASE_URL === "string" && config.RESEND_BASE_URL.trim()
       ? config.RESEND_BASE_URL.trim()
       : "https://api.resend.com",

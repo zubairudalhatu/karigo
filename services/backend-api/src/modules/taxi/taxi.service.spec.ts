@@ -173,7 +173,7 @@ const taxiTrip = {
   updatedAt: now,
   customer: {
     id: customerProfile.id,
-    user: { id: "customer-user", fullName: "Demo Customer", phoneNumber: "+2348030000001" }
+    user: { id: "customer-user", fullName: "Demo Customer", phoneNumber: "+2348030000001", email: "customer@example.test" }
   },
   driverProfile: null,
   events: [],
@@ -222,6 +222,9 @@ describe("TaxiService", () => {
       findUniqueOrThrow: jest.fn(),
       update: jest.fn()
     },
+    taxiRideReceipt: {
+      upsert: jest.fn()
+    },
     taxiTripEvent: {
       create: jest.fn()
     },
@@ -266,7 +269,12 @@ describe("TaxiService", () => {
     endCallsForTerminalRide: jest.fn().mockResolvedValue(undefined)
   };
   const rideRealtime = {
-    emitToRide: jest.fn(), schedulePaidWaiting: jest.fn(), stopWaiting: jest.fn()
+    emitToRide: jest.fn(), schedulePaidWaiting: jest.fn(), stopWaiting: jest.fn(), revokeRideAccess: jest.fn()
+  };
+  const receiptEmails = {
+    canResend: jest.fn(() => false),
+    enqueueAutomatic: jest.fn(),
+    processPendingSoon: jest.fn()
   };
 
   const service = new TaxiService(
@@ -279,7 +287,8 @@ describe("TaxiService", () => {
     notifications as unknown as NotificationsService,
     launchOperations as never,
     rideCommunications as never,
-    rideRealtime as never
+    rideRealtime as never,
+    receiptEmails as never
   );
 
   function enableTaxiStaging() {
@@ -361,6 +370,7 @@ describe("TaxiService", () => {
     }));
     prisma.taxiTrip.count.mockResolvedValue(1);
     prisma.taxiTripEvent.create.mockResolvedValue({});
+    prisma.taxiRideReceipt.upsert.mockResolvedValue({ id: "receipt-id", tripId: taxiTrip.id });
     prisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<unknown>) => callback(prisma));
     audit.record.mockResolvedValue({});
     config.get.mockImplementation((_key: string, fallback?: unknown) => fallback);
@@ -988,6 +998,43 @@ describe("TaxiService", () => {
       })
     }));
     expect(result.status).toBe(TaxiTripStatus.ACCEPTED);
+  });
+
+  it("atomically creates one immutable receipt and automatic email boundary without duplicating repeated completion", async () => {
+    enableTaxiStaging();
+    const arrivedTrip = {
+      ...taxiTrip,
+      driverProfileId: driverProfile.id,
+      driverProfile,
+      status: TaxiTripStatus.ARRIVED_DESTINATION,
+      arrivedAtPickupAt: new Date(now.getTime() - 1_800_000),
+      startedAt: new Date(now.getTime() - 1_500_000),
+      arrivedAtDestinationAt: now,
+      tripPinHash: null,
+      tripPinEncrypted: null,
+      events: [{ eventType: "taxi.trip.requested", metadata: { rideCategory: "ECONOMY", paymentMethod: "CASH" }, createdAt: now }],
+      tracePoints: []
+    };
+    prisma.taxiTrip.findFirst.mockResolvedValueOnce(arrivedTrip);
+
+    await service.riderCompleteTrip("rider-user", taxiTrip.id);
+
+    expect(prisma.taxiRideReceipt.upsert).toHaveBeenCalledTimes(1);
+    expect(receiptEmails.enqueueAutomatic).toHaveBeenCalledTimes(1);
+    expect(receiptEmails.enqueueAutomatic).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({ id: "receipt-id", tripId: taxiTrip.id }),
+      "customer@example.test"
+    );
+    expect(receiptEmails.processPendingSoon).toHaveBeenCalledTimes(1);
+
+    jest.clearAllMocks();
+    enableTaxiStaging();
+    prisma.taxiDriverProfile.findUnique.mockResolvedValue(driverProfile);
+    prisma.taxiTrip.findFirst.mockResolvedValueOnce({ ...arrivedTrip, status: TaxiTripStatus.COMPLETED, completedAt: now });
+    await service.riderCompleteTrip("rider-user", taxiTrip.id);
+    expect(prisma.taxiRideReceipt.upsert).not.toHaveBeenCalled();
+    expect(receiptEmails.enqueueAutomatic).not.toHaveBeenCalled();
   });
 
   it("blocks Captains from self-claiming unassigned ride requests", async () => {

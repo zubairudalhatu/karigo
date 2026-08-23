@@ -186,6 +186,13 @@ export class AdminTaxiController {
     return { message: "KariGO Rides trip cancelled", data: await this.taxi.adminCancelTrip(user.id, tripId, dto) };
   }
 
+  @Post("trips/:tripId/receipt-email/retry")
+  @AdminRoles(AdminRole.SUPER_ADMIN, AdminRole.OPERATIONS_ADMIN, AdminRole.SUPPORT_AGENT)
+  @ApiOperation({ summary: "Retry a failed KariGO Ride receipt email" })
+  async retryReceiptEmail(@CurrentUser() user: AuthenticatedUser, @Param("tripId", ParseUUIDPipe) tripId: string) {
+    return { message: "Ride receipt email retry requested", data: await this.taxi.adminRetryRideReceiptEmail(user.id, tripId) };
+  }
+
   @Get("summary")
   @ApiOperation({ summary: "Get KariGO Ride operations summary" })
   async summary() {

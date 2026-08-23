@@ -181,7 +181,7 @@ export function CaptainRideWorkspace({
   }
 
   return <View style={styles.workspace}>
-    <View style={styles.mapShell}>
+    {trip.status !== "DRIVER_ASSIGNED" ? <View style={styles.mapShell}>
       {visibleCoordinates[0] ? <MapView
         ref={mapRef}
         style={styles.map}
@@ -201,9 +201,9 @@ export function CaptainRideWorkspace({
           <Feather name="shield" size={18} color={brand.colors.charcoal} /><Text style={styles.safetyText}>Safety</Text>
         </Pressable>
       </View>
-    </View>
+    </View> : null}
 
-    <View style={styles.sheet}>
+    <View style={[styles.sheet, trip.status === "DRIVER_ASSIGNED" ? styles.proposalSheet : null]}>
       <Text style={styles.eyebrow}>{copy.eyebrow}</Text>
       <Text style={styles.title}>{copy.title}</Text>
       <Text style={styles.reference}>{trip.tripReference} · {operatingArea}</Text>
@@ -248,12 +248,12 @@ export function CaptainRideWorkspace({
         <Button title={saving ? "UPDATING..." : copy.action} disabled={saving || (trip.status === "ARRIVED_PICKUP" && trip.ridePinRequired && pin.length !== 6) || ((trip.status === "ACCEPTED" || trip.status === "STARTED") && (!captainLocation || (overrideMode && overrideNote.trim().length < 5)))} onPress={() => void primaryAction()} />
       </>}
 
-      <View style={styles.quickActions}>
+      {trip.status !== "DRIVER_ASSIGNED" ? <View style={styles.quickActions}>
         <Pressable accessibilityRole="button" onPress={() => router.push(`/ride-chat/${trip.id}` as never)} style={styles.quickAction}><Feather name="message-circle" size={18} /><Text style={styles.quickActionText}>Chat{unreadCount ? ` • ${unreadCount}` : ""}</Text></Pressable>
         <Pressable accessibilityRole="button" onPress={callInKariGO} style={styles.quickAction}><Feather name="phone" size={18} /><Text style={styles.quickActionText}>Call</Text></Pressable>
         {mapTarget ? <Pressable accessibilityRole="button" onPress={openNavigation} style={styles.quickAction}><Feather name="navigation" size={18} /><Text style={styles.quickActionText}>Navigation</Text></Pressable> : null}
         <Pressable accessibilityRole="button" onPress={() => router.push("/ride-safety" as never)} style={styles.quickAction}><Feather name="shield" size={18} /><Text style={styles.quickActionText}>Safety</Text></Pressable>
-      </View>
+      </View> : null}
       <Message error>{error}</Message>
     </View>
   </View>;
@@ -277,6 +277,7 @@ const styles = StyleSheet.create({
   routeRow: { alignItems: "flex-start", flexDirection: "row", gap: 11 },
   routeCopy: { flex: 1, gap: 3 },
   routeLabel: { color: brand.colors.muted, fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  proposalSheet: { borderColor: "#FECACA", borderWidth: 1, marginTop: 0, paddingTop: 22 },
   routeAddress: { color: brand.colors.charcoal, fontSize: 15, fontWeight: "800", lineHeight: 20 },
   pickupDot: { backgroundColor: brand.colors.primary, borderRadius: 999, height: 10, marginTop: 4, width: 10 },
   destinationDot: { backgroundColor: brand.colors.charcoal, borderRadius: 2, height: 10, marginTop: 4, width: 10 },

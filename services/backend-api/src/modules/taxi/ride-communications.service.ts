@@ -14,7 +14,6 @@ export const RIDE_MESSAGE_READ_EVENT = "taxi.trip.message_read";
 export const RIDE_CALL_EVENT_PREFIX = "taxi.trip.call";
 
 const ACTIVE_COMMUNICATION_STATUSES = new Set<TaxiTripStatus>([
-  TaxiTripStatus.DRIVER_ASSIGNED,
   TaxiTripStatus.ACCEPTED,
   TaxiTripStatus.ARRIVED_PICKUP,
   TaxiTripStatus.STARTED,
@@ -67,7 +66,7 @@ export class RideCommunicationsService {
   }
 
   async listMessages(trip: RideCommunicationTrip, viewerRole: RideMessageSenderRole, query: ListRideMessagesQueryDto) {
-    this.assertReadable(trip);
+    this.assertConversationReadable(trip);
     const limit = query.limit ?? 30;
     const [messageEvents, receipts, messageCount] = await Promise.all([
       this.prisma.taxiTripEvent.findMany({
@@ -130,6 +129,7 @@ export class RideCommunicationsService {
 
   async acknowledgeDelivered(userId: string, tripId: string, messageId: string) {
     const { trip, participantRole } = await this.authorizeRealtimeParticipant(userId, tripId);
+    this.assertConversationReadable(trip);
     const message = await this.prisma.taxiTripEvent.findFirst({
       where: { id: messageId, tripId, eventType: RIDE_MESSAGE_EVENT }
     });
@@ -155,7 +155,7 @@ export class RideCommunicationsService {
   }
 
   async markRead(trip: RideCommunicationTrip, userId: string, readerRole: RideMessageSenderRole, dto: MarkRideMessagesReadDto) {
-    this.assertReadable(trip);
+    this.assertConversationReadable(trip);
     const message = await this.prisma.taxiTripEvent.findFirst({
       where: { id: dto.lastMessageId, tripId: trip.id, eventType: RIDE_MESSAGE_EVENT }
     });
@@ -268,8 +268,15 @@ export class RideCommunicationsService {
     }
   }
 
-  private assertWritable(trip: RideCommunicationTrip) {
+  private assertConversationReadable(trip: RideCommunicationTrip) {
     this.assertReadable(trip);
+    if (trip.status === TaxiTripStatus.DRIVER_ASSIGNED) {
+      throw new BadRequestException("Ride chat and calling become available after the Ride Captain accepts.");
+    }
+  }
+
+  private assertWritable(trip: RideCommunicationTrip) {
+    this.assertConversationReadable(trip);
     if (!ACTIVE_COMMUNICATION_STATUSES.has(trip.status)) {
       throw new BadRequestException("Completed or closed Rides cannot accept new messages or calls");
     }

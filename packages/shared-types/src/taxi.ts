@@ -576,6 +576,14 @@ export interface RideWaitingSummary {
   state: "NOT_STARTED" | "FREE" | "PAID" | "STOPPED";
 }
 
+export interface RideReceiptEmailDelivery {
+  status: "NOT_SENT_AUTOMATICALLY" | "NOT_APPLICABLE" | "PENDING" | "PROCESSING" | "SENT" | "FAILED";
+  maskedRecipientEmail?: string | null;
+  sentAt?: string | null;
+  attemptCount: number;
+  canResend: boolean;
+}
+
 export interface RideReceipt {
   id: string;
   tripId: string;
@@ -603,6 +611,7 @@ export interface RideReceipt {
   paymentMethod: string;
   completedAt: string;
   createdAt: string;
+  emailDelivery?: RideReceiptEmailDelivery;
 }
 
 export interface RideEvidenceSummary {

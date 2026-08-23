@@ -132,6 +132,23 @@ describe("RideCommunicationsService", () => {
     await expect(service.listMessages(expired, "CUSTOMER", { limit: 30 })).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it("rejects direct chat and call attempts before Captain acceptance while retaining lifecycle-room authorization", async () => {
+    const assigned = { ...activeTrip, status: TaxiTripStatus.DRIVER_ASSIGNED };
+    await expect(service.sendMessage(assigned, "customer-user", "CUSTOMER", { message: "Hello" })).rejects.toThrow(
+      "Ride chat and calling become available after the Ride Captain accepts."
+    );
+    expect(() => service.callSession(assigned, "customer-user", "CUSTOMER")).toThrow(
+      "Ride chat and calling become available after the Ride Captain accepts."
+    );
+    prisma.taxiTrip.findFirst.mockResolvedValue(assigned);
+    await expect(service.authorizeRealtimeParticipant("customer-user", assigned.id)).resolves.toMatchObject({
+      participantRole: "CUSTOMER",
+      trip: assigned
+    });
+    expect(prisma.taxiTripEvent.create).not.toHaveBeenCalled();
+    expect(calls.initiate).not.toHaveBeenCalled();
+  });
+
   it("returns disabled in-app call readiness without fabricating a provider", async () => {
     await expect(service.callSession(activeTrip, "captain-user", "CAPTAIN")).resolves.toMatchObject({ enabled: false, provider: null });
   });

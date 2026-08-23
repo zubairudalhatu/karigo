@@ -23,6 +23,7 @@ import { Button, Card, Empty, Field, Loading, Message, Protected, Screen, Status
 import { friendlyError } from "../../src/lib/errors";
 import { formatRideFareKobo, formatRideFareRangeKobo } from "../../src/lib/rides-format";
 import { ridesProductionEnabled } from "../../src/lib/rides-flags";
+import { useAuth } from "../../src/contexts/auth-context";
 
 import { acknowledgeRideMessageDelivered, subscribeRideRealtime } from "../../src/lib/ride-realtime";
 import { useRideUnreadCount } from "../../src/lib/ride-alert-state";
@@ -63,6 +64,8 @@ const cancellableBeforePickup = new Set<string>(customerCancellableTaxiTripStatu
 const duplicateActiveRideMessage = "You already have an active KariGO Ride. View or cancel it before requesting another immediate ride.";
 const reverseGeocodeDebounceMs = 550;
 const mapMovementThresholdMeters = 14;
+
+const activeRideSnapshotsByUser = new Map<string, TaxiTrip>();
 
 const defaultRideRegion: Region = {
   latitude: rideServiceAreaLabel.toLowerCase().includes("kano") ? serviceAreaCenters.Kano.latitude : serviceAreaCenters.Abuja.latitude,
@@ -357,6 +360,7 @@ function newRideRequestId() {
 
 export default function TaxiRequest() {
   const taxiEnabled = ridesProductionEnabled();
+  const { user } = useAuth();
   const { tripId } = useLocalSearchParams<{ tripId?: string }>();
   const insets = useSafeAreaInsets();
   const searchToken = useRef(0);
@@ -375,11 +379,14 @@ export default function TaxiRequest() {
   const trackingRequestToken = useRef(0);
   const keyboardVisible = useRef(false);
   const panelDrag = useRef(new Animated.Value(0)).current;
+  const snapshotUserId = user?.id ?? null;
+  const initialRideSnapshot = useRef(snapshotUserId ? activeRideSnapshotsByUser.get(snapshotUserId) ?? null : null).current;
+  const snapshotOwnerRef = useRef(snapshotUserId);
 
-  const [step, setStep] = useState<BookingStep>("HOME");
+  const [step, setStep] = useState<BookingStep>(initialRideSnapshot ? "TRACKING" : "HOME");
   const [panelState, setPanelState] = useState<RidePanelState>("half");
-  const [pickup, setPickup] = useState<RidePlace | null>(null);
-  const [destination, setDestination] = useState<RidePlace | null>(null);
+  const [pickup, setPickup] = useState<RidePlace | null>(initialRideSnapshot ? placeFromTrip(initialRideSnapshot, "pickup") : null);
+  const [destination, setDestination] = useState<RidePlace | null>(initialRideSnapshot ? placeFromTrip(initialRideSnapshot, "destination") : null);
   const [stop, setStop] = useState<RidePlace | null>(null);
   const [pickupText, setPickupText] = useState("");
   const [destinationText, setDestinationText] = useState("");
@@ -406,7 +413,7 @@ export default function TaxiRequest() {
   const [routePreview, setRoutePreview] = useState<TaxiRoutePreview | null>(null);
   const [routeError, setRouteError] = useState("");
   const [trips, setTrips] = useState<TaxiTrip[]>([]);
-  const [created, setCreated] = useState<TaxiTrip | null>(null);
+  const [created, setCreated] = useState<TaxiTrip | null>(initialRideSnapshot);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -414,7 +421,22 @@ export default function TaxiRequest() {
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [entryStatus, setEntryStatus] = useState<RideEntryStatus>("checking");
+  const [entryStatus, setEntryStatus] = useState<RideEntryStatus>(initialRideSnapshot ? "active" : "checking");
+  const [reconnecting, setReconnecting] = useState(Boolean(initialRideSnapshot));
+
+  useEffect(() => {
+    if (snapshotOwnerRef.current === snapshotUserId) return;
+    snapshotOwnerRef.current = snapshotUserId;
+    const next = snapshotUserId ? activeRideSnapshotsByUser.get(snapshotUserId) ?? null : null;
+    setCreated(next);
+    setPickup(next ? placeFromTrip(next, "pickup") : null);
+    setDestination(next ? placeFromTrip(next, "destination") : null);
+    setStep(next ? "TRACKING" : "HOME");
+    setEntryStatus(next ? "active" : "checking");
+    setReconnecting(Boolean(next));
+    setMessage("");
+    setError("");
+  }, [snapshotUserId]);
 
   const savedPlaces = useMemo(() => addresses.map(placeFromAddress), [addresses]);
   const recentPlaces = useMemo(() => {
@@ -475,8 +497,14 @@ export default function TaxiRequest() {
     extrapolate: "clamp"
   });
 
+  function rememberRide(trip: TaxiTrip) {
+    if (snapshotUserId) activeRideSnapshotsByUser.set(snapshotUserId, trip);
+    return trip;
+  }
+
   async function load() {
     if (!taxiEnabled) return;
+    if (created) setReconnecting(true);
     if (step !== "TRACKING") setEntryStatus("checking");
     try {
       const history = await taxiApi.trips();
@@ -489,20 +517,26 @@ export default function TaxiRequest() {
       setCategories(rideCategories);
       setRequireRidePin(customerProfile.requireRidePin);
       setTrips(history);
-      setCreated((current) => current ? history.find((trip) => trip.id === current.id) ?? current : current);
+      const reconciled = created ? history.find((trip) => trip.id === created.id) ?? null : null;
+      if (reconciled) setCreated(rememberRide(reconciled));
+      else if (created) {
+        if (snapshotUserId) activeRideSnapshotsByUser.delete(snapshotUserId);
+        setCreated(null);
+        setStep("HOME");
+      }
       const preferred = reconcileRideEntry(history);
       setEntryStatus(preferred ? "active" : "clear");
     } catch (err) {
       setEntryStatus("failed");
       setError(friendlyError(err) || "KariGO Rides could not confirm active ride status. Please retry.");
+    } finally {
+      setReconnecting(false);
     }
   }
 
-  useEffect(() => { void load(); }, [taxiEnabled, activeRideCity]);
-
   useFocusEffect(useCallback(() => {
     void load();
-  }, [taxiEnabled, activeRideCity, tripId, step]));
+  }, [taxiEnabled, activeRideCity, tripId, step, snapshotUserId]));
 
   useEffect(() => {
     if (!preferredActiveTrip) return;
@@ -563,6 +597,7 @@ export default function TaxiRequest() {
       try {
         const fresh = await taxiApi.trip(created.id);
         if (cancelled || requestId !== trackingRequestToken.current) return;
+        rememberRide(fresh);
         setCreated(fresh);
         setTrips((current) => mergeTrip(current, fresh));
         if (fresh.status !== currentStatus) {
@@ -869,6 +904,7 @@ export default function TaxiRequest() {
     setEstimate(null);
     setRoutePreview(null);
     setRouteError("");
+    if (snapshotUserId) activeRideSnapshotsByUser.delete(snapshotUserId);
     setCreated(null);
     setDetailsExpanded(false);
     setMessage("");
@@ -876,6 +912,7 @@ export default function TaxiRequest() {
   }
 
   function openTrip(trip: TaxiTrip) {
+    rememberRide(trip);
     setCreated(trip);
     setPickup(placeFromTrip(trip, "pickup"));
     setDestination(placeFromTrip(trip, "destination"));
@@ -1161,6 +1198,7 @@ export default function TaxiRequest() {
         customerNote: tripNote,
         clientRequestId: requestAttemptId.current
       });
+      rememberRide(trip);
       setCreated(trip);
       setTrips((current) => mergeTrip(current, trip));
       setMessage("Ride request received. KariGO will keep this screen updated.");
@@ -1190,7 +1228,10 @@ export default function TaxiRequest() {
     try {
       const updated = await taxiApi.cancelTrip(tripId, "Customer cancelled ride before pickup");
       setTrips((current) => mergeTrip(current, updated));
-      setCreated((current) => current?.id === updated.id ? updated : current);
+      setCreated((current) => {
+        if (current?.id === updated.id) rememberRide(updated);
+        return current?.id === updated.id ? updated : current;
+      });
       setMessage("Ride request cancelled.");
       await load();
     } catch (err) {
@@ -1207,6 +1248,10 @@ export default function TaxiRequest() {
     else if (step === "CONFIRM") setStep("ROUTE");
     else setStep("HOME");
     setPanelState(step === "HOME" ? "half" : "expanded");
+  }
+
+  if (snapshotOwnerRef.current !== snapshotUserId) {
+    return <Protected><Loading label="Checking active KariGO Rides..." /></Protected>;
   }
 
   if (!taxiEnabled) {
@@ -1305,6 +1350,7 @@ export default function TaxiRequest() {
         <View style={[styles.trackingSheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetScroll}>
             <Message error>{error}</Message>
+            {reconnecting ? <Message>Returning to your Ride… Reconnecting in the background.</Message> : null}
             <Message>{message}</Message>
             {created ? <RideTracking
               trip={created}
@@ -1898,8 +1944,9 @@ function RideTracking({
   const vehicle = lifecycle.vehicleVisible ? vehicleForTrip(trip) : null;
   const unreadCount = useRideUnreadCount(trip.id, trip.conversationSummary?.unreadCount ?? 0);
   const showPin = Boolean(trip.ridePinRequired && trip.tripPin && lifecycle.pickupPinVisible && captain);
-  const canContactCaptain = Boolean(captain && !terminal);
-  const canChatCaptain = Boolean(captain);
+  const captainAccepted = !["REQUESTED", "DRIVER_ASSIGNED"].includes(trip.status);
+  const canContactCaptain = Boolean(captain && captainAccepted && !terminal);
+  const canChatCaptain = Boolean(captain && captainAccepted);
   const showReceipt = lifecycle.receiptAvailable || terminal;
   const shareRide = () => void Share.share({ message: safeShareRideText(trip) });
   const chatCaptain = () => router.push(`/taxi/chat/${trip.id}` as never);
@@ -1914,8 +1961,7 @@ function RideTracking({
     }
   };
   const openContact = () => {
-    Alert.alert("Contact Captain", "Choose a Ride-scoped contact option.", [
-      { text: "Chat in KariGO", onPress: chatCaptain },
+    Alert.alert("Contact Captain", "Choose a Ride-scoped call option.", [
       { text: "Call in KariGO", onPress: () => void callInKariGO() },
       { text: "Call by phone", onPress: () => void callByPhone() },
       { text: "Close", style: "cancel" }
@@ -1947,6 +1993,10 @@ function RideTracking({
       <Text style={styles.activeNoticeText}>The first 5 minutes are free. After that, waiting is billed at ₦5 per minute, proportional to elapsed seconds.</Text>
     </View> : null}
     {captain || vehicle ? <CaptainVehicleCard captain={captain} vehicle={vehicle} status={trip.status} /> : null}
+    {trip.status === "DRIVER_ASSIGNED" ? <View style={styles.activeNotice}>
+      <Text style={styles.activeNoticeTitle}>Waiting for Captain acceptance</Text>
+      <Text style={styles.activeNoticeText}>Chat and Call become available after your Captain accepts.</Text>
+    </View> : null}
     {captain && ["DRIVER_ASSIGNED", "ACCEPTED"].includes(trip.status) ? <Text style={ui.muted}>
       {captain.location?.freshness === "fresh" ? "Captain location is updating." : "Location updating. Captain movement appears only when verified location is available."}
     </Text> : null}
@@ -1967,12 +2017,11 @@ function RideTracking({
     </View> : null}
     <View style={styles.primaryRideActions}>
       {canChatCaptain ? <Button title={`Chat${unreadCount ? ` • ${unreadCount}` : ""}`} tone="muted" onPress={chatCaptain} /> : null}
-      {canContactCaptain ? <Button title="Call" tone="muted" onPress={callInKariGO} /> : null}
+      {canContactCaptain ? <Button title="Call" tone="muted" onPress={openContact} /> : null}
       <Button title="Safety" tone="muted" onPress={() => Alert.alert("Ride Safety", "Verify your Captain and vehicle. Use Share to send safe Ride details to someone you trust.")} />
       <Button title="Share" tone="muted" onPress={shareRide} />
     </View>
     {lifecycle.customerCancellationAllowed ? <Button title={loading ? "Cancelling..." : "Cancel ride request"} tone="muted" disabled={loading} onPress={onCancel} /> : null}
-    {canContactCaptain ? <Button title="Phone fallback" tone="muted" onPress={openContact} /> : null}
     {terminal ? <View style={styles.inlineActions}>
       <Button title={trip.status === "EXPIRED" ? "Retry ride request" : "Book another ride"} onPress={onBookAnother} />
       <Button title="Back to KariGO Home" tone="muted" onPress={onBackHome} />
@@ -2044,11 +2093,43 @@ function RideReceipt({ trip }: { trip: TaxiTrip }) {
   const captain = captainForTrip(trip);
   const vehicle = vehicleForTrip(trip);
   const receipt = trip.receipt;
+  const [emailDelivery, setEmailDelivery] = useState(receipt?.emailDelivery);
+  const [emailing, setEmailing] = useState(false);
+  const [emailMessage, setEmailMessage] = useState("");
+  const [emailError, setEmailError] = useState("");
+  useEffect(() => setEmailDelivery(receipt?.emailDelivery), [receipt?.emailDelivery?.status, receipt?.emailDelivery?.sentAt]);
+  const emailStatusLabel = emailDelivery?.status === "SENT"
+    ? "Receipt emailed"
+    : ["PENDING", "PROCESSING"].includes(emailDelivery?.status ?? "")
+      ? "Receipt email pending"
+      : emailDelivery?.status === "FAILED"
+        ? "Receipt email could not be delivered"
+        : "Receipt available in Ride History";
+  async function resendReceiptEmail() {
+    if (emailing) return;
+    setEmailing(true);
+    setEmailMessage("");
+    setEmailError("");
+    try {
+      const delivery = await taxiApi.resendReceiptEmail(trip.id);
+      setEmailDelivery(delivery);
+      setEmailMessage("Receipt email requested. We will send it shortly.");
+    } catch (cause) {
+      setEmailError(friendlyError(cause));
+    } finally {
+      setEmailing(false);
+    }
+  }
   const fareLabel = trip.status === "COMPLETED" && trip.finalFareKobo ? "Final fare" : "Estimated fare";
   return <View style={styles.receiptCard}>
     <Text style={styles.receiptTitle}>{trip.status === "COMPLETED" ? "Ride receipt" : "Ride record"}</Text>
     <ReceiptRow label="Reference" value={trip.tripReference} />
     {receipt ? <ReceiptRow label="Receipt" value={receipt.receiptNumber} /> : null}
+    {receipt ? <ReceiptRow label="Email" value={emailStatusLabel} /> : null}
+    {emailDelivery?.maskedRecipientEmail ? <ReceiptRow label="Recipient" value={emailDelivery.maskedRecipientEmail} /> : null}
+    <Message error>{emailError}</Message>
+    <Message>{emailMessage}</Message>
+    {receipt && emailDelivery?.canResend ? <Button title={emailing ? "Sending..." : "Email receipt again"} tone="muted" disabled={emailing} onPress={() => void resendReceiptEmail()} /> : null}
     <ReceiptRow label="Status" value={rideTrackingTitle(trip)} />
     <ReceiptRow label="Ride" value={tripCategoryLabel(trip)} />
     <ReceiptRow label="Pickup" value={trip.pickupAddress} />

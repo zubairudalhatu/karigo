@@ -151,6 +151,7 @@ export const taxiApi = {
   assignDriver: (tripId: string, driverProfileId: string) =>
     api.patch<TaxiTrip>(`admin/taxi/trips/${tripId}/assign-driver`, { driverProfileId }),
   cancelTrip: (tripId: string, reason?: string) => api.post<TaxiTrip>(`admin/taxi/trips/${tripId}/cancel`, { reason }),
+  retryReceiptEmail: (tripId: string) => api.post<{ status: string; attemptCount: number }>(`admin/taxi/trips/${tripId}/receipt-email/retry`),
   summary: () => api.get<{
     driverProfiles: number;
     availableDrivers: number;

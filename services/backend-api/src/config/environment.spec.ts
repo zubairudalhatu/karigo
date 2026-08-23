@@ -386,6 +386,50 @@ describe("environment configuration", () => {
     }))).toThrow("Live Flutterwave v4 checkout requires FLUTTERWAVE_CLIENT_SECRET");
   });
 
+  it("allows production Ride receipt email only with explicit Resend configuration", () => {
+    const result = validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "production",
+      RIDE_RECEIPT_EMAIL_ENABLED: "true",
+      RIDE_RECEIPT_EMAIL_PROVIDER: "resend",
+      RESEND_API_KEY: "resend-test-key-not-real",
+      RESEND_FROM_EMAIL: "no-reply@example.test"
+    });
+
+    expect(result.RIDE_RECEIPT_EMAIL_ENABLED).toBe(true);
+    expect(result.RIDE_RECEIPT_EMAIL_PROVIDER).toBe("resend");
+  });
+
+  it("fails closed instead of recording mock receipt delivery in production", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "production",
+      RIDE_RECEIPT_EMAIL_ENABLED: "true",
+      RIDE_RECEIPT_EMAIL_PROVIDER: "mock"
+    })).toThrow("Production Ride receipt email requires RIDE_RECEIPT_EMAIL_PROVIDER=resend");
+  });
+
+
+  it("fails closed when Ride receipt Resend is enabled without server credentials", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      APP_ENV: "production",
+      RIDE_RECEIPT_EMAIL_ENABLED: "true",
+      RIDE_RECEIPT_EMAIL_PROVIDER: "resend"
+    })).toThrow("Missing required environment variable: RESEND_API_KEY");
+  });
+
+  it("rejects unsupported Ride receipt email providers", () => {
+    expect(() => validateEnvironment({
+      DATABASE_URL: testDatabaseUrl,
+      JWT_SECRET: "test-secret",
+      RIDE_RECEIPT_EMAIL_PROVIDER: "sendgrid"
+    })).toThrow("RIDE_RECEIPT_EMAIL_PROVIDER must be mock or resend");
+  });
+
   it("rejects live Flutterwave payments without a webhook secret", () => {
     expect(() => validateEnvironment(flutterwaveLiveConfig({
       FLUTTERWAVE_SECRET_HASH: "",

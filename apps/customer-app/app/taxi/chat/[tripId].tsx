@@ -105,7 +105,7 @@ function mergeMessage(current: RideConversationPage | null, message: RideMessage
     {conversation?.nextBefore ? <Button title="Load earlier messages" tone="muted" disabled={loading} onPress={() => load(conversation.nextBefore ?? undefined)} /> : null}
     <View style={styles.history}>
       {conversation?.messages.length ? conversation.messages.map((item: RideMessage) => <View key={item.id} style={[styles.bubble, item.senderRole === "CUSTOMER" ? styles.mine : styles.theirs]}>
-        <Text style={[styles.sender, item.senderRole === "CUSTOMER" && styles.mineText]}>{item.senderLabel}</Text>
+        <Text style={[styles.sender, item.senderRole === "CUSTOMER" && styles.mineText]}>{item.senderRole === "CUSTOMER" ? "You" : item.senderLabel}</Text>
         <Text style={[styles.message, item.senderRole === "CUSTOMER" && styles.mineText]}>{item.message}</Text>
         <Text style={[styles.timestamp, item.senderRole === "CUSTOMER" && styles.mineTimestamp]}>{new Date(item.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {item.readAt ? "Read" : item.deliveryState === "DELIVERED" ? "Delivered" : "Sent"}</Text>
       </View>) : <Text style={ui.muted}>No messages yet. This conversation is available only for your assigned Ride.</Text>}
