@@ -5,7 +5,7 @@ CREATE TYPE "PartnerCommercialModel" AS ENUM ('COMMISSION', 'ONBOARDING_FEE', 'Q
 CREATE TYPE "PartnerOnboardingPaymentStatus" AS ENUM ('PENDING', 'INITIALIZED', 'SUCCESSFUL', 'VERIFICATION_FAILED', 'FAILED', 'CANCELLED', 'REVIEW_REQUIRED');
 
 CREATE TABLE "partner_commercial_policies" (
-  "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+  "id" UUID NOT NULL,
   "businessCategory" "VendorApplicationCategory" NOT NULL,
   "commercialModel" "PartnerCommercialModel" NOT NULL,
   "commissionRateBasisPoints" INTEGER NOT NULL DEFAULT 0,
@@ -23,12 +23,12 @@ CREATE TABLE "partner_commercial_policies" (
   "createdByAdminId" UUID,
   "updatedByAdminId" UUID,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "partner_commercial_policies_pkey" PRIMARY KEY ("id")
 );
 
 CREATE TABLE "partner_commercial_agreements" (
-  "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+  "id" UUID NOT NULL,
   "applicationId" UUID NOT NULL,
   "applicantUserId" UUID NOT NULL,
   "policyId" UUID NOT NULL,
@@ -47,12 +47,12 @@ CREATE TABLE "partner_commercial_agreements" (
   "acceptedTermsVersion" TEXT NOT NULL,
   "acceptedFromAppSurface" TEXT NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "partner_commercial_agreements_pkey" PRIMARY KEY ("id")
 );
 
 CREATE TABLE "partner_onboarding_payments" (
-  "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+  "id" UUID NOT NULL,
   "agreementId" UUID NOT NULL,
   "provider" TEXT NOT NULL,
   "transactionReference" TEXT NOT NULL,
@@ -68,12 +68,12 @@ CREATE TABLE "partner_onboarding_payments" (
   "failureReason" TEXT,
   "expiresAt" TIMESTAMP(3),
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "partner_onboarding_payments_pkey" PRIMARY KEY ("id")
 );
 
 CREATE TABLE "partner_onboarding_fee_waivers" (
-  "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+  "id" UUID NOT NULL,
   "agreementId" UUID NOT NULL,
   "amountWaivedKobo" INTEGER NOT NULL,
   "currency" TEXT NOT NULL DEFAULT 'NGN',
@@ -83,17 +83,18 @@ CREATE TABLE "partner_onboarding_fee_waivers" (
   "waivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "partner_onboarding_fee_waivers_pkey" PRIMARY KEY ("id")
+);
+
 ALTER TABLE "vendor_settlements" ADD COLUMN "commercialAgreementId" UUID;
 ALTER TABLE "vendor_settlements" ADD COLUMN "commercialModel" "PartnerCommercialModel";
 ALTER TABLE "vendor_settlements" ADD COLUMN "commissionableSubtotal" DECIMAL(12,2);
 ALTER TABLE "vendor_settlements" ADD COLUMN "deliveryFeeExcluded" DECIMAL(12,2);
-);
 
 ALTER TABLE "vendors" ADD COLUMN "commercialAgreementId" UUID;
 
 CREATE UNIQUE INDEX "partner_commercial_policies_businessCategory_policyVersion_key" ON "partner_commercial_policies"("businessCategory", "policyVersion");
-CREATE INDEX "partner_commercial_policies_businessCategory_isActive_effectiveFrom_idx" ON "partner_commercial_policies"("businessCategory", "isActive", "effectiveFrom");
-CREATE INDEX "partner_commercial_policies_isActive_effectiveFrom_effectiveTo_idx" ON "partner_commercial_policies"("isActive", "effectiveFrom", "effectiveTo");
+CREATE INDEX "partner_commercial_policies_businessCategory_isActive_effec_idx" ON "partner_commercial_policies"("businessCategory", "isActive", "effectiveFrom");
+CREATE INDEX "partner_commercial_policies_isActive_effectiveFrom_effectiv_idx" ON "partner_commercial_policies"("isActive", "effectiveFrom", "effectiveTo");
 CREATE UNIQUE INDEX "partner_commercial_agreements_applicationId_key" ON "partner_commercial_agreements"("applicationId");
 CREATE INDEX "partner_commercial_agreements_applicantUserId_acceptedAt_idx" ON "partner_commercial_agreements"("applicantUserId", "acceptedAt");
 CREATE INDEX "partner_commercial_agreements_category_commercialModel_idx" ON "partner_commercial_agreements"("category", "commercialModel");
@@ -117,20 +118,20 @@ ALTER TABLE "vendors" ADD CONSTRAINT "vendors_commercialAgreementId_fkey" FOREIG
 
 INSERT INTO "partner_commercial_policies" (
   "id", "businessCategory", "commercialModel", "commissionRateBasisPoints", "onboardingFeeKobo", "currency",
-  "effectiveFrom", "isActive", "publicOnboardingEnabled", "publicTitle", "publicSummary", "policyVersion", "internalNote"
+  "effectiveFrom", "isActive", "publicOnboardingEnabled", "publicTitle", "publicSummary", "policyVersion", "internalNote", "updatedAt"
 ) VALUES
   (gen_random_uuid(), 'RESTAURANT', 'COMMISSION', 1000, NULL, 'NGN', CURRENT_TIMESTAMP, true, true,
-   'KariGO Restaurant Partner', 'Current KariGO commission under this commercial agreement: 10% of restaurant merchandise subtotal. KariGO delivery fees are excluded.', 'launch-2026-08-v1', 'System launch policy; no historical Vendor rows changed.'),
+   'KariGO Restaurant Partner', 'Current KariGO commission under this commercial agreement: 10% of restaurant merchandise subtotal. KariGO delivery fees are excluded.', 'launch-2026-08-v1', 'System launch policy; no historical Vendor rows changed.', CURRENT_TIMESTAMP),
   (gen_random_uuid(), 'GROCERIES', 'ONBOARDING_FEE', 0, NULL, 'NGN', CURRENT_TIMESTAMP, true, true,
-   'KariGO Grocery Partner', '0% KariGO sales commission. A KariGO onboarding/platform fee applies when configured and accepted.', 'launch-2026-08-v1', 'Fee intentionally not configured; missing is not zero.'),
+   'KariGO Grocery Partner', '0% KariGO sales commission. A KariGO onboarding/platform fee applies when configured and accepted.', 'launch-2026-08-v1', 'Fee intentionally not configured; missing is not zero.', CURRENT_TIMESTAMP),
   (gen_random_uuid(), 'MARKET_ITEMS', 'ONBOARDING_FEE', 0, NULL, 'NGN', CURRENT_TIMESTAMP, true, true,
-   'KariGO Market Items Partner', '0% KariGO sales commission. A KariGO onboarding/platform fee applies when configured and accepted.', 'launch-2026-08-v1', 'Fee intentionally not configured; missing is not zero.'),
+   'KariGO Market Items Partner', '0% KariGO sales commission. A KariGO onboarding/platform fee applies when configured and accepted.', 'launch-2026-08-v1', 'Fee intentionally not configured; missing is not zero.', CURRENT_TIMESTAMP),
   (gen_random_uuid(), 'PHARMACY', 'ONBOARDING_FEE', 0, NULL, 'NGN', CURRENT_TIMESTAMP, true, true,
-   'KariGO Pharmacy Partner', '0% KariGO sales commission. The onboarding/platform fee does not replace regulatory, document or KariGO approval.', 'launch-2026-08-v1', 'Fee intentionally not configured; pharmacy compliance remains separate.'),
+   'KariGO Pharmacy Partner', '0% KariGO sales commission. The onboarding/platform fee does not replace regulatory, document or KariGO approval.', 'launch-2026-08-v1', 'Fee intentionally not configured; pharmacy compliance remains separate.', CURRENT_TIMESTAMP),
   (gen_random_uuid(), 'SME_SERVICES', 'ONBOARDING_FEE', 0, NULL, 'NGN', CURRENT_TIMESTAMP, true, true,
-   'KariGO SME Services Partner', '0% KariGO service commission. A KariGO onboarding/platform fee applies when configured and accepted.', 'launch-2026-08-v1', 'Fee intentionally not configured; no job-value commission.'),
+   'KariGO SME Services Partner', '0% KariGO service commission. A KariGO onboarding/platform fee applies when configured and accepted.', 'launch-2026-08-v1', 'Fee intentionally not configured; no job-value commission.', CURRENT_TIMESTAMP),
   (gen_random_uuid(), 'PARCEL_LOGISTICS_PARTNER', 'QUOTATION', 0, NULL, 'NGN', CURRENT_TIMESTAMP, true, false,
-   'KariGO Parcel Delivery', 'Parcel delivery is operated by KariGO through a quotation workflow. Third-party parcel Partner onboarding is not publicly available.', 'launch-2026-08-v1', 'Reserved future database capability; public onboarding disabled.'),
+   'KariGO Parcel Delivery', 'Parcel delivery is operated by KariGO through a quotation workflow. Third-party parcel Partner onboarding is not publicly available.', 'launch-2026-08-v1', 'Reserved future database capability; public onboarding disabled.', CURRENT_TIMESTAMP),
   (gen_random_uuid(), 'OTHER_MARKETPLACE_VENDOR', 'REVIEW_REQUIRED', 0, NULL, 'NGN', CURRENT_TIMESTAMP, true, true,
-   'Other KariGO Marketplace Partner', 'KariGO must review and classify the appropriate commercial terms before this Partner can be activated.', 'launch-2026-08-v1', 'No commercial model is assigned silently.');
+   'Other KariGO Marketplace Partner', 'KariGO must review and classify the appropriate commercial terms before this Partner can be activated.', 'launch-2026-08-v1', 'No commercial model is assigned silently.', CURRENT_TIMESTAMP);
 ALTER TABLE "vendor_settlements" ADD CONSTRAINT "vendor_settlements_commercialAgreementId_fkey" FOREIGN KEY ("commercialAgreementId") REFERENCES "partner_commercial_agreements"("id") ON DELETE SET NULL ON UPDATE CASCADE;
