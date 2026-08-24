@@ -17,6 +17,11 @@ export interface VendorSettlement {
   deliveryFee?: string | number | null;
   commissionRate: string | number;
   platformFee: string | number;
+  commercialModel?: "COMMISSION" | "ONBOARDING_FEE" | "QUOTATION" | "REVIEW_REQUIRED" | null;
+  commercialPlan?: string | null;
+  policyVersion?: string | null;
+  commissionableSubtotal?: string | number | null;
+  deliveryFeeExcluded?: string | number | null;
   settlementAmount: string | number;
   settlementStatus: VendorSettlementStatus;
   paidAt?: string | null;

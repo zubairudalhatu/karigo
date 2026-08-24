@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   AccountStatus,
@@ -26,6 +26,7 @@ import { ApplicationNotificationsService } from "../../common/services/applicati
 import { PrismaService } from "../../prisma/prisma.service";
 import { captainOperatingAreaProjection, captainResidentialLocation } from "../platform/captain-operating-areas";
 import { resolvePartnerCapabilities } from "../vendors/partner-capabilities";
+import { PartnerCommercialService } from "../partner-commercial/partner-commercial.service";
 import { AccountLifecycleAction } from "./dto/account-lifecycle-action.dto";
 import { ListAdminOrdersQueryDto } from "./dto/list-admin-orders-query.dto";
 import { ReportDateRangeDto } from "./dto/report-date-range.dto";
@@ -58,6 +59,22 @@ const VENDOR_CLEANUP_SELECT = {
   createdAt: true,
   updatedAt: true,
   user: { select: { fullName: true, phoneNumber: true, email: true, accountStatus: true, deletedAt: true } },
+  commercialAgreement: {
+    select: {
+      id: true,
+      category: true,
+      commercialModel: true,
+      commissionRateBasisPoints: true,
+      onboardingFeeKobo: true,
+      currency: true,
+      policyVersion: true,
+      publicTitleSnapshot: true,
+      publicSummarySnapshot: true,
+      acceptedAt: true,
+      onboardingPayments: { where: { status: "SUCCESSFUL" }, select: { id: true, verifiedAt: true }, take: 1 },
+      feeWaiver: { select: { id: true, waivedAt: true, amountWaivedKobo: true } }
+    }
+  },
   sourceApplication: {
     select: {
       reference: true,
@@ -99,7 +116,9 @@ export class AdminOperationsService {
     private readonly prisma: PrismaService,
     private readonly audit: AdminAuditService,
     private readonly applicationNotifications: ApplicationNotificationsService,
-    private readonly config?: ConfigService
+    private readonly config?: ConfigService,
+    @Optional()
+    private readonly partnerCommercial?: PartnerCommercialService
   ) {}
 
   async dashboard() {
@@ -853,6 +872,7 @@ export class AdminOperationsService {
       this.requiredReason(note, "Vendor closure or rejection requires a reason.");
     }
     if (status === VendorStatus.ACTIVE) {
+      if (this.partnerCommercial) await this.partnerCommercial.assertVendorActivationReady(vendor.id);
       if (vendor.status !== VendorStatus.PENDING_APPROVAL) {
         throw new BadRequestException("Only pending vendors can be marked operational through this action. Use reactivation for suspended vendors.");
       }

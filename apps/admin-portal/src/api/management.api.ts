@@ -45,6 +45,20 @@ export interface AdminVendor {
   cleanupSafety?: VendorCleanupSafety;
   trashSafety?: VendorTrashSafety;
   onboardingDocuments?: VendorOnboardingDocument[];
+  commercialAgreement?: {
+    id: string;
+    category: string;
+    commercialModel: string;
+    commissionRateBasisPoints: number;
+    onboardingFeeKobo?: number | null;
+    currency: string;
+    policyVersion: string;
+    publicTitleSnapshot: string;
+    publicSummarySnapshot: string;
+    acceptedAt: string;
+    onboardingPayments?: Array<{ id: string; verifiedAt?: string | null }>;
+    feeWaiver?: { id: string; waivedAt: string; amountWaivedKobo: number } | null;
+  } | null;
 }
 
 export interface AdminUserSummary {

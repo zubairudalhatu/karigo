@@ -26,6 +26,7 @@ import { UtilitiesModule } from "./modules/utilities/utilities.module";
 import { VendorApplicationsModule } from "./modules/vendor-applications/vendor-applications.module";
 import { VendorPayoutAccountsModule } from "./modules/vendor-payout-accounts/vendor-payout-accounts.module";
 import { VendorsModule } from "./modules/vendors/vendors.module";
+import { PartnerCommercialModule } from "./modules/partner-commercial/partner-commercial.module";
 import { VendorDashboardOrdersModule } from "./modules/vendor-dashboard-orders/vendor-dashboard-orders.module";
 import { VendorSettlementsModule } from "./modules/vendor-settlements/vendor-settlements.module";
 import { WalletModule } from "./modules/wallet/wallet.module";
@@ -55,6 +56,7 @@ import { ServiceProviderRequestsModule } from "./modules/service-provider-reques
     WalletModule,
     LaunchOperationsModule,
     ReferralsModule,
+    PartnerCommercialModule,
     AuthModule,
     CustomersModule,
     AddressesModule,

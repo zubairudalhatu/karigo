@@ -5,6 +5,7 @@ import {
   HttpException,
   Injectable,
   Logger,
+  Optional,
   NotFoundException
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -34,6 +35,7 @@ import {
   paymentInitializationDiagnostic
 } from "./providers/payment-provider-diagnostics";
 import { RideCommissionPaymentService } from "./ride-commission-payment.service";
+import { PartnerOnboardingPaymentService } from "./partner-onboarding-payment.service";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { NotificationsService } from "../notifications/notifications.service";
 
@@ -58,7 +60,9 @@ export class PaymentsService {
     private readonly audit: AdminAuditService,
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
-    private readonly rideCommissionPayments: RideCommissionPaymentService
+    private readonly rideCommissionPayments: RideCommissionPaymentService,
+    @Optional()
+    private readonly partnerOnboardingPayments?: PartnerOnboardingPaymentService
   ) {}
 
   async initiate(userId: string, dto: InitiatePaymentDto) {
@@ -473,6 +477,9 @@ export class PaymentsService {
   async webhook(gateway: string, payload: Record<string, unknown>, context?: PaymentWebhookContext) {
     const provider = this.providerRegistry.get(gateway);
     const result = await provider.parseWebhook(payload, context);
+    if (result.transactionReference && this.partnerOnboardingPayments && await this.partnerOnboardingPayments.exists(result.transactionReference)) {
+      return this.partnerOnboardingPayments.processWebhook(provider, result);
+    }
     if (result.transactionReference && await this.rideCommissionPayments.exists(result.transactionReference)) {
       return this.rideCommissionPayments.processWebhook(provider, result);
     }

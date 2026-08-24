@@ -29,9 +29,10 @@ function SettlementCard({ settlement }: { settlement: VendorSettlement }) {
       </div>
       <div className="settlement-meta">
         <span>Completed: {formatDate(settlement.orderCompletedAt)}</span>
-        <span>Gross subtotal: {money(settlement.grossOrderSubtotal)}</span>
-        <span>Delivery fee: {money(settlement.deliveryFee ?? 0)}</span>
-        <span>KariGO fee: {money(settlement.platformFee)}</span>
+        {settlement.commercialPlan ? <span>Commercial plan: {settlement.commercialPlan}{settlement.policyVersion ? ` · ${settlement.policyVersion}` : ""}</span> : null}
+        <span>Gross merchandise sales: {money(settlement.commissionableSubtotal ?? settlement.grossOrderSubtotal)}</span>
+        <span>Delivery fee excluded from commission: {money(settlement.deliveryFeeExcluded ?? settlement.deliveryFee ?? 0)}</span>
+        <span>KariGO {settlement.commercialModel === "ONBOARDING_FEE" ? "sales commission" : "commission"}: {money(settlement.platformFee)} at {Number(settlement.commissionRate)}%</span>
         <span>Paid: {formatDate(settlement.paidAt)}</span>
         {settlement.payoutReference ? <span className="wrap">Reference: {settlement.payoutReference}</span> : null}
       </div>

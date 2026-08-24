@@ -215,8 +215,9 @@ function validateFlutterwaveLivePaymentGate(config: Record<string, unknown>, pay
 
   const customerCheckoutEnabled = booleanFlag(config.FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED, "FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED", false);
   const captainCommissionPaymentEnabled = booleanFlag(config.RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED, "RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED", false);
-  if (!customerCheckoutEnabled && !captainCommissionPaymentEnabled) {
-    throw new Error("Live Flutterwave payments require FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED=true or RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED=true for an explicitly approved payment purpose");
+  const partnerOnboardingPaymentEnabled = booleanFlag(config.PARTNER_ONBOARDING_PAYMENT_ENABLED, "PARTNER_ONBOARDING_PAYMENT_ENABLED", false);
+  if (!customerCheckoutEnabled && !captainCommissionPaymentEnabled && !partnerOnboardingPaymentEnabled) {
+    throw new Error("Live Flutterwave payments require FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED=true, RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED=true, or PARTNER_ONBOARDING_PAYMENT_ENABLED=true for an explicitly approved payment purpose");
   }
 }
 
@@ -846,6 +847,8 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     STANDARD_DELIVERY_FEE: positiveInteger(config.STANDARD_DELIVERY_FEE, "STANDARD_DELIVERY_FEE", 1000),
     PARCEL_DELIVERY_FEE: positiveInteger(config.PARCEL_DELIVERY_FEE, "PARCEL_DELIVERY_FEE", 1500),
     PAYMENTS_LIVE_ENABLED: paymentsLiveEnabled,
+    PARTNER_PUBLIC_ONBOARDING_ENABLED: booleanFlag(config.PARTNER_PUBLIC_ONBOARDING_ENABLED, "PARTNER_PUBLIC_ONBOARDING_ENABLED", false),
+    PARTNER_ONBOARDING_PAYMENT_ENABLED: booleanFlag(config.PARTNER_ONBOARDING_PAYMENT_ENABLED, "PARTNER_ONBOARDING_PAYMENT_ENABLED", false),
     PAYMENT_PROVIDER: paymentProvider,
     PAYMENTS_PROVIDER: paymentProvider,
     PAYSTACK_BASE_URL: typeof config.PAYSTACK_BASE_URL === "string" && config.PAYSTACK_BASE_URL.trim()

@@ -3,7 +3,7 @@ import { KariGoApiError, LaunchAvailabilityResponse, PartnerCapabilities, Produc
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Image, Linking, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { partnerApi, PartnerOnboardingDocument, PartnerOnboardingState, PartnerOrderSummary, PartnerProfile } from "../src/api/partner.api";
+import { partnerApi, PartnerCommercialState, PartnerOnboardingDocument, PartnerOnboardingState, PartnerOrderSummary, PartnerProfile } from "../src/api/partner.api";
 import { launchApi } from "../src/api/launch.api";
 import { AuthGate } from "../src/components/auth-gate";
 import { Badge, Card, EmptyState, Hero, LoadingState, MutedText, PrimaryButton, Screen, StatCard } from "../src/components/ui";
@@ -52,6 +52,9 @@ function DashboardContent() {
   const [availabilityMessage, setAvailabilityMessage] = useState<string | null>(null);
   const [availabilitySaving, setAvailabilitySaving] = useState(false);
   const [launchAvailability, setLaunchAvailability] = useState<LaunchAvailabilityResponse | null>(null);
+  const [commercial, setCommercial] = useState<PartnerCommercialState | null>(null);
+  const [commercialMessage, setCommercialMessage] = useState<string | null>(null);
+  const [paymentSaving, setPaymentSaving] = useState(false);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
@@ -62,6 +65,7 @@ function DashboardContent() {
 
     try {
       const onboardingState = await partnerApi.onboardingState();
+      setCommercial(await partnerApi.commercialState().catch(() => null));
       setPartnerState(onboardingState);
       if (onboardingState.state !== "approved") {
         setMissingProfile(true);
@@ -108,6 +112,38 @@ function DashboardContent() {
       setAvailabilitySaving(false);
     }
   }, [data.profile]);
+  const startOnboardingPayment = useCallback(async () => {
+    setPaymentSaving(true);
+    setCommercialMessage(null);
+    try {
+      const result = await partnerApi.initializeOnboardingPayment();
+      const checkoutUrl = result.authorization?.checkoutUrl ?? result.authorization?.authorizationUrl ?? result.payment.checkoutUrl;
+      setCommercialMessage(result.recovered ? "Existing onboarding payment recovered. Complete or verify this payment; a second charge was not created." : "Secure onboarding payment checkout is ready.");
+      if (checkoutUrl) await Linking.openURL(checkoutUrl);
+      setCommercial(await partnerApi.commercialState());
+    } catch (err) {
+      setCommercialMessage(err instanceof Error ? err.message : "Onboarding payment could not be initialized.");
+    } finally {
+      setPaymentSaving(false);
+    }
+  }, []);
+
+  const verifyOnboardingPayment = useCallback(async () => {
+    const reference = commercial?.payments?.[0]?.reference;
+    if (!reference) return;
+    setPaymentSaving(true);
+    setCommercialMessage(null);
+    try {
+      await partnerApi.verifyOnboardingPayment(reference);
+      setCommercialMessage("Onboarding payment verified. Your commercial readiness has been refreshed.");
+      setCommercial(await partnerApi.commercialState());
+    } catch (err) {
+      setCommercialMessage(err instanceof Error ? err.message : "Payment is still awaiting provider verification.");
+    } finally {
+      setPaymentSaving(false);
+    }
+  }, [commercial]);
+
 
   if (loading) return <LoadingState />;
 
@@ -132,6 +168,19 @@ function DashboardContent() {
           title={title}
           subtitle={body}
         />
+        {commercial?.agreement ? <Card>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Accepted commercial plan</Text>
+            <Badge label={formatLabel(commercial.feeState ?? "Accepted")} tone={commercial.feeState === "PAID" || commercial.feeState === "WAIVED" || commercial.feeState === "NOT_APPLICABLE" ? "success" : "warning"} />
+          </View>
+          <MutedText>{commercial.agreement.publicTitle} · Policy {commercial.agreement.policyVersion}</MutedText>
+          <MutedText>{commercial.agreement.commercialModel === "COMMISSION" ? `${commercial.agreement.commissionPercent}% KariGO commission on merchandise subtotal; KariGO delivery fee excluded.` : "0% sales/service commission under the accepted onboarding/platform-fee model."}</MutedText>
+          {commercial.agreement.onboardingFeeKobo !== null ? <MutedText>Onboarding fee: NGN {(commercial.agreement.onboardingFeeKobo / 100).toLocaleString("en-NG")} · {formatLabel(commercial.feeState)}</MutedText> : null}
+          {commercial.feeState === "FEE_NOT_CONFIGURED" ? <MutedText>KariGO is finalising the onboarding fee for this Partner category. No payment or activation is available yet.</MutedText> : null}
+          {commercialMessage ? <MutedText>{commercialMessage}</MutedText> : null}
+          {commercial.feeState === "PENDING" && commercial.payments?.[0] ? <PrimaryButton label={paymentSaving ? "Checking..." : "Verify completed payment"} onPress={() => void verifyOnboardingPayment()} disabled={paymentSaving} /> : null}
+          {commercial.feeState === "PENDING" && !commercial.payments?.[0] ? <PrimaryButton label={paymentSaving ? "Preparing..." : "Pay onboarding fee"} onPress={() => void startOnboardingPayment()} disabled={paymentSaving} /> : null}
+        </Card> : null}
         <Card>
           <MutedText>
             {partnerState?.account?.phoneNumber
@@ -186,6 +235,16 @@ function DashboardContent() {
           {data.profile?.city ?? "City pending"}, {data.profile?.state ?? "State pending"} - {partnerTypeLabel(data.capabilities?.partnerType)}
         </MutedText>
       </Card>
+
+      {commercial?.agreement ? <Card>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Commercial plan</Text>
+          <Badge label={formatLabel(commercial.feeState ?? "Accepted")} tone="success" />
+        </View>
+        <MutedText>{commercial.agreement.publicTitle} · Policy {commercial.agreement.policyVersion}</MutedText>
+        <MutedText>{commercial.agreement.commercialModel === "COMMISSION" ? `${commercial.agreement.commissionPercent}% KariGO commission on merchandise subtotal. KariGO delivery fee is excluded.` : "0% KariGO sales/service commission under the accepted commercial agreement."}</MutedText>
+        {commercial.agreement.onboardingFeeKobo !== null ? <MutedText>Onboarding fee: NGN {(commercial.agreement.onboardingFeeKobo / 100).toLocaleString("en-NG")} · {formatLabel(commercial.feeState)}</MutedText> : null}
+      </Card> : null}
 
       {launchAvailability ? <Card>
         <View style={styles.cardHeader}>

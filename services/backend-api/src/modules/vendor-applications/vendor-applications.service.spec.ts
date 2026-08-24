@@ -88,6 +88,7 @@ describe("VendorApplicationsService", () => {
     },
     order: { count: jest.fn() },
     vendorSettlement: { count: jest.fn() },
+    partnerCommercialAgreement: { count: jest.fn() },
     vendorPayoutAccount: { count: jest.fn() },
     orderItem: { count: jest.fn() },
     payment: { count: jest.fn() },
@@ -131,6 +132,7 @@ describe("VendorApplicationsService", () => {
       updatedAt: now
     });
     prisma.order.count.mockResolvedValue(0);
+    prisma.partnerCommercialAgreement.count.mockResolvedValue(0);
     prisma.vendorSettlement.count.mockResolvedValue(0);
     prisma.vendorPayoutAccount.count.mockResolvedValue(0);
     prisma.orderItem.count.mockResolvedValue(0);

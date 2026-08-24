@@ -192,6 +192,13 @@ export default function VendorsPage() {
         <p><Badge>Account: {vendor.status}</Badge> <Badge>Availability: {vendor.isOpen ? "Online" : "Offline"}</Badge></p>
         <p className="muted">Products: {vendor.productCount ?? 0} · Services: {vendor.serviceCount ?? 0} · Active orders: {vendor.activeOrderCount ?? vendor.totalOrders}</p>
         {vendor.applicationReference ? <p className="muted">Application: {vendor.applicationReference}</p> : null}
+        {vendor.commercialAgreement ? <div className="notice">
+          <strong>Current accepted commercial agreement</strong>
+          <p>{vendor.commercialAgreement.publicTitleSnapshot} <Badge>{vendor.commercialAgreement.commercialModel}</Badge></p>
+          <p>{vendor.commercialAgreement.commercialModel === "COMMISSION" ? `${vendor.commercialAgreement.commissionRateBasisPoints / 100}% KariGO commission` : "0% KariGO sales/service commission"} · policy {vendor.commercialAgreement.policyVersion}</p>
+          {vendor.commercialAgreement.onboardingFeeKobo !== null && vendor.commercialAgreement.onboardingFeeKobo !== undefined ? <p className="muted">Onboarding fee: NGN {(vendor.commercialAgreement.onboardingFeeKobo / 100).toLocaleString("en-NG")} · {vendor.commercialAgreement.onboardingPayments?.length ? "PAID" : vendor.commercialAgreement.feeWaiver ? "WAIVED" : "PENDING"}</p> : null}
+          <p className="muted">Accepted {new Date(vendor.commercialAgreement.acceptedAt).toLocaleString()}. This snapshot is read-only; future terms require a new version and agreement process.</p>
+        </div> : <p className="muted">Legacy Partner: no H11.2 commercial agreement snapshot. Historical economics remain unchanged.</p>}
         {vendor.status === "ACTIVE" ? <p className="notice">Suspending this partner blocks workspace access, product/service updates and new order acceptance. Outstanding operational history is preserved for audit and settlement review.</p> : null}
         <p className="muted">{trashSafetySummary(vendor)}</p>
         <p className="muted">{documentSummary(vendor)}</p>

@@ -527,6 +527,16 @@ describe("environment configuration", () => {
     expect(result.FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED).toBe(false);
   });
 
+  it("allows the separately approved Partner onboarding fee purpose without enabling customer checkout", () => {
+    const result = validateEnvironment(flutterwaveLiveConfig({
+      FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED: "false",
+      PARTNER_ONBOARDING_PAYMENT_ENABLED: "true"
+    }));
+
+    expect(result.PARTNER_ONBOARDING_PAYMENT_ENABLED).toBe(true);
+    expect(result.FLUTTERWAVE_CUSTOMER_CHECKOUT_ENABLED).toBe(false);
+  });
+
   it("allows approved live Flutterwave payment configuration", () => {
     const result = validateEnvironment(flutterwaveLiveConfig({
       PAYMENTS_PROVIDER: "flutterwave",

@@ -29,6 +29,7 @@ import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
 import { LaunchOperationsService } from "../launch-operations/launch-operations.service";
 import { captainIsApprovedForOperatingArea, captainOperatingAreaFromCoordinates, captainOperatingAreaFromText } from "../platform/captain-operating-areas";
+import { calculatePartnerSettlementKobo } from "../partner-commercial/partner-commercial-policy";
 import { captainCommissionOutstandingKobo } from "../taxi/ride-commission-policy";
 import { deriveRideEarningPresentation } from "./ride-earning-presentation";
 
@@ -329,7 +330,14 @@ export class DispatchService {
       });
 
       if (order.vendorId && order.vendor) {
-        const commissionAmount = order.subtotal.mul(order.vendor.commissionRate).div(100);
+        const agreement = order.vendor.commercialAgreement;
+        const commissionRateBasisPoints = agreement?.commissionRateBasisPoints ?? Math.round(order.vendor.commissionRate.toNumber() * 100);
+        const settlementMoney = calculatePartnerSettlementKobo({
+          merchandiseSubtotalKobo: Math.round(order.subtotal.mul(100).toNumber()),
+          deliveryFeeKobo: Math.round(order.deliveryFee.mul(100).toNumber()),
+          commissionRateBasisPoints
+        });
+        const commissionAmount = new Prisma.Decimal(settlementMoney.commissionKobo).div(100);
         await tx.vendorSettlement.upsert({
           where: { vendorId_orderId: { vendorId: order.vendorId, orderId: order.id } },
           update: {},
@@ -337,9 +345,13 @@ export class DispatchService {
             vendorId: order.vendorId,
             orderId: order.id,
             grossAmount: order.subtotal,
-            commissionRate: order.vendor.commissionRate,
+            commercialAgreementId: agreement?.id,
+            commercialModel: agreement?.commercialModel,
+            commissionableSubtotal: new Prisma.Decimal(settlementMoney.commissionableSubtotalKobo).div(100),
+            deliveryFeeExcluded: new Prisma.Decimal(settlementMoney.deliveryFeeExcludedKobo).div(100),
+            commissionRate: new Prisma.Decimal(commissionRateBasisPoints).div(100),
             commissionAmount,
-            netAmount: order.subtotal.sub(commissionAmount),
+            netAmount: new Prisma.Decimal(settlementMoney.partnerNetMerchandiseKobo).div(100),
             settlementStatus: SettlementStatus.PENDING
           }
         });
@@ -593,7 +605,7 @@ export class DispatchService {
     const rider = await this.requireRider(userId);
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, riderId: rider.id },
-      include: { vendor: { select: { commissionRate: true } } }
+      include: { vendor: { select: { commissionRate: true, commercialAgreement: { select: { id: true, commercialModel: true, commissionRateBasisPoints: true } } } } }
     });
     if (!order) throw new NotFoundException("Rider job not found");
     return { rider, order };

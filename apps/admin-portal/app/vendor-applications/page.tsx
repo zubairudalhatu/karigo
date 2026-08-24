@@ -16,6 +16,15 @@ function partnerTypeLabel(application: VendorApplication) {
   if (application.businessCategory === "SME_SERVICES" || source.includes("SERVICE PROVIDER")) return "Service Provider";
   return "Product Seller";
 }
+function commercialReadiness(application: VendorApplication) {
+  const agreement = application.commercialAgreement;
+  if (!agreement) return "Blocked: commercial agreement not accepted";
+  if (agreement.commercialModel !== "ONBOARDING_FEE") return agreement.commercialModel === "REVIEW_REQUIRED" ? "Blocked: commercial classification required" : "Commercial terms ready";
+  if (agreement.onboardingFeeKobo === null || agreement.onboardingFeeKobo === undefined) return "Blocked: onboarding fee not configured";
+  if (agreement.onboardingFeeKobo === 0 || agreement.feeWaiver) return agreement.feeWaiver ? "Fee waived by authorized Finance role" : "Explicit zero-fee policy";
+  return agreement.onboardingPayments?.some((payment) => payment.status === "SUCCESSFUL") ? "Provider-verified onboarding fee paid" : "Blocked: onboarding fee unpaid";
+}
+
 
 export default function VendorApplicationsPage() {
   const [applications, setApplications] = useState<VendorApplication[]>([]);
@@ -72,6 +81,26 @@ export default function VendorApplicationsPage() {
       setActioning("");
     }
   }
+  async function waiveOnboardingFee(application: VendorApplication) {
+    const agreement = application.commercialAgreement;
+    if (!agreement) return;
+    const reason = window.prompt("Required waiver reason");
+    if (!reason?.trim()) return;
+    const note = window.prompt("Required governance note (do not include private payment data)");
+    if (!note?.trim()) return;
+    if (!window.confirm(`Record an explicit NGN ${((agreement.onboardingFeeKobo ?? 0) / 100).toLocaleString("en-NG")} onboarding fee waiver? This is audited and does not delete the obligation.`)) return;
+    try {
+      setError(""); setMessage(""); setActioning(application.id);
+      await vendorApplicationsApi.waiveOnboardingFee(agreement.id, reason, note);
+      setMessage("Authorized onboarding fee waiver recorded with actor, amount, reason and timestamp.");
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    } finally {
+      setActioning("");
+    }
+  }
+
 
   async function resendActivationLink(application: VendorApplication) {
     if (!application.vendor) return;
@@ -168,6 +197,17 @@ export default function VendorApplicationsPage() {
           {application.vendor.activationInvitations?.[0] ? <p className="muted">Latest activation invitation: {application.vendor.activationInvitations[0].status} - expires {new Date(application.vendor.activationInvitations[0].expiresAt).toLocaleString()}</p> : <p className="muted">No activation invitation has been issued yet.</p>}
           {application.vendor.user.accountStatus !== "ACTIVE" ? <button className="secondary" onClick={() => void resendActivationLink(application)}>Send new activation link</button> : null}
         </div> : <p className="muted">No linked vendor account yet. Approving the application creates or links the Vendor account.</p>}
+        {application.commercialAgreement ? <div className="notice">
+          <strong>Accepted commercial agreement</strong>
+          <p>{application.commercialAgreement.publicTitleSnapshot} <Badge>{application.commercialAgreement.commercialModel}</Badge></p>
+          <p className="muted">Policy {application.commercialAgreement.policyVersion} · accepted {new Date(application.commercialAgreement.acceptedAt).toLocaleString()}</p>
+          <p>{application.commercialAgreement.commercialModel === "COMMISSION" ? `${application.commercialAgreement.commissionRateBasisPoints / 100}% KariGO commission on merchandise subtotal; delivery fee excluded.` : `0% sales/service commission · onboarding fee ${application.commercialAgreement.onboardingFeeKobo === null || application.commercialAgreement.onboardingFeeKobo === undefined ? "FEE NOT CONFIGURED" : `NGN ${(application.commercialAgreement.onboardingFeeKobo / 100).toLocaleString("en-NG")}`}`}</p>
+          <p><Badge>{commercialReadiness(application)}</Badge></p>
+          {application.commercialAgreement.onboardingPayments?.map((payment) => <p className="muted" key={payment.id}>Payment {payment.transactionReference}: {payment.status}{payment.verifiedAt ? ` · verified ${new Date(payment.verifiedAt).toLocaleString()}` : ""}</p>)}
+          {application.commercialAgreement.feeWaiver ? <p className="muted">Waiver: {application.commercialAgreement.feeWaiver.reason} · {new Date(application.commercialAgreement.feeWaiver.waivedAt).toLocaleString()}</p> : null}
+          <p className="muted">Activation still independently requires application approval and approved onboarding documents.</p>
+        </div> : <p className="notice">Activation blocked: no accepted commercial agreement.</p>}
+          {application.commercialAgreement && application.commercialAgreement.commercialModel === "ONBOARDING_FEE" && (application.commercialAgreement.onboardingFeeKobo ?? 0) > 0 && !application.commercialAgreement.feeWaiver && !application.commercialAgreement.onboardingPayments?.some((payment) => payment.status === "SUCCESSFUL") ? <button className="secondary" disabled={actioning === application.id} onClick={() => void waiveOnboardingFee(application)}>Record authorized fee waiver</button> : null}
         {application.documents?.length ? <div className="notice"><strong>Documents</strong>{application.documents.map((document) => <p key={document.id}><a href={document.documentUrl} target="_blank" rel="noreferrer">{document.documentName || document.documentType}</a> <Badge>{document.verificationStatus}</Badge></p>)}</div> : <p className="muted">No application documents supplied yet.</p>}
         {!application.inTrash ? <div className="filters">{reviewStatuses.map((status) => <button key={status} className="secondary" disabled={actioning === application.id || status === application.status} onClick={() => void review(application.id, status)}>{status.replaceAll("_", " ")}</button>)}</div> : null}
         {!application.inTrash ? <div className="notice">

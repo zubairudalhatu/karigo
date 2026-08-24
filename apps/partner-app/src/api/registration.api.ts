@@ -10,6 +10,28 @@ export type VendorApplicationCategory =
   | "OTHER_MARKETPLACE_VENDOR";
 
 export type PreferredContactMethod = "PHONE" | "EMAIL" | "WHATSAPP";
+export type PartnerCommercialModel = "COMMISSION" | "ONBOARDING_FEE" | "QUOTATION" | "REVIEW_REQUIRED";
+
+export interface PartnerCommercialPolicy {
+  id: string;
+  businessCategory: VendorApplicationCategory;
+  commercialModel: PartnerCommercialModel;
+  commissionRateBasisPoints: number;
+  commissionPercent: number;
+  onboardingFeeKobo: number | null;
+  onboardingFeeConfigured: boolean;
+  renewalFeeKobo: number | null;
+  currency: "NGN";
+  publicTitle: string;
+  publicSummary: string;
+  policyVersion: string;
+  termsVersion: string;
+  effectiveFrom: string;
+  publicOnboardingEnabled: boolean;
+  categoryPublicOnboardingEnabled: boolean;
+  visibleInPublicCategorySelection: boolean;
+}
+
 
 export interface VendorApplicationInput {
   businessCategory: VendorApplicationCategory;
@@ -41,6 +63,10 @@ export interface VendorApplicationInput {
   brandAssets?: Record<string, unknown>;
   documentPlaceholders?: Record<string, unknown>;
   documents?: Array<{ documentType: string; documentName?: string; documentUrl: string }>;
+  commercialPolicyId: string;
+  commercialTermsAccepted: boolean;
+  acceptedTermsVersion: string;
+  acceptedFromAppSurface: "partner-mobile-app";
   declarationAccepted: boolean;
   privacyAccepted: boolean;
   contactConsentAccepted: boolean;
@@ -91,6 +117,7 @@ export interface PartnerOnboardingResult {
 }
 
 export const registrationApi = {
+  commercialPolicies: () => api.get<PartnerCommercialPolicy[]>("partner-commercial/policies", { authenticated: false }),
   ensurePartnerOnboarding: () =>
     api.post<PartnerOnboardingResult>("vendor-applications/me/ensure"),
   savePartnerDraft: (body: PartnerOnboardingDraftInput) =>

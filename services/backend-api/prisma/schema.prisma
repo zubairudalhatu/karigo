@@ -240,6 +240,23 @@ enum VendorApplicationCategory {
   OTHER_MARKETPLACE_VENDOR
 }
 
+enum PartnerCommercialModel {
+  COMMISSION
+  ONBOARDING_FEE
+  QUOTATION
+  REVIEW_REQUIRED
+}
+
+enum PartnerOnboardingPaymentStatus {
+  PENDING
+  INITIALIZED
+  SUCCESSFUL
+  VERIFICATION_FAILED
+  FAILED
+  CANCELLED
+  REVIEW_REQUIRED
+}
+
 enum PreferredContactMethod {
   PHONE
   EMAIL
@@ -868,6 +885,7 @@ model User {
   statusChanges                       OrderStatusHistory[]                 @relation("StatusChangedBy")
   verifiedDocuments                   RiderDocument[]                      @relation("DocumentVerifiedBy")
   vendorApplications                  VendorApplication[]                  @relation("VendorApplicant")
+  partnerCommercialAgreements         PartnerCommercialAgreement[]
   partnerOnboardingDraft              PartnerOnboardingDraft?
   deliveryCaptainApplications         DeliveryCaptainApplication[]         @relation("DeliveryCaptainApplicant")
   assignedTickets                     SupportTicket[]                      @relation("TicketAssignedAdmin")
@@ -1963,6 +1981,7 @@ model VendorApplication {
   applicant              User?                            @relation("VendorApplicant", fields: [applicantUserId], references: [id])
   vendor                 Vendor?                          @relation("VendorApplicationApprovedVendor", fields: [vendorId], references: [id])
   partnerOnboardingDraft PartnerOnboardingDraft?
+  commercialAgreement    PartnerCommercialAgreement?
 
   @@index([status])
   @@index([applicantUserId])
@@ -1988,6 +2007,110 @@ model PartnerOnboardingDraft {
   @@index([onboardingStage])
   @@index([submittedAt])
   @@map("partner_onboarding_drafts")
+}
+
+model PartnerCommercialPolicy {
+  id                        String                       @id @default(uuid()) @db.Uuid
+  businessCategory          VendorApplicationCategory
+  commercialModel           PartnerCommercialModel
+  commissionRateBasisPoints Int                          @default(0)
+  onboardingFeeKobo         Int?
+  renewalFeeKobo            Int?
+  currency                  String                       @default("NGN")
+  effectiveFrom             DateTime
+  effectiveTo               DateTime?
+  isActive                  Boolean                      @default(true)
+  publicOnboardingEnabled   Boolean                      @default(false)
+  publicTitle               String
+  publicSummary             String
+  policyVersion             String
+  internalNote              String?
+  createdByAdminId          String?                      @db.Uuid
+  updatedByAdminId          String?                      @db.Uuid
+  createdAt                 DateTime                     @default(now())
+  updatedAt                 DateTime                     @updatedAt
+  agreements                PartnerCommercialAgreement[]
+
+  @@unique([businessCategory, policyVersion])
+  @@index([businessCategory, isActive, effectiveFrom])
+  @@index([isActive, effectiveFrom, effectiveTo])
+  @@map("partner_commercial_policies")
+}
+
+model PartnerCommercialAgreement {
+  id                        String                      @id @default(uuid()) @db.Uuid
+  applicationId             String                      @unique @db.Uuid
+  applicantUserId           String                      @db.Uuid
+  policyId                  String                      @db.Uuid
+  category                  VendorApplicationCategory
+  policyVersion             String
+  commercialModel           PartnerCommercialModel
+  commissionRateBasisPoints Int
+  onboardingFeeKobo         Int?
+  renewalFeeKobo            Int?
+  vendorSettlements         VendorSettlement[]
+  currency                  String                      @default("NGN")
+  publicTitleSnapshot       String
+  publicSummarySnapshot     String
+  policySnapshot            Json
+  policyHash                String
+  acceptedAt                DateTime                    @default(now())
+  acceptedTermsVersion      String
+  acceptedFromAppSurface    String
+  createdAt                 DateTime                    @default(now())
+  updatedAt                 DateTime                    @updatedAt
+  application               VendorApplication           @relation(fields: [applicationId], references: [id])
+  applicant                 User                        @relation(fields: [applicantUserId], references: [id])
+  policy                    PartnerCommercialPolicy     @relation(fields: [policyId], references: [id])
+  vendor                    Vendor?
+  onboardingPayments        PartnerOnboardingPayment[]
+  feeWaiver                 PartnerOnboardingFeeWaiver?
+
+  @@index([applicantUserId, acceptedAt])
+  @@index([category, commercialModel])
+  @@index([policyId])
+  @@map("partner_commercial_agreements")
+}
+
+model PartnerOnboardingPayment {
+  id                           String                         @id @default(uuid()) @db.Uuid
+  agreementId                  String                         @db.Uuid
+  provider                     String
+  transactionReference         String                         @unique
+  providerTransactionReference String?                        @unique
+  amountKobo                   Int
+  currency                     String                         @default("NGN")
+  status                       PartnerOnboardingPaymentStatus @default(PENDING)
+  authorizationUrl             String?
+  providerResponse             Json?
+  initializedAt                DateTime?
+  verifiedAt                   DateTime?
+  failedAt                     DateTime?
+  failureReason                String?
+  expiresAt                    DateTime?
+  createdAt                    DateTime                       @default(now())
+  updatedAt                    DateTime                       @updatedAt
+  agreement                    PartnerCommercialAgreement     @relation(fields: [agreementId], references: [id])
+
+  @@index([agreementId, status, createdAt])
+  @@index([provider, status])
+  @@map("partner_onboarding_payments")
+}
+
+model PartnerOnboardingFeeWaiver {
+  id               String                     @id @default(uuid()) @db.Uuid
+  agreementId      String                     @unique @db.Uuid
+  amountWaivedKobo Int
+  currency         String                     @default("NGN")
+  reason           String
+  note             String?
+  waivedByAdminId  String                     @db.Uuid
+  waivedAt         DateTime                   @default(now())
+  createdAt        DateTime                   @default(now())
+  agreement        PartnerCommercialAgreement @relation(fields: [agreementId], references: [id])
+
+  @@index([waivedByAdminId, waivedAt])
+  @@map("partner_onboarding_fee_waivers")
 }
 
 model VendorApplicationDocument {
@@ -2039,9 +2162,9 @@ model VendorApplicationStatusHistory {
 }
 
 model Vendor {
-  id                    String                     @id @default(uuid()) @db.Uuid
-  userId                String                     @unique @db.Uuid
-  categoryId            String?                    @db.Uuid
+  id                    String                      @id @default(uuid()) @db.Uuid
+  userId                String                      @unique @db.Uuid
+  categoryId            String?                     @db.Uuid
   businessName          String
   businessCategory      String
   description           String?
@@ -2050,25 +2173,26 @@ model Vendor {
   address               String
   city                  String
   state                 String
-  latitude              Decimal?                   @db.Decimal(10, 7)
-  longitude             Decimal?                   @db.Decimal(10, 7)
+  latitude              Decimal?                    @db.Decimal(10, 7)
+  longitude             Decimal?                    @db.Decimal(10, 7)
   logoUrl               String?
   coverImageUrl         String?
   openingTime           String?
   closingTime           String?
-  isOpen                Boolean                    @default(false)
-  commissionRate        Decimal                    @default(15) @db.Decimal(5, 2)
+  commercialAgreementId String?                     @unique @db.Uuid
+  isOpen                Boolean                     @default(false)
+  commissionRate        Decimal                     @default(15) @db.Decimal(5, 2)
   bankName              String?
   accountNumber         String?
   accountName           String?
-  status                VendorStatus               @default(PENDING_APPROVAL)
-  rating                Decimal?                   @db.Decimal(3, 2)
-  totalOrders           Int                        @default(0)
+  status                VendorStatus                @default(PENDING_APPROVAL)
+  rating                Decimal?                    @db.Decimal(3, 2)
+  totalOrders           Int                         @default(0)
   deletedAt             DateTime?
-  createdAt             DateTime                   @default(now())
-  updatedAt             DateTime                   @updatedAt
-  user                  User                       @relation(fields: [userId], references: [id])
-  category              VendorCategory?            @relation(fields: [categoryId], references: [id])
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  user                  User                        @relation(fields: [userId], references: [id])
+  category              VendorCategory?             @relation(fields: [categoryId], references: [id])
   products              Product[]
   services              VendorService[]
   adCampaigns           AdCampaign[]
@@ -2082,7 +2206,8 @@ model Vendor {
   auditLogs             VendorAuditLog[]
   activationInvitations VendorAccountActivation[]
   onboardingDocuments   VendorOnboardingDocument[]
-  sourceApplication     VendorApplication?         @relation("VendorApplicationApprovedVendor")
+  sourceApplication     VendorApplication?          @relation("VendorApplicationApprovedVendor")
+  commercialAgreement   PartnerCommercialAgreement? @relation(fields: [commercialAgreementId], references: [id])
 
   @@index([status, city])
   @@map("vendors")
@@ -2651,22 +2776,28 @@ model CustomerReferralRewardRule {
 }
 
 model VendorSettlement {
-  id               String           @id @default(uuid()) @db.Uuid
-  vendorId         String           @db.Uuid
-  orderId          String           @db.Uuid
-  grossAmount      Decimal          @db.Decimal(12, 2)
-  commissionRate   Decimal          @db.Decimal(5, 2)
-  commissionAmount Decimal          @db.Decimal(12, 2)
-  netAmount        Decimal          @db.Decimal(12, 2)
-  settlementStatus SettlementStatus @default(PENDING)
-  paidAt           DateTime?
-  paymentReference String?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  vendor           Vendor           @relation(fields: [vendorId], references: [id])
-  order            Order            @relation(fields: [orderId], references: [id])
+  id                     String                      @id @default(uuid()) @db.Uuid
+  vendorId               String                      @db.Uuid
+  orderId                String                      @db.Uuid
+  commercialAgreementId  String?                     @db.Uuid
+  commercialModel        PartnerCommercialModel?
+  grossAmount            Decimal                     @db.Decimal(12, 2)
+  commissionableSubtotal Decimal?                    @db.Decimal(12, 2)
+  deliveryFeeExcluded    Decimal?                    @db.Decimal(12, 2)
+  commissionRate         Decimal                     @db.Decimal(5, 2)
+  commissionAmount       Decimal                     @db.Decimal(12, 2)
+  netAmount              Decimal                     @db.Decimal(12, 2)
+  settlementStatus       SettlementStatus            @default(PENDING)
+  paidAt                 DateTime?
+  paymentReference       String?
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+  vendor                 Vendor                      @relation(fields: [vendorId], references: [id])
+  order                  Order                       @relation(fields: [orderId], references: [id])
+  commercialAgreement    PartnerCommercialAgreement? @relation(fields: [commercialAgreementId], references: [id])
 
   @@unique([vendorId, orderId])
+  @@index([commercialAgreementId])
   @@map("vendor_settlements")
 }
 

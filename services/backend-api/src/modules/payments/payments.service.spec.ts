@@ -64,13 +64,15 @@ describe("PaymentsService", () => {
     get: jest.fn((_: string, fallback?: unknown) => fallback)
   };
   const rideCommissionPayments = { exists: jest.fn().mockResolvedValue(false), processWebhook: jest.fn() };
+  const partnerOnboardingPayments = { exists: jest.fn().mockResolvedValue(false), processWebhook: jest.fn() };
   const service = new PaymentsService(
     prisma as unknown as PrismaService,
     registry as unknown as PaymentProviderRegistry,
     audit as never,
     notifications as never,
     config as never,
-    rideCommissionPayments as never
+    rideCommissionPayments as never,
+    partnerOnboardingPayments as never
   );
 
   beforeEach(() => {
@@ -81,6 +83,7 @@ describe("PaymentsService", () => {
     registry.get.mockReturnValue(mockProvider);
     config.get.mockImplementation((_: string, fallback?: unknown) => fallback);
     rideCommissionPayments.exists.mockResolvedValue(false);
+    partnerOnboardingPayments.exists.mockResolvedValue(false);
     prisma.$transaction.mockImplementation((callback) => callback(tx));
   });
 
@@ -1366,6 +1369,26 @@ describe("PaymentsService", () => {
         statusHistory: expect.any(Object)
       })
     });
+  });
+
+  it("routes a Partner onboarding fee webhook independently of Ride commission references", async () => {
+    const webhookResult = {
+      eventType: "charge.completed",
+      transactionReference: "KGO-PARTNER-FEE-ROUTE-1",
+      successful: true,
+      verified: true,
+      amountMinor: 250_000,
+      currency: "NGN",
+      providerResponse: { data: { flw_ref: "FLW-PARTNER-1" } }
+    };
+    mockProvider.parseWebhook.mockResolvedValue(webhookResult);
+    partnerOnboardingPayments.exists.mockResolvedValue(true);
+    partnerOnboardingPayments.processWebhook.mockResolvedValue({ processed: true, duplicate: false });
+
+    await expect(service.webhook("mock", {})).resolves.toEqual({ processed: true, duplicate: false });
+
+    expect(partnerOnboardingPayments.processWebhook).toHaveBeenCalledWith(mockProvider, webhookResult);
+    expect(rideCommissionPayments.exists).not.toHaveBeenCalled();
   });
 
   it("stores and processes a verified mock webhook", async () => {

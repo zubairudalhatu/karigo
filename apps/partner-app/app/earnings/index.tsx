@@ -25,8 +25,10 @@ function SettlementCard({ settlement }: { settlement: VendorSettlement }) {
         <Badge label={formatLabel(settlement.settlementStatus)} tone={statusTone(settlement.settlementStatus)} />
       </View>
       <Text style={styles.amount}>{money(settlement.settlementAmount)}</Text>
-      <MutedText>Order subtotal: {money(settlement.grossOrderSubtotal)}</MutedText>
-      <MutedText>Platform fee: {money(settlement.platformFee)} at {Number(settlement.commissionRate)}%</MutedText>
+      {settlement.commercialPlan ? <MutedText>Commercial plan: {settlement.commercialPlan}{settlement.policyVersion ? ` · ${settlement.policyVersion}` : ""}</MutedText> : null}
+      <MutedText>Gross merchandise sales: {money(settlement.commissionableSubtotal ?? settlement.grossOrderSubtotal)}</MutedText>
+      <MutedText>KariGO {settlement.commercialModel === "ONBOARDING_FEE" ? "sales commission" : "commission"}: {money(settlement.platformFee)} at {Number(settlement.commissionRate)}%</MutedText>
+      <MutedText>Delivery fee excluded from commission: {money(settlement.deliveryFeeExcluded ?? settlement.deliveryFee ?? 0)}</MutedText>
       <MutedText>Completed: {formatDate(settlement.orderCompletedAt)} - Paid: {formatDate(settlement.paidAt)}</MutedText>
       {settlement.payoutReference ? <MutedText>Reference: {settlement.payoutReference}</MutedText> : null}
     </Card>

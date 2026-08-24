@@ -252,6 +252,77 @@ describe("DispatchService", () => {
       data: expect.objectContaining({ orderStatus: OrderStatus.COMPLETED, deliveryOtp: null })
     }));
   });
+  it("uses the accepted Restaurant 10% snapshot on merchandise subtotal and excludes delivery fee", async () => {
+    prisma.rider.findUnique.mockResolvedValue({ id: "rider-1", user: { accountStatus: AccountStatus.ACTIVE } });
+    prisma.order.findFirst.mockResolvedValue({
+      id: "restaurant-order", vendorId: "restaurant-1", orderStatus: OrderStatus.DELIVERED,
+      paymentStatus: PaymentStatus.SUCCESSFUL, deliveryOtp: validDeliveryOtp,
+      deliveryFee: new Prisma.Decimal(1500), subtotal: new Prisma.Decimal(10000),
+      vendor: {
+        commissionRate: new Prisma.Decimal(15),
+        commercialAgreement: { id: "agreement-restaurant", commercialModel: "COMMISSION", commissionRateBasisPoints: 1000 }
+      }
+    });
+    tx.order.update.mockResolvedValue({ id: "restaurant-order" });
+
+    await service.completeJob("rider-user-1", "restaurant-order", { deliveryOtp: validDeliveryOtp });
+
+    expect(tx.vendorSettlement.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      update: {},
+      create: expect.objectContaining({
+        commercialAgreementId: "agreement-restaurant",
+        commissionableSubtotal: new Prisma.Decimal(10000),
+        deliveryFeeExcluded: new Prisma.Decimal(1500),
+        commissionRate: new Prisma.Decimal(10),
+        commissionAmount: new Prisma.Decimal(1000),
+        netAmount: new Prisma.Decimal(9000)
+      })
+    }));
+  });
+
+  it("uses zero commission for accepted onboarding-fee categories even when legacy Vendor rate is 15%", async () => {
+    prisma.rider.findUnique.mockResolvedValue({ id: "rider-1", user: { accountStatus: AccountStatus.ACTIVE } });
+    prisma.order.findFirst.mockResolvedValue({
+      id: "grocery-order", vendorId: "grocery-1", orderStatus: OrderStatus.DELIVERED,
+      paymentStatus: PaymentStatus.SUCCESSFUL, deliveryOtp: validDeliveryOtp,
+      deliveryFee: new Prisma.Decimal(900), subtotal: new Prisma.Decimal(8374.55),
+      vendor: {
+        commissionRate: new Prisma.Decimal(15),
+        commercialAgreement: { id: "agreement-grocery", commercialModel: "ONBOARDING_FEE", commissionRateBasisPoints: 0 }
+      }
+    });
+    tx.order.update.mockResolvedValue({ id: "grocery-order" });
+
+    await service.completeJob("rider-user-1", "grocery-order", { deliveryOtp: validDeliveryOtp });
+
+    expect(tx.vendorSettlement.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({
+        commissionRate: new Prisma.Decimal(0),
+        commissionAmount: new Prisma.Decimal(0),
+        netAmount: new Prisma.Decimal(8374.55),
+        deliveryFeeExcluded: new Prisma.Decimal(900)
+      })
+    }));
+  });
+
+  it("keeps settlement creation idempotent on order retry", async () => {
+    prisma.rider.findUnique.mockResolvedValue({ id: "rider-1", user: { accountStatus: AccountStatus.ACTIVE } });
+    prisma.order.findFirst.mockResolvedValue({
+      id: "retry-order", vendorId: "vendor-1", orderStatus: OrderStatus.DELIVERED,
+      paymentStatus: PaymentStatus.SUCCESSFUL, deliveryOtp: validDeliveryOtp,
+      deliveryFee: new Prisma.Decimal(500), subtotal: new Prisma.Decimal(2000),
+      vendor: { commissionRate: new Prisma.Decimal(15), commercialAgreement: { id: "agreement-1", commercialModel: "COMMISSION", commissionRateBasisPoints: 1000 } }
+    });
+    tx.order.update.mockResolvedValue({ id: "retry-order" });
+
+    await service.completeJob("rider-user-1", "retry-order", { deliveryOtp: validDeliveryOtp });
+
+    expect(tx.vendorSettlement.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { vendorId_orderId: { vendorId: "vendor-1", orderId: "retry-order" } },
+      update: {}
+    }));
+  });
+
 
   it("does not expose delivery OTP in rider job responses", async () => {
     prisma.rider.findUnique.mockResolvedValue({

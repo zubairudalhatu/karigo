@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { AccountStatus, Prisma, UserRole, VendorActivationInvitationStatus, VendorApplicationStatus, VendorStatus } from "@prisma/client";
 import { hash } from "bcrypt";
@@ -6,6 +6,7 @@ import { createHash, randomBytes } from "crypto";
 import { ApplicationNotificationsService } from "../../common/services/application-notifications.service";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../common/utils/phone.util";
 import { PrismaService } from "../../prisma/prisma.service";
+import { PartnerCommercialService } from "../partner-commercial/partner-commercial.service";
 import { CreateVendorApplicationDto } from "./dto/create-vendor-application.dto";
 import { PartnerOnboardingDraftDto } from "./dto/partner-onboarding-draft.dto";
 import { ReviewVendorApplicationDto } from "./dto/review-vendor-application.dto";
@@ -72,6 +73,25 @@ const APPLICATION_SELECT = {
   reviews: { orderBy: { createdAt: "desc" }, take: 5 },
   statusHistory: { orderBy: { createdAt: "desc" }, take: 10 },
   documents: { orderBy: { uploadedAt: "desc" } },
+  commercialAgreement: {
+    select: {
+      id: true,
+      policyId: true,
+      policyVersion: true,
+      category: true,
+      commercialModel: true,
+      commissionRateBasisPoints: true,
+      onboardingFeeKobo: true,
+      renewalFeeKobo: true,
+      currency: true,
+      publicTitleSnapshot: true,
+      publicSummarySnapshot: true,
+      acceptedAt: true,
+      acceptedTermsVersion: true,
+      onboardingPayments: { select: { id: true, transactionReference: true, amountKobo: true, currency: true, status: true, verifiedAt: true }, orderBy: { createdAt: "desc" as const } },
+      feeWaiver: { select: { id: true, amountWaivedKobo: true, currency: true, reason: true, waivedAt: true } }
+    }
+  },
   vendor: {
     select: {
       id: true,
@@ -107,7 +127,9 @@ export class VendorApplicationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly applicationNotifications: ApplicationNotificationsService,
-    private readonly config?: ConfigService
+    private readonly config?: ConfigService,
+    @Optional()
+    private readonly partnerCommercial?: PartnerCommercialService
   ) {}
 
   async create(dto: CreateVendorApplicationDto) {
@@ -119,6 +141,9 @@ export class VendorApplicationsService {
     const contactPhoneNumber = this.normalizePhone(dto.contactPhoneNumber);
     const applicant = await this.requireApplicantAccount(contactPhoneNumber);
     await this.assertNoActiveDuplicateApplication(applicant.id, contactPhoneNumber);
+    const commercialAgreement = this.partnerCommercial
+      ? await this.partnerCommercial.prepareAgreement(applicant.id, dto)
+      : undefined;
 
     const data: Prisma.VendorApplicationCreateInput = {
         applicant: { connect: { id: applicant.id } },
@@ -159,6 +184,7 @@ export class VendorApplicationsService {
         } : undefined,
         declarationAccepted: dto.declarationAccepted,
         privacyAccepted: dto.privacyAccepted,
+        commercialAgreement: commercialAgreement ? { create: commercialAgreement } : undefined,
         contactConsentAccepted: dto.contactConsentAccepted,
         reference: await this.nextReference(),
         status: VendorApplicationStatus.SUBMITTED,
@@ -352,6 +378,23 @@ export class VendorApplicationsService {
     this.assertPartnerOnboardingAccount(user);
     const businessPhoneNumber = this.normalizePhone(dto.businessPhoneNumber);
     const contactPhoneNumber = this.normalizePhone(dto.contactPhoneNumber || user.phoneNumber);
+    const existingBeforeAgreement = await this.findCurrentUserApplication(this.prisma, user, contactPhoneNumber, dto.contactEmail);
+    if (existingBeforeAgreement) {
+      await this.prisma.partnerOnboardingDraft.upsert({
+        where: { userId },
+        update: { applicationId: existingBeforeAgreement.id, onboardingStage: "SUBMITTED", submittedAt: existingBeforeAgreement.submittedAt },
+        create: { userId, applicationId: existingBeforeAgreement.id, onboardingStage: "SUBMITTED", submittedAt: existingBeforeAgreement.submittedAt }
+      });
+      return {
+        ...this.toPublicStatus(existingBeforeAgreement),
+        alreadySubmitted: true,
+        message: "Your Partner application has already been submitted."
+      };
+    }
+
+    const commercialAgreement = this.partnerCommercial
+      ? await this.partnerCommercial.prepareAgreement(user.id, dto)
+      : undefined;
     const reference = await this.nextReference();
 
     const { application, createdForNotification } = await this.prisma.$transaction(async (tx): Promise<{
@@ -398,7 +441,7 @@ export class VendorApplicationsService {
       }
 
       const created = await tx.vendorApplication.create({
-        data: this.vendorApplicationCreateData(dto, user.id, businessPhoneNumber, contactPhoneNumber, reference),
+        data: this.vendorApplicationCreateData(dto, user.id, businessPhoneNumber, contactPhoneNumber, reference, commercialAgreement),
         select: APPLICATION_SELECT
       });
       await tx.partnerOnboardingDraft.update({
@@ -467,6 +510,9 @@ export class VendorApplicationsService {
     }
 
     const shouldApprove = dto.status === VendorApplicationStatus.APPROVED;
+    if (shouldApprove && this.partnerCommercial && !current.commercialAgreement) {
+      throw new BadRequestException("The applicant must accept the current Partner commercial agreement before approval.");
+    }
     const activationToken = shouldApprove ? randomBytes(40).toString("base64url") : null;
     const activationExpiresAt = shouldApprove ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null;
     const placeholderPasswordHash = shouldApprove ? await hash(randomBytes(32).toString("hex"), 12) : null;
@@ -808,7 +854,8 @@ export class VendorApplicationsService {
     applicantUserId: string,
     businessPhoneNumber: string,
     contactPhoneNumber: string,
-    reference: string
+    reference: string,
+    commercialAgreement?: Prisma.PartnerCommercialAgreementCreateWithoutApplicationInput
   ): Prisma.VendorApplicationCreateInput {
     return {
       applicant: { connect: { id: applicantUserId } },
@@ -851,6 +898,7 @@ export class VendorApplicationsService {
       privacyAccepted: dto.privacyAccepted,
       contactConsentAccepted: dto.contactConsentAccepted,
       reference,
+      commercialAgreement: commercialAgreement ? { create: commercialAgreement } : undefined,
       status: VendorApplicationStatus.SUBMITTED,
       statusHistory: {
         create: {
@@ -970,6 +1018,15 @@ export class VendorApplicationsService {
         where: { id: application.id },
         data: { vendorId: user.vendor.id }
       });
+      if (application.commercialAgreement) {
+        await tx.vendor.update({
+          where: { id: user.vendor.id },
+          data: {
+            commercialAgreementId: application.commercialAgreement.id,
+            commissionRate: new Prisma.Decimal(application.commercialAgreement.commissionRateBasisPoints).div(100)
+          }
+        });
+      }
       return {
         vendorId: user.vendor.id,
         userId: user.id,
@@ -990,6 +1047,8 @@ export class VendorApplicationsService {
         city: application.city,
         state: application.state,
         status: VendorStatus.PENDING_APPROVAL,
+        commissionRate: application.commercialAgreement ? new Prisma.Decimal(application.commercialAgreement.commissionRateBasisPoints).div(100) : undefined,
+        commercialAgreementId: application.commercialAgreement?.id,
         isOpen: false,
         branches: {
           create: {
@@ -1165,18 +1224,19 @@ export class VendorApplicationsService {
 
   private async permanentDeleteSafety(application: Prisma.VendorApplicationGetPayload<{ select: typeof APPLICATION_SELECT }>) {
     const vendorId = application.vendorId;
-    const [orders, settlements, payoutAccounts, orderItems, payments, documents, reviews, history] = await Promise.all([
+    const [orders, settlements, payoutAccounts, orderItems, payments, commercialAgreements, documents, reviews, history] = await Promise.all([
       vendorId ? this.prisma.order.count({ where: { vendorId } }) : Promise.resolve(0),
       vendorId ? this.prisma.vendorSettlement.count({ where: { vendorId } }) : Promise.resolve(0),
       vendorId ? this.prisma.vendorPayoutAccount.count({ where: { vendorId } }) : Promise.resolve(0),
       vendorId ? this.prisma.orderItem.count({ where: { product: { vendorId } } }) : Promise.resolve(0),
       vendorId ? this.prisma.payment.count({ where: { order: { is: { vendorId } } } }) : Promise.resolve(0),
+      this.prisma.partnerCommercialAgreement.count({ where: { applicationId: application.id } }),
       this.prisma.vendorApplicationDocument.count({ where: { applicationId: application.id } }),
       this.prisma.vendorApplicationReview.count({ where: { applicationId: application.id } }),
       this.prisma.vendorApplicationStatusHistory.count({ where: { applicationId: application.id } })
     ]);
 
-    const protectedRecordCounts = { orders, settlements, payoutAccounts, orderItems, payments };
+    const protectedRecordCounts = { orders, settlements, payoutAccounts, orderItems, payments, commercialAgreements };
     const activeApprovedVendorProfile = Boolean(application.vendor && !application.vendor.deletedAt);
     const blockedBy = [
       ...(!application.deletedAt ? ["Application must be moved to Trash before permanent deletion."] : []),
@@ -1185,7 +1245,8 @@ export class VendorApplicationsService {
       ...(settlements ? ["Linked vendor has settlement history."] : []),
       ...(payoutAccounts ? ["Linked vendor has payout account records."] : []),
       ...(orderItems ? ["Linked vendor products are tied to historical order items."] : []),
-      ...(payments ? ["Linked vendor orders have payment records."] : [])
+      ...(payments ? ["Linked vendor orders have payment records."] : []),
+      ...(commercialAgreements ? ["Application has an accepted commercial agreement that must remain immutable."] : [])
     ];
 
     return {

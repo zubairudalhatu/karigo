@@ -1,16 +1,17 @@
 import { brand } from "@karigo/config";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { registrationApi } from "../../src/api/registration.api";
-import { Card, Hero, PrimaryButton, Screen, TextField } from "../../src/components/ui";
+import { Card, Hero, MutedText, PrimaryButton, Screen, TextField } from "../../src/components/ui";
 import { usePartnerRegistration } from "../../src/contexts/partner-registration-context";
-import type { VendorApplicationCategory } from "../../src/api/registration.api";
+import type { PartnerCommercialPolicy, VendorApplicationCategory } from "../../src/api/registration.api";
 
 const categoryOptions: Array<{ label: string; value: VendorApplicationCategory }> = [
   { label: "Restaurant", value: "RESTAURANT" },
   { label: "Groceries", value: "GROCERIES" },
   { label: "Market items", value: "MARKET_ITEMS" },
+  { label: "Pharmacy", value: "PHARMACY" },
   { label: "Service provider", value: "SME_SERVICES" },
   { label: "Other vendor", value: "OTHER_MARKETPLACE_VENDOR" }
 ];
@@ -22,6 +23,20 @@ function stateForCity(city: "Kano" | "Abuja") {
 export default function RegisterBusinessScreen() {
   const router = useRouter();
   const { registration, updateRegistration } = usePartnerRegistration();
+  const [policies, setPolicies] = useState<PartnerCommercialPolicy[]>([]);
+  const [policyWarning, setPolicyWarning] = useState<string | null>(null);
+  useEffect(() => {
+    registrationApi.commercialPolicies()
+      .then(setPolicies)
+      .catch(() => setPolicyWarning("Commercial terms could not be loaded. You can save this draft and try again before submission."));
+  }, []);
+  const visibleCategories = useMemo(() => {
+    if (!policies.length) return categoryOptions;
+    const visible = new Set(policies.filter((item) => item.visibleInPublicCategorySelection && item.categoryPublicOnboardingEnabled).map((item) => item.businessCategory));
+    return categoryOptions.filter((item) => visible.has(item.value));
+  }, [policies]);
+  const globalOnboardingPaused = policies.length > 0 && policies.every((item) => !item.publicOnboardingEnabled);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ready = registration.businessName.trim() &&
@@ -55,13 +70,15 @@ export default function RegisterBusinessScreen() {
         <TextField label="Business name" value={registration.businessName} onChangeText={(businessName) => updateRegistration({ businessName })} />
         <TextField label="Trading name optional" value={registration.tradingName} onChangeText={(tradingName) => updateRegistration({ tradingName })} />
         <View style={styles.chips}>
-          {categoryOptions.map((category) => (
+          {visibleCategories.map((category) => (
             <Text
               key={category.value}
-              onPress={() => updateRegistration({ businessCategory: category.value, catalogueCategory: category.label })}
+              onPress={() => updateRegistration({ businessCategory: category.value, catalogueCategory: category.label, commercialPolicyId: "", commercialTermsVersion: "", commercialTermsAccepted: false })}
               style={[styles.chip, registration.businessCategory === category.value ? styles.chipActive : null]}
             >
               {category.label}
+        {globalOnboardingPaused ? <MutedText>Partner application submission is currently controlled. You may save your draft while KariGO prepares public onboarding.</MutedText> : null}
+        {policyWarning ? <Text style={styles.error}>{policyWarning}</Text> : null}
             </Text>
           ))}
         </View>

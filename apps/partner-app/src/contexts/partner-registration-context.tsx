@@ -40,6 +40,9 @@ export interface PartnerRegistrationState {
   identityDocumentReady: boolean;
   serviceEvidenceReady: boolean;
   declarationAccepted: boolean;
+  commercialPolicyId: string;
+  commercialTermsVersion: string;
+  commercialTermsAccepted: boolean;
   privacyAccepted: boolean;
   contactConsentAccepted: boolean;
   applicationReference: string;
@@ -82,6 +85,9 @@ const initialRegistration: PartnerRegistrationState = {
   identityDocumentReady: false,
   serviceEvidenceReady: false,
   declarationAccepted: false,
+  commercialPolicyId: "",
+  commercialTermsVersion: "",
+  commercialTermsAccepted: false,
   privacyAccepted: false,
   contactConsentAccepted: false,
   applicationReference: ""

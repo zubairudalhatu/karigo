@@ -11,6 +11,7 @@ import { RideCommissionPaymentService } from "./ride-commission-payment.service"
 import { PaystackProvider } from "./providers/paystack.provider";
 import { SquadProvider } from "./providers/squad.provider";
 
+import { PartnerOnboardingPaymentService } from "./partner-onboarding-payment.service";
 @Module({
   imports: [AuthModule],
   controllers: [PaymentsController, AdminPaymentsController],
@@ -22,8 +23,9 @@ import { SquadProvider } from "./providers/squad.provider";
     FlutterwaveProvider,
     MonnifyProvider,
     SquadProvider,
-    RideCommissionPaymentService
+    RideCommissionPaymentService,
+    PartnerOnboardingPaymentService
   ],
-  exports: [RideCommissionPaymentService]
+  exports: [RideCommissionPaymentService, PartnerOnboardingPaymentService, PaymentProviderRegistry]
 })
 export class PaymentsModule {}

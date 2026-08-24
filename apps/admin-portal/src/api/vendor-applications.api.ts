@@ -30,6 +30,19 @@ export interface VendorApplication {
   trashNote?: string | null;
   trashedByAdminId?: string | null;
   restoredByAdminId?: string | null;
+  commercialAgreement?: {
+    id: string;
+    policyVersion: string;
+    commercialModel: string;
+    commissionRateBasisPoints: number;
+    onboardingFeeKobo?: number | null;
+    currency: string;
+    publicTitleSnapshot: string;
+    publicSummarySnapshot: string;
+    acceptedAt: string;
+    onboardingPayments?: Array<{ id: string; transactionReference: string; amountKobo: number; currency: string; status: string; verifiedAt?: string | null }>;
+    feeWaiver?: { id: string; amountWaivedKobo: number; currency: string; reason: string; waivedAt: string } | null;
+  } | null;
   inTrash?: boolean;
   documents?: VendorApplicationDocument[];
   applicant?: {
@@ -58,6 +71,7 @@ export const vendorApplicationsApi = {
   review: (id: string, status: string, notes?: string) => api.patch<VendorApplication>(`admin/vendor-applications/${id}`, { status, notes }),
   trash: (id: string, reason: string, note?: string) => api.patch<VendorApplication>(`admin/vendor-applications/${id}/trash`, { reason, note }),
   restore: (id: string, reason?: string) => api.patch<VendorApplication>(`admin/vendor-applications/${id}/restore`, { reason }),
+  waiveOnboardingFee: (agreementId: string, reason: string, note: string) => api.post<unknown>(`admin/partner-commercial/agreements/${agreementId}/waive-onboarding-fee`, { reason, note }),
   permanentlyDelete: (id: string, confirmation: "DELETE" | "PERMANENTLY DELETE") =>
     api.delete<{ applicationId: string; permanentlyDeleted: boolean }>(`admin/vendor-applications/${id}/permanent`, { body: { confirmation } })
 };

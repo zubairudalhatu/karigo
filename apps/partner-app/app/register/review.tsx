@@ -1,8 +1,8 @@
 import { brand } from "@karigo/config";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { registrationApi, VendorApplicationInput } from "../../src/api/registration.api";
+import { PartnerCommercialPolicy, registrationApi, VendorApplicationInput } from "../../src/api/registration.api";
 import { Card, Hero, MutedText, PrimaryButton, Screen } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { usePartnerRegistration } from "../../src/contexts/partner-registration-context";
@@ -21,6 +21,20 @@ export default function RegisterReviewScreen() {
   const { registration, updateRegistration } = usePartnerRegistration();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [policies, setPolicies] = useState<PartnerCommercialPolicy[]>([]);
+  const [termsLoading, setTermsLoading] = useState(true);
+  useEffect(() => {
+    registrationApi.commercialPolicies()
+      .then(setPolicies)
+      .catch((err) => setError(err instanceof Error ? err.message : "Commercial terms could not be loaded."))
+      .finally(() => setTermsLoading(false));
+  }, []);
+  const policy = useMemo(() => policies.find((item) => item.businessCategory === registration.businessCategory) ?? null, [policies, registration.businessCategory]);
+  const feeUnavailable = policy?.commercialModel === "ONBOARDING_FEE" && !policy.onboardingFeeConfigured;
+  const feeText = policy?.onboardingFeeKobo === null || policy?.onboardingFeeKobo === undefined
+    ? "Not yet configured"
+    : new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(policy.onboardingFeeKobo / 100);
+
 
   const missingRequirements = [
     !registration.businessName.trim() ? "Complete your Business Name before submitting." : "",
@@ -31,10 +45,14 @@ export default function RegisterReviewScreen() {
     !registration.contactFullName.trim() ? "Complete your Contact Full Name before submitting." : "",
     !registration.declarationAccepted ? "Accept the business details declaration before submitting." : "",
     !registration.privacyAccepted ? "Accept the KariGO review acknowledgement before submitting." : "",
-    !registration.contactConsentAccepted ? "Accept contact consent before submitting." : ""
+    !registration.contactConsentAccepted ? "Accept contact consent before submitting." : "",
+    termsLoading ? "Wait while the current commercial terms load." : "",
+    !policy ? "Current commercial terms are unavailable for this category." : "",
+    policy && !policy.publicOnboardingEnabled ? "KariGO Partner public onboarding is not currently enabled." : "",
+    !registration.commercialTermsAccepted ? "Accept the KariGO Partner commercial terms before submitting." : "",
+    feeUnavailable ? "KariGO is finalising the onboarding fee for this Partner category. You may save your application and continue when the commercial terms are available." : ""
   ].filter(Boolean);
   const canSubmit = missingRequirements.length === 0;
-
   async function submit() {
     setSubmitting(true);
     setError(null);
@@ -45,6 +63,10 @@ export default function RegisterReviewScreen() {
         tradingName: clean(registration.tradingName),
         businessType: registration.accountType === "BOTH" ? "Product Seller and Service Provider" : formatLabel(registration.accountType),
         businessDescription: registration.businessDescription.trim(),
+        commercialPolicyId: policy?.id ?? "",
+        commercialTermsAccepted: registration.commercialTermsAccepted,
+        acceptedTermsVersion: policy?.termsVersion ?? "",
+        acceptedFromAppSurface: "partner-mobile-app",
         businessAddress: registration.businessAddress.trim(),
         state: registration.state,
         city: registration.city,
@@ -106,6 +128,29 @@ export default function RegisterReviewScreen() {
         <Text style={styles.title}>Before you submit</Text>
         {missingRequirements.map((requirement) => <MutedText key={requirement}>{requirement}</MutedText>)}
       </Card> : null}
+      <Card>
+        <Text style={styles.title}>{policy?.publicTitle ?? "KariGO Partner commercial terms"}</Text>
+        {termsLoading ? <MutedText>Loading current commercial terms...</MutedText> : null}
+        {policy ? <>
+          <MutedText>{policy.publicSummary}</MutedText>
+          {policy.commercialModel === "COMMISSION" ? <>
+            <MutedText>Current KariGO commission under this commercial agreement: {policy.commissionPercent}% of merchandise subtotal.</MutedText>
+            <MutedText>KariGO does not calculate this commission on the KariGO delivery fee.</MutedText>
+          </> : null}
+          {policy.commercialModel === "ONBOARDING_FEE" ? <>
+            <MutedText>KariGO sales/service commission: 0%.</MutedText>
+            <MutedText>KariGO onboarding/platform fee: {feeText}.</MutedText>
+            {feeUnavailable ? <Text style={styles.error}>KariGO is finalising the onboarding fee for this Partner category. You may save your application and continue when the commercial terms are available.</Text> : null}
+          </> : null}
+          {policy.commercialModel === "REVIEW_REQUIRED" ? <MutedText>KariGO must review and classify the appropriate commercial terms before activation.</MutedText> : null}
+          <MutedText>Policy version: {policy.policyVersion}</MutedText>
+          <ConsentRow
+            label="I understand and accept the KariGO Partner commercial terms for this business category."
+            value={registration.commercialTermsAccepted}
+            onPress={() => updateRegistration({ commercialTermsAccepted: !registration.commercialTermsAccepted, commercialPolicyId: policy.id, commercialTermsVersion: policy.termsVersion })}
+          />
+        </> : null}
+      </Card>
       <Card>
         <Text style={styles.title}>{registration.businessName || "Business name pending"}</Text>
         <MutedText>{formatLabel(registration.businessCategory)} - {registration.city}, {registration.state}</MutedText>

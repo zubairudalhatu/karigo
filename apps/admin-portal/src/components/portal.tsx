@@ -15,7 +15,7 @@ const navGroups: NavGroup[] = [
   ] },
   { label: "People & Partners", links: [
     { label: "Users", href: "/users" }, { label: "Captains", href: "/riders" }, { label: "Vendors", href: "/vendors" },
-    { label: "Partner Applications", href: "/vendor-applications" }, { label: "Delivery Captain Applications", href: "/delivery-captain-applications" },
+    { label: "Partner Applications", href: "/vendor-applications" }, { label: "Partner Commercial", href: "/partner-commercial" }, { label: "Delivery Captain Applications", href: "/delivery-captain-applications" },
     { label: "Service Providers", href: "/sme-services/providers" }
   ] },
   { label: "Commerce & Finance", links: [

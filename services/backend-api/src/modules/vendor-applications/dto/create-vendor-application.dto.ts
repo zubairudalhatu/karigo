@@ -1,6 +1,6 @@
 import { PreferredContactMethod, VendorApplicationCategory } from "@prisma/client";
 import { Transform } from "class-transformer";
-import { IsBoolean, IsEmail, IsEnum, IsIn, IsOptional, IsString, Matches, MaxLength } from "class-validator";
+import { IsBoolean, IsEmail, IsEnum, IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength } from "class-validator";
 import { ApplicationDocumentDto } from "../../../common/dto/application-document.dto";
 import { NIGERIAN_PHONE_PATTERN, normalizePhoneNumber } from "../../../common/utils/phone.util";
 
@@ -158,4 +158,22 @@ export class CreateVendorApplicationDto {
 
   @IsBoolean()
   contactConsentAccepted!: boolean;
+
+  @IsOptional()
+  @IsUUID()
+  commercialPolicyId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  commercialTermsAccepted?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  acceptedTermsVersion?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  acceptedFromAppSurface?: string;
 }

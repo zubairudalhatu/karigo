@@ -157,6 +157,11 @@ export interface VendorSettlement {
   paidAt?: string | null;
   payoutReference?: string | null;
   createdAt: string;
+  commercialModel?: "COMMISSION" | "ONBOARDING_FEE" | "QUOTATION" | "REVIEW_REQUIRED" | null;
+  commercialPlan?: string | null;
+  policyVersion?: string | null;
+  commissionableSubtotal?: string | number | null;
+  deliveryFeeExcluded?: string | number | null;
 }
 
 export interface VendorSettlementsResult {
@@ -178,6 +183,41 @@ export interface VendorPayoutAccount {
   vendorVisibleNote?: string | null;
   lastUpdatedAt: string;
   createdAt: string;
+}
+
+export interface PartnerCommercialState {
+  agreement: {
+    id: string;
+    category: string;
+    policyVersion: string;
+    commercialModel: "COMMISSION" | "ONBOARDING_FEE" | "QUOTATION" | "REVIEW_REQUIRED";
+    commissionPercent: number;
+    onboardingFeeKobo: number | null;
+    currency: string;
+    publicTitle: string;
+    publicSummary: string;
+    acceptedAt: string;
+  } | null;
+  feeState: "NOT_APPLICABLE" | "FEE_NOT_CONFIGURED" | "PENDING" | "PAID" | "WAIVED" | null;
+  activationEligible: boolean;
+  blockers: string[];
+  payments?: Array<{
+    reference: string;
+    provider: string;
+    amountKobo: number;
+    currency: string;
+    status: string;
+    checkoutUrl?: string | null;
+    verifiedAt?: string | null;
+  }>;
+}
+
+export interface PartnerOnboardingPaymentResult {
+  payment: { reference: string; status: string; amountKobo: number; currency: string; checkoutUrl?: string | null };
+  authorization?: { reference: string; authorizationUrl?: string | null; checkoutUrl?: string | null };
+  recovered?: boolean;
+  alreadyProcessed?: boolean;
+  receipt?: Record<string, unknown>;
 }
 
 export interface PayoutAccountPayload {
@@ -216,6 +256,11 @@ export const partnerApi = {
     api.post<PartnerOnboardingDocument>("vendors/onboarding-documents", body),
   settlements: (status: VendorSettlementFilter = "ALL") =>
     api.get<VendorSettlementsResult>(`vendor/settlements${status === "ALL" ? "" : `?status=${status}`}`),
+  commercialState: () => api.get<PartnerCommercialState>("partner-commercial/me"),
+  initializeOnboardingPayment: () => api.post<PartnerOnboardingPaymentResult>("partner-commercial/me/onboarding-payments"),
+  verifyOnboardingPayment: (reference: string) =>
+    api.get<PartnerOnboardingPaymentResult>(`partner-commercial/me/onboarding-payments/${encodeURIComponent(reference)}/verify`),
+
   payoutAccount: () => api.get<VendorPayoutAccount | null>("vendor/payout-account"),
   createPayoutAccount: (payload: PayoutAccountPayload) => api.post<VendorPayoutAccount>("vendor/payout-account", payload),
   updatePayoutAccount: (payload: PayoutAccountPayload) => api.patch<VendorPayoutAccount>("vendor/payout-account", payload)

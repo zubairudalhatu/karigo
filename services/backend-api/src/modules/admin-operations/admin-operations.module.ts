@@ -6,10 +6,11 @@ import { AdminOperationsController } from "./admin-operations.controller";
 import { AdminOperationsService } from "./admin-operations.service";
 import { AdminReportsController } from "./admin-reports.controller";
 import { AdminSettlementsController } from "./admin-settlements.controller";
+import { PartnerCommercialModule } from "../partner-commercial/partner-commercial.module";
 import { SettlementsService } from "./settlements.service";
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, PartnerCommercialModule],
   controllers: [AdminOperationsController, AdminReportsController, AdminSettlementsController],
   providers: [AdminOperationsService, SettlementsService, ApplicationNotificationsService, AdminRolesGuard],
   exports: [AdminOperationsService]
