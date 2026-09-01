@@ -4,6 +4,8 @@ const assert = require("node:assert/strict");
 
 const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
+const canonicalCustomerGooglePlayUrl = "https://play.google.com/store/apps/details?id=com.karigo.customer";
+const site = read("src", "lib", "site.ts");
 
 const home = read("app", "page.tsx");
 assert(home.includes("Everything you need, delivered."), "Homepage must use approved hero headline.");
@@ -14,7 +16,12 @@ assert(home.includes("Become a Service Provider"), "Homepage must include SME Se
 assert(home.includes("https://vendor.karigo.com.ng/register"), "Homepage service-provider CTA must route to unified partner onboarding.");
 assert(home.includes("KariGO is preparing secure merchant integrations"), "Bills provider-review copy must be present.");
 assert(home.includes("Services under provider or operations approval are clearly marked before activation."), "Provider/operations approval services must be presented accurately.");
-assert(home.includes("Preparing for Google Play"), "Website must not invent fake Play Store links.");
+assert(site.includes(`customerGooglePlayUrl: "${canonicalCustomerGooglePlayUrl}"`), "Website config must define the canonical Customer Google Play URL.");
+assert((home.match(/site\.customerGooglePlayUrl/g) || []).length >= 2, "Homepage hero and rollout badge must use the centralized Google Play URL.");
+assert(home.includes("Available now on Google Play."), "Homepage must present the Android Customer app as live.");
+assert(home.includes("App Store release in preparation."), "Homepage must keep iOS accurately future-facing.");
+assert(home.includes('target="_blank"') && home.includes('rel="noopener noreferrer"'), "Homepage Google Play links must use safe external-link behavior.");
+assert(!home.includes("Preparing for Google Play") && !home.includes("Android coming soon"), "Homepage must not retain stale Android launch copy.");
 
 const customerWebPortalPage = read("app", "app", "page.tsx");
 assert(customerWebPortalPage.includes("CustomerWebPortal"), "Website must expose the Customer Web Portal page.");
@@ -43,8 +50,10 @@ assert(customerWebPortal.includes("Ride requests remain readiness-only"), "Custo
 assert(customerWebPortal.includes("Refresh") && customerWebPortal.includes("Retry"), "Customer Web Portal must expose refresh/retry actions.");
 assert(!customerWebPortal.includes("Phase 1") && !customerWebPortal.includes("Phase 2"), "Customer Web Portal must not show internal phase labels.");
 assert(!customerWebPortal.includes("localStorage"), "Customer Web Portal must not persist auth tokens in localStorage.");
+["Dashboard", "Wallet", "Utilities", "SME Services", "Orders", "Addresses", "Profile", "Account deletion", "Support"]
+  .forEach((tab) => assert(customerWebPortal.includes(`"${tab}"`), `Customer Web Portal must retain the ${tab} navigation tab.`));
+assert(customerWebPortal.includes("site.customerGooglePlayUrl") && customerWebPortal.includes("Get KariGO on Google Play"), "Customer Web Dashboard must expose the centralized Google Play link.");
 
-const site = read("src", "lib", "site.ts");
 ["Food Delivery", "Groceries", "KariGO Rides", "Market Items", "Pharmacy", "Parcel Delivery", "SME Services", "Airtime", "Data", "Electricity", "Cable TV"]
   .forEach((service) => assert(site.includes(service), `Service list must include ${service}.`));
 const oldSmeWebsiteLabel = ["SME", "E" + "rrands"].join(" ");
@@ -186,7 +195,11 @@ assert(footer.includes("@karigoapp"), "Footer must show the official KariGO soci
 assert(footer.includes("<SocialIcon name={link.icon} />"), "Footer social links must render icons instead of text chips.");
 assert(footer.includes("aria-label={`KariGO on ${link.label}`}"), "Footer social icon links must keep accessible labels.");
 assert(!footer.includes("{link.label}\n                </a>"), "Footer social links must not render visible text labels.");
-assert(footer.includes("Google Play soon"), "Footer must include Android launch status.");
+assert((footer.match(/site\.customerGooglePlayUrl/g) || []).length >= 2, "Footer download and rollout links must use the centralized Google Play URL.");
+assert(footer.includes("Available on Google Play"), "Footer must present the Android Customer app as live.");
+assert(footer.includes("App Store in preparation"), "Footer must keep iOS accurately future-facing.");
+assert(footer.includes('target="_blank"') && footer.includes('rel="noopener noreferrer"'), "Footer Google Play links must use safe external-link behavior.");
+assert(!footer.includes("Google Play soon"), "Footer must not retain stale Android launch copy.");
 assert(footer.includes("/riders#ride-waitlist"), "Footer must use the public Ride waitlist anchor.");
 assert(footer.includes("/riders#ride-captain-application"), "Footer must use the public Ride Captain application anchor.");
 assert(footer.includes("/account-deletion"), "Footer must link to the public account-deletion resource.");
@@ -201,6 +214,12 @@ const css = read("app", "globals.css");
 assert(css.includes(".portal-actions"), "Customer Web Portal must style topbar refresh/logout actions.");
 assert(css.includes(".inline-action"), "Customer Web Portal must style inline retry actions.");
 assert(css.includes("overflow-wrap: anywhere"), "Customer Web Portal must wrap long references safely.");
+const portalSidebarRule = css.match(/\.portal-sidebar\s*\{([^}]*)\}/s)?.[1] || "";
+assert(portalSidebarRule.includes("align-content: start") && portalSidebarRule.includes("align-self: start"), "Desktop Customer Web sidebar must stay top-aligned beside content of any height.");
+assert(portalSidebarRule.includes("grid-auto-rows: max-content"), "Customer Web sidebar implicit rows must not stretch title, name or navigation apart.");
+assert(portalSidebarRule.includes("max-height: calc(100vh - 97px)") && portalSidebarRule.includes("overflow-y: auto"), "Desktop Customer Web sidebar must remain internally scrollable at short viewport heights.");
+assert(css.includes(".portal-sidebar { align-self: stretch; max-height: none; min-height: auto; overflow-y: visible; }"), "Customer Web sidebar must reset desktop height constraints at the tablet breakpoint.");
+assert(css.includes(".portal-sidebar nav { display: flex; overflow-x: auto; padding-bottom: 6px; }"), "Customer Web navigation must remain horizontally scrollable at 980px and below.");
 
 const privacy = read("app", "privacy", "page.tsx");
 assert(privacy.includes("Information we may collect"), "Privacy page must include data collection content.");

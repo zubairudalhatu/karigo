@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { site } from "../lib/site";
 
 const socialLinks = [
   { label: "Instagram", href: "https://www.instagram.com/karigoapp", icon: "instagram" },
@@ -88,7 +89,7 @@ export function SiteFooter() {
           <a href="https://vendor.karigo.com.ng">Vendor Login</a>
           <Link href="/riders#ride-waitlist">Ride Waitlist</Link>
           <Link href="/riders#ride-captain-application">Ride review</Link>
-          <a href="/#download">Download App</a>
+          <a href={site.customerGooglePlayUrl} rel="noopener noreferrer" target="_blank">Download App</a>
         </nav>
 
         <nav className="footer-links" aria-label="Legal links">
@@ -103,13 +104,13 @@ export function SiteFooter() {
         <section className="footer-apps" aria-label="App launch status">
           <h2>App rollout</h2>
           <div className="footer-badges">
-            <div className="footer-store-badge" aria-disabled="true">
+            <a className="footer-store-badge" href={site.customerGooglePlayUrl} rel="noopener noreferrer" target="_blank" aria-label="Get the KariGO Customer app on Google Play">
               <span>Android</span>
-              <strong>Google Play soon</strong>
-            </div>
+              <strong>Available on Google Play</strong>
+            </a>
             <div className="footer-store-badge footer-store-badge-muted" aria-disabled="true">
               <span>iOS</span>
-              <strong>Planned later</strong>
+              <strong>App Store in preparation</strong>
             </div>
           </div>
         </section>

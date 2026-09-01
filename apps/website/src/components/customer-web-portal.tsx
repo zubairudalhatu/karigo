@@ -561,7 +561,7 @@ export function CustomerWebPortal() {
 
       {activeTab === "Dashboard" ? <section className="portal-grid">
         <article className="portal-card"><span>Wallet balance</span><strong>{money(wallet?.availableBalance)}</strong><p>Wallet credits only after backend verification.</p></article>
-        <article className="portal-card"><span>Orders</span><strong>{orders.length}</strong><p>Use the mobile app for the full shopping and checkout experience.</p></article>
+        <article className="portal-card"><span>Orders</span><strong>{orders.length}</strong><p>Use the mobile app for the full shopping and checkout experience.</p><a className="button small-button" href={site.customerGooglePlayUrl} rel="noopener noreferrer" target="_blank">Get KariGO on Google Play</a></article>
         <article className="portal-card"><span>SME requests</span><strong>{smeRequests.length}</strong><p>{supportedSmeCategoryLabels.join(", ")} now supported.</p></article>
         <article className="portal-card"><span>Addresses</span><strong>{addresses.length}</strong><p>Manage saved delivery and service addresses.</p></article>
       </section> : null}

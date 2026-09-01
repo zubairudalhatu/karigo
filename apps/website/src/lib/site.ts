@@ -1,6 +1,7 @@
 export const site = {
   preferredUrl: process.env.NEXT_PUBLIC_SITE_URL || "https://www.karigo.com.ng",
-  apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || "https://karigo-8htn.onrender.com/api/v1"
+  apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || "https://karigo-8htn.onrender.com/api/v1",
+  customerGooglePlayUrl: "https://play.google.com/store/apps/details?id=com.karigo.customer"
 };
 
 export const services = [

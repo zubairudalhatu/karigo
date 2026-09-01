@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ServiceCard } from "../src/components/service-card";
-import { serviceGroups, services } from "../src/lib/site";
+import { serviceGroups, services, site } from "../src/lib/site";
 
 export default function HomePage() {
   return (
@@ -12,7 +12,7 @@ export default function HomePage() {
           <p className="lead">Order food, shop groceries and market items, send parcels, request SME Services and prepare for more everyday services with KariGO.</p>
           <p className="tagline">Food, groceries, market items, parcels, SME Services and everyday support across Kano and Abuja.</p>
           <div className="actions">
-            <a className="button" href="#download">Download the App</a>
+            <a className="button" href={site.customerGooglePlayUrl} rel="noopener noreferrer" target="_blank">Download the App</a>
             <Link className="button secondary" href="/vendors/apply">Become a Partner</Link>
           </div>
         </div>
@@ -104,18 +104,18 @@ export default function HomePage() {
           <article className="info-card" id="download">
             <p className="eyebrow">Download App</p>
             <h2>Customer app rollout</h2>
-            <div className="store-badges" aria-label="Future app store availability">
-              <div className="store-badge" aria-disabled="true">
+            <div className="store-badges" aria-label="Customer app store availability">
+              <a className="store-badge" href={site.customerGooglePlayUrl} rel="noopener noreferrer" target="_blank" aria-label="Get the KariGO Customer app on Google Play">
                 <span className="store-mark" aria-hidden="true">GP</span>
-                <span><small>Preparing for</small><strong>Google Play</strong></span>
-              </div>
+                <span><small>Get it on</small><strong>Google Play</strong></span>
+              </a>
               <div className="store-badge store-badge-muted" aria-disabled="true">
                 <span className="store-mark" aria-hidden="true">A</span>
-                <span><small>Planned for</small><strong>App Store</strong></span>
+                <span><small>Coming to the</small><strong>App Store</strong></span>
               </div>
             </div>
-            <p><strong>Android:</strong> Preparing for Google Play release. Controlled onboarding access is shared separately.</p>
-            <p><strong>iOS:</strong> Coming later.</p>
+            <p><strong>Android:</strong> Available now on Google Play.</p>
+            <p><strong>iOS:</strong> App Store release in preparation.</p>
           </article>
         </div>
       </section>
