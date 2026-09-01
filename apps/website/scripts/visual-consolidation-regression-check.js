@@ -35,6 +35,27 @@ groupIds.forEach((id) => {
 });
 assert(serviceData.includes('status: "Apply now"') && serviceData.includes('status: "Preparing"'), "Grouped services must preserve non-live status labels.");
 
+[
+  "Services under provider or operations approval are clearly marked before activation.",
+  "Order from local businesses or move everyday items with clear availability status.",
+  "Ride Captain onboarding and controlled operations remain clearly separated from public availability.",
+  "Find approved skilled providers through KariGO SME Services.",
+  "Provider and operational readiness remain visible before any utility is presented as active."
+].forEach((description) => {
+  assert(home.includes(description) || serviceData.includes(description), `Homepage Services description must remain present: ${description}`);
+});
+
+const servicesHeadingRule = css.match(/#services\s*>\s*\.section-heading\s*\{([^}]*)\}/s)?.[1] || "";
+assert(servicesHeadingRule.includes("flex-direction: column"), "Homepage Services intro must use a vertically attached heading layout.");
+assert(servicesHeadingRule.includes("align-items: flex-start"), "Homepage Services intro must align its title and description on one content edge.");
+assert(css.includes("#services > .section-heading > p { margin: 0; max-width: 720px; width: 100%; }"), "Homepage Services description must retain a responsive reading width.");
+
+const serviceGroupHeadingRule = css.match(/\.service-group-heading\s*\{([^}]*)\}/g)?.at(-1)?.match(/\{([^}]*)\}/s)?.[1] || "";
+assert(serviceGroupHeadingRule.includes("flex-direction: column"), "Service-group titles and descriptions must remain vertically attached.");
+assert(serviceGroupHeadingRule.includes("margin-bottom: 18px"), "Service cards must retain deliberate spacing below group descriptions.");
+assert(css.includes(".service-group-heading > p") && css.includes("max-width: 720px; width: 100%;"), "Service-group descriptions must wrap within narrow viewports.");
+assert(css.includes(".section-heading { align-items: center; margin-bottom: 24px; }"), "Generic section headings must retain their established desktop layout.");
+
 function sourceFiles(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const target = path.join(directory, entry.name);
