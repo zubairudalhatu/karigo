@@ -184,7 +184,7 @@ assert(header.includes("Partner Login"), "Website header must include partner lo
 assert(header.includes("https://vendor.karigo.com.ng"), "Partner login must preserve the branded vendor dashboard domain.");
 
 const footer = read("src", "components", "site-footer.tsx");
-assert(footer.includes("&copy; 2026 KariGO Express Limited"), "Footer must include legal copyright text.");
+assert(footer.includes("&copy; 2026 Zamkah Technologies Limited"), "Footer must include legal copyright text.");
 ["Services", "Vendors", "Vendor Application", "Service Provider Application", "Customer Web Portal", "Vendor Login", "Captains", "Ride Waitlist", "Ride review", "Download App", "Contact", "Returns", "Refunds", "Privacy Policy", "Terms"]
   .forEach((link) => assert(footer.includes(link), `Footer must include ${link}.`));
 assert(footer.includes("https://vendor.karigo.com.ng/register"), "Footer service-provider application link must route to unified partner onboarding.");

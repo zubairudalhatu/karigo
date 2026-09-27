@@ -496,12 +496,12 @@ export default function CaptainApplication() {
 
   async function chooseImage(type: CaptainDocumentType, source: "camera" | "gallery") {
     setError("");
-    const permission = source === "camera"
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError(source === "camera" ? "Camera permission is needed to take this photo." : "Gallery permission is needed to choose this image.");
-      return;
+    if (source === "camera") {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        setError("Camera permission is needed to take this photo.");
+        return;
+      }
     }
     const result = source === "camera"
       ? await ImagePicker.launchCameraAsync({ allowsEditing: type === "PROFILE_PHOTO", quality: 0.82, mediaTypes: ImagePicker.MediaTypeOptions.Images })

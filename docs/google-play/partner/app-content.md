@@ -5,7 +5,7 @@
 | Privacy Policy | Public HTTPS policy | `https://www.karigo.com.ng/privacy` |
 | Ads | No ad SDK identified; partners may manage KariGO promotional requests outside an ad-network SDK | Confirm Play SDK report: **OWNER CONFIRMATION REQUIRED** |
 | App access | Approved Partner sign-in required | Use private mixed-capability reviewer account |
-| Target audience | Adults operating a business/service account | Exact age-group selection: **OWNER CONFIRMATION REQUIRED** |
+| Target audience | Adults operating a business/service account | Console 18+; exclusion of minors not checked |
 | Content rating | Business catalogue and order management | Complete IARC truthfully: **OWNER CONFIRMATION REQUIRED** |
 | Data Safety | See `data-safety.md` | Reconcile against final providers and manifest |
 | Account deletion | In-app Partner access request and public web guidance | `https://www.karigo.com.ng/account-deletion` |

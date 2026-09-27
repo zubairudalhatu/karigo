@@ -10,9 +10,11 @@
 | Biometric capability | Optional local sign-in unlock |
 | Notifications, if declared by generated build | Assignment and account updates when enabled |
 
-Background location is not intentionally configured. Contacts, SMS, call log and broad storage are not required.
+September 2026 correction: background location is intentionally configured for accepted active Ride/Delivery work. Internal version 16 includes ACCESS_BACKGROUND_LOCATION, FOREGROUND_SERVICE_LOCATION and RECORD_AUDIO for optional Agora calls, as well as unnecessary media-projection and legacy storage permissions. Local config blocks the unnecessary permissions and adds disclosure/active-work lifecycle checks; it has not been shipped. Contacts, SMS, call log and broad storage are not required.
 
-## Final merged AAB manifest
+A new AAB must be inspected for merged permissions and service types before release. Expo config introspection and JavaScript export do not prove the final merged native manifest or device behavior.
+
+## Historical merged AAB manifest (not the current internal release)
 
 Build `f7afbcd7-bf24-422b-8ed9-948042cbdce3` declares:
 

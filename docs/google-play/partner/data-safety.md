@@ -16,8 +16,10 @@ Source reviewed: Partner auth/onboarding, business profile, products/services, o
 | App interactions | Yes | No advertising sharing found | Audit, security and reliability | Required operational logs | Requestable/retention applies |
 | Uploaded photos/documents | Yes | Admin/review and customers for approved public listing images | Onboarding, compliance and catalogue | Feature-dependent; stored | Requestable, compliance retention applies |
 | Device/session identifiers | Yes | Authentication infrastructure | Secure session and abuse prevention | Required; stored/rotated | Requestable/retention applies |
-| Crash diagnostics | No dedicated third-party crash SDK found | No | Not currently declared | **OWNER CONFIRMATION REQUIRED** for platform telemetry | Not applicable if disabled |
+| Crash logs / diagnostics | SDK-specific collection requires review; absence of a dedicated crash SDK is not evidence of no collection | Provider-specific; see reconciliation | Functionality and documented SDK diagnostics/analytics | Retention varies; do not assume ephemeral | Provider retention applies |
 | Notifications | Notification records/preferences may be stored | Approved delivery provider if enabled | Order/account updates | Configuration-dependent | Requestable |
 | Business details | Yes | Customers and operations according to approval/publication | Partner operation | Required; stored | Requestable, transaction retention applies |
 
 No contacts, SMS, call-log, background location or broad-storage access was identified. **OWNER CONFIRMATION REQUIRED** for final telemetry, settlement-provider and notification-provider declarations.
+
+September 2026 audit: This worksheet is not a finalized Console declaration. See `../provider-data-safety-reconciliation-2026-09-27.md` for recipient/data-type exceptions and unresolved evidence. Console drafts are incomplete and must not be represented as approved.

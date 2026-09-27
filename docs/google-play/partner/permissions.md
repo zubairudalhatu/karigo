@@ -11,7 +11,7 @@
 
 Device location, contacts, SMS, call log, microphone and broad storage are not required by the current app.
 
-## Final merged AAB manifest
+## Historical merged AAB manifest (superseded inspection build)
 
 Build `effbe636-d5f4-4aa0-b69b-d1df7d1270d3` declares:
 
@@ -24,3 +24,7 @@ Build `effbe636-d5f4-4aa0-b69b-d1df7d1270d3` declares:
 | App-scoped dynamic receiver permission | Protects dynamically registered internal receivers |
 
 The launcher/deep-link activity supports `karigo-partner`. Library exported components are limited to the image crop activity and the profile installer receiver, which is protected by an Android system permission. Providers are not exported. Backup is disabled and no cleartext override is present. Location, camera, write-storage, microphone, overlay, contacts, SMS and call-log permissions are absent.
+
+## September 2026 source correction
+
+Unneeded external-storage, media-projection and overlay permissions are explicitly blocked in source. Gallery selection uses the system picker without broad photo-library permission. A replacement merged AAB and device QA are still required; source configuration does not change already distributed bundles. See the three-app audit for actual active artifact permissions.

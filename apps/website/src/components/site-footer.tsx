@@ -117,7 +117,7 @@ export function SiteFooter() {
       </div>
 
       <div className="footer-bottom">
-        <p>&copy; 2026 KariGO Express Limited</p>
+        <p>&copy; 2026 Zamkah Technologies Limited</p>
       </div>
     </footer>
   );

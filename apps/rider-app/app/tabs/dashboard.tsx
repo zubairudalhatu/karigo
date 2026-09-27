@@ -17,7 +17,7 @@ import { launchApi } from "../../src/api/launch.api";
 import { taxiApi } from "../../src/api/taxi.api";
 import { CaptainRideWorkspace } from "../../src/components/captain-ride-workspace";
 import { CaptainHomeCockpit, CaptainHomeSkeleton } from "../../src/components/captain-home-cockpit";
-import { disableActiveWorkBackgroundLocation, enableActiveWorkBackgroundLocation } from "../../src/lib/background-location";
+import { disableActiveWorkBackgroundLocation, enableActiveWorkBackgroundLocation, hasAcceptedActiveWork } from "../../src/lib/background-location";
 import { foregroundRideTracePoint } from "../../src/lib/ride-trace-buffer";
 import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
@@ -521,12 +521,12 @@ export default function RiderDashboard() {
   }, [isForeground, workState?.activeWorkMode, workState?.desiredDeliveryOnline, workState?.desiredRideOnline]);
 
   useEffect(() => {
-    if (workState?.activeWorkMode) {
+    if (hasAcceptedActiveWork(workState)) {
       void enableActiveWorkBackgroundLocation().catch(() => undefined);
     } else {
       void disableActiveWorkBackgroundLocation().catch(() => undefined);
     }
-  }, [workState?.activeWorkMode]);
+  }, [workState?.activeWorkMode, workState?.lockStage, workState?.activeWorkReference]);
 
   useEffect(() => {
     void updateCaptainPresenceNotification({

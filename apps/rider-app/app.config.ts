@@ -86,7 +86,12 @@ export default ({ config }: ExpoConfigInput) => {
       blockedPermissions: [
         ...new Set([
           ...(Array.isArray(config.android?.blockedPermissions) ? config.android.blockedPermissions : []),
-          "android.permission.SYSTEM_ALERT_WINDOW"
+          "android.permission.READ_MEDIA_IMAGES",
+          "android.permission.READ_MEDIA_VIDEO",
+          "android.permission.READ_EXTERNAL_STORAGE",
+          "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION",
+          "android.permission.SYSTEM_ALERT_WINDOW",
+          "android.permission.WRITE_EXTERNAL_STORAGE"
         ])
       ],
       allowBackup: false,

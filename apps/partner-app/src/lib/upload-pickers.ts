@@ -9,11 +9,6 @@ function filenameFromUri(uri: string, fallback: string) {
 }
 
 export async function pickAndUploadImage(purpose: Extract<VendorUploadPurpose, "product-image" | "service-image" | "logo" | "cover">) {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    throw new Error("Please allow photo access to upload this image.");
-  }
-
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
     allowsEditing: true,
