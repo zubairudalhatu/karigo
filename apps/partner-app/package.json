@@ -24,6 +24,7 @@
     "expo-secure-store": "~14.2.3",
     "expo-status-bar": "~2.2.0",
     "expo-updates": "~0.28.18",
+    "query-string": "9.5.1",
     "react": "19.0.0",
     "react-native": "^0.79.6",
     "react-native-safe-area-context": "5.4.0",
