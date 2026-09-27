@@ -108,7 +108,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
       monochromeImage: "./assets/adaptive-icon-monochrome.png"
     },
     package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer",
-    versionCode: isStaging ? 1 : 17
+    versionCode: isStaging ? 1 : 18
   },
   ios: {
     ...config.ios,

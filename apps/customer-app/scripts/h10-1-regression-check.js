@@ -16,7 +16,7 @@ if (packageJson.dependencies["socket.io-client"] !== "^4.8.3") throw new Error("
 const blockedPermissions = config.slice(config.indexOf("blockedPermissions"), config.indexOf("allowBackup"));
 if (blockedPermissions.includes("RECORD_AUDIO")) throw new Error("Customer RECORD_AUDIO remains blocked");
 if (!config.includes('"android.permission.RECORD_AUDIO"') || config.includes("microphonePermission: false")) throw new Error("Customer generated manifest would not retain RECORD_AUDIO");
-if (!config.includes("NSMicrophoneUsageDescription") || !config.includes('versionCode: isStaging ? 1 : 17')) throw new Error("Customer native call configuration is incomplete");
+if (!config.includes("NSMicrophoneUsageDescription") || !config.includes('versionCode: isStaging ? 1 : 18')) throw new Error("Customer native call configuration is incomplete");
 if (!config.includes("karigo_ride_call.wav") || !config.includes("karigo_message.wav")) throw new Error("Customer notification sounds are not registered with Expo");
 if (config.includes("EXPO_PUBLIC_AGORA_APP_CERTIFICATE")) throw new Error("Agora Certificate must never be public");
 for (const file of ["assets/sounds/karigo_ride_call.wav", "assets/sounds/karigo_message.wav"]) {

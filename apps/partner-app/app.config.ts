@@ -78,7 +78,7 @@ export default ({ config }: ExpoConfigInput) => {
         monochromeImage: "./assets/adaptive-icon-monochrome.png"
       },
       package: isStaging ? "com.karigo.partner.staging" : "com.karigo.partner",
-      versionCode: isStaging ? 1 : 6
+      versionCode: isStaging ? 1 : 7
     },
     ios: {
       ...config.ios,

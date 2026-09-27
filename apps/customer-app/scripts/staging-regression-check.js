@@ -17,7 +17,7 @@ assert(appConfig.includes("compileSdkVersion: 36"), "Customer app must compile a
 assert(appConfig.includes("targetSdkVersion: 36"), "Customer app must target Android API 36.");
 assert(appConfig.includes('buildToolsVersion: "36.0.0"'), "Customer app must use Android build tools 36.0.0.");
 assert(appConfig.includes('package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer"'), "Customer app package names must remain stable.");
-assert(appConfig.includes("versionCode: isStaging ? 1 : 17"), "Customer production versionCode must be 17 for the native H10.1 Ride-call AAB.");
+assert(appConfig.includes("versionCode: isStaging ? 1 : 18"), "Customer production versionCode must be 18 for the replacement production AAB.");
 assert(appConfig.includes('"android.permission.SYSTEM_ALERT_WINDOW"') && appConfig.includes("allowBackup: false"), "Customer production must block overlay access and Android backup.");
 assert(appConfig.includes('owner: "zamkah"'), "Customer app must resolve to the zamkah EAS account.");
 assert(appConfig.includes('const customerAppVersion = "1.1.0"'), "Customer app version must create the native H10.1 runtime 1.1.0 boundary.");

@@ -85,7 +85,7 @@ expect(appConfig.includes("compileSdkVersion: 36"), "Captain app must compile ag
 expect(appConfig.includes("targetSdkVersion: 36"), "Captain app must target Android API 36.");
 expect(appConfig.includes("GOOGLE_MAPS_ANDROID_API_KEY") && appConfig.includes("googleMaps"), "Captain app must pass the Android Google Maps API key through Expo config when available.");
 expect(appConfig.includes('version: "1.2.0"'), "Captain app version must create the native H10.1 runtime 1.2.0 boundary.");
-expect(appConfig.includes("versionCode: isStaging ? 1 : 16"), "Captain production versionCode must be 16 for the native H10.1 Ride-call AAB.");
+expect(appConfig.includes("versionCode: isStaging ? 1 : 17"), "Captain production versionCode must be 17 for the replacement production AAB.");
 expect(appConfig.includes('googleServicesFile: "./google-services.json"'), "Captain production Android config must include the approved Firebase client configuration.");
 expect(firebaseAndroidPackages.length === 1 && firebaseAndroidPackages[0] === "com.karigo.rider", "Firebase Android client configuration must belong only to com.karigo.rider.");
 expect(Boolean(googleServices.project_info?.project_number), "Firebase Android client configuration must include its project identity.");

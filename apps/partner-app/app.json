@@ -54,7 +54,7 @@
         "monochromeImage": "./assets/adaptive-icon-monochrome.png"
       },
       "package": "com.karigo.partner",
-      "versionCode": 6
+      "versionCode": 7
     },
     "owner": "zamkah",
     "runtimeVersion": {
