@@ -30,9 +30,17 @@ This qualifies as user initiated because accepting an assignment starts the flow
 
 A current, publicly accessible real-device video for code 17 is required. It must show the acceptance trigger, disclosure before the Android permission UI, permission grant, ongoing foreground-service notification, minimized/background tracking during active work, and tracking/notification stopping when work ends. The currently saved Drive URL returns **Page Not Found**.
 
+## Revealed Console fields after approved selection
+
+On 28 September 2026, **User-initiated location sharing** and **Navigation** were selected temporarily for inspection. Play revealed the same required prompt beneath each selected task:
+
+> Provide a video demonstrating how your app uses the FOREGROUND_SERVICE_LOCATION permission for the tasks you've selected
+
+Each prompt contains one empty field labelled **Video link**. Play showed no additional narrative question or option for either selected task. **Geofencing**, both Location **Other** choices, **Media and content projection, streaming**, and the Media projection **Other** choice remained unchecked. **Save** remained disabled because the required video fields were empty. Nothing was saved.
+
 ## Current state
 
-- Console answers changed: **No**
+- Unsaved inspection selections currently shown: **User-initiated location sharing** and **Navigation**
 - Console declaration saved: **No**
 - Send for review: **No**
 - Blockers: invalid video evidence and obsolete Internal-testing code 16 media-projection prompt
