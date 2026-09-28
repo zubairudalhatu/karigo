@@ -63,7 +63,7 @@ Permission result:
 | Permission audit | Replacement removes stale media-projection and broad media/storage exposure | Required accepted-work background location/location FGS retained; media-projection and broad storage removed | Broad media/storage, overlay and unnecessary hardware permissions removed |
 | Policy status | Earlier audit recorded API 36 warning against active code 9 and an overdue FGS declaration; replacement resolves binary API/permission causes but Console declaration still needs reconciliation | Earlier Policy status showed no general issue; separate location FGS and background-location evidence gates remain | Earlier Policy status showed no issue; final declarations still depend on evidence review |
 | Data Safety | **Not confirmed.** Partial draft and provider/data-type decisions remain open | **Not confirmed.** Provider/data-type decisions remain open | **Not confirmed.** Provider/data-type decisions remain open |
-| Reviewer access | Dedicated non-personal account not verified | Dedicated non-personal approved Captain account not verified | Dedicated non-personal approved Partner account not verified |
+| Reviewer access | Dedicated shared reviewer account and Customer instructions saved in Play Console on 28 Sep; change pending review | Same dedicated reviewer account and Captain instructions saved on 28 Sep; change pending review | Same dedicated reviewer account and Partner instructions saved on 28 Sep; change pending review |
 | Privacy / deletion | Public URLs work; Zamkah ownership/controller corrections are local and undeployed; live dedicated-account deletion test missing | Same; role-access versus full-account deletion requires clean-device confirmation | Same; Partner-access versus full-account deletion requires clean-device confirmation |
 | Foreground service | Generic FGS exists; remove obsolete media-projection declaration and reconcile the actual replacement behavior | Legitimate location FGS; Console declaration and physical-device evidence incomplete | No FGS permission in replacement |
 | Background location | Not declared or used | Present only for accepted/in-progress work; implementation checks passed, physical-device lifecycle evidence is missing | Not declared or used |
@@ -78,26 +78,26 @@ Permission result:
 
 ### Customer — BLOCKED
 
-Specific blockers: evidence-based Data Safety completion; verified dedicated reviewer account and instructions; corrected privacy/ownership copy deployed and live deletion exercised; actual FGS declaration reconciled; Customer content-rating/UGC and listing evidence finalized; replacement pre-launch and clean-device QA completed; Android vitals reviewed when data is available.
+Specific blockers: evidence-based Data Safety completion; corrected privacy/ownership copy deployed and live deletion exercised; actual FGS declaration reconciled; Customer content-rating/UGC and listing evidence finalized; replacement pre-launch and clean-device QA completed; Android vitals reviewed when data is available. Reviewer access is saved but remains pending Google review.
 
 Exact next Play action after those gates pass and the owner approves this exact artifact: open the saved Production code 18 draft, select **Next**, review the summary, and stop immediately before **Send for review** for final owner authorization. Do not change Nigeria-only availability.
 
 ### Captain — BLOCKED
 
-Specific blockers: current public background-location demonstration video for code 17; physical-device verification of disclosure, permission ordering, accepted-work-only tracking, foreground notification and stop behavior; completed location FGS/background-location declarations; evidence-based Data Safety; dedicated approved reviewer account; privacy/deletion validation; replacement pre-launch QA; active Alpha/Internal artifact reconciliation; Production country configuration remains unset and requires separate Nigeria-only approval.
+Specific blockers: current public background-location demonstration video for code 17; physical-device verification of disclosure, permission ordering, accepted-work-only tracking, foreground notification and stop behavior; completed location FGS/background-location declarations; evidence-based Data Safety; privacy/deletion validation; replacement pre-launch QA; active Alpha/Internal artifact reconciliation; Production country configuration remains unset and requires separate Nigeria-only approval. Reviewer access is saved but remains pending Google review.
 
 Exact next Play actions after those gates pass: first review the saved Alpha code 17 replacement and stop before sending it for review; after it replaces Alpha 14 and device QA passes, configure Production for Nigeria only under explicit country authorization, preview the saved Production code 17 release, and stop immediately before **Send for review** for final owner authorization.
 
 ### Partner — BLOCKED
 
-Specific blockers: evidence-based Data Safety; dedicated approved reviewer account; privacy/deletion and catalogue/content-rating reconciliation; replacement pre-launch and clean-device QA; active Alpha/Internal artifact reconciliation; verify the pre-existing pending Nigeria country change before Production review.
+Specific blockers: evidence-based Data Safety; privacy/deletion and catalogue/content-rating reconciliation; replacement pre-launch and clean-device QA; active Alpha/Internal artifact reconciliation; verify the pre-existing pending Nigeria country change before Production review. Reviewer access is saved but remains pending Google review.
 
 Exact next Play actions after those gates pass: review the saved Alpha code 7 replacement and stop before sending it for review; after it replaces Alpha 6 and device QA passes, verify Nigeria-only Production availability, preview the saved Production code 7 release, and stop immediately before **Send for review** for final owner authorization.
 
 ## Overall classification
 
-- Customer: **BLOCKED — declarations, reviewer/provider evidence, privacy deployment, pre-launch and device QA remain incomplete.**
-- Captain: **BLOCKED — current location video, location/FGS declarations, reviewer/provider evidence, country setup, pre-launch and physical-device lifecycle QA remain incomplete.**
-- Partner: **BLOCKED — reviewer/provider evidence, privacy/content reconciliation, country verification, pre-launch and physical-device QA remain incomplete.**
+- Customer: **BLOCKED — declarations, provider evidence, privacy deployment, pre-launch and device QA remain incomplete; reviewer access is saved pending review.**
+- Captain: **BLOCKED — current location video, location/FGS declarations, provider evidence, country setup, pre-launch and physical-device lifecycle QA remain incomplete; reviewer access is saved pending review.**
+- Partner: **BLOCKED — provider evidence, privacy/content reconciliation, country verification, pre-launch and physical-device QA remain incomplete; reviewer access is saved pending review.**
 
 The saved drafts are technically consistent with the intended replacement artifacts. They are not authorization to submit, release, or roll out.
