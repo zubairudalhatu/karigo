@@ -101,3 +101,23 @@ Exact next Play actions after those gates pass: review the saved Alpha code 7 re
 - Partner: **BLOCKED — provider evidence, privacy/content reconciliation, country verification, pre-launch and physical-device QA remain incomplete; reviewer access is saved pending review.**
 
 The saved drafts are technically consistent with the intended replacement artifacts. They are not authorization to submit, release, or roll out.
+
+## H11.2G foreground-service and Captain background-location reconciliation — 28 September 2026
+
+Read-only inspection of the exact replacement AABs and Play Console forms produced these results:
+
+| App | Replacement manifest | Play prompt source | Required resolution |
+| --- | --- | --- | --- |
+| Customer code 18 | No typed FGS permission; no background location; no media-projection permission or runtime feature | `FOREGROUND_SERVICE_MEDIA_PROJECTION` prompt is attributed solely to obsolete Internal-testing code 17 | Do not submit a false declaration. Retire/replace code 17 after QA, then verify the prompt clears. Consider removing the remaining generic FGS permission in a later verified build. |
+| Captain code 17 | Legitimate location FGS and background location for accepted/in-progress work; no media-projection permission or feature | Current location + media-projection prompt is attributed solely to obsolete Internal-testing code 16 | Declare only the legitimate location tasks after a current evidence video exists; retire/replace code 16 after QA and verify the media-projection prompt clears. |
+
+Captain's saved background-location form is **Ready to send for review**, but its Drive video URL returns **Page Not Found**. The declaration must not be saved or submitted with unsupported evidence. Source inspection confirms the prominent disclosure precedes the Android background-location request and that tracking is limited to accepted/in-progress work with explicit stop paths. Physical-device proof remains outstanding.
+
+Detailed records:
+
+- `docs/google-play/customer/foreground-service-declaration-2026-09-28.md`
+- `docs/google-play/captain/foreground-service-declaration-2026-09-28.md`
+- `docs/google-play/captain/background-location-declaration-2026-09-28.md`
+- `docs/google-play/captain/background-location-video-runbook-2026-09-28.md`
+
+Classification remains **C — blocked**. No declaration answer was selected or saved, no artifact was removed, and nothing was sent for review.
