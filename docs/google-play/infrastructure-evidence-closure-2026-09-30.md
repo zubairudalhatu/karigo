@@ -1,6 +1,6 @@
 # Production infrastructure evidence closure — 30 September 2026
 
-Status: **PARTIAL — DASHBOARD MFA AND OWNER INPUT REQUIRED**. This task performed read-only inspection. No backup, restore, bucket, environment change, deployment, Play change or Git push occurred.
+Status: **PARTIAL — OWNER CONTRACT AND BUCKET-CONFIGURATION EVIDENCE REQUIRED**. This task performed read-only inspection. No backup, restore, bucket, environment change, deployment, Play change or Git push occurred.
 
 ## Repository control
 
@@ -36,17 +36,21 @@ High-confidence secret scan of these changes found no newly introduced credentia
 | Database association | Backend and database share Render environment `evm-da6rq949v7es7388ceqg`; the database name is legacy `karigo_staging` even though it serves the production backend |
 | Network evidence | Database IP allowlist currently reports `0.0.0.0/0`; credentials remain required. The rehearsal destination must not copy this broad rule unchanged. |
 
+The authenticated Recovery page confirms a seven-day PITR window and a latest inspected recovery point of `2026-09-30 20:26:12 +01:00`. No logical export existed. A customized PITR instance can be left unattached to any Project/Environment. The minimum inspected option is `0.1c-256mb` plus 1 GB storage at $6.30/month, prorated by the second. The final button is **Create database**. No database was created.
+
+The restore form does not provide a pre-creation network-policy control, while workspace/environment rules currently permit `0.0.0.0/0`. A logical export restored into a separately created destination remains the safer method for controlling the logical database name and verifying the destination before import, but network restriction still requires closing the effective workspace rule or using an isolated workspace/provider.
+
 ## Captain storage
 
-Classification: **C — generic/custom S3 endpoint; provider still unknown** pending authenticated environment inspection. Repository history contains only the generic `CAPTAIN_UPLOADS_STORAGE_*` names and no provider-specific hostname. Dashboard MFA prevented the value-safe endpoint-host/region/bucket inspection.
+Classification: **A — provider definitively identified as Google Cloud Storage**. The production endpoint is `https://storage.googleapis.com`, Google Cloud Storage's XML/S3-compatible endpoint. Render also shows bucket `karigo-captain-uploads`, storage enabled, path-style addressing enabled, and application region `auto`. No credential value was revealed or recorded.
 
-Therefore these remain unconfirmed: provider legal identity, endpoint hostname, region, bucket, path-style setting, server-side encryption default, versioning, lifecycle, object lock, public-access block, agreement/DPA, subprocessors, independent uses, transfers, deletion behavior and backups.
+Google Cloud documents standard server-side encryption as the default, but Render does not expose the bucket's actual encryption-key mode. The bucket location, public-access prevention/IAM, uniform bucket-level access, versioning, soft-delete retention, lifecycle, retention policy, object lock, backup/recovery configuration and service-plan/billing account remain unconfirmed until the Google Cloud bucket/account is inspected.
 
-Account-level evidence required after identification: applicable service terms; accepted/executed DPA; current subprocessors; independent security/fraud/diagnostic/improvement uses; region and international-transfer terms; object deletion/versioning/backup policy; account acceptance/version record; and bucket configuration evidence. Preserve `CAPTAIN STORAGE CONTRACT — NOT CONFIRMED` until then.
+Account-level evidence still required: Google Cloud Terms, accepted/incorporated Cloud Data Processing Addendum, current subprocessors, service-specific terms, independent security/fraud/diagnostic/improvement uses, location and transfer terms, deletion/soft-delete behavior, account acceptance/version record and bucket configuration evidence. Preserve `CAPTAIN STORAGE CONTRACT — NOT CONFIRMED` until those account records are captured.
 
 ## Partner recommendation
 
-Classification: **D — cannot decide until Captain provider evidence is supplied**. Reuse could be acceptable only after provider/contract evidence closes. If reused, use a separate private bucket rather than the Captain bucket; this gives clearer tenant isolation, policy review, lifecycle, migration rollback and audit boundaries.
+Classification: **A — reuse Google Cloud Storage with a separate Partner private bucket, pending provisioning approval and account-evidence closure**. The confirmed XML/S3-compatible endpoint supports the application driver and object deletion. A separate bucket is required for IAM, lifecycle, retention, migration rollback and audit isolation.
 
 Proposed variable shape, with values supplied only in the Render secret store:
 
@@ -77,9 +81,8 @@ The push is therefore production-sensitive because of the three Vercel deploymen
 
 ## Owner inputs
 
-- Complete Render dashboard MFA so the storage endpoint host and Recovery page can be inspected without exposing secrets.
 - Approve one isolated snapshot method and its temporary cost.
-- Approve/reject reuse of the identified Captain storage provider; if reused, approve a separate Partner bucket.
+- Approve Google Cloud Storage reuse and a separate Partner bucket after bucket IAM/location/lifecycle evidence and contract records are supplied.
 - Supply provider agreement/DPA/account acceptance evidence without credentials.
 - Supply Flutterwave merchant agreement/DPA/account terms evidence.
 - Approve retention purposes/durations identified in the deletion matrix.

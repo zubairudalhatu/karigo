@@ -6,13 +6,13 @@ Status: **PLAN ONLY — NOTHING CREATED OR RESTORED**.
 
 Source: Render Postgres `karigo-staging-db` (`dpg-d92nd6hkh4rs738p33a0-a`), PostgreSQL 18, paid `basic_256mb`, 1 GB, Frankfurt. It is linked to the production KariGO environment despite its legacy staging name.
 
-Render documents that paid Postgres instances have point-in-time recovery (PITR), and that PITR creates a separate database instead of overwriting the source. The recovery window is three days on Hobby workspaces and seven days on Pro or higher. The connector did not expose the workspace billing tier or latest recovery point, so the exact window/latest point remains pending dashboard verification. Render also supports on-demand logical exports retained for seven days. A recovery instance is billable until deleted.
+The authenticated Recovery page confirms point-in-time recovery from any timestamp in the past **7 days**. The latest point shown during inspection was **2026-09-30 20:26:12 Africa/Lagos (UTC+01:00)**. PITR creates a separate PostgreSQL instance. The page also supports on-demand logical exports retained for at least seven days; no export existed at inspection time. A recovery instance is billed until deleted.
 
-Authoritative capability source: <https://render.com/docs/postgresql-backups>. Exact account-specific recovery metadata and price remain unverified because the dashboard is waiting for the account's MFA code.
+Authoritative capability source: <https://render.com/docs/postgresql-backups>. The restore form offers `0.1c-256mb` compute at $6/month and 1 GB storage at $0.30/month, for **$6.30/month prorated by the second** (approximately $0.21 for 24 hours, before taxes and billing-rounding differences).
 
 ## Recommended authorized action
 
-Preferred for this rehearsal: create an on-demand logical export, download it to an authorized operator environment, then restore it with `pg_restore` into a separately created, empty, access-restricted Frankfurt Render Postgres instance using destination-only credentials. This avoids PITR's documented behavior of copying the source IP allowlist, currently `0.0.0.0/0`, and permits the destination network policy to be restricted before credentials are issued. The operator must verify the archive and destination identity before running `pg_restore`; the command must never contain the production connection URL.
+Preferred for this rehearsal: create a fresh logical export, download it to an authorized operator environment, create a separate empty Frankfurt PostgreSQL 18 instance, and restore it with `pg_restore` using destination-only credentials. The PITR form can create a separate instance, but it exposes only a display-name field, inherits a seven-day recovery point, and the workspace/environment currently applies `0.0.0.0/0`; it does not provide a pre-creation network-restriction control. Logical export is safer for establishing the required logical database name and validating destination identity before restore. The command must never contain the production connection URL.
 
 Proposed configuration:
 
@@ -22,7 +22,7 @@ Proposed configuration:
 | Destination display name | `karigo-task209b-rehearsal-20260930` |
 | Destination database name | `karigo_task209b_rehearsal_20260930` |
 | Region/version | Frankfurt / PostgreSQL 18 |
-| Plan/storage | Smallest paid plan compatible with the export; 1 GB minimum; exact price is **not available from current evidence** and must be confirmed in the creation screen |
+| Plan/storage | `0.1c-256mb` at $6/month plus 1 GB at $0.30/month; $6.30/month total, prorated by the second |
 | Network | No production service attachment; allow only named operator source addresses or a dedicated private rehearsal runner |
 | Credentials | New destination-only credentials stored in the operator secret manager; never copy to production services, repository, chat or evidence logs |
 | Harness marker | `CONFIRM_TASK209B_RESTORED_SNAPSHOT=AUTHORIZED_RESTORED_COPY` |
@@ -30,7 +30,7 @@ Proposed configuration:
 | Runtime | One-off local/private runner; do not launch the public backend |
 | Expiry | Delete destination and export after evidence approval, targeted within 24 hours and no later than seven days |
 
-PITR remains an alternative if the Recovery page confirms a suitable recovery point and the new instance's copied IP allowlist is restricted immediately before any credential is distributed. Stop if Render cannot ensure a separate instance.
+PITR remains an alternative using the latest confirmed point `2026-09-30 20:26:12 +01:00` or another timestamp within the preceding seven days. Choose “No, don't copy existing settings,” leave Project/Environment unselected, use `0.1c-256mb` with 1 GB, and stop before **Create database**. Do not use PITR until the effective workspace/environment `0.0.0.0/0` rule is removed or the owner explicitly accepts credential-only isolation for the short-lived instance.
 
 ## Execution sequence requiring later approval
 
