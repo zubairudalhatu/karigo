@@ -1,8 +1,8 @@
 # Customer foreground-service declaration audit
 
-Date: 28 September 2026  
-App: KariGO Customer (`com.karigo.customer`)  
-Replacement artifact: `1.1.0` / version code `18`  
+Date: 28 September 2026
+App: KariGO Customer (`com.karigo.customer`)
+Replacement artifact: `1.1.0` / version code `18`
 SHA-256: `7B99804549AC3887D88AD1103F3CC97A8FDA2AB7547B620A3C53FA16D0FFD8CA`
 
 ## Finding

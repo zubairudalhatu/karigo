@@ -1,8 +1,8 @@
 # Captain foreground-service declaration audit
 
-Date: 28 September 2026  
-App: KariGO Captain (`com.karigo.rider`)  
-Replacement artifact: `1.2.0` / version code `17`  
+Date: 28 September 2026
+App: KariGO Captain (`com.karigo.rider`)
+Replacement artifact: `1.2.0` / version code `17`
 SHA-256: `DC5D5F7C2F0A61D6FD47BB9E6FA1915CE2C91BFB896764142C2EE9027AC3A3E5`
 
 ## Artifact and Console reconciliation

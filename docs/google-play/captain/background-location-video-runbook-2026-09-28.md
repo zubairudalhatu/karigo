@@ -1,6 +1,6 @@
 # Captain background-location and location-FGS video runbook
 
-Date: 28 September 2026  
+Date: 28 September 2026
 Target: KariGO Captain code 17 from the Play testing track on a physical Android device
 
 ## Preconditions

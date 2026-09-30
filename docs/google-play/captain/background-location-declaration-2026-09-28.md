@@ -1,7 +1,7 @@
 # Captain background-location declaration audit
 
-Date: 28 September 2026  
-App: KariGO Captain (`com.karigo.rider`)  
+Date: 28 September 2026
+App: KariGO Captain (`com.karigo.rider`)
 Replacement artifact: `1.2.0` / version code `17`
 
 ## Current Play declaration
