@@ -304,11 +304,38 @@ function validateCaptainUploadsStorage(config: Record<string, unknown>) {
   return enabled;
 }
 
+function validatePartnerPrivateStorage(config: Record<string, unknown>) {
+  const driver = stringAlias(config, ["PARTNER_PRIVATE_STORAGE_DRIVER"], "local").toLowerCase();
+  if (!["local", "s3"].includes(driver)) {
+    throw new Error("PARTNER_PRIVATE_STORAGE_DRIVER must be local or s3");
+  }
+  // The storage service fails closed if invoked with the local driver in production.
+  // Keep global boot validation composable so unrelated production gates retain their errors.
+  if (driver === "s3") {
+    for (const key of [
+      "PARTNER_PRIVATE_STORAGE_REGION",
+      "PARTNER_PRIVATE_STORAGE_BUCKET",
+      "PARTNER_PRIVATE_STORAGE_ACCESS_KEY_ID",
+      "PARTNER_PRIVATE_STORAGE_SECRET_ACCESS_KEY"
+    ]) requireValue(config, key);
+    const endpoint = liveString(config, "PARTNER_PRIVATE_STORAGE_ENDPOINT");
+    if (endpoint && !endpoint.startsWith("https://")) {
+      throw new Error("PARTNER_PRIVATE_STORAGE_ENDPOINT must use HTTPS");
+    }
+    const encryption = stringAlias(config, ["PARTNER_PRIVATE_STORAGE_SERVER_SIDE_ENCRYPTION"], "AES256");
+    if (!["AES256", "aws:kms"].includes(encryption)) {
+      throw new Error("PARTNER_PRIVATE_STORAGE_SERVER_SIDE_ENCRYPTION must be AES256 or aws:kms");
+    }
+  }
+  return driver;
+}
+
 export function validateEnvironment(config: Record<string, unknown>): Record<string, unknown> {
   const databaseUrl = requireValue(config, "DATABASE_URL");
   const prismaAccelerate = validatePrismaAccelerateConfig(config, databaseUrl);
   const captainUploadsStorageEnabled = validateCaptainUploadsStorage(config);
   const appEnvironment = typeof config.APP_ENV === "string" ? config.APP_ENV : "development";
+  const partnerPrivateStorageDriver = validatePartnerPrivateStorage(config);
   const otpProvider =
     typeof config.OTP_PROVIDER === "string"
       ? config.OTP_PROVIDER.toLowerCase()
@@ -829,6 +856,7 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     DIRECT_URL: prismaAccelerate.directUrl,
     PRISMA_ACCELERATE_ENABLED: prismaAccelerate.prismaAccelerateEnabled,
     CAPTAIN_UPLOADS_STORAGE_ENABLED: captainUploadsStorageEnabled,
+    PARTNER_PRIVATE_STORAGE_DRIVER: partnerPrivateStorageDriver,
     JWT_SECRET: requireValue(config, "JWT_SECRET"),
     JWT_EXPIRES_IN_SECONDS: jwtExpirySeconds(config.JWT_EXPIRES_IN),
     OTP_EXPIRY_MINUTES: positiveInteger(config.OTP_EXPIRY_MINUTES, "OTP_EXPIRY_MINUTES", 10),

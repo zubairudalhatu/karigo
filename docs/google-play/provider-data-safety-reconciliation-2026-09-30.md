@@ -93,3 +93,27 @@ Ready to complete Play Step 4: **PARTIAL**. Evidence-supported category, purpose
 ## Task 209B-S1-H11.2P reconciliation update — 2026-09-30
 
 Implementation now minimizes new persisted payment evidence, physically deletes eligible Captain/private Partner objects before reporting deletion, and records defined retention states. This does not resolve provider-sharing answers. Customer `User payment info` remains **NOT CONFIRMED** until legacy Flutterwave JSON is cleaned and all other production paths are verified. Captain storage sharing remains unresolved because the provider and contract are unconfirmed. Partner historic onboarding documents require controlled migration from legacy public URLs.
+
+## Task 209B-S1-H11.2Q read-only reassessment — 2026-09-30
+
+No Google Play Console answer was opened, saved or submitted for this update.
+
+### Customer
+
+- `User payment info`: **do not remove yet**. New writes are allowlisted, but historic Flutterwave JSON has not been inventoried or cleaned on an authorized production copy. Removal becomes supportable only after the production dry run, owner-approved cleanup, post-cleanup verification, and confirmation that no other path stores payment instruments.
+- `Purchase history`: remains collected for orders, receipts, fulfilment and transaction history.
+- `Other financial info`: remains collected for wallet ledger, amounts, references, statuses, refunds and reconciliation.
+- Flutterwave sharing: unresolved until the exact flow, executed/incorporated merchant terms/DPA, provider independent uses and Play exception are evidenced.
+
+### Captain
+
+- Eligible unattached application documents have an implementation-backed physical deletion state; active/approved application evidence has a recorded retention reason. The duration remains unresolved.
+- Provider identity, region, encryption/versioning configuration, DPA, subprocessors and independent uses remain missing. Storage sharing must remain unresolved.
+
+### Partner
+
+- New private onboarding files now have a durable S3-compatible production design, authenticated vendor-scoped retrieval, explicit object keys and delete support. Production provisioning is not complete.
+- Catalogue/service/logo/cover media remains intentionally public and must stay classified separately.
+- Historic onboarding files cannot be described as private until the counts-only inventory and controlled migration complete.
+- Eligible unapproved private documents can be deleted; approved evidence is retained with a defined state but an unresolved duration.
+- Existing Play categories should change only after deployed behavior and the legacy migration are verified. Provider sharing remains unresolved.

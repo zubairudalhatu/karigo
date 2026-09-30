@@ -32,3 +32,7 @@ See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-rec
 - `Purchase history` and `Other financial info` remain supported by order/payment/wallet/reference and reconciliation records.
 - Do **not** yet remove `User payment info` in Play: legacy JSON may still contain it and the production cleanup was designed but not executed.
 - Flutterwave `Shared`/`Not shared` remains unresolved pending executed contract/DPA and independent-use evidence.
+
+## Task H11.2Q read-only update — 30 September 2026
+
+- User payment info remains unresolved until legacy Flutterwave cleanup and post-cleanup verification. Purchase history and Other financial info remain collected. Flutterwave sharing remains unresolved.

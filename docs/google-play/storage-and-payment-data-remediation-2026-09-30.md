@@ -124,3 +124,53 @@ Tests cover payment allowlisting, prohibited nested credential removal, Captain 
 - Durable production design for Partner private uploads and migration of legacy public onboarding documents.
 - Approved retention schedule and deletion/anonymization behavior for relational Customer, Captain, and Partner records.
 - Provider-side deletion/retention evidence for Flutterwave and all other subprocessors.
+
+## Task 209B-S1-H11.2Q rehearsal update — 2026-09-30
+
+### Durable Partner storage target
+
+Production target: an S3-compatible private object store configured independently through `PARTNER_PRIVATE_STORAGE_*`. Production document keys are `partner-private/vendors/{vendorId}/onboarding-documents/{random}.{extension}`. The application supplies no public ACL, requires server-side encryption (`AES256` or `aws:kms`), permits only HTTPS custom endpoints, validates ownership before every read/delete, and converts provider failures to secret-safe messages. Local storage remains available only for non-production development; the service refuses it in production.
+
+The upload controller's existing MIME and size allowlists remain the first gate. `VendorPrivateUpload` is the lifecycle manifest. Deletion uses one explicit object key and is retryable/idempotent. Catalogue product/service/logo/cover media remains on its separate intentionally public path.
+
+Provider decision: **D — SEPARATE PARTNER STORAGE REQUIRED, PROVIDER SELECTION PENDING**. Captain's provider was not provable from repository configuration; the Render dashboard session had expired and no safe account metadata was available. No Captain credentials, endpoint, region or bucket values were read. Reuse requires provider identity, tenant/account ownership, private-bucket configuration, DPA, subprocessors, independent-use analysis, region and encryption/versioning evidence.
+
+### Rehearsal boundary and results
+
+- Mock S3 rehearsal: upload command, private/no-ACL posture, encrypted write, authenticated vendor scope, read, retry after a simulated delete failure, repeated already-missing-style delete, and secret-safe errors passed. Existing account-deletion tests cover retained approved evidence; existing vendor tests cover unauthorized access and the independent public-media path.
+- Restored production migration rehearsal: **NOT RUN**. No authorized restored production database was available and the local PostgreSQL service was unavailable. The guarded harness refuses database names without `restore`, `snapshot`, `rehearsal`, or `task209b` and requires a separate restored-copy token.
+- Legacy Partner counts: **NOT AVAILABLE** for the same reason. The counts-only tool is prepared and never emits names, URLs, filenames, or contents.
+- Flutterwave production-copy dry run: **NOT RUN**; counts remain unavailable. Synthetic fixtures proved classification, allowlisted minimization, reference preservation, idempotency, and malformed-record safety.
+
+### Payment cleanup safety
+
+The cleanup planner now distinguishes already compliant rows, legacy rows needing minimization, unclassifiable rows and failures. It reports only field names and structural categories for potential card/account numbers, authorization objects, customer/provider profiles, bank details and nested metadata. Dry run creates no update operations. Apply mode updates only the three allowlisted JSON columns and requires a separate controlled-window token. Records already on schema version 1 are not rewritten.
+
+### Exact proposed copy — not deployed
+
+`/privacy`:
+
+> KariGO collects the account, contact, location, order, Ride/Delivery, support, uploaded-file and transaction-reference data needed for the services you use. Payment credentials entered on a provider-hosted checkout are submitted to that provider; KariGO retains payment references, status and reconciliation evidence. Private application and onboarding documents are available only through authenticated access. Catalogue, service, logo and cover media selected for publication may be displayed publicly. When an account-deletion request is completed, KariGO deletes eligible private uploads and unattached application documents. Approved application evidence, transaction, dispute, security and audit records may remain only where KariGO has recorded a defined reason. The exact schedule for each retained category is still under owner/legal review. Provider-side retention depends on the applicable verified provider terms.
+
+`/account-deletion`:
+
+> Submit an account-deletion request from the app or the published deletion channel. KariGO signs the account out and stops active access while the request is processed. Eligible private uploads and unattached application documents are physically deleted from KariGO-controlled storage. Some transaction, approved-application, dispute, security and audit records may remain with a recorded reason. KariGO does not yet publish a fixed period for every retained category; those periods require owner/legal approval. Deletion from a provider's systems depends on the verified provider process and contract.
+
+Customer app deletion screen:
+
+> Deleting your account revokes access and starts removal of eligible profile uploads and tokens. Order, Ride/Delivery, wallet, payment-reference, support, security and audit records may require deletion, anonymization or retention review. The app will show the request status; it does not promise immediate deletion of every related record.
+
+Captain app deletion screen:
+
+> Deleting your Captain account takes you offline, revokes access and deletes eligible unattached application documents. Documents attached to an active or approved application may be retained as application evidence until the approved schedule permits removal. Ride/Delivery, earnings, payment-reference, support, security and audit records remain subject to the documented deletion, anonymization or retention decision.
+
+Partner app deletion screen:
+
+> Deleting your Partner account revokes access and deletes eligible unapproved private onboarding documents. Approved onboarding evidence may be retained with a recorded reason. Public catalogue, service, logo and cover media are handled separately from private documents. Orders, settlements, payment references, support, security and audit records remain subject to the documented deletion, anonymization or retention decision.
+
+Proposed corporate footer only; it does not determine controller status:
+
+> © 2026 KariGO Express Limited.
+> A Zamkah Technologies Limited company. All rights reserved.
+
+No production data, deployment, Play Console state or remote Git state was changed by this rehearsal.

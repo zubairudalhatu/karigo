@@ -24,6 +24,33 @@ describe("environment configuration", () => {
     expect(normalizeApiPrefix("/api/v1/")).toBe("api/v1");
   });
 
+  it("validates an encrypted S3-compatible Partner private-storage target", () => {
+    const result = validateEnvironment({
+      ...baseConfig(),
+      APP_ENV: "production",
+      PARTNER_PRIVATE_STORAGE_DRIVER: "s3",
+      PARTNER_PRIVATE_STORAGE_REGION: "test-region-1",
+      PARTNER_PRIVATE_STORAGE_BUCKET: "test-private-bucket",
+      PARTNER_PRIVATE_STORAGE_ENDPOINT: "https://objects.example.test",
+      PARTNER_PRIVATE_STORAGE_ACCESS_KEY_ID: "test-access",
+      PARTNER_PRIVATE_STORAGE_SECRET_ACCESS_KEY: "test-secret",
+      PARTNER_PRIVATE_STORAGE_SERVER_SIDE_ENCRYPTION: "AES256"
+    });
+    expect(result.PARTNER_PRIVATE_STORAGE_DRIVER).toBe("s3");
+  });
+
+  it("rejects an insecure Partner object-storage endpoint", () => {
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      PARTNER_PRIVATE_STORAGE_DRIVER: "s3",
+      PARTNER_PRIVATE_STORAGE_REGION: "test-region-1",
+      PARTNER_PRIVATE_STORAGE_BUCKET: "test-private-bucket",
+      PARTNER_PRIVATE_STORAGE_ENDPOINT: "http://objects.example.test",
+      PARTNER_PRIVATE_STORAGE_ACCESS_KEY_ID: "test-access",
+      PARTNER_PRIVATE_STORAGE_SECRET_ACCESS_KEY: "test-secret"
+    })).toThrow("PARTNER_PRIVATE_STORAGE_ENDPOINT must use HTTPS");
+  });
+
   it("adds safe defaults while retaining required values", () => {
     const result = validateEnvironment({
       DATABASE_URL: testDatabaseUrl,

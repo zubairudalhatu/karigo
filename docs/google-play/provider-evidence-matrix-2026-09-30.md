@@ -59,3 +59,16 @@ Classification **B — PARTIAL**. Render application payloads and Resend email p
 - Flutterwave raw response persistence has been replaced for new writes by a fixed reconciliation allowlist. Executed contractual evidence and provider independent-use analysis remain missing, so Play sharing classification is unchanged/unresolved.
 - Partner public catalogue/branding media remains public by design. New onboarding documents use authenticated vendor-scoped retrieval from a non-static private root. Production durability and legacy public-document migration remain outstanding.
 - See `storage-and-payment-data-remediation-2026-09-30.md` for the redacted legacy inventory and rollout gates.
+
+## Task 209B-S1-H11.2Q provider/storage addendum — 2026-09-30
+
+| Evidence item | Result | Consequence |
+| --- | --- | --- |
+| Captain storage provider identity | **C — provider still unknown.** Repository contains only generic S3-compatible variable names. The local environment contains none of those names. Render account inspection could not continue because the authenticated session had expired. | Do not assert a provider, contract, region, encryption default, versioning policy, subprocessor list or Play service-provider exception. |
+| Partner production storage target | **D — separate Partner storage required, provider selection pending.** A dedicated `PARTNER_PRIVATE_STORAGE_*` abstraction now exists. | Select/provision a private durable bucket and finish the provider/DPA review before deployment. Reuse of Captain storage remains conditional. |
+| Render filesystem for private Partner documents | Explicitly rejected as the production target. | Local/ephemeral disk is limited to non-production development. |
+| Flutterwave legacy payload scope | Production counts not available without an authorized restored snapshot. Synthetic fixtures demonstrate the structural categories the tool can count without values. | Customer `User payment info` remains unresolved until the controlled cleanup and a post-cleanup inventory succeed. Flutterwave sharing remains unresolved. |
+
+Safe variable names for the Partner target are: driver, bucket, endpoint, region, access-key identifier, secret access key, path-style switch, server-side encryption and non-production local root. No values are recorded here.
+
+The provider evidence needed before the production gate is: provider legal name; account/workspace ownership; bucket name convention and region (recorded in a restricted evidence pack); anonymous-access block; encryption/versioning/lifecycle settings; scoped access policy; executed/incorporated agreement and DPA; subprocessors; independent security/fraud/diagnostic/analytics/improvement uses; breach/deletion/export contacts; and tested delete/head/get behavior.

@@ -25,3 +25,7 @@ See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-rec
 - New onboarding documents are written outside the static public upload root and require authenticated, vendor-scoped retrieval.
 - Eligible unapproved private documents are physically deleted; approved evidence is explicitly retained as `APPROVED_ONBOARDING_EVIDENCE` without an invented period.
 - Legacy public onboarding URLs and durable production private storage still require migration/verification, so historic privacy claims remain qualified.
+
+## Task H11.2Q read-only update — 30 September 2026
+
+- Durable private object-storage support is implemented but not provisioned. Legacy public onboarding documents are not yet inventoried or migrated. Keep public catalogue media separate and provider sharing unresolved.

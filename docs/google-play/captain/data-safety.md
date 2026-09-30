@@ -24,3 +24,7 @@ See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-rec
 - Failures remain `DELETION_FAILED`, retries are safe, and account deletion cannot complete while an eligible deletion fails.
 - Documents attached to an application are `RETAINED_FOR_DEFINED_REASON` with `ACTIVE_APPLICATION_EVIDENCE`; no retention period is asserted.
 - Storage provider identity and sharing status remain unconfirmed. Do not infer a Play service-provider exception.
+
+## Task H11.2Q read-only update — 30 September 2026
+
+- Eligible unattached document deletion and retained application-evidence states are implemented. Storage provider/DPA/configuration evidence remains unresolved; do not finalize sharing.
