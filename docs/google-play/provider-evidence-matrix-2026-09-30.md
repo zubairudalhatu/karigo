@@ -113,3 +113,10 @@ This closes the account-specific DPA-incorporation gap for Customer Data. It doe
 - Legacy Captain reads/deletes and matching-vendor legacy Partner reads/deletes remain compatible. Production and provider state remain unchanged pending deployment.
 - **Terms evidence:** account association and accepted DPA are verified. Current Cloud Terms, Cloud Privacy Notice, and subprocessors are public-term evidence; a separate account-specific Cloud Terms/order-form acceptance record was not exported.
 - No Play Console, GCS, production, deployment, or Git remote state changed.
+
+## Task 209B-S1-H11.2AB Partner bucket provisioning — 2026-09-30
+
+- `karigo-partner-private-uploads` now exists in `mystical-method-475123-s9`, `europe-west3` (Frankfurt), Standard, with PAP enabled, uniform access, no public/anonymous principal, Google-managed default encryption, versioning off, seven-day soft delete, no retention lock/object retention, and no lifecycle rules.
+- The bucket is empty and not runtime-wired. Dedicated Partner service identity, bucket-scoped `roles/storage.objectUser`, HMAC interoperability credential, and independent application key secret remain uncreated.
+- Cloud Storage Data Access logs remain disabled. Google Cloud exposes this as a project-level service AuditConfig; enabling Data Read/Write would affect all Cloud Storage buckets in the project. No logging change was saved.
+- Provider role remains **A — service-provider exception supported for the governed backend-mediated Customer Data path**, conditional on least-privilege runtime wiring and verification. Production-app applicability remains gated because no credentials, Render variables, deployment, or file migration exist.

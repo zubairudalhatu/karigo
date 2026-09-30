@@ -46,3 +46,12 @@ See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-rec
 - KariGO's private-upload manifest retains the vendor, display filename, MIME type, size, provider/bucket, key, lifecycle state, and retention state; the onboarding record retains document type and label.
 - The seven-record planner now emits deterministic opaque HMAC-derived destination keys and requires the same key secret. No file was migrated and no bucket was created.
 - The planned GCS service-provider exception remains supported, conditional on provisioning, deployment, and verification.
+
+## Task 209B-S1-H11.2AB private-bucket checkpoint — 30 September 2026
+
+- The dedicated Partner bucket `karigo-partner-private-uploads` now exists in the governed project and is empty.
+- Verified controls: Frankfurt regional Standard storage, PAP enabled, uniform access, no public IAM, Google-managed encryption, versioning off, seven-day soft delete, no retention lock/object retention, and no lifecycle rule.
+- Runtime wiring is not complete: no dedicated service account/bucket grant, HMAC credential, application key secret, Render variables, deployment, test object, or legacy-file migration exists.
+- The evidence-supported Play treatment for the planned backend-mediated GCS transfer remains `Files and documents` collected and retained, **not shared under the service-provider exception**. It does not yet describe live production handling.
+- Data Access logging is still disabled because the available Cloud Storage AuditConfig is project-wide rather than bucket-only; owner review is required before affecting other buckets.
+- Play Console remained unchanged.

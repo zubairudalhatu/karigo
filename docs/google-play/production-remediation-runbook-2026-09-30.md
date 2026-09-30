@@ -103,3 +103,18 @@ Phase A proposed Partner controls:
 - keep public catalogue/service/logo/cover media outside the private document bucket.
 
 Additional pre-provisioning gate: the project Privacy & Security page still offers `Review and Accept` for the Cloud Data Processing Addendum. Preserve an account-specific acceptance/executed agreement record identifying Zamkah Technologies Limited, the governed account/billing account, timestamp, and version before relying on the service-provider exception. Provisioning, DPA acceptance, Captain PAP/IAM/logging changes, secret configuration, migration, and deployment each remain separate approval actions.
+
+## Task 209B-S1-H11.2AB Phase A checkpoint — 2026-09-30
+
+The dedicated bucket `karigo-partner-private-uploads` has been created in `mystical-method-475123-s9` as Standard regional storage in `europe-west3` (Frankfurt). Verified controls are PAP enabled, uniform access, no public principal, Google-managed default encryption, Object Versioning off, seven-day soft delete, no retention/object lock, and no lifecycle rules. The bucket is empty.
+
+Phase A is not complete. Before runtime wiring:
+
+1. approve and create `karigo-partner-private-storage` as the dedicated service account;
+2. remove/review default project basic-role legacy bucket/object bindings and grant only bucket-scoped `roles/storage.objectUser` to the runtime identity;
+3. decide whether to enable Cloud Storage Data Read/Data Write logs project-wide, because Google Cloud does not offer a bucket-only AuditConfig and the change would affect Captain and every other bucket in the project;
+4. create and immediately secure the dedicated HMAC credential after a separate action-time confirmation;
+5. generate and securely store an independent 256-bit `PARTNER_PRIVATE_STORAGE_KEY_SECRET`; and
+6. obtain separate approval before adding any Render variable, deploying, testing with an object, or migrating the seven legacy records.
+
+No Render, deployment, migration, Google Play, Captain bucket, or Git remote change occurred at this checkpoint.

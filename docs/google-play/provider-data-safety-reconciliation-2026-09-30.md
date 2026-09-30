@@ -176,3 +176,11 @@ New Captain and Partner object keys should replace raw user/vendor UUIDs and doc
 - Existing Captain objects remain readable through signed URLs and deletable using their stored legacy keys. No legacy object migration occurred.
 - Partner new-write and seven-record migration keys contain neither raw vendor UUID nor database row ID. The keyed vendor namespace preserves cross-tenant verification.
 - The Play result remains **COLLECTED BUT NOT SHARED under the GCS service-provider exception**. No Data Safety answer or production behavior changed because this code is not deployed.
+
+## Task 209B-S1-H11.2AB provisioning reconciliation — 2026-09-30
+
+- The dedicated governed-account Partner bucket now exists with private controls: PAP, uniform access, no public IAM, Google-managed encryption, seven-day soft delete, no versioning, no retention lock, and no lifecycle rule.
+- This does not create a new Play data category. Partner onboarding evidence remains `Files and documents`, collected and retained for functionality, onboarding/account administration, and security/compliance.
+- The GCS provider result remains **COLLECTED BUT NOT SHARED under the service-provider exception** for the documented backend-mediated path. It is not yet a live production transfer: the dedicated identity, HMAC credential, application key, Render configuration, deployment, and seven-file migration are all absent.
+- Cloud Storage Data Access logging remains disabled because the available AuditConfig is project-wide across every bucket in `mystical-method-475123-s9`; no unsupported bucket-only claim is recorded.
+- Google Play was not changed.
