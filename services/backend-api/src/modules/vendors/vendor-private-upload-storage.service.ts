@@ -1,9 +1,9 @@
 import { BadRequestException, Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { randomBytes } from "crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { mkdir, readFile, unlink, writeFile } from "fs/promises";
-import { extname, normalize, resolve } from "path";
+import { normalize, resolve } from "path";
 
 export interface PrivateVendorFile {
   originalname: string;
@@ -21,8 +21,10 @@ export class VendorPrivateUploadStorageService {
   constructor(private readonly config: ConfigService) {}
 
   async putOnboardingDocument(vendorId: string, file: PrivateVendorFile) {
-    const extension = extname(file.originalname).toLowerCase() || this.extensionFor(file.mimetype);
-    const key = `partner-private/vendors/${vendorId}/onboarding-documents/${randomBytes(16).toString("hex")}${extension}`;
+    const extension = this.extensionFor(file.mimetype);
+    const opaqueSubject = this.opaqueSubject(vendorId);
+    const opaqueObject = randomBytes(16).toString("hex");
+    const key = `partner-private/${opaqueSubject}/${opaqueObject}${extension}`;
     this.assertOwnedKey(vendorId, key);
     if (this.driver() === "s3") {
       const storage = this.s3Config();
@@ -84,10 +86,23 @@ export class VendorPrivateUploadStorageService {
   }
 
   assertOwnedKey(vendorId: string, key: string) {
-    const expectedPrefix = `partner-private/vendors/${vendorId}/onboarding-documents/`;
-    if (!key.startsWith(expectedPrefix) || key.includes("..") || key.includes("\\")) {
-      throw new BadRequestException("Private upload reference is invalid.");
+    if (key.includes("..") || key.includes("\\")) throw new BadRequestException("Private upload reference is invalid.");
+    const legacyPrefix = `partner-private/vendors/${vendorId}/onboarding-documents/`;
+    if (key.startsWith(legacyPrefix)) return;
+    const opaqueMatch = key.match(/^partner-private\/([a-f0-9]{32})\/[a-f0-9]{32}(?:\.(?:jpg|jpeg|png|webp|pdf))?$/);
+    if (opaqueMatch) {
+      const actual = Buffer.from(opaqueMatch[1], "utf8");
+      const expected = Buffer.from(this.opaqueSubject(vendorId), "utf8");
+      if (actual.length === expected.length && timingSafeEqual(actual, expected)) return;
     }
+    throw new BadRequestException("Private upload reference is invalid.");
+  }
+
+  storageLocation() {
+    if (this.driver() === "local") return { provider: "LOCAL", bucket: "private-uploads" };
+    const storage = this.s3Config();
+    const provider = storage.endpoint?.includes("storage.googleapis.com") ? "GCS" : "S3_COMPATIBLE";
+    return { provider, bucket: storage.bucket };
   }
 
   private driver(): StorageDriver {
@@ -104,6 +119,14 @@ export class VendorPrivateUploadStorageService {
 
   private root() {
     return resolve(this.config.get<string>("PARTNER_PRIVATE_STORAGE_LOCAL_ROOT") ?? resolve(process.cwd(), "private-uploads"));
+  }
+
+  private opaqueSubject(vendorId: string) {
+    const secret = this.config.get<string>("PARTNER_PRIVATE_STORAGE_KEY_SECRET")?.trim();
+    if (!secret || secret.length < 32) {
+      throw new ServiceUnavailableException("Private Partner object-key protection is not configured.");
+    }
+    return createHmac("sha256", secret).update(`vendor:${vendorId}`).digest("hex").slice(0, 32);
   }
 
   private localPathForOwnedKey(vendorId: string, key: string) {

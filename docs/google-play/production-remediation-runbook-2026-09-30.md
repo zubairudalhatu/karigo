@@ -13,7 +13,7 @@ Status: **PREPARED, NOT AUTHORIZED FOR EXECUTION**. Use a separate approval at e
 ## Phase A — provision durable private storage
 
 - Prerequisite: provider accepted and bucket policy reviewed.
-- Action: provision private bucket; set `PARTNER_PRIVATE_STORAGE_DRIVER=s3` and the approved `PARTNER_PRIVATE_STORAGE_*` values in the deployment secret store; deploy the compatible application with Partner private upload actions disabled until verification.
+- Action: provision private bucket; generate and durably retain a dedicated high-entropy `PARTNER_PRIVATE_STORAGE_KEY_SECRET` in the deployment secret store; set `PARTNER_PRIVATE_STORAGE_DRIVER=s3` and the approved `PARTNER_PRIVATE_STORAGE_*` values; deploy the compatible application with Partner private upload actions disabled until verification. Never reuse the storage access key as the object-key HMAC secret, and do not rotate the HMAC secret without a versioned compatibility plan for existing keys.
 - Success: synthetic upload/head/authenticated read/delete succeeds; anonymous and cross-vendor access fails; no ACL/public URL; audit contains no secret.
 - Stop/rollback: disable Partner private uploads and restore prior app release; keep copied objects private. Never switch to public storage.
 - Evidence: redacted config names, policy/config screenshots, test IDs/counts and timestamps.
@@ -29,7 +29,7 @@ Status: **PREPARED, NOT AUTHORIZED FOR EXECUTION**. Use a separate approval at e
 ## Phase C — migrate legacy Partner private documents
 
 - Prerequisite: approved restored-copy inventory and reviewed per-object plan.
-- Action: first run `node services/backend-api/scripts/inventory-legacy-partner-files.cjs --dry-run` and `node services/backend-api/scripts/prepare-legacy-partner-file-migration.cjs --dry-run`. For each approved object: copy, head/size/hash verify, create/link manifest, switch reference, verify owner access and unauthorized rejection, remove public source, record completion.
+- Action: first run `node services/backend-api/scripts/inventory-legacy-partner-files.cjs --dry-run` and, with the deployment `PARTNER_PRIVATE_STORAGE_KEY_SECRET`, `node services/backend-api/scripts/prepare-legacy-partner-file-migration.cjs --dry-run`. Confirm every destination key matches `partner-private/{opaque}/{opaque}` and contains no vendor UUID, database row ID, or filename. For each approved object: copy, head/size/hash verify, create/link the full provider/bucket/metadata/lifecycle manifest, switch reference, verify owner access and unauthorized rejection, remove public source, record completion.
 - Success: every eligible item has a verified private object/manifest; anonymous old URL fails only after verified switch; aggregate category counts reconcile.
 - Stop/rollback: stop per object on any mismatch. Before source removal restore old reference; afterward recover from backup into private storage. No bulk blind deletion.
 - Evidence: aggregate status counts and opaque migration IDs only.
@@ -85,3 +85,21 @@ Before Phase B, follow `snapshot-rehearsal-environment-2026-09-30.md`. The Recov
 Push gate: a push to `main` would automatically create Vercel production deployments for the website, admin portal and vendor dashboard. It would not auto-deploy Render, run Prisma migration, create an EAS build/update, or invoke GitHub Actions. Treat Git push as a production web deployment and obtain separate approval.
 
 Captain storage is **A — definitively Google Cloud Storage**, proven by the `storage.googleapis.com` XML/S3-compatible endpoint. Production uses bucket `karigo-captain-uploads`, region `auto`, path-style addressing and enabled storage. Bucket IAM/public-access prevention, location, encryption-key mode, versioning, soft-delete/lifecycle and account contract evidence remain rollout gates. Partner recommendation is **A — reuse Google Cloud Storage with a separate private Partner bucket**, pending those gates and provisioning approval.
+
+## Task 209B-S1-H11.2X GCS provisioning gate — 2026-09-30
+
+Captain baseline from read-only inspection: `us-south1` (Dallas), Standard, uniform access, Google-managed key, no public IAM, PAP not enforced, soft delete seven days, versioning off, no lifecycle rules, no retention/object lock, Requester Pays off, and Cloud Storage Data Access audit logs disabled. Do not copy these weaknesses into Partner.
+
+Phase A proposed Partner controls:
+
+- separate bucket `karigo-partner-private-uploads` in `europe-west3` (Frankfurt), subject to owner/legal location approval;
+- Standard class, Public Access Prevention enforced at creation, and uniform bucket-level access;
+- dedicated bucket-scoped runtime identity using `roles/storage.objectUser`; temporary migration identity revoked after the seven-record run; no public or broad project-basic-role object access;
+- Google-managed encryption unless a documented requirement selects CMEK;
+- seven-day soft delete, Object Versioning off, no bucket/object lock, and no lifecycle deletion until the approved-evidence retention duration is decided;
+- no CORS unless a tested browser flow requires an exact-origin allowlist;
+- authenticated backend retrieval or short-lived signed URLs, single-key deletion, absence verification, and opaque deterministic keys;
+- enable Cloud Storage Data Read and Data Write audit logs before production use; retain Admin Activity logging; and
+- keep public catalogue/service/logo/cover media outside the private document bucket.
+
+Additional pre-provisioning gate: the project Privacy & Security page still offers `Review and Accept` for the Cloud Data Processing Addendum. Preserve an account-specific acceptance/executed agreement record identifying Zamkah Technologies Limited, the governed account/billing account, timestamp, and version before relying on the service-provider exception. Provisioning, DPA acceptance, Captain PAP/IAM/logging changes, secret configuration, migration, and deployment each remain separate approval actions.

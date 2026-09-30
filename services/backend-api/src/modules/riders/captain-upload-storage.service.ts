@@ -52,16 +52,19 @@ export class CaptainUploadStorageService {
     return Boolean(this.bucket());
   }
 
+  storageLocation() {
+    const config = this.storageConfig();
+    const provider = config.endpoint?.includes("storage.googleapis.com") ? "GCS" : "S3_COMPATIBLE";
+    return { provider, bucket: config.bucket };
+  }
+
   async putObject(objectKey: string, file: CaptainUploadFile) {
     const config = this.storageConfig();
     await this.s3().send(new PutObjectCommand({
       Bucket: config.bucket,
       Key: objectKey,
       Body: file.buffer,
-      ContentType: file.mimetype,
-      Metadata: {
-        originalName: file.originalname.slice(0, 200)
-      }
+      ContentType: file.mimetype
     }));
   }
 

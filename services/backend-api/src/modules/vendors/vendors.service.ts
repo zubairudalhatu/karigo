@@ -289,11 +289,12 @@ export class VendorsService {
   async privateOnboardingDocument(userId: string, documentId: string) {
     const vendor = await this.requireVendorForUser(userId);
     const document = await this.prisma.vendorOnboardingDocument.findFirst({
-      where: { id: documentId, vendorId: vendor.id, deletedAt: null, storageKey: { not: null } }
+      where: { id: documentId, vendorId: vendor.id, deletedAt: null, storageKey: { not: null } },
+      include: { vendorPrivateUpload: { select: { mimeType: true } } }
     });
     if (!document?.storageKey || !this.privateUploads) throw new NotFoundException("Partner onboarding document not found");
     const buffer = await this.privateUploads.readOwnedObject(vendor.id, document.storageKey);
-    return { buffer, mimeType: this.mimeTypeFromKey(document.storageKey) };
+    return { buffer, mimeType: document.vendorPrivateUpload?.mimeType ?? this.mimeTypeFromKey(document.storageKey) };
   }
 
   async removeOnboardingDocument(userId: string, documentId: string) {
@@ -360,11 +361,14 @@ export class VendorsService {
     if (purpose === VendorUploadPurpose.ONBOARDING_DOCUMENT) {
       if (!this.privateUploads) throw new BadRequestException("Private upload storage is unavailable.");
       const storageKey = await this.privateUploads.putOnboardingDocument(vendor.id, file);
+      const storageLocation = this.privateUploads.storageLocation();
       let upload;
       try {
         upload = await this.prisma.vendorPrivateUpload.create({ data: {
           vendorId: vendor.id,
           storageKey,
+          storageProvider: storageLocation.provider,
+          storageBucket: storageLocation.bucket,
           originalFileName: file.originalname.slice(0, 200),
           mimeType: file.mimetype,
           sizeBytes: file.size

@@ -8,13 +8,13 @@ Audit date: 30 September 2026. Status: **PARTIAL; Play form unchanged**.
 | Approximate/precise/background location | Collected while online or assigned; traces/evidence retained; required only for active work | Google Maps **shared**; Render exempt; assigned Customer transfer expected. |
 | Ride/Delivery traces and app activity | Assignments, status, timing, chat/call events retained | Render exempt; Maps portions shared; counterparties expected. |
 | Earnings/payment references | Earnings, commission and transaction records retained | Render exempt; Flutterwave flow needs account/product evidence. |
-| Vehicle/identity photos and files | Approval-required and retained | S3-compatible provider is **STORAGE BLOCKER — NOT CONFIRMED**. |
+| Vehicle/identity photos and files | Collected for application/approval and retained; GCS also receives user/document metadata, MIME, size and original-name metadata | **COLLECTED BUT NOT SHARED** for GCS under the service-provider exception. Functionality, account/onboarding, security/compliance. |
 | Push/device IDs | Expo token and device/session IDs retained/rotated | Expo/FCM unresolved; Render exempt. |
 | Diagnostics | Maps, Expo Updates and Agora if calls enabled | Maps **shared**; Expo/Agora unresolved. |
 | Voice/audio | If enabled, Agora RTC stream is transmitted. KariGO code sets recording false and stores only session metadata/duration. Agora states RTC stream is not stored. | Conditional service-provider exception; production activation, account terms and dashboard recording settings remain unconfirmed. |
 | Chat/messages | Ride chat retained; no email/SMS inbox reading | Render exempt; recipient receives through user action. Remove Email/SMS content absent another proven path. |
 
-Captain document deletion currently changes the database status only; no S3 object deletion call was found. Do not claim object deletion, storage region, encryption at rest, backup expiry or provider retention until the owner supplies the storage record and lifecycle evidence.
+Captain document upload is backend-mediated; deletion now calls GCS `DeleteObject` before the database records physical deletion. Authorized admin reads use a backend-created signed `GetObject` URL valid for five minutes. The Captain app does not connect directly to GCS.
 
 See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-reconciliation-2026-09-30.md`.
 
@@ -23,8 +23,25 @@ See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-rec
 - Eligible unattached Captain documents are now deleted from S3-compatible storage before the database reports deletion.
 - Failures remain `DELETION_FAILED`, retries are safe, and account deletion cannot complete while an eligible deletion fails.
 - Documents attached to an application are `RETAINED_FOR_DEFINED_REASON` with `ACTIVE_APPLICATION_EVIDENCE`; no retention period is asserted.
-- Storage provider identity and sharing status remain unconfirmed. Do not infer a Play service-provider exception.
+- Storage provider identity, governed-account DPA, and request path are confirmed. Task 2Z supports the Play service-provider exception for GCS Customer Data.
 
 ## Task H11.2Q read-only update — 30 September 2026
 
-- Eligible unattached document deletion and retained application-evidence states are implemented. Storage provider/DPA/configuration evidence remains unresolved; do not finalize sharing.
+- Eligible unattached document deletion and retained application-evidence states are implemented. Provider, DPA, bucket, and request-path evidence are now verified; Task 2Z supports `Not shared` for the GCS transfer under the service-provider exception.
+
+## Task 209B-S1-H11.2Z GCS decision — 30 September 2026
+
+- Upload: Captain app → KariGO backend → GCS. File bytes never travel directly from the Captain app to GCS.
+- Read: authorized admin requests a backend-generated signed GET URL, valid for 300 seconds; the admin browser then retrieves the object directly from GCS.
+- Delete: client/account workflow → KariGO backend → single-key GCS `DeleteObject`. No client-side delete path.
+- Classification: identity/application files, vehicle files, other Captain documents, and associated user/document metadata are collected, retained, and not ephemeral. The GCS transfer is **not shared under Google Play's service-provider exception** because the accepted DPA restricts Customer Data to KariGO instructions.
+- Google separately processes Service Data for service operation, security/fraud prevention, diagnostics/support, analytics, recommendations and improvement. Service Data excludes Customer Data; the admin/browser signed-GET telemetry does not create a new Captain-app category.
+- Key privacy: current keys expose raw Captain user UUID and document type; signed URLs reproduce the key, and `originalName` is stored as GCS object metadata. Use opaque keys and omit original filenames for new writes; retain compatibility for existing objects.
+- Play Console unchanged.
+
+## Task 209B-S1-H11.2AA local minimization update — 30 September 2026
+
+- New local code generates `captain-private/{opaque}/{opaque}.{extension}` keys and sends no original-filename GCS metadata.
+- KariGO's database continues to hold the Captain owner, document type, display filename, MIME type, size, provider/bucket, object key, deletion state, and retention state.
+- Stored legacy keys still support signed viewing and deletion; no production object was renamed or migrated.
+- The GCS service-provider exception remains supported. Production claims remain based on the deployed legacy behavior until this change is separately deployed and verified.

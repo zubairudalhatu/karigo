@@ -316,8 +316,12 @@ function validatePartnerPrivateStorage(config: Record<string, unknown>) {
       "PARTNER_PRIVATE_STORAGE_REGION",
       "PARTNER_PRIVATE_STORAGE_BUCKET",
       "PARTNER_PRIVATE_STORAGE_ACCESS_KEY_ID",
-      "PARTNER_PRIVATE_STORAGE_SECRET_ACCESS_KEY"
+      "PARTNER_PRIVATE_STORAGE_SECRET_ACCESS_KEY",
+      "PARTNER_PRIVATE_STORAGE_KEY_SECRET"
     ]) requireValue(config, key);
+    if (requireValue(config, "PARTNER_PRIVATE_STORAGE_KEY_SECRET").length < 32) {
+      throw new Error("PARTNER_PRIVATE_STORAGE_KEY_SECRET must be at least 32 characters");
+    }
     const endpoint = liveString(config, "PARTNER_PRIVATE_STORAGE_ENDPOINT");
     if (endpoint && !endpoint.startsWith("https://")) {
       throw new Error("PARTNER_PRIVATE_STORAGE_ENDPOINT must use HTTPS");

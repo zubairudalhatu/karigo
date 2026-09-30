@@ -398,8 +398,9 @@ export class RidersService {
     await this.requireCaptainUploadUser(userId);
     this.assertCaptainUploadFile(documentType, file);
 
-    const objectKey = this.captainDocumentObjectKey(userId, documentType, file!);
+    const objectKey = this.captainDocumentObjectKey(file!);
     await this.captainUploadStorage.putObject(objectKey, file!);
+    const storageLocation = this.captainUploadStorage.storageLocation();
     const document = await this.prisma.$transaction(async (tx) => {
       await tx.captainApplicationDocument.updateMany({
         where: {
@@ -419,6 +420,8 @@ export class RidersService {
           userId,
           documentType,
           objectKey,
+          storageProvider: storageLocation.provider,
+          storageBucket: storageLocation.bucket,
           originalFileName: this.safeOriginalFileName(file!.originalname),
           mimeType: file!.mimetype,
           sizeBytes: file!.size,
@@ -1039,9 +1042,11 @@ export class RidersService {
     }
   }
 
-  private captainDocumentObjectKey(userId: string, documentType: CaptainApplicationDocumentType, file: CaptainUploadFile) {
+  private captainDocumentObjectKey(file: CaptainUploadFile) {
     const extension = this.safeExtension(file.originalname, file.mimetype);
-    return `captain-applications/${userId}/${documentType.toLowerCase()}/${randomBytes(16).toString("hex")}${extension}`;
+    const opaqueSubject = randomBytes(16).toString("hex");
+    const opaqueObject = randomBytes(16).toString("hex");
+    return `captain-private/${opaqueSubject}/${opaqueObject}${extension}`;
   }
 
   private safeExtension(originalName: string, mimeType: string) {

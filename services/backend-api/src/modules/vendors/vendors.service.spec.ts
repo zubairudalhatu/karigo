@@ -17,13 +17,15 @@ describe("VendorsService public listing", () => {
     putOnboardingDocument: jest.fn(),
     readOwnedObject: jest.fn(),
     deleteOwnedObject: jest.fn(),
-    assertOwnedKey: jest.fn()
+    assertOwnedKey: jest.fn(),
+    storageLocation: jest.fn()
   };
   const service = new VendorsService(prisma as unknown as PrismaService, undefined, privateUploads as never);
 
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.vendor.findFirst.mockResolvedValue(activeServiceVendor());
+    privateUploads.storageLocation.mockReturnValue({ provider: "GCS", bucket: "partner-private-test" });
   });
 
   it("returns a safe public vendor shape without bank details", async () => {
@@ -297,6 +299,11 @@ describe("VendorsService public listing", () => {
     expect(privateResult).toMatchObject({ access: "PRIVATE_CONTROLLED", relativeUrl: null });
     expect(privateResult.url).toBe("private-upload:private-upload-1");
     expect(privateUploads.putOnboardingDocument).toHaveBeenCalledWith("vendor-1", expect.any(Object));
+    expect(prisma.vendorPrivateUpload.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      originalFileName: "cac.pdf",
+      storageProvider: "GCS",
+      storageBucket: "partner-private-test"
+    }) });
   });
 
   it("requires vendor ownership for private document retrieval", async () => {
@@ -306,6 +313,25 @@ describe("VendorsService public listing", () => {
     await expect(serviceUnderTest().privateOnboardingDocument("vendor-user-1", "other-tenant-document"))
       .rejects.toThrow("Partner onboarding document not found");
     expect(privateUploads.readOwnedObject).not.toHaveBeenCalled();
+  });
+
+  it("reads an opaque object only after a vendor-scoped manifest lookup", async () => {
+    prisma.vendor.findFirst.mockResolvedValue(activeProductVendor());
+    const storageKey = "partner-private/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.pdf";
+    prisma.vendorOnboardingDocument.findFirst.mockResolvedValueOnce({
+      id: "doc-1",
+      vendorId: "vendor-1",
+      storageKey,
+      vendorPrivateUpload: { mimeType: "application/pdf" }
+    });
+    privateUploads.readOwnedObject.mockResolvedValueOnce(Buffer.from("pdf"));
+
+    await expect(serviceUnderTest().privateOnboardingDocument("vendor-user-1", "doc-1"))
+      .resolves.toEqual({ buffer: Buffer.from("pdf"), mimeType: "application/pdf" });
+    expect(prisma.vendorOnboardingDocument.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: "doc-1", vendorId: "vendor-1", deletedAt: null })
+    }));
+    expect(privateUploads.readOwnedObject).toHaveBeenCalledWith("vendor-1", storageKey);
   });
 
   it("does not claim private Partner deletion when filesystem deletion fails", async () => {

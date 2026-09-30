@@ -114,7 +114,8 @@ describe("RidersService delivery captain applications", () => {
   const captainUploadStorage = {
     putObject: jest.fn(),
     signedViewUrl: jest.fn(),
-    deleteObject: jest.fn()
+    deleteObject: jest.fn(),
+    storageLocation: jest.fn()
   };
   const applicationNotifications = {
     deliveryCaptainApplicationSubmitted: jest.fn(),
@@ -161,6 +162,41 @@ describe("RidersService delivery captain applications", () => {
     applicationNotifications.deliveryCaptainGuarantorListed.mockResolvedValue(undefined);
     applicationNotifications.deliveryCaptainApplicationReviewed.mockResolvedValue(undefined);
     audit.record.mockResolvedValue({});
+    captainUploadStorage.storageLocation.mockReturnValue({ provider: "GCS", bucket: "captain-private-test" });
+  });
+
+  it("uses an opaque provider key while retaining Captain display metadata in the database", async () => {
+    const userId = deliveryCaptainApplication.applicantUserId;
+    const file = {
+      originalname: `${userId}-driver-licence.pdf`,
+      mimetype: "application/pdf",
+      size: 3,
+      buffer: Buffer.from("pdf")
+    };
+    captainUploadStorage.putObject.mockResolvedValueOnce(undefined);
+    prisma.captainApplicationDocument.create.mockImplementationOnce(async ({ data }: any) => ({
+      ...uploadedProfilePhoto,
+      ...data,
+      id: "00000000-0000-0000-0000-00000000d002"
+    }));
+
+    await service.uploadCaptainApplicationDocument(userId, "DRIVER_LICENCE" as any, file);
+
+    const objectKey = captainUploadStorage.putObject.mock.calls[0][0];
+    expect(objectKey).toMatch(/^captain-private\/[a-f0-9]{32}\/[a-f0-9]{32}\.pdf$/);
+    expect(objectKey).not.toContain(userId);
+    expect(objectKey).not.toContain("driver");
+    expect(objectKey).not.toContain("licence");
+    expect(prisma.captainApplicationDocument.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        objectKey,
+        originalFileName: file.originalname,
+        mimeType: file.mimetype,
+        sizeBytes: file.size,
+        storageProvider: "GCS",
+        storageBucket: "captain-private-test"
+      })
+    });
   });
 
   it("creates a Kano or Abuja account-linked Delivery Captain application without activating dispatch or payouts", async () => {

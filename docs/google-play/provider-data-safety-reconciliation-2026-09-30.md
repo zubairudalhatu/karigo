@@ -117,3 +117,62 @@ No Google Play Console answer was opened, saved or submitted for this update.
 - Historic onboarding files cannot be described as private until the counts-only inventory and controlled migration complete.
 - Eligible unapproved private documents can be deleted; approved evidence is retained with a defined state but an unresolved duration.
 - Existing Play categories should change only after deployed behavior and the legacy migration are verified. Provider sharing remains unresolved.
+
+## Task 209B-S1-H11.2X Data Safety reconciliation — 2026-09-30
+
+No Play Console state changed.
+
+### Captain
+
+- The storage provider and bucket controls are now verified: GCS, `us-south1`, Standard, uniform access, Google-managed encryption, no public IAM, seven-day soft delete, versioning off, and no lifecycle/retention lock.
+- Public Access Prevention is not enforced. This is a hardening gap, although the current IAM policy is not public.
+- The Google Cloud account now confirms acceptance of the June 8, 2026 Cloud Data Processing Addendum on September 30, 2026. The payment profile identifies **Zamkah Technologies Limited** for linked account `My Maps Project` and project `mystical-method-475123-s9`.
+- The account-incorporated DPA supports instruction-bound processor treatment for Customer Data, but Google independently processes separate Service Data for security, fraud prevention, analytics, recommendations, and improvement.
+- Result after request-path review: Captain `Files and documents` and associated user/document metadata are **COLLECTED BUT NOT SHARED** for GCS under the service-provider exception. They are retained, not ephemeral, for functionality, onboarding/account administration, and security/compliance. Admin signed-GET Service Data is separate and does not change the Customer Data result.
+- Deletion text must disclose that live deletion is followed by seven days of recoverability; the account-incorporated DPA allows up to 180 days for provider-system deletion after data becomes customer-unrecoverable, subject to law.
+
+### Partner
+
+- The proposed private GCS bucket does not create a new Play category. The seven approved onboarding records remain `Files and documents`, collected for onboarding/compliance.
+- Catalogue, service, logo, and cover media remain intentionally public outside the private bucket.
+- For the planned governed-account GCS design, Partner private onboarding files are **COLLECTED BUT NOT SHARED** under the service-provider exception. The path is fully backend-mediated and retained, not ephemeral. This classification becomes production-applicable only after the bucket, deployment, and legacy migration are separately approved and verified.
+- The seven-record plan is compatible with copy, verify, manifest, authenticated retrieval, retention-state preservation, verified source deletion, retry, and rollback.
+
+
+## Task 209B-S1-H11.2Y DPA reconciliation update — 2026-09-30
+
+- Account-specific DPA acceptance: **VERIFIED** for **Zamkah Technologies Limited**, linked account `My Maps Project`, project `mystical-method-475123-s9`.
+- Accepted document: Customer Cloud Data Processing Addendum, last modified **June 8, 2026**; Google Cloud shows acceptance on **September 30, 2026**.
+- Cloud Terms incorporation: the DPA incorporates the applicable Agreement, but a separate account Cloud Terms/order-form acceptance record was not exported.
+- Subprocessors/transfers: the accepted DPA incorporates the referenced subprocessor and restricted-transfer mechanisms.
+- Google Play conclusion at the DPA-only stage was provisional. Task 2Z subsequently mapped the exact request paths and supports the service-provider exception for Captain Customer Data and the planned backend-mediated Partner GCS flow. No Play answer changed.
+
+## Task 209B-S1-H11.2Z GCS classification — 2026-09-30
+
+### Captain
+
+- Upload: Captain app → KariGO backend → GCS `PutObject`.
+- Read: authorized admin → KariGO backend for a five-minute signed URL → admin browser direct GCS `GetObject`.
+- Delete: Captain/account workflow → KariGO backend → GCS `DeleteObject`.
+- Signed URL: read only; no signed upload and no Captain mobile app-to-GCS request.
+- Customer Data: file bytes, user/document association in the key, document type, original filename metadata, MIME type and size. Collected and retained; not ephemeral.
+- Service Data: account/configuration/resource attributes, service authentication, backend/admin IP and technical identifiers, operational status, errors, performance, request and support records. Used for service operation, security/fraud prevention, diagnostics/support, analytics, recommendations and improvement. The Privacy Notice excludes Customer Data from Service Data.
+- Play outcome: **COLLECTED BUT NOT SHARED** for GCS; **A — SERVICE-PROVIDER EXCEPTION SUPPORTED**. Purposes: app functionality, account/onboarding administration, fraud prevention/security/compliance.
+
+### Planned Partner
+
+- Recommended path: Partner app → KariGO backend → GCS for upload; GCS → KariGO backend → authenticated Partner for read; KariGO backend → GCS for delete.
+- No signed URL, public URL, or direct Partner app-to-GCS request.
+- Play outcome for the proposed same-account deployment: **COLLECTED BUT NOT SHARED**; **A — SERVICE-PROVIDER EXCEPTION SUPPORTED**. This remains a planned state until provisioning and deployment are verified.
+
+### Data-minimization action
+
+New Captain and Partner object keys should replace raw user/vendor UUIDs and document-type path segments with opaque provider-facing identifiers. Captain uploads should omit original filename from GCS metadata. This is an implementation improvement, not a blocker to the provider-role classification. No code or console state changed in this task.
+
+## Task 209B-S1-H11.2AA minimization reconciliation — 2026-09-30
+
+- The local backend now generates opaque keys for new Captain and Partner private documents and records provider/bucket alongside the existing KariGO-owned manifest metadata.
+- Captain provider writes omit original-filename metadata; the filename remains in KariGO's application database where operationally required.
+- Existing Captain objects remain readable through signed URLs and deletable using their stored legacy keys. No legacy object migration occurred.
+- Partner new-write and seven-record migration keys contain neither raw vendor UUID nor database row ID. The keyed vendor namespace preserves cross-tenant verification.
+- The Play result remains **COLLECTED BUT NOT SHARED under the GCS service-provider exception**. No Data Safety answer or production behavior changed because this code is not deployed.

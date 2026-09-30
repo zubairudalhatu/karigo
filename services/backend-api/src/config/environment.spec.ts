@@ -34,6 +34,7 @@ describe("environment configuration", () => {
       PARTNER_PRIVATE_STORAGE_ENDPOINT: "https://objects.example.test",
       PARTNER_PRIVATE_STORAGE_ACCESS_KEY_ID: "test-access",
       PARTNER_PRIVATE_STORAGE_SECRET_ACCESS_KEY: "test-secret",
+      PARTNER_PRIVATE_STORAGE_KEY_SECRET: "test-only-partner-private-key-secret-2026",
       PARTNER_PRIVATE_STORAGE_SERVER_SIDE_ENCRYPTION: "AES256"
     });
     expect(result.PARTNER_PRIVATE_STORAGE_DRIVER).toBe("s3");
@@ -47,8 +48,22 @@ describe("environment configuration", () => {
       PARTNER_PRIVATE_STORAGE_BUCKET: "test-private-bucket",
       PARTNER_PRIVATE_STORAGE_ENDPOINT: "http://objects.example.test",
       PARTNER_PRIVATE_STORAGE_ACCESS_KEY_ID: "test-access",
-      PARTNER_PRIVATE_STORAGE_SECRET_ACCESS_KEY: "test-secret"
+      PARTNER_PRIVATE_STORAGE_SECRET_ACCESS_KEY: "test-secret",
+      PARTNER_PRIVATE_STORAGE_KEY_SECRET: "test-only-partner-private-key-secret-2026"
     })).toThrow("PARTNER_PRIVATE_STORAGE_ENDPOINT must use HTTPS");
+  });
+
+  it("rejects a short Partner opaque-key secret", () => {
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      PARTNER_PRIVATE_STORAGE_DRIVER: "s3",
+      PARTNER_PRIVATE_STORAGE_REGION: "test-region-1",
+      PARTNER_PRIVATE_STORAGE_BUCKET: "test-private-bucket",
+      PARTNER_PRIVATE_STORAGE_ENDPOINT: "https://objects.example.test",
+      PARTNER_PRIVATE_STORAGE_ACCESS_KEY_ID: "test-access",
+      PARTNER_PRIVATE_STORAGE_SECRET_ACCESS_KEY: "test-secret",
+      PARTNER_PRIVATE_STORAGE_KEY_SECRET: "too-short"
+    })).toThrow("PARTNER_PRIVATE_STORAGE_KEY_SECRET must be at least 32 characters");
   });
 
   it("adds safe defaults while retaining required values", () => {

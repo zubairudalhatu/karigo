@@ -1162,6 +1162,8 @@ model CaptainApplicationDocument {
   rideApplicationId     String?                        @db.Uuid
   documentType          CaptainApplicationDocumentType
   objectKey             String                         @unique
+  storageProvider       String?
+  storageBucket         String?
   originalFileName      String
   mimeType              String
   sizeBytes             Int
@@ -2351,6 +2353,8 @@ model VendorPrivateUpload {
   id                    String                       @id @default(uuid()) @db.Uuid
   vendorId              String                       @db.Uuid
   storageKey            String                       @unique
+  storageProvider       String?
+  storageBucket         String?
   originalFileName      String
   mimeType              String
   sizeBytes             Int
