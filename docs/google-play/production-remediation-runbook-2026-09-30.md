@@ -73,3 +73,15 @@ Status: **PREPARED, NOT AUTHORIZED FOR EXECUTION**. Use a separate approval at e
 - Success: no error-rate regression, all lifecycle states reconcile, Customer legacy payment-instrument structures are absent where proven, and no secret/PII appears in evidence.
 - Stop/rollback: disable affected write/deletion path and use phase-specific rollback on any integrity issue.
 - Evidence: test report, monitoring window, final aggregate inventory and owner sign-off.
+
+## Task 209B-S1-H11.2R infrastructure gate — 2026-09-30
+
+Read-only Render evidence confirms the production backend is `karigo` in Frankfurt on Starter, deploy branch `main`, with auto-deploy off. The live deploy is `de3bbdccf17570bbeead4b18b3e9413d50048f74`. A manual deploy runs `npx prisma migrate deploy` before starting the application. Pushing Git alone therefore does not migrate or deploy the Render backend.
+
+The attached database is `karigo-staging-db`, PostgreSQL 18, paid `basic_256mb`, 1 GB, Frankfurt. Its legacy name does not make it non-production; it shares the production Render environment. Do not use or rename it as a rehearsal target.
+
+Before Phase B, follow `snapshot-rehearsal-environment-2026-09-30.md`. Preferred method: a fresh logical export restored into `karigo_task209b_rehearsal_20260930`, a separate Frankfurt database with restricted network access and no production service attachment. Render PITR is an alternative only if the copied `0.0.0.0/0` source allowlist is restricted before credentials are distributed. Exact backup timestamp, recovery window, workspace tier and temporary price require the authenticated Recovery page.
+
+Push gate: a push to `main` would automatically create Vercel production deployments for the website, admin portal and vendor dashboard. It would not auto-deploy Render, run Prisma migration, create an EAS build/update, or invoke GitHub Actions. Treat Git push as a production web deployment and obtain separate approval.
+
+Captain storage remains **C — generic/custom endpoint; provider unknown** until Render dashboard MFA permits a value-safe check of the endpoint hostname, region, bucket and path-style setting. Partner remains **D — cannot decide**; if the approved Captain provider is reused, provision a separate private Partner bucket with independent policy, lifecycle and audit boundaries.
