@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import {
   AccountDeletionAccountType,
   AccountDeletionBlockedReasonCode,
@@ -8,6 +8,8 @@ import {
   Prisma,
   RiderStatus,
   SettlementStatus,
+  StoredObjectDeletionState,
+  StoredObjectRetentionReason,
   TaxiDriverProfileStatus,
   TaxiTripStatus,
   UserRole,
@@ -19,6 +21,8 @@ import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ListAccountDeletionRequestsQueryDto, UpdateAccountDeletionRequestDto } from "./dto/admin-account-deletion.dto";
 import { CancelAccountDeletionDto, RequestAccountDeletionDto } from "./dto/request-account-deletion.dto";
+import { CaptainUploadStorageService } from "../riders/captain-upload-storage.service";
+import { VendorPrivateUploadStorageService } from "../vendors/vendor-private-upload-storage.service";
 
 const openRequestStatuses = [
   AccountDeletionStatus.REQUESTED,
@@ -119,7 +123,9 @@ function accountTypeLabel(accountType: AccountDeletionAccountType) {
 export class AccountDeletionService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly audit: AdminAuditService
+    private readonly audit: AdminAuditService,
+    private readonly captainStorage: CaptainUploadStorageService,
+    private readonly vendorPrivateStorage: VendorPrivateUploadStorageService
   ) {}
 
   async currentStatus(userId: string) {
@@ -252,6 +258,13 @@ export class AccountDeletionService {
       throw new BadRequestException("Blocked deletion requests require a blocked reason.");
     }
 
+    if (dto.status === AccountDeletionStatus.COMPLETED) {
+      if (blockers.length) {
+        throw new BadRequestException("Account deletion cannot complete while operational blockers remain.");
+      }
+      await this.reconcileStoredObjectsForCompletion(adminUserId, request.user, request.accountType);
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       if (dto.status === AccountDeletionStatus.PROCESSING) {
         await this.applyProcessingSafeguards(tx, request.user, request.accountType, now);
@@ -286,6 +299,182 @@ export class AccountDeletionService {
       adminNote: safeReason(dto.adminNote)
     });
     return this.toResponse(updated, blockers);
+  }
+
+  private async reconcileStoredObjectsForCompletion(
+    adminUserId: string,
+    user: AccountDeletionUserContext,
+    accountType: AccountDeletionAccountType
+  ) {
+    const summary = { captainDeleted: 0, captainRetained: 0, partnerDeleted: 0, partnerRetained: 0 };
+
+    if (this.affectsCaptain(accountType)) {
+      const documents = await this.prisma.captainApplicationDocument.findMany({
+        where: {
+          userId: user.id,
+          OR: [
+            { externalDeletionState: null },
+            { externalDeletionState: { not: StoredObjectDeletionState.DELETED } }
+          ]
+        }
+      });
+      for (const document of documents) {
+        const retained = Boolean(document.deliveryApplicationId || document.rideApplicationId);
+        if (retained) {
+          await this.prisma.captainApplicationDocument.update({
+            where: { id: document.id },
+            data: {
+              externalDeletionState: StoredObjectDeletionState.RETAINED_FOR_DEFINED_REASON,
+              retentionReason: StoredObjectRetentionReason.ACTIVE_APPLICATION_EVIDENCE,
+              deletionFailureCode: null
+            }
+          });
+          summary.captainRetained += 1;
+          continue;
+        }
+        await this.prisma.captainApplicationDocument.update({
+          where: { id: document.id },
+          data: {
+            externalDeletionState: StoredObjectDeletionState.PENDING_EXTERNAL_DELETION,
+            retentionReason: null,
+            deletionAttempts: { increment: 1 },
+            lastDeletionAttemptAt: new Date(),
+            deletionFailureCode: null
+          }
+        });
+        try {
+          await this.captainStorage.deleteObject(document.objectKey);
+        } catch {
+          await this.prisma.captainApplicationDocument.update({
+            where: { id: document.id },
+            data: {
+              externalDeletionState: StoredObjectDeletionState.DELETION_FAILED,
+              deletionFailureCode: "STORAGE_DELETE_FAILED"
+            }
+          });
+          throw new ServiceUnavailableException("Account deletion is waiting for Captain document storage cleanup.");
+        }
+        const deletedAt = new Date();
+        await this.prisma.captainApplicationDocument.update({
+          where: { id: document.id },
+          data: {
+            uploadStatus: "DELETED",
+            deletedAt,
+            physicallyDeletedAt: deletedAt,
+            externalDeletionState: StoredObjectDeletionState.DELETED,
+            deletionFailureCode: null
+          }
+        });
+        summary.captainDeleted += 1;
+      }
+    }
+
+    if (this.affectsPartner(accountType) && user.vendor) {
+      const uploads = await this.prisma.vendorPrivateUpload.findMany({
+        where: {
+          vendorId: user.vendor.id,
+          deletedAt: null,
+          OR: [
+            { externalDeletionState: null },
+            { externalDeletionState: { not: StoredObjectDeletionState.DELETED } }
+          ]
+        },
+        include: { onboardingDocument: true }
+      });
+      for (const upload of uploads) {
+        const retained = upload.onboardingDocument?.verificationStatus === "APPROVED";
+        if (retained) {
+          await this.prisma.vendorPrivateUpload.update({
+            where: { id: upload.id },
+            data: {
+              externalDeletionState: StoredObjectDeletionState.RETAINED_FOR_DEFINED_REASON,
+              retentionReason: StoredObjectRetentionReason.APPROVED_ONBOARDING_EVIDENCE,
+              deletionFailureCode: null
+            }
+          });
+          if (upload.onboardingDocumentId) {
+            await this.prisma.vendorOnboardingDocument.update({
+              where: { id: upload.onboardingDocumentId },
+              data: {
+                externalDeletionState: StoredObjectDeletionState.RETAINED_FOR_DEFINED_REASON,
+                retentionReason: StoredObjectRetentionReason.APPROVED_ONBOARDING_EVIDENCE,
+                deletionFailureCode: null
+              }
+            });
+          }
+          summary.partnerRetained += 1;
+          continue;
+        }
+        const attemptedAt = new Date();
+        await this.prisma.vendorPrivateUpload.update({
+          where: { id: upload.id },
+          data: {
+            externalDeletionState: StoredObjectDeletionState.PENDING_EXTERNAL_DELETION,
+            retentionReason: null,
+            deletionAttempts: { increment: 1 },
+            lastDeletionAttemptAt: attemptedAt,
+            deletionFailureCode: null
+          }
+        });
+        if (upload.onboardingDocumentId) {
+          await this.prisma.vendorOnboardingDocument.update({
+            where: { id: upload.onboardingDocumentId },
+            data: {
+              externalDeletionState: StoredObjectDeletionState.PENDING_EXTERNAL_DELETION,
+              retentionReason: null,
+              deletionAttempts: { increment: 1 },
+              lastDeletionAttemptAt: attemptedAt,
+              deletionFailureCode: null
+            }
+          });
+        }
+        try {
+          await this.vendorPrivateStorage.deleteOwnedObject(user.vendor.id, upload.storageKey);
+        } catch {
+          await this.prisma.vendorPrivateUpload.update({
+            where: { id: upload.id },
+            data: {
+              externalDeletionState: StoredObjectDeletionState.DELETION_FAILED,
+              deletionFailureCode: "LOCAL_STORAGE_DELETE_FAILED"
+            }
+          });
+          if (upload.onboardingDocumentId) {
+            await this.prisma.vendorOnboardingDocument.update({
+              where: { id: upload.onboardingDocumentId },
+              data: {
+                externalDeletionState: StoredObjectDeletionState.DELETION_FAILED,
+                deletionFailureCode: "LOCAL_STORAGE_DELETE_FAILED"
+              }
+            });
+          }
+          throw new ServiceUnavailableException("Account deletion is waiting for Partner document storage cleanup.");
+        }
+        const deletedAt = new Date();
+        await this.prisma.vendorPrivateUpload.update({
+          where: { id: upload.id },
+          data: {
+            deletedAt,
+            physicallyDeletedAt: deletedAt,
+            externalDeletionState: StoredObjectDeletionState.DELETED,
+            deletionFailureCode: null
+          }
+        });
+        if (upload.onboardingDocumentId) {
+          await this.prisma.vendorOnboardingDocument.update({
+            where: { id: upload.onboardingDocumentId },
+            data: {
+              deletedAt,
+              physicallyDeletedAt: deletedAt,
+              externalDeletionState: StoredObjectDeletionState.DELETED,
+              deletionFailureCode: null
+            }
+          });
+        }
+        summary.partnerDeleted += 1;
+      }
+    }
+
+    await this.audit.record(adminUserId, "ACCOUNT_DELETION_STORAGE_RECONCILED", "User", user.id, summary);
   }
 
   private async loadUser(userId: string) {

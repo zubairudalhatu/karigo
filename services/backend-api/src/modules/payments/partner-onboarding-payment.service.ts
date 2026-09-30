@@ -5,6 +5,7 @@ import { randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { PaymentProviderRegistry } from "./providers/payment-provider.registry";
+import { paymentProviderEvidence } from "./payment-provider-evidence";
 import { PaymentProvider, VerifyPaymentResult, WebhookPaymentResult } from "./providers/payment-provider.interface";
 
 type TransactionClient = Prisma.TransactionClient;
@@ -93,7 +94,7 @@ export class PartnerOnboardingPaymentService {
     this.assertEvidence(intent, independentlyVerified);
     try {
       const result = await this.prisma.$transaction(async (tx) => {
-        await tx.paymentWebhookLog.create({ data: { gateway: provider.name, eventType: webhook.eventType, transactionReference, payload: webhook.providerResponse as Prisma.InputJsonValue, isVerified: true, processedAt: new Date() } });
+        await tx.paymentWebhookLog.create({ data: { gateway: provider.name, eventType: webhook.eventType, transactionReference, payload: paymentProviderEvidence(provider.name, webhook), isVerified: true, processedAt: new Date() } });
         return this.processVerifiedWithClient(tx, transactionReference, provider.name, independentlyVerified);
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
       await this.auditPosted(result);
@@ -124,7 +125,7 @@ export class PartnerOnboardingPaymentService {
     if (!providerReference) throw new BadRequestException("Provider verification did not return a transaction identifier.");
     const payment = await tx.partnerOnboardingPayment.update({
       where: { id: intent.id },
-      data: { status: PartnerOnboardingPaymentStatus.SUCCESSFUL, providerTransactionReference: providerReference, providerResponse: evidence.providerResponse as Prisma.InputJsonValue, verifiedAt: new Date(), failedAt: null, failureReason: null }
+      data: { status: PartnerOnboardingPaymentStatus.SUCCESSFUL, providerTransactionReference: providerReference, providerResponse: paymentProviderEvidence(provider, evidence), verifiedAt: new Date(), failedAt: null, failureReason: null }
     });
     return { payment, duplicate: false, applicantUserId: intent.agreement.applicantUserId };
   }

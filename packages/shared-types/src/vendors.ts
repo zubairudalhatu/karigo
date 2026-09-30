@@ -103,8 +103,9 @@ export type VendorUploadPurpose = "onboarding-document" | "product-image" | "ser
 
 export interface VendorUploadResult {
   url: string;
-  relativeUrl: string;
+  relativeUrl: string | null;
   purpose: VendorUploadPurpose;
+  access?: "PUBLIC" | "PRIVATE_CONTROLLED";
   originalName: string;
   mimeType: string;
   size: number;

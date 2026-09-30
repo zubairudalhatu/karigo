@@ -38,6 +38,7 @@ import { RideCommissionPaymentService } from "./ride-commission-payment.service"
 import { PartnerOnboardingPaymentService } from "./partner-onboarding-payment.service";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { paymentProviderEvidence } from "./payment-provider-evidence";
 
 type TransactionClient = Prisma.TransactionClient;
 type ReadinessStatus = "READY" | "WAITING_FOR_CONFIGURATION" | "BLOCKED";
@@ -129,7 +130,7 @@ export class PaymentsService {
 
     const initializedPayment = await this.prisma.payment.update({
       where: { id: payment.id },
-      data: { gatewayResponse: authorization.providerResponse as Prisma.InputJsonValue }
+      data: { gatewayResponse: paymentProviderEvidence(provider.name, authorization) }
     }) ?? payment;
 
     return { payment: initializedPayment, authorization: this.publicAuthorization(authorization, provider.name, initializedPayment) };
@@ -220,7 +221,7 @@ export class PaymentsService {
 
     const initializedPayment = await this.prisma.payment.update({
       where: { id: payment.id },
-      data: { gatewayResponse: authorization.providerResponse as Prisma.InputJsonValue }
+      data: { gatewayResponse: paymentProviderEvidence(provider.name, authorization) }
     }) ?? payment;
 
     return { payment: initializedPayment, walletLedgerEntry: ledger, authorization: this.publicAuthorization(authorization, provider.name, initializedPayment) };
@@ -491,7 +492,7 @@ export class PaymentsService {
             gateway: provider.name,
             eventType: result.eventType,
             transactionReference: result.transactionReference,
-            payload: result.providerResponse as Prisma.InputJsonValue,
+            payload: paymentProviderEvidence(provider.name, result),
             isVerified: result.verified,
             processedAt: new Date()
           }
@@ -669,7 +670,7 @@ export class PaymentsService {
       data: {
         paymentStatus: PaymentStatus.SUCCESSFUL,
         paidAt: new Date(),
-        gatewayResponse: providerResponse as Prisma.InputJsonValue
+        gatewayResponse: paymentProviderEvidence(expectedGateway, { transactionReference, successful: true, providerResponse })
       }
     });
 
@@ -806,7 +807,7 @@ export class PaymentsService {
       data: {
         paymentStatus: PaymentStatus.SUCCESSFUL,
         paidAt: now,
-        gatewayResponse: providerResponse as Prisma.InputJsonValue
+        gatewayResponse: paymentProviderEvidence(payment.gateway, { transactionReference: payment.transactionReference, successful: true, providerResponse })
       }
     });
     const customer = await tx.customerProfile.findUnique({ where: { id: payment.customerId }, select: { userId: true } });

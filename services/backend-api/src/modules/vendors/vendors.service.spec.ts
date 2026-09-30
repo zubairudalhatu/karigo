@@ -8,11 +8,18 @@ describe("VendorsService public listing", () => {
     user: { findUnique: jest.fn() },
     vendorApplication: { findFirst: jest.fn(), findUnique: jest.fn() },
     vendor: { findMany: jest.fn(), findFirst: jest.fn() },
-    vendorOnboardingDocument: { create: jest.fn(), findMany: jest.fn() },
+    vendorOnboardingDocument: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+    vendorPrivateUpload: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     vendorService: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     vendorAuditLog: { create: jest.fn() }
   };
-  const service = new VendorsService(prisma as unknown as PrismaService);
+  const privateUploads = {
+    putOnboardingDocument: jest.fn(),
+    readOwnedObject: jest.fn(),
+    deleteOwnedObject: jest.fn(),
+    assertOwnedKey: jest.fn()
+  };
+  const service = new VendorsService(prisma as unknown as PrismaService, undefined, privateUploads as never);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -67,19 +74,25 @@ describe("VendorsService public listing", () => {
 
   it("uploads onboarding document metadata for only the authenticated vendor", async () => {
     prisma.vendor.findFirst.mockResolvedValue(activeProductVendor());
+    prisma.vendorPrivateUpload.findFirst.mockResolvedValue({
+      id: "private-upload-1",
+      vendorId: "vendor-1",
+      storageKey: "vendors/vendor-1/onboarding-documents/cac.pdf"
+    });
     prisma.vendorOnboardingDocument.create.mockResolvedValue({
       id: "doc-1",
       vendorId: "vendor-1",
       documentType: "CAC_CERTIFICATE",
       documentName: "CAC certificate",
-      documentUrl: "https://example.test/documents/vendor-1/cac.pdf",
+      documentUrl: "CONTROLLED_PRIVATE_DOCUMENT",
+      storageKey: "vendors/vendor-1/onboarding-documents/cac.pdf",
       verificationStatus: "PENDING"
     });
 
     await expect(service.uploadOnboardingDocument("vendor-user-1", {
       documentType: "CAC_CERTIFICATE",
       documentName: "CAC certificate",
-      documentUrl: "https://example.test/documents/vendor-1/cac.pdf"
+      documentUrl: "private-upload:private-upload-1"
     })).resolves.toMatchObject({ id: "doc-1", vendorId: "vendor-1" });
 
     expect(prisma.vendorOnboardingDocument.create).toHaveBeenCalledWith({
@@ -116,7 +129,7 @@ describe("VendorsService public listing", () => {
       })
     ]);
     expect(prisma.vendorOnboardingDocument.findMany).toHaveBeenCalledWith({
-      where: { vendorId: "vendor-1" },
+      where: { vendorId: "vendor-1", deletedAt: null },
       orderBy: { uploadedAt: "desc" }
     });
   });
@@ -215,7 +228,7 @@ describe("VendorsService public listing", () => {
   });
 
   function serviceUnderTest() {
-    return new VendorsService(prisma as unknown as PrismaService);
+    return new VendorsService(prisma as unknown as PrismaService, undefined, privateUploads as never);
   }
 
   function activeProductVendor() {
@@ -271,4 +284,43 @@ describe("VendorsService public listing", () => {
       }
     };
   }
+
+  it("stores onboarding files as private references while catalogue images remain public", async () => {
+    prisma.vendor.findFirst.mockResolvedValue(activeProductVendor());
+    privateUploads.putOnboardingDocument.mockResolvedValueOnce("vendors/vendor-1/onboarding-documents/private.pdf");
+    prisma.vendorPrivateUpload.create.mockResolvedValueOnce({ id: "private-upload-1", storageKey: "vendors/vendor-1/onboarding-documents/private.pdf" });
+
+    const privateResult = await serviceUnderTest().uploadFile("vendor-user-1", VendorUploadPurpose.ONBOARDING_DOCUMENT, {
+      originalname: "cac.pdf", mimetype: "application/pdf", size: 100, buffer: Buffer.from("private")
+    });
+
+    expect(privateResult).toMatchObject({ access: "PRIVATE_CONTROLLED", relativeUrl: null });
+    expect(privateResult.url).toBe("private-upload:private-upload-1");
+    expect(privateUploads.putOnboardingDocument).toHaveBeenCalledWith("vendor-1", expect.any(Object));
+  });
+
+  it("requires vendor ownership for private document retrieval", async () => {
+    prisma.vendor.findFirst.mockResolvedValue(activeProductVendor());
+    prisma.vendorOnboardingDocument.findFirst.mockResolvedValueOnce(null);
+
+    await expect(serviceUnderTest().privateOnboardingDocument("vendor-user-1", "other-tenant-document"))
+      .rejects.toThrow("Partner onboarding document not found");
+    expect(privateUploads.readOwnedObject).not.toHaveBeenCalled();
+  });
+
+  it("does not claim private Partner deletion when filesystem deletion fails", async () => {
+    prisma.vendor.findFirst.mockResolvedValue(activeProductVendor());
+    prisma.vendorOnboardingDocument.findFirst.mockResolvedValueOnce({
+      id: "doc-1", vendorId: "vendor-1", storageKey: "vendors/vendor-1/onboarding-documents/private.pdf",
+      verificationStatus: "PENDING", deletedAt: null
+    });
+    prisma.vendorOnboardingDocument.update.mockImplementation(async ({ data }: any) => ({ id: "doc-1", ...data }));
+    privateUploads.deleteOwnedObject.mockRejectedValueOnce(new Error("filesystem detail"));
+
+    await expect(serviceUnderTest().removeOnboardingDocument("vendor-user-1", "doc-1")).rejects.toThrow("pending storage retry");
+    expect(prisma.vendorOnboardingDocument.update).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ externalDeletionState: "DELETION_FAILED", deletionFailureCode: "LOCAL_STORAGE_DELETE_FAILED" })
+    }));
+  });
+
 });

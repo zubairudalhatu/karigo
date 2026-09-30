@@ -113,7 +113,8 @@ describe("RidersService delivery captain applications", () => {
   };
   const captainUploadStorage = {
     putObject: jest.fn(),
-    signedViewUrl: jest.fn()
+    signedViewUrl: jest.fn(),
+    deleteObject: jest.fn()
   };
   const applicationNotifications = {
     deliveryCaptainApplicationSubmitted: jest.fn(),
@@ -829,4 +830,47 @@ describe("RidersService delivery captain applications", () => {
       hasAdminNote: true
     }));
   });
+
+  it("physically deletes an eligible owned Captain upload before reporting database deletion", async () => {
+    prisma.captainApplicationDocument.findFirst.mockResolvedValueOnce(uploadedProfilePhoto);
+    prisma.captainApplicationDocument.update
+      .mockResolvedValueOnce({ ...uploadedProfilePhoto, externalDeletionState: "PENDING_EXTERNAL_DELETION" })
+      .mockResolvedValueOnce({ ...uploadedProfilePhoto, uploadStatus: "DELETED", externalDeletionState: "DELETED" });
+    captainUploadStorage.deleteObject.mockResolvedValueOnce(undefined);
+
+    await expect(service.removeCaptainApplicationDocument(uploadedProfilePhoto.userId, uploadedProfilePhoto.id))
+      .resolves.toMatchObject({ uploadStatus: "DELETED" });
+
+    expect(captainUploadStorage.deleteObject).toHaveBeenCalledWith(uploadedProfilePhoto.objectKey);
+    expect(prisma.captainApplicationDocument.update).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ externalDeletionState: "DELETED", physicallyDeletedAt: expect.any(Date) })
+    }));
+  });
+
+  it("records a safe failure state and supports a later idempotent retry", async () => {
+    prisma.captainApplicationDocument.findFirst
+      .mockResolvedValueOnce(uploadedProfilePhoto)
+      .mockResolvedValueOnce({ ...uploadedProfilePhoto, externalDeletionState: "DELETION_FAILED" });
+    prisma.captainApplicationDocument.update.mockImplementation(async ({ data }: any) => ({ ...uploadedProfilePhoto, ...data }));
+    captainUploadStorage.deleteObject
+      .mockRejectedValueOnce(new Error("credential=must-not-escape"))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(service.removeCaptainApplicationDocument(uploadedProfilePhoto.userId, uploadedProfilePhoto.id))
+      .rejects.toThrow("pending storage retry");
+    expect(prisma.captainApplicationDocument.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ deletionFailureCode: "STORAGE_DELETE_FAILED", externalDeletionState: "DELETION_FAILED" })
+    }));
+
+    await expect(service.removeCaptainApplicationDocument(uploadedProfilePhoto.userId, uploadedProfilePhoto.id))
+      .resolves.toMatchObject({ uploadStatus: "DELETED" });
+    expect(captainUploadStorage.deleteObject).toHaveBeenCalledTimes(2);
+  });
+
+  it("cannot delete another user tenant's Captain object", async () => {
+    prisma.captainApplicationDocument.findFirst.mockResolvedValueOnce(null);
+    await expect(service.removeCaptainApplicationDocument("other-user", uploadedProfilePhoto.id)).rejects.toBeInstanceOf(NotFoundException);
+    expect(captainUploadStorage.deleteObject).not.toHaveBeenCalled();
+  });
+
 });

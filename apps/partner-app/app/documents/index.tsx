@@ -66,7 +66,7 @@ function DocumentsContent() {
 
   async function submitDocument() {
     if (!documentUrl.trim()) {
-      setError("Upload a document or paste an approved secure document URL.");
+      setError("Choose and upload a document before submitting.");
       return;
     }
     setSubmitting(true);
@@ -117,11 +117,11 @@ function DocumentsContent() {
           variant="secondary"
         />
         <TextField
-          label="Document URL"
-          placeholder="Upload a file or paste approved HTTPS URL"
+          label="Private upload reference"
+          placeholder="Choose a document above"
           value={documentUrl}
           autoCapitalize="none"
-          onChangeText={setDocumentUrl}
+          editable={false}
         />
         <MutedText>Accepted files: PDF, JPG, PNG and WebP. Do not upload passwords, OTPs, card details or unnecessary private information.</MutedText>
         <PrimaryButton

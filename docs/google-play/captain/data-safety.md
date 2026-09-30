@@ -1,25 +1,26 @@
 # Captain Data Safety worksheet
 
-Source reviewed: Captain auth, application/profile, location, availability, assignments, deliveries/Rides, earnings, uploads, notifications and account deletion; Expo/native dependencies; backend contracts. Traffic uses HTTPS.
+Audit date: 30 September 2026. Status: **PARTIAL; Play form unchanged**.
 
-| Data type | Collected | Shared | Purpose | Requirement / processing | Deletion |
-| --- | --- | --- | --- | --- | --- |
-| Name | Yes | Safe assigned-work identity may be shown to customer/operations | Account and operations | Required; stored | Requestable, subject to retention |
-| Phone number | Yes | Operations; not exposed publicly | Authentication and coordination | Required; stored | Requestable, subject to retention |
-| Email | Yes when supplied | Transactional provider where enabled | Account/application messages | Optional; stored | Requestable |
-| Profile photo | Yes when chosen | Customer/operations safe profile where enabled | Identity and review | Optional/approval-dependent; stored | Requestable |
-| Precise/approximate location | Yes while permission granted and operationally required | Customer/dispatch/maps for active work | Map, availability, assignment safety | Required while online/active; latest operational points stored | Requestable, safety retention applies |
-| Address/service area | Yes | Operations | Application and work eligibility | Required for approval; stored | Requestable, retention applies |
-| Payment information | Earnings/settlement records, not customer card data | Finance operations | Earnings and settlement visibility | Operational; stored | Financial retention applies |
-| Delivery/Ride history | Yes | Customer, partner and operations within assigned job | Work fulfilment, support and safety | Required; stored | Retention applies |
-| App interactions | Yes | No advertising sharing found | Security, audit and reliability | Required operational logs | Requestable/retention applies |
-| Uploaded photos/documents | Yes | Admin/review providers only | Identity, vehicle, licence and compliance review | Required by application type; stored | Requestable, regulatory retention applies |
-| Device/session identifiers | Yes | Authentication infrastructure | Secure session and abuse prevention | Required; stored/rotated | Requestable/retention applies |
-| Crash diagnostics | No dedicated third-party crash SDK found | No | Not currently declared | **OWNER CONFIRMATION REQUIRED** for platform telemetry | Not applicable if disabled |
-| Notifications | Notification records/preferences may be stored | Approved delivery provider if enabled | Assignment and account updates | Configuration-dependent | Requestable |
-| Vehicle/licence information | Yes for Ride/vehicle operation | Admin; safe vehicle summary may be shown to assigned customer | Approval, safety and operations | Required for relevant mode; stored | Regulatory/safety retention applies |
-| Business details | No normal merchant profile | No | Not applicable | Not collected as Partner data | Not applicable |
+| Data type | Evidence-supported handling | Play sharing result |
+| --- | --- | --- |
+| Name/email/phone/user ID | Collected and retained; core identity, with email optional where allowed | Render/Resend exempt; assigned Customer identity is expected fulfilment. |
+| Approximate/precise/background location | Collected while online or assigned; traces/evidence retained; required only for active work | Google Maps **shared**; Render exempt; assigned Customer transfer expected. |
+| Ride/Delivery traces and app activity | Assignments, status, timing, chat/call events retained | Render exempt; Maps portions shared; counterparties expected. |
+| Earnings/payment references | Earnings, commission and transaction records retained | Render exempt; Flutterwave flow needs account/product evidence. |
+| Vehicle/identity photos and files | Approval-required and retained | S3-compatible provider is **STORAGE BLOCKER — NOT CONFIRMED**. |
+| Push/device IDs | Expo token and device/session IDs retained/rotated | Expo/FCM unresolved; Render exempt. |
+| Diagnostics | Maps, Expo Updates and Agora if calls enabled | Maps **shared**; Expo/Agora unresolved. |
+| Voice/audio | If enabled, Agora RTC stream is transmitted. KariGO code sets recording false and stores only session metadata/duration. Agora states RTC stream is not stored. | Conditional service-provider exception; production activation, account terms and dashboard recording settings remain unconfirmed. |
+| Chat/messages | Ride chat retained; no email/SMS inbox reading | Render exempt; recipient receives through user action. Remove Email/SMS content absent another proven path. |
 
-September 2026 correction: Captain uses foreground location and background location during accepted active assignments, plus optional Agora voice calling. Uploaded internal version 16 declares background location and microphone access. The local correction adds a prominent disclosure before the background permission request and stops tracking when active work ends or cannot be verified. These source changes are not yet shipped. Contacts, SMS and call-log access are not required. Legacy storage and media-projection permissions in uploaded artifacts require a replacement AAB; future config blocks them.
+Captain document deletion currently changes the database status only; no S3 object deletion call was found. Do not claim object deletion, storage region, encryption at rest, backup expiry or provider retention until the owner supplies the storage record and lifecycle evidence.
 
-This worksheet is evidence preparation, not a finalized Play declaration. Voice/audio, in-app messages, SDK device/network identifiers and diagnostics must be reconciled with Agora, Google Maps, Expo/Firebase and actual hosting/provider terms. Absence of a dedicated crash SDK does not establish absence of diagnostics. No blanket service-provider exception or No sharing conclusion is supported. Non-ephemeral profile, location, message and uploaded-document records must be declared as retained. Provider-specific sharing and retention remain under review.
+See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-reconciliation-2026-09-30.md`.
+
+## Task 209B-S1-H11.2P implementation evidence — 2026-09-30
+
+- Eligible unattached Captain documents are now deleted from S3-compatible storage before the database reports deletion.
+- Failures remain `DELETION_FAILED`, retries are safe, and account deletion cannot complete while an eligible deletion fails.
+- Documents attached to an application are `RETAINED_FOR_DEFINED_REASON` with `ACTIVE_APPLICATION_EVIDENCE`; no retention period is asserted.
+- Storage provider identity and sharing status remain unconfirmed. Do not infer a Play service-provider exception.

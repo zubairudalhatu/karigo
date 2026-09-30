@@ -1,26 +1,34 @@
 # Customer Data Safety worksheet
 
-Source reviewed: Customer app auth/profile, addresses, Ride, orders, wallet/payment, Utilities, SME Services, uploads, support and account-deletion clients; Expo/native dependencies; backend contracts. All network traffic uses HTTPS. Final Play answers must be reconciled against production providers and the generated manifest.
+Audit date: 30 September 2026. Status: **PARTIAL; Play form unchanged**.
 
-| Data type | Collected | Shared | Purpose | Requirement / processing | Deletion |
-| --- | --- | --- | --- | --- | --- |
-| Name | Yes | With assigned operational parties where needed | Account and service fulfilment | Required; stored | Requestable, subject to retention |
-| Phone number | Yes | With approved communication/operational providers where needed | Authentication, account and service coordination | Required; stored | Requestable, subject to retention |
-| Email | Yes when supplied | Transactional email provider where enabled | Account and service messages | Optional; stored | Requestable |
-| Profile photo | Yes when chosen | No public sharing by default | Account personalization | Optional; stored upload | Requestable |
-| Precise/approximate location | Yes when permission granted | Maps/route and assigned operational parties | Address selection and Ride/service operation | Feature-dependent; current/operational storage | Requestable, with safety retention |
-| Address | Yes | Assigned partner/Captain/provider as needed | Delivery and service fulfilment | Required for relevant service; stored | Requestable, with order retention |
-| Payment information | Payment references/status and retained provider responses; instrument metadata scope requires review | Flutterwave and backend payment services | Checkout and wallet top-up | Feature-dependent; hosted payment; stored transaction metadata | Financial retention applies |
-| Purchase/order history | Yes | Assigned partner/Captain | Order fulfilment, support, fraud/finance | Required for transaction; stored | Retention applies |
-| Ride history | Yes | Assigned Captain and operations | Ride operation, safety and support | Required for Ride; stored | Retention applies |
-| App interactions | Yes, operational events | No advertising sharing found | Reliability, security and support | Required operational logs; stored | Requestable/retention applies |
-| Uploaded photos | Yes when chosen | Approved service parties only where needed | Profile/evidence | Optional; stored | Requestable |
-| Uploaded documents | Not a normal Customer feature | No | Not applicable | Not collected by current app | Not applicable |
-| Device/session identifiers | Yes | Authentication/infrastructure providers | Secure session and abuse prevention | Required; stored/rotated | Requestable/retention applies |
-| Crash logs / diagnostics | SDK-specific collection requires disclosure; absence of a dedicated crash SDK is not evidence of no collection | Provider-specific; see reconciliation | Functionality and documented SDK diagnostics/analytics | Retention varies; do not assume ephemeral | Provider retention applies |
-| Notifications | Notification records/preferences may be stored; no contact-list access | Approved delivery provider if enabled | Transactional account/service updates | Optional/configuration-dependent | Requestable |
-| Business details | Only details submitted in a partner/application flow | Admin review | Application processing | Optional feature; stored | Requestable/retention applies |
+| Data type | Evidence-supported handling | Play sharing result |
+| --- | --- | --- |
+| Name, phone, user ID | Collected, account-required, retained; account/functionality/security | Render hosting exempt; assigned-party transfer may be user-initiated. |
+| Email | Optional, retained; account/developer communications | Resend and Render payloads qualify for service-provider exception. |
+| Address | Feature-required for delivery/Ride, retained | Maps geocode/route transfer is **shared**; Render exempt. |
+| Profile image | Optional when chosen, retained where upload succeeds | Hosting/access lifecycle needs confirmation. |
+| Approximate/precise location | Foreground and feature-dependent; Ride/operational records retained | Google Maps **shared**; active fulfilment recipient transfer can be user-initiated. |
+| User payment info | No raw card/bank input; hosted checkout. Full provider responses are persisted. | **Do not remove yet** until a redacted Flutterwave returned-field inventory proves no mapped instrument/account field and storage is allowlisted. |
+| Purchase history | Collected and retained for orders/Rides | Render exempt; expected fulfilment transfer; payment-provider result is flow-specific. |
+| Other financial info | Wallet ledger, amounts, references and statuses retained | Render exempt; Flutterwave classification depends on exact user-initiated flow/terms. |
+| Other in-app messages | Support/Ride chat when used, retained | Render exempt; recipient receives content through user action. |
+| Photos/files | Only chosen profile/evidence/content uploads | Hosting/access lifecycle requires mapping. |
+| Voice/audio | Only if Agora Ride calls are active; implementation records metadata, not audio | Activation/account/recording settings **NOT CONFIRMED**. |
+| Interactions/searches/user content | Orders, Rides, reviews/support/actions retained; Maps/Expo events transmitted | Maps portions **shared**; Expo telemetry unresolved. |
+| Crash/diagnostics | Maps SDK and possibly Expo/Agora; no Crashlytics/Sentry | Maps diagnostics **shared**; other SDK fields unresolved. |
+| Device/install IDs and push token | Session identifiers and Expo push token retained/rotated | Maps identifier **shared**; Expo/FCM unresolved; Render exempt. |
 
-No contacts, call logs, broad storage, marketing advertising ID or background location use was identified. **OWNER CONFIRMATION REQUIRED** for final provider-sharing and Expo telemetry declarations.
+Raw payment answer: Customer does not collect raw card or bank credentials through its UI/API. It sends Flutterwave name/email/phone, amount, currency, reference and metadata and receives hosted checkout/verification/webhook responses. Because responses are stored wholesale, `User payment info` removal is not final until a redacted returned-field inventory and response allowlist close that gap.
 
-September 2026 audit: This worksheet is not a finalized Console declaration. See `../provider-data-safety-reconciliation-2026-09-27.md` for recipient/data-type exceptions and unresolved evidence. Console drafts are incomplete and must not be represented as approved.
+No contacts, call logs, installed-app inventory, broad storage access, background location, advertising ID, ad SDK, Firebase Analytics or Crashlytics was found.
+
+See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-reconciliation-2026-09-30.md`.
+
+## Task 209B-S1-H11.2P implementation evidence — 2026-09-30
+
+- New Flutterwave initialization, verification, and webhook writes persist an explicit reconciliation allowlist instead of full provider JSON.
+- The regression fixture proves nested card data, account numbers, authorization values, provider customer profiles, and tokens are excluded.
+- `Purchase history` and `Other financial info` remain supported by order/payment/wallet/reference and reconciliation records.
+- Do **not** yet remove `User payment info` in Play: legacy JSON may still contain it and the production cleanup was designed but not executed.
+- Flutterwave `Shared`/`Not shared` remains unresolved pending executed contract/DPA and independent-use evidence.

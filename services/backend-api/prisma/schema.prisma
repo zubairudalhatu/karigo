@@ -153,6 +153,18 @@ enum AccountDeletionStatus {
   CANCELLED
 }
 
+enum StoredObjectDeletionState {
+  PENDING_EXTERNAL_DELETION
+  DELETED
+  RETAINED_FOR_DEFINED_REASON
+  DELETION_FAILED
+}
+
+enum StoredObjectRetentionReason {
+  ACTIVE_APPLICATION_EVIDENCE
+  APPROVED_ONBOARDING_EVIDENCE
+}
+
 enum AccountDeletionBlockedReasonCode {
   ACTIVE_ORDER_EXISTS
   ACTIVE_DELIVERY_EXISTS
@@ -1160,6 +1172,12 @@ model CaptainApplicationDocument {
   uploadedAt            DateTime                       @default(now())
   replacedAt            DateTime?
   deletedAt             DateTime?
+  externalDeletionState StoredObjectDeletionState?
+  retentionReason       StoredObjectRetentionReason?
+  deletionAttempts      Int                            @default(0)
+  lastDeletionAttemptAt DateTime?
+  deletionFailureCode   String?
+  physicallyDeletedAt   DateTime?
   reviewedByAdminId     String?                        @db.Uuid
   reviewedAt            DateTime?
   createdAt             DateTime                       @default(now())
@@ -2206,6 +2224,7 @@ model Vendor {
   auditLogs             VendorAuditLog[]
   activationInvitations VendorAccountActivation[]
   onboardingDocuments   VendorOnboardingDocument[]
+  privateUploads        VendorPrivateUpload[]
   sourceApplication     VendorApplication?          @relation("VendorApplicationApprovedVendor")
   commercialAgreement   PartnerCommercialAgreement? @relation(fields: [commercialAgreementId], references: [id])
 
@@ -2300,23 +2319,56 @@ model VendorAccountActivation {
 }
 
 model VendorOnboardingDocument {
-  id                 String                     @id @default(uuid()) @db.Uuid
-  vendorId           String                     @db.Uuid
-  documentType       String
-  documentName       String?
-  documentUrl        String
-  verificationStatus DocumentVerificationStatus @default(PENDING)
-  adminNote          String?
-  uploadedAt         DateTime                   @default(now())
-  reviewedByAdminId  String?                    @db.Uuid
-  reviewedAt         DateTime?
-  createdAt          DateTime                   @default(now())
-  updatedAt          DateTime                   @updatedAt
-  vendor             Vendor                     @relation(fields: [vendorId], references: [id])
-  reviewedByAdmin    User?                      @relation("VendorOnboardingDocumentReviewedBy", fields: [reviewedByAdminId], references: [id])
+  id                    String                       @id @default(uuid()) @db.Uuid
+  vendorId              String                       @db.Uuid
+  documentType          String
+  documentName          String?
+  documentUrl           String
+  storageKey            String?                      @unique
+  externalDeletionState StoredObjectDeletionState?
+  retentionReason       StoredObjectRetentionReason?
+  deletionAttempts      Int                          @default(0)
+  lastDeletionAttemptAt DateTime?
+  deletionFailureCode   String?
+  physicallyDeletedAt   DateTime?
+  deletedAt             DateTime?
+  verificationStatus    DocumentVerificationStatus   @default(PENDING)
+  adminNote             String?
+  uploadedAt            DateTime                     @default(now())
+  reviewedByAdminId     String?                      @db.Uuid
+  reviewedAt            DateTime?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  vendor                Vendor                       @relation(fields: [vendorId], references: [id])
+  reviewedByAdmin       User?                        @relation("VendorOnboardingDocumentReviewedBy", fields: [reviewedByAdminId], references: [id])
+  vendorPrivateUpload   VendorPrivateUpload?
 
   @@index([vendorId, verificationStatus])
   @@map("vendor_onboarding_documents")
+}
+
+model VendorPrivateUpload {
+  id                    String                       @id @default(uuid()) @db.Uuid
+  vendorId              String                       @db.Uuid
+  storageKey            String                       @unique
+  originalFileName      String
+  mimeType              String
+  sizeBytes             Int
+  onboardingDocumentId  String?                      @unique @db.Uuid
+  externalDeletionState StoredObjectDeletionState?
+  retentionReason       StoredObjectRetentionReason?
+  deletionAttempts      Int                          @default(0)
+  lastDeletionAttemptAt DateTime?
+  deletionFailureCode   String?
+  physicallyDeletedAt   DateTime?
+  deletedAt             DateTime?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  vendor                Vendor                       @relation(fields: [vendorId], references: [id])
+  onboardingDocument    VendorOnboardingDocument?    @relation(fields: [onboardingDocumentId], references: [id])
+
+  @@index([vendorId, externalDeletionState])
+  @@map("vendor_private_uploads")
 }
 
 model VendorService {

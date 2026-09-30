@@ -24,6 +24,7 @@ import {
 } from "../taxi/ride-commission-policy";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PaymentProviderRegistry } from "./providers/payment-provider.registry";
+import { paymentProviderEvidence } from "./payment-provider-evidence";
 import type { PaymentProvider, VerifyPaymentResult, WebhookPaymentResult } from "./providers/payment-provider.interface";
 
 type TransactionClient = Prisma.TransactionClient;
@@ -140,7 +141,7 @@ export class RideCommissionPaymentService {
             gateway: provider.name,
             eventType: webhook.eventType,
             transactionReference: webhook.transactionReference,
-            payload: webhook.providerResponse as Prisma.InputJsonValue,
+            payload: paymentProviderEvidence(provider.name, webhook),
             isVerified: true,
             processedAt: new Date()
           }

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import {
   AccountStatus,
   CaptainApplicationDocumentType,
@@ -7,6 +7,7 @@ import {
   DeliveryCaptainApplicationStatus,
   Prisma,
   RiderStatus,
+  StoredObjectDeletionState,
   TaxiApplicationStatus,
   TaxiDriverProfileStatus,
   UserRole
@@ -440,9 +441,45 @@ export class RidersService {
       }
     });
     if (!document) throw new NotFoundException("Captain application upload not found");
+    const attemptedAt = new Date();
+    await this.prisma.captainApplicationDocument.update({
+      where: { id: document.id },
+      data: {
+        externalDeletionState: StoredObjectDeletionState.PENDING_EXTERNAL_DELETION,
+        deletionAttempts: { increment: 1 },
+        lastDeletionAttemptAt: attemptedAt,
+        deletionFailureCode: null
+      }
+    });
+    try {
+      await this.captainUploadStorage.deleteObject(document.objectKey);
+    } catch (error) {
+      await this.prisma.captainApplicationDocument.update({
+        where: { id: document.id },
+        data: {
+          externalDeletionState: StoredObjectDeletionState.DELETION_FAILED,
+          deletionFailureCode: "STORAGE_DELETE_FAILED"
+        }
+      });
+      await this.audit.record(userId, "CAPTAIN_DOCUMENT_DELETE_FAILED", "CaptainApplicationDocument", document.id, {
+        failureCode: "STORAGE_DELETE_FAILED"
+      });
+      throw new ServiceUnavailableException("Captain document deletion is pending storage retry.");
+    }
+    const deletedAt = new Date();
     const updated = await this.prisma.captainApplicationDocument.update({
       where: { id: document.id },
-      data: { uploadStatus: CaptainDocumentUploadStatus.DELETED, deletedAt: new Date() }
+      data: {
+        uploadStatus: CaptainDocumentUploadStatus.DELETED,
+        deletedAt,
+        physicallyDeletedAt: deletedAt,
+        externalDeletionState: StoredObjectDeletionState.DELETED,
+        retentionReason: null,
+        deletionFailureCode: null
+      }
+    });
+    await this.audit.record(userId, "CAPTAIN_DOCUMENT_DELETED", "CaptainApplicationDocument", document.id, {
+      externalDeletionState: StoredObjectDeletionState.DELETED
     });
     return this.toPublicCaptainDocument(updated);
   }

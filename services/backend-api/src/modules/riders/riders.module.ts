@@ -12,6 +12,7 @@ import { RidersService } from "./riders.service";
 @Module({
   imports: [AuthModule, AdminAuditModule],
   controllers: [DeliveryCaptainApplicationsController, AdminDeliveryCaptainApplicationsController, RidersController, CaptainAccessController],
-  providers: [RidersService, CaptainUploadStorageService, ApplicationNotificationsService, CaptainWorkStateService, AdminRolesGuard, ApprovedCaptainGuard]
+  providers: [RidersService, CaptainUploadStorageService, ApplicationNotificationsService, CaptainWorkStateService, AdminRolesGuard, ApprovedCaptainGuard],
+  exports: [CaptainUploadStorageService]
 })
 export class RidersModule {}

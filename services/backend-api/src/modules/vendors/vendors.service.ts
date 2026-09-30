@@ -1,6 +1,6 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Prisma, ProductCategory, ServiceCategory, VendorServiceStatus } from "@prisma/client";
+import { Prisma, ProductCategory, ServiceCategory, StoredObjectDeletionState, VendorServiceStatus } from "@prisma/client";
 import { createHash, randomBytes } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { extname, join } from "path";
@@ -14,6 +14,7 @@ import { UpsertVendorBranchDto } from "./dto/vendor-branch.dto";
 import { UpdateVendorServiceDto, VendorServiceInputDto } from "./dto/vendor-service.dto";
 import { VendorUploadPurpose } from "./dto/vendor-upload.dto";
 import { resolvePartnerCapabilities } from "./partner-capabilities";
+import { VendorPrivateUploadStorageService } from "./vendor-private-upload-storage.service";
 
 export interface VendorUploadedFile {
   originalname: string;
@@ -34,7 +35,11 @@ const UPLOAD_PURPOSES: Record<VendorUploadPurpose, { directory: string; mimeType
 
 @Injectable()
 export class VendorsService {
-  constructor(private readonly prisma: PrismaService, @Optional() private readonly config?: ConfigService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly config?: ConfigService,
+    @Optional() private readonly privateUploads?: VendorPrivateUploadStorageService
+  ) {}
 
   async me(userId: string) {
     const vendor = await this.prisma.vendor.findFirst({
@@ -236,11 +241,13 @@ export class VendorsService {
   async onboardingDocuments(userId: string) {
     const vendor = await this.requireVendorForUser(userId);
     const [documents, application] = await Promise.all([this.prisma.vendorOnboardingDocument.findMany({
-      where: { vendorId: vendor.id },
+      where: { vendorId: vendor.id, deletedAt: null },
       orderBy: { uploadedAt: "desc" }
     }), this.prisma.vendorApplication.findUnique({ where: { vendorId: vendor.id }, select: { reference: true } })]);
     return documents.map((document) => ({
       ...document,
+      documentUrl: document.storageKey ? `/vendors/onboarding-documents/${document.id}/file` : document.documentUrl,
+      storageKey: undefined,
       applicationType: "PARTNER",
       applicationReference: application?.reference ?? null,
       roleScope: "PARTNER"
@@ -249,19 +256,89 @@ export class VendorsService {
 
   async uploadOnboardingDocument(userId: string, dto: ApplicationDocumentDto) {
     const vendor = await this.requireVendorForUser(userId);
+    const prefix = "private-upload:";
+    if (!dto.documentUrl.startsWith(prefix) || !this.privateUploads) {
+      throw new BadRequestException("Onboarding documents must use a server-issued private upload reference.");
+    }
+    const uploadId = dto.documentUrl.slice(prefix.length);
+    const upload = await this.prisma.vendorPrivateUpload.findFirst({
+      where: { id: uploadId, vendorId: vendor.id, deletedAt: null, onboardingDocumentId: null }
+    });
+    if (!upload) throw new BadRequestException("Private upload reference is invalid or already used.");
+    this.privateUploads.assertOwnedKey(vendor.id, upload.storageKey);
     const document = await this.prisma.vendorOnboardingDocument.create({
       data: {
         vendorId: vendor.id,
         documentType: dto.documentType,
         documentName: dto.documentName,
-        documentUrl: dto.documentUrl
+        documentUrl: "CONTROLLED_PRIVATE_DOCUMENT",
+        storageKey: upload.storageKey
       }
+    });
+    await this.prisma.vendorPrivateUpload.update({
+      where: { id: upload.id },
+      data: { onboardingDocumentId: document.id }
     });
     await this.logVendorAudit(vendor.id, userId, "vendor.onboarding_document.uploaded", "VendorOnboardingDocument", document.id, {
       documentType: document.documentType,
       hasDocumentName: Boolean(document.documentName)
     });
-    return document;
+    return { ...document, documentUrl: `/vendors/onboarding-documents/${document.id}/file`, storageKey: undefined };
+  }
+
+  async privateOnboardingDocument(userId: string, documentId: string) {
+    const vendor = await this.requireVendorForUser(userId);
+    const document = await this.prisma.vendorOnboardingDocument.findFirst({
+      where: { id: documentId, vendorId: vendor.id, deletedAt: null, storageKey: { not: null } }
+    });
+    if (!document?.storageKey || !this.privateUploads) throw new NotFoundException("Partner onboarding document not found");
+    const buffer = await this.privateUploads.readOwnedObject(vendor.id, document.storageKey);
+    return { buffer, mimeType: this.mimeTypeFromKey(document.storageKey) };
+  }
+
+  async removeOnboardingDocument(userId: string, documentId: string) {
+    const vendor = await this.requireVendorForUser(userId);
+    const document = await this.prisma.vendorOnboardingDocument.findFirst({ where: { id: documentId, vendorId: vendor.id, deletedAt: null } });
+    if (!document?.storageKey || !this.privateUploads) throw new NotFoundException("Partner onboarding document not found");
+    if (document.verificationStatus === "APPROVED") throw new BadRequestException("Approved onboarding evidence must be handled through account deletion review.");
+    const attemptedAt = new Date();
+    await this.prisma.vendorOnboardingDocument.update({ where: { id: document.id }, data: {
+      externalDeletionState: StoredObjectDeletionState.PENDING_EXTERNAL_DELETION,
+      deletionAttempts: { increment: 1 }, lastDeletionAttemptAt: attemptedAt, deletionFailureCode: null
+    } });
+    await this.prisma.vendorPrivateUpload.updateMany({ where: { onboardingDocumentId: document.id }, data: {
+      externalDeletionState: StoredObjectDeletionState.PENDING_EXTERNAL_DELETION,
+      deletionAttempts: { increment: 1 }, lastDeletionAttemptAt: attemptedAt, deletionFailureCode: null
+    } });
+    try {
+      await this.privateUploads.deleteOwnedObject(vendor.id, document.storageKey);
+    } catch (error) {
+      await this.prisma.vendorOnboardingDocument.update({ where: { id: document.id }, data: {
+        externalDeletionState: StoredObjectDeletionState.DELETION_FAILED, deletionFailureCode: "LOCAL_STORAGE_DELETE_FAILED"
+      } });
+      await this.prisma.vendorPrivateUpload.updateMany({ where: { onboardingDocumentId: document.id }, data: {
+        externalDeletionState: StoredObjectDeletionState.DELETION_FAILED, deletionFailureCode: "LOCAL_STORAGE_DELETE_FAILED"
+      } });
+      throw new ServiceUnavailableException("Partner document deletion is pending storage retry.");
+    }
+    const deletedAt = new Date();
+    await this.prisma.vendorPrivateUpload.updateMany({
+      where: { onboardingDocumentId: document.id },
+      data: {
+        externalDeletionState: StoredObjectDeletionState.DELETED,
+        physicallyDeletedAt: deletedAt,
+        deletedAt,
+        deletionFailureCode: null
+      }
+    });
+    const updated = await this.prisma.vendorOnboardingDocument.update({ where: { id: document.id }, data: {
+      externalDeletionState: StoredObjectDeletionState.DELETED, physicallyDeletedAt: deletedAt, deletedAt,
+      retentionReason: null, deletionFailureCode: null
+    } });
+    await this.logVendorAudit(vendor.id, userId, "vendor.onboarding_document.deleted", "VendorOnboardingDocument", document.id, {
+      externalDeletionState: StoredObjectDeletionState.DELETED
+    });
+    return { ...updated, storageKey: undefined };
   }
 
   async uploadFile(userId: string, purpose: VendorUploadPurpose, file?: VendorUploadedFile, requestBaseUrl?: string) {
@@ -278,6 +355,36 @@ export class VendorsService {
     }
     if (file.size > config.maxBytes) {
       throw new BadRequestException(`File is too large. Maximum size is ${Math.round(config.maxBytes / 1024 / 1024)}MB.`);
+    }
+
+    if (purpose === VendorUploadPurpose.ONBOARDING_DOCUMENT) {
+      if (!this.privateUploads) throw new BadRequestException("Private upload storage is unavailable.");
+      const storageKey = await this.privateUploads.putOnboardingDocument(vendor.id, file);
+      let upload;
+      try {
+        upload = await this.prisma.vendorPrivateUpload.create({ data: {
+          vendorId: vendor.id,
+          storageKey,
+          originalFileName: file.originalname.slice(0, 200),
+          mimeType: file.mimetype,
+          sizeBytes: file.size
+        } });
+      } catch {
+        await this.privateUploads.deleteOwnedObject(vendor.id, storageKey);
+        throw new ServiceUnavailableException("Private Partner upload could not be recorded.");
+      }
+      await this.logVendorAudit(vendor.id, userId, "vendor.private_file.uploaded", "VendorPrivateUpload", upload.id, {
+        purpose, mimeType: file.mimetype, size: file.size
+      });
+      return {
+        url: `private-upload:${upload.id}`,
+        relativeUrl: null,
+        purpose,
+        access: "PRIVATE_CONTROLLED",
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size
+      };
     }
 
     const extension = this.safeFileExtension(file.originalname, file.mimetype);
@@ -597,6 +704,14 @@ export class VendorsService {
       createdAt: service.createdAt.toISOString(),
       updatedAt: service.updatedAt.toISOString()
     };
+  }
+
+  private mimeTypeFromKey(key: string) {
+    const extension = extname(key).toLowerCase();
+    if (extension === ".pdf") return "application/pdf";
+    if (extension === ".png") return "image/png";
+    if (extension === ".webp") return "image/webp";
+    return "image/jpeg";
   }
 
   private safeFileExtension(originalName: string, mimeType: string) {
