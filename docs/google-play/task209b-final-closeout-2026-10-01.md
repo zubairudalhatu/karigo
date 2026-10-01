@@ -1,10 +1,10 @@
 # Task 209B final privacy, website and Data Safety close-out — 1 October 2026
 
-Status: **A — PROVIDER EVIDENCE CLOSED — DATA SAFETY READY** as of 1 October 2026. This is a preparation record. Google Play was inspected read-only and was not changed or submitted. Owner/legal retention-duration decisions remain a separate governance and public-copy approval item.
+Status: **A — FINAL PLAY SUBMISSION READY, SUBJECT TO SAVE/PUSH/FINAL REVIEW GATES** as of 1 October 2026. Provider evidence is closed. The owner approved the current retention/privacy/account-deletion design for this release, and Barr. Ibrahim Isa, Company Legal Secretary, completed the company legal review. Future refinements remain permitted. No additional retention research is required before current publication. Google Play has not been submitted.
 
 ## Owner/legal retention decision table
 
-No Nigerian statutory duration is asserted. Owner/legal must approve the purpose, minimum fields, start event, duration, disposal/anonymisation method and exception handling for each `DECIDE` row.
+No Nigerian statutory duration is asserted. The table records the approved current-release behavior and future refinement candidates; `DECIDE`, `LEGAL` and `IMPLEMENT` labels are backlog controls rather than current publication blockers.
 
 | Record group | Current implementation | Delete possible? | Anonymise possible? | Proposed rationale / required decision | Public-copy and Play effect |
 | --- | --- | --- | --- | --- | --- |
@@ -25,7 +25,7 @@ No Nigerian statutory duration is asserted. Owner/legal must approve the purpose
 ## Exact public-copy result
 
 - `/privacy`: identifies Zamkah Technologies Limited as the confirmed responsible organisation without treating footer branding as controller evidence; lists actual categories; explains hosted Customer checkout and minimized reconciliation evidence; documents active-work location, private GCS, seven-day soft deletion, Partner reacquisition, provider roles and qualified retention.
-- `/account-deletion`: states deactivation/session revocation and provider-confirmed deletion of eligible objects; does not promise broad anonymisation or immediate irreversible provider erasure; describes blockers, retained groups and pending duration decisions.
+- `/account-deletion`: states deactivation/session revocation and provider-confirmed deletion of eligible objects; does not promise broad anonymisation or immediate irreversible provider erasure; describes blockers, retained groups and reason-bound review of retained records.
 - `/terms`: adds hosted checkout, authenticated private onboarding evidence, reacquisition and secure Careers applications.
 - In-app deletion copy should use: **“Deleting an account deactivates the selected KariGO access, revokes active sessions and deletes eligible unattached private documents after storage confirmation. Some order, financial, approved onboarding, security and audit records may be retained for a defined legal, finance, safety or compliance reason. Provider soft-delete or protected backup copies may remain for a limited period.”**
 
@@ -121,8 +121,17 @@ The fresh root production-dependency audit on 1 October 2026 reports 23 aggregat
 
 ## Close-out gate
 
-Technical website work can be committed locally after validation. Provider-dependent Data Safety answers are closed by the Task 2BK evidence below. Owner/legal approval of retention durations/bases and the final public legal copy remains a separate final-submission gate. No production, GCS, Git remote or Play mutation is authorized by this document.
+Technical website work can be committed locally after validation. Provider-dependent Data Safety answers are closed by the Task 2BK evidence below. The current public legal copy and retention/account-deletion design are approved for this release. Remaining gates are controlled Play saves, the reviewed Git push, final Play review and later submission approval. No production, GCS, Git remote or Play submission is authorized by this document.
 
 ## Task 209B-S1-H11.2BK provider closure — 1 October 2026
 
-The earlier provider-sharing/activation gate is now closed. Flutterwave was classified per active Customer transfer; Expo Push/EAS and downstream FCM were separated; direct FCM was marked not applicable; Agora activation and audio-only behavior were confirmed, and the signed-in **KariGO Ride Voice** project shows **Cloud Recording: Inactive** with zero recording usage; Termii's active payloads were classified shared; Utilities fulfilment was marked inactive. Provider-dependent unresolved count: Customer **0**, Captain **0**, Partner **0**. All three Data Safety forms can now be completed truthfully from `task209b-provider-evidence-closure-2026-10-01.md`. This does not itself approve final public legal copy or decide outstanding retention durations. Production changed: **NO**. Google Play changed: **NO**.
+The earlier provider-sharing/activation gate is now closed. Flutterwave was classified per active Customer transfer; Expo Push/EAS and downstream FCM were separated; direct FCM was marked not applicable; Agora activation and audio-only behavior were confirmed, and the signed-in **KariGO Ride Voice** project shows **Cloud Recording: Inactive** with zero recording usage; Termii's active payloads were classified shared; Utilities fulfilment was marked inactive. Provider-dependent unresolved count: Customer **0**, Captain **0**, Partner **0**. All three Data Safety forms can now be completed truthfully from `task209b-provider-evidence-closure-2026-10-01.md`. The owner and company legal review now approve the current public legal copy and retention design for this release. Production changed: **NO**. Google Play changed: **NO**.
+
+## Task 209B-S1-H11.2BL release-baseline legal approval — 1 October 2026
+
+- Current retention, privacy and account-deletion design approved for this release: **YES**.
+- Owner approval obtained: **YES**.
+- Company legal review obtained from Barr. Ibrahim Isa, Company Legal Secretary: **YES**.
+- Privacy Policy, Account Deletion and affected Terms wording use the implementation-backed approved drafts and avoid invented statutory periods or obligations.
+- Future policy, retention, provider and recruitment refinements remain permitted as circumstances change.
+- Additional retention research required before current publication: **NO**.
