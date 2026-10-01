@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength } from "class-validator";
+import { IsOptional, IsString, IsUUID, MaxLength } from "class-validator";
 
 export class ApplicationDocumentDto {
   @IsString()
@@ -13,4 +13,8 @@ export class ApplicationDocumentDto {
   @IsString()
   @MaxLength(1000)
   documentUrl!: string;
+
+  @IsOptional()
+  @IsUUID()
+  replacesDocumentId?: string;
 }

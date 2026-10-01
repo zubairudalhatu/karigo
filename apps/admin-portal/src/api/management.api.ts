@@ -109,8 +109,12 @@ export interface VendorOnboardingDocument {
   id: string;
   documentType: string;
   documentName?: string | null;
-  documentUrl: string;
+  documentUrl?: string | null;
   verificationStatus: string;
+  evidenceAvailability?: "AVAILABLE" | "SOURCE_UNAVAILABLE_REACQUISITION_REQUIRED" | "SUPERSEDED_BY_REPLACEMENT";
+  downloadAvailable?: boolean;
+  replacementRequired?: boolean;
+  historicalApproval?: boolean;
   adminNote?: string | null;
   uploadedAt: string;
   reviewedAt?: string | null;

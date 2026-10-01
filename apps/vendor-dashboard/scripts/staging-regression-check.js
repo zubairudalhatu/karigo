@@ -169,6 +169,9 @@ assert(onboardingPage.includes("SERVICE_PROVIDER_EVIDENCE"), "Partner onboarding
 assert(onboardingPage.includes("PORTFOLIO_OR_WORK_SAMPLE"), "Partner onboarding must support portfolio/work sample documents.");
 assert(onboardingPage.includes("documentHref(document.documentUrl)"), "Partner onboarding must route private document reads through the authenticated BFF.");
 assert(onboardingPage.includes('`/api/bff${documentUrl}`'), "Partner onboarding must keep private reads on the same-origin authenticated BFF.");
+assert(onboardingPage.includes("document.downloadAvailable && document.documentUrl"), "Unavailable historical evidence must not render a download link.");
+assert(onboardingPage.includes("document.replacementRequired"), "Partner onboarding must expose the replacement-required workflow.");
+assert(onboardingPage.includes("Submit replacement"), "Partner onboarding must let the owner submit linked replacement evidence.");
 
 const vendorApi = read("src", "api", "vendor.api.ts");
 assert(vendorApi.includes("vendors/uploads"), "Vendor API must include vendor-scoped upload endpoint.");

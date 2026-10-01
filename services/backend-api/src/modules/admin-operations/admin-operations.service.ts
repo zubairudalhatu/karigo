@@ -18,6 +18,7 @@ import {
   TaxiDriverProfileStatus,
   UserRole,
   VendorActivationInvitationStatus,
+  VendorEvidenceAvailabilityState,
   VendorStatus
 } from "@prisma/client";
 import { createHash, randomBytes } from "crypto";
@@ -100,6 +101,10 @@ const VENDOR_CLEANUP_SELECT = {
       documentType: true,
       documentName: true,
       documentUrl: true,
+      storageKey: true,
+      evidenceAvailability: true,
+      replacesDocumentId: true,
+      replacementDocument: { select: { id: true, verificationStatus: true } },
       verificationStatus: true,
       adminNote: true,
       uploadedAt: true,
@@ -817,26 +822,43 @@ export class AdminOperationsService {
 
   async vendorOnboardingDocuments(vendorId: string) {
     await this.assertVendorExists(vendorId);
-    return this.prisma.vendorOnboardingDocument.findMany({
+    const documents = await this.prisma.vendorOnboardingDocument.findMany({
       where: { vendorId },
       orderBy: { uploadedAt: "desc" },
       include: { reviewedByAdmin: { select: { id: true, fullName: true, adminRole: true } } }
     });
+    return documents.map((document) => this.vendorOnboardingDocumentView(document));
   }
 
   async reviewVendorOnboardingDocument(adminUserId: string, vendorId: string, documentId: string, status: DocumentVerificationStatus, adminNote?: string) {
     await this.assertVendorExists(vendorId);
     const document = await this.prisma.vendorOnboardingDocument.findFirst({ where: { id: documentId, vendorId } });
     if (!document) throw new NotFoundException("Vendor onboarding document not found");
-    const reviewed = await this.prisma.vendorOnboardingDocument.update({
-      where: { id: document.id },
-      data: {
-        verificationStatus: status,
-        adminNote,
-        reviewedByAdminId: adminUserId,
-        reviewedAt: new Date()
-      },
-      include: { reviewedByAdmin: { select: { id: true, fullName: true, adminRole: true } } }
+    if ((document.evidenceAvailability ?? VendorEvidenceAvailabilityState.AVAILABLE) !== VendorEvidenceAvailabilityState.AVAILABLE) {
+      throw new BadRequestException("Historical unavailable evidence cannot be re-reviewed. Review its linked replacement instead.");
+    }
+    const reviewed = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.vendorOnboardingDocument.update({
+        where: { id: document.id },
+        data: {
+          verificationStatus: status,
+          adminNote,
+          reviewedByAdminId: adminUserId,
+          reviewedAt: new Date()
+        },
+        include: { reviewedByAdmin: { select: { id: true, fullName: true, adminRole: true } } }
+      });
+      if (status === DocumentVerificationStatus.APPROVED && document.replacesDocumentId) {
+        await tx.vendorOnboardingDocument.updateMany({
+          where: {
+            id: document.replacesDocumentId,
+            vendorId,
+            evidenceAvailability: VendorEvidenceAvailabilityState.SOURCE_UNAVAILABLE_REACQUISITION_REQUIRED
+          },
+          data: { evidenceAvailability: VendorEvidenceAvailabilityState.SUPERSEDED_BY_REPLACEMENT }
+        });
+      }
+      return updated;
     });
     await this.audit.record(adminUserId, "admin.vendor_onboarding_document.reviewed", "VendorOnboardingDocument", document.id, {
       vendorId,
@@ -1219,7 +1241,7 @@ export class AdminOperationsService {
       serviceCount: vendor._count.services,
       activeOrderCount: vendor._count.orders,
       onboardingDocuments: vendor.onboardingDocuments.map((document) => ({
-        ...document,
+        ...this.vendorOnboardingDocumentView(document),
         applicationType: "PARTNER",
         applicationReference: vendor.sourceApplication?.reference ?? null,
         roleScope: "PARTNER"
@@ -1229,6 +1251,28 @@ export class AdminOperationsService {
         ...vendor.user,
         accountStatus: vendor.user.deletedAt ? AccountStatus.DEACTIVATED : vendor.user.accountStatus
       }
+    };
+  }
+
+  private vendorOnboardingDocumentView<T extends {
+    id: string;
+    documentUrl: string;
+    storageKey?: string | null;
+    evidenceAvailability?: VendorEvidenceAvailabilityState;
+    verificationStatus?: DocumentVerificationStatus;
+  }>(document: T): Record<string, unknown> {
+    const { storageKey, ...safeDocument } = document;
+    const availability = document.evidenceAvailability ?? VendorEvidenceAvailabilityState.AVAILABLE;
+    const downloadAvailable = availability === VendorEvidenceAvailabilityState.AVAILABLE;
+    return {
+      ...safeDocument,
+      documentUrl: downloadAvailable
+        ? storageKey ? `/vendors/onboarding-documents/${document.id}/file` : document.documentUrl
+        : null,
+      evidenceAvailability: availability,
+      downloadAvailable,
+      replacementRequired: availability === VendorEvidenceAvailabilityState.SOURCE_UNAVAILABLE_REACQUISITION_REQUIRED,
+      historicalApproval: !downloadAvailable && document.verificationStatus === DocumentVerificationStatus.APPROVED
     };
   }
 

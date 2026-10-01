@@ -125,6 +125,12 @@ Tests cover payment allowlisting, prohibited nested credential removal, Captain 
 - Approved retention schedule and deletion/anonymization behavior for relational Customer, Captain, and Partner records.
 - Provider-side deletion/retention evidence for Flutterwave and all other subprocessors.
 
+## Task 209B-S1-H11.2BC legacy Partner correction — 1 October 2026
+
+The seven historical approved Partner rows have zero recoverable legacy source objects. Six references return 404; the seventh resolves to HTML rather than an evidence file. Legacy migration is closed and the physical retained-document count for this set is **0**.
+
+The prepared lifecycle migration marks exactly these seven guarded records `SOURCE_UNAVAILABLE_REACQUISITION_REQUIRED` without changing approval or review timestamps. APIs hide their broken source URLs. A replacement uses the existing private GCS upload/manifest path, creates a new pending document linked to the historical row, and supersedes the historical availability state only after separate Admin approval.
+
 ## Task 209B-S1-H11.2Q rehearsal update — 2026-09-30
 
 ### Durable Partner storage target

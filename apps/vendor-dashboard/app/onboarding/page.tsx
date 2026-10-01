@@ -5,7 +5,7 @@ import { vendorApi, VendorOnboardingDocument } from "../../src/api/vendor.api";
 import { DashboardShell, Empty, ErrorMessage, StatusBadge } from "../../src/components/dashboard";
 import { friendlyError } from "../../src/lib/errors";
 
-const initialForm = { documentType: "CAC_CERTIFICATE", documentName: "", documentUrl: "" };
+const initialForm = { documentType: "CAC_CERTIFICATE", documentName: "", documentUrl: "", replacesDocumentId: "" };
 
 function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleString() : "Not reviewed";
@@ -71,7 +71,8 @@ export default function VendorOnboardingPage() {
       await vendorApi.uploadOnboardingDocument({
         documentType: form.documentType,
         documentName: form.documentName || undefined,
-        documentUrl: form.documentUrl
+        documentUrl: form.documentUrl,
+        replacesDocumentId: form.replacesDocumentId || undefined
       });
       setMessage("Onboarding document submitted for KariGO review.");
       setForm(initialForm);
@@ -91,7 +92,8 @@ export default function VendorOnboardingPage() {
 
     <section className="grid two">
       <form className="card" onSubmit={(event) => void submit(event)}>
-        <h2>Submit document</h2>
+        <h2>{form.replacesDocumentId ? "Submit replacement evidence" : "Submit document"}</h2>
+        {form.replacesDocumentId ? <p className="notice">This new private document will be reviewed separately. The historical approval record will remain intact.</p> : null}
         <label>Document type
           <select value={form.documentType} onChange={(event) => setForm((current) => ({ ...current, documentType: event.target.value }))}>
             <option value="CAC_CERTIFICATE">CAC certificate</option>
@@ -125,7 +127,16 @@ export default function VendorOnboardingPage() {
           <p><StatusBadge>{document.verificationStatus}</StatusBadge></p>
           <p className="muted">Uploaded {formatDate(document.uploadedAt)}</p>
           <p className="muted">Reviewed {formatDate(document.reviewedAt)}</p>
-          <p><a href={documentHref(document.documentUrl)} target="_blank" rel="noreferrer">Open document reference</a></p>
+          {document.downloadAvailable && document.documentUrl
+            ? <p><a href={documentHref(document.documentUrl)} target="_blank" rel="noreferrer">Open document reference</a></p>
+            : <p className="notice">Source file unavailable. This historical approval is retained for audit only.</p>}
+          {document.replacementRequired ? <p><button className="secondary" type="button" onClick={() => setForm({
+            documentType: document.documentType,
+            documentName: document.documentName ? `Replacement — ${document.documentName}` : "Replacement evidence",
+            documentUrl: "",
+            replacesDocumentId: document.id
+          })}>Submit replacement</button></p> : null}
+          {document.evidenceAvailability === "SUPERSEDED_BY_REPLACEMENT" ? <p className="muted">Superseded by an approved replacement. Historical approval remains preserved.</p> : null}
           {document.adminNote ? <p className="notice">{document.adminNote}</p> : null}
         </article>) : <Empty>No onboarding documents yet. Upload the required documents when KariGO operations requests them.</Empty>}
       </section>

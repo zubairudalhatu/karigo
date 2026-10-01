@@ -7,7 +7,21 @@ export interface VendorProfile { id: string; businessName: string; description?:
 export interface VendorBranch { id: string; name: string; address: string; city: string; state: string; area?: string | null; phoneNumber?: string | null; isPrimary: boolean; status: string; createdAt: string; }
 export interface VendorTeamMember { id: string; fullName: string; email?: string | null; phoneNumber?: string | null; role: string; invitationStatus: string; expiresAt?: string | null; createdAt: string; invitationIssued?: boolean; invitationTokenReturned?: boolean; }
 export interface VendorAuditLog { id: string; action: string; entityType: string; entityId?: string | null; newValue?: unknown; createdAt: string; actor?: { fullName: string } | null; }
-export interface VendorOnboardingDocument { id: string; documentType: string; documentName?: string | null; documentUrl: string; verificationStatus: string; adminNote?: string | null; uploadedAt: string; reviewedAt?: string | null; }
+export interface VendorOnboardingDocument {
+  id: string;
+  documentType: string;
+  documentName?: string | null;
+  documentUrl?: string | null;
+  verificationStatus: string;
+  evidenceAvailability: "AVAILABLE" | "SOURCE_UNAVAILABLE_REACQUISITION_REQUIRED" | "SUPERSEDED_BY_REPLACEMENT";
+  downloadAvailable: boolean;
+  replacementRequired: boolean;
+  historicalApproval: boolean;
+  replacesDocumentId?: string | null;
+  adminNote?: string | null;
+  uploadedAt: string;
+  reviewedAt?: string | null;
+}
 
 async function uploadVendorFile(file: File, purpose: VendorUploadPurpose) {
   const form = new FormData();
@@ -39,7 +53,7 @@ export const vendorApi = {
   revokeTeamMember: (id: string) => api.patch<VendorTeamMember>(`vendors/team/${id}/revoke`, {}),
   auditLogs: () => api.get<VendorAuditLog[]>("vendors/audit-logs"),
   onboardingDocuments: () => api.get<VendorOnboardingDocument[]>("vendors/onboarding-documents"),
-  uploadOnboardingDocument: (body: { documentType: string; documentName?: string; documentUrl: string }) => api.post<VendorOnboardingDocument>("vendors/onboarding-documents", body),
+  uploadOnboardingDocument: (body: { documentType: string; documentName?: string; documentUrl: string; replacesDocumentId?: string }) => api.post<VendorOnboardingDocument>("vendors/onboarding-documents", body),
   uploadFile: uploadVendorFile,
   services: () => api.get<VendorServiceSummary[]>("vendors/services"),
   createService: (body: VendorServiceInput) => api.post<VendorServiceSummary>("vendors/services", body),

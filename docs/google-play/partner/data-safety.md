@@ -55,3 +55,11 @@ See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-rec
 - The evidence-supported Play treatment for the planned backend-mediated GCS transfer remains `Files and documents` collected and retained, **not shared under the service-provider exception**. It does not yet describe live production handling.
 - Data Access logging is still disabled because the available Cloud Storage AuditConfig is project-wide rather than bucket-only. The owner explicitly deferred that cross-bucket hardening change due to scope and logging volume/cost; this is not a Partner bucket-provisioning failure.
 - Play Console remained unchanged.
+
+## Task 209B-S1-H11.2BC legacy-evidence closure — 1 October 2026
+
+- Seven historical Partner evidence approval rows exist, but zero corresponding legacy document objects are recoverable or physically retained.
+- Historical approval metadata remains first-party audit history. It must not be described as a currently available document.
+- All seven records require fresh evidence through the authenticated private GCS flow. The replacement is a new object, manifest, and review record linked to the historical row; it does not overwrite the historical approval.
+- The unavailable legacy URLs are suppressed from Partner and Admin responses and cannot be used by the authenticated file endpoint.
+- This does not change the Play data category: a future replacement remains `Files and documents`, collected and retained for onboarding/account administration and security/compliance. Google Play was unchanged.

@@ -136,6 +136,34 @@ describe("VendorsService public listing", () => {
     });
   });
 
+  it("keeps historical approval visible while blocking an unavailable legacy download", async () => {
+    prisma.vendor.findFirst.mockResolvedValue(activeMixedVendor());
+    prisma.vendorOnboardingDocument.findMany.mockResolvedValue([{
+      id: "historical-doc-1",
+      vendorId: "vendor-1",
+      documentType: "CAC_CERTIFICATE",
+      documentName: "Historical CAC evidence",
+      documentUrl: "https://legacy.invalid/missing.pdf",
+      storageKey: null,
+      verificationStatus: "APPROVED",
+      evidenceAvailability: "SOURCE_UNAVAILABLE_REACQUISITION_REQUIRED",
+      uploadedAt: new Date("2026-08-01T10:00:00.000Z")
+    }]);
+    prisma.vendorApplication.findUnique.mockResolvedValue({ reference: "KGO-PARTNER-2026-001" });
+
+    const [document] = await serviceUnderTest().onboardingDocuments("vendor-user-1");
+
+    expect(document).toMatchObject({
+      id: "historical-doc-1",
+      documentUrl: null,
+      verificationStatus: "APPROVED",
+      downloadAvailable: false,
+      replacementRequired: true,
+      historicalApproval: true
+    });
+    expect(document).not.toHaveProperty("storageKey");
+  });
+
   it("creates vendor-owned service catalogue entries", async () => {
     prisma.vendor.findFirst.mockResolvedValue(activeServiceVendor());
     prisma.vendorService.create.mockResolvedValue({
@@ -329,9 +357,50 @@ describe("VendorsService public listing", () => {
     await expect(serviceUnderTest().privateOnboardingDocument("vendor-user-1", "doc-1"))
       .resolves.toEqual({ buffer: Buffer.from("pdf"), mimeType: "application/pdf" });
     expect(prisma.vendorOnboardingDocument.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ id: "doc-1", vendorId: "vendor-1", deletedAt: null })
+      where: expect.objectContaining({ id: "doc-1", vendorId: "vendor-1", deletedAt: null, evidenceAvailability: "AVAILABLE" })
     }));
     expect(privateUploads.readOwnedObject).toHaveBeenCalledWith("vendor-1", storageKey);
+  });
+
+  it("creates a private replacement linked to history without overwriting the historical approval", async () => {
+    prisma.vendor.findFirst.mockResolvedValue(activeProductVendor());
+    prisma.vendorPrivateUpload.findFirst.mockResolvedValue({
+      id: "private-upload-2",
+      vendorId: "vendor-1",
+      storageKey: "partner-private/opaque/replace.pdf"
+    });
+    prisma.vendorOnboardingDocument.findFirst.mockResolvedValue({
+      id: "historical-doc-1",
+      vendorId: "vendor-1",
+      verificationStatus: "APPROVED",
+      evidenceAvailability: "SOURCE_UNAVAILABLE_REACQUISITION_REQUIRED"
+    });
+    prisma.vendorOnboardingDocument.create.mockResolvedValue({
+      id: "replacement-doc-1",
+      vendorId: "vendor-1",
+      documentType: "CAC_CERTIFICATE",
+      documentName: "Replacement CAC evidence",
+      documentUrl: "CONTROLLED_PRIVATE_DOCUMENT",
+      storageKey: "partner-private/opaque/replace.pdf",
+      verificationStatus: "PENDING",
+      evidenceAvailability: "AVAILABLE",
+      replacesDocumentId: "historical-doc-1"
+    });
+
+    await serviceUnderTest().uploadOnboardingDocument("vendor-user-1", {
+      documentType: "CAC_CERTIFICATE",
+      documentName: "Replacement CAC evidence",
+      documentUrl: "private-upload:private-upload-2",
+      replacesDocumentId: "historical-doc-1"
+    });
+
+    expect(prisma.vendorOnboardingDocument.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        replacesDocumentId: "historical-doc-1",
+        storageKey: "partner-private/opaque/replace.pdf"
+      })
+    });
+    expect(prisma.vendorOnboardingDocument.update).not.toHaveBeenCalled();
   });
 
   it("does not claim private Partner deletion when filesystem deletion fails", async () => {

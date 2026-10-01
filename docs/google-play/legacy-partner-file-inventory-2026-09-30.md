@@ -1,25 +1,33 @@
-# Legacy Partner file inventory — 30 September 2026
+# Legacy Partner evidence closure — 1 October 2026
 
-## Evidence boundary
+## Verified final inventory
 
-No authorized restored production snapshot or approved metadata-only production query was available. No production database, object store or URL was queried. Counts are therefore recorded as unavailable rather than estimated.
+The production-derived investigation identified seven historical `APPROVED_ONBOARDING_EVIDENCE` database records. Their approval rows and original review timestamps remain historical audit evidence; they do not prove that document bytes remain available.
 
-| Category / measure | Count |
+| Measure | Verified count |
 | --- | ---: |
-| `PUBLIC_CONTENT` | NOT AVAILABLE |
-| `PRIVATE_ONBOARDING_DOCUMENT` | NOT AVAILABLE |
-| `APPROVED_ONBOARDING_EVIDENCE` | NOT AVAILABLE |
-| `UNKNOWN` | NOT AVAILABLE |
-| Currently public | NOT AVAILABLE |
-| Should become private | NOT AVAILABLE |
-| Requiring retention | NOT AVAILABLE |
-| Missing/orphan database records | NOT AVAILABLE |
-| Missing/orphan files | NOT AVAILABLE |
+| Historical approved records | 7 |
+| Recoverable legacy document objects | 0 |
+| Legacy objects eligible for migration | 0 |
+| Records requiring fresh private evidence | 7 |
+| Legacy physical source objects currently retained | 0 |
 
-`services/backend-api/scripts/inventory-legacy-partner-files.cjs --dry-run` is the counts-only query prepared for the authorized restored snapshot. It emits no names, emails, filenames, URLs or contents. Object-level missing/orphan checks require safe provider metadata and must not be inferred from database rows alone.
+Six source references returned HTTP 404. The remaining reference returned HTTP 200 with 6,939 bytes of `text/html` and no PDF, JPEG, PNG, or WebP signature. It was a web-page response, not an evidence object, and was not copied. No substitute file was created and no historical record was marked migrated.
 
-## Migration plan
+## Closed migration branch
 
-`prepare-legacy-partner-file-migration.cjs --dry-run` creates deterministic vendor-scoped destination keys and reports only aggregate states. Production apply is deliberately disabled for Task H11.2Q. The controlled executor must use this order per object: copy; verify destination; create manifest; switch reference; verify authenticated owner retrieval and unauthorized rejection; remove public source; record audit completion.
+Legacy file migration is closed. No further backup search, source copy, or migration is authorized for this set. The seven historical rows are classified `SOURCE_UNAVAILABLE_REACQUISITION_REQUIRED`; their `APPROVED` status and original review metadata remain unchanged.
 
-Resume state lives in the unique `storageKey`, linked `VendorPrivateUpload`, deletion state, attempt counters and audit evidence. A retry must re-check destination and manifest before copying. Rollback before public-source removal restores the old application reference. After source removal, rollback restores the verified private reference or recovers the source from the change-window backup; it must never make private evidence anonymously public.
+Unavailable records must never expose their stored legacy URL as a current download. Partner and Admin APIs return an unavailable state and no downloadable URL. A private read request requires an `AVAILABLE` record with a stored private object key.
+
+## Reacquisition workflow
+
+1. Show the historical approval as audit history and identify that replacement evidence is required.
+2. The Partner uploads a fresh PDF, JPEG, PNG, or WebP through the authenticated private-storage flow.
+3. KariGO creates a new GCS object and `VendorPrivateUpload` manifest using an opaque provider-facing key.
+4. KariGO creates a new pending onboarding-document row linked through `replacesDocumentId`; it does not overwrite the historical row.
+5. Admin reviews the new evidence explicitly.
+6. Only approval of the replacement changes the historical row to `SUPERSEDED_BY_REPLACEMENT`.
+7. The verified private replacement becomes the current downloadable evidence; the unavailable historical record remains audit-only.
+
+No Partner communication was sent by this implementation task. Production data, GCS configuration, Google Play, and Flutterwave were unchanged.

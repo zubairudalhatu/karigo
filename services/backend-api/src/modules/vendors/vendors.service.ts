@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Prisma, ProductCategory, ServiceCategory, StoredObjectDeletionState, VendorServiceStatus } from "@prisma/client";
+import { Prisma, ProductCategory, ServiceCategory, StoredObjectDeletionState, VendorEvidenceAvailabilityState, VendorServiceStatus } from "@prisma/client";
 import { createHash, randomBytes } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { extname, join } from "path";
@@ -58,7 +58,10 @@ export class VendorsService {
       throw new NotFoundException("Vendor profile not found");
     }
 
-    return vendor;
+    return {
+      ...vendor,
+      onboardingDocuments: vendor.onboardingDocuments.map((document) => this.onboardingDocumentView(document))
+    };
   }
 
   async update(userId: string, dto: UpdateVendorProfileDto) {
@@ -245,9 +248,7 @@ export class VendorsService {
       orderBy: { uploadedAt: "desc" }
     }), this.prisma.vendorApplication.findUnique({ where: { vendorId: vendor.id }, select: { reference: true } })]);
     return documents.map((document) => ({
-      ...document,
-      documentUrl: document.storageKey ? `/vendors/onboarding-documents/${document.id}/file` : document.documentUrl,
-      storageKey: undefined,
+      ...this.onboardingDocumentView(document),
       applicationType: "PARTNER",
       applicationReference: application?.reference ?? null,
       roleScope: "PARTNER"
@@ -265,6 +266,19 @@ export class VendorsService {
       where: { id: uploadId, vendorId: vendor.id, deletedAt: null, onboardingDocumentId: null }
     });
     if (!upload) throw new BadRequestException("Private upload reference is invalid or already used.");
+    const historicalDocument = dto.replacesDocumentId
+      ? await this.prisma.vendorOnboardingDocument.findFirst({
+          where: {
+            id: dto.replacesDocumentId,
+            vendorId: vendor.id,
+            evidenceAvailability: VendorEvidenceAvailabilityState.SOURCE_UNAVAILABLE_REACQUISITION_REQUIRED,
+            replacementDocument: null
+          }
+        })
+      : null;
+    if (dto.replacesDocumentId && !historicalDocument) {
+      throw new BadRequestException("The historical evidence record is not eligible for replacement.");
+    }
     this.privateUploads.assertOwnedKey(vendor.id, upload.storageKey);
     const document = await this.prisma.vendorOnboardingDocument.create({
       data: {
@@ -272,7 +286,8 @@ export class VendorsService {
         documentType: dto.documentType,
         documentName: dto.documentName,
         documentUrl: "CONTROLLED_PRIVATE_DOCUMENT",
-        storageKey: upload.storageKey
+        storageKey: upload.storageKey,
+        replacesDocumentId: historicalDocument?.id
       }
     });
     await this.prisma.vendorPrivateUpload.update({
@@ -283,18 +298,46 @@ export class VendorsService {
       documentType: document.documentType,
       hasDocumentName: Boolean(document.documentName)
     });
-    return { ...document, documentUrl: `/vendors/onboarding-documents/${document.id}/file`, storageKey: undefined };
+    return this.onboardingDocumentView(document);
   }
 
   async privateOnboardingDocument(userId: string, documentId: string) {
     const vendor = await this.requireVendorForUser(userId);
     const document = await this.prisma.vendorOnboardingDocument.findFirst({
-      where: { id: documentId, vendorId: vendor.id, deletedAt: null, storageKey: { not: null } },
+      where: {
+        id: documentId,
+        vendorId: vendor.id,
+        deletedAt: null,
+        storageKey: { not: null },
+        evidenceAvailability: VendorEvidenceAvailabilityState.AVAILABLE
+      },
       include: { vendorPrivateUpload: { select: { mimeType: true } } }
     });
     if (!document?.storageKey || !this.privateUploads) throw new NotFoundException("Partner onboarding document not found");
     const buffer = await this.privateUploads.readOwnedObject(vendor.id, document.storageKey);
     return { buffer, mimeType: document.vendorPrivateUpload?.mimeType ?? this.mimeTypeFromKey(document.storageKey) };
+  }
+
+  private onboardingDocumentView<T extends {
+    id: string;
+    documentUrl: string;
+    storageKey?: string | null;
+    evidenceAvailability?: VendorEvidenceAvailabilityState;
+    verificationStatus?: string;
+  }>(document: T): Record<string, unknown> {
+    const { storageKey, ...safeDocument } = document;
+    const availability = document.evidenceAvailability ?? VendorEvidenceAvailabilityState.AVAILABLE;
+    const downloadAvailable = availability === VendorEvidenceAvailabilityState.AVAILABLE;
+    return {
+      ...safeDocument,
+      documentUrl: downloadAvailable
+        ? storageKey ? `/vendors/onboarding-documents/${document.id}/file` : document.documentUrl
+        : null,
+      evidenceAvailability: availability,
+      downloadAvailable,
+      replacementRequired: availability === VendorEvidenceAvailabilityState.SOURCE_UNAVAILABLE_REACQUISITION_REQUIRED,
+      historicalApproval: !downloadAvailable && document.verificationStatus === "APPROVED"
+    };
   }
 
   async removeOnboardingDocument(userId: string, documentId: string) {

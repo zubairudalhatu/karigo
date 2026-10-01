@@ -205,10 +205,20 @@ export default function VendorsPage() {
         {vendor.onboardingDocuments?.length ? <div className="notice">
           <strong>Onboarding documents</strong>
           {vendor.onboardingDocuments.map((document) => <div className="list-row" key={document.id}>
-            <span><a href={document.documentUrl} target="_blank" rel="noreferrer">{document.documentName || document.documentType}</a> <Badge>{document.verificationStatus}</Badge> <span className="muted">Partner document{document.applicationReference ? ` · ${document.applicationReference}` : ""}</span></span>
+            <span>
+              {document.downloadAvailable && document.documentUrl
+                ? <a href={document.documentUrl} target="_blank" rel="noreferrer">{document.documentName || document.documentType}</a>
+                : <strong>{document.documentName || document.documentType}</strong>}
+              {" "}<Badge>{document.verificationStatus}</Badge>{" "}
+              {document.replacementRequired ? <Badge>Replacement required</Badge> : null}
+              <span className="muted"> Partner document{document.applicationReference ? ` · ${document.applicationReference}` : ""}</span>
+              {!document.downloadAvailable ? <span className="muted"> · Historical record only; source file unavailable</span> : null}
+            </span>
             <span className="actions">
-              <button className="secondary" onClick={() => void reviewDocument(vendor, document.id, "APPROVED")}>Approve</button>
-              <button className="secondary" onClick={() => void reviewDocument(vendor, document.id, "REJECTED")}>Reject</button>
+              {document.evidenceAvailability === "AVAILABLE" ? <>
+                <button className="secondary" onClick={() => void reviewDocument(vendor, document.id, "APPROVED")}>Approve</button>
+                <button className="secondary" onClick={() => void reviewDocument(vendor, document.id, "REJECTED")}>Reject</button>
+              </> : null}
             </span>
           </div>)}
         </div> : null}

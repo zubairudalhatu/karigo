@@ -14,7 +14,7 @@ describe("AdminOperationsService vendor cleanup", () => {
     deviceToken: { updateMany: jest.fn(), deleteMany: jest.fn() },
     notification: { deleteMany: jest.fn() },
     otpVerification: { deleteMany: jest.fn() },
-    vendorOnboardingDocument: { deleteMany: jest.fn() },
+    vendorOnboardingDocument: { deleteMany: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     product: { findMany: jest.fn(), deleteMany: jest.fn() },
     productOption: { deleteMany: jest.fn() },
     productOptionGroup: { deleteMany: jest.fn() },
@@ -179,13 +179,13 @@ describe("AdminOperationsService vendor cleanup", () => {
   it("reviews vendor onboarding documents and records admin audit", async () => {
     prisma.vendor.findUnique.mockResolvedValueOnce({ id: vendor.id, deletedAt: null });
     prisma.vendorOnboardingDocument.findFirst.mockResolvedValue({ id: "doc-1", vendorId: vendor.id });
-    prisma.vendorOnboardingDocument.update.mockResolvedValue({ id: "doc-1", verificationStatus: DocumentVerificationStatus.APPROVED });
+    tx.vendorOnboardingDocument.update.mockResolvedValue({ id: "doc-1", verificationStatus: DocumentVerificationStatus.APPROVED });
 
     await expect(service.reviewVendorOnboardingDocument("admin-1", vendor.id, "doc-1", DocumentVerificationStatus.APPROVED, "Looks good")).resolves.toMatchObject({
       id: "doc-1",
       verificationStatus: DocumentVerificationStatus.APPROVED
     });
-    expect(prisma.vendorOnboardingDocument.update).toHaveBeenCalledWith(expect.objectContaining({
+    expect(tx.vendorOnboardingDocument.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: "doc-1" },
       data: expect.objectContaining({
         verificationStatus: DocumentVerificationStatus.APPROVED,
@@ -196,6 +196,78 @@ describe("AdminOperationsService vendor cleanup", () => {
       vendorId: vendor.id,
       status: DocumentVerificationStatus.APPROVED
     }));
+  });
+
+  it("marks only the historical predecessor superseded after its replacement is approved", async () => {
+    prisma.vendor.findUnique.mockResolvedValueOnce({ id: vendor.id, deletedAt: null });
+    prisma.vendorOnboardingDocument.findFirst.mockResolvedValue({
+      id: "replacement-doc-1",
+      vendorId: vendor.id,
+      replacesDocumentId: "historical-doc-1"
+    });
+    tx.vendorOnboardingDocument.update.mockResolvedValue({
+      id: "replacement-doc-1",
+      verificationStatus: DocumentVerificationStatus.APPROVED,
+      replacesDocumentId: "historical-doc-1"
+    });
+
+    await service.reviewVendorOnboardingDocument(
+      "admin-1",
+      vendor.id,
+      "replacement-doc-1",
+      DocumentVerificationStatus.APPROVED,
+      "Replacement verified"
+    );
+
+    expect(tx.vendorOnboardingDocument.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "historical-doc-1",
+        vendorId: vendor.id,
+        evidenceAvailability: "SOURCE_UNAVAILABLE_REACQUISITION_REQUIRED"
+      },
+      data: { evidenceAvailability: "SUPERSEDED_BY_REPLACEMENT" }
+    });
+  });
+
+  it("does not expose an unavailable historical source URL to Admin", async () => {
+    prisma.vendor.findUnique.mockResolvedValueOnce({ id: vendor.id, deletedAt: null });
+    prisma.vendorOnboardingDocument.findMany.mockResolvedValueOnce([{
+      id: "historical-doc-1",
+      vendorId: vendor.id,
+      documentUrl: "https://legacy.invalid/missing.pdf",
+      storageKey: null,
+      evidenceAvailability: "SOURCE_UNAVAILABLE_REACQUISITION_REQUIRED",
+      verificationStatus: DocumentVerificationStatus.APPROVED
+    }]);
+
+    await expect(service.vendorOnboardingDocuments(vendor.id)).resolves.toEqual([
+      expect.objectContaining({
+        documentUrl: null,
+        downloadAvailable: false,
+        replacementRequired: true,
+        historicalApproval: true
+      })
+    ]);
+  });
+
+  it("preserves historical approval by rejecting re-review of unavailable evidence", async () => {
+    prisma.vendor.findUnique.mockResolvedValueOnce({ id: vendor.id, deletedAt: null });
+    prisma.vendorOnboardingDocument.findFirst.mockResolvedValue({
+      id: "historical-doc-1",
+      vendorId: vendor.id,
+      verificationStatus: DocumentVerificationStatus.APPROVED,
+      evidenceAvailability: "SOURCE_UNAVAILABLE_REACQUISITION_REQUIRED"
+    });
+
+    await expect(service.reviewVendorOnboardingDocument(
+      "admin-1",
+      vendor.id,
+      "historical-doc-1",
+      DocumentVerificationStatus.REJECTED,
+      "Should remain historical"
+    )).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.vendorOnboardingDocument.update).not.toHaveBeenCalled();
   });
 
   it("creates a vendor activation invitation without returning the plaintext URL", async () => {

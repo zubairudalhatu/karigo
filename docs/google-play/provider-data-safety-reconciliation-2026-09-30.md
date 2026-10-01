@@ -92,7 +92,7 @@ Ready to complete Play Step 4: **PARTIAL**. Evidence-supported category, purpose
 
 ## Task 209B-S1-H11.2P reconciliation update — 2026-09-30
 
-Implementation now minimizes new persisted payment evidence, physically deletes eligible Captain/private Partner objects before reporting deletion, and records defined retention states. This does not resolve provider-sharing answers. Customer `User payment info` remains **NOT CONFIRMED** until legacy Flutterwave JSON is cleaned and all other production paths are verified. Captain storage sharing remains unresolved because the provider and contract are unconfirmed. Partner historic onboarding documents require controlled migration from legacy public URLs.
+Implementation now minimizes new persisted payment evidence, physically deletes eligible Captain/private Partner objects before reporting deletion, and records defined retention states. This does not resolve provider-sharing answers. Customer `User payment info` remains **NOT CONFIRMED** until legacy Flutterwave JSON is cleaned and all other production paths are verified. Captain storage sharing remains unresolved because the provider and contract are unconfirmed. The seven Partner historic approval records have no recoverable source objects and require fresh private evidence rather than migration.
 
 ## Task 209B-S1-H11.2Q read-only reassessment — 2026-09-30
 
@@ -184,3 +184,11 @@ New Captain and Partner object keys should replace raw user/vendor UUIDs and doc
 - The GCS provider result remains **COLLECTED BUT NOT SHARED under the service-provider exception** for the documented backend-mediated path. It is not yet a live production transfer: the dedicated identity, HMAC credential, application key, Render configuration, deployment, and seven-file migration are all absent.
 - Cloud Storage Data Access logging remains disabled because the available AuditConfig is project-wide across every bucket in `mystical-method-475123-s9`. The owner explicitly deferred that cross-bucket hardening change; it is recorded as an accepted operational limitation, not as a provider-role or bucket-provisioning failure.
 - Google Play was not changed.
+
+## Task 209B-S1-H11.2BC legacy-evidence closure — 2026-10-01
+
+- Historical Partner approval records: 7.
+- Recoverable legacy Partner document objects: 0.
+- Physical legacy source objects retained for this set: 0.
+- The database approval/audit rows remain retained separately from document-object storage.
+- Reacquired evidence uses the live backend-mediated private GCS path and remains `Files and documents`; this closure does not change the provider-sharing result or any Play Console answer.
