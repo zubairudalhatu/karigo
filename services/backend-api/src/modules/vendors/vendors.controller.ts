@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, Header, Param, ParseUUIDPipe, Patch, Post, Query, Req, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
+import type { Response } from "express";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
@@ -139,11 +140,21 @@ export class VendorsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
-  @Header("Cache-Control", "private, no-store")
   @ApiOperation({ summary: "Retrieve an authenticated vendor-owned private onboarding document" })
-  async privateOnboardingDocument(@CurrentUser() user: AuthenticatedUser, @Param("documentId", ParseUUIDPipe) documentId: string) {
+  async privateOnboardingDocument(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("documentId", ParseUUIDPipe) documentId: string,
+    @Res() response: Response
+  ): Promise<void> {
     const file = await this.vendorsService.privateOnboardingDocument(user.id, documentId);
-    return new StreamableFile(file.buffer, { type: file.mimeType, disposition: "inline" });
+    response.status(200);
+    response.set({
+      "Content-Type": file.mimeType,
+      "Content-Length": String(file.buffer.length),
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff"
+    });
+    response.send(file.buffer);
   }
 
   @Delete("onboarding-documents/:documentId")
