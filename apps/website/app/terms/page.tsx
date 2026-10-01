@@ -11,7 +11,7 @@ export default function TermsPage() {
       <section className="section">
         <p className="eyebrow">Terms</p>
         <h1>Terms of Service</h1>
-        <p className="lead">These terms explain the expected use of KariGO's public website, delivery platform, vendor application forms, Captain and Ride review forms and related services.</p>
+        <p className="lead">These terms explain the expected use of KariGO's public website, apps, delivery platform, Partner and Captain onboarding, Careers applications and related services.</p>
       </section>
 
       <section className="section soft">
@@ -28,12 +28,17 @@ export default function TermsPage() {
 
           <article className="info-card">
             <h2>Orders, payments and delivery</h2>
-            <p>Orders, payment status, delivery updates, support tickets, settlements and earnings are managed through KariGO workflows. Provider-based services are available only when KariGO marks them as active.</p>
+            <p>Orders, payment status, delivery updates, support tickets, settlements and earnings are managed through KariGO workflows. Customer payment credentials are entered in the supported provider's hosted checkout. KariGO retains transaction and reconciliation evidence needed to operate the service.</p>
           </article>
 
           <article className="info-card">
             <h2>Vendors and Captains</h2>
-            <p>Vendor applications, Delivery Captain operations and Ride Captain review submissions are subject to review. Approval is not automatic, and interest forms do not activate restricted services by themselves.</p>
+            <p>Partner and Captain applications are subject to review. Private onboarding evidence is accessible only through authenticated workflows. Historical evidence that is no longer available may need to be submitted again; a former approval does not make a missing file available.</p>
+          </article>
+
+          <article className="info-card">
+            <h2>Careers</h2>
+            <p>A vacancy exists only when it is published on the Careers page. Applications must use the secure online route for that approved role. Submission does not guarantee screening, interview or employment. Applicant documents are private and follow the recruitment retention decision approved for that vacancy.</p>
           </article>
 
           <article className="info-card">

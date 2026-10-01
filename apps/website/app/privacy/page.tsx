@@ -1,84 +1,22 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-export const metadata: Metadata = {
-  title: "Privacy Policy",
-  description: "KariGO privacy policy summary for customers, vendors, Captains, Ride review applicants and website visitors."
-};
+export const metadata: Metadata = { title: "Privacy Policy", description: "How KariGO handles personal data across its apps, website and support services." };
 
 export default function PrivacyPage() {
-  return (
-    <main>
-      <section className="section">
-        <p className="eyebrow">Privacy Policy</p>
-        <h1>Privacy Policy</h1>
-        <p className="lead">KariGO is owned by Zamkah Technologies Limited, the developer of KariGO Customer, KariGO Captain and KariGO Partner on Google Play. This page explains how we handle information for customers, vendors, Captains, applicants and website visitors.</p>
-      </section>
-
-      <section className="section soft">
-        <div className="card-grid legal-grid">
-          <article className="info-card">
-            <h2>Information we may collect</h2>
-            <ul className="list">
-              <li>Account and profile information, including name, phone number, optional email and profile photos.</li>
-              <li>Delivery and pickup addresses, location when you use a location feature, order and Ride history, payment references, wallet transactions, and support or in-app messages.</li>
-              <li>Business, vehicle, identity and application details, and the photos or documents you choose to upload for onboarding or service fulfilment.</li>
-              <li>Device, browser and usage information needed to keep the service secure and reliable.</li>
-            </ul>
-          </article>
-
-          <article className="info-card">
-            <h2>How we use information</h2>
-            <ul className="list">
-              <li>To create accounts, process orders, support delivery and respond to inquiries.</li>
-              <li>To review vendor, Captain and Ride applications or interest requests.</li>
-              <li>To improve safety, prevent abuse and monitor operational performance.</li>
-              <li>To prepare reports for operations, finance and customer support.</li>
-            </ul>
-          </article>
-
-          <article className="info-card">
-            <h2>Location during service use</h2>
-            <p>Customer location helps select an address, pickup or service area. You can manage location permission in your device settings.</p>
-            <p>KariGO Captain uses location for operational availability, navigation and live Ride or Delivery tracking. During accepted active work, location may continue to be collected when the app is minimized or not in use, so the service can show progress and support safety. Background tracking is intended to stop when the active assignment ends. Location is not used for advertising.</p>
-          </article>
-
-          <article className="info-card">
-            <h2>Payments and communications</h2>
-            <p>Flutterwave processes supported payments. Payment references, amounts and results support orders, wallet transactions and reconciliation. Do not send card details through KariGO chat or support messages.</p>
-            <p>In-app messages and support conversations support service coordination. Where calling is available, Agora processes call audio to connect participants. Microphone permission is used for calls. Expo and Firebase support device push notifications using notification tokens and service messages.</p>
-          </article>
-
-          <article className="info-card">
-            <h2>Sharing and access</h2>
-            <p>KariGO shares information to fulfil services, support users, review applications, process payments and communications, and meet security and legal requirements.</p>
-            <p>Assigned Captains and Partners receive the contact, address and order information needed to fulfil the service. Hosting, payment, maps, communications and notification providers process information needed for their functions. Depending on the service and data involved, providers may also process usage or diagnostic information for their own security, fraud prevention or service-improvement purposes under their terms. Role-based access controls limit operational access.</p>
-          </article>
-
-          <article className="info-card">
-            <h2>Security and retention</h2>
-            <p>KariGO uses authenticated access, role separation and careful provider activation to reduce data exposure risk. Sensitive credentials, OTPs and payment secrets must never be stored in public documents or exposed through the website.</p>
-            <p>KariGO keeps information only as long as needed for service delivery, safety, legal, finance and operational purposes.</p>
-          </article>
-
-          <article className="info-card">
-            <h2>User choices</h2>
-            <p>You can manage device permissions, update your profile, choose whether to upload optional photos, and contact support about your information. Disabling a permission may limit the feature that requires it.</p>
-          </article>
-
-          <article className="info-card">
-            <h2>Account deletion</h2>
-            <p>Use the account-deletion control in your authenticated app profile or the secure web portal to request deletion of Customer, Captain, Partner or complete KariGO account access. You do not need to reinstall an app to make a web request.</p>
-            <p>Active work, balances, disputes or other unresolved obligations may require review before processing. Some transaction, security and audit records may be retained for legal, financial or safety obligations.</p>
-            <p><Link href="/account-deletion">Read the deletion steps and retention information</Link>.</p>
-          </article>
-
-          <article className="info-card">
-            <h2>Questions</h2>
-            <p>Use the <Link href="/contact">KariGO contact form</Link> for privacy or account questions. Do not submit passwords, payment card details, delivery OTPs or other secrets through public forms.</p>
-          </article>
-        </div>
-      </section>
-    </main>
-  );
+  return <main>
+    <section className="section"><p className="eyebrow">Privacy Policy</p><h1>How KariGO handles personal data</h1><p className="lead">KariGO is owned by Zamkah Technologies Limited, the Google Play developer for the Customer, Captain and Partner apps. Zamkah Technologies Limited is the confirmed organisation responsible for the processing described here. The corporate footer does not change that responsibility.</p></section>
+    <section className="section soft"><div className="card-grid legal-grid">
+      <article className="info-card"><h2>Data we handle</h2><ul className="list"><li>Identity, contact, account, address and profile information.</li><li>Orders, Ride and Delivery activity, support messages, device identifiers and service diagnostics.</li><li>Customer payment references, amounts, status, wallet and purchase history. KariGO uses hosted checkout and does not ask Customers to enter raw card or bank credentials into KariGO.</li><li>Captain location during availability and accepted active work, including background location while an assignment is active.</li><li>Captain and Partner onboarding evidence, and Partner payout bank-account information.</li></ul></article>
+      <article className="info-card"><h2>Why we use it</h2><p>We use information to provide accounts, orders, Rides, Deliveries, payments, support, onboarding, fraud and security controls, legal compliance, service communications and reliability. Required and optional fields are identified by the feature that requests them.</p></article>
+      <article className="info-card"><h2>Location</h2><p>Customer location supports address, pickup and service-area features. Captain precise location supports availability, navigation and live tracking during accepted work. Background collection is limited to active work and is designed to stop when the job ends. Location is not used for advertising.</p></article>
+      <article className="info-card"><h2>Payments</h2><p>Flutterwave hosts supported Customer checkout. KariGO keeps the minimum payment and reconciliation evidence needed for wallet, order, refund, dispute and finance workflows. Legacy provider payloads have been minimized; raw card, bank-account, authorization and provider-customer structures are not retained in those payloads.</p></article>
+      <article className="info-card"><h2>Private documents</h2><p>New Captain and Partner onboarding documents use access-controlled Google Cloud Storage. Partner reads are authenticated and backend-mediated, and no permanent public document URL is created. Live deletion can remain recoverable within Google Cloud's seven-day soft-delete window. Provider systems may retain protected copies for longer under their processing terms, so deletion is not described as immediately irreversible.</p></article>
+      <article className="info-card"><h2>Historical Partner evidence</h2><p>Seven historical Partner approval records remain as audit history, but their former file objects are unavailable. They are marked for reacquisition. Any replacement is submitted again through the authenticated private-document workflow and linked to the historical record.</p></article>
+      <article className="info-card"><h2>Providers and recipients</h2><p>KariGO sends information needed for the relevant flow to providers such as Render, Google Cloud Storage, Flutterwave, Google Maps, Expo/Firebase, Agora and communications providers. A provider may also process information for security, fraud prevention, diagnostics, legal compliance or other purposes described in its terms. Some transfers, including active Google Maps requests, can qualify as sharing under Google Play even when they support a KariGO feature. GCS private document storage is handled under KariGO's accepted Google Cloud data-processing terms.</p></article>
+      <article className="info-card"><h2>Retention and deletion</h2><p>Account deletion deactivates the selected access, revokes active sessions and deletes eligible unattached private objects after provider confirmation. Orders, financial reconciliation, approved onboarding evidence, disputes, security and audit records may remain for a defined legal, finance, safety or compliance reason. Exact retention periods require the applicable owner/legal decision and are not represented as fixed until approved.</p><p><Link href="/account-deletion">See the secure deletion process</Link>.</p></article>
+      <article className="info-card"><h2>Your choices</h2><p>You can manage permissions, update eligible profile fields, request account deletion and contact support about access or correction. Disabling a permission may prevent the feature that needs it.</p></article>
+      <article className="info-card"><h2>Contact</h2><p>Use the <Link href="/contact">KariGO contact and support form</Link>. Do not send passwords, OTPs, card details or provider credentials through a public message.</p></article>
+    </div></section>
+  </main>;
 }

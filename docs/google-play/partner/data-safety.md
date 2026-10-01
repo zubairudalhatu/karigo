@@ -63,3 +63,7 @@ See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-rec
 - All seven records require fresh evidence through the authenticated private GCS flow. The replacement is a new object, manifest, and review record linked to the historical row; it does not overwrite the historical approval.
 - The unavailable legacy URLs are suppressed from Partner and Admin responses and cannot be used by the authenticated file endpoint.
 - This does not change the Play data category: a future replacement remains `Files and documents`, collected and retained for onboarding/account administration and security/compliance. Google Play was unchanged.
+
+## Task 209B-S1-H11.2BJ final reconciliation — 1 October 2026
+
+The Partner private GCS upload/read/delete lifecycle is production-verified. Seven historical approval rows remain but all seven former file objects are absent and marked for reacquisition; replacements use private GCS. Files/documents are collected, retained and not shared for the GCS transfer under the service-provider exception. Raw payout bank-account information remains collected by KariGO. Device location remains not collected. Expo sharing remains NOT CONFIRMED. See `../task209b-final-closeout-2026-10-01.md`.

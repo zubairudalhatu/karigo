@@ -20,8 +20,8 @@ const canonicalCustomerGooglePlayUrl = "https://play.google.com/store/apps/detai
 assert(serviceData.includes(`customerGooglePlayUrl: "${canonicalCustomerGooglePlayUrl}"`), "Website config must retain the canonical Customer Google Play URL.");
 assert(hero.includes("site.customerGooglePlayUrl") && hero.includes('target="_blank"') && hero.includes('rel="noopener noreferrer"'), "Homepage primary download CTA must open the centralized Google Play link safely.");
 assert(home.includes("Available now on Google Play.") && !home.includes("Preparing for Google Play"), "Homepage rollout must present the Android Customer app as live.");
-assert(footer.includes("Available on Google Play") && !footer.includes("Google Play soon"), "Footer rollout must present the Android Customer app as live.");
-assert(home.includes("App Store release in preparation.") && footer.includes("App Store in preparation"), "Public rollout copy must keep iOS future-facing.");
+assert(footer.includes("/get-it-on-google-play.png") && !footer.includes("Google Play soon"), "Footer must present the live Android app with the official badge.");
+assert(home.includes("App Store release in preparation.") && footer.includes("iOS app coming soon"), "Public rollout copy must keep iOS future-facing.");
 assert(!home.includes("Available on App Store") && !home.includes("Download on App Store"), "Homepage must not falsely present iOS as live.");
 assert(css.includes("--content-width: 1240px") && css.includes("--radius-card") && css.includes("--space-section"), "Public UI must use consolidated width, radius, and spacing tokens.");
 assert(css.includes("clamp(44px, 5.7vw, 64px)"), "Desktop hero typography must cap at 64px.");

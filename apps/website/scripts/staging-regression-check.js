@@ -184,8 +184,8 @@ assert(header.includes("Partner Login"), "Website header must include partner lo
 assert(header.includes("https://vendor.karigo.com.ng"), "Partner login must preserve the branded vendor dashboard domain.");
 
 const footer = read("src", "components", "site-footer.tsx");
-assert(footer.includes("&copy; 2026 Zamkah Technologies Limited"), "Footer must include legal copyright text.");
-["Services", "Vendors", "Vendor Application", "Service Provider Application", "Customer Web Portal", "Vendor Login", "Captains", "Ride Waitlist", "Ride review", "Download App", "Contact", "Returns", "Refunds", "Privacy Policy", "Terms"]
+assert(footer.includes("&copy; 2026 KariGO Express Limited. All rights reserved.") && footer.includes("Zamkah Technologies Limited"), "Footer must include the approved corporate strip.");
+["Services", "Become a Partner", "Careers", "Safety", "Contact", "Returns", "Refunds", "Privacy Policy", "Terms", "Account Deletion"]
   .forEach((link) => assert(footer.includes(link), `Footer must include ${link}.`));
 assert(footer.includes("https://vendor.karigo.com.ng/register"), "Footer service-provider application link must route to unified partner onboarding.");
 assert(footer.includes("/karigo-logo.png"), "Footer must display the KariGO logo.");
@@ -195,9 +195,8 @@ assert(footer.includes("@karigoapp"), "Footer must show the official KariGO soci
 assert(footer.includes("<SocialIcon name={link.icon} />"), "Footer social links must render icons instead of text chips.");
 assert(footer.includes("aria-label={`KariGO on ${link.label}`}"), "Footer social icon links must keep accessible labels.");
 assert(!footer.includes("{link.label}\n                </a>"), "Footer social links must not render visible text labels.");
-assert((footer.match(/site\.customerGooglePlayUrl/g) || []).length >= 2, "Footer download and rollout links must use the centralized Google Play URL.");
-assert(footer.includes("Available on Google Play"), "Footer must present the Android Customer app as live.");
-assert(footer.includes("App Store in preparation"), "Footer must keep iOS accurately future-facing.");
+assert(footer.includes("site.customerGooglePlayUrl") && footer.includes("/get-it-on-google-play.png"), "Footer must use the official Google Play badge and centralized listing URL.");
+assert(footer.includes("iOS app coming soon"), "Footer must keep iOS accurately future-facing.");
 assert(footer.includes('target="_blank"') && footer.includes('rel="noopener noreferrer"'), "Footer Google Play links must use safe external-link behavior.");
 assert(!footer.includes("Google Play soon"), "Footer must not retain stale Android launch copy.");
 assert(footer.includes("/riders#ride-waitlist"), "Footer must use the public Ride waitlist anchor.");
@@ -222,9 +221,9 @@ assert(css.includes(".portal-sidebar { align-self: stretch; max-height: none; mi
 assert(css.includes(".portal-sidebar nav { display: flex; overflow-x: auto; padding-bottom: 6px; }"), "Customer Web navigation must remain horizontally scrollable at 980px and below.");
 
 const privacy = read("app", "privacy", "page.tsx");
-assert(privacy.includes("Information we may collect"), "Privacy page must include data collection content.");
-assert(privacy.includes("How we use information"), "Privacy page must include usage content.");
-assert(privacy.includes("Security and retention"), "Privacy page must include security and retention content.");
+assert(privacy.includes("Data we handle"), "Privacy page must include data collection content.");
+assert(privacy.includes("Why we use it"), "Privacy page must include usage content.");
+assert(privacy.includes("Retention and deletion"), "Privacy page must include retention content.");
 
 const accountDeletion = read("app", "account-deletion", "page.tsx");
 assert(accountDeletion.includes("Customer account access"), "Account deletion page must support Customer scope.");
@@ -232,6 +231,15 @@ assert(accountDeletion.includes("Captain operational access"), "Account deletion
 assert(accountDeletion.includes("Partner business access"), "Account deletion page must support Partner scope.");
 assert(accountDeletion.includes("Complete KariGO account"), "Account deletion page must support complete account scope.");
 assert(accountDeletion.includes("Open secure Customer Web Portal"), "Account deletion page must route users to authenticated verification.");
+assert(accountDeletion.includes("seven-day soft-delete window"), "Account deletion copy must disclose provider soft deletion.");
+
+const careers = read("app", "careers", "page.tsx");
+const safety = read("app", "safety", "page.tsx");
+assert(careers.includes("No approved vacancies are open"), "Careers must not fabricate vacancies.");
+assert(careers.includes("private storage") && careers.includes("authenticated staff"), "Careers must describe secure application handling.");
+for (const unsupportedClaim of ["24/7 live safety monitoring", "audio recording", "emergency dispatch", "insurance coverage"]) {
+  assert(!safety.includes(unsupportedClaim), `Safety must not claim unsupported control: ${unsupportedClaim}.`);
+}
 
 const terms = read("app", "terms", "page.tsx");
 assert(terms.includes("Using KariGO"), "Terms page must include platform usage content.");

@@ -45,3 +45,7 @@ See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-rec
 - KariGO's database continues to hold the Captain owner, document type, display filename, MIME type, size, provider/bucket, object key, deletion state, and retention state.
 - Stored legacy keys still support signed viewing and deletion; no production object was renamed or migrated.
 - The GCS service-provider exception remains supported. Production claims remain based on the deployed legacy behavior until this change is separately deployed and verified.
+
+## Task 209B-S1-H11.2BJ final reconciliation — 1 October 2026
+
+Private GCS storage, opaque new keys, provider-confirmed deletion, the active-work location lifecycle, and saved Play FGS/background-location declarations are verified. Files/documents are collected, retained and not shared for the GCS transfer under the supported service-provider exception. Maps fields are shared. Expo/FCM sharing and current Agora RTC activation/account/recording state remain NOT CONFIRMED; voice/audio must remain conditional. See `../task209b-final-closeout-2026-10-01.md`.

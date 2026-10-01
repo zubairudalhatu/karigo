@@ -48,7 +48,10 @@ const navigation: NavigationGroup[] = [
   {
     label: "Help",
     items: [
-      { label: "Contact & support", href: "/contact" }
+      { label: "Safety", href: "/safety" },
+      { label: "Careers", href: "/careers" },
+      { label: "Contact & support", href: "/contact" },
+      { label: "Account deletion", href: "/account-deletion" }
     ]
   }
 ];

@@ -1,5 +1,7 @@
 # Account deletion retention matrix — 30 September 2026
 
+The owner/legal decision pack and public-copy reconciliation prepared for final close-out are recorded in `task209b-final-closeout-2026-10-01.md`. The decision fields below remain open until owner/legal approval is documented.
+
 This matrix separates current behavior from the recommended target. `RETAIN_FOR_DEFINED_REASON` is used only where the implementation records a reason. It does not assert a statutory basis or duration. Every retention duration and legal basis marked below needs owner/legal approval.
 
 | Scope | Record group | Current behavior | Target classification | Required decision/evidence |

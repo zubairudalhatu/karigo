@@ -192,3 +192,7 @@ New Captain and Partner object keys should replace raw user/vendor UUIDs and doc
 - Physical legacy source objects retained for this set: 0.
 - The database approval/audit rows remain retained separately from document-object storage.
 - Reacquired evidence uses the live backend-mediated private GCS path and remains `Files and documents`; this closure does not change the provider-sharing result or any Play Console answer.
+
+## Task 209B-S1-H11.2BJ closure update — 1 October 2026
+
+Production Flutterwave legacy payload minimisation is complete and supports Customer `User payment info = NO`; it does not by itself prove Flutterwave's Play sharing exception. Partner private GCS is live and verified; both Captain and Partner private-document transfers qualify for the supported GCS service-provider exception. Google Maps remains shared. Expo/FCM sharing, Flutterwave independent-use/contract treatment, and current Agora activation/account/recording state remain NOT CONFIRMED. Detailed final answers and the read-only Play review are in `task209b-final-closeout-2026-10-01.md`.
