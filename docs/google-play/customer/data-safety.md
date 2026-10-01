@@ -1,6 +1,6 @@
 # Customer Data Safety worksheet
 
-Audit date: 30 September 2026. Status: **PARTIAL; Play form unchanged**.
+Audit date: 30 September 2026; provider closure updated 1 October 2026. Status: **DATA SAFETY READY; Play form unchanged**.
 
 | Data type | Evidence-supported handling | Play sharing result |
 | --- | --- | --- |
@@ -9,17 +9,17 @@ Audit date: 30 September 2026. Status: **PARTIAL; Play form unchanged**.
 | Address | Feature-required for delivery/Ride, retained | Maps geocode/route transfer is **shared**; Render exempt. |
 | Profile image | Optional when chosen, retained where upload succeeds | Hosting/access lifecycle needs confirmation. |
 | Approximate/precise location | Foreground and feature-dependent; Ride/operational records retained | Google Maps **shared**; active fulfilment recipient transfer can be user-initiated. |
-| User payment info | No raw card/bank input; hosted checkout. Full provider responses are persisted. | **Do not remove yet** until a redacted Flutterwave returned-field inventory proves no mapped instrument/account field and storage is allowlisted. |
-| Purchase history | Collected and retained for orders/Rides | Render exempt; expected fulfilment transfer; payment-provider result is flow-specific. |
-| Other financial info | Wallet ledger, amounts, references and statuses retained | Render exempt; Flutterwave classification depends on exact user-initiated flow/terms. |
+| User payment info | **Not collected.** No raw card/bank input; hosted checkout; persisted reconciliation payloads are allowlisted and legacy payload cleanup is complete. | Not applicable. |
+| Purchase history | Collected and retained for orders/Rides | Render exempt; expected fulfilment transfer; **shared with Flutterwave** because later server verification is not fully covered by the user-initiated exception. |
+| Other financial info | Wallet ledger, amounts, references and statuses retained | Render exempt; **shared with Flutterwave** for verification/reconciliation and fraud/security. |
 | Other in-app messages | Support/Ride chat when used, retained | Render exempt; recipient receives content through user action. |
 | Photos/files | Only chosen profile/evidence/content uploads | Hosting/access lifecycle requires mapping. |
-| Voice/audio | Only if Agora Ride calls are active; implementation records metadata, not audio | Activation/account/recording settings **NOT CONFIRMED**. |
-| Interactions/searches/user content | Orders, Rides, reviews/support/actions retained; Maps/Expo events transmitted | Maps portions **shared**; Expo telemetry unresolved. |
-| Crash/diagnostics | Maps SDK and possibly Expo/Agora; no Crashlytics/Sentry | Maps diagnostics **shared**; other SDK fields unresolved. |
-| Device/install IDs and push token | Session identifiers and Expo push token retained/rotated | Maps identifier **shared**; Expo/FCM unresolved; Render exempt. |
+| Voice/audio | Collected only when an optional Agora Ride call is used; ephemeral stream, session metadata retained, no recording | **Not shared under the service-provider exception.** |
+| Interactions/searches/user content | Orders, Rides, reviews/support/actions retained; Maps/Expo events transmitted | Maps portions **shared**; Expo Push/EAS portions **not shared under the service-provider exception**. |
+| Crash/diagnostics | Maps SDK and conditional Expo/Agora service diagnostics; no Crashlytics/Sentry | Maps diagnostics **shared**; Expo/Agora portions **not shared under the service-provider exception**. |
+| Device/install IDs and push token | Session identifiers and Expo push token retained/rotated | Maps identifier **shared**; Expo Push/EAS and downstream FCM **not shared under the service-provider exception**; Render exempt. |
 
-Raw payment answer: Customer does not collect raw card or bank credentials through its UI/API. It sends Flutterwave name/email/phone, amount, currency, reference and metadata and receives hosted checkout/verification/webhook responses. Because responses are stored wholesale, `User payment info` removal is not final until a redacted returned-field inventory and response allowlist close that gap.
+Raw payment answer: Customer does not collect raw card or bank credentials through its UI/API. It sends Flutterwave email/phone, amount, currency, reference and metadata and receives hosted checkout/verification/webhook responses. New persistence is allowlisted and the production legacy-payload cleanup left 12 compliant minimized payloads plus 10 JSON-null/missing payloads with no eligible payload remaining. `User payment info` is therefore not collected by KariGO.
 
 No contacts, call logs, installed-app inventory, broad storage access, background location, advertising ID, ad SDK, Firebase Analytics or Crashlytics was found.
 
@@ -40,3 +40,13 @@ See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-rec
 ## Task 209B-S1-H11.2BJ final reconciliation — 1 October 2026
 
 Production Flutterwave cleanup is complete: 22 inspected, 12 minimized, 10 JSON-null/missing unchanged, zero eligible or failed after cleanup, and a second apply changed zero. Reconciliation fields and relationships were preserved. Customer `User payment info` is therefore **NO**: hosted checkout receives payment credentials, KariGO has no raw Customer card/bank input, and no remaining persisted provider payload contains the excluded instrument/account structures. `Purchase history` and `Other financial info` remain collected and retained. Maps sharing is confirmed; Flutterwave independent-use/exception treatment and Expo/FCM sharing remain NOT CONFIRMED. See `../task209b-final-closeout-2026-10-01.md`.
+
+## Task 209B-S1-H11.2BK provider closure — 1 October 2026
+
+- Flutterwave is active for hosted Customer order checkout and wallet top-up. `User payment info` remains **not collected** by KariGO. Email/phone initialization uses the user-initiated exception. Purchase history and other financial/reconciliation information are **shared** because later server verification is not wholly covered by that exception and Flutterwave independently processes transaction data.
+- Expo Push is active. Push/device tokens and routing metadata are collected and retained/rotated, **not shared under the service-provider exception**; push content is transient at Expo. Direct Firebase sending is **not applicable**; FCM is downstream transport and is not double-counted.
+- EAS Update is active. OS and randomized installation token are collected, retained and **not shared under the service-provider exception**, for app functionality/reliability.
+- Agora is active for optional audio-only Ride calls. Voice is collected only as an ephemeral stream and **not shared under the service-provider exception**. No recording is enabled or invoked; device/network diagnostics are collected conditionally for functionality/reliability.
+- Termii is active. Phone number and order/waitlist activity included in transactional notices are **shared** for authentication/account management, functionality, developer communications and security. Do not add SMS/MMS inbox content.
+- Utilities external fulfilment is inactive and **not applicable**.
+- Provider-dependent answers still unresolved: **0**. See `../task209b-provider-evidence-closure-2026-10-01.md`.

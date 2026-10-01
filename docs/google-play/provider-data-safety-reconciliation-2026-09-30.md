@@ -1,6 +1,6 @@
 # Three-app provider and Google Play Data safety reconciliation — 30 September 2026
 
-Status: **PARTIAL — SPECIFIC OWNER DOCUMENTS STILL REQUIRED**. No Play form, CSV, release or declaration was changed. This document applies Google Play's current collection/sharing rules to the evidence in `provider-evidence-matrix-2026-09-30.md`.
+Status: **PROVIDER EVIDENCE CLOSED — DATA SAFETY READY** as of 1 October 2026. Historical provisional analysis below is retained for traceability and is superseded by `task209b-provider-evidence-closure-2026-10-01.md`. No Play form, CSV, release or declaration was changed.
 
 ## Decisions now supported
 
@@ -196,3 +196,7 @@ New Captain and Partner object keys should replace raw user/vendor UUIDs and doc
 ## Task 209B-S1-H11.2BJ closure update — 1 October 2026
 
 Production Flutterwave legacy payload minimisation is complete and supports Customer `User payment info = NO`; it does not by itself prove Flutterwave's Play sharing exception. Partner private GCS is live and verified; both Captain and Partner private-document transfers qualify for the supported GCS service-provider exception. Google Maps remains shared. Expo/FCM sharing, Flutterwave independent-use/contract treatment, and current Agora activation/account/recording state remain NOT CONFIRMED. Detailed final answers and the read-only Play review are in `task209b-final-closeout-2026-10-01.md`.
+
+## Task 209B-S1-H11.2BK final provider reconciliation — 1 October 2026
+
+The remaining provider-dependent rows are resolved in `task209b-provider-evidence-closure-2026-10-01.md`: Flutterwave is classified per transfer without a blanket exception; Expo Push/EAS use evidenced service-provider treatment; direct FCM is not applicable; Agora is active audio-only with signed-in project evidence that Cloud Recording is inactive; Termii's actual SMS payloads are shared; Utilities fulfilment is inactive. Provider-dependent unresolved count is **0** for Customer, **0** for Captain and **0** for Partner. The three worksheets are ready to complete truthfully from the final matrix. Owner/legal retention-duration decisions remain a separate governance item and do not leave a provider-sharing row unresolved. Production changed: **NO**. Google Play changed: **NO**.

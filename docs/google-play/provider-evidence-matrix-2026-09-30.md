@@ -1,6 +1,6 @@
 # KariGO provider evidence matrix — 30 September 2026
 
-Status: **PARTIAL — OWNER EVIDENCE REQUIRED**. Repository, account configuration evidence already recorded in the project, and current official provider documents were reviewed. No Play Console state was changed.
+Status: **CLOSED FOR TASK 209B PROVIDER-DEPENDENT PLAY ANSWERS — DATA SAFETY READY** as of 1 October 2026. Historical findings below preserve the evidence trail; the final superseding classifications are in `task209b-provider-evidence-closure-2026-10-01.md`. No Play Console state was changed.
 
 ## Method and Google Play rule
 
@@ -124,3 +124,11 @@ This closes the account-specific DPA-incorporation gap for Customer Data. It doe
 ## Task 209B-S1-H11.2BJ closure update — 1 October 2026
 
 Confirmed: Render applicable hosting treatment; Resend applicable transactional payload treatment; accepted Zamkah Google Cloud DPA and private GCS request paths; Google Maps sharing; Flutterwave hosted checkout, allowlisted persistence and completed 22-record cleanup. Not confirmed: Flutterwave independent-use/contract sharing classification, Expo/FCM device and diagnostic sharing, and current Agora activation/account/recording state. Optional paperwork that does not affect a declared transfer is backlog work; the named unresolved sharing fields remain a Play completion gate. See `task209b-final-closeout-2026-10-01.md`.
+
+## Task 209B-S1-H11.2BK final provider closure — 1 October 2026
+
+- Flutterwave is active only for Customer hosted checkout/top-up. Raw User payment info is not collected by KariGO; email/phone checkout initialization uses the user-initiated exception; purchase and financial reconciliation data is shared because later server verification and Flutterwave independent processing are not fully covered by that exception. Captain and Partner Flutterwave flows are inactive.
+- Expo Push is active for Customer and Captain; EAS Update is active for all three apps. These provider payloads use the service-provider exception. Direct Firebase sending is inactive for all three; Android FCM is Expo's downstream transport and is not double-counted.
+- Agora is active for Customer/Captain optional audio-only Ride calls. The signed-in **KariGO Ride Voice** project shows **Cloud Recording: Inactive** and zero recording usage; code invokes no recording API and configures no recording destination. Audio streams are ephemeral and use the service-provider exception. Partner Agora is not applicable.
+- Termii is active for OTP and enabled transactional notices in all three apps. Actual phone/name/application/order-status payloads are shared because the published terms do not establish instruction-only treatment for all identifiable API recipient data. Utilities customer purchase/wallet/live fulfilment is inactive and not applicable.
+- Provider-dependent answers still unresolved: Customer **0**, Captain **0**, Partner **0**. See `task209b-provider-evidence-closure-2026-10-01.md` for the final per-data-type matrix. Production changed: **NO**. Google Play changed: **NO**.

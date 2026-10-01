@@ -1,17 +1,17 @@
 # Captain Data Safety worksheet
 
-Audit date: 30 September 2026. Status: **PARTIAL; Play form unchanged**.
+Audit date: 30 September 2026; provider closure updated 1 October 2026. Status: **DATA SAFETY READY; Play form unchanged**.
 
 | Data type | Evidence-supported handling | Play sharing result |
 | --- | --- | --- |
 | Name/email/phone/user ID | Collected and retained; core identity, with email optional where allowed | Render/Resend exempt; assigned Customer identity is expected fulfilment. |
 | Approximate/precise/background location | Collected while online or assigned; traces/evidence retained; required only for active work | Google Maps **shared**; Render exempt; assigned Customer transfer expected. |
 | Ride/Delivery traces and app activity | Assignments, status, timing, chat/call events retained | Render exempt; Maps portions shared; counterparties expected. |
-| Earnings/payment references | Earnings, commission and transaction records retained | Render exempt; Flutterwave flow needs account/product evidence. |
+| Earnings/payment references | Earnings, commission and transaction records retained | Render exempt; Captain Flutterwave payment is inactive and not applicable. |
 | Vehicle/identity photos and files | Collected for application/approval and retained; GCS also receives user/document metadata, MIME, size and original-name metadata | **COLLECTED BUT NOT SHARED** for GCS under the service-provider exception. Functionality, account/onboarding, security/compliance. |
-| Push/device IDs | Expo token and device/session IDs retained/rotated | Expo/FCM unresolved; Render exempt. |
-| Diagnostics | Maps, Expo Updates and Agora if calls enabled | Maps **shared**; Expo/Agora unresolved. |
-| Voice/audio | If enabled, Agora RTC stream is transmitted. KariGO code sets recording false and stores only session metadata/duration. Agora states RTC stream is not stored. | Conditional service-provider exception; production activation, account terms and dashboard recording settings remain unconfirmed. |
+| Push/device IDs | Expo token and device/session IDs retained/rotated | Expo Push/EAS and downstream FCM **not shared under the service-provider exception**; Render exempt. |
+| Diagnostics | Maps, Expo Updates and Agora when a call is used | Maps **shared**; Expo/Agora portions **not shared under the service-provider exception**. |
+| Voice/audio | Optional active Agora audio-only RTC stream; KariGO stores session metadata/duration, not audio. Cloud Recording is inactive. | **Not shared under the service-provider exception**; stream is ephemeral and not recorded. |
 | Chat/messages | Ride chat retained; no email/SMS inbox reading | Render exempt; recipient receives through user action. Remove Email/SMS content absent another proven path. |
 
 Captain document upload is backend-mediated; deletion now calls GCS `DeleteObject` before the database records physical deletion. Authorized admin reads use a backend-created signed `GetObject` URL valid for five minutes. The Captain app does not connect directly to GCS.
@@ -49,3 +49,13 @@ See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-rec
 ## Task 209B-S1-H11.2BJ final reconciliation — 1 October 2026
 
 Private GCS storage, opaque new keys, provider-confirmed deletion, the active-work location lifecycle, and saved Play FGS/background-location declarations are verified. Files/documents are collected, retained and not shared for the GCS transfer under the supported service-provider exception. Maps fields are shared. Expo/FCM sharing and current Agora RTC activation/account/recording state remain NOT CONFIRMED; voice/audio must remain conditional. See `../task209b-final-closeout-2026-10-01.md`.
+
+## Task 209B-S1-H11.2BK provider closure — 1 October 2026
+
+- Captain Flutterwave commission payment is inactive and **not applicable**.
+- Expo Push is active. Push/device tokens and assignment/call routing metadata are collected and retained/rotated, **not shared under the service-provider exception**; content is transient at Expo. Direct Firebase sending is **not applicable**.
+- EAS Update is active. OS and randomized installation token are collected, retained and **not shared under the service-provider exception**, for app functionality/reliability.
+- Agora is active for optional audio-only Ride calls. Voice is collected as an ephemeral stream and **not shared under the service-provider exception**. Cloud Recording is not enabled or invoked, and no server-side recording storage exists. Conditional device/network/session diagnostics are collected for functionality/reliability and use the same exception.
+- Termii is active. Phone number, applicable name and application activity/status in OTP/application/guarantor notices are **shared** for authentication/account management, functionality, developer communications and security. Do not add SMS/MMS inbox content.
+- Utilities external fulfilment is inactive and **not applicable**.
+- Provider-dependent answers still unresolved: **0**. See `../task209b-provider-evidence-closure-2026-10-01.md`.

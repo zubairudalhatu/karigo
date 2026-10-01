@@ -1,18 +1,18 @@
 # Partner Data Safety worksheet
 
-Audit date: 30 September 2026. Status: **PARTIAL; Play form unchanged**.
+Audit date: 30 September 2026; provider closure updated 1 October 2026. Status: **DATA SAFETY READY; Play form unchanged**.
 
 | Data type | Evidence-supported handling | Play sharing result |
 | --- | --- | --- |
 | Business/contact identity, address, user ID | Collected, role-required and retained | Render exempt; approved public/fulfilment identity is expected feature transfer. |
-| Device ID | Session identifiers and Expo Updates telemetry; no Partner push path | Render exempt; Expo telemetry unresolved. |
+| Device ID | Session identifiers and EAS Update randomized installation token; no Partner push path | Render exempt; EAS Update **not shared under the service-provider exception**. |
 | Orders/purchase history | Collected and retained | Render exempt; Customer/Captain fulfilment transfer expected. |
-| Financial/payment information | Onboarding reference, payout bank account number, settlements and references retained | Partner does provide raw payout account number to KariGO. Render exempt; payment-provider flow is unresolved. |
+| Financial/payment information | Onboarding reference, payout bank account number, settlements and references retained | Partner provides raw payout account data to KariGO; Render exempt; Partner Flutterwave flow is inactive and not applicable. |
 | Product/service images | Optional/feature-dependent, uploaded to Render-local path, retained and given a public URL | Render hosting exempt; publication is intended for catalogue, but access/deletion lifecycle requires review. |
-| Files/documents | Onboarding/commercial evidence collected and retained; future private GCS objects remain backend-mediated | Current Render/legacy handling remains deployment-specific. Planned governed-account GCS transfer is **not shared under the service-provider exception** after provisioning. |
+| Files/documents | Onboarding/commercial evidence collected and retained; live private GCS objects are backend-mediated | GCS transfer is **not shared under the service-provider exception**. |
 | App activity/user content | Catalogue, price, availability, order and support actions/content retained | Render exempt; intended public/fulfilment transfers apply. |
 | Messages/support | Other in-app/support content only where used; no email/SMS inbox collection | Render/Resend payloads exempt; remove Email/SMS content absent evidence. |
-| Diagnostics | Expo Updates/network telemetry; no Crashlytics/Sentry | Expo independent telemetry unresolved. |
+| Diagnostics | EAS Update/network reliability telemetry; no Crashlytics/Sentry | EAS Update **not shared under the service-provider exception**. |
 | Approximate/precise device location | **NOT COLLECTED.** No dependency, permission or production code path. Business address belongs under Personal info > Address. | Remove both Partner device-location types. |
 
 Catalogue/branding uploads remain on their separate intentionally public path. New onboarding-document code uses a private backend-mediated storage service: the Partner app uploads to KariGO, KariGO writes/reads/deletes the object, and authenticated reads are streamed through the backend with `private, no-store`. No signed or permanent public URL is used for that private path.
@@ -67,3 +67,13 @@ See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-rec
 ## Task 209B-S1-H11.2BJ final reconciliation — 1 October 2026
 
 The Partner private GCS upload/read/delete lifecycle is production-verified. Seven historical approval rows remain but all seven former file objects are absent and marked for reacquisition; replacements use private GCS. Files/documents are collected, retained and not shared for the GCS transfer under the service-provider exception. Raw payout bank-account information remains collected by KariGO. Device location remains not collected. Expo sharing remains NOT CONFIRMED. See `../task209b-final-closeout-2026-10-01.md`.
+
+## Task 209B-S1-H11.2BK provider closure — 1 October 2026
+
+- Partner Flutterwave onboarding payment is inactive and **not applicable**. The payout bank-account field remains collected by KariGO, but no active Partner-to-Flutterwave path was found.
+- Expo Push and direct Firebase sending are **not applicable**: Partner has no notification dependency or token-registration path.
+- EAS Update is active through the production EAS project/update URL. OS and randomized installation token are collected, retained and **not shared under the service-provider exception**, for app functionality/reliability.
+- Agora is **not applicable**.
+- Termii is active. Phone number and application activity/status in OTP/application notices are **shared** for authentication/account management, functionality, developer communications and security. Do not add SMS/MMS inbox content.
+- Utilities external fulfilment is inactive and **not applicable**.
+- Provider-dependent answers still unresolved: **0**. See `../task209b-provider-evidence-closure-2026-10-01.md`.
