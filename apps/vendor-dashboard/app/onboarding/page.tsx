@@ -11,6 +11,12 @@ function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleString() : "Not reviewed";
 }
 
+function documentHref(documentUrl: string) {
+  return /^\/vendors\/onboarding-documents\/[0-9a-f-]{36}\/file$/i.test(documentUrl)
+    ? `/api/bff${documentUrl}`
+    : documentUrl;
+}
+
 export default function VendorOnboardingPage() {
   const [documents, setDocuments] = useState<VendorOnboardingDocument[]>([]);
   const [form, setForm] = useState(initialForm);
@@ -119,7 +125,7 @@ export default function VendorOnboardingPage() {
           <p><StatusBadge>{document.verificationStatus}</StatusBadge></p>
           <p className="muted">Uploaded {formatDate(document.uploadedAt)}</p>
           <p className="muted">Reviewed {formatDate(document.reviewedAt)}</p>
-          <p><a href={document.documentUrl} target="_blank" rel="noreferrer">Open document reference</a></p>
+          <p><a href={documentHref(document.documentUrl)} target="_blank" rel="noreferrer">Open document reference</a></p>
           {document.adminNote ? <p className="notice">{document.adminNote}</p> : null}
         </article>) : <Empty>No onboarding documents yet. Upload the required documents when KariGO operations requests them.</Empty>}
       </section>

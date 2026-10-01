@@ -47,6 +47,10 @@ assert(bffSession.includes("isPlainRecord") && bffSession.includes("!Array.isArr
 assert(bffSession.includes("BFF_BACKEND_UNAVAILABLE"), "Partner BFF must return a safe backend-unavailable login error.");
 assert(bffSession.includes("BFF_BACKEND_NON_JSON"), "Partner BFF must safely handle non-JSON backend responses.");
 assert(bffSession.includes("BFF_SESSION_USER_MISSING"), "Partner BFF must reject token payloads without a user profile.");
+assert(bffSession.includes("PRIVATE_DOCUMENT_PATH") && bffSession.includes("privateDocumentResponse"), "Partner BFF must stream the bounded authenticated private-document response.");
+assert(bffSession.includes('"Cache-Control": "private, no-store"'), "Private Partner document responses must not be cached.");
+assert(bffSession.includes('"X-Content-Type-Options": "nosniff"'), "Private Partner document responses must disable MIME sniffing.");
+assert(bffSession.includes('["content-type", "content-length", "content-disposition"]'), "Partner BFF must forward only the reviewed private-document response headers.");
 assert(bffSession.includes("API_BASE_URL") && bffSession.includes("NEXT_PUBLIC_API_BASE_URL"), "Partner BFF must document and use production backend URL env names.");
 assert(bffSession.includes("productionPortal"), "Partner BFF must guard missing backend API URL in production deployments.");
 const vendorApiSourceForSession = read("src", "api", "vendor.api.ts");
@@ -163,6 +167,8 @@ assert(onboardingPage.includes("Partner onboarding"), "Vendor onboarding page mu
 assert(onboardingPage.includes("Product sellers and SME service providers may be asked for different evidence"), "Partner onboarding must explain account-type evidence differences.");
 assert(onboardingPage.includes("SERVICE_PROVIDER_EVIDENCE"), "Partner onboarding must support service-provider evidence documents.");
 assert(onboardingPage.includes("PORTFOLIO_OR_WORK_SAMPLE"), "Partner onboarding must support portfolio/work sample documents.");
+assert(onboardingPage.includes("documentHref(document.documentUrl)"), "Partner onboarding must route private document reads through the authenticated BFF.");
+assert(onboardingPage.includes('`/api/bff${documentUrl}`'), "Partner onboarding must keep private reads on the same-origin authenticated BFF.");
 
 const vendorApi = read("src", "api", "vendor.api.ts");
 assert(vendorApi.includes("vendors/uploads"), "Vendor API must include vendor-scoped upload endpoint.");

@@ -24,6 +24,8 @@ type BackendPayload = {
   details?: unknown;
 };
 
+const PRIVATE_DOCUMENT_PATH = /^vendors\/onboarding-documents\/[0-9a-f-]{36}\/file$/i;
+
 type PartnerCapabilitiesPayload = {
   canAccessWorkspace?: boolean;
   operationalStatus?: string | null;
@@ -255,6 +257,25 @@ async function refreshSession(request: NextRequest) {
   return data as { accessToken: string; refreshToken?: string; user?: { role?: string } };
 }
 
+function privateDocumentResponse(backendResponse: Response, refreshed?: { accessToken: string; refreshToken?: string } | null) {
+  const headers = new Headers({
+    "Cache-Control": "private, no-store",
+    "X-Content-Type-Options": "nosniff"
+  });
+  for (const name of ["content-type", "content-length", "content-disposition"]) {
+    const value = backendResponse.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  const response = new NextResponse(backendResponse.body, {
+    status: backendResponse.status,
+    headers
+  });
+  if (refreshed?.accessToken) {
+    setSessionCookies(response, refreshed.accessToken, refreshed.refreshToken);
+  }
+  return response;
+}
+
 export async function handleBffRequest(request: NextRequest, pathParts: string[]) {
   const path = pathParts.join("/");
   const csrfFailure = validateCsrf(request, path);
@@ -284,6 +305,10 @@ export async function handleBffRequest(request: NextRequest, pathParts: string[]
   }
 
   const contentType = backendResponse.headers.get("content-type") ?? "";
+  if (request.method === "GET" && PRIVATE_DOCUMENT_PATH.test(path) && backendResponse.ok && !contentType.includes("application/json")) {
+    return privateDocumentResponse(backendResponse, refreshed);
+  }
+
   if (!contentType.includes("application/json")) {
     const response = jsonError(
       backendResponse.status >= 500
