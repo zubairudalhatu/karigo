@@ -8,6 +8,7 @@ const canonicalCustomerGooglePlayUrl = "https://play.google.com/store/apps/detai
 const site = read("src", "lib", "site.ts");
 
 const home = read("app", "page.tsx");
+const appDownloadBadges = read("src", "components", "app-download-badges.tsx");
 assert(home.includes("Everything you need, delivered."), "Homepage must use approved hero headline.");
 assert(home.includes("Order food, shop groceries and market items"), "Homepage must use approved subheadline.");
 assert(home.includes("Download the App"), "Homepage must include Download App CTA.");
@@ -17,10 +18,10 @@ assert(home.includes("https://vendor.karigo.com.ng/register"), "Homepage service
 assert(home.includes("KariGO is preparing secure merchant integrations"), "Bills provider-review copy must be present.");
 assert(home.includes("Services under provider or operations approval are clearly marked before activation."), "Provider/operations approval services must be presented accurately.");
 assert(site.includes(`customerGooglePlayUrl: "${canonicalCustomerGooglePlayUrl}"`), "Website config must define the canonical Customer Google Play URL.");
-assert((home.match(/site\.customerGooglePlayUrl/g) || []).length >= 2, "Homepage hero and rollout badge must use the centralized Google Play URL.");
+assert(home.includes("site.customerGooglePlayUrl") && home.includes("<AppDownloadBadges />") && appDownloadBadges.includes("site.customerGooglePlayUrl"), "Homepage hero and rollout badge must use the centralized Google Play URL.");
 assert(home.includes("Available now on Google Play."), "Homepage must present the Android Customer app as live.");
 assert(home.includes("App Store release in preparation."), "Homepage must keep iOS accurately future-facing.");
-assert(home.includes('target="_blank"') && home.includes('rel="noopener noreferrer"'), "Homepage Google Play links must use safe external-link behavior.");
+assert(home.includes('target="_blank"') && home.includes('rel="noopener noreferrer"') && appDownloadBadges.includes('target="_blank"') && appDownloadBadges.includes('rel="noopener noreferrer"'), "Homepage Google Play links must use safe external-link behavior.");
 assert(!home.includes("Preparing for Google Play") && !home.includes("Android coming soon"), "Homepage must not retain stale Android launch copy.");
 
 const customerWebPortalPage = read("app", "app", "page.tsx");
@@ -195,9 +196,9 @@ assert(footer.includes("@karigoapp"), "Footer must show the official KariGO soci
 assert(footer.includes("<SocialIcon name={link.icon} />"), "Footer social links must render icons instead of text chips.");
 assert(footer.includes("aria-label={`KariGO on ${link.label}`}"), "Footer social icon links must keep accessible labels.");
 assert(!footer.includes("{link.label}\n                </a>"), "Footer social links must not render visible text labels.");
-assert(footer.includes("site.customerGooglePlayUrl") && footer.includes("/get-it-on-google-play.png"), "Footer must use the official Google Play badge and centralized listing URL.");
-assert(footer.includes("iOS app coming soon"), "Footer must keep iOS accurately future-facing.");
-assert(footer.includes('target="_blank"') && footer.includes('rel="noopener noreferrer"'), "Footer Google Play links must use safe external-link behavior.");
+assert(footer.includes("<AppDownloadBadges footer />") && appDownloadBadges.includes("site.customerGooglePlayUrl") && appDownloadBadges.includes("/get-it-on-google-play.png"), "Footer must use the official Google Play badge and centralized listing URL.");
+assert(appDownloadBadges.includes("iOS app coming soon"), "Footer must keep iOS accurately future-facing.");
+assert(appDownloadBadges.includes('target="_blank"') && appDownloadBadges.includes('rel="noopener noreferrer"'), "Footer Google Play links must use safe external-link behavior.");
 assert(!footer.includes("Google Play soon"), "Footer must not retain stale Android launch copy.");
 assert(footer.includes("/riders#ride-waitlist"), "Footer must use the public Ride waitlist anchor.");
 assert(footer.includes("/riders#ride-captain-application"), "Footer must use the public Ride Captain application anchor.");

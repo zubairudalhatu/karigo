@@ -514,3 +514,54 @@ h3 { font-size: clamp(22px, 2vw, 26px); line-height: 1.2; }
   .service-groups { gap: 30px; }
   .service-card { padding: 16px; }
 }
+
+/* Website UX closeout: deterministic dropdown state and overflow-safe shared layouts. */
+.main-nav > a,.nav-group-toggle {
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: inherit;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+.main-nav > a:hover,.nav-group-toggle:hover,.nav-group.is-open > .nav-group-toggle { background: #fff1f2; color: var(--red-dark); }
+.nav-group-toggle::after {
+  border-bottom: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  content: "";
+  display: inline-block;
+  height: 5px;
+  margin: 0 0 3px 8px;
+  transform: rotate(45deg);
+  transition: transform .15s ease;
+  width: 5px;
+}
+.nav-group.is-open > .nav-group-toggle::after { margin-bottom: 0; transform: rotate(225deg); }
+.nav-group:not(.is-open) > .nav-menu { display: none; }
+
+.service-card,.info-card,.form-card,.contact-card,.split > *,.form-grid > *,.card-grid > * { min-width: 0; }
+.form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.form-card input,.form-card select,.form-card textarea { max-width: 100%; min-width: 0; width: 100%; }
+.form-card label,.contact-card,.info-card { overflow-wrap: anywhere; }
+.button,.form-card button { max-width: 100%; overflow-wrap: anywhere; text-align: center; white-space: normal; }
+.form-card > button { width: 100%; }
+.actions > * { min-width: 0; }
+
+.app-download-badges { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+.app-download-badges-footer { align-items: flex-start; display: grid; margin: 0; }
+
+@media (max-width: 1080px) {
+  .main-nav > a,.nav-group-toggle { padding-inline: 7px; }
+}
+
+@media (max-width: 980px) {
+  .main-nav > a,.nav-group-toggle { display: block; padding: 11px 12px; text-align: left; width: 100%; }
+}
+
+@media (max-width: 620px) {
+  .app-download-badges { align-items: flex-start; flex-direction: column; }
+  .google-play-badge,.ios-coming-soon { max-width: 100%; }
+}

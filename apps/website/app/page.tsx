@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppDownloadBadges } from "../src/components/app-download-badges";
 import { ServiceCard } from "../src/components/service-card";
 import { serviceGroups, services, site } from "../src/lib/site";
 
@@ -104,16 +105,7 @@ export default function HomePage() {
           <article className="info-card" id="download">
             <p className="eyebrow">Download App</p>
             <h2>Customer app rollout</h2>
-            <div className="store-badges" aria-label="Customer app store availability">
-              <a className="store-badge" href={site.customerGooglePlayUrl} rel="noopener noreferrer" target="_blank" aria-label="Get the KariGO Customer app on Google Play">
-                <span className="store-mark" aria-hidden="true">GP</span>
-                <span><small>Get it on</small><strong>Google Play</strong></span>
-              </a>
-              <div className="store-badge store-badge-muted" aria-disabled="true">
-                <span className="store-mark" aria-hidden="true">A</span>
-                <span><small>Coming to the</small><strong>App Store</strong></span>
-              </div>
-            </div>
+            <AppDownloadBadges />
             <p><strong>Android:</strong> Available now on Google Play.</p>
             <p><strong>iOS:</strong> App Store release in preparation.</p>
           </article>

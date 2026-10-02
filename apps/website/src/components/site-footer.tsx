@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { site } from "../lib/site";
+import { AppDownloadBadges } from "./app-download-badges";
 
 const socialLinks = [
   { label: "Instagram", href: "https://www.instagram.com/karigoapp", icon: "instagram" },
@@ -78,13 +78,7 @@ export function SiteFooter() {
 
         <section className="footer-apps" aria-label="KariGO apps">
           <h2>Get the Customer app</h2>
-          <a className="google-play-badge" href={site.customerGooglePlayUrl} rel="noopener noreferrer" target="_blank">
-            <Image src="/get-it-on-google-play.png" alt="Get the KariGO Customer app on Google Play" width={162} height={63} />
-          </a>
-          <div className="ios-coming-soon" aria-label="KariGO iOS app coming soon">
-            <span aria-hidden="true">iOS</span>
-            <strong>iOS app coming soon</strong>
-          </div>
+          <AppDownloadBadges footer />
         </section>
       </div>
 

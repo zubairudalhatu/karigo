@@ -10,6 +10,7 @@ const servicesPage = read("app", "services", "page.tsx");
 const serviceData = read("src", "lib", "site.ts");
 const css = read("app", "globals.css");
 const footer = read("src", "components", "site-footer.tsx");
+const appDownloadBadges = read("src", "components", "app-download-badges.tsx");
 const customerWebPortal = read("src", "components", "customer-web-portal.tsx");
 
 const hero = home.slice(home.indexOf('<section className="hero">'), home.indexOf('<section className="section" id="services">'));
@@ -20,8 +21,8 @@ const canonicalCustomerGooglePlayUrl = "https://play.google.com/store/apps/detai
 assert(serviceData.includes(`customerGooglePlayUrl: "${canonicalCustomerGooglePlayUrl}"`), "Website config must retain the canonical Customer Google Play URL.");
 assert(hero.includes("site.customerGooglePlayUrl") && hero.includes('target="_blank"') && hero.includes('rel="noopener noreferrer"'), "Homepage primary download CTA must open the centralized Google Play link safely.");
 assert(home.includes("Available now on Google Play.") && !home.includes("Preparing for Google Play"), "Homepage rollout must present the Android Customer app as live.");
-assert(footer.includes("/get-it-on-google-play.png") && !footer.includes("Google Play soon"), "Footer must present the live Android app with the official badge.");
-assert(home.includes("App Store release in preparation.") && footer.includes("iOS app coming soon"), "Public rollout copy must keep iOS future-facing.");
+assert(footer.includes("<AppDownloadBadges footer />") && appDownloadBadges.includes("/get-it-on-google-play.png") && !footer.includes("Google Play soon"), "Footer must present the live Android app with the official badge.");
+assert(home.includes("App Store release in preparation.") && appDownloadBadges.includes("iOS app coming soon"), "Public rollout copy must keep iOS future-facing.");
 assert(!home.includes("Available on App Store") && !home.includes("Download on App Store"), "Homepage must not falsely present iOS as live.");
 assert(css.includes("--content-width: 1240px") && css.includes("--radius-card") && css.includes("--space-section"), "Public UI must use consolidated width, radius, and spacing tokens.");
 assert(css.includes("clamp(44px, 5.7vw, 64px)"), "Desktop hero typography must cap at 64px.");
@@ -36,7 +37,7 @@ assert(css.includes(".portal-sidebar nav { display: flex; overflow-x: auto; padd
 ["Dashboard", "Wallet", "Utilities", "SME Services", "Orders", "Addresses", "Profile", "Account deletion", "Support"].forEach((tab) => assert(customerWebPortal.includes(`"${tab}"`), `Customer Web navigation must retain ${tab}.`));
 
 ["Services", "Rides", "Partners", "Captains", "Apps", "Help"].forEach((label) => assert(header.includes(`label: "${label}"`), `Header must include ${label} navigation.`));
-assert(header.includes("<details") && header.includes("<summary>"), "Grouped public navigation must use keyboard-accessible disclosure controls.");
+assert(header.includes("aria-controls={`nav-menu-${group.label.toLowerCase()}`}") && header.includes("aria-expanded={openGroup === group.label}"), "Grouped public navigation must use keyboard-accessible controlled disclosures.");
 assert(header.includes('aria-controls="primary-navigation"') && header.includes("aria-expanded={menuOpen}"), "Mobile public navigation must expose expanded state.");
 assert((header.match(/desktop-cta/g) || []).length === 1 && header.includes("Become a Partner"), "Desktop header must expose one priority CTA.");
 assert(header.includes("Details coming through KariGO onboarding"), "Unsupported app destinations must remain non-clicking guidance.");

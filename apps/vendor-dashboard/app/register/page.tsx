@@ -22,9 +22,19 @@ const partnerTypes = [
 ];
 
 export default function PartnerRegisterPage() {
-  return <main className="login partner-register">
+  return <div className="partner-public-shell">
+    <header className="partner-public-header">
+      <a className="partner-public-brand" href="https://www.karigo.com.ng" aria-label="KariGO home">
+        <Image src="/karigo-logo.png" alt="KariGO" width={80} height={80} priority />
+        <span><strong>KariGO</strong><small>Partner Workspace</small></span>
+      </a>
+      <nav aria-label="Partner registration links">
+        <a href="https://www.karigo.com.ng">Back to KariGO</a>
+        <a href="https://www.karigo.com.ng/contact">Help / Support</a>
+      </nav>
+    </header>
+    <main className="login partner-register">
     <section className="partner-register-card">
-      <Image src="/karigo-logo.png" alt="KariGO" width={300} height={300} priority />
       <p className="muted">KariGO Partner Workspace</p>
       <h1>Choose how you want to partner with KariGO.</h1>
       <p>Product sellers and SME service providers now use one partner onboarding path. Approval is not automatic, and account access is activated only after KariGO review.</p>
@@ -44,5 +54,14 @@ export default function PartnerRegisterPage() {
       </div>
       <p className="muted">Already approved? <a href="/login">Sign in to the Partner Workspace</a> or <a href="/activate">set up your password</a>.</p>
     </section>
-  </main>;
+    </main>
+    <footer className="partner-public-footer">
+      <nav aria-label="Partner Workspace legal and support links">
+        <a href="https://www.karigo.com.ng/privacy">Privacy</a>
+        <a href="https://www.karigo.com.ng/terms">Terms</a>
+        <a href="https://www.karigo.com.ng/contact">Support</a>
+      </nav>
+      <div><p>&copy; 2026 KariGO Express Limited</p><p>A <strong>Zamkah Technologies Limited</strong> company</p></div>
+    </footer>
+  </div>;
 }
