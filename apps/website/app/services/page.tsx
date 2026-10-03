@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { ServiceCard } from "../../src/components/service-card";
+import { buildPageMetadata } from "../../src/lib/seo";
 import { liveServices, preparingServices, serviceGroups, services } from "../../src/lib/site";
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: "Services",
-  description: "KariGO services and launch status."
-};
+  description: "KariGO services and launch status.",
+  path: "/services"
+});
 
 export default function ServicesPage() {
   return (

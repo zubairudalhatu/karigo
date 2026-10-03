@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
 import Link from "next/link";
+import { buildPageMetadata } from "../../src/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: "Safety",
-  description: "KariGO safety guidance for customers, Captains, deliveries and Partners."
-};
+  description: "KariGO safety guidance for customers, Captains, deliveries and Partners.",
+  path: "/safety"
+});
 
 export default function SafetyPage() {
   return (

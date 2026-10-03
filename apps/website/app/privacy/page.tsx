@@ -1,7 +1,11 @@
-import type { Metadata } from "next";
 import Link from "next/link";
+import { buildPageMetadata } from "../../src/lib/seo";
 
-export const metadata: Metadata = { title: "Privacy Policy", description: "How KariGO handles personal data across its apps, website and support services." };
+export const metadata = buildPageMetadata({
+  title: "Privacy Policy",
+  description: "How KariGO handles personal data across its apps, website and support services.",
+  path: "/privacy"
+});
 
 export default function PrivacyPage() {
   return <main>

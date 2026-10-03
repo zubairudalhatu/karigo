@@ -2,14 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { careerOpenings, getCareerOpening } from "../../../src/lib/careers";
+import { buildPageMetadata, privatePageRobots } from "../../../src/lib/seo";
 
 export function generateStaticParams() {
   return careerOpenings.filter((opening) => opening.status === "OPEN").map((opening) => ({ "job-slug": opening.slug }));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ "job-slug": string }> }): Promise<Metadata> {
-  const opening = getCareerOpening((await params)["job-slug"]);
-  return opening ? { title: opening.title, description: opening.description } : { title: "Career opportunity" };
+  const slug = (await params)["job-slug"];
+  const opening = getCareerOpening(slug);
+  return opening
+    ? buildPageMetadata({ title: opening.title, description: opening.description, path: `/careers/${slug}` })
+    : { title: "Career opportunity", robots: privatePageRobots };
 }
 
 export default async function CareerOpeningPage({ params }: { params: Promise<{ "job-slug": string }> }) {

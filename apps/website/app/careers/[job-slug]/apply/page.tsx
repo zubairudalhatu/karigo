@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getCareerOpening } from "../../../../src/lib/careers";
+import { privatePageRobots } from "../../../../src/lib/seo";
 
 export const metadata: Metadata = {
   title: "Secure career application",
-  robots: { index: false, follow: false }
+  robots: privatePageRobots,
+  openGraph: null,
+  twitter: null
 };
 
 export default async function CareerApplicationPage({ params }: { params: Promise<{ "job-slug": string }> }) {

@@ -4,7 +4,8 @@ import { AuthProvider } from "../src/contexts/auth-context";
 
 export const metadata: Metadata = {
   title: "KariGO Admin Portal",
-  description: "KariGO operations control centre"
+  description: "KariGO operations control centre",
+  robots: { index: false, follow: false, googleBot: { index: false, follow: false } }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

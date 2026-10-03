@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
 import Link from "next/link";
+import { buildPageMetadata } from "../../src/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: "Returns",
-  description: "KariGO delivery issue and return guidance for Kano and Abuja customers."
-};
+  description: "KariGO delivery issue and return guidance for Kano and Abuja customers.",
+  path: "/returns"
+});
 
 export default function ReturnsPage() {
   return (

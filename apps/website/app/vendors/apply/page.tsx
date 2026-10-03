@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
 import { VendorApplicationForm } from "../../../src/components/vendor-application-form";
+import { buildPageMetadata } from "../../../src/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: "Apply as a Vendor",
-  description: "Submit a public KariGO vendor application."
-};
+  description: "Submit a public KariGO vendor application.",
+  path: "/vendors/apply"
+});
 
 export default function VendorApplyPage() {
   return (

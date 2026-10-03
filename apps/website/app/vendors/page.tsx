@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
 import Link from "next/link";
+import { buildPageMetadata } from "../../src/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: "Vendors",
-  description: "Apply to become a KariGO vendor in Kano or Abuja."
-};
+  description: "Apply to become a KariGO vendor in Kano or Abuja.",
+  path: "/vendors"
+});
 
 export default function VendorsPage() {
   return (

@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
 import Link from "next/link";
+import { buildPageMetadata } from "../../src/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: "Refunds",
-  description: "KariGO payment, wallet and cash/POD refund guidance."
-};
+  description: "KariGO payment, wallet and cash/POD refund guidance.",
+  path: "/refunds"
+});
 
 export default function RefundsPage() {
   return (

@@ -1,11 +1,12 @@
-import type { Metadata } from "next";
 import { DeliveryCaptainApplicationForm } from "../../src/components/delivery-captain-application-form";
 import { TaxiDriverApplicationForm, TaxiWaitlistForm } from "../../src/components/taxi-readiness-forms";
+import { buildPageMetadata } from "../../src/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: "Captains",
-  description: "Join KariGO as a Delivery Captain or future Ride Captain."
-};
+  description: "Join KariGO as a Delivery Captain or future Ride Captain.",
+  path: "/riders"
+});
 
 export default function RidersPage() {
   return (

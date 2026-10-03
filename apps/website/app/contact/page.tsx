@@ -1,11 +1,12 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { ContactInquiryForm } from "../../src/components/contact-inquiry-form";
+import { buildPageMetadata } from "../../src/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: "Contact",
-  description: "Send a KariGO inquiry for customers, vendors, Captains, Ride review and business partners."
-};
+  description: "Send a KariGO inquiry for customers, vendors, Captains, Ride review and business partners.",
+  path: "/contact"
+});
 
 export default function ContactPage() {
   return (

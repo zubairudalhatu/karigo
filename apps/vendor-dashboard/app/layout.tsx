@@ -4,7 +4,8 @@ import { AuthProvider } from "../src/contexts/auth-context";
 
 export const metadata: Metadata = {
   title: "KariGO Vendor Dashboard",
-  description: "Manage KariGO vendor orders, products and settlements"
+  description: "Manage KariGO vendor orders, products and settlements",
+  robots: { index: false, follow: false, googleBot: { index: false, follow: false } }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

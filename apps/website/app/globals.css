@@ -42,8 +42,8 @@ img { max-width: 100%; }
 .nav-cta,.button { align-items: center; background: var(--red); border: 0; border-radius: 999px; color: white; cursor: pointer; display: inline-flex; font-weight: 900; justify-content: center; min-height: 46px; padding: 12px 18px; }
 .button.secondary { background: white; border: 1px solid var(--border); color: var(--charcoal); }
 .button.dark { background: var(--black); }
-.small-button { font-size: 13px; margin-top: 10px; min-height: 38px; padding: 9px 13px; }
-.menu-toggle { align-items: center; background: white; border: 1px solid var(--border); border-radius: 999px; color: var(--charcoal); cursor: pointer; display: none; font-weight: 900; gap: 10px; min-height: 42px; padding: 10px 14px; }
+.small-button { font-size: 13px; margin-top: 10px; min-height: 44px; padding: 9px 13px; }
+.menu-toggle { align-items: center; background: white; border: 1px solid var(--border); border-radius: 999px; color: var(--charcoal); cursor: pointer; display: none; font-weight: 900; gap: 10px; min-height: 44px; padding: 10px 14px; }
 .hamburger-lines { background: currentColor; border-radius: 999px; box-shadow: 0 -6px 0 currentColor, 0 6px 0 currentColor; display: inline-block; height: 2px; width: 18px; }
 .mobile-nav-cta { display: none; }
 
@@ -192,7 +192,7 @@ input:focus,select:focus,textarea:focus { border-color: var(--red); box-shadow: 
 .footer-social p { margin: 0; }
 .footer-social strong { color: white; }
 .social-links { display: flex; flex-wrap: wrap; gap: 8px; }
-.social-links a { align-items: center; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); border-radius: 999px; color: #f9fafb; display: inline-flex; height: 40px; justify-content: center; width: 40px; }
+.social-links a { align-items: center; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); border-radius: 999px; color: #f9fafb; display: inline-flex; height: 44px; justify-content: center; width: 44px; }
 .social-links a:hover { background: rgba(225,29,46,.28); border-color: rgba(254,202,202,.42); color: white; }
 .social-icon { height: 20px; width: 20px; }
 .footer-links { align-content: start; display: grid; gap: 8px; }
@@ -524,6 +524,7 @@ h3 { font-size: clamp(22px, 2vw, 26px); line-height: 1.2; }
   cursor: pointer;
   font: inherit;
   font-weight: inherit;
+  min-height: 44px;
   padding: 8px 10px;
   white-space: nowrap;
 }

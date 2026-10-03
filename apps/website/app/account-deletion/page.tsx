@@ -1,7 +1,11 @@
-import type { Metadata } from "next";
 import Link from "next/link";
+import { buildPageMetadata } from "../../src/lib/seo";
 
-export const metadata: Metadata = { title: "Account Deletion", description: "Request deletion of KariGO Customer, Captain, Partner or complete account access." };
+export const metadata = buildPageMetadata({
+  title: "Account Deletion",
+  description: "Request deletion of KariGO Customer, Captain, Partner or complete account access.",
+  path: "/account-deletion"
+});
 
 export default function AccountDeletionPage() {
   return <main>

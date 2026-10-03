@@ -1,11 +1,12 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { careerOpenings } from "../../src/lib/careers";
+import { buildPageMetadata } from "../../src/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: "Careers",
-  description: "Explore approved KariGO vacancies and apply through the secure online recruitment process."
-};
+  description: "Explore approved KariGO vacancies and apply through the secure online recruitment process.",
+  path: "/careers"
+});
 
 export default function CareersPage() {
   const activeOpenings = careerOpenings.filter((opening) => opening.status === "OPEN");

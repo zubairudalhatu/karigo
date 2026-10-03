@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
+import { buildPageMetadata } from "../../src/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: "Terms",
-  description: "KariGO terms of service summary for customers, vendors, Captains, Ride review applicants and website visitors."
-};
+  description: "KariGO terms of service summary for customers, vendors, Captains, Ride review applicants and website visitors.",
+  path: "/terms"
+});
 
 export default function TermsPage() {
   return (

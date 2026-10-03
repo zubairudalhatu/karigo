@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
 import Link from "next/link";
+import { buildPageMetadata } from "../../../src/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: "Become a Service Provider",
-  description: "Apply to join KariGO SME Services provider review."
-};
+  description: "Apply to join KariGO SME Services provider review.",
+  path: "/sme-services/apply"
+});
 
 export default function SmeServiceProviderApplicationPage() {
   return (
