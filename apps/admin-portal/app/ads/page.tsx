@@ -11,6 +11,12 @@ const actions: Partial<Record<AdCampaignStatus, AdCampaignStatus[]>> = {
   ACTIVE: ["PAUSED", "COMPLETED", "EXPIRED", "CANCELLED"], PAUSED: ["ACTIVE", "COMPLETED", "EXPIRED", "CANCELLED"]
 };
 const sponsorTypes: AdSponsorType[] = ["EXTERNAL", "VENDOR"];
+function availableActions(campaign: AdminAdCampaign) {
+  if (campaign.pendingRevisionStatus === "DRAFT" || campaign.pendingRevisionStatus === "CHANGES_REQUESTED") return ["SUBMITTED" as AdCampaignStatus];
+  if (campaign.pendingRevisionStatus === "SUBMITTED") return ["UNDER_REVIEW" as AdCampaignStatus];
+  if (campaign.pendingRevisionStatus === "UNDER_REVIEW") return ["CHANGES_REQUESTED", "APPROVED", "REJECTED"] as AdCampaignStatus[];
+  return actions[campaign.status] ?? [];
+}
 
 const emptyForm = {
   sponsorType: "EXTERNAL" as AdSponsorType,
@@ -184,8 +190,8 @@ export default function AdminAdsPage() {
     {loading ? <Loading /> : <section className="section">
       {data?.items.length ? data.items.map((campaign) => <article className="card" key={campaign.id}>
         <div className="top-actions">
-          <span><strong>{campaign.campaignReference}</strong> <Badge>{campaign.status}</Badge></span>
-          <span className="top-actions"><button className="secondary" onClick={() => void editCampaign(campaign)}>Edit during review</button>{(actions[campaign.status] ?? []).map((item) => <button className="secondary" key={item} onClick={() => void updateAd(campaign, item)}>{item.replaceAll("_", " ")}</button>)}</span>
+          <span><strong>{campaign.campaignReference}</strong> <Badge>{campaign.status}</Badge>{campaign.pendingRevisionStatus ? <> Replacement <Badge>{campaign.pendingRevisionStatus}</Badge></> : null}</span>
+          <span className="top-actions"><button className="secondary" onClick={() => void editCampaign(campaign)}>Edit / new revision</button>{availableActions(campaign).map((item) => <button className="secondary" key={item} onClick={() => void updateAd(campaign, item)}>{item.replaceAll("_", " ")}</button>)}</span>
         </div>
         <h3>{campaign.title}</h3>
         <p>{campaign.body}</p>

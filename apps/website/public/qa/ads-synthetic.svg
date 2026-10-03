@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Synthetic KariGO advertising QA image</title>
+  <desc id="desc">A blue and green test card labelled synthetic QA creative with no personal data.</desc>
+  <rect width="1200" height="630" fill="#102a56"/>
+  <circle cx="1010" cy="95" r="210" fill="#2bb673" opacity=".85"/>
+  <rect x="82" y="86" width="780" height="458" rx="42" fill="#ffffff"/>
+  <text x="142" y="235" font-family="Arial, sans-serif" font-size="58" font-weight="700" fill="#102a56">Synthetic QA creative</text>
+  <text x="142" y="325" font-family="Arial, sans-serif" font-size="34" fill="#3157c8">KariGO Ads local release gate</text>
+  <text x="142" y="402" font-family="Arial, sans-serif" font-size="28" fill="#334155">No customer, vendor, or production data</text>
+  <rect x="142" y="454" width="275" height="58" rx="29" fill="#2bb673"/>
+  <text x="210" y="493" font-family="Arial, sans-serif" font-size="25" font-weight="700" fill="#ffffff">ORDER NOW</text>
+</svg>

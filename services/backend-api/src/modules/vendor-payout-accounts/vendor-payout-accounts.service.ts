@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { NotificationType, PayoutAccountStatus, Prisma } from "@prisma/client";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
+import { NotificationType, PhoneChangeStatus, PayoutAccountStatus, Prisma } from "@prisma/client";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
@@ -57,6 +57,7 @@ export class VendorPayoutAccountsService {
   }
 
   async createVendorAccount(userId: string, dto: UpsertVendorPayoutAccountDto) {
+    await this.assertSensitiveActionAllowed(userId);
     const vendor = await this.requireVendor(userId);
     this.assertMatchingAccountNumbers(dto);
     const existing = await this.prisma.vendorPayoutAccount.findUnique({ where: { vendorId: vendor.id }, select: { id: true } });
@@ -81,6 +82,7 @@ export class VendorPayoutAccountsService {
   }
 
   async updateVendorAccount(userId: string, dto: UpsertVendorPayoutAccountDto) {
+    await this.assertSensitiveActionAllowed(userId);
     const vendor = await this.requireVendor(userId);
     this.assertMatchingAccountNumbers(dto);
     const existing = await this.prisma.vendorPayoutAccount.findUnique({ where: { vendorId: vendor.id }, select: { id: true } });
@@ -214,6 +216,22 @@ export class VendorPayoutAccountsService {
     const vendor = await this.prisma.vendor.findFirst({ where: { userId, deletedAt: null }, select: { id: true, userId: true, businessName: true } });
     if (!vendor) throw new NotFoundException("Vendor profile not found");
     return vendor;
+  }
+
+  private async assertSensitiveActionAllowed(userId: string) {
+    try {
+      const recent = await this.prisma.phoneChangeRequest.findFirst({
+        where: { userId, status: PhoneChangeStatus.COMPLETED },
+        orderBy: { completedAt: "desc" },
+        select: { sensitiveActionsHoldUntil: true }
+      });
+      if (recent?.sensitiveActionsHoldUntil && recent.sensitiveActionsHoldUntil > new Date()) {
+        throw new ForbiddenException("Payout-account changes are temporarily unavailable after a phone-number change.");
+      }
+    } catch (error) {
+      if (error instanceof ForbiddenException) throw error;
+      throw new ServiceUnavailableException("Sensitive-action safety status could not be verified.");
+    }
   }
 
   private assertMatchingAccountNumbers(dto: UpsertVendorPayoutAccountDto) {

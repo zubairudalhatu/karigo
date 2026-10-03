@@ -1,6 +1,8 @@
 import { api, csrfHeaders } from "./client";
 
 export type VendorAdCampaignStatus = "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "CHANGES_REQUESTED" | "APPROVED" | "SCHEDULED" | "REJECTED" | "ACTIVE" | "PAUSED" | "COMPLETED" | "EXPIRED" | "CANCELLED";
+export type AdPerformanceRange = "TODAY" | "DAYS_7" | "DAYS_30" | "LIFETIME";
+export interface AdPerformanceBucket { date: string; impressions: number; clicks: number; ctr: number; spendKobo: number }
 
 export interface VendorAdCampaign {
   id: string;
@@ -17,6 +19,7 @@ export interface VendorAdCampaign {
   spentKobo: number;
   remainingBudgetKobo: number;
   analytics: { impressions: number; clicks: number; ctr: number; spendKobo: number };
+  performance?: { range: AdPerformanceRange; timezone: string; buckets: AdPerformanceBucket[] };
   status: VendorAdCampaignStatus;
   startsAt?: string | null;
   endsAt?: string | null;
@@ -25,6 +28,7 @@ export interface VendorAdCampaign {
   createdAt: string;
   updatedAt: string;
   currentRevisionNumber: number;
+  pendingRevisionStatus?: VendorAdCampaignStatus | null;
   revisions: Array<{ id: string; revisionNumber: number; createdByType: "VENDOR" | "ADMIN" | "SYSTEM"; changeReason?: string | null; reviewNotes?: string | null; submittedAt?: string | null; approvedAt?: string | null; publishedAt?: string | null; createdAt: string }>;
 }
 
@@ -40,6 +44,7 @@ export interface VendorAdCreditAccount {
 export interface VendorAdsResponse {
   creditAccount: VendorAdCreditAccount;
   campaigns: VendorAdCampaign[];
+  performance: { range: AdPerformanceRange; timezone: string; buckets: AdPerformanceBucket[]; spendPolicy: string };
   guardrails: {
     livePaymentsEnabled: boolean;
     liveWalletTopUpEnabled: boolean;
@@ -73,7 +78,7 @@ async function uploadCreative(campaignId: string, creative: File) {
 }
 
 export const adsApi = {
-  dashboard: () => api.get<VendorAdsResponse>("vendor/ads"),
+  dashboard: (range: AdPerformanceRange = "DAYS_7", campaignId?: string) => api.get<VendorAdsResponse>(`vendor/ads?range=${range}${campaignId ? `&campaignId=${encodeURIComponent(campaignId)}` : ""}`),
   create: (body: VendorAdCampaignInput) => api.post<VendorAdCampaign>("vendor/ads", body),
   update: (id: string, body: Partial<VendorAdCampaignInput>) => api.patch<VendorAdCampaign>(`vendor/ads/${id}`, body),
   action: (id: string, status: VendorAdCampaignStatus, reason?: string) => api.post<VendorAdCampaign>(`vendor/ads/${id}/actions`, { status, reason }),

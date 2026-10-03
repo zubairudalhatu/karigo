@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
 import { NotificationType, PayoutAccountStatus } from "@prisma/client";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -44,6 +44,7 @@ describe("VendorPayoutAccountsService", () => {
       create: jest.fn(),
       update: jest.fn()
     },
+    phoneChangeRequest: { findFirst: jest.fn() },
     adminAuditLog: { findMany: jest.fn() }
   };
   const audit = { record: jest.fn() };
@@ -59,6 +60,7 @@ describe("VendorPayoutAccountsService", () => {
     prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-a", userId: "vendor-user-a", businessName: "Kano Kitchen" });
     notifications.createNotification.mockResolvedValue({});
     audit.record.mockResolvedValue({});
+    prisma.phoneChangeRequest.findFirst.mockResolvedValue(null);
   });
 
   it("lets a vendor create one masked payout account in pending verification state", async () => {
@@ -182,5 +184,13 @@ describe("VendorPayoutAccountsService", () => {
     prisma.vendor.findFirst.mockResolvedValue(null);
     await expect(service.getVendorAccount("not-a-vendor")).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.vendorPayoutAccount.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("fails closed during the 24-hour post-phone-change payout-account hold", async () => {
+    prisma.phoneChangeRequest.findFirst.mockResolvedValue({ sensitiveActionsHoldUntil: new Date(Date.now() + 60_000) });
+    await expect(service.updateVendorAccount("vendor-user-a", {
+      accountName: "Kano Kitchen Vendor", bankName: "KariGO Demo Bank", accountNumber: "0000000201", confirmAccountNumber: "0000000201"
+    })).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.vendorPayoutAccount.update).not.toHaveBeenCalled();
   });
 });

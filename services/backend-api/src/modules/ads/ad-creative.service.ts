@@ -14,7 +14,8 @@ export function inspectCreative(buffer: Buffer, mimeType: string) {
   if (!buffer.length || buffer.length > AD_CREATIVE_MAX_BYTES) throw new BadRequestException("Creative must be between 1 byte and 5 MB.");
   let width = 0;
   let height = 0;
-  if (mimeType === "image/png" && buffer.length >= 24 && buffer.subarray(1, 4).toString() === "PNG") {
+  const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (mimeType === "image/png" && buffer.length >= 24 && buffer.subarray(0, 8).equals(pngSignature) && buffer.subarray(12, 16).toString("ascii") === "IHDR") {
     width = buffer.readUInt32BE(16); height = buffer.readUInt32BE(20);
   } else if (mimeType === "image/jpeg" && buffer[0] === 0xff && buffer[1] === 0xd8) {
     let offset = 2;

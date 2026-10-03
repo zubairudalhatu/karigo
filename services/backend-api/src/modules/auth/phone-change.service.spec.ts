@@ -44,4 +44,12 @@ describe("PhoneChangeService", () => {
     await expect(service.confirm("u1", { requestId: "11111111-1111-4111-8111-111111111111", otp: "123456" })).rejects.toBeInstanceOf(BadRequestException);
     expect(tx.user.update).not.toHaveBeenCalled();
   });
+
+  it("blocks a second payout-capable phone change during the sensitive-action hold", async () => {
+    const passwordHash = await hash("CorrectPassword1", 4);
+    prisma.user.findUnique.mockResolvedValue({ id: "u1", role: UserRole.VENDOR, passwordHash, phoneNumber: "+2348011111111", deletedAt: null });
+    prisma.phoneChangeRequest.findFirst.mockResolvedValue({ sensitiveActionsHoldUntil: new Date(Date.now() + 60_000) });
+    await expect(service.start("u1", { currentPassword: "CorrectPassword1", newPhoneNumber: "08022222222" })).rejects.toBeInstanceOf(BadRequestException);
+    expect(otp.issue).not.toHaveBeenCalled();
+  });
 });

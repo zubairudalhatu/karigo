@@ -233,10 +233,10 @@ export function CustomerWebPortal() {
   }, []);
 
   useEffect(() => {
-    if (!sessionChecked) return;
+    if (!sessionChecked || !authenticated) { setHomeAd(null); return; }
     if (!adRenderToken.current) adRenderToken.current = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
     void request<{ items: WebAd[] }>("ads/customer-home", {}, false).then((result) => setHomeAd(result.items[0] ?? null)).catch(() => setHomeAd(null));
-  }, [sessionChecked]);
+  }, [authenticated, sessionChecked]);
 
   useEffect(() => {
     if (!homeAd || activeTab !== "Dashboard" || recordedAdImpressions.current.has(homeAd.id)) return;

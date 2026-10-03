@@ -23,6 +23,7 @@ export interface AdminAdCampaign {
   spentKobo: number;
   remainingBudgetKobo: number;
   currentRevisionNumber: number;
+  pendingRevisionStatus?: AdCampaignStatus | null;
   revisions: Array<{ id: string; revisionNumber: number; createdByType: string; changeReason?: string | null; reviewNotes?: string | null; createdAt: string }>;
   auditEvents: Array<{ id: string; action: string; fromStatus?: AdCampaignStatus | null; toStatus?: AdCampaignStatus | null; reason?: string | null; createdAt: string }>;
   status: AdCampaignStatus;

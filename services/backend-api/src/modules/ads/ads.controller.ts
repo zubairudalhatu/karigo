@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Headers, Param, ParseUUIDPipe, Patch, Post, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AdminRole, UserRole } from "@prisma/client";
@@ -14,33 +14,39 @@ import { CreateAdCampaignDto } from "./dto/create-ad-campaign.dto";
 import { CreateAdCreditAdjustmentDto } from "./dto/create-ad-credit-adjustment.dto";
 import { UpdateAdCampaignDto } from "./dto/update-ad-campaign.dto";
 import { RecordAdEventDto } from "./dto/record-ad-event.dto";
+import { GetCustomerAdsQueryDto } from "./dto/get-customer-ads-query.dto";
+import { GetAdPerformanceQueryDto } from "./dto/get-ad-performance-query.dto";
 import { TransitionAdCampaignDto } from "./dto/transition-ad-campaign.dto";
 import { AD_CREATIVE_MAX_BYTES, AdCreativeService } from "./ad-creative.service";
 
 const AD_MANAGEMENT_ADMINS = [AdminRole.SUPER_ADMIN, AdminRole.OPERATIONS_ADMIN, AdminRole.VENDOR_MANAGER];
 
 @ApiTags("Ads")
+@ApiBearerAuth()
 @Controller("ads")
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.CUSTOMER)
 export class CustomerAdsController {
   constructor(private readonly ads: AdsService, private readonly creative: AdCreativeService) {}
 
   @Get("customer-home")
   @ApiOperation({ summary: "List approved customer-home ads for public discovery surfaces" })
-  async customerHome() {
-    return { message: "Customer home ads retrieved", data: await this.ads.customerHome() };
+  async customerHome(@CurrentUser() user: AuthenticatedUser, @Query() query: GetCustomerAdsQueryDto) {
+    return { message: "Customer home ads retrieved", data: await this.ads.customerHome(user.id, query.serviceCategory) };
   }
 
   @Post(":campaignId/events")
   @ApiOperation({ summary: "Record a privacy-safe ad render or click event" })
   async recordEvent(
     @Param("campaignId", ParseUUIDPipe) campaignId: string,
-    @Headers("user-agent") userAgent: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: RecordAdEventDto
   ) {
-    return { message: "Ad event accepted", data: await this.ads.recordEvent(campaignId, dto, userAgent) };
+    return { message: "Ad event accepted", data: await this.ads.recordEvent(user.id, campaignId, dto) };
   }
 
   @Get("creative/:assetId")
+  @Roles(UserRole.CUSTOMER, UserRole.VENDOR, UserRole.ADMIN)
   @ApiOperation({ summary: "Serve an approved active ad creative" })
   async approvedCreative(@Param("assetId", ParseUUIDPipe) assetId: string) {
     const asset = await this.creative.readApproved(assetId);
@@ -58,8 +64,8 @@ export class VendorAdsController {
 
   @Get()
   @ApiOperation({ summary: "Get vendor ad campaigns and controlled ad credit balance" })
-  async dashboard(@CurrentUser() user: AuthenticatedUser) {
-    return { message: "Vendor ads retrieved", data: await this.ads.vendorDashboard(user.id) };
+  async dashboard(@CurrentUser() user: AuthenticatedUser, @Query() query: GetAdPerformanceQueryDto) {
+    return { message: "Vendor ads retrieved", data: await this.ads.vendorDashboard(user.id, query) };
   }
 
   @Post()

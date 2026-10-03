@@ -1,5 +1,5 @@
 import { AdCampaignEventType, AdPlacementSurface } from "@prisma/client";
-import { IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 export class RecordAdEventDto {
   @IsEnum(AdCampaignEventType)
@@ -8,8 +8,13 @@ export class RecordAdEventDto {
   @IsEnum(AdPlacementSurface)
   placement!: AdPlacementSurface;
 
+  @IsString()
+  @MinLength(12)
+  @MaxLength(120)
+  renderToken!: string;
+
   @IsOptional()
   @IsString()
-  @MaxLength(120)
-  renderToken?: string;
+  @MaxLength(80)
+  serviceCategory?: string;
 }

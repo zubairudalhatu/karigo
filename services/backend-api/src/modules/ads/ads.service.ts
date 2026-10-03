@@ -18,7 +18,9 @@ import { CreateAdCreditAdjustmentDto } from "./dto/create-ad-credit-adjustment.d
 import { UpdateAdCampaignDto } from "./dto/update-ad-campaign.dto";
 import { RecordAdEventDto } from "./dto/record-ad-event.dto";
 import { TransitionAdCampaignDto } from "./dto/transition-ad-campaign.dto";
-import { assertAdTransition, ctr, normalizeApprovedDestination, REVISION_REQUIRED_STATUSES, validateCampaignPlan } from "./ad-policy";
+import { assertAdTransition, ctr, deliveryBudgetEligible, matchesAdTargeting, normalizeApprovedDestination, REVISION_REQUIRED_STATUSES, validateCampaignPlan } from "./ad-policy";
+import { AdPerformanceRange, GetAdPerformanceQueryDto } from "./dto/get-ad-performance-query.dto";
+import { ADS_REPORTING_TIMEZONE, buildPerformanceSeries, lagosDayKey, performanceStart } from "./ad-reporting";
 
 const AD_INCLUDE = {
   vendor: { select: { id: true, businessName: true, logoUrl: true, city: true, state: true } },
@@ -34,34 +36,25 @@ export class AdsService {
     private readonly audit: AdminAuditService
   ) {}
 
-  async customerHome() {
-    const now = new Date();
-    const items = await this.prisma.adCampaign.findMany({
-      where: {
-        placementSurface: AdPlacementSurface.CUSTOMER_HOME_FEATURED,
-        status: AdCampaignStatus.ACTIVE,
-        OR: [{ startsAt: null }, { startsAt: { lte: now } }],
-        AND: [{ OR: [{ endsAt: null }, { endsAt: { gte: now } }] }]
-      },
-      include: AD_INCLUDE,
-      orderBy: { updatedAt: "desc" },
-      take: 3
-    });
-
+  async customerHome(userId: string, serviceCategory?: string) {
+    const eligible = await this.eligibleCustomerCampaigns(userId, serviceCategory);
+    const rotationSeed = `${lagosDayKey(new Date())}:${userId}`;
     return {
-      items: items
-        .filter((campaign) => campaign.requestedBudgetKobo === 0 || campaign.spentKobo < campaign.requestedBudgetKobo)
+      items: eligible
+        .sort((left, right) => this.hashPrivacyToken(`${rotationSeed}:${left.id}`).localeCompare(this.hashPrivacyToken(`${rotationSeed}:${right.id}`)))
+        .slice(0, 3)
         .map((campaign) => this.publicAd(campaign)),
       guardrails: {
         adsAreLabelled: true,
         liveBillingEnabled: false,
         walletTopUpEnabled: false,
-        checkoutPricingAffected: false
+        checkoutPricingAffected: false,
+        selectionPolicy: "Approved eligible campaigns are privacy-safely rotated per customer per Lagos calendar day."
       }
     };
   }
 
-  async vendorDashboard(userId: string) {
+  async vendorDashboard(userId: string, query: GetAdPerformanceQueryDto = new GetAdPerformanceQueryDto()) {
     const vendor = await this.requireVendor(userId);
     const [account, campaigns] = await Promise.all([
       this.ensureAdCreditAccount(vendor.id),
@@ -73,13 +66,31 @@ export class AdsService {
       })
     ]);
 
-    const campaignIds = campaigns.map((campaign) => campaign.id);
-    const grouped = campaignIds.length ? await this.prisma.adCampaignEvent.groupBy({
-      by: ["campaignId", "eventType"], where: { campaignId: { in: campaignIds } }, _count: { _all: true }, _sum: { costKobo: true }
+    const selectedCampaigns = query.campaignId ? campaigns.filter((campaign) => campaign.id === query.campaignId) : campaigns;
+    const campaignIds = selectedCampaigns.map((campaign) => campaign.id);
+    const now = new Date();
+    const lifetimeStart = selectedCampaigns.reduce<Date | undefined>((first, campaign) => !first || campaign.createdAt < first ? campaign.createdAt : first, undefined);
+    const start = performanceStart(query.range ?? AdPerformanceRange.DAYS_7, now, lifetimeStart);
+    const events = campaignIds.length ? await this.prisma.adCampaignEvent.findMany({
+      where: { campaignId: { in: campaignIds }, ...(start ? { occurredAt: { gte: start, lte: now } } : {}) },
+      select: { campaignId: true, eventType: true, costKobo: true, occurredAt: true },
+      orderBy: { occurredAt: "asc" }
     }) : [];
+    const grouped = this.groupEvents(events);
+    const range = query.range ?? AdPerformanceRange.DAYS_7;
     return {
       creditAccount: this.creditAccount(account),
-      campaigns: campaigns.map((campaign) => this.vendorAd(campaign, this.analyticsFor(campaign.id, grouped))),
+      campaigns: campaigns.map((campaign) => this.vendorAd(campaign, this.analyticsFor(campaign.id, grouped), {
+        range,
+        timezone: ADS_REPORTING_TIMEZONE,
+        buckets: buildPerformanceSeries(range, events.filter((event) => event.campaignId === campaign.id), now, campaign.createdAt)
+      })),
+      performance: {
+        range,
+        timezone: ADS_REPORTING_TIMEZONE,
+        buckets: buildPerformanceSeries(range, events, now, lifetimeStart),
+        spendPolicy: "Spend is reported only from recorded costKobo. Automated CPC/CPM pricing remains disabled."
+      },
       guardrails: this.adGuardrails()
     };
   }
@@ -337,18 +348,14 @@ export class AdsService {
     return this.transitionCampaign(adminUserId, AdCampaignActorType.ADMIN, campaign, dto);
   }
 
-  async recordEvent(campaignId: string, dto: RecordAdEventDto, privacyToken?: string) {
-    const campaign = await this.prisma.adCampaign.findUnique({ where: { id: campaignId }, include: AD_INCLUDE });
+  async recordEvent(userId: string, campaignId: string, dto: RecordAdEventDto) {
+    const campaign = (await this.eligibleCustomerCampaigns(userId, dto.serviceCategory)).find((item) => item.id === campaignId);
     const revision = campaign?.approvedRevision;
-    if (!campaign || !revision || campaign.status !== AdCampaignStatus.ACTIVE || revision.id !== campaign.approvedRevisionId) {
+    if (!campaign || !revision || dto.placement !== revision.placementSurface) {
       throw new NotFoundException("Active ad campaign not found");
     }
-    const now = new Date();
-    if ((campaign.startsAt && campaign.startsAt > now) || (campaign.endsAt && campaign.endsAt < now) || (campaign.requestedBudgetKobo > 0 && campaign.spentKobo >= campaign.requestedBudgetKobo)) {
-      throw new NotFoundException("Active ad campaign not found");
-    }
-    const dedupeSource = dto.renderToken && privacyToken ? `${campaign.id}:${revision.id}:${dto.eventType}:${dto.renderToken}:${privacyToken}` : undefined;
-    const dedupeKeyHash = dedupeSource ? this.hashPrivacyToken(dedupeSource) : undefined;
+    const dedupeSource = `${campaign.id}:${revision.id}:${dto.eventType}:${dto.renderToken}:${userId}`;
+    const dedupeKeyHash = this.hashPrivacyToken(dedupeSource);
     try {
       await this.prisma.adCampaignEvent.create({ data: {
         campaignId: campaign.id, revisionId: revision.id, eventType: dto.eventType,
@@ -390,6 +397,39 @@ export class AdsService {
     });
     await this.audit.record(adminUserId, "vendor_ad_credit.granted", "Vendor", vendorId, { amountKobo: dto.amountKobo });
     return this.creditAccount(updated);
+  }
+
+  private async eligibleCustomerCampaigns(userId: string, serviceCategory?: string) {
+    const now = new Date();
+    const [address, campaigns] = await Promise.all([
+      this.prisma.address.findFirst({ where: { userId }, orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }], select: { city: true, state: true } }),
+      this.prisma.adCampaign.findMany({
+        where: { status: AdCampaignStatus.ACTIVE, placementSurface: AdPlacementSurface.CUSTOMER_HOME_FEATURED, approvedRevisionId: { not: null } },
+        include: AD_INCLUDE
+      })
+    ]);
+    const dayStart = new Date(`${lagosDayKey(now)}T00:00:00+01:00`);
+    const dailySpend = campaigns.length ? await this.prisma.adCampaignEvent.groupBy({
+      by: ["campaignId"], where: { campaignId: { in: campaigns.map((item) => item.id) }, occurredAt: { gte: dayStart, lte: now } }, _sum: { costKobo: true }
+    }) : [];
+    return campaigns.filter((campaign) => {
+      const revision = campaign.approvedRevision;
+      if (!revision || revision.id !== campaign.approvedRevisionId || revision.placementSurface !== AdPlacementSurface.CUSTOMER_HOME_FEATURED) return false;
+      if ((revision.startsAt && revision.startsAt > now) || (revision.endsAt && revision.endsAt < now)) return false;
+      const spentToday = dailySpend.find((item) => item.campaignId === campaign.id)?._sum.costKobo ?? 0;
+      if (!deliveryBudgetEligible({ requestedBudgetKobo: revision.requestedBudgetKobo, dailyBudgetKobo: revision.dailyBudgetKobo, spentKobo: campaign.spentKobo, spentTodayKobo: spentToday, vendorFunded: Boolean(campaign.vendorId), reservedCreditKobo: campaign.reservedCreditKobo })) return false;
+      return matchesAdTargeting(revision.targeting, address, serviceCategory);
+    });
+  }
+
+  private groupEvents(events: Array<{ campaignId: string; eventType: AdCampaignEventType; costKobo: number }>) {
+    const grouped = new Map<string, { campaignId: string; eventType: AdCampaignEventType; _count: { _all: number }; _sum: { costKobo: number } }>();
+    for (const event of events) {
+      const key = `${event.campaignId}:${event.eventType}`;
+      const item = grouped.get(key) ?? { campaignId: event.campaignId, eventType: event.eventType, _count: { _all: 0 }, _sum: { costKobo: 0 } };
+      item._count._all += 1; item._sum.costKobo += event.costKobo; grouped.set(key, item);
+    }
+    return [...grouped.values()];
   }
 
   private async requireVendor(userId: string) {
@@ -446,6 +486,12 @@ export class AdsService {
     campaign: Prisma.AdCampaignGetPayload<{ include: typeof AD_INCLUDE }>,
     dto: TransitionAdCampaignDto
   ) {
+    const revision = campaign.revisions.find((item) => item.revisionNumber === campaign.currentRevisionNumber);
+    const pendingReplacement = Boolean(revision && campaign.approvedRevisionId && revision.id !== campaign.approvedRevisionId && REVISION_REQUIRED_STATUSES.has(campaign.status));
+    const replacementReviewTargets = [AdCampaignStatus.SUBMITTED, AdCampaignStatus.UNDER_REVIEW, AdCampaignStatus.CHANGES_REQUESTED, AdCampaignStatus.APPROVED, AdCampaignStatus.REJECTED] as AdCampaignStatus[];
+    if (pendingReplacement && revision && replacementReviewTargets.includes(dto.status)) {
+      return this.transitionReplacementRevision(actorUserId, actorType, campaign, revision, dto);
+    }
     assertAdTransition(campaign.status, dto.status);
     if (dto.status === AdCampaignStatus.SUBMITTED) {
       const pending = campaign.revisions.find((revision) => revision.revisionNumber === campaign.currentRevisionNumber);
@@ -458,7 +504,6 @@ export class AdsService {
     if (actorType === AdCampaignActorType.VENDOR && !([AdCampaignStatus.SUBMITTED, AdCampaignStatus.CANCELLED, AdCampaignStatus.PAUSED, AdCampaignStatus.ACTIVE] as AdCampaignStatus[]).includes(dto.status)) {
       throw new BadRequestException("Campaign owners cannot perform that transition.");
     }
-    const revision = campaign.revisions.find((item) => item.revisionNumber === campaign.currentRevisionNumber);
     const approved = dto.status === AdCampaignStatus.APPROVED;
     const published = dto.status === AdCampaignStatus.ACTIVE;
     const release = ([AdCampaignStatus.REJECTED, AdCampaignStatus.CANCELLED, AdCampaignStatus.EXPIRED, AdCampaignStatus.COMPLETED] as AdCampaignStatus[]).includes(dto.status);
@@ -490,6 +535,75 @@ export class AdsService {
     return actorType === AdCampaignActorType.ADMIN ? this.adminAd(updated) : this.vendorAd(updated);
   }
 
+  private async transitionReplacementRevision(
+    actorUserId: string,
+    actorType: AdCampaignActorType,
+    campaign: Prisma.AdCampaignGetPayload<{ include: typeof AD_INCLUDE }>,
+    revision: Prisma.AdCampaignRevisionGetPayload<{ include: { creativeAsset: true } }>,
+    dto: TransitionAdCampaignDto
+  ) {
+    const from = this.revisionReviewStatus(campaign);
+    const allowed: Record<string, AdCampaignStatus[]> = {
+      DRAFT: [AdCampaignStatus.SUBMITTED],
+      SUBMITTED: [AdCampaignStatus.UNDER_REVIEW],
+      UNDER_REVIEW: [AdCampaignStatus.CHANGES_REQUESTED, AdCampaignStatus.APPROVED, AdCampaignStatus.REJECTED],
+      CHANGES_REQUESTED: [AdCampaignStatus.SUBMITTED]
+    };
+    if (actorType === AdCampaignActorType.VENDOR && dto.status !== AdCampaignStatus.SUBMITTED) {
+      throw new BadRequestException("Campaign owners may only submit a pending replacement revision.");
+    }
+    if (!(allowed[from] ?? []).includes(dto.status)) {
+      throw new BadRequestException(`Replacement revision cannot move from ${from} to ${dto.status}.`);
+    }
+    if ((dto.status === AdCampaignStatus.CHANGES_REQUESTED || dto.status === AdCampaignStatus.REJECTED) && !dto.reason?.trim()) {
+      throw new BadRequestException("A review reason is required.");
+    }
+    validateCampaignPlan({ requestedBudgetKobo: revision.requestedBudgetKobo, dailyBudgetKobo: revision.dailyBudgetKobo, startsAt: revision.startsAt, endsAt: revision.endsAt });
+    const approved = dto.status === AdCampaignStatus.APPROVED;
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.adCampaignRevision.update({ where: { id: revision.id }, data: {
+        ...(dto.status === AdCampaignStatus.SUBMITTED ? { submittedAt: new Date() } : {}),
+        ...(approved ? { approvedAt: new Date(), reviewNotes: this.optionalText(dto.reason) } : {}),
+        ...(dto.status === AdCampaignStatus.CHANGES_REQUESTED ? { reviewNotes: dto.reason } : {})
+      }});
+      if (approved) {
+        await tx.adCampaign.update({ where: { id: campaign.id }, data: {
+          approvedRevisionId: revision.id,
+          title: revision.title,
+          body: revision.body,
+          imageUrl: revision.imageUrl,
+          ctaLabel: revision.ctaLabel,
+          ctaUrl: revision.ctaUrl,
+          requestedBudgetKobo: revision.requestedBudgetKobo,
+          dailyBudgetKobo: revision.dailyBudgetKobo,
+          startsAt: revision.startsAt,
+          endsAt: revision.endsAt,
+          placementSurface: revision.placementSurface,
+          targeting: revision.targeting ?? Prisma.JsonNull,
+          reviewedByAdminId: actorUserId,
+          reviewedAt: new Date()
+        }});
+      }
+      await tx.adCampaignAuditEvent.create({ data: {
+        campaignId: campaign.id,
+        actorUserId,
+        actorType,
+        action: "revision.transitioned",
+        fromStatus: from as AdCampaignStatus,
+        toStatus: dto.status,
+        revisionNumber: revision.revisionNumber,
+        reason: this.optionalText(dto.reason)
+      }});
+      return tx.adCampaign.findUniqueOrThrow({ where: { id: campaign.id }, include: AD_INCLUDE });
+    });
+    return actorType === AdCampaignActorType.ADMIN ? this.adminAd(updated) : this.vendorAd(updated);
+  }
+
+  private revisionReviewStatus(campaign: Prisma.AdCampaignGetPayload<{ include: typeof AD_INCLUDE }>) {
+    const latest = campaign.auditEvents.find((event) => event.revisionNumber === campaign.currentRevisionNumber && event.action === "revision.transitioned");
+    return latest?.toStatus ?? AdCampaignStatus.DRAFT;
+  }
+
   private publicAd(campaign: Prisma.AdCampaignGetPayload<{ include: typeof AD_INCLUDE }>) {
     const revision = campaign.approvedRevision;
     return {
@@ -509,7 +623,7 @@ export class AdsService {
     };
   }
 
-  private vendorAd(campaign: Prisma.AdCampaignGetPayload<{ include: typeof AD_INCLUDE }>, analytics = { impressions: 0, clicks: 0, spendKobo: 0, ctr: 0 }) {
+  private vendorAd(campaign: Prisma.AdCampaignGetPayload<{ include: typeof AD_INCLUDE }>, analytics = { impressions: 0, clicks: 0, spendKobo: 0, ctr: 0 }, performance?: unknown) {
     return {
       ...this.publicAd(campaign),
       requestedBudgetKobo: campaign.requestedBudgetKobo,
@@ -518,6 +632,7 @@ export class AdsService {
       spentKobo: campaign.spentKobo,
       remainingBudgetKobo: Math.max(0, campaign.requestedBudgetKobo - campaign.spentKobo),
       analytics,
+      performance,
       status: campaign.status,
       startsAt: campaign.startsAt,
       endsAt: campaign.endsAt,
@@ -527,6 +642,8 @@ export class AdsService {
       updatedAt: campaign.updatedAt
       ,currentRevisionNumber: campaign.currentRevisionNumber,
       approvedRevisionId: campaign.approvedRevisionId,
+      pendingRevisionStatus: campaign.approvedRevisionId && campaign.approvedRevision?.id !== campaign.revisions.find((revision) => revision.revisionNumber === campaign.currentRevisionNumber)?.id
+        ? this.revisionReviewStatus(campaign) : null,
       revisions: campaign.revisions.map((revision) => ({
         id: revision.id, revisionNumber: revision.revisionNumber, createdByType: revision.createdByType,
         changeReason: revision.changeReason, reviewNotes: revision.reviewNotes, submittedAt: revision.submittedAt,

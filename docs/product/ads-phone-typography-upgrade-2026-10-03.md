@@ -36,3 +36,17 @@ Lost-SIM recovery must never bypass verification. Support should require an auth
 8. Read-only verify the production sample campaign identity, then seek separate approval before pausing, removing, or migrating it.
 
 Required approvals are: Git push; Vercel consequences; production bucket/service identity/IAM/credential creation; Render environment changes; exact-SHA Render deployment and migration; production sample-ad mutation; any live advertiser pricing/billing; and any support-assisted lost-number override workflow.
+
+## Release-gate completion notes
+
+Customer delivery now requires an authenticated Customer account. The server checks the approved revision, active lifecycle, revision schedule, total budget, daily recorded spend, vendor reservation, requested placement, the customer's stored default/recent city or state, and the requested KariGO service context. A configured city or category fails closed when that context is unavailable. Untargeted dimensions remain unrestricted. Eligible campaigns are ordered with a SHA-256 rotation key derived from customer, Lagos calendar day and campaign ID. Targeting rules are not returned to customers.
+
+Event recording repeats eligibility and hashes customer/revision/render context for replay and rerender deduplication. Reporting supports Today, 7 days, 30 days and campaign lifetime with Lagos daily boundaries, zero-filled missing days and zero-safe CTR. Spend is only recorded `costKobo`; CPC/CPM pricing remains disabled.
+
+An active edit creates a new revision while `approvedRevisionId` continues serving. Replacement submission and admin review are recorded as revision transitions without changing the campaign's ACTIVE/PAUSED lifecycle. Approval alone moves `approvedRevisionId` and copies the reviewed fields into the campaign compatibility columns.
+
+The 24-hour hold is enforced for Partner payout-account creation/replacement and another Captain/Partner phone-number change. Hold evaluation fails closed. There is no self-service Captain payout edit, withdrawal or payout execution endpoint in the current runtime, and there is no unrestricted support override.
+
+Completion revokes every stored refresh token in the same transaction. Existing signed access tokens are not centrally denylisted and can remain usable until their normal short expiry, so clients must clear the local session and reauthenticate; this is a documented residual behavior, not a claim of instant access-token invalidation. The account receives an in-app security alert. The flow does not currently send an independent SMS to the old number or an external email notification, so that notification enhancement remains separate from the verified identity/OTP transaction.
+
+For the production sample, first identify the exact campaign/reference, sponsor/vendor, revision IDs, creative, event aggregates and audit rows read-only. Preserve statistics and audit evidence. Pause it, copy it to a non-production demo identity, verify the copy, then use `CANCELLED` for production when approved; retain `PAUSED` instead if legal review requires reversible retention. Never bulk-delete revision, event, ledger or audit records.

@@ -15,6 +15,12 @@ export class PhoneChangeService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     const passwordMatches = user ? await compare(dto.currentPassword, user.passwordHash) : false;
     if (!user || user.deletedAt || !passwordMatches) throw new BadRequestException("Identity confirmation failed.");
+    if (user.role !== UserRole.CUSTOMER) {
+      const recent = await this.prisma.phoneChangeRequest.findFirst({ where: { userId, status: PhoneChangeStatus.COMPLETED }, orderBy: { completedAt: "desc" }, select: { sensitiveActionsHoldUntil: true } });
+      if (recent?.sensitiveActionsHoldUntil && recent.sensitiveActionsHoldUntil > new Date()) {
+        throw new BadRequestException("Another phone-number change is temporarily unavailable for this account.");
+      }
+    }
     const newPhoneNumber = normalizePhoneNumber(dto.newPhoneNumber);
     if (!NIGERIAN_PHONE_PATTERN.test(newPhoneNumber)) throw new BadRequestException("Enter a valid Nigerian phone number.");
     if (newPhoneNumber === user.phoneNumber) throw new BadRequestException("Enter a different phone number.");

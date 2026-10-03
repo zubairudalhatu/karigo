@@ -74,3 +74,33 @@ export function validateCampaignPlan(input: {
 export function ctr(impressions: number, clicks: number) {
   return impressions > 0 ? Number(((clicks / impressions) * 100).toFixed(2)) : 0;
 }
+
+export function matchesAdTargeting(
+  targeting: unknown,
+  address: { city?: string | null; state?: string | null } | null,
+  serviceCategory?: string
+) {
+  if (!targeting || typeof targeting !== "object" || Array.isArray(targeting)) return true;
+  const record = targeting as Record<string, unknown>;
+  const normalize = (value: unknown) => typeof value === "string" ? value.trim().toLocaleLowerCase("en-NG") : "";
+  const cities = Array.isArray(record.cityCodes) ? record.cityCodes.map(normalize).filter(Boolean) : [];
+  const categories = Array.isArray(record.serviceCategories) ? record.serviceCategories.map(normalize).filter(Boolean) : [];
+  const locationValues = [normalize(address?.city), normalize(address?.state)].filter(Boolean);
+  if (cities.length && !cities.some((city) => locationValues.includes(city))) return false;
+  if (categories.length && !categories.includes(normalize(serviceCategory))) return false;
+  return true;
+}
+
+export function deliveryBudgetEligible(input: {
+  requestedBudgetKobo: number;
+  dailyBudgetKobo?: number | null;
+  spentKobo: number;
+  spentTodayKobo: number;
+  vendorFunded: boolean;
+  reservedCreditKobo: number;
+}) {
+  if (input.requestedBudgetKobo > 0 && input.spentKobo >= input.requestedBudgetKobo) return false;
+  if (input.dailyBudgetKobo && input.spentTodayKobo >= input.dailyBudgetKobo) return false;
+  if (input.vendorFunded && input.requestedBudgetKobo > 0 && input.reservedCreditKobo <= input.spentKobo) return false;
+  return true;
+}
