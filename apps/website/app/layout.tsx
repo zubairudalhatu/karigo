@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { ReactNode } from "react";
+import { AnalyticsConsentProvider } from "../src/components/analytics-consent";
+import { GoogleAnalytics } from "../src/components/google-analytics";
 import { SiteFooter } from "../src/components/site-footer";
 import { SiteHeader } from "../src/components/site-header";
 import { absoluteUrl, canonicalOrigin, socialImagePath } from "../src/lib/seo";
@@ -82,9 +84,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
         />
-        <SiteHeader />
-        {children}
-        <SiteFooter />
+        <AnalyticsConsentProvider>
+          <SiteHeader />
+          {children}
+          <SiteFooter />
+          <GoogleAnalytics />
+        </AnalyticsConsentProvider>
       </body>
     </html>
   );

@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { site } from "../lib/site";
+import { trackAnalyticsEvent } from "../lib/analytics";
 
 type ServiceProviderType =
   | "PAINTER"
@@ -88,6 +89,13 @@ export function ServiceProviderApplicationForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+  const analyticsStarted = useRef(false);
+
+  function trackStart() {
+    if (analyticsStarted.current) return;
+    analyticsStarted.current = true;
+    trackAnalyticsEvent("sme_application_start", { source_path: "/sme-services/apply", form_variant: "public_website" });
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -118,6 +126,7 @@ export function ServiceProviderApplicationForm() {
       }
 
       setSuccess("Your service provider application has been submitted. KariGO will review your details and contact you with the next steps.");
+      trackAnalyticsEvent("sme_application_submit", { source_path: "/sme-services/apply", form_variant: "public_website" });
       setForm(initial);
     } catch {
       setError("We could not submit your service provider application right now. Please check the required fields and try again.");
@@ -127,7 +136,7 @@ export function ServiceProviderApplicationForm() {
   }
 
   return (
-    <form className="form-card" onSubmit={submit}>
+    <form className="form-card" onFocusCapture={trackStart} onSubmit={submit}>
       <div className="form-grid">
         <label>Full name<input required value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></label>
         <label>Business name optional<input value={form.businessName} onChange={(event) => setForm({ ...form, businessName: event.target.value })} /></label>

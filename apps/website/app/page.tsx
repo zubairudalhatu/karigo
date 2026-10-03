@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppDownloadBadges } from "../src/components/app-download-badges";
 import { ServiceCard } from "../src/components/service-card";
+import { TrackedAnchor, TrackedLink } from "../src/components/tracked-link";
 import { serviceGroups, services, site } from "../src/lib/site";
 
 export default function HomePage() {
@@ -13,8 +14,8 @@ export default function HomePage() {
           <p className="lead">Order food, shop groceries and market items, send parcels, request SME Services and prepare for more everyday services with KariGO.</p>
           <p className="tagline">Food, groceries, market items, parcels, SME Services and everyday support across Kano and Abuja.</p>
           <div className="actions">
-            <a className="button" href={site.customerGooglePlayUrl} rel="noopener noreferrer" target="_blank">Download the App</a>
-            <Link className="button secondary" href="/vendors/apply">Become a Partner</Link>
+            <TrackedAnchor analyticsEvent="google_play_click" analyticsParameters={{ source_path: "/", placement: "hero", app_target: "customer_android" }} className="button" href={site.customerGooglePlayUrl} rel="noopener noreferrer" target="_blank">Download the App</TrackedAnchor>
+            <TrackedLink analyticsEvent="primary_cta_click" analyticsParameters={{ source_path: "/", placement: "hero", cta_id: "become_partner", destination_id: "vendor_application" }} className="button secondary" href="/vendors/apply">Become a Partner</TrackedLink>
           </div>
         </div>
         <div className="app-visual" aria-label="KariGO app-style preview">
@@ -79,8 +80,8 @@ export default function HomePage() {
           <h2>Grow your business with KariGO.</h2>
           <p>Restaurants, groceries, market sellers and approved service providers can apply to reach customers across Kano and Abuja. KariGO reviews every application before onboarding.</p>
           <div className="actions">
-            <Link className="button" href="/vendors/apply">Apply as a Vendor</Link>
-            <a className="button secondary" href="https://vendor.karigo.com.ng/register">Become a Service Provider</a>
+            <TrackedLink analyticsEvent="primary_cta_click" analyticsParameters={{ source_path: "/", placement: "content", cta_id: "apply_vendor", destination_id: "vendor_application" }} className="button" href="/vendors/apply">Apply as a Vendor</TrackedLink>
+            <TrackedAnchor analyticsEvent="partner_workspace_click" analyticsParameters={{ source_path: "/", placement: "content" }} className="button secondary" href="https://vendor.karigo.com.ng/register">Become a Service Provider</TrackedAnchor>
           </div>
         </article>
         <article className="info-card">

@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { ApplicantAccount, ApplicantOnboardingCard } from "./applicant-onboarding-card";
 import { site } from "../lib/site";
+import { trackAnalyticsEvent } from "../lib/analytics";
 
 type Category = "RESTAURANT" | "GROCERIES" | "MARKET_ITEMS" | "PHARMACY" | "SME_SERVICES" | "OTHER_MARKETPLACE_VENDOR";
 
@@ -48,6 +49,13 @@ export function VendorApplicationForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+  const analyticsStarted = useRef(false);
+
+  function trackStart() {
+    if (analyticsStarted.current) return;
+    analyticsStarted.current = true;
+    trackAnalyticsEvent("vendor_application_start", { source_path: "/vendors/apply", form_variant: "public_website" });
+  }
 
   function applyApplicantAccount(account: ApplicantAccount) {
     setAccountReady(true);
@@ -115,6 +123,7 @@ export function VendorApplicationForm() {
         throw new Error("Application could not be submitted");
       }
       setSuccess("Your vendor application has been submitted. KariGO will review your details and contact you with the next steps.");
+      trackAnalyticsEvent("vendor_application_submit", { source_path: "/vendors/apply", form_variant: "public_website" });
       setForm(initial);
     } catch {
       setError("We could not submit your application right now. Please check your details and try again, or contact KariGO directly.");
@@ -131,7 +140,7 @@ export function VendorApplicationForm() {
       helper="Vendor applications are open for Kano and Abuja launch onboarding. Create the account first, verify your phone with OTP, then create the password you will use after approval."
       onReady={applyApplicantAccount}
     />
-    {accountReady ? <form className="form-card" onSubmit={submit}>
+    {accountReady ? <form className="form-card" onFocusCapture={trackStart} onSubmit={submit}>
       <p className="muted">Vendor application details are linked to your verified vendor account. Approval does not automatically publish a storefront, activate payouts or enable pharmacy scope.</p>
       <div className="form-grid">
         <label>Business name<input required value={form.businessName} onChange={(event) => setForm({ ...form, businessName: event.target.value })} /></label>

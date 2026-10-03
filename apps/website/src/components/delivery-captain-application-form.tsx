@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { ApplicantAccount, ApplicantOnboardingCard } from "./applicant-onboarding-card";
 import { site } from "../lib/site";
+import { trackAnalyticsEvent } from "../lib/analytics";
 
 type VehicleType = "MOTORCYCLE" | "BICYCLE" | "TRICYCLE" | "CAR" | "VAN" | "OTHER";
 
@@ -52,6 +53,13 @@ export function DeliveryCaptainApplicationForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+  const analyticsStarted = useRef(false);
+
+  function trackStart() {
+    if (analyticsStarted.current) return;
+    analyticsStarted.current = true;
+    trackAnalyticsEvent("captain_application_start", { source_path: "/riders", captain_type: "delivery", form_variant: "public_website" });
+  }
 
   function applyApplicantAccount(account: ApplicantAccount) {
     setAccountReady(true);
@@ -118,6 +126,7 @@ export function DeliveryCaptainApplicationForm() {
       }
 
       setSuccess("Your Delivery Captain application has been submitted. KariGO will review your details and contact you with the next steps.");
+      trackAnalyticsEvent("captain_application_submit", { source_path: "/riders", captain_type: "delivery", form_variant: "public_website" });
       setForm(initial);
     } catch (err) {
       setError(err instanceof Error ? err.message : "We could not submit your application right now. Please check your details and try again.");
@@ -134,7 +143,7 @@ export function DeliveryCaptainApplicationForm() {
       helper="Delivery Captain applicants create an account first, verify their phone with OTP, then create a password before submitting application and document details."
       onReady={applyApplicantAccount}
     />
-    {accountReady ? <form id="delivery-captain-application" className="form-card" onSubmit={submit}>
+    {accountReady ? <form id="delivery-captain-application" className="form-card" onFocusCapture={trackStart} onSubmit={submit}>
       <p className="eyebrow">Delivery Captain Application</p>
       <h2>Apply to deliver with KariGO in Kano or Abuja.</h2>
       <p className="muted">Application details are linked to your verified Captain account. Approval can activate the same account for delivery login, but dispatch, payouts and ride access remain separately controlled.</p>

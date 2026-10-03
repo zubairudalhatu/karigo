@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { trackAnalyticsEvent } from "../lib/analytics";
 
 type NavigationItem = { label: string; href?: string; note?: boolean };
 type NavigationGroup = { label: string; href?: string; items?: NavigationItem[] };
@@ -62,6 +63,10 @@ export function SiteHeader() {
   const headerRef = useRef<HTMLElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const trackNavigation = (label: string) => {
+    if (label === "Customer App") trackAnalyticsEvent("customer_app_entry", { source_path: pathname, placement: "navigation" });
+    if (label === "Partner Login") trackAnalyticsEvent("partner_workspace_click", { source_path: pathname, placement: "navigation" });
+  };
   const closeMenu = () => {
     setMenuOpen(false);
     setOpenGroup(null);
@@ -112,13 +117,13 @@ export function SiteHeader() {
             {group.items.map((item) => item.note
               ? <span className="nav-menu-note" aria-disabled="true" key={item.label}>{item.label}<small>Details coming through KariGO onboarding</small></span>
               : item.href?.startsWith("http") || item.href?.startsWith("/#")
-                ? <a key={`${item.label}-${item.href}`} href={item.href} onClick={closeMenu}>{item.label}</a>
-                : <Link key={`${item.label}-${item.href}`} href={item.href!} onClick={closeMenu}>{item.label}</Link>)}
+                ? <a key={`${item.label}-${item.href}`} href={item.href} onClick={() => { trackNavigation(item.label); closeMenu(); }}>{item.label}</a>
+                : <Link key={`${item.label}-${item.href}`} href={item.href!} onClick={() => { trackNavigation(item.label); closeMenu(); }}>{item.label}</Link>)}
           </div>
         </div> : <Link key={group.label} href={group.href!} onClick={closeMenu}>{group.label}</Link>)}
-        <Link className="mobile-nav-cta" href="/vendors/apply" onClick={closeMenu}>Become a Partner</Link>
+        <Link className="mobile-nav-cta" href="/vendors/apply" onClick={() => { trackAnalyticsEvent("primary_cta_click", { source_path: pathname, placement: "header", cta_id: "become_partner", destination_id: "vendor_application" }); closeMenu(); }}>Become a Partner</Link>
       </nav>
-      <Link className="nav-cta desktop-cta" href="/vendors/apply">Become a Partner</Link>
+      <Link className="nav-cta desktop-cta" href="/vendors/apply" onClick={() => trackAnalyticsEvent("primary_cta_click", { source_path: pathname, placement: "header", cta_id: "become_partner", destination_id: "vendor_application" })}>Become a Partner</Link>
     </header>
   );
 }

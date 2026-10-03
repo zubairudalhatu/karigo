@@ -11,7 +11,8 @@
     "test:regression": "node scripts/staging-regression-check.js",
     "test:visual": "node scripts/visual-consolidation-regression-check.js",
     "test:ux-closeout": "node scripts/web-ux-closeout-regression-check.js",
-    "test:seo": "node scripts/seo-foundation-regression-check.js"
+    "test:seo": "node scripts/seo-foundation-regression-check.js",
+    "test:analytics": "node scripts/analytics-privacy-regression-check.js"
   },
   "dependencies": {
     "@karigo/config": "*",

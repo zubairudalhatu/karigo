@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { ApplicantAccount, ApplicantOnboardingCard } from "./applicant-onboarding-card";
 import { site } from "../lib/site";
+import { trackAnalyticsEvent } from "../lib/analytics";
 
 const waitlistInitial = {
   fullName: "",
@@ -108,6 +109,13 @@ export function TaxiDriverApplicationForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+  const analyticsStarted = useRef(false);
+
+  function trackStart() {
+    if (analyticsStarted.current) return;
+    analyticsStarted.current = true;
+    trackAnalyticsEvent("captain_application_start", { source_path: "/riders", captain_type: "ride", form_variant: "public_website" });
+  }
 
   function applyApplicantAccount(account: ApplicantAccount) {
     setAccountReady(true);
@@ -142,6 +150,7 @@ export function TaxiDriverApplicationForm() {
         notes: form.notes || undefined
       });
       setSuccess(response?.data?.message ?? "Ride Captain application submitted. KariGO will review your details before Ride dispatch activation.");
+      trackAnalyticsEvent("captain_application_submit", { source_path: "/riders", captain_type: "ride", form_variant: "public_website" });
       setForm(driverInitial);
     } catch {
       setError("We could not submit your Ride Captain application right now. Please check your details and try again.");
@@ -157,7 +166,7 @@ export function TaxiDriverApplicationForm() {
     helper="Ride Captain applicants verify their phone and create a password first. KariGO Rides remains readiness-only until operations approval."
     onReady={applyApplicantAccount}
   />
-  {accountReady ? <form className="form-card" id="ride-captain-application" onSubmit={submit}>
+  {accountReady ? <form className="form-card" id="ride-captain-application" onFocusCapture={trackStart} onSubmit={submit}>
     <h3>Ride Captain Application</h3>
     <p>Register for Ride Captain review while KariGO verifies ride operations. Approval can link the same Captain account for future review, but this form does not activate live ride dispatch.</p>
     <div className="form-grid">

@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AppDownloadBadges } from "./app-download-badges";
+import { CookieSettingsButton } from "./analytics-consent";
+import { TrackedAnchor } from "./tracked-link";
 
 const socialLinks = [
   { label: "Instagram", href: "https://www.instagram.com/karigoapp", icon: "instagram" },
@@ -47,7 +49,7 @@ export function SiteFooter() {
           <Link href="/riders#delivery-captain-application">Become a Captain</Link>
           <Link href="/riders#ride-captain-application">Become a Ride Captain</Link>
           <Link href="/vendors/apply">Become a Partner</Link>
-          <a href="https://vendor.karigo.com.ng/register" rel="noopener noreferrer">Service Provider opportunities</a>
+          <TrackedAnchor analyticsEvent="partner_workspace_click" analyticsParameters={{ source_path: "/", placement: "footer" }} href="https://vendor.karigo.com.ng/register" rel="noopener noreferrer">Service Provider opportunities</TrackedAnchor>
         </nav>
 
         <nav className="footer-links" aria-label="Company links">
@@ -74,6 +76,7 @@ export function SiteFooter() {
           <Link href="/account-deletion">Account Deletion</Link>
           <Link href="/returns">Returns</Link>
           <Link href="/refunds">Refunds</Link>
+          <CookieSettingsButton />
         </nav>
 
         <section className="footer-apps" aria-label="KariGO apps">

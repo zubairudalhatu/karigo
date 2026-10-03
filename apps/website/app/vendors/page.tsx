@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { buildPageMetadata } from "../../src/lib/seo";
+import { TrackedAnchor, TrackedLink } from "../../src/components/tracked-link";
 
 export const metadata = buildPageMetadata({
   title: "Vendors",
@@ -15,9 +16,9 @@ export default function VendorsPage() {
         <h1>Reach more customers across Kano and Abuja.</h1>
         <p className="lead">KariGO helps restaurants, grocery stores, market sellers and approved service providers receive digital orders, improve operations visibility and reach more customers.</p>
         <div className="actions">
-          <Link className="button" href="/vendors/apply">Apply as a Vendor</Link>
-          <a className="button secondary" href="https://vendor.karigo.com.ng/register">Service Provider Onboarding</a>
-          <a className="button secondary" href="https://vendor.karigo.com.ng">Vendor Login</a>
+          <TrackedLink analyticsEvent="primary_cta_click" analyticsParameters={{ source_path: "/vendors", placement: "content", cta_id: "apply_vendor", destination_id: "vendor_application" }} className="button" href="/vendors/apply">Apply as a Vendor</TrackedLink>
+          <TrackedAnchor analyticsEvent="partner_workspace_click" analyticsParameters={{ source_path: "/vendors", placement: "content" }} className="button secondary" href="https://vendor.karigo.com.ng/register">Service Provider Onboarding</TrackedAnchor>
+          <TrackedAnchor analyticsEvent="partner_workspace_click" analyticsParameters={{ source_path: "/vendors", placement: "content" }} className="button secondary" href="https://vendor.karigo.com.ng">Vendor Login</TrackedAnchor>
         </div>
       </section>
       <section className="section soft">
