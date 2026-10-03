@@ -60,5 +60,7 @@ const customerTypography = css.slice(css.indexOf("/* Customer Web uses"), css.in
 assert(customerTypography.includes("font-weight: 400") && customerTypography.includes("font-weight: 600") && customerTypography.includes("font-weight: 700"), "Customer Web must preserve the normalized typography hierarchy");
 assert(!customerTypography.includes("font-weight: 900"), "Customer Web overrides must not retain 900-weight typography");
 assert(css.includes("@media (max-width: 980px)") && css.includes("@media (max-width: 620px)"), "Customer Web must retain tablet and mobile responsive breakpoints covering the requested viewports");
+const customerWeb = read("apps", "website", "src", "components", "customer-web-portal.tsx");
+assert(customerWeb.includes("Sponsored by") && customerWeb.includes("IMPRESSION") && customerWeb.includes("CLICK"), "Customer Web must render labelled ads and record first-party delivery events");
 
 console.log("Ads Manager, phone identity and Customer Web typography regression checks passed.");

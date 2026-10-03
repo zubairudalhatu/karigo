@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { site } from "../lib/site";
 
 type AuthenticatedUser = { id: string; fullName: string; phoneNumber: string; email?: string | null; role: string };
@@ -29,6 +29,7 @@ type AccountDeletionRequest = {
   blockers: Array<{ code: string; message: string }>;
 };
 type ApiPayload<T> = { success?: boolean; data?: T; message?: string; error_code?: string };
+type WebAd = { id: string; campaignReference: string; title: string; body: string; imageUrl?: string | null; creativeAltText?: string | null; ctaLabel?: string | null; hasDestination: boolean; sponsorName: string; label: "Ad" };
 
 const TOKEN_KEY = "karigo_customer_web_access_token";
 const REFRESH_TOKEN_KEY = "karigo_customer_web_refresh_token";
@@ -90,6 +91,9 @@ export function CustomerWebPortal() {
   const [smeCatalogue, setSmeCatalogue] = useState<ServiceProviderCategory[]>([]);
   const [smeRequests, setSmeRequests] = useState<ServiceRequest[]>([]);
   const [deletionRequest, setDeletionRequest] = useState<AccountDeletionRequest | null>(null);
+  const [homeAd, setHomeAd] = useState<WebAd | null>(null);
+  const adRenderToken = useRef("");
+  const recordedAdImpressions = useRef(new Set<string>());
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -227,6 +231,24 @@ export function CustomerWebPortal() {
     }
     setSessionChecked(true);
   }, []);
+
+  useEffect(() => {
+    if (!sessionChecked) return;
+    if (!adRenderToken.current) adRenderToken.current = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
+    void request<{ items: WebAd[] }>("ads/customer-home", {}, false).then((result) => setHomeAd(result.items[0] ?? null)).catch(() => setHomeAd(null));
+  }, [sessionChecked]);
+
+  useEffect(() => {
+    if (!homeAd || activeTab !== "Dashboard" || recordedAdImpressions.current.has(homeAd.id)) return;
+    recordedAdImpressions.current.add(homeAd.id);
+    void request(`ads/${homeAd.id}/events`, { method: "POST", body: JSON.stringify({ eventType: "IMPRESSION", placement: "CUSTOMER_HOME_FEATURED", renderToken: adRenderToken.current }) }, false).catch(() => undefined);
+  }, [activeTab, homeAd]);
+
+  async function openAdDestination() {
+    if (!homeAd?.hasDestination) return;
+    const result = await request<{ destination?: string }>(`ads/${homeAd.id}/events`, { method: "POST", body: JSON.stringify({ eventType: "CLICK", placement: "CUSTOMER_HOME_FEATURED", renderToken: adRenderToken.current }) }, false);
+    if (result.destination?.startsWith("https://")) window.open(result.destination, "_blank", "noopener,noreferrer");
+  }
 
   useEffect(() => {
     if (accessToken) void loadPortalData();
@@ -578,6 +600,7 @@ export function CustomerWebPortal() {
       {loading ? <p className="notice">Loading customer portal data...</p> : null}
 
       {activeTab === "Dashboard" ? <section className="portal-grid">
+        {homeAd ? <article className="portal-card customer-sponsored-card"><p className="eyebrow">{homeAd.label} · Sponsored by {homeAd.sponsorName}</p>{homeAd.imageUrl ? <img src={homeAd.imageUrl.startsWith("/") ? `${site.apiBaseUrl}${homeAd.imageUrl}` : homeAd.imageUrl} alt={homeAd.creativeAltText ?? homeAd.title} /> : null}<h2>{homeAd.title}</h2><p>{homeAd.body}</p>{homeAd.hasDestination ? <button type="button" onClick={() => void openAdDestination()}>{homeAd.ctaLabel ?? "Learn more"}</button> : null}</article> : null}
         <article className="portal-card"><span>Wallet balance</span><strong>{money(wallet?.availableBalance)}</strong><p>Wallet credits only after backend verification.</p></article>
         <article className="portal-card"><span>Orders</span><strong>{orders.length}</strong><p>Use the mobile app for the full shopping and checkout experience.</p><a className="button small-button" href={site.customerGooglePlayUrl} rel="noopener noreferrer" target="_blank">Get KariGO on Google Play</a></article>
         <article className="portal-card"><span>SME requests</span><strong>{smeRequests.length}</strong><p>{supportedSmeCategoryLabels.join(", ")} now supported.</p></article>
