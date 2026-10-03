@@ -4,8 +4,8 @@ import * as Location from "expo-location";
 import type { LaunchAvailabilityResponse, LaunchServiceType, ServiceCategory, TaxiTrip, VendorSummary } from "@karigo/shared-types";
 import { isActiveTaxiTripStatus, taxiLifecycleForStatus } from "@karigo/shared-types";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Image, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { adsApi, CustomerHomeAd } from "../../src/api/ads.api";
 import { launchApi } from "../../src/api/launch.api";
 import { taxiApi } from "../../src/api/taxi.api";
@@ -192,6 +192,8 @@ export default function CustomerHome() {
 
   const featured = useMemo(() => vendors.filter((vendor) => vendor.isOpen).slice(0, 3), [vendors]);
   const homeAd = ads[0];
+  const adRenderToken = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  useEffect(() => { if (homeAd) void adsApi.recordEvent(homeAd.id, "IMPRESSION", adRenderToken.current).catch(() => undefined); }, [homeAd?.id]);
   const activeRide = rides[0] ?? null;
   const columns = width >= 380 ? 3 : 2;
   const serviceTileBasis = `${(100 / columns) - 2}%` as const;
@@ -210,13 +212,10 @@ export default function CustomerHome() {
     router.push(category.href as never);
   }
 
-  function openAd(ad: CustomerHomeAd) {
-    if (!ad.ctaUrl) return;
-    if (ad.ctaUrl.startsWith("/")) {
-      router.push(ad.ctaUrl as never);
-      return;
-    }
-    void Linking.openURL(ad.ctaUrl);
+  async function openAd(ad: CustomerHomeAd) {
+    if (!ad.hasDestination) return;
+    const event = await adsApi.recordEvent(ad.id, "CLICK", adRenderToken.current);
+    if (event.destination?.startsWith("https://")) await Linking.openURL(event.destination);
   }
 
   if (authLoading) return <Loading label="Opening KariGO..." />;
@@ -299,12 +298,13 @@ export default function CustomerHome() {
         : featured.map((vendor) => <VendorSpotlight key={vendor.id} vendor={vendor} />)}
 
       <Pressable
-        accessibilityRole={homeAd?.ctaUrl ? "button" : "text"}
+        accessibilityRole={homeAd?.hasDestination ? "button" : "text"}
         accessibilityLabel={homeAd ? `${homeAd.label}: ${homeAd.title}` : "Ad campaign placement available"}
-        onPress={() => homeAd ? openAd(homeAd) : undefined}
+        onPress={() => homeAd ? void openAd(homeAd) : undefined}
         style={styles.adPlacement}
       >
         <Text style={styles.adLabel}>Ad</Text>
+        {homeAd?.imageUrl ? <Image source={{ uri: homeAd.imageUrl }} style={styles.adImage} accessibilityLabel={homeAd.creativeAltText ?? homeAd.title} /> : null}
         <Text style={styles.adTitle}>{homeAd?.title ?? "Campaign placement available"}</Text>
         <Text style={ui.muted}>{homeAd?.body ?? "Approved KariGO campaigns may appear here. Ads are labelled and never affect checkout pricing or delivery quotes."}</Text>
         <Text style={styles.adSponsor}>{homeAd ? `Sponsored by ${homeAd.sponsorName}` : "Vendor and partner ads require Admin approval."}</Text>
@@ -334,6 +334,7 @@ const styles = StyleSheet.create({
   vendorLogoText: { color: brand.colors.primaryDark, fontSize: 22, fontWeight: "900" },
   link: { color: brand.colors.primary, fontWeight: "900" },
   adPlacement: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 20, borderStyle: "dashed", borderWidth: 1, gap: 8, padding: 16 },
+  adImage: { aspectRatio: 1.91, borderRadius: 14, width: "100%" },
   adLabel: { alignSelf: "flex-start", backgroundColor: "#F3F4F6", borderRadius: 999, color: brand.colors.muted, fontSize: 11, fontWeight: "900", paddingHorizontal: 8, paddingVertical: 4 },
   adTitle: { color: brand.colors.charcoal, fontSize: 17, fontWeight: "900" },
   adSponsor: { color: brand.colors.muted, fontSize: 12, fontWeight: "800" }

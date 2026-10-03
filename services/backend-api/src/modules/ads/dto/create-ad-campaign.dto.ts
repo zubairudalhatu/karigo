@@ -1,6 +1,6 @@
 import { Type } from "class-transformer";
 import { AdCampaignStatus, AdPlacementSurface, AdSponsorType } from "@prisma/client";
-import { IsEnum, IsInt, IsISO8601, IsOptional, IsString, IsUUID, MaxLength, Min } from "class-validator";
+import { IsEnum, IsInt, IsISO8601, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min } from "class-validator";
 
 export class CreateAdCampaignDto {
   @IsString()
@@ -31,6 +31,12 @@ export class CreateAdCampaignDto {
   @IsInt()
   @Min(0)
   requestedBudgetKobo?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  dailyBudgetKobo?: number;
 
   @IsOptional()
   @IsEnum(AdPlacementSurface)
@@ -75,4 +81,13 @@ export class CreateAdCampaignDto {
   @IsOptional()
   @IsISO8601()
   endsAt?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  creativeAltText?: string;
+
+  @IsOptional()
+  @IsObject()
+  targeting?: { cityCodes?: string[]; serviceCategories?: string[] };
 }

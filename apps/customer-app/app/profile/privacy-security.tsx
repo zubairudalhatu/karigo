@@ -55,6 +55,7 @@ export default function PrivacySecurityScreen() {
         />
         <View style={styles.actions}>
           <Button title="Change password" tone="muted" onPress={() => router.push("/profile/change-password")} />
+          <Button title="Change phone number" tone="muted" onPress={() => router.push("/profile/change-phone")} />
           <Button title="Sign out on this device" tone="muted" onPress={async () => { await logout(); router.replace("/auth/login"); }} />
         </View>
       </Card>

@@ -24,4 +24,9 @@ export class UpdateAdCampaignDto extends PartialType(CreateAdCampaignDto) {
   @IsString()
   @MaxLength(500)
   rejectionReason?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  changeReason?: string;
 }

@@ -82,3 +82,8 @@ export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
 }
+
+export interface StartPhoneChangeRequest { newPhoneNumber: string; currentPassword: string; }
+export interface StartPhoneChangeResult { requestId: string; newPhoneNumberMasked: string; expiresAt: string; mockOtp?: string; }
+export interface ConfirmPhoneChangeRequest { requestId: string; otp: string; }
+export interface ConfirmPhoneChangeResult { phoneChanged: true; sessionsRevoked: true; sensitiveActionsHoldUntil?: string | null; }

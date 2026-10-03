@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { API_BASE_URL, api } from "./client";
 
 export interface CustomerHomeAd {
   id: string;
@@ -7,8 +7,9 @@ export interface CustomerHomeAd {
   title: string;
   body: string;
   imageUrl?: string | null;
+  creativeAltText?: string | null;
   ctaLabel?: string | null;
-  ctaUrl?: string | null;
+  hasDestination: boolean;
   sponsorType: "VENDOR" | "EXTERNAL";
   sponsorName: string;
   label: "Ad";
@@ -25,5 +26,15 @@ export interface CustomerHomeAdsResponse {
 }
 
 export const adsApi = {
-  customerHome: () => api.get<CustomerHomeAdsResponse>("ads/customer-home")
+  customerHome: async () => {
+    const response = await api.get<CustomerHomeAdsResponse>("ads/customer-home");
+    return {
+      ...response,
+      items: response.items.map((item) => ({
+        ...item,
+        imageUrl: item.imageUrl?.startsWith("/") ? `${API_BASE_URL}${item.imageUrl}` : item.imageUrl
+      }))
+    };
+  },
+  recordEvent: (campaignId: string, eventType: "IMPRESSION" | "CLICK", renderToken: string) => api.post<{ recorded: true; destination?: string }>(`ads/${campaignId}/events`, { eventType, placement: "CUSTOMER_HOME_FEATURED", renderToken })
 };

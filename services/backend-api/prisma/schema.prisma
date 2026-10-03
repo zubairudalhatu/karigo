@@ -381,12 +381,44 @@ enum AdCampaignStatus {
   DRAFT
   SUBMITTED
   UNDER_REVIEW
+  CHANGES_REQUESTED
   APPROVED
+  SCHEDULED
   REJECTED
   ACTIVE
   PAUSED
+  COMPLETED
   EXPIRED
   CANCELLED
+}
+
+enum AdCampaignActorType {
+  VENDOR
+  ADMIN
+  SYSTEM
+}
+
+enum AdCampaignEventType {
+  IMPRESSION
+  CLICK
+}
+
+enum AdCreativeStorageProvider {
+  LOCAL_TEST
+  GCS
+}
+
+enum PhoneChangeStatus {
+  PENDING_NEW_PHONE_VERIFICATION
+  VERIFIED
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum PhoneChangeAssurance {
+  RECENT_PASSWORD
+  SUPPORT_ASSISTED_RECOVERY
 }
 
 enum AdSponsorType {
@@ -934,6 +966,10 @@ model User {
   vendorActivationAccounts            VendorAccountActivation[]            @relation("VendorActivationUser")
   createdVendorActivationInvitations  VendorAccountActivation[]            @relation("VendorActivationCreatedBy")
   reviewedAdCampaigns                 AdCampaign[]                         @relation("AdCampaignReviewedBy")
+  createdAdCampaignRevisions          AdCampaignRevision[]                 @relation("AdCampaignRevisionCreatedBy")
+  adCampaignAuditEvents               AdCampaignAuditEvent[]               @relation("AdCampaignAuditActor")
+  phoneChangeRequests                 PhoneChangeRequest[]
+  accountSecurityEvents               AccountSecurityEvent[]
   captainWorkState                    CaptainWorkState?
   rideFinancialLedgerEntries          TaxiRideFinancialLedgerEntry[]       @relation("TaxiRideFinancialLedgerActor")
   recordedRideCommissionRemittances   TaxiRideCommissionRemittance[]       @relation("TaxiRideCommissionRemittanceRecordedBy")
@@ -2426,8 +2462,13 @@ model AdCampaign {
   advertiserEmail       String?
   advertiserPhone       String?
   requestedBudgetKobo   Int                         @default(0)
+  dailyBudgetKobo       Int?
   reservedCreditKobo    Int                         @default(0)
+  spentKobo             Int                         @default(0)
   status                AdCampaignStatus            @default(SUBMITTED)
+  currentRevisionNumber Int                         @default(1)
+  approvedRevisionId    String?                     @unique @db.Uuid
+  targeting             Json?
   startsAt              DateTime?
   endsAt                DateTime?
   adminNote             String?
@@ -2440,10 +2481,143 @@ model AdCampaign {
   vendor                Vendor?                     @relation(fields: [vendorId], references: [id])
   reviewedByAdmin       User?                       @relation("AdCampaignReviewedBy", fields: [reviewedByAdminId], references: [id])
   creditLedgerEntries   VendorAdCreditLedgerEntry[]
+  revisions             AdCampaignRevision[]        @relation("AdCampaignRevisions")
+  approvedRevision      AdCampaignRevision?         @relation("ApprovedAdCampaignRevision", fields: [approvedRevisionId], references: [id])
+  events                AdCampaignEvent[]
+  auditEvents           AdCampaignAuditEvent[]
+  creativeAssets        AdCreativeAsset[]
 
   @@index([status, placementSurface])
   @@index([vendorId, status])
   @@map("ad_campaigns")
+}
+
+model AdCampaignRevision {
+  id                  String              @id @default(uuid()) @db.Uuid
+  campaignId          String              @db.Uuid
+  revisionNumber      Int
+  title               String
+  body                String
+  imageUrl            String?
+  creativeAssetId     String?             @db.Uuid
+  creativeAltText     String?
+  ctaLabel            String?
+  ctaUrl              String?
+  requestedBudgetKobo Int                 @default(0)
+  dailyBudgetKobo     Int?
+  startsAt            DateTime?
+  endsAt              DateTime?
+  placementSurface    AdPlacementSurface
+  targeting           Json?
+  createdById         String?             @db.Uuid
+  createdByType       AdCampaignActorType
+  changeReason        String?
+  reviewNotes         String?
+  submittedAt         DateTime?
+  approvedAt          DateTime?
+  publishedAt         DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  campaign            AdCampaign          @relation("AdCampaignRevisions", fields: [campaignId], references: [id], onDelete: Cascade)
+  approvedForCampaign AdCampaign?         @relation("ApprovedAdCampaignRevision")
+  creativeAsset       AdCreativeAsset?    @relation(fields: [creativeAssetId], references: [id])
+  createdBy           User?               @relation("AdCampaignRevisionCreatedBy", fields: [createdById], references: [id])
+  events              AdCampaignEvent[]
+
+  @@unique([campaignId, revisionNumber])
+  @@index([campaignId, createdAt])
+  @@map("ad_campaign_revisions")
+}
+
+model AdCreativeAsset {
+  id               String                    @id @default(uuid()) @db.Uuid
+  campaignId       String                    @db.Uuid
+  provider         AdCreativeStorageProvider
+  bucket           String?
+  storageKey       String                    @unique
+  mimeType         String
+  byteSize         Int
+  width            Int
+  height           Int
+  sha256           String
+  metadataStripped Boolean                   @default(true)
+  createdAt        DateTime                  @default(now())
+  deletedAt        DateTime?
+  campaign         AdCampaign                @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  revisions        AdCampaignRevision[]
+
+  @@index([campaignId, createdAt])
+  @@map("ad_creative_assets")
+}
+
+model AdCampaignEvent {
+  id            String              @id @default(uuid()) @db.Uuid
+  campaignId    String              @db.Uuid
+  revisionId    String              @db.Uuid
+  eventType     AdCampaignEventType
+  placement     AdPlacementSurface
+  dedupeKeyHash String?
+  occurredAt    DateTime            @default(now())
+  costKobo      Int                 @default(0)
+  campaign      AdCampaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  revision      AdCampaignRevision  @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  @@unique([eventType, dedupeKeyHash])
+  @@index([campaignId, eventType, occurredAt])
+  @@map("ad_campaign_events")
+}
+
+model AdCampaignAuditEvent {
+  id             String              @id @default(uuid()) @db.Uuid
+  campaignId     String              @db.Uuid
+  actorUserId    String?             @db.Uuid
+  actorType      AdCampaignActorType
+  action         String
+  fromStatus     AdCampaignStatus?
+  toStatus       AdCampaignStatus?
+  revisionNumber Int?
+  reason         String?
+  changedFields  Json?
+  createdAt      DateTime            @default(now())
+  campaign       AdCampaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  actor          User?               @relation("AdCampaignAuditActor", fields: [actorUserId], references: [id])
+
+  @@index([campaignId, createdAt])
+  @@map("ad_campaign_audit_events")
+}
+
+model PhoneChangeRequest {
+  id                        String               @id @default(uuid()) @db.Uuid
+  userId                    String               @db.Uuid
+  oldPhoneNumber            String
+  newPhoneNumber            String
+  status                    PhoneChangeStatus    @default(PENDING_NEW_PHONE_VERIFICATION)
+  assurance                 PhoneChangeAssurance
+  attempts                  Int                  @default(0)
+  expiresAt                 DateTime
+  verifiedAt                DateTime?
+  completedAt               DateTime?
+  cancelledAt               DateTime?
+  sensitiveActionsHoldUntil DateTime?
+  createdAt                 DateTime             @default(now())
+  updatedAt                 DateTime             @updatedAt
+  user                      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, createdAt])
+  @@index([newPhoneNumber, status])
+  @@map("phone_change_requests")
+}
+
+model AccountSecurityEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("account_security_events")
 }
 
 model VendorAdCreditAccount {

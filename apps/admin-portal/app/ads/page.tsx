@@ -5,7 +5,11 @@ import { AdCampaignStatus, AdSponsorType, adsApi, AdminAdCampaign, AdminAdsRespo
 import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
 import { friendlyError } from "../../src/lib/errors";
 
-const statuses: AdCampaignStatus[] = ["SUBMITTED", "UNDER_REVIEW", "APPROVED", "ACTIVE", "PAUSED", "REJECTED", "EXPIRED", "CANCELLED"];
+const actions: Partial<Record<AdCampaignStatus, AdCampaignStatus[]>> = {
+  DRAFT: ["SUBMITTED", "CANCELLED"], SUBMITTED: ["UNDER_REVIEW", "CANCELLED"], UNDER_REVIEW: ["CHANGES_REQUESTED", "APPROVED", "REJECTED"],
+  CHANGES_REQUESTED: ["SUBMITTED", "CANCELLED"], APPROVED: ["SCHEDULED", "ACTIVE", "CANCELLED"], SCHEDULED: ["ACTIVE", "PAUSED", "EXPIRED", "CANCELLED"],
+  ACTIVE: ["PAUSED", "COMPLETED", "EXPIRED", "CANCELLED"], PAUSED: ["ACTIVE", "COMPLETED", "EXPIRED", "CANCELLED"]
+};
 const sponsorTypes: AdSponsorType[] = ["EXTERNAL", "VENDOR"];
 
 const emptyForm = {
@@ -21,7 +25,7 @@ const emptyForm = {
   ctaLabel: "",
   ctaUrl: "",
   requestedBudgetKobo: "0",
-  status: "APPROVED" as AdCampaignStatus
+  status: "DRAFT" as AdCampaignStatus
 };
 
 function money(value: number) {
@@ -75,7 +79,6 @@ export default function AdminAdsPage() {
         ctaLabel: form.ctaLabel || undefined,
         ctaUrl: form.ctaUrl || undefined,
         requestedBudgetKobo: Number(form.requestedBudgetKobo || 0),
-        status: form.status
       });
       setForm(emptyForm);
       setMessage("Ad campaign has been created for admin review.");
@@ -91,8 +94,28 @@ export default function AdminAdsPage() {
     setMessage("");
     setError("");
     try {
-      await adsApi.update(campaign.id, { status });
+      const reason = ["CHANGES_REQUESTED", "REJECTED"].includes(status) ? window.prompt("Required review reason")?.trim() : undefined;
+      if (["CHANGES_REQUESTED", "REJECTED"].includes(status) && !reason) return;
+      await adsApi.action(campaign.id, status, reason);
       setMessage(`${campaign.campaignReference} updated.`);
+      await load();
+    } catch (e) {
+      setError(friendlyError(e, "form"));
+    }
+  }
+
+  async function editCampaign(campaign: AdminAdCampaign) {
+    const title = window.prompt("Campaign title", campaign.title)?.trim();
+    if (!title) return;
+    const body = window.prompt("Campaign message", campaign.body)?.trim();
+    if (!body) return;
+    const changeReason = window.prompt("Audit note for this admin edit")?.trim();
+    if (!changeReason) return;
+    setMessage("");
+    setError("");
+    try {
+      await adsApi.update(campaign.id, { title, body, changeReason });
+      setMessage(`${campaign.campaignReference} edited by KariGO Admin with an audit note.`);
       await load();
     } catch (e) {
       setError(friendlyError(e, "form"));
@@ -138,7 +161,7 @@ export default function AdminAdsPage() {
         <label>Contact name<input value={form.advertiserContactName} onChange={(e) => setForm({ ...form, advertiserContactName: e.target.value })} /></label>
         <label>Contact email<input value={form.advertiserEmail} onChange={(e) => setForm({ ...form, advertiserEmail: e.target.value })} /></label>
         <label>Contact phone<input value={form.advertiserPhone} onChange={(e) => setForm({ ...form, advertiserPhone: e.target.value })} /></label>
-        <label>Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as AdCampaignStatus })}>{statuses.map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}</select></label>
+        <label>Initial state<input value="DRAFT — submit through governed actions" readOnly /></label>
         <label>Title<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
         <label>Image URL<input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} /></label>
         <label>CTA label<input value={form.ctaLabel} onChange={(e) => setForm({ ...form, ctaLabel: e.target.value })} /></label>
@@ -162,14 +185,14 @@ export default function AdminAdsPage() {
       {data?.items.length ? data.items.map((campaign) => <article className="card" key={campaign.id}>
         <div className="top-actions">
           <span><strong>{campaign.campaignReference}</strong> <Badge>{campaign.status}</Badge></span>
-          <select value={campaign.status} onChange={(e) => void updateAd(campaign, e.target.value as AdCampaignStatus)}>
-            {statuses.map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}
-          </select>
+          <span className="top-actions"><button className="secondary" onClick={() => void editCampaign(campaign)}>Edit during review</button>{(actions[campaign.status] ?? []).map((item) => <button className="secondary" key={item} onClick={() => void updateAd(campaign, item)}>{item.replaceAll("_", " ")}</button>)}</span>
         </div>
         <h3>{campaign.title}</h3>
         <p>{campaign.body}</p>
         <p className="muted">Sponsor: {campaign.sponsorName} ({campaign.sponsorType})</p>
         <p className="muted">Requested {money(campaign.requestedBudgetKobo)} - Reserved {money(campaign.reservedCreditKobo)} - Created {date(campaign.createdAt)}</p>
+        <p className="muted">Revision {campaign.currentRevisionNumber} · Remaining {money(campaign.remainingBudgetKobo)} · {campaign.revisions.length} revision(s) · Edited by KariGO Admin when an audited edit appears below · Last edited {date(campaign.updatedAt)}</p>
+        {campaign.auditEvents.slice(0, 3).map((event) => <p className="muted" key={event.id}>{date(event.createdAt)} · {event.action} {event.fromStatus && event.toStatus ? `${event.fromStatus} → ${event.toStatus}` : ""}</p>)}
         {campaign.rejectionReason ? <p className="error">{campaign.rejectionReason}</p> : null}
       </article>) : <Empty>No ad campaigns yet.</Empty>}
     </section>}

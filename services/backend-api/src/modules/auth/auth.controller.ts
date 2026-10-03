@@ -19,11 +19,13 @@ import { RequestPasswordResetDto } from "./dto/request-password-reset.dto";
 import { RequestVendorActivationLinkDto } from "./dto/request-vendor-activation-link.dto";
 import { ResendOtpDto } from "./dto/resend-otp.dto";
 import { VerifyOtpDto } from "./dto/verify-otp.dto";
+import { ConfirmPhoneChangeDto, StartPhoneChangeDto } from "./dto/phone-change.dto";
+import { PhoneChangeService } from "./phone-change.service";
 
 @ApiTags("Auth")
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService, private readonly phoneChange: PhoneChangeService) {}
 
   @Post("customer/register")
   @ApiOperation({ summary: "Register a customer and issue a phone OTP" })
@@ -50,6 +52,22 @@ export class AuthController {
       message: "If the phone number is eligible, a new OTP has been sent.",
       data: await this.authService.resendOtp(dto)
     };
+  }
+
+  @Post("phone-change/start")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Confirm identity and send an OTP to a new phone number" })
+  async startPhoneChange(@CurrentUser() user: AuthenticatedUser, @Body() dto: StartPhoneChangeDto) {
+    return { message: "If the new number is eligible, a verification code has been sent.", data: await this.phoneChange.start(user.id, dto) };
+  }
+
+  @Post("phone-change/confirm")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Verify and transactionally apply a phone-number change" })
+  async confirmPhoneChange(@CurrentUser() user: AuthenticatedUser, @Body() dto: ConfirmPhoneChangeDto) {
+    return { message: "Phone number changed. Sign in again on all devices.", data: await this.phoneChange.confirm(user.id, dto) };
   }
 
   @Post("vendor-onboarding/account")

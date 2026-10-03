@@ -97,6 +97,8 @@ export function CustomerWebPortal() {
   const [registerForm, setRegisterForm] = useState({ fullName: "", phoneNumber: "", email: "", password: "", referralCode: "" });
   const [otpForm, setOtpForm] = useState({ phoneNumber: "", otp: "" });
   const [profileForm, setProfileForm] = useState({ fullName: "", email: "" });
+  const [phoneChangeForm, setPhoneChangeForm] = useState({ newPhoneNumber: "", currentPassword: "", otp: "" });
+  const [phoneChangeRequestId, setPhoneChangeRequestId] = useState("");
   const [addressForm, setAddressForm] = useState({ label: "Home", addressLine: "", city: "Kano", state: "Kano", country: "Nigeria", isDefault: false });
   const [topUpAmount, setTopUpAmount] = useState("1000");
   const [pendingTopUpReference, setPendingTopUpReference] = useState("");
@@ -329,6 +331,22 @@ export function CustomerWebPortal() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Profile could not be updated.");
     }
+  }
+
+  async function startPhoneChange(event: FormEvent) {
+    event.preventDefault(); setMessage(""); setError("");
+    try {
+      const result = await request<{ requestId: string; newPhoneNumberMasked: string }>("auth/phone-change/start", { method: "POST", body: JSON.stringify({ newPhoneNumber: phoneChangeForm.newPhoneNumber, currentPassword: phoneChangeForm.currentPassword }) });
+      setPhoneChangeRequestId(result.requestId); setMessage(`Verification code sent to ${result.newPhoneNumberMasked}.`);
+    } catch (err) { setError(err instanceof Error ? err.message : "Phone change could not be started."); }
+  }
+
+  async function confirmPhoneChange(event: FormEvent) {
+    event.preventDefault(); setMessage(""); setError("");
+    try {
+      await request("auth/phone-change/confirm", { method: "POST", body: JSON.stringify({ requestId: phoneChangeRequestId, otp: phoneChangeForm.otp }) });
+      setMessage("Phone number changed. Your other sessions were signed out; please sign in again."); clearSession();
+    } catch (err) { setError(err instanceof Error ? err.message : "Phone verification failed."); }
   }
 
   async function createAddress(event: FormEvent) {
@@ -635,13 +653,17 @@ export function CustomerWebPortal() {
         <section className="portal-card"><h2>Saved addresses</h2>{addresses.length ? addresses.map((address) => <p key={address.id}><strong>{address.label}</strong> - {address.addressLine}, {address.city}, {address.state}</p>) : <p>No saved addresses yet.</p>}</section>
       </section> : null}
 
-      {activeTab === "Profile" ? <form className="portal-card" onSubmit={saveProfile}>
+      {activeTab === "Profile" ? <section className="portal-stack"><form className="portal-card" onSubmit={saveProfile}>
         <h2>Your KariGO account</h2>
-        <p>{profile?.phoneNumber}</p>
+        <p><strong>Verified phone number</strong><br />{profile?.phoneNumber}</p>
         <label>Full name<input required value={profileForm.fullName} onChange={(event) => setProfileForm({ ...profileForm, fullName: event.target.value })} /></label>
         <label>Email optional<input type="email" value={profileForm.email} onChange={(event) => setProfileForm({ ...profileForm, email: event.target.value })} /></label>
         <button type="submit">Save profile</button>
-      </form> : null}
+      </form><form className="portal-card" onSubmit={phoneChangeRequestId ? confirmPhoneChange : startPhoneChange}>
+        <h2>Change phone number</h2><p>Your number is never changed until the new number is verified. Changing it signs out existing sessions.</p>
+        {!phoneChangeRequestId ? <><label>New phone number<input required autoComplete="tel" value={phoneChangeForm.newPhoneNumber} onChange={(event) => setPhoneChangeForm({ ...phoneChangeForm, newPhoneNumber: event.target.value })} /></label><label>Current password<input required type="password" autoComplete="current-password" value={phoneChangeForm.currentPassword} onChange={(event) => setPhoneChangeForm({ ...phoneChangeForm, currentPassword: event.target.value })} /></label><button type="submit">Send verification code</button></> : <><label>Verification code<input required inputMode="numeric" maxLength={6} value={phoneChangeForm.otp} onChange={(event) => setPhoneChangeForm({ ...phoneChangeForm, otp: event.target.value.replace(/\D/g, "") })} /></label><button type="submit">Verify and change number</button></>}
+        <p className="muted">Lost access to your old SIM? Use KariGO Support for identity-reviewed recovery. Support cannot bypass verification.</p>
+      </form></section> : null}
 
       {activeTab === "Account deletion" ? <section className="portal-stack">
         <article className="portal-card">

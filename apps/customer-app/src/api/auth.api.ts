@@ -12,7 +12,8 @@ import type {
   RequestPasswordResetResult,
   ResendOtpRequest,
   ResendOtpResult,
-  VerifyOtpRequest
+  VerifyOtpRequest,
+  StartPhoneChangeRequest, StartPhoneChangeResult, ConfirmPhoneChangeRequest, ConfirmPhoneChangeResult
 } from "@karigo/shared-types";
 import { api } from "./client";
 
@@ -32,6 +33,8 @@ export const authApi = {
   verifyOtp: (body: VerifyOtpRequest) => api.post<LoginResult>("auth/verify-otp", body, { authenticated: false, retryOnNetworkFailure: true }),
   login: (body: LoginRequest) => api.post<LoginResponse>("auth/login", body, { authenticated: false, retryOnNetworkFailure: true }),
   changePassword: (body: ChangePasswordRequest) => api.post<{ passwordChanged: boolean }>("auth/change-password", body),
+  startPhoneChange: (body: StartPhoneChangeRequest) => api.post<StartPhoneChangeResult>("auth/phone-change/start", body),
+  confirmPhoneChange: (body: ConfirmPhoneChangeRequest) => api.post<ConfirmPhoneChangeResult>("auth/phone-change/confirm", body),
   refresh: (body: RefreshSessionRequest) => api.post<LoginResult>("auth/refresh", body, { authenticated: false }),
   logout: (body: LogoutRequest) => api.post<{ loggedOut: boolean }>("auth/logout", body),
   me: () => api.get<AuthenticatedUser>("auth/me")

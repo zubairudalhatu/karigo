@@ -1,6 +1,6 @@
 import { api } from "./client";
 
-export type AdCampaignStatus = "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "ACTIVE" | "PAUSED" | "EXPIRED" | "CANCELLED";
+export type AdCampaignStatus = "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "CHANGES_REQUESTED" | "APPROVED" | "SCHEDULED" | "REJECTED" | "ACTIVE" | "PAUSED" | "COMPLETED" | "EXPIRED" | "CANCELLED";
 export type AdSponsorType = "VENDOR" | "EXTERNAL";
 
 export interface AdminAdCampaign {
@@ -19,6 +19,12 @@ export interface AdminAdCampaign {
   advertiserPhone?: string | null;
   requestedBudgetKobo: number;
   reservedCreditKobo: number;
+  dailyBudgetKobo?: number | null;
+  spentKobo: number;
+  remainingBudgetKobo: number;
+  currentRevisionNumber: number;
+  revisions: Array<{ id: string; revisionNumber: number; createdByType: string; changeReason?: string | null; reviewNotes?: string | null; createdAt: string }>;
+  auditEvents: Array<{ id: string; action: string; fromStatus?: AdCampaignStatus | null; toStatus?: AdCampaignStatus | null; reason?: string | null; createdAt: string }>;
   status: AdCampaignStatus;
   startsAt?: string | null;
   endsAt?: string | null;
@@ -64,17 +70,22 @@ export interface AdCampaignInput {
   status?: AdCampaignStatus;
   startsAt?: string;
   endsAt?: string;
+  dailyBudgetKobo?: number;
+  creativeAltText?: string;
+  targeting?: { cityCodes?: string[]; serviceCategories?: string[] };
 }
 
 export interface AdCampaignUpdateInput extends Partial<AdCampaignInput> {
   reservedCreditKobo?: number;
   adminNote?: string;
   rejectionReason?: string;
+  changeReason?: string;
 }
 
 export const adsApi = {
   list: () => api.get<AdminAdsResponse>("admin/ads"),
   create: (body: AdCampaignInput) => api.post<AdminAdCampaign>("admin/ads", body),
   update: (id: string, body: AdCampaignUpdateInput) => api.patch<AdminAdCampaign>(`admin/ads/${id}`, body),
+  action: (id: string, status: AdCampaignStatus, reason?: string) => api.post<AdminAdCampaign>(`admin/ads/${id}/actions`, { status, reason }),
   grantVendorCredit: (vendorId: string, body: { amountKobo: number; description?: string }) => api.post("admin/ads/vendor-credit/" + vendorId, body)
 };

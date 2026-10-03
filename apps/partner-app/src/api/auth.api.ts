@@ -1,4 +1,4 @@
-import type { AuthenticatedUser, LoginRequest, LoginResult, LogoutRequest, RefreshSessionRequest } from "@karigo/shared-types";
+import type { AuthenticatedUser, LoginRequest, LoginResult, LogoutRequest, RefreshSessionRequest, StartPhoneChangeRequest, StartPhoneChangeResult, ConfirmPhoneChangeRequest, ConfirmPhoneChangeResult } from "@karigo/shared-types";
 import { api } from "./client";
 
 export interface VendorApplicantAccountInput {
@@ -40,6 +40,8 @@ export const authApi = {
   refresh: (body: RefreshSessionRequest) => api.post<LoginResult>("auth/refresh", body, { authenticated: false }),
   logout: (body: LogoutRequest) => api.post<{ loggedOut: boolean }>("auth/logout", body),
   me: () => api.get<AuthenticatedUser>("auth/me"),
+  startPhoneChange: (body: StartPhoneChangeRequest) => api.post<StartPhoneChangeResult>("auth/phone-change/start", body),
+  confirmPhoneChange: (body: ConfirmPhoneChangeRequest) => api.post<ConfirmPhoneChangeResult>("auth/phone-change/confirm", body),
   requestPasswordReset: (body: { phoneNumber: string }) =>
     api.post<PasswordResetRequestResult>("auth/password-reset/request", body, { authenticated: false }),
   confirmPasswordReset: (body: { phoneNumber: string; otp: string; newPassword: string }) =>

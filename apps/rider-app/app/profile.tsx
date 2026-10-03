@@ -88,6 +88,7 @@ export default function Profile() {
       <SettingRow icon="bell" label="Notifications" value={unread ? `${unread > 99 ? "99+" : unread} unread` : "No unread updates"} onPress={() => router.push("/notifications")} />
       <SettingRow icon="navigation" label="Navigation" value="Device maps" />
       <SettingRow icon="lock" label="Biometric sign-in" value={biometricEnabled ? "On" : biometricAvailable ? "Off" : "Set up on your phone first"} onPress={biometricAvailable || biometricEnabled ? () => void toggleBiometricSignIn() : undefined} />
+      <SettingRow icon="phone" label="Change phone number" value="Verified change with security hold" onPress={() => router.push("/phone-change")} />
       {biometricBusy ? <Text style={styles.updating}>Updating biometric preference...</Text> : null}
     </View>
 

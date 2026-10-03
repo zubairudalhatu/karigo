@@ -140,6 +140,7 @@ function ProfileContent() {
         <PrimaryButton label="Privacy Policy" onPress={() => router.push("/legal/privacy")} variant="secondary" />
         <PrimaryButton label="Terms of Service" onPress={() => router.push("/legal/terms")} variant="secondary" />
         <PrimaryButton label="Support" onPress={() => router.push("/support")} variant="secondary" />
+        <PrimaryButton label="Change verified phone number" onPress={() => router.push("/profile/change-phone")} variant="secondary" />
         <PrimaryButton label="Delete my KariGO Partner business access" onPress={() => router.push("/profile/delete-account")} variant="secondary" />
       </Card>
       <PrimaryButton label="Log out" onPress={() => void logout()} variant="secondary" />

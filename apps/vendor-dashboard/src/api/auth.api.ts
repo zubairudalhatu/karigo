@@ -10,5 +10,7 @@ export const authApi = {
   requestVendorActivationLink: (body: { phoneNumber?: string; email?: string }) =>
     api.post<{ requestAccepted: boolean; message: string }>("auth/vendor/activation-link/request", body, { authenticated: false }),
   logout: () => api.post<{ loggedOut: boolean }>("auth/logout", {}),
-  me: () => api.get<AuthenticatedUser>("auth/me")
+  me: () => api.get<AuthenticatedUser>("auth/me"),
+  startPhoneChange: (body: { newPhoneNumber: string; currentPassword: string }) => api.post<{ requestId: string; newPhoneNumberMasked: string; expiresAt: string }>("auth/phone-change/start", body),
+  confirmPhoneChange: (body: { requestId: string; otp: string }) => api.post<{ phoneChanged: true; sessionsRevoked: true; sensitiveActionsHoldUntil?: string | null }>("auth/phone-change/confirm", body)
 };

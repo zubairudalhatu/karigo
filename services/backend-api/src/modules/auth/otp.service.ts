@@ -15,14 +15,15 @@ export class OtpService {
     private readonly providers: OtpProviderRegistry
   ) {}
 
-  async issue(userId: string, phoneNumber: string, options: { enforceCooldown?: boolean } = {}) {
+  async issue(userId: string, phoneNumber: string, options: { enforceCooldown?: boolean; purpose?: string } = {}) {
+    const purpose = options.purpose ?? PHONE_VERIFICATION;
     const length = this.config.get<number>("OTP_LENGTH", 6);
     const expiryMinutes = this.config.get<number>("OTP_EXPIRY_MINUTES", 10);
     const cooldownSeconds = this.config.get<number>("OTP_RESEND_COOLDOWN_SECONDS", 60);
 
     if (options.enforceCooldown) {
       const latest = await this.prisma.otpVerification.findFirst({
-        where: { userId, purpose: PHONE_VERIFICATION },
+        where: { userId, purpose },
         orderBy: { createdAt: "desc" },
         select: { createdAt: true }
       });
@@ -40,14 +41,14 @@ export class OtpService {
     const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
 
     await this.prisma.otpVerification.updateMany({
-      where: { userId, purpose: PHONE_VERIFICATION, verifiedAt: null },
+      where: { userId, purpose, verifiedAt: null },
       data: { verifiedAt: new Date() }
     });
 
     const verification = await this.prisma.otpVerification.create({
       data: {
         userId,
-        purpose: PHONE_VERIFICATION,
+        purpose,
         codeHash,
         expiresAt
       }
@@ -59,7 +60,7 @@ export class OtpService {
         phoneNumber,
         otpCode: otp,
         expiresAt,
-        metadata: { userId, purpose: PHONE_VERIFICATION }
+        metadata: { userId, purpose }
       });
     } catch (error) {
       await this.prisma.otpVerification.update({
@@ -72,9 +73,9 @@ export class OtpService {
     return { otp, expiresAt, provider: provider.name };
   }
 
-  async verify(userId: string, otp: string): Promise<void> {
+  async verify(userId: string, otp: string, purpose = PHONE_VERIFICATION): Promise<void> {
     const verification = await this.prisma.otpVerification.findFirst({
-      where: { userId, purpose: PHONE_VERIFICATION, verifiedAt: null },
+      where: { userId, purpose, verifiedAt: null },
       orderBy: { createdAt: "desc" }
     });
 

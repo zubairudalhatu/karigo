@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { vendorApi, VendorProfile } from "../../src/api/vendor.api";
 import { DashboardShell, ErrorMessage, Loading } from "../../src/components/dashboard";
 import { friendlyError } from "../../src/lib/errors";
+import { authApi } from "../../src/api/auth.api";
 
 type VendorProfileUpdatePayload = Pick<
   VendorProfile,
@@ -33,6 +34,15 @@ export default function Profile() {
   const [success, setSuccess] = useState("");
   const [uploading, setUploading] = useState<"logo" | "cover" | null>(null);
   const [saving, setSaving] = useState(false);
+  const [phoneChange, setPhoneChange] = useState({ newPhoneNumber: "", currentPassword: "", otp: "", requestId: "" });
+
+  async function submitPhoneChange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setError(""); setSuccess("");
+    try {
+      if (!phoneChange.requestId) { const result = await authApi.startPhoneChange(phoneChange); setPhoneChange({ ...phoneChange, requestId: result.requestId }); setSuccess(`Verification code sent to ${result.newPhoneNumberMasked}.`); }
+      else { await authApi.confirmPhoneChange({ requestId: phoneChange.requestId, otp: phoneChange.otp }); setSuccess("Phone changed. Existing sessions were revoked; sign in again."); }
+    } catch (cause) { setError(friendlyError(cause, "form")); }
+  }
 
   useEffect(() => {
     vendorApi.profile().then(setProfile).catch((e) => setError(friendlyError(e)));
@@ -81,7 +91,7 @@ export default function Profile() {
     {profile ? <form className="card profile-form" onSubmit={(event) => void submit(event)}>
       <label>Business name<input value={profile.businessName} onChange={(event) => setProfile({ ...profile, businessName: event.target.value })} /></label>
       <label>Description<textarea value={profile.description ?? ""} onChange={(event) => setProfile({ ...profile, description: event.target.value })} /></label>
-      <label>Phone<input value={profile.phoneNumber} onChange={(event) => setProfile({ ...profile, phoneNumber: event.target.value })} /></label>
+      <label>Business contact phone<input value={profile.phoneNumber} onChange={(event) => setProfile({ ...profile, phoneNumber: event.target.value })} /></label>
       <label>Email<input value={profile.email ?? ""} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label>
       <label>Address<input value={profile.address} onChange={(event) => setProfile({ ...profile, address: event.target.value })} /></label>
       <label>City<input value={profile.city} onChange={(event) => setProfile({ ...profile, city: event.target.value })} /></label>
@@ -104,5 +114,6 @@ export default function Profile() {
       {uploading ? <p className="muted">Uploading {uploading === "logo" ? "logo" : "cover image"}...</p> : null}
       <button disabled={saving || Boolean(uploading)}>{saving ? "Saving..." : "Save profile"}</button>
     </form> : null}
+    <form className="card profile-form" onSubmit={(event) => void submitPhoneChange(event)}><h2>Change verified account phone</h2><p className="muted">This guided security flow is separate from the public business contact. It verifies the new number, revokes sessions and places payout/security actions on a 24-hour hold.</p>{!phoneChange.requestId ? <><label>New phone number<input required value={phoneChange.newPhoneNumber} onChange={(event) => setPhoneChange({ ...phoneChange, newPhoneNumber: event.target.value })} /></label><label>Current password<input required type="password" value={phoneChange.currentPassword} onChange={(event) => setPhoneChange({ ...phoneChange, currentPassword: event.target.value })} /></label></> : <label>Verification code<input required inputMode="numeric" maxLength={6} value={phoneChange.otp} onChange={(event) => setPhoneChange({ ...phoneChange, otp: event.target.value.replace(/\D/g, "") })} /></label>}<button>{phoneChange.requestId ? "Verify and change number" : "Send verification code"}</button><p className="muted">Lost the old SIM? Contact KariGO Support for an audited identity review. Support cannot bypass verification.</p></form>
   </DashboardShell>;
 }

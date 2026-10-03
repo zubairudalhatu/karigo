@@ -12,6 +12,7 @@ import { AfricasTalkingOtpProvider } from "./providers/africas-talking-otp.provi
 import { MockOtpProvider } from "./providers/mock-otp.provider";
 import { OtpProviderRegistry } from "./providers/otp-provider.registry";
 import { TermiiOtpProvider } from "./providers/termii-otp.provider";
+import { PhoneChangeService } from "./phone-change.service";
 
 @Module({
   imports: [PassportModule.register({ defaultStrategy: "jwt" }), UsersModule],
@@ -21,6 +22,7 @@ import { TermiiOtpProvider } from "./providers/termii-otp.provider";
     AccountActivationEmailService,
     ApplicationNotificationsService,
     OtpService,
+    PhoneChangeService,
     OtpProviderRegistry,
     MockOtpProvider,
     TermiiOtpProvider,
