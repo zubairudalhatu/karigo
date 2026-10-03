@@ -71,7 +71,7 @@ for (const sensitiveKey of ["name", "email_address", "phone_number", "address", 
 }
 
 const loader = read("src/components/google-analytics.tsx");
-assert.match(loader, /if \(!eligible\) return null/);
+assert.match(loader, /if \(!eligible \|\| !bootstrapped\) return null/);
 assert.match(loader, /send_page_view:\s*false/);
 assert.match(loader, /allow_google_signals:\s*false/);
 for (const consentType of ["ad_storage", "ad_user_data", "ad_personalization"]) {

@@ -85,7 +85,7 @@ async function main() {
   const analyticsLoader = read("src", "components", "google-analytics.tsx");
   const envExample = read(".env.example");
   assert(layout.includes("<GoogleAnalytics />"), "The privacy-gated analytics loader must be integrated.");
-  assert(analyticsLoader.includes("if (!eligible) return null"), "The Google script must remain absent until every runtime gate passes.");
+  assert(analyticsLoader.includes("if (!eligible || !bootstrapped) return null"), "The Google script must remain absent until every runtime gate passes and bootstrap is ready.");
   assert(analyticsLoader.includes("send_page_view: false"), "Automatic GA page views must remain disabled.");
   assert(/^NEXT_PUBLIC_GA_MEASUREMENT_ID=\s*$/m.test(envExample), "The example measurement ID must remain blank.");
   assert(!`${layout}\n${analyticsLoader}\n${envExample}`.match(/G-[A-Z0-9]{6,20}/), "No real GA measurement ID may be committed.");

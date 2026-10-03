@@ -10,6 +10,12 @@ export type AnalyticsConsentRecord = {
   analytics: AnalyticsConsentChoice;
 };
 
+export function createGtagCommandQueue(dataLayer: unknown[]) {
+  return function gtag() {
+    dataLayer.push(arguments);
+  };
+}
+
 type Placement = "header" | "hero" | "content" | "footer" | "download_section" | "navigation";
 type FormVariant = "public_website";
 type CaptainType = "delivery" | "ride";
