@@ -32,3 +32,13 @@ Authenticated local transactions were completed for Customer, Captain and Partne
 ## Validation record
 
 Final command results are recorded in the release report. The dependency audit ran once, the JSON stayed outside source, and no audit fix or package change occurred. The lockfile, production, Git remote, Render, Vercel and EAS were unchanged.
+
+## Production-shaped migration rehearsal addendum
+
+The exact `20261003120000_ads_manager_phone_change` migration passed in a disposable loopback-only PostgreSQL 18.6 database with synthetic production-shaped aggregates: 48 unique-phone users, one active campaign, one credit account and no ledger entries. The first deploy exited 0 in 6.407 seconds including Prisma startup, created exactly one system revision and produced no integrity error. The second deploy exited 0 with no pending migration.
+
+The prior guarded Partner migration contains production-record hash predicates that synthetic identifiers cannot reproduce. A temporary local-only copy changed only those predicates to match seven synthetic fixtures, then its local checksum was normalized to the repository checksum. The ads/phone migration under review was not altered.
+
+The old generated client read and wrote ordinary campaign data after migration, with the write intentionally rolled back. It cannot deserialize a new enum status after the new runtime writes one, so rollback must first prove no `CHANGES_REQUESTED`, `SCHEDULED` or `COMPLETED` row exists. The new runtime completed Customer, Captain and Partner phone changes and the governed Partner campaign create/upload/submit/review/approve/deliver/event flow locally without an external call.
+
+Six focused suites passed: 107 tests. Prisma validation, backend/mobile typechecks, diff checks and secret scanning passed. The proposed ad-creative GCS resource remains uncreated and production creative storage continues to fail closed.
