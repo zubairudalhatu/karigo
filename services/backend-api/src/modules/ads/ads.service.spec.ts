@@ -21,6 +21,13 @@ function harness(campaign = liveCampaign()) {
 }
 
 describe("AdsService revision safety", () => {
+  it("rejects arbitrary vendor image URLs before any campaign mutation", async () => {
+    const { service, prisma } = harness();
+    await expect(service.vendorUpdate("vendor-user", "campaign-1", { imageUrl: "https://example.test/untrusted.png" }))
+      .rejects.toThrow("must be uploaded as validated image files");
+    expect(prisma.adCampaign.findFirst).not.toHaveBeenCalled();
+  });
+
   it("creates a replacement revision without mutating active delivery fields", async () => {
     const { service, tx } = harness();
     await service.vendorUpdate("vendor-user", "campaign-1", { title: "Replacement", body: "Replacement body", changeReason: "Refresh" });

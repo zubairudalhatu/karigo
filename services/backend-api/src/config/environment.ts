@@ -334,12 +334,42 @@ function validatePartnerPrivateStorage(config: Record<string, unknown>) {
   return driver;
 }
 
+function validateAdCreativeStorage(config: Record<string, unknown>) {
+  const driver = stringAlias(config, ["AD_CREATIVE_STORAGE_DRIVER"], "local").toLowerCase();
+  if (!["local", "gcs"].includes(driver)) {
+    throw new Error("AD_CREATIVE_STORAGE_DRIVER must be local or gcs");
+  }
+  // The adapter itself rejects local/missing configuration whenever production storage is invoked.
+  // Keeping boot validation composable allows unrelated production configuration checks to remain precise.
+  if (driver === "gcs") {
+    for (const key of [
+      "AD_CREATIVE_STORAGE_ENDPOINT",
+      "AD_CREATIVE_STORAGE_REGION",
+      "AD_CREATIVE_STORAGE_BUCKET",
+      "AD_CREATIVE_STORAGE_ACCESS_KEY_ID",
+      "AD_CREATIVE_STORAGE_SECRET_ACCESS_KEY"
+    ]) requireValue(config, key);
+    if (requireValue(config, "AD_CREATIVE_STORAGE_ENDPOINT") !== "https://storage.googleapis.com") {
+      throw new Error("AD_CREATIVE_STORAGE_ENDPOINT must be https://storage.googleapis.com");
+    }
+    if (requireValue(config, "AD_CREATIVE_STORAGE_REGION") !== "auto") {
+      throw new Error("AD_CREATIVE_STORAGE_REGION must be auto for GCS interoperability");
+    }
+    if (!booleanFlag(config.AD_CREATIVE_STORAGE_FORCE_PATH_STYLE, "AD_CREATIVE_STORAGE_FORCE_PATH_STYLE", false)) {
+      throw new Error("AD_CREATIVE_STORAGE_FORCE_PATH_STYLE must be true for GCS interoperability");
+    }
+    positiveInteger(config.AD_CREATIVE_STORAGE_TIMEOUT_MS, "AD_CREATIVE_STORAGE_TIMEOUT_MS", 8000);
+  }
+  return driver;
+}
+
 export function validateEnvironment(config: Record<string, unknown>): Record<string, unknown> {
   const databaseUrl = requireValue(config, "DATABASE_URL");
   const prismaAccelerate = validatePrismaAccelerateConfig(config, databaseUrl);
   const captainUploadsStorageEnabled = validateCaptainUploadsStorage(config);
   const appEnvironment = typeof config.APP_ENV === "string" ? config.APP_ENV : "development";
   const partnerPrivateStorageDriver = validatePartnerPrivateStorage(config);
+  const adCreativeStorageDriver = validateAdCreativeStorage(config);
   const otpProvider =
     typeof config.OTP_PROVIDER === "string"
       ? config.OTP_PROVIDER.toLowerCase()
@@ -861,6 +891,7 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     PRISMA_ACCELERATE_ENABLED: prismaAccelerate.prismaAccelerateEnabled,
     CAPTAIN_UPLOADS_STORAGE_ENABLED: captainUploadsStorageEnabled,
     PARTNER_PRIVATE_STORAGE_DRIVER: partnerPrivateStorageDriver,
+    AD_CREATIVE_STORAGE_DRIVER: adCreativeStorageDriver,
     JWT_SECRET: requireValue(config, "JWT_SECRET"),
     JWT_EXPIRES_IN_SECONDS: jwtExpirySeconds(config.JWT_EXPIRES_IN),
     OTP_EXPIRY_MINUTES: positiveInteger(config.OTP_EXPIRY_MINUTES, "OTP_EXPIRY_MINUTES", 10),

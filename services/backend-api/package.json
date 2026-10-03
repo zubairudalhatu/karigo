@@ -17,6 +17,7 @@
     "cleanup:production-demo-data": "node scripts/cleanup-production-demo-data.cjs",
     "sync:accelerate-catalogue": "node scripts/sync-accelerate-live-catalogue.cjs",
     "verify:task207b-migration": "node scripts/verify-task207b-migration-split.cjs",
+    "verify:ad-creative-storage": "node scripts/verify-ad-creative-storage.cjs",
     "test": "jest --runInBand",
     "test:e2e:smoke": "node scripts/e2e-smoke.mjs",
     "test:coverage": "jest --runInBand --coverage",

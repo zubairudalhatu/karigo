@@ -1,10 +1,11 @@
-import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { AdCreativeStorageProvider, AdCampaignStatus } from "@prisma/client";
-import { createHash, randomBytes } from "crypto";
-import { mkdir, readFile, writeFile } from "fs/promises";
-import { join } from "path";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { AdCampaignStatus, UserRole } from "@prisma/client";
+import { createHash } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
+import { AdCreativeStorageReference, AdCreativeStorageService } from "./ad-creative-storage.service";
+import { deliveryBudgetEligible } from "./ad-policy";
+import { lagosDayKey } from "./ad-reporting";
 
 export const AD_CREATIVE_MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = new Map([["image/jpeg", ".jpg"], ["image/png", ".png"]]);
@@ -54,36 +55,118 @@ export function stripJpegMetadata(buffer: Buffer) {
 
 @Injectable()
 export class AdCreativeService {
-  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
+  constructor(private readonly prisma: PrismaService, private readonly storage: AdCreativeStorageService) {}
 
   async saveForVendor(userId: string, campaignId: string, file: { buffer: Buffer; mimetype: string; size: number; originalname: string }) {
     const campaign = await this.prisma.adCampaign.findFirst({ where: { id: campaignId, vendor: { is: { userId, deletedAt: null } } } });
     if (!campaign) throw new NotFoundException("Ad campaign not found");
-    const { width, height } = inspectCreative(file.buffer, file.mimetype);
-    if (this.config.get("APP_ENV", "development") === "production") {
-      throw new ServiceUnavailableException("Production ad-creative storage has not been provisioned.");
-    }
-    const cleaned = file.mimetype === "image/jpeg" ? stripJpegMetadata(file.buffer) : file.buffer;
-    const root = this.config.get("AD_CREATIVE_LOCAL_ROOT", join(process.cwd(), ".local", "ad-creatives"));
-    await mkdir(root, { recursive: true });
-    const storageKey = `${randomBytes(24).toString("hex")}${ALLOWED.get(file.mimetype)}`;
-    await writeFile(join(root, storageKey), cleaned, { flag: "wx" });
-    const asset = await this.prisma.adCreativeAsset.create({ data: {
-      campaignId, provider: AdCreativeStorageProvider.LOCAL_TEST, storageKey, mimeType: file.mimetype,
-      byteSize: cleaned.length, width, height, sha256: createHash("sha256").update(cleaned).digest("hex"), metadataStripped: file.mimetype === "image/jpeg"
-    }});
-    await this.prisma.adCampaignRevision.updateMany({
-      where: { campaignId, revisionNumber: campaign.currentRevisionNumber }, data: { creativeAssetId: asset.id, imageUrl: null }
+    const revision = await this.prisma.adCampaignRevision.findUnique({
+      where: { campaignId_revisionNumber: { campaignId, revisionNumber: campaign.currentRevisionNumber } }
     });
-    return { id: asset.id, mimeType: asset.mimeType, byteSize: asset.byteSize, width, height, metadataStripped: asset.metadataStripped };
+    if (!revision) throw new NotFoundException("Ad campaign revision not found");
+    if (campaign.approvedRevisionId === revision.id) {
+      throw new BadRequestException("Create a replacement revision before uploading new creative bytes.");
+    }
+    const { width, height } = inspectCreative(file.buffer, file.mimetype);
+    const cleaned = file.mimetype === "image/jpeg" ? stripJpegMetadata(file.buffer) : file.buffer;
+    const stored = await this.storage.put(cleaned, file.mimetype as "image/jpeg" | "image/png");
+    try {
+      const asset = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.adCreativeAsset.create({ data: {
+          campaignId, provider: stored.provider, bucket: stored.bucket, storageKey: stored.storageKey, mimeType: file.mimetype,
+          byteSize: cleaned.length, width, height, sha256: createHash("sha256").update(cleaned).digest("hex"), metadataStripped: file.mimetype === "image/jpeg"
+        }});
+        await tx.adCampaignRevision.updateMany({
+          where: { campaignId, revisionNumber: campaign.currentRevisionNumber }, data: { creativeAssetId: created.id, imageUrl: null }
+        });
+        return created;
+      });
+      return { id: asset.id, mimeType: asset.mimeType, byteSize: asset.byteSize, width, height, metadataStripped: asset.metadataStripped };
+    } catch (error) {
+      await this.storage.delete(stored).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async readForActor(assetId: string, actor: Pick<AuthenticatedUser, "id" | "role">) {
+    if (actor.role === UserRole.CUSTOMER) return this.readApproved(assetId);
+    const asset = await this.prisma.adCreativeAsset.findFirst({
+      where: {
+        id: assetId,
+        deletedAt: null,
+        ...(actor.role === UserRole.VENDOR ? { campaign: { is: { vendor: { is: { userId: actor.id, deletedAt: null } } } } } : {})
+      }
+    });
+    if (!asset || (actor.role !== UserRole.VENDOR && actor.role !== UserRole.ADMIN)) throw new NotFoundException("Creative not found");
+    return { buffer: await this.storage.read(this.reference(asset)), mimeType: asset.mimeType };
   }
 
   async readApproved(assetId: string) {
-    const asset = await this.prisma.adCreativeAsset.findFirst({ where: {
-      id: assetId, deletedAt: null, revisions: { some: { approvedForCampaign: { is: { status: AdCampaignStatus.ACTIVE } } } }
-    }});
-    if (!asset || asset.provider !== AdCreativeStorageProvider.LOCAL_TEST) throw new NotFoundException("Creative not found");
-    const root = this.config.get("AD_CREATIVE_LOCAL_ROOT", join(process.cwd(), ".local", "ad-creatives"));
-    return { buffer: await readFile(join(root, asset.storageKey)), mimeType: asset.mimeType };
+    const asset = await this.prisma.adCreativeAsset.findFirst({
+      where: { id: assetId, deletedAt: null },
+      include: { campaign: { include: { approvedRevision: true } } }
+    });
+    if (!asset || !(await this.customerReadable(asset))) throw new NotFoundException("Creative not found");
+    return { buffer: await this.storage.read(this.reference(asset)), mimeType: asset.mimeType };
+  }
+
+  async deleteForVendor(userId: string, assetId: string) {
+    const asset = await this.prisma.adCreativeAsset.findFirst({
+      where: { id: assetId, deletedAt: null, campaign: { is: { vendor: { is: { userId, deletedAt: null } } } } },
+      include: { campaign: { include: { approvedRevision: true } } }
+    });
+    if (!asset) throw new NotFoundException("Creative not found");
+    if (asset.campaign.approvedRevision?.creativeAssetId === asset.id) {
+      throw new ForbiddenException("An approved live creative cannot be deleted.");
+    }
+    await this.storage.delete(this.reference(asset));
+    await this.prisma.adCreativeAsset.update({ where: { id: asset.id }, data: { deletedAt: new Date() } });
+    return { deleted: true };
+  }
+
+  private async customerReadable(asset: {
+    id: string;
+    campaign: {
+      id: string;
+      status: AdCampaignStatus;
+      approvedRevisionId: string | null;
+      vendorId: string | null;
+      reservedCreditKobo: number;
+      spentKobo: number;
+      approvedRevision: {
+        id: string;
+        creativeAssetId: string | null;
+        requestedBudgetKobo: number;
+        dailyBudgetKobo: number | null;
+        startsAt: Date | null;
+        endsAt: Date | null;
+      } | null;
+    };
+  }) {
+    const revision = asset.campaign.approvedRevision;
+    const now = new Date();
+    if (!(asset.campaign.status === AdCampaignStatus.ACTIVE
+      && Boolean(revision)
+      && asset.campaign.approvedRevisionId === revision!.id
+      && revision!.creativeAssetId === asset.id
+      && (!revision!.startsAt || revision!.startsAt <= now)
+      && (!revision!.endsAt || revision!.endsAt >= now))) return false;
+    const dayStart = new Date(`${lagosDayKey(now)}T00:00:00+01:00`);
+    const spend = await this.prisma.adCampaignEvent.aggregate({
+      where: { campaignId: asset.campaign.id, occurredAt: { gte: dayStart, lte: now } },
+      _sum: { costKobo: true }
+    });
+    return deliveryBudgetEligible({
+      requestedBudgetKobo: revision!.requestedBudgetKobo,
+      dailyBudgetKobo: revision!.dailyBudgetKobo,
+      spentKobo: asset.campaign.spentKobo,
+      spentTodayKobo: spend._sum.costKobo ?? 0,
+      vendorFunded: Boolean(asset.campaign.vendorId),
+      reservedCreditKobo: asset.campaign.reservedCreditKobo
+    });
+  }
+
+  private reference(asset: { provider: AdCreativeStorageReference["provider"]; bucket: string | null; storageKey: string }): AdCreativeStorageReference {
+    return { provider: asset.provider, bucket: asset.bucket, storageKey: asset.storageKey };
   }
 }

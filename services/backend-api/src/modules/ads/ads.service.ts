@@ -96,6 +96,9 @@ export class AdsService {
   }
 
   async vendorCreate(userId: string, dto: CreateAdCampaignDto) {
+    if (dto.imageUrl !== undefined) {
+      throw new BadRequestException("Vendor ad creatives must be uploaded as validated image files.");
+    }
     const vendor = await this.requireVendor(userId);
     await this.ensureAdCreditAccount(vendor.id);
     const startsAt = this.optionalDate(dto.startsAt);
@@ -138,6 +141,9 @@ export class AdsService {
   }
 
   async vendorUpdate(userId: string, campaignId: string, dto: UpdateAdCampaignDto) {
+    if (dto.imageUrl !== undefined) {
+      throw new BadRequestException("Vendor ad creatives must be uploaded as validated image files.");
+    }
     const vendor = await this.requireVendor(userId);
     const existing = await this.prisma.adCampaign.findFirst({ where: { id: campaignId, vendorId: vendor.id }, include: AD_INCLUDE });
     if (!existing) throw new NotFoundException("Ad campaign not found");

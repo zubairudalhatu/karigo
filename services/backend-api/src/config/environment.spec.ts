@@ -66,6 +66,37 @@ describe("environment configuration", () => {
     })).toThrow("PARTNER_PRIVATE_STORAGE_KEY_SECRET must be at least 32 characters");
   });
 
+  it("validates the exact GCS interoperability contract for ad creatives", () => {
+    const result = validateEnvironment({
+      ...baseConfig(),
+      AD_CREATIVE_STORAGE_DRIVER: "gcs",
+      AD_CREATIVE_STORAGE_ENDPOINT: "https://storage.googleapis.com",
+      AD_CREATIVE_STORAGE_REGION: "auto",
+      AD_CREATIVE_STORAGE_BUCKET: "ad-creative-test-bucket",
+      AD_CREATIVE_STORAGE_FORCE_PATH_STYLE: "true",
+      AD_CREATIVE_STORAGE_ACCESS_KEY_ID: "test-access",
+      AD_CREATIVE_STORAGE_SECRET_ACCESS_KEY: "test-secret"
+    });
+    expect(result.AD_CREATIVE_STORAGE_DRIVER).toBe("gcs");
+  });
+
+  it("rejects incomplete or incompatible ad-creative GCS configuration", () => {
+    const valid = {
+      ...baseConfig(),
+      AD_CREATIVE_STORAGE_DRIVER: "gcs",
+      AD_CREATIVE_STORAGE_ENDPOINT: "https://storage.googleapis.com",
+      AD_CREATIVE_STORAGE_REGION: "auto",
+      AD_CREATIVE_STORAGE_BUCKET: "ad-creative-test-bucket",
+      AD_CREATIVE_STORAGE_FORCE_PATH_STYLE: "true",
+      AD_CREATIVE_STORAGE_ACCESS_KEY_ID: "test-access",
+      AD_CREATIVE_STORAGE_SECRET_ACCESS_KEY: "test-secret"
+    };
+    expect(() => validateEnvironment({ ...valid, AD_CREATIVE_STORAGE_BUCKET: "" })).toThrow("AD_CREATIVE_STORAGE_BUCKET");
+    expect(() => validateEnvironment({ ...valid, AD_CREATIVE_STORAGE_ENDPOINT: "https://objects.example.test" })).toThrow("storage.googleapis.com");
+    expect(() => validateEnvironment({ ...valid, AD_CREATIVE_STORAGE_REGION: "us-east-1" })).toThrow("must be auto");
+    expect(() => validateEnvironment({ ...valid, AD_CREATIVE_STORAGE_FORCE_PATH_STYLE: "false" })).toThrow("must be true");
+  });
+
   it("adds safe defaults while retaining required values", () => {
     const result = validateEnvironment({
       DATABASE_URL: testDatabaseUrl,

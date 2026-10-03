@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Header, Param, ParseUUIDPipe, Patch, Post, Query, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AdminRole, UserRole } from "@prisma/client";
@@ -47,9 +47,11 @@ export class CustomerAdsController {
 
   @Get("creative/:assetId")
   @Roles(UserRole.CUSTOMER, UserRole.VENDOR, UserRole.ADMIN)
+  @Header("Cache-Control", "private, no-store")
+  @Header("X-Content-Type-Options", "nosniff")
   @ApiOperation({ summary: "Serve an approved active ad creative" })
-  async approvedCreative(@Param("assetId", ParseUUIDPipe) assetId: string) {
-    const asset = await this.creative.readApproved(assetId);
+  async approvedCreative(@Param("assetId", ParseUUIDPipe) assetId: string, @CurrentUser() user: AuthenticatedUser) {
+    const asset = await this.creative.readForActor(assetId, user);
     return new StreamableFile(asset.buffer, { type: asset.mimeType });
   }
 }
