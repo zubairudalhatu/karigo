@@ -11,7 +11,7 @@ const compiled = ts.transpileModule(helperSource, {
 }).outputText;
 const helperModule = { exports: {} };
 new Function("exports", "module", compiled)(helperModule.exports, helperModule);
-const { isCreativeBinaryRequest, prepareCreativeBinaryResponse } = helperModule.exports;
+const { decodeWrappedCreativeResponse, isCreativeBinaryRequest, prepareCreativeBinaryResponse } = helperModule.exports;
 
 const previewHelperPath = path.join(root, "src", "lib", "ad-creative-path.ts");
 const previewHelperSource = fs.readFileSync(previewHelperPath, "utf8");
@@ -67,12 +67,44 @@ const collect = async (prepared) => new Uint8Array(await new Response(prepared.b
   }));
   assert.equal(jsonApiResponse.kind, "not-binary", "Ordinary JSON API responses must stay on the existing JSON response path.");
 
-  for (const mediaType of ["text/html", "image/svg+xml", "application/javascript", "application/octet-stream", "application/json"]) {
+  for (const [mediaType, bytes] of [
+    ["image/png", Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a])],
+    ["image/jpeg", Uint8Array.from([0xff, 0xd8, 0xff, 0xdb])]
+  ]) {
+    const wrapped = new Response(JSON.stringify({
+      success: true,
+      message: "Request successful",
+      data: {
+        options: { type: mediaType, length: bytes.byteLength },
+        stream: { _readableState: { length: bytes.byteLength, buffer: [{ type: "Buffer", data: [...bytes] }] } }
+      }
+    }), { status: 200, headers: { "content-type": "application/json" } });
+    const prepared = prepareCreativeBinaryResponse(creativePath, "GET", wrapped);
+    assert.equal(prepared.kind, "wrapped-json", "The known backend StreamableFile envelope must enter the bounded compatibility decoder.");
+    const decoded = await decodeWrappedCreativeResponse(wrapped);
+    assert.equal(decoded.kind, "binary");
+    assert.deepEqual(await collect(decoded), bytes, `${mediaType} wrapped bytes must remain byte-for-byte identical.`);
+    assert.equal(decoded.headers.get("content-type"), mediaType);
+  }
+
+  for (const mediaType of ["text/html", "image/svg+xml", "application/javascript", "application/octet-stream"]) {
     const prepared = prepareCreativeBinaryResponse(creativePath, "GET", new Response("unsafe", {
       status: 200,
       headers: { "content-type": mediaType }
     }));
     assert.equal(prepared.kind, "rejected", `${mediaType} must be rejected.`);
+  }
+
+  for (const unsafe of [
+    { options: { type: "image/svg+xml", length: 1 }, stream: { _readableState: { length: 1, buffer: [{ type: "Buffer", data: [1] }] } } },
+    { options: { type: "image/png", length: 2 }, stream: { _readableState: { length: 2, buffer: [{ type: "Buffer", data: [1] }] } } },
+    { options: { type: "image/png", length: 1 }, stream: { _readableState: { length: 1, buffer: [{ type: "Buffer", data: [999] }] } } }
+  ]) {
+    const decoded = await decodeWrappedCreativeResponse(new Response(JSON.stringify({ success: true, data: unsafe }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    }));
+    assert.equal(decoded.kind, "rejected", "Malformed or unsafe wrapped creative payloads must be rejected.");
   }
 
   for (const status of [401, 403, 404]) {
@@ -88,9 +120,9 @@ const collect = async (prepared) => new Uint8Array(await new Response(prepared.b
   assert(bffSession.includes("prepareCreativeBinaryResponse(path, request.method, backendResponse)"), "The BFF must use the reviewed binary response gate.");
   assert(bffSession.includes("new NextResponse(creativeResponse.body"), "The BFF must stream the upstream body without JSON/text coercion.");
   assert(bffSession.includes("BFF_CREATIVE_MEDIA_TYPE_REJECTED"), "Unexpected creative MIME types must return a safe bounded error.");
-  assert(bffSession.includes('status=${backendResponse.status} mediaType=${creativeResponse.mediaType || "missing"}'), "Rejected MIME diagnostics must remain limited to safe status and media type fields.");
-  assert(!bffSession.includes("creative media type rejected path="), "Rejected MIME diagnostics must not log creative paths or asset identifiers.");
-  assert(!helperSource.includes(".json(") && !helperSource.includes(".text("), "The binary helper must not coerce creative bytes to JSON or text.");
+  assert(bffSession.includes("decodeWrappedCreativeResponse(backendResponse)"), "The BFF must decode only the known backend StreamableFile JSON envelope.");
+  assert(!bffSession.includes("creative media type rejected path="), "Rejected MIME handling must not log creative paths or asset identifiers.");
+  assert(!prepareCreativeBinaryResponse.toString().includes(".json(") && !prepareCreativeBinaryResponse.toString().includes(".text("), "A direct binary response must stream without JSON or text coercion.");
 
   const adsPage = fs.readFileSync(path.join(root, "app", "ads", "page.tsx"), "utf8");
   const privateMediaRoute = fs.readFileSync(path.join(root, "app", "api", "private-media", "[assetId]", "route.ts"), "utf8");

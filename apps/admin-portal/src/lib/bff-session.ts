@@ -1,7 +1,7 @@
 import { normalizeApiBaseUrl } from "@karigo/config";
 import type { NextRequest } from "next/server";
 import { buildBffUpstreamUrl } from "./bff-url";
-import { isCreativeBinaryRequest, prepareCreativeBinaryResponse } from "./bff-binary-response";
+import { decodeWrappedCreativeResponse, isCreativeBinaryRequest, prepareCreativeBinaryResponse } from "./bff-binary-response";
 import { NextResponse } from "next/server";
 
 const ACCESS_COOKIE = "karigo_admin_access";
@@ -227,7 +227,10 @@ export async function handleBffRequest(request: NextRequest, pathParts: string[]
     }
   }
 
-  const creativeResponse = prepareCreativeBinaryResponse(path, request.method, backendResponse);
+  let creativeResponse = prepareCreativeBinaryResponse(path, request.method, backendResponse);
+  if (creativeResponse.kind === "wrapped-json") {
+    creativeResponse = await decodeWrappedCreativeResponse(backendResponse);
+  }
   if (creativeResponse.kind === "binary") {
     const response = new NextResponse(creativeResponse.body, {
       status: creativeResponse.status,
@@ -237,7 +240,6 @@ export async function handleBffRequest(request: NextRequest, pathParts: string[]
     return response;
   }
   if (creativeResponse.kind === "rejected") {
-    console.warn(`Admin BFF creative media type rejected status=${backendResponse.status} mediaType=${creativeResponse.mediaType || "missing"}`);
     return jsonError("Creative response type is not allowed.", 415, "BFF_CREATIVE_MEDIA_TYPE_REJECTED");
   }
 
