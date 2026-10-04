@@ -88,6 +88,8 @@ const collect = async (prepared) => new Uint8Array(await new Response(prepared.b
   assert(bffSession.includes("prepareCreativeBinaryResponse(path, request.method, backendResponse)"), "The BFF must use the reviewed binary response gate.");
   assert(bffSession.includes("new NextResponse(creativeResponse.body"), "The BFF must stream the upstream body without JSON/text coercion.");
   assert(bffSession.includes("BFF_CREATIVE_MEDIA_TYPE_REJECTED"), "Unexpected creative MIME types must return a safe bounded error.");
+  assert(bffSession.includes('status=${backendResponse.status} mediaType=${creativeResponse.mediaType || "missing"}'), "Rejected MIME diagnostics must remain limited to safe status and media type fields.");
+  assert(!bffSession.includes("creative media type rejected path="), "Rejected MIME diagnostics must not log creative paths or asset identifiers.");
   assert(!helperSource.includes(".json(") && !helperSource.includes(".text("), "The binary helper must not coerce creative bytes to JSON or text.");
 
   const adsPage = fs.readFileSync(path.join(root, "app", "ads", "page.tsx"), "utf8");

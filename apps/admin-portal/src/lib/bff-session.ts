@@ -237,6 +237,7 @@ export async function handleBffRequest(request: NextRequest, pathParts: string[]
     return response;
   }
   if (creativeResponse.kind === "rejected") {
+    console.warn(`Admin BFF creative media type rejected status=${backendResponse.status} mediaType=${creativeResponse.mediaType || "missing"}`);
     return jsonError("Creative response type is not allowed.", 415, "BFF_CREATIVE_MEDIA_TYPE_REJECTED");
   }
 
