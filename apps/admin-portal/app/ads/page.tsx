@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AdCampaignStatus, AdPerformanceRange, AdSponsorType, adsApi, AdminAdCampaign, AdminAdRevisionPresentation, AdminAdsResponse } from "../../src/api/ads.api";
 import { Badge, Empty, ErrorMessage, Loading, PortalShell } from "../../src/components/portal";
 import { friendlyError } from "../../src/lib/errors";
+import { creativePreviewSrc } from "../../src/lib/ad-creative-path";
 
 const actions: Partial<Record<AdCampaignStatus, AdCampaignStatus[]>> = {
   DRAFT: ["SUBMITTED", "CANCELLED"], SUBMITTED: ["UNDER_REVIEW", "CANCELLED"], UNDER_REVIEW: ["CHANGES_REQUESTED", "APPROVED", "REJECTED"],
@@ -25,7 +26,6 @@ function availableActions(campaign: AdminAdCampaign) {
 const emptyForm = { sponsorType: "EXTERNAL" as AdSponsorType, vendorId: "", advertiserName: "", advertiserContactName: "", advertiserEmail: "", advertiserPhone: "", title: "", body: "", ctaLabel: "", ctaUrl: "", requestedBudgetKobo: "0" };
 const money = (value: number) => new Intl.NumberFormat("en-NG", { currency: "NGN", style: "currency", maximumFractionDigits: 0 }).format(value / 100);
 const date = (value?: string | null) => value ? new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "Not set";
-const creativeSrc = (value?: string | null): string | undefined => value?.startsWith("/") ? `/api/bff${value}` : (value ?? undefined);
 const destination = (value?: string | null) => { try { return value ? new URL(value).hostname : "Not set"; } catch { return "Invalid destination"; } };
 const duration = (start?: string | null, end?: string | null) => {
   if (!start || !end) return "Open-ended";
@@ -40,7 +40,7 @@ function ReviewSurface({ campaign }: { campaign: AdminAdCampaign }) {
   return <div className="ad-review-grid">
     <section className="ad-panel creative-panel" aria-label="Creative preview">
       <h4>Creative preview</h4>
-      {creativeSrc(revision?.imageUrl) ? <div className="creative-frame"><img src={creativeSrc(revision?.imageUrl)} alt={revision?.creativeAltText || `${revision?.title || campaign.title} advertising creative`} /></div> : <div className="creative-empty">No creative is attached to this revision.</div>}
+      {creativePreviewSrc(revision?.imageUrl) ? <div className="creative-frame"><img src={creativePreviewSrc(revision?.imageUrl)} alt={revision?.creativeAltText || `${revision?.title || campaign.title} advertising creative`} /></div> : <div className="creative-empty">No creative is attached to this revision.</div>}
       <div className="creative-copy"><strong>{revision?.title ?? campaign.title}</strong><p>{revision?.body ?? campaign.body}</p></div>
       <dl className="detail-list"><div><dt>CTA</dt><dd>{revision?.ctaLabel || "Not set"}</dd></div><div><dt>Destination</dt><dd>{destination(revision?.ctaUrl)}</dd></div><div><dt>Placement</dt><dd>{(revision?.placementSurface || "Not set").replaceAll("_", " ")}</dd></div></dl>
     </section>

@@ -13,6 +13,15 @@ const helperModule = { exports: {} };
 new Function("exports", "module", compiled)(helperModule.exports, helperModule);
 const { isCreativeBinaryRequest, prepareCreativeBinaryResponse } = helperModule.exports;
 
+const previewHelperPath = path.join(root, "src", "lib", "ad-creative-path.ts");
+const previewHelperSource = fs.readFileSync(previewHelperPath, "utf8");
+const previewCompiled = ts.transpileModule(previewHelperSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+}).outputText;
+const previewModule = { exports: {} };
+new Function("exports", "module", previewCompiled)(previewModule.exports, previewModule);
+const { creativePreviewSrc, isCreativeAssetId } = previewModule.exports;
+
 const creativePath = "ads/creative/08c79b73-24ca-4c37-a380-2f0a78a730fc";
 const differentCreativePath = "ads/creative/b48db5f7-7b9e-4f64-90f1-b4565e8e81b8";
 
@@ -47,6 +56,10 @@ const collect = async (prepared) => new Uint8Array(await new Response(prepared.b
   assert.equal(isCreativeBinaryRequest("ads/creative/not-a-uuid", "GET"), false, "Arbitrary object keys must not be proxied.");
   assert.equal(isCreativeBinaryRequest("vendors/creative/08c79b73-24ca-4c37-a380-2f0a78a730fc", "GET"), false);
   assert.equal(isCreativeBinaryRequest(differentCreativePath, "GET"), true);
+  assert.equal(isCreativeAssetId("08c79b73-24ca-4c37-a380-2f0a78a730fc"), true);
+  assert.equal(isCreativeAssetId("../../provider-object"), false);
+  assert.equal(creativePreviewSrc("/ads/creative/08c79b73-24ca-4c37-a380-2f0a78a730fc"), "/api/private-media/08c79b73-24ca-4c37-a380-2f0a78a730fc", "Creative browser URLs must avoid client-side ad-blocking path terms.");
+  assert.equal(creativePreviewSrc("/ads/creative/not-a-uuid"), "/api/bff/ads/creative/not-a-uuid", "Invalid asset identifiers must never enter the private-media route.");
 
   const jsonApiResponse = prepareCreativeBinaryResponse("admin/ads", "GET", new Response(JSON.stringify({ success: true }), {
     status: 200,
@@ -78,8 +91,11 @@ const collect = async (prepared) => new Uint8Array(await new Response(prepared.b
   assert(!helperSource.includes(".json(") && !helperSource.includes(".text("), "The binary helper must not coerce creative bytes to JSON or text.");
 
   const adsPage = fs.readFileSync(path.join(root, "app", "ads", "page.tsx"), "utf8");
+  const privateMediaRoute = fs.readFileSync(path.join(root, "app", "api", "private-media", "[assetId]", "route.ts"), "utf8");
   const styles = fs.readFileSync(path.join(root, "app", "globals.css"), "utf8");
-  assert(adsPage.includes("/api/bff${value}"), "Private creative previews must continue through the same-origin authenticated BFF.");
+  assert(adsPage.includes("creativePreviewSrc"), "Private creative previews must use the client-safe same-origin media route.");
+  assert(privateMediaRoute.includes('handleBffRequest(request, ["ads", "creative", assetId])'), "The client-safe route must reuse the authenticated BFF upstream handler.");
+  assert(privateMediaRoute.includes("isCreativeAssetId(assetId)"), "The client-safe route must reject arbitrary provider object keys before upstream access.");
   assert(adsPage.includes("creativeAltText") && adsPage.includes("advertising creative"), "Creative previews must retain reviewed alt text and fallback text.");
   assert(styles.includes(".creative-frame img") && styles.includes("object-fit: contain") && styles.includes("width: 100%"), "Creative previews must remain responsive and contained.");
 
