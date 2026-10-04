@@ -199,7 +199,7 @@ export class AdsService {
     return this.transitionCampaign(userId, AdCampaignActorType.VENDOR, campaign, dto);
   }
 
-  async adminList() {
+  async adminList(query: GetAdPerformanceQueryDto = new GetAdPerformanceQueryDto()) {
     const [items, submitted, underReview, approved, active, rejected] = await Promise.all([
       this.prisma.adCampaign.findMany({ include: AD_INCLUDE, orderBy: { createdAt: "desc" }, take: 200 }),
       this.prisma.adCampaign.count({ where: { status: AdCampaignStatus.SUBMITTED } }),
@@ -208,9 +208,31 @@ export class AdsService {
       this.prisma.adCampaign.count({ where: { status: AdCampaignStatus.ACTIVE } }),
       this.prisma.adCampaign.count({ where: { status: AdCampaignStatus.REJECTED } })
     ]);
+    const selectedItems = query.campaignId ? items.filter((campaign) => campaign.id === query.campaignId) : items;
+    const campaignIds = selectedItems.map((campaign) => campaign.id);
+    const now = new Date();
+    const lifetimeStart = selectedItems.reduce<Date | undefined>((first, campaign) => !first || campaign.createdAt < first ? campaign.createdAt : first, undefined);
+    const range = query.range ?? AdPerformanceRange.DAYS_7;
+    const start = performanceStart(range, now, lifetimeStart);
+    const events = campaignIds.length ? await this.prisma.adCampaignEvent.findMany({
+      where: { campaignId: { in: campaignIds }, ...(start ? { occurredAt: { gte: start, lte: now } } : {}) },
+      select: { campaignId: true, eventType: true, costKobo: true, occurredAt: true },
+      orderBy: { occurredAt: "asc" }
+    }) : [];
+    const grouped = this.groupEvents(events);
     return {
       summary: { total: items.length, submitted, underReview, approved, active, rejected },
-      items: items.map((campaign) => this.adminAd(campaign)),
+      items: items.map((campaign) => this.adminAd(campaign, this.analyticsFor(campaign.id, grouped), {
+        range,
+        timezone: ADS_REPORTING_TIMEZONE,
+        buckets: buildPerformanceSeries(range, events.filter((event) => event.campaignId === campaign.id), now, campaign.createdAt)
+      })),
+      performance: {
+        range,
+        timezone: ADS_REPORTING_TIMEZONE,
+        buckets: buildPerformanceSeries(range, events, now, lifetimeStart),
+        spendPolicy: "Spend is reported only from recorded costKobo. Automated CPC/CPM pricing remains disabled."
+      },
       guardrails: this.adGuardrails()
     };
   }
@@ -658,9 +680,16 @@ export class AdsService {
     };
   }
 
-  private adminAd(campaign: Prisma.AdCampaignGetPayload<{ include: typeof AD_INCLUDE }>) {
+  private adminAd(
+    campaign: Prisma.AdCampaignGetPayload<{ include: typeof AD_INCLUDE }>,
+    analytics = { impressions: 0, clicks: 0, spendKobo: 0, ctr: 0 },
+    performance?: unknown
+  ) {
+    const currentRevision = campaign.revisions.find((revision) => revision.revisionNumber === campaign.currentRevisionNumber);
     return {
-      ...this.vendorAd(campaign),
+      ...this.vendorAd(campaign, analytics, performance),
+      reviewRevision: currentRevision ? this.adminRevision(currentRevision, currentRevision.id === campaign.approvedRevisionId ? campaign.status : this.revisionReviewStatus(campaign)) : null,
+      approvedRevision: campaign.approvedRevision ? this.adminRevision(campaign.approvedRevision, campaign.status) : null,
       vendor: campaign.vendor,
       advertiserName: campaign.advertiserName,
       advertiserContactName: campaign.advertiserContactName,
@@ -670,6 +699,33 @@ export class AdsService {
       reviewedAt: campaign.reviewedAt,
       submittedAt: campaign.submittedAt
       ,auditEvents: campaign.auditEvents
+    };
+  }
+
+  private adminRevision(
+    revision: Prisma.AdCampaignRevisionGetPayload<{ include: { creativeAsset: true } }>,
+    status: AdCampaignStatus
+  ) {
+    return {
+      id: revision.id,
+      revisionNumber: revision.revisionNumber,
+      status,
+      title: revision.title,
+      body: revision.body,
+      imageUrl: revision.creativeAsset ? `/ads/creative/${revision.creativeAsset.id}` : revision.imageUrl,
+      creativeAltText: revision.creativeAltText,
+      ctaLabel: revision.ctaLabel,
+      ctaUrl: revision.ctaUrl,
+      requestedBudgetKobo: revision.requestedBudgetKobo,
+      dailyBudgetKobo: revision.dailyBudgetKobo,
+      startsAt: revision.startsAt,
+      endsAt: revision.endsAt,
+      placementSurface: revision.placementSurface,
+      targeting: revision.targeting,
+      createdByType: revision.createdByType,
+      changeReason: revision.changeReason,
+      reviewNotes: revision.reviewNotes,
+      createdAt: revision.createdAt
     };
   }
 

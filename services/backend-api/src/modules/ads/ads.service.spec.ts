@@ -1,4 +1,5 @@
-import { AdCampaignActorType, AdCampaignStatus, AdPlacementSurface, AdSponsorType } from "@prisma/client";
+import { AdCampaignActorType, AdCampaignEventType, AdCampaignStatus, AdPlacementSurface, AdSponsorType } from "@prisma/client";
+import { AdPerformanceRange } from "./dto/get-ad-performance-query.dto";
 import { AdsService } from "./ads.service";
 
 function liveCampaign() {
@@ -98,5 +99,41 @@ describe("AdsService customer delivery gates", () => {
 
     const daily = liveCampaign();
     expect((await deliveryHarness(daily, daily.approvedRevision.dailyBudgetKobo).customerHome("customer-1")).items).toHaveLength(0);
+  });
+});
+
+describe("AdsService admin review presentation", () => {
+  it("returns the review revision, backend creative route and range-scoped delivery metrics", async () => {
+    const campaign = liveCampaign();
+    campaign.approvedRevision.creativeAsset = { id: "creative-1" };
+    campaign.approvedRevision.creativeAltText = "Vendor campaign artwork";
+    campaign.approvedRevision.ctaLabel = "View offer";
+    campaign.approvedRevision.ctaUrl = "https://vendor.example/offers";
+    campaign.approvedRevision.targeting = { cityCodes: ["ABUJA"], serviceCategories: ["DELIVERY"] };
+    const events = [
+      { campaignId: campaign.id, eventType: AdCampaignEventType.IMPRESSION, costKobo: 5, occurredAt: new Date() },
+      { campaignId: campaign.id, eventType: AdCampaignEventType.CLICK, costKobo: 10, occurredAt: new Date() }
+    ];
+    const prisma = {
+      adCampaign: {
+        findMany: jest.fn().mockResolvedValue([campaign]),
+        count: jest.fn().mockResolvedValue(0)
+      },
+      adCampaignEvent: { findMany: jest.fn().mockResolvedValue(events) }
+    } as any;
+    const service = new AdsService(prisma, { record: jest.fn() } as any);
+
+    const result = await service.adminList({ range: AdPerformanceRange.DAYS_7 });
+
+    expect(result.items[0]).toEqual(expect.objectContaining({
+      analytics: { impressions: 1, clicks: 1, spendKobo: 15, ctr: 100 },
+      reviewRevision: expect.objectContaining({
+        imageUrl: "/ads/creative/creative-1",
+        ctaUrl: "https://vendor.example/offers",
+        targeting: { cityCodes: ["ABUJA"], serviceCategories: ["DELIVERY"] }
+      }),
+      performance: expect.objectContaining({ range: AdPerformanceRange.DAYS_7, timezone: "Africa/Lagos" })
+    }));
+    expect(prisma.adCampaignEvent.findMany).toHaveBeenCalledTimes(1);
   });
 });

@@ -142,11 +142,45 @@ input,select,textarea { border-radius: var(--radius-control); min-height: 42px; 
 .quick-steps .card p { margin-bottom: 8px; }
 .confirmation { box-shadow: 0 10px 30px rgba(225,29,46,.08); }
 
+.ad-toolbar,.range-tabs,.ad-metrics { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.ad-toolbar { justify-content: space-between; margin-bottom: 12px; }
+.ad-toolbar h2 { margin: 0; }
+.range-tabs button.active { background: var(--red); color: white; }
+.ad-review-card { display: grid; gap: 14px; margin-bottom: 16px; min-width: 0; }
+.ad-review-card > .top-actions { align-items: center; border-bottom: 0; justify-content: space-between; margin: 0; padding: 0; }
+.ad-review-card > .top-actions > .top-actions { border: 0; margin: 0; padding: 0; }
+.ad-review-grid { display: grid; gap: 12px; grid-template-columns: minmax(240px, .9fr) minmax(220px, .7fr) minmax(320px, 1.25fr); min-width: 0; }
+.ad-panel { background: var(--surface-soft); border: 1px solid var(--border); border-radius: 12px; min-width: 0; padding: 14px; }
+.ad-panel h4 { margin: 0 0 10px; }
+.creative-frame { align-items: center; aspect-ratio: 16 / 9; background: #f1f3f5; border: 1px solid var(--border); border-radius: 10px; display: flex; justify-content: center; overflow: hidden; }
+.creative-frame img { display: block; height: 100%; object-fit: contain; width: 100%; }
+.creative-empty { align-items: center; aspect-ratio: 16 / 9; background: #f1f3f5; border: 1px dashed #adb5bd; border-radius: 10px; color: var(--muted); display: flex; justify-content: center; padding: 16px; text-align: center; }
+.creative-copy { overflow-wrap: anywhere; padding: 12px 2px 4px; }
+.creative-copy p { margin: 5px 0; }
+.detail-list { display: grid; gap: 0; margin: 0; }
+.detail-list > div { border-top: 1px solid var(--border); display: grid; gap: 10px; grid-template-columns: minmax(80px, .6fr) minmax(0, 1.4fr); padding: 8px 0; }
+.detail-list dt { color: var(--muted); font-size: 12px; }
+.detail-list dd { margin: 0; overflow-wrap: anywhere; text-align: right; }
+.ad-metrics { align-items: stretch; display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); }
+.ad-metrics > div { background: white; border: 1px solid var(--border); border-radius: 9px; display: grid; gap: 4px; min-width: 0; padding: 9px; }
+.ad-metrics span { color: var(--muted); font-size: 11px; }
+.ad-metrics strong { font-size: 16px; overflow-wrap: anywhere; }
+.ad-chart { align-items: flex-end; display: flex; gap: 6px; min-height: 170px; overflow-x: auto; padding: 14px 2px 2px; }
+.ad-chart-column { display: grid; flex: 1 0 28px; gap: 5px; height: 145px; min-width: 28px; text-align: center; }
+.ad-chart-bars { align-items: flex-end; display: flex; gap: 2px; height: 118px; justify-content: center; }
+.ad-chart-bars i { background: var(--red); border-radius: 3px 3px 0 0; display: block; max-width: 12px; min-height: 2px; width: 42%; }
+.ad-chart-bars i.clicks { background: #334155; }
+.ad-chart-column small { color: var(--muted); font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-review-card details { border-top: 1px solid var(--border); padding-top: 10px; }
+.ad-review-card summary { cursor: pointer; font-weight: 750; }
+
 @media (max-width: 1100px) {
   .shell { grid-template-columns: 232px minmax(0, 1fr); }
   .sidebar { padding-inline: 10px; }
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .quick-grid,.quick-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ad-review-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .performance-panel { grid-column: 1 / -1; }
 }
 
 @media (max-width: 900px) {
@@ -183,4 +217,11 @@ input,select,textarea { border-radius: var(--radius-control); min-height: 42px; 
   .launch-tabs { align-items: center; flex-direction: row; flex-wrap: nowrap; }
   .filters { align-items: stretch; flex-direction: column; }
   .filters input,.filters select,.filters button { width: 100%; }
+  .ad-review-grid,.ad-metrics { grid-template-columns: 1fr; }
+  .performance-panel { grid-column: auto; }
+  .ad-toolbar { align-items: flex-start; }
+  .range-tabs { width: 100%; }
+  .range-tabs button { flex: 1 1 auto; }
+  .detail-list > div { grid-template-columns: 1fr; }
+  .detail-list dd { text-align: left; }
 }

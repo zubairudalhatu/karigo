@@ -112,8 +112,8 @@ export class AdminAdsController {
 
   @Get()
   @ApiOperation({ summary: "List ad campaigns for admin review" })
-  async list() {
-    return { message: "Ad campaigns retrieved", data: await this.ads.adminList() };
+  async list(@Query() query: GetAdPerformanceQueryDto) {
+    return { message: "Ad campaigns retrieved", data: await this.ads.adminList(query) };
   }
 
   @Post()
