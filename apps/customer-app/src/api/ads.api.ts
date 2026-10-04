@@ -33,7 +33,9 @@ export const adsApi = {
     const response = await api.get<CustomerHomeAdsResponse>("ads/customer-home");
     const adPlacement = response.adPlacement ?? (response.items.length
       ? { source: "KARIGO" as const, reason: "ELIGIBLE_KARIGO_CAMPAIGN" as const }
-      : { source: "NONE" as const, reason: "FALLBACK_DISABLED" as const });
+      : process.env.EXPO_PUBLIC_ADMOB_TEST_MODE === "true" && process.env.EXPO_PUBLIC_ADMOB_QA_FORCE_FALLBACK === "true"
+        ? { source: "ADMOB_FALLBACK" as const, reason: "NO_KARIGO_INVENTORY" as const }
+        : { source: "NONE" as const, reason: "FALLBACK_DISABLED" as const });
     return {
       ...response,
       adPlacement,

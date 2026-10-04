@@ -5,6 +5,7 @@ const isStaging =
   process.env.APP_VARIANT === "staging" ||
   process.env.EAS_BUILD_PROFILE === "customer-staging" ||
   process.env.EAS_BUILD_PROFILE === "customer-staging-ios-simulator";
+const isAdMobQa = process.env.EAS_BUILD_PROFILE === "customer-admob-qa";
 
 const androidApi36BuildProperties = {
   android: {
@@ -133,7 +134,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
     router: {},
     apiBaseUrl,
     appEnvironment: process.env.APP_VARIANT ?? "development",
-    updateChannel: isStaging ? "customer-staging" : "customer-production",
+    updateChannel: isStaging || isAdMobQa ? "customer-staging" : "customer-production",
     runtimeVersion: customerAppVersion,
     eas: {
       ...easExtra(config.extra?.eas),

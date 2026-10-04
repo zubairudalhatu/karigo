@@ -20,7 +20,8 @@ export function AdMobNativeFallback({ eligible, firstPartyAdCount }: { eligible:
   const [nativeAd, setNativeAd] = useState<NativeAd | null>(null);
   const currentAd = useRef<NativeAd | null>(null);
   const appEnvironment = String(Constants.expoConfig?.extra?.appEnvironment ?? "development");
-  const unitId = useMemo(() => selectNativeAdUnitId({ isDevelopment: __DEV__, appEnvironment }), [appEnvironment]);
+  const testMode = process.env.EXPO_PUBLIC_ADMOB_TEST_MODE === "true";
+  const unitId = useMemo(() => selectNativeAdUnitId({ isDevelopment: __DEV__, appEnvironment, testMode }), [appEnvironment, testMode]);
   const shouldLoad = shouldRequestAdMob({
     placementSource: eligible ? "ADMOB_FALLBACK" : "NONE",
     firstPartyAdCount,

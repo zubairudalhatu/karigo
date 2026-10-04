@@ -19,6 +19,7 @@ assert.equal(shouldRequestAdMob({ placementSource: "NONE", firstPartyAdCount: 0,
 assert.equal(selectNativeAdUnitId({ isDevelopment: true, appEnvironment: "production" }), ADMOB_TEST_NATIVE_UNIT_ID, "development must use Google's test unit");
 assert.equal(selectNativeAdUnitId({ isDevelopment: false, appEnvironment: "staging" }), ADMOB_TEST_NATIVE_UNIT_ID, "staging must use Google's test unit");
 assert.equal(selectNativeAdUnitId({ isDevelopment: false, appEnvironment: "production" }), ADMOB_PRODUCTION_NATIVE_UNIT_ID, "production config must select the production unit");
+assert.equal(selectNativeAdUnitId({ isDevelopment: false, appEnvironment: "production", testMode: true }), ADMOB_TEST_NATIVE_UNIT_ID, "the production-package QA build must be locked to Google's test unit");
 assert.equal(shouldRequestAdMob({ placementSource: "ADMOB_FALLBACK", firstPartyAdCount: 0, consentCanRequestAds: false, runtimeReady: true }), false, "consent must gate requests");
 assert.equal(shouldRequestAdMob({ placementSource: "ADMOB_FALLBACK", firstPartyAdCount: 0, consentCanRequestAds: true, runtimeReady: false }), false, "account readiness must gate production requests");
 
@@ -34,11 +35,16 @@ const eas = JSON.parse(read(root, "eas.json"));
 assert.match(appConfig, /androidAppId: "ca-app-pub-8797316301984037~1272004979"/, "Android App ID must be configured through the Expo plugin");
 assert.match(appConfig, /delayAppMeasurementInit: true/, "measurement initialization must wait for consent");
 assert.notEqual(eas.build["customer-production"].env.EXPO_PUBLIC_ADMOB_PRODUCTION_READY, "true", "production requests must remain readiness-gated until the account/app is cleared");
+assert.equal(eas.build["customer-admob-qa"].android.buildType, "apk", "AdMob QA must create an APK, never an AAB");
+assert.equal(eas.build["customer-admob-qa"].env.EXPO_PUBLIC_ADMOB_TEST_MODE, "true", "AdMob QA must force the official test unit");
+assert.equal(eas.build["customer-admob-qa"].env.EXPO_PUBLIC_ADMOB_QA_FORCE_FALLBACK, "true", "AdMob QA must safely bridge the pre-contract backend only when inventory is empty");
 
 const home = read(root, "app", "tabs", "home.tsx");
+const adsApi = read(root, "src", "api", "ads.api.ts");
 assert.match(home, /adsApi\.recordEvent\(homeAd\.id, "IMPRESSION"/, "first-party impression tracking must remain");
 assert.match(home, /adPlacement\.source === "ADMOB_FALLBACK"/, "home must use the backend placement decision");
 assert.match(home, /firstPartyAdCount=\{ads\.length\}/, "loaded direct inventory must independently suppress AdMob");
+assert.match(adsApi, /EXPO_PUBLIC_ADMOB_TEST_MODE.*EXPO_PUBLIC_ADMOB_QA_FORCE_FALLBACK/, "the QA compatibility fallback must require both QA flags");
 
 const captainPackage = read(repo, "apps", "rider-app", "package.json");
 const partnerPackage = read(repo, "apps", "partner-app", "package.json");

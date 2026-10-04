@@ -22,8 +22,9 @@ export function AdMobConsentProvider({ children }: { children: ReactNode }) {
   const [sdkReady, setSdkReady] = useState(false);
   const initialized = useRef(false);
   const appEnvironment = String(Constants.expoConfig?.extra?.appEnvironment ?? "development");
+  const testMode = process.env.EXPO_PUBLIC_ADMOB_TEST_MODE === "true";
   const productionReady = process.env.EXPO_PUBLIC_ADMOB_PRODUCTION_READY === "true";
-  const configurationReady = __DEV__ || appEnvironment !== "production" || productionReady;
+  const configurationReady = __DEV__ || appEnvironment !== "production" || testMode || productionReady;
 
   useEffect(() => {
     let active = true;

@@ -32,6 +32,23 @@
         "EXPO_PUBLIC_TAXI_SERVICE_ENABLED": "true"
       }
     },
+    "customer-admob-qa": {
+      "distribution": "internal",
+      "channel": "customer-staging",
+      "environment": "production",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "APP_VARIANT": "production",
+        "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1",
+        "EXPO_PUBLIC_ADMOB_TEST_MODE": "true",
+        "EXPO_PUBLIC_ADMOB_QA_FORCE_FALLBACK": "true",
+        "EXPO_PUBLIC_RIDES_SERVICE_ENABLED": "true",
+        "EXPO_PUBLIC_RIDES_PRODUCTION_ENABLED": "true",
+        "EXPO_PUBLIC_TAXI_SERVICE_ENABLED": "true"
+      }
+    },
     "customer-production": {
       "distribution": "store",
       "channel": "customer-production",
