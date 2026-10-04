@@ -97,6 +97,7 @@ export const orderStatuses = [
 export type OrderStatus = (typeof orderStatuses)[number];
 
 export * from "./api";
+export * from "./ads";
 export * from "./auth";
 export * from "./captain-catalog";
 export * from "./notifications";

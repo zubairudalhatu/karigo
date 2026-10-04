@@ -6,6 +6,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { Button, Card, Message, Protected, Screen, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
+import { useAdMobConsent } from "../../src/contexts/admob-consent-context";
 
 function SecurityRow({ icon, title, body }: { icon: keyof typeof Feather.glyphMap; title: string; body: string }) {
   return <View style={styles.row}>
@@ -22,6 +23,8 @@ export default function PrivacySecurityScreen() {
   const [biometricBusy, setBiometricBusy] = useState(false);
   const [biometricMessage, setBiometricMessage] = useState("");
   const [biometricError, setBiometricError] = useState("");
+  const { privacyOptionsRequired, showPrivacyOptions } = useAdMobConsent();
+  const [privacyChoiceError, setPrivacyChoiceError] = useState("");
 
   async function toggleBiometric() {
     setBiometricBusy(true);
@@ -75,6 +78,11 @@ export default function PrivacySecurityScreen() {
         <View style={styles.actions}>
           <Button title="View Privacy Policy" tone="muted" onPress={() => router.push("/profile/privacy-policy")} />
           <Button title="View Terms" tone="muted" onPress={() => router.push("/profile/terms")} />
+          {privacyOptionsRequired ? <Button title="Advertising privacy choices" tone="muted" onPress={() => {
+            setPrivacyChoiceError("");
+            void showPrivacyOptions().catch(() => setPrivacyChoiceError("Advertising privacy choices are unavailable right now. Please try again later."));
+          }} /> : null}
+          <Message error>{privacyChoiceError}</Message>
         </View>
       </Card>
 

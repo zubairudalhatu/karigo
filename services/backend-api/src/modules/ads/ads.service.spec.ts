@@ -78,11 +78,18 @@ describe("AdsService customer delivery gates", () => {
     return new AdsService(prisma, { record: jest.fn() } as any);
   }
 
+  it("returns a backend-authoritative direct placement when KariGO inventory is eligible", async () => {
+    const result = await deliveryHarness(liveCampaign()).customerHome("customer-1");
+    expect(result.items).toHaveLength(1);
+    expect(result.adPlacement).toEqual({ source: "KARIGO", reason: "ELIGIBLE_KARIGO_CAMPAIGN" });
+  });
+
   it("rejects a placement mismatch even when a malformed repository result is returned", async () => {
     const campaign = liveCampaign();
     campaign.approvedRevision.placementSurface = "UNSUPPORTED" as AdPlacementSurface;
     const result = await deliveryHarness(campaign).customerHome("customer-1");
     expect(result.items).toHaveLength(0);
+    expect(result.adPlacement).toEqual({ source: "ADMOB_FALLBACK", reason: "NO_KARIGO_INVENTORY" });
   });
 
   it("rejects campaigns outside their approved revision schedule", async () => {

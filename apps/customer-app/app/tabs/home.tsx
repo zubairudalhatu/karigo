@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import * as Location from "expo-location";
-import type { LaunchAvailabilityResponse, LaunchServiceType, ServiceCategory, TaxiTrip, VendorSummary } from "@karigo/shared-types";
+import type { CustomerAdPlacementDecision, LaunchAvailabilityResponse, LaunchServiceType, ServiceCategory, TaxiTrip, VendorSummary } from "@karigo/shared-types";
 import { isActiveTaxiTripStatus, taxiLifecycleForStatus } from "@karigo/shared-types";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -12,6 +12,7 @@ import { taxiApi } from "../../src/api/taxi.api";
 import { vendorsApi } from "../../src/api/vendors.api";
 import { Button, Card, Empty, Loading, Message, Screen, ui } from "../../src/components/ui";
 import { KariGoAppTopBar } from "../../src/components/kari-go-app-top-bar";
+import { AdMobNativeFallback } from "../../src/components/admob-native-fallback";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 import { ridesProductionEnabled } from "../../src/lib/rides-flags";
@@ -111,6 +112,7 @@ export default function CustomerHome() {
   const { width } = useWindowDimensions();
   const [vendors, setVendors] = useState<VendorSummary[]>([]);
   const [ads, setAds] = useState<CustomerHomeAd[]>([]);
+  const [adPlacement, setAdPlacement] = useState<CustomerAdPlacementDecision>({ source: "NONE", reason: "FALLBACK_DISABLED" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [guestPrompt, setGuestPrompt] = useState("");
@@ -129,8 +131,14 @@ export default function CustomerHome() {
 
   useEffect(() => {
     adsApi.customerHome()
-      .then((response) => setAds(response.items))
-      .catch(() => setAds([]));
+      .then((response) => {
+        setAds(response.items);
+        setAdPlacement(response.adPlacement);
+      })
+      .catch(() => {
+        setAds([]);
+        setAdPlacement({ source: "NONE", reason: "FALLBACK_DISABLED" });
+      });
   }, []);
 
   useEffect(() => {
@@ -308,19 +316,20 @@ export default function CustomerHome() {
         ? <Empty message="No featured vendor is available right now. Please check Browse for more options." />
         : featured.map((vendor) => <VendorSpotlight key={vendor.id} vendor={vendor} />)}
 
-      <Pressable
+      {homeAd && adPlacement.source === "KARIGO" ? <Pressable
         accessibilityRole={homeAd?.hasDestination ? "button" : "text"}
-        accessibilityLabel={homeAd ? `${homeAd.label}: ${homeAd.title}` : "Ad campaign placement available"}
-        onPress={() => homeAd ? void openAd(homeAd) : undefined}
+        accessibilityLabel={`${homeAd.label}: ${homeAd.title}`}
+        onPress={() => void openAd(homeAd)}
         style={styles.adPlacement}
       >
         <Text style={styles.adLabel}>Ad</Text>
         {homeAdCreativeUri ? <Image source={{ uri: homeAdCreativeUri }} onError={() => setHomeAdCreativeUri(null)} style={styles.adImage} accessibilityLabel={homeAd?.creativeAltText ?? homeAd?.title} /> : null}
-        <Text style={styles.adTitle}>{homeAd?.title ?? "Campaign placement available"}</Text>
-        <Text style={ui.muted}>{homeAd?.body ?? "Approved KariGO campaigns may appear here. Ads are labelled and never affect checkout pricing or delivery quotes."}</Text>
-        <Text style={styles.adSponsor}>{homeAd ? `Sponsored by ${homeAd.sponsorName}` : "Vendor and partner ads require Admin approval."}</Text>
+        <Text style={styles.adTitle}>{homeAd.title}</Text>
+        <Text style={ui.muted}>{homeAd.body}</Text>
+        <Text style={styles.adSponsor}>Sponsored by {homeAd.sponsorName}</Text>
         {homeAd?.ctaLabel ? <Text style={styles.link}>{homeAd.ctaLabel}</Text> : null}
-      </Pressable>
+      </Pressable> : null}
+      <AdMobNativeFallback eligible={adPlacement.source === "ADMOB_FALLBACK"} firstPartyAdCount={ads.length} />
     </Screen>
   </>;
 }

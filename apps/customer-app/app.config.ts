@@ -10,7 +10,8 @@ const androidApi36BuildProperties = {
   android: {
     compileSdkVersion: 36,
     targetSdkVersion: 36,
-    buildToolsVersion: "36.0.0"
+    buildToolsVersion: "36.0.0",
+    extraProguardRules: "-keep class com.google.android.gms.internal.consent_sdk.** { *; }"
   }
 };
 
@@ -18,7 +19,7 @@ const googleMapsAndroidApiKey =
   process.env.GOOGLE_MAPS_ANDROID_API_KEY ??
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY;
 
-const customerAppVersion = "1.1.0";
+const customerAppVersion = "1.1.1";
 const apiBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ??
   process.env.EXPO_PUBLIC_API_URL ??
@@ -52,6 +53,15 @@ export default ({ config }: { config: Record<string, any> }) => ({
       "expo-location",
       {
         locationWhenInUsePermission: "KariGO uses your location only when you choose to detect a delivery or service address."
+      }
+    ],
+    [
+      "react-native-google-mobile-ads",
+      {
+        androidAppId: "ca-app-pub-8797316301984037~1272004979",
+        delayAppMeasurementInit: true,
+        optimizeInitialization: true,
+        optimizeAdLoading: true
       }
     ],
     ["expo-build-properties", androidApi36BuildProperties],
@@ -108,7 +118,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
       monochromeImage: "./assets/adaptive-icon-monochrome.png"
     },
     package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer",
-    versionCode: isStaging ? 1 : 18
+    versionCode: isStaging ? 2 : 19
   },
   ios: {
     ...config.ios,

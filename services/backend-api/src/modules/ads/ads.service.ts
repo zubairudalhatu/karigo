@@ -21,6 +21,7 @@ import { TransitionAdCampaignDto } from "./dto/transition-ad-campaign.dto";
 import { assertAdTransition, ctr, deliveryBudgetEligible, matchesAdTargeting, normalizeApprovedDestination, REVISION_REQUIRED_STATUSES, validateCampaignPlan } from "./ad-policy";
 import { AdPerformanceRange, GetAdPerformanceQueryDto } from "./dto/get-ad-performance-query.dto";
 import { ADS_REPORTING_TIMEZONE, buildPerformanceSeries, lagosDayKey, performanceStart } from "./ad-reporting";
+import { customerAdPlacementDecision } from "./customer-ad-placement";
 
 const AD_INCLUDE = {
   vendor: { select: { id: true, businessName: true, logoUrl: true, city: true, state: true } },
@@ -39,11 +40,13 @@ export class AdsService {
   async customerHome(userId: string, serviceCategory?: string) {
     const eligible = await this.eligibleCustomerCampaigns(userId, serviceCategory);
     const rotationSeed = `${lagosDayKey(new Date())}:${userId}`;
+    const items = eligible
+      .sort((left, right) => this.hashPrivacyToken(`${rotationSeed}:${left.id}`).localeCompare(this.hashPrivacyToken(`${rotationSeed}:${right.id}`)))
+      .slice(0, 3)
+      .map((campaign) => this.publicAd(campaign));
     return {
-      items: eligible
-        .sort((left, right) => this.hashPrivacyToken(`${rotationSeed}:${left.id}`).localeCompare(this.hashPrivacyToken(`${rotationSeed}:${right.id}`)))
-        .slice(0, 3)
-        .map((campaign) => this.publicAd(campaign)),
+      items,
+      adPlacement: customerAdPlacementDecision(items.length, true),
       guardrails: {
         adsAreLabelled: true,
         liveBillingEnabled: false,

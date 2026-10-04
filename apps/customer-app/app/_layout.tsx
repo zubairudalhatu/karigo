@@ -5,12 +5,13 @@ import { CartProvider } from "../src/contexts/cart-context";
 import { CartNotice, CustomerBottomNav } from "../src/components/customer-navigation";
 import { CustomerOtaUpdateGate } from "../src/components/customer-ota-update-gate";
 import { RideCommunicationHost } from "../src/components/ride-communication-host";
+import { AdMobConsentProvider } from "../src/contexts/admob-consent-context";
 
 const headerless = { headerShown: false };
 const backOnly = { headerTitle: "", title: "", headerBackTitle: "Back" };
 
 export default function RootLayout() {
-  return <AuthProvider><CartProvider><><Stack screenOptions={{
+  return <AdMobConsentProvider><AuthProvider><CartProvider><><Stack screenOptions={{
     headerBackTitle: "Back",
     headerShadowVisible: false,
     headerStyle: { backgroundColor: brand.colors.white },
@@ -61,5 +62,5 @@ export default function RootLayout() {
     <Stack.Screen name="sme-services/requests/index" options={backOnly} />
     <Stack.Screen name="sme-services/requests/[id]" options={backOnly} />
     <Stack.Screen name="notifications" options={headerless} />
-  </Stack><RideCommunicationHost /><CustomerOtaUpdateGate /><CustomerBottomNav /><CartNotice /></></CartProvider></AuthProvider>;
+  </Stack><RideCommunicationHost /><CustomerOtaUpdateGate /><CustomerBottomNav /><CartNotice /></></CartProvider></AuthProvider></AdMobConsentProvider>;
 }

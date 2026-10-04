@@ -21,9 +21,25 @@ Audit date: 30 September 2026; provider closure updated 1 October 2026. Status: 
 
 Raw payment answer: Customer does not collect raw card or bank credentials through its UI/API. It sends Flutterwave email/phone, amount, currency, reference and metadata and receives hosted checkout/verification/webhook responses. New persistence is allowlisted and the production legacy-payload cleanup left 12 compliant minimized payloads plus 10 JSON-null/missing payloads with no eligible payload remaining. `User payment info` is therefore not collected by KariGO.
 
-No contacts, call logs, installed-app inventory, broad storage access, background location, advertising ID, ad SDK, Firebase Analytics or Crashlytics was found.
+No contacts, call logs, installed-app inventory, broad storage access, background location, Firebase Analytics or Crashlytics was found. The local Customer 1.1.1 implementation adds Google Mobile Ads and UMP; it is not in the released binary yet.
 
 See `../provider-evidence-matrix-2026-09-30.md` and `../provider-data-safety-reconciliation-2026-09-30.md`.
+
+## AdMob fallback delta — 5 October 2026
+
+This is a **read-only proposed Play delta** for the next Customer native build. Google states that Google Mobile Ads SDK 25.5.0 automatically collects and shares IP address, user product interactions, diagnostic information, and device/account identifiers for advertising, analytics, and fraud prevention. This implementation pins the compatible wrapper at 16.5.0, which resolves Android Google Mobile Ads SDK 25.4.0, so the form must be rechecked against the bundled SDK and current Google disclosure again before submission.
+
+The current Customer form already selects and marks as collected and shared the closest applicable Play types: Approximate location, Crash logs, Diagnostics, App interactions, and Device or other IDs. Proposed changes are therefore purpose/handling updates rather than new type selections:
+
+| Play data type | Proposed Customer form delta |
+| --- | --- |
+| Approximate location | Keep Collected and shared; add **Advertising or marketing**, **Analytics**, and **Fraud prevention, security and compliance** for the AdMob/IP-derived use. |
+| App interactions | Keep Collected and shared; add **Advertising or marketing**, **Analytics**, and **Fraud prevention, security and compliance** for AdMob app/ad interactions. |
+| Diagnostics | Keep Collected and shared; add **Advertising or marketing**, **Analytics**, and **Fraud prevention, security and compliance** for SDK performance data. |
+| Crash logs | Keep Collected and shared. Google groups SDK crash/performance information under diagnostics; retain the existing declaration and add the same applicable AdMob purposes if Play presents crash logs separately for the final SDK disclosure. |
+| Device or other IDs | Keep Collected and shared; add **Advertising or marketing**, **Analytics**, and **Fraud prevention, security and compliance** for advertising ID, app-set ID and applicable device/account identifiers. |
+
+All affected types remain retained/non-ephemeral for the Play answer because the SDK/provider processing is not limited to transient in-memory handling. Required/optional should remain **Required** for these SDK-level signals when the fallback is enabled; the ad placement itself remains consent-gated. Do not add Name, Email, Phone, precise location, payment, message, photo, audio, file, search, or user-content collection on AdMob's behalf. Customer's existing **Contains ads = Yes** declaration remains accurate; adding AdMob does not introduce another App Content declaration category.
 
 ## Task 209B-S1-H11.2P implementation evidence — 2026-09-30
 

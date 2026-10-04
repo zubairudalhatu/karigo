@@ -17,10 +17,10 @@ assert(appConfig.includes("compileSdkVersion: 36"), "Customer app must compile a
 assert(appConfig.includes("targetSdkVersion: 36"), "Customer app must target Android API 36.");
 assert(appConfig.includes('buildToolsVersion: "36.0.0"'), "Customer app must use Android build tools 36.0.0.");
 assert(appConfig.includes('package: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer"'), "Customer app package names must remain stable.");
-assert(appConfig.includes("versionCode: isStaging ? 1 : 18"), "Customer production versionCode must be 18 for the replacement production AAB.");
+assert(appConfig.includes("versionCode: isStaging ? 2 : 19"), "Customer production versionCode must be 19 for the AdMob native replacement AAB.");
 assert(appConfig.includes('"android.permission.SYSTEM_ALERT_WINDOW"') && appConfig.includes("allowBackup: false"), "Customer production must block overlay access and Android backup.");
 assert(appConfig.includes('owner: "zamkah"'), "Customer app must resolve to the zamkah EAS account.");
-assert(appConfig.includes('const customerAppVersion = "1.1.0"'), "Customer app version must create the native H10.1 runtime 1.1.0 boundary.");
+assert(appConfig.includes('const customerAppVersion = "1.1.1"'), "Customer app version must create the AdMob native runtime 1.1.1 boundary.");
 assert(appConfig.includes('policy: "appVersion"'), "Customer runtimeVersion must use the appVersion policy.");
 assert(easJson.build?.["customer-play-internal"]?.channel === "customer-production", "Customer Play Internal profile must use the production channel.");
 assert(easJson.submit?.["customer-play-internal"]?.android?.track === "internal", "Customer Play submit profile must target Internal testing.");
@@ -148,7 +148,7 @@ assert(home.includes("Today's featured for you"), "Home must show vendor/campaig
 assert(home.includes("Ad"), "Home must expose a clearly labelled internal ad placement.");
 assert(home.includes("adsApi.customerHome"), "Home ad placement must load Admin-approved managed ads.");
 assert(home.includes("Sponsored by"), "Home ad placement must label the sponsor.");
-assert(home.includes("never affect checkout pricing or delivery quotes"), "Home ad fallback must state ads do not affect pricing.");
+assert(!home.includes("Campaign placement available"), "Home must render no commercial placeholder when neither direct nor fallback inventory is available.");
 assert(home.includes("VendorSpotlight"), "Home featured content must be vendor-focused.");
 assert(!home.includes("productsApi.catalogue"), "Home must not load individual product feeds.");
 assert(!home.includes("Add to cart"), "Home must not expose product add-to-cart actions.");
