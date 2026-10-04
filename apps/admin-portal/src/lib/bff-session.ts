@@ -1,6 +1,7 @@
 import { normalizeApiBaseUrl } from "@karigo/config";
 import type { NextRequest } from "next/server";
 import { buildBffUpstreamUrl } from "./bff-url";
+import { isCreativeBinaryRequest, prepareCreativeBinaryResponse } from "./bff-binary-response";
 import { NextResponse } from "next/server";
 
 const ACCESS_COOKIE = "karigo_admin_access";
@@ -165,7 +166,7 @@ async function readBody(request: NextRequest, path: string) {
 
 async function fetchBackend(path: string, request: NextRequest, accessToken?: string, body?: BodyInit) {
   const headers = new Headers();
-  headers.set("Accept", "application/json");
+  headers.set("Accept", isCreativeBinaryRequest(path, request.method) ? "image/png, image/jpeg" : "application/json");
   const contentType = request.headers.get("content-type");
   if (path === "auth/logout") headers.set("Content-Type", "application/json");
   else if (contentType) headers.set("Content-Type", contentType);
@@ -224,6 +225,19 @@ export async function handleBffRequest(request: NextRequest, pathParts: string[]
         return jsonError("KariGO services are temporarily unavailable. Please try again shortly.", 503, "BFF_BACKEND_UNAVAILABLE");
       }
     }
+  }
+
+  const creativeResponse = prepareCreativeBinaryResponse(path, request.method, backendResponse);
+  if (creativeResponse.kind === "binary") {
+    const response = new NextResponse(creativeResponse.body, {
+      status: creativeResponse.status,
+      headers: creativeResponse.headers
+    });
+    if (refreshed?.accessToken) setSessionCookies(response, refreshed.accessToken, refreshed.refreshToken);
+    return response;
+  }
+  if (creativeResponse.kind === "rejected") {
+    return jsonError("Creative response type is not allowed.", 415, "BFF_CREATIVE_MEDIA_TYPE_REJECTED");
   }
 
   const contentType = backendResponse.headers.get("content-type") ?? "";
