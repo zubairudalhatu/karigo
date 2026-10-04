@@ -1,4 +1,5 @@
-import { API_BASE_URL, api } from "./client";
+import { loadPrivateAdCreative } from "../lib/private-ad-creative";
+import { API_BASE_URL, api, tokenStore } from "./client";
 
 export interface CustomerHomeAd {
   id: string;
@@ -36,5 +37,6 @@ export const adsApi = {
       }))
     };
   },
+  loadCreative: async (source: string) => loadPrivateAdCreative(source, API_BASE_URL, await tokenStore.getToken()),
   recordEvent: (campaignId: string, eventType: "IMPRESSION" | "CLICK", renderToken: string) => api.post<{ recorded: true; destination?: string }>(`ads/${campaignId}/events`, { eventType, placement: "CUSTOMER_HOME_FEATURED", renderToken })
 };

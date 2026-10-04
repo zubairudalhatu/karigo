@@ -192,8 +192,19 @@ export default function CustomerHome() {
 
   const featured = useMemo(() => vendors.filter((vendor) => vendor.isOpen).slice(0, 3), [vendors]);
   const homeAd = ads[0];
+  const [homeAdCreativeUri, setHomeAdCreativeUri] = useState<string | null>(null);
   const adRenderToken = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
   useEffect(() => { if (homeAd) void adsApi.recordEvent(homeAd.id, "IMPRESSION", adRenderToken.current).catch(() => undefined); }, [homeAd?.id]);
+  useEffect(() => {
+    let active = true;
+    setHomeAdCreativeUri(null);
+    if (user && homeAd?.imageUrl) {
+      void adsApi.loadCreative(homeAd.imageUrl)
+        .then((uri) => { if (active) setHomeAdCreativeUri(uri); })
+        .catch(() => { if (active) setHomeAdCreativeUri(null); });
+    }
+    return () => { active = false; };
+  }, [homeAd?.id, homeAd?.imageUrl, user?.id]);
   const activeRide = rides[0] ?? null;
   const columns = width >= 380 ? 3 : 2;
   const serviceTileBasis = `${(100 / columns) - 2}%` as const;
@@ -304,7 +315,7 @@ export default function CustomerHome() {
         style={styles.adPlacement}
       >
         <Text style={styles.adLabel}>Ad</Text>
-        {homeAd?.imageUrl ? <Image source={{ uri: homeAd.imageUrl }} style={styles.adImage} accessibilityLabel={homeAd.creativeAltText ?? homeAd.title} /> : null}
+        {homeAdCreativeUri ? <Image source={{ uri: homeAdCreativeUri }} onError={() => setHomeAdCreativeUri(null)} style={styles.adImage} accessibilityLabel={homeAd?.creativeAltText ?? homeAd?.title} /> : null}
         <Text style={styles.adTitle}>{homeAd?.title ?? "Campaign placement available"}</Text>
         <Text style={ui.muted}>{homeAd?.body ?? "Approved KariGO campaigns may appear here. Ads are labelled and never affect checkout pricing or delivery quotes."}</Text>
         <Text style={styles.adSponsor}>{homeAd ? `Sponsored by ${homeAd.sponsorName}` : "Vendor and partner ads require Admin approval."}</Text>

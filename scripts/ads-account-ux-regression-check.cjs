@@ -48,7 +48,7 @@ assert(adminAds.includes("adsApi.update"), "Admin must retain audited content ed
 for (const marker of ["Creative preview", "Schedule and budget", "Performance", "Impressions", "Clicks", "CTR", "Destination", "Targeting"]) {
   assert(adminAds.includes(marker), `Admin campaign review marker missing: ${marker}`);
 }
-assert(adminAds.includes("/api/bff"), "Admin creative preview must use the authenticated backend-mediated route");
+assert(adminAds.includes("creativePreviewSrc"), "Admin creative preview must use the reviewed authenticated private-media route");
 assert(!adminAds.includes("Image URL<input"), "Admin campaign creation must not expose the obsolete image URL workflow");
 assert(!adminAds.includes("set status directly"), "Admin UI must not offer arbitrary direct status mutation");
 
