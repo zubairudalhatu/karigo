@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { site } from "../lib/site";
+import { customerPrivateCreativePath } from "../lib/private-creative-path";
 
 type AuthenticatedUser = { id: string; fullName: string; phoneNumber: string; email?: string | null; role: string };
 type Profile = { id: string; fullName: string; phoneNumber: string; email?: string | null; profilePhotoUrl?: string | null };
@@ -30,6 +31,41 @@ type AccountDeletionRequest = {
 };
 type ApiPayload<T> = { success?: boolean; data?: T; message?: string; error_code?: string };
 type WebAd = { id: string; campaignReference: string; title: string; body: string; imageUrl?: string | null; creativeAltText?: string | null; ctaLabel?: string | null; hasDestination: boolean; sponsorName: string; label: "Ad" };
+
+function PrivateCreativeImage({ source, accessToken, alt }: { source: string; accessToken: string; alt: string }) {
+  const [imageSource, setImageSource] = useState("");
+
+  useEffect(() => {
+    const privatePath = customerPrivateCreativePath(source);
+    if (!privatePath || !accessToken) {
+      setImageSource("");
+      return;
+    }
+
+    const controller = new AbortController();
+    let objectUrl = "";
+    void fetch(privatePath, {
+      method: "GET",
+      headers: { Accept: "image/png, image/jpeg", Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+      credentials: "same-origin",
+      signal: controller.signal
+    }).then(async (response) => {
+      const type = (response.headers.get("content-type") ?? "").split(";", 1)[0].toLowerCase();
+      if (!response.ok || !["image/png", "image/jpeg"].includes(type)) return;
+      const bytes = await response.blob();
+      objectUrl = URL.createObjectURL(bytes);
+      setImageSource(objectUrl);
+    }).catch(() => undefined);
+
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [accessToken, source]);
+
+  return imageSource ? <img src={imageSource} alt={alt} /> : null;
+}
 
 const TOKEN_KEY = "karigo_customer_web_access_token";
 const REFRESH_TOKEN_KEY = "karigo_customer_web_refresh_token";
@@ -600,7 +636,7 @@ export function CustomerWebPortal() {
       {loading ? <p className="notice">Loading customer portal data...</p> : null}
 
       {activeTab === "Dashboard" ? <section className="portal-grid">
-        {homeAd ? <article className="portal-card customer-sponsored-card"><p className="eyebrow">{homeAd.label} · Sponsored by {homeAd.sponsorName}</p>{homeAd.imageUrl ? <img src={homeAd.imageUrl.startsWith("/") ? `${site.apiBaseUrl}${homeAd.imageUrl}` : homeAd.imageUrl} alt={homeAd.creativeAltText ?? homeAd.title} /> : null}<h2>{homeAd.title}</h2><p>{homeAd.body}</p>{homeAd.hasDestination ? <button type="button" onClick={() => void openAdDestination()}>{homeAd.ctaLabel ?? "Learn more"}</button> : null}</article> : null}
+        {homeAd ? <article className="portal-card customer-sponsored-card"><p className="eyebrow">{homeAd.label} · Sponsored by {homeAd.sponsorName}</p>{homeAd.imageUrl ? <PrivateCreativeImage source={homeAd.imageUrl} accessToken={accessToken} alt={homeAd.creativeAltText ?? homeAd.title} /> : null}<h2>{homeAd.title}</h2><p>{homeAd.body}</p>{homeAd.hasDestination ? <button type="button" onClick={() => void openAdDestination()}>{homeAd.ctaLabel ?? "Learn more"}</button> : null}</article> : null}
         <article className="portal-card"><span>Wallet balance</span><strong>{money(wallet?.availableBalance)}</strong><p>Wallet credits only after backend verification.</p></article>
         <article className="portal-card"><span>Orders</span><strong>{orders.length}</strong><p>Use the mobile app for the full shopping and checkout experience.</p><a className="button small-button" href={site.customerGooglePlayUrl} rel="noopener noreferrer" target="_blank">Get KariGO on Google Play</a></article>
         <article className="portal-card"><span>SME requests</span><strong>{smeRequests.length}</strong><p>{supportedSmeCategoryLabels.join(", ")} now supported.</p></article>

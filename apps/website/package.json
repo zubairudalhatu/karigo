@@ -13,7 +13,8 @@
     "test:ux-closeout": "node scripts/web-ux-closeout-regression-check.js",
     "test:seo": "node scripts/seo-foundation-regression-check.js",
     "test:analytics": "node scripts/analytics-privacy-regression-check.js",
-    "test:analytics-transport": "node scripts/ga4-transport-regression-check.js"
+    "test:analytics-transport": "node scripts/ga4-transport-regression-check.js",
+    "test:private-creative": "node scripts/private-creative-regression-check.js"
   },
   "dependencies": {
     "@karigo/config": "*",
