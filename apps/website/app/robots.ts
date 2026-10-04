@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: "*",
-      allow: "/",
+      allow: ["/", "/app-ads.txt"],
       disallow: ["/app", "/api/", "/careers/*/apply", "/payment/"]
     },
     sitemap: absoluteUrl("/sitemap.xml"),

@@ -52,7 +52,7 @@ async function main() {
   }
 
   const robots = read("app", "robots.ts");
-  assert(robots.includes('allow: "/"'), "Public robots policy must allow the marketing site.");
+  assert(robots.includes('allow: ["/", "/app-ads.txt"]'), "Public robots policy must allow the marketing site and the AdMob declaration.");
   assert(robots.includes('absoluteUrl("/sitemap.xml")'), "robots.txt must declare the apex sitemap.");
   for (const blocked of ["/app", "/payment/", "/api/", "/careers/*/apply"]) {
     assert(robots.includes(`"${blocked}"`), `robots.txt must disallow ${blocked}.`);
