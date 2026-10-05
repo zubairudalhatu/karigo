@@ -30,7 +30,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
   ...config,
   name: isStaging ? "KariGO Customer Staging" : "KariGO",
   version: customerAppVersion,
-  newArchEnabled: false,
+  newArchEnabled: true,
   owner: "zamkah",
   slug: "karigo-customer",
   scheme: isStaging ? "karigo-customer-staging" : "karigo-customer",

@@ -33,7 +33,7 @@ assert.doesNotMatch(component, /recordEvent|IMPRESSION|CLICK/, "AdMob events mus
 const appConfig = read(root, "app.config.ts");
 const eas = JSON.parse(read(root, "eas.json"));
 assert.match(appConfig, /androidAppId: "ca-app-pub-8797316301984037~1272004979"/, "Android App ID must be configured through the Expo plugin");
-assert.match(appConfig, /newArchEnabled: false/, "Customer Android must use the RN 0.79-compatible legacy architecture for AdMob 16.5.0");
+assert.match(appConfig, /newArchEnabled: true/, "Customer Android must use New Architecture for the reviewed AdMob 15.8.3 compatibility path");
 assert.match(appConfig, /delayAppMeasurementInit: true/, "measurement initialization must wait for consent");
 assert.notEqual(eas.build["customer-production"].env.EXPO_PUBLIC_ADMOB_PRODUCTION_READY, "true", "production requests must remain readiness-gated until the account/app is cleared");
 assert.equal(eas.build["customer-admob-qa"].android.buildType, "apk", "AdMob QA must create an APK, never an AAB");
