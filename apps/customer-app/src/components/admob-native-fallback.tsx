@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import {
   NativeAd,
+  NativeAdChoicesPlacement,
   NativeAdView,
   NativeAsset,
   NativeAssetType,
@@ -43,6 +44,7 @@ export function AdMobNativeFallback({ eligible, firstPartyAdCount }: { eligible:
     }, LOAD_TIMEOUT_MS);
 
     void NativeAd.createForAdRequest(unitId, {
+      adChoicesPlacement: NativeAdChoicesPlacement.TOP_RIGHT,
       aspectRatio: NativeMediaAspectRatio.LANDSCAPE,
       requestNonPersonalizedAdsOnly: true
     }).then((loadedAd) => {
@@ -64,26 +66,29 @@ export function AdMobNativeFallback({ eligible, firstPartyAdCount }: { eligible:
 
   if (!nativeAd) return null;
 
-  return <NativeAdView nativeAd={nativeAd} style={styles.card}>
-    <View style={styles.header}>
-      <Text style={styles.attribution}>Ad</Text>
-      <NativeAsset assetType={NativeAssetType.HEADLINE}><Text style={styles.headline} numberOfLines={2}>{nativeAd.headline}</Text></NativeAsset>
-    </View>
-    <NativeMediaView style={styles.media} resizeMode="cover" />
-    <View style={styles.copy}>
-      {nativeAd.icon ? <NativeAsset assetType={NativeAssetType.ICON}><Image source={{ uri: nativeAd.icon.url }} style={styles.icon} /></NativeAsset> : null}
-      <View style={styles.copyText}>
-        {nativeAd.advertiser ? <NativeAsset assetType={NativeAssetType.ADVERTISER}><Text style={styles.advertiser}>{nativeAd.advertiser}</Text></NativeAsset> : null}
-        <NativeAsset assetType={NativeAssetType.BODY}><Text style={styles.body} numberOfLines={3}>{nativeAd.body}</Text></NativeAsset>
+  return <View style={styles.cardFrame}>
+    <NativeAdView nativeAd={nativeAd} style={styles.card}>
+      <View style={styles.header}>
+        <Text style={styles.attribution}>Ad</Text>
+        <NativeAsset assetType={NativeAssetType.HEADLINE}><Text style={styles.headline} numberOfLines={2}>{nativeAd.headline}</Text></NativeAsset>
       </View>
-    </View>
-    <NativeAsset assetType={NativeAssetType.CALL_TO_ACTION}><Text style={styles.cta}>{nativeAd.callToAction}</Text></NativeAsset>
-  </NativeAdView>;
+      <NativeMediaView style={styles.media} resizeMode="cover" />
+      <View style={styles.copy}>
+        {nativeAd.icon ? <NativeAsset assetType={NativeAssetType.ICON}><Image source={{ uri: nativeAd.icon.url }} style={styles.icon} /></NativeAsset> : null}
+        <View style={styles.copyText}>
+          {nativeAd.advertiser ? <NativeAsset assetType={NativeAssetType.ADVERTISER}><Text style={styles.advertiser}>{nativeAd.advertiser}</Text></NativeAsset> : null}
+          <NativeAsset assetType={NativeAssetType.BODY}><Text style={styles.body} numberOfLines={3}>{nativeAd.body}</Text></NativeAsset>
+        </View>
+      </View>
+      <NativeAsset assetType={NativeAssetType.CALL_TO_ACTION}><Text style={styles.cta}>{nativeAd.callToAction}</Text></NativeAsset>
+    </NativeAdView>
+  </View>;
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 20, borderWidth: 1, gap: 10, overflow: "hidden", padding: 14 },
-  header: { gap: 6, paddingRight: 36 },
+  cardFrame: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 20, borderWidth: 1 },
+  card: { gap: 10, overflow: "visible", padding: 14, paddingTop: 18 },
+  header: { gap: 6, paddingRight: 56 },
   attribution: { alignSelf: "flex-start", backgroundColor: "#FFF4CC", borderColor: "#D69E00", borderRadius: 4, borderWidth: 1, color: "#614700", fontSize: 10, fontWeight: "900", paddingHorizontal: 5, paddingVertical: 2 },
   headline: { color: brand.colors.charcoal, fontSize: 17, fontWeight: "900" },
   media: { aspectRatio: 1.91, borderRadius: 14, width: "100%" },

@@ -27,6 +27,8 @@ const component = read(root, "src", "components", "admob-native-fallback.tsx");
 assert.match(component, /\.catch\(\(\) => undefined\)/, "load errors must be silent and non-blocking");
 assert.match(component, /LOAD_TIMEOUT_MS = 8_000/, "loading must be bounded");
 assert.match(component, /currentAd\.current\?\.destroy\(\)/, "native ad must be destroyed on cleanup");
+assert.match(component, /adChoicesPlacement: NativeAdChoicesPlacement\.TOP_RIGHT/, "the Google SDK AdChoices overlay must be explicitly placed at the unobstructed top-right corner");
+assert.doesNotMatch(component, /card: \{[^}]*overflow: "hidden"/, "the NativeAdView must not clip the SDK-rendered AdChoices overlay");
 assert.match(component, /requestNonPersonalizedAdsOnly: true/, "fallback requests must be conservative");
 assert.doesNotMatch(component, /recordEvent|IMPRESSION|CLICK/, "AdMob events must not enter KariGO campaign metrics");
 
