@@ -23,6 +23,9 @@ export function AdMobConsentProvider({ children }: { children: ReactNode }) {
   const initialized = useRef(false);
   const appEnvironment = String(Constants.expoConfig?.extra?.appEnvironment ?? "development");
   const testMode = process.env.EXPO_PUBLIC_ADMOB_TEST_MODE === "true";
+  const qaTestDeviceIdentifier = testMode && process.env.EXPO_PUBLIC_ADMOB_QA_FORCE_FALLBACK === "true"
+    ? process.env.EXPO_PUBLIC_ADMOB_QA_TEST_DEVICE_ID?.trim()
+    : undefined;
   const productionReady = process.env.EXPO_PUBLIC_ADMOB_PRODUCTION_READY === "true";
   const configurationReady = __DEV__ || appEnvironment !== "production" || testMode || productionReady;
 
@@ -53,11 +56,17 @@ export function AdMobConsentProvider({ children }: { children: ReactNode }) {
     let active = true;
     if (!configurationReady || !canRequestAds || initialized.current) return;
     initialized.current = true;
-    void mobileAds().initialize()
+    const configureAndInitialize = async () => {
+      if (qaTestDeviceIdentifier) {
+        await mobileAds().setRequestConfiguration({ testDeviceIdentifiers: [qaTestDeviceIdentifier] });
+      }
+      return mobileAds().initialize();
+    };
+    void configureAndInitialize()
       .then(() => { if (active) setSdkReady(true); })
       .catch(() => { if (active) setSdkReady(false); });
     return () => { active = false; };
-  }, [canRequestAds, configurationReady]);
+  }, [canRequestAds, configurationReady, qaTestDeviceIdentifier]);
 
   const value = useMemo<AdMobConsentContextValue>(() => ({
     canRequestAds,

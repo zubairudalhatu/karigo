@@ -20,6 +20,7 @@ assert.equal(selectNativeAdUnitId({ isDevelopment: true, appEnvironment: "produc
 assert.equal(selectNativeAdUnitId({ isDevelopment: false, appEnvironment: "staging" }), ADMOB_TEST_NATIVE_UNIT_ID, "staging must use Google's test unit");
 assert.equal(selectNativeAdUnitId({ isDevelopment: false, appEnvironment: "production" }), ADMOB_PRODUCTION_NATIVE_UNIT_ID, "production config must select the production unit");
 assert.equal(selectNativeAdUnitId({ isDevelopment: false, appEnvironment: "production", testMode: true }), ADMOB_TEST_NATIVE_UNIT_ID, "the production-package QA build must be locked to Google's test unit");
+assert.equal(selectNativeAdUnitId({ isDevelopment: false, appEnvironment: "production", testMode: true, qaRealUnitTest: true }), ADMOB_PRODUCTION_NATIVE_UNIT_ID, "the device-gated QA path must exercise KariGO's real unit as test inventory");
 assert.equal(shouldRequestAdMob({ placementSource: "ADMOB_FALLBACK", firstPartyAdCount: 0, consentCanRequestAds: false, runtimeReady: true }), false, "consent must gate requests");
 assert.equal(shouldRequestAdMob({ placementSource: "ADMOB_FALLBACK", firstPartyAdCount: 0, consentCanRequestAds: true, runtimeReady: false }), false, "account readiness must gate production requests");
 
@@ -41,6 +42,11 @@ assert.notEqual(eas.build["customer-production"].env.EXPO_PUBLIC_ADMOB_PRODUCTIO
 assert.equal(eas.build["customer-admob-qa"].android.buildType, "apk", "AdMob QA must create an APK, never an AAB");
 assert.equal(eas.build["customer-admob-qa"].env.EXPO_PUBLIC_ADMOB_TEST_MODE, "true", "AdMob QA must force the official test unit");
 assert.equal(eas.build["customer-admob-qa"].env.EXPO_PUBLIC_ADMOB_QA_FORCE_FALLBACK, "true", "AdMob QA must safely bridge the pre-contract backend only when inventory is empty");
+assert.match(eas.build["customer-admob-qa"].env.EXPO_PUBLIC_ADMOB_QA_TEST_DEVICE_ID, /^[A-F0-9]{32}$/, "AdMob QA must explicitly configure the approved physical test device");
+assert.equal(eas.build["customer-production"].env.EXPO_PUBLIC_ADMOB_QA_TEST_DEVICE_ID, undefined, "production must not contain a physical test-device identifier");
+
+const consentContext = read(root, "src", "contexts", "admob-consent-context.tsx");
+assert.match(consentContext, /setRequestConfiguration\(\{ testDeviceIdentifiers: \[qaTestDeviceIdentifier\] \}\)/, "the QA device must be registered before Mobile Ads initialization");
 
 const home = read(root, "app", "tabs", "home.tsx");
 const adsApi = read(root, "src", "api", "ads.api.ts");
