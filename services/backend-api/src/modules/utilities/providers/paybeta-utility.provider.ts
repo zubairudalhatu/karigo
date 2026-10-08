@@ -37,6 +37,13 @@ interface PaybetaRequestOptions {
   acceptedStatuses?: number[];
 }
 
+class PaybetaHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`PAYBETA_HTTP_${status}`);
+    this.name = "PaybetaHttpError";
+  }
+}
+
 const SANDBOX_ORIGIN = "https://api.sandbox.paybeta.ng";
 const PRODUCTION_ORIGIN = "https://api.paybeta.ng";
 const PROVIDER_PATHS: Record<UtilityServiceType, string> = {
@@ -201,13 +208,24 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
       });
       return this.purchaseResult(response, input.reference, input.serviceType, "purchase");
     } catch (error) {
-      this.logger.warn(`Paybeta purchase failed reference=${input.reference} category=${this.safeErrorCategory(error)}`);
+      const errorCategory = this.safeErrorCategory(error);
+      this.logger.warn(`Paybeta purchase failed reference=${input.reference} category=${errorCategory}`);
+      if (this.isDefinitiveClientFailure(error)) {
+        return {
+          status: UtilityTransactionStatus.FAILED,
+          providerStatus: errorCategory.toUpperCase(),
+          providerReference: input.reference,
+          failureReason: "Paybeta rejected the utility request before confirming a transaction.",
+          customerNote: "The utility provider rejected this request. Any posted wallet debit will be reversed.",
+          metadata: { ...this.safeMetadata("purchase", input.serviceType), errorCategory }
+        };
+      }
       return {
         status: UtilityTransactionStatus.PROCESSING,
         providerStatus: "PAYBETA_SUBMISSION_UNCONFIRMED",
         providerReference: input.reference,
         customerNote: "Paybeta did not confirm this request. KariGO will query its status and will not repurchase it automatically.",
-        metadata: { ...this.safeMetadata("purchase", input.serviceType), errorCategory: this.safeErrorCategory(error) }
+        metadata: { ...this.safeMetadata("purchase", input.serviceType), errorCategory }
       };
     }
   }
@@ -321,6 +339,8 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
   }
 
   private normalizedStatus(response: JsonRecord): UtilityTransactionStatus {
+    const httpStatus = Number(response.__httpStatus);
+    if (httpStatus >= 400 && httpStatus < 500) return UtilityTransactionStatus.FAILED;
     const code = this.string(response.code);
     const rootStatus = this.string(response.status).toLowerCase();
     const paymentStatus = this.string(this.record(response.data).paymentStatus).toLowerCase();
@@ -337,6 +357,8 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
   }
 
   private providerStatus(response: JsonRecord): string {
+    const httpStatus = Number(response.__httpStatus);
+    if (httpStatus >= 400) return `HTTP_${httpStatus}`;
     const code = this.string(response.code);
     if (code === "00") return "SUCCESSFUL";
     if (code === "01") return "PENDING";
@@ -365,10 +387,11 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
           signal: controller.signal
         });
         const payload = await response.json().catch(() => ({}));
-        if (!acceptedStatuses.includes(response.status)) throw new Error(`PAYBETA_HTTP_${response.status}`);
-        return this.record(payload);
+        if (!acceptedStatuses.includes(response.status)) throw new PaybetaHttpError(response.status);
+        return { ...this.record(payload), __httpStatus: response.status };
       } catch (error) {
         lastError = error;
+        if (this.isDefinitiveClientFailure(error)) throw error;
         if (attempt + 1 >= attempts) throw error;
         await this.delay(this.retryDelayMs());
       } finally {
@@ -414,6 +437,10 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
     if (error instanceof Error && error.name === "AbortError") return "timeout";
     if (error instanceof Error && /^PAYBETA_HTTP_\d{3}$/.test(error.message)) return error.message.toLowerCase();
     return "provider_unavailable";
+  }
+
+  private isDefinitiveClientFailure(error: unknown): boolean {
+    return error instanceof PaybetaHttpError && error.status >= 400 && error.status < 500;
   }
 
   private providerCode(serviceType: UtilityServiceType, value: JsonRecord): string {

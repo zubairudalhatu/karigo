@@ -164,6 +164,46 @@ describe("PaybetaUtilityProvider", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("treats provider authentication rejection as a definitive failure", async () => {
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(response({ message: "Unauthorized" }, 401));
+    const provider = new PaybetaUtilityProvider(config());
+
+    const result = await provider.purchase({
+      serviceType: UtilityServiceType.AIRTIME,
+      providerCode: "mtn_vtu",
+      amountKobo: 10_000,
+      totalKobo: 10_000,
+      recipient: "08030000000",
+      reference: "KGO-AUTH-FAILURE"
+    });
+
+    expect(result).toMatchObject({
+      status: UtilityTransactionStatus.FAILED,
+      providerStatus: "PAYBETA_HTTP_401",
+      providerReference: "KGO-AUTH-FAILURE"
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats accepted validation HTTP 4xx responses as definitive failures", async () => {
+    jest.spyOn(global, "fetch").mockResolvedValue(response({ status: "pending", message: "Invalid request" }, 422));
+    const provider = new PaybetaUtilityProvider(config());
+
+    const result = await provider.purchase({
+      serviceType: UtilityServiceType.AIRTIME,
+      providerCode: "mtn_vtu",
+      amountKobo: 10_000,
+      totalKobo: 10_000,
+      recipient: "08030000000",
+      reference: "KGO-VALIDATION-FAILURE"
+    });
+
+    expect(result).toMatchObject({
+      status: UtilityTransactionStatus.FAILED,
+      providerStatus: "PAYBETA_HTTP_422"
+    });
+  });
+
   it("performs bounded status reconciliation without invoking purchase", async () => {
     const fetchMock = jest.spyOn(global, "fetch")
       .mockResolvedValueOnce(response({ status: "pending", code: "01", data: { reference: "KGO-QUERY" } }))

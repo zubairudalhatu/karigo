@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   Prisma,
@@ -217,17 +217,7 @@ export class UtilitiesService {
     const utilityProvider = this.activeUtilityProvider(dto.serviceType);
     const resolved = await this.resolveRequest(dto, utilityProvider.client);
     this.assertAccelerateLiveRequestAllowed(resolved, utilityProvider);
-    const providerQuote = await utilityProvider.client.quote({
-      serviceType: resolved.provider.type,
-      providerCode: resolved.provider.code,
-      productCode: resolved.product?.code,
-      amountKobo: resolved.amountKobo,
-      recipient: resolved.recipient,
-      recipientName: resolved.recipientName,
-      meterType: resolved.meterType,
-      customerPhoneNumber: customer.user?.phoneNumber,
-      customerEmail: customer.user?.email
-    });
+    const providerQuote = await this.safeProviderQuote(customer, resolved, utilityProvider.client);
     return {
       quoteReference: this.reference("KGO-UTIL-QUOTE"),
       customerId: customer.id,
@@ -257,6 +247,7 @@ export class UtilitiesService {
     }
     const resolved = await this.resolveRequest(dto, utilityProvider.client);
     this.assertAccelerateLiveRequestAllowed(resolved, utilityProvider);
+    await this.safeProviderQuote(customer, resolved, utilityProvider.client);
     const reference = await this.uniqueReference();
     if (this.walletUtilityPaymentEnabled(utilityProvider)) {
       return this.createWalletFundedTransaction(customer, dto, resolved, reference, utilityProvider);
@@ -789,6 +780,28 @@ export class UtilitiesService {
       recipientName: dto.recipientName ?? validation.recipientName,
       meterType: provider.type === UtilityServiceType.ELECTRICITY ? dto.meterType ?? "PREPAID" : undefined
     };
+  }
+
+  private async safeProviderQuote(
+    customer: Awaited<ReturnType<UtilitiesService["requireCustomer"]>>,
+    resolved: Awaited<ReturnType<UtilitiesService["resolveRequest"]>>,
+    providerClient: UtilityProviderClient
+  ) {
+    try {
+      return await providerClient.quote({
+        serviceType: resolved.provider.type,
+        providerCode: resolved.provider.code,
+        productCode: resolved.product?.code,
+        amountKobo: resolved.amountKobo,
+        recipient: resolved.recipient,
+        recipientName: resolved.recipientName,
+        meterType: resolved.meterType,
+        customerPhoneNumber: customer.user?.phoneNumber,
+        customerEmail: customer.user?.email
+      });
+    } catch {
+      throw new ServiceUnavailableException("Utility provider is temporarily unavailable. Please try again later.");
+    }
   }
 
   private resolveAmount(type: UtilityServiceType, product: { amountKobo: number | null; minAmountKobo: number | null; maxAmountKobo: number | null } | null, requested?: number) {

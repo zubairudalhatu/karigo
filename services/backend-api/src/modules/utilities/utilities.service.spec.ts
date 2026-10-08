@@ -351,6 +351,73 @@ describe("UtilitiesService", () => {
     });
   });
 
+  it("returns a safe temporary-unavailable error when provider quote authentication fails", async () => {
+    const { service, paybetaProvider } = serviceWith({
+      configValues: {
+        UTILITIES_PROVIDER: "accelerate",
+        UTILITIES_AIRTIME_PROVIDER: "paybeta",
+        UTILITIES_ENABLED: true,
+        UTILITIES_CUSTOMER_PURCHASE_ENABLED: true,
+        UTILITIES_TEST_MODE: false,
+        UTILITIES_WALLET_PAYMENT_ENABLED: true,
+        UTILITIES_LIVE_FULFILLMENT_ENABLED: true
+      },
+      paybetaProvider: {
+        isConfigured: jest.fn().mockReturnValue(true),
+        validateRecipient: jest.fn().mockResolvedValue({ isValid: true, normalizedRecipient: "+2348030000000" }),
+        quote: jest.fn().mockRejectedValue(new Error("PAYBETA_HTTP_401"))
+      }
+    });
+
+    await expect(service.quote("user-id", {
+      serviceType: UtilityServiceType.AIRTIME,
+      providerId: provider.id,
+      amountKobo: 50000,
+      recipient: "08030000000"
+    })).rejects.toThrow("Utility provider is temporarily unavailable. Please try again later.");
+    expect(paybetaProvider.quote).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks Electricity before wallet debit when provider preflight authentication fails", async () => {
+    const electricityProvider = { ...provider, type: UtilityServiceType.ELECTRICITY, code: "abuja-electric" };
+    const { tx, service, paybetaProvider } = serviceWith({
+      configValues: {
+        UTILITIES_PROVIDER: "accelerate",
+        UTILITIES_ELECTRICITY_PROVIDER: "paybeta",
+        UTILITIES_ENABLED: true,
+        UTILITIES_CUSTOMER_PURCHASE_ENABLED: true,
+        UTILITIES_TEST_MODE: false,
+        UTILITIES_WALLET_PAYMENT_ENABLED: true,
+        UTILITIES_LIVE_FULFILLMENT_ENABLED: true
+      },
+      prismaOverrides: {
+        utilityProvider: {
+          findMany: jest.fn().mockResolvedValue([electricityProvider]),
+          findFirst: jest.fn().mockResolvedValue(electricityProvider),
+          update: jest.fn()
+        }
+      },
+      paybetaProvider: {
+        isConfigured: jest.fn().mockReturnValue(true),
+        validateRecipient: jest.fn().mockResolvedValue({ isValid: true, normalizedRecipient: "0000000000" }),
+        quote: jest.fn().mockRejectedValue(new Error("PAYBETA_HTTP_401")),
+        purchase: jest.fn()
+      }
+    });
+
+    await expect(service.createTransaction("user-id", {
+      serviceType: UtilityServiceType.ELECTRICITY,
+      providerId: electricityProvider.id,
+      amountKobo: 100000,
+      recipient: "0000000000",
+      meterType: "PREPAID",
+      idempotencyKey: "KGO-ELECTRICITY-PREFLIGHT"
+    })).rejects.toThrow("Utility provider is temporarily unavailable. Please try again later.");
+    expect(paybetaProvider.quote).toHaveBeenCalledTimes(1);
+    expect(paybetaProvider.purchase).not.toHaveBeenCalled();
+    expect(tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
   it("creates a successful mock transaction with a unique reference", async () => {
     const { prisma, service } = serviceWith();
     const result = await service.createTransaction("user-id", {
@@ -707,6 +774,104 @@ describe("UtilitiesService", () => {
       where: { id: provider.id },
       data: { metadata: expect.objectContaining({ accelerateIpReadiness: expect.objectContaining({ status: "NOT_VERIFIED", source: "LIVE_OPERATION" }) }) }
     }));
+  });
+
+  it("reverses a Paybeta-auth-rejected wallet debit exactly once", async () => {
+    const paybetaProvider = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      validateRecipient: jest.fn().mockResolvedValue({ isValid: true, normalizedRecipient: "+2348030000000" }),
+      purchase: jest.fn().mockResolvedValue({
+        status: UtilityTransactionStatus.FAILED,
+        providerStatus: "PAYBETA_HTTP_401",
+        providerReference: "KGO-UTIL-REFERENCE",
+        failureReason: "Paybeta rejected the utility request before confirming a transaction.",
+        metadata: { provider: "paybeta", errorCategory: "paybeta_http_401" }
+      })
+    };
+    const { prisma, tx, service } = serviceWith({
+      configValues: {
+        UTILITIES_PROVIDER: "accelerate",
+        UTILITIES_AIRTIME_PROVIDER: "paybeta",
+        UTILITIES_ENABLED: true,
+        UTILITIES_CUSTOMER_PURCHASE_ENABLED: true,
+        UTILITIES_TEST_MODE: false,
+        UTILITIES_WALLET_PAYMENT_ENABLED: true,
+        UTILITIES_LIVE_FULFILLMENT_ENABLED: true
+      },
+      paybetaProvider
+    });
+    (prisma.utilityTransaction.findUnique as jest.Mock).mockImplementation(({ where }: { where: { id?: string; reference?: string } }) => {
+      if (where.reference) return Promise.resolve(null);
+      return Promise.resolve({
+        id: "transaction-id",
+        reference: "KGO-UTIL-REFERENCE",
+        customerId: "customer-id",
+        serviceType: provider.type,
+        providerId: provider.id,
+        productId: product.id,
+        amountKobo: 50000,
+        convenienceFeeKobo: 0,
+        totalKobo: 50000,
+        recipient: "+2348030000000",
+        recipientName: null,
+        status: UtilityTransactionStatus.FAILED,
+        providerStatus: "PAYBETA_HTTP_401",
+        providerReference: "KGO-UTIL-REFERENCE",
+        mockToken: null,
+        customerNote: "The utility provider rejected this request. Any posted wallet debit will be reversed.",
+        failureReason: "Paybeta rejected the utility request before confirming a transaction.",
+        metadata: {
+          mode: "paybeta",
+          testMode: false,
+          paymentMethod: "WALLET",
+          walletDebitLedgerEntryId: "ledger-debit",
+          walletDebitReference: "KGO-UTIL-REFERENCE-WALLET-DEBIT",
+          walletDebitStatus: WalletLedgerEntryStatus.POSTED,
+          errorCategory: "paybeta_http_401"
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        completedAt: new Date(),
+        provider,
+        product
+      });
+    });
+    tx.customerWalletLedgerEntry.findUnique.mockImplementation(({ where }: { where: { id?: string; idempotencyKey?: string } }) => {
+      if (where.id === "ledger-debit") {
+        return Promise.resolve({
+          id: "ledger-debit",
+          walletId: "wallet-id",
+          customerId: "customer-id",
+          status: WalletLedgerEntryStatus.POSTED,
+          amount: new Prisma.Decimal(500),
+          reference: "KGO-UTIL-REFERENCE-WALLET-DEBIT",
+          metadata: null
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    const result = await service.createTransaction("user-id", {
+      serviceType: UtilityServiceType.AIRTIME,
+      providerId: provider.id,
+      amountKobo: 50000,
+      recipient: "08030000000",
+      idempotencyKey: "KGO-PAYBETA-401"
+    });
+
+    const reversalWrites = tx.customerWalletLedgerEntry.create.mock.calls.filter(([call]) => call.data.entryType === WalletLedgerEntryType.REVERSAL);
+    expect(paybetaProvider.purchase).toHaveBeenCalledTimes(1);
+    expect(reversalWrites).toHaveLength(1);
+    expect(reversalWrites[0][0].data).toMatchObject({
+      idempotencyKey: "utility:KGO-UTIL-REFERENCE:wallet-reversal",
+      direction: WalletLedgerDirection.CREDIT,
+      status: WalletLedgerEntryStatus.POSTED
+    });
+    expect(result).toMatchObject({
+      status: UtilityTransactionStatus.FAILED,
+      walletDebitStatus: WalletLedgerEntryStatus.REVERSED,
+      walletReversalStatus: WalletLedgerEntryStatus.POSTED
+    });
   });
 
   it("keeps provider-pending fulfilment pending without reversing the wallet", async () => {

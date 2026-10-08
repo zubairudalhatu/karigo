@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import * as Location from "expo-location";
-import type { CustomerAdPlacementDecision, LaunchAvailabilityResponse, LaunchServiceType, ServiceCategory, TaxiTrip, VendorSummary } from "@karigo/shared-types";
+import type { CustomerAdPlacementDecision, LaunchAvailabilityResponse, LaunchServiceType, ServiceCategory, TaxiTrip, UtilityServiceType, VendorSummary } from "@karigo/shared-types";
 import { isActiveTaxiTripStatus, taxiLifecycleForStatus } from "@karigo/shared-types";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -9,6 +9,8 @@ import { Image, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View 
 import { adsApi, CustomerHomeAd } from "../../src/api/ads.api";
 import { launchApi } from "../../src/api/launch.api";
 import { taxiApi } from "../../src/api/taxi.api";
+import { utilitiesApi } from "../../src/api/utilities.api";
+import type { UtilityAvailability } from "../../src/api/utilities.api";
 import { vendorsApi } from "../../src/api/vendors.api";
 import { Button, Card, Empty, Loading, Message, Screen, ui } from "../../src/components/ui";
 import { KariGoAppTopBar } from "../../src/components/kari-go-app-top-bar";
@@ -34,6 +36,7 @@ const categories: {
   statusLabel?: string;
   requiresAuth?: boolean;
   launchService?: LaunchServiceType;
+  utilityService?: UtilityServiceType;
 }[] = [
   { label: "Food Delivery", icon: "coffee", href: "/catalogue/food", serviceCategory: "FOOD", tone: "#FFF1F2", state: "active", launchService: "FOOD" },
   { label: "Groceries", icon: "shopping-bag", href: "/catalogue/groceries", serviceCategory: "GROCERY", tone: "#ECFDF3", state: "active", launchService: "GROCERIES" },
@@ -50,11 +53,22 @@ const categories: {
   },
   { label: "Parcel Delivery", icon: "package", href: "/parcel", serviceCategory: "PARCEL", tone: "#FFFBEB", state: "active", requiresAuth: true, launchService: "PARCEL_DELIVERY" },
   { label: "SME Services", subtitle: "Book trusted service providers", icon: "tool", href: "/sme-services", serviceCategory: "CORPORATE", tone: "#F5F3FF", state: "active", requiresAuth: true, launchService: "SME_SERVICES" },
-  { label: "Airtime", icon: "phone", href: "/utilities/airtime", tone: "#FEF2F2", state: "readiness", statusLabel: "Available", requiresAuth: true },
-  { label: "Data", icon: "wifi", href: "/utilities/data", tone: "#FEF2F2", state: "readiness", statusLabel: "Available", requiresAuth: true },
-  { label: "Electricity", icon: "zap", href: "/utilities/electricity", tone: "#FEF2F2", state: "readiness", statusLabel: "Available", requiresAuth: true },
-  { label: "Cable TV", icon: "tv", href: "/utilities/cable-tv", tone: "#FEF2F2", state: "readiness", statusLabel: "Available", requiresAuth: true }
+  { label: "Airtime", icon: "phone", href: "/utilities/airtime", tone: "#FEF2F2", state: "readiness", requiresAuth: true, utilityService: "AIRTIME" },
+  { label: "Data", icon: "wifi", href: "/utilities/data", tone: "#FEF2F2", state: "readiness", requiresAuth: true, utilityService: "DATA" },
+  { label: "Electricity", icon: "zap", href: "/utilities/electricity", tone: "#FEF2F2", state: "readiness", requiresAuth: true, utilityService: "ELECTRICITY" },
+  { label: "Cable TV", icon: "tv", href: "/utilities/cable-tv", tone: "#FEF2F2", state: "readiness", requiresAuth: true, utilityService: "CABLE_TV" }
 ];
+
+const unavailableUtilities: Record<UtilityServiceType, UtilityAvailability> = {
+  AIRTIME: "TEMPORARILY_UNAVAILABLE",
+  DATA: "TEMPORARILY_UNAVAILABLE",
+  ELECTRICITY: "TEMPORARILY_UNAVAILABLE",
+  CABLE_TV: "TEMPORARILY_UNAVAILABLE"
+};
+
+function utilityAvailabilityLabel(availability: UtilityAvailability) {
+  return availability === "AVAILABLE" ? "Available" : "Temporarily unavailable";
+}
 
 function firstName(fullName?: string | null) {
   const name = fullName?.trim();
@@ -121,6 +135,7 @@ export default function CustomerHome() {
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [rides, setRides] = useState<TaxiTrip[]>([]);
   const [launchAvailability, setLaunchAvailability] = useState<LaunchAvailabilityResponse | null>(null);
+  const [utilityReadiness, setUtilityReadiness] = useState<Record<UtilityServiceType, UtilityAvailability>>(unavailableUtilities);
 
   useEffect(() => {
     vendorsApi.list()
@@ -172,6 +187,18 @@ export default function CustomerHome() {
   useEffect(() => { loadLaunchAvailability(); }, [loadLaunchAvailability]);
   useFocusEffect(useCallback(() => { loadLaunchAvailability(); }, [loadLaunchAvailability]));
 
+  const loadUtilityReadiness = useCallback(() => {
+    utilitiesApi.readiness()
+      .then((readiness) => setUtilityReadiness({
+        ...unavailableUtilities,
+        ...Object.fromEntries(readiness.services.map((item) => [item.serviceType, item.availability]))
+      }))
+      .catch(() => setUtilityReadiness(unavailableUtilities));
+  }, []);
+
+  useEffect(() => { loadUtilityReadiness(); }, [loadUtilityReadiness]);
+  useFocusEffect(useCallback(() => { loadUtilityReadiness(); }, [loadUtilityReadiness]));
+
   async function detectLaunchCity(showFeedback = true) {
     setDetectingLocation(true);
     if (showFeedback) setLocationMessage("");
@@ -221,6 +248,10 @@ export default function CustomerHome() {
     const availability = category.launchService ? launchAvailability?.services.find((item) => item.serviceType === category.launchService) : null;
     if (availability && !availability.available) {
       setGuestPrompt(availability.message);
+      return;
+    }
+    if (category.utilityService && utilityReadiness[category.utilityService] !== "AVAILABLE") {
+      setGuestPrompt(`${category.label} is temporarily unavailable.`);
       return;
     }
     if (!user && category.requiresAuth) {
@@ -293,7 +324,9 @@ export default function CustomerHome() {
       <View style={styles.categoryGrid}>
         {categories.map((category) => {
           const availability = category.launchService ? launchAvailability?.services.find((item) => item.serviceType === category.launchService) : null;
-          const unavailable = Boolean(availability && !availability.available);
+          const utilityAvailability = category.utilityService ? utilityReadiness[category.utilityService] : null;
+          const unavailable = Boolean((availability && !availability.available) || (utilityAvailability && utilityAvailability !== "AVAILABLE"));
+          const statusLabel = utilityAvailability ? utilityAvailabilityLabel(utilityAvailability) : category.statusLabel;
           return <Pressable
           key={category.label}
           accessibilityRole="button"
@@ -306,7 +339,7 @@ export default function CustomerHome() {
           </View>
           <Text style={styles.categoryLabel}>{category.label}</Text>
           {category.subtitle ? <Text style={styles.categorySubtitle}>{category.subtitle}</Text> : null}
-          {availability || category.statusLabel || (category.label === "KariGO Rides" && activeRide) ? <Text style={styles.serviceStatus}>{category.label === "KariGO Rides" && activeRide ? "Active ride" : availability ? (availability.available ? labelLaunchStage(availability.launchStage) : availability.message) : category.statusLabel}</Text> : null}
+          {availability || statusLabel || (category.label === "KariGO Rides" && activeRide) ? <Text style={styles.serviceStatus}>{category.label === "KariGO Rides" && activeRide ? "Active ride" : availability ? (availability.available ? labelLaunchStage(availability.launchStage) : availability.message) : statusLabel}</Text> : null}
         </Pressable>})}
       </View>
 
