@@ -670,6 +670,75 @@ describe("environment configuration", () => {
     expect(result.ACCELERATE_ENV).toBe("sandbox");
   });
 
+  it("allows Paybeta utility purchases only through the sandbox host and API key", () => {
+    const result = validateEnvironment({
+      ...baseConfig(),
+      UTILITIES_PROVIDER: "paybeta_sandbox",
+      UTILITIES_ENABLED: "true",
+      UTILITIES_TEST_MODE: "true",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
+      PAYBETA_BASE_URL: "https://api.sandbox.paybeta.ng",
+      PAYBETA_API_KEY: "paybeta-sandbox-key-placeholder"
+    });
+
+    expect(result.UTILITIES_PROVIDER).toBe("paybeta_sandbox");
+    expect(result.UTILITIES_TEST_MODE).toBe(true);
+    expect(result.PAYBETA_BASE_URL).toBe("https://api.sandbox.paybeta.ng");
+    expect(result.PAYBETA_API_KEY).toBe("paybeta-sandbox-key-placeholder");
+  });
+
+  it("allows service-level Paybeta production routing while leaving Data and Cable on Accelerate", () => {
+    const result = validateEnvironment({
+      ...baseConfig(),
+      UTILITIES_PROVIDER: "accelerate",
+      UTILITIES_AIRTIME_PROVIDER: "paybeta",
+      UTILITIES_DATA_PROVIDER: "accelerate",
+      UTILITIES_ELECTRICITY_PROVIDER: "paybeta",
+      UTILITIES_CABLE_PROVIDER: "accelerate",
+      UTILITIES_ENABLED: "true",
+      UTILITIES_TEST_MODE: "false",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
+      UTILITIES_WALLET_PAYMENT_ENABLED: "true",
+      UTILITIES_LIVE_FULFILLMENT_ENABLED: "true",
+      ACCELERATE_ENABLED: "true",
+      ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder",
+      ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder",
+      PAYBETA_BASE_URL: "https://api.paybeta.ng",
+      PAYBETA_API_KEY: "paybeta-production-key-placeholder"
+    });
+
+    expect(result.UTILITIES_AIRTIME_PROVIDER).toBe("paybeta");
+    expect(result.UTILITIES_DATA_PROVIDER).toBe("accelerate");
+    expect(result.UTILITIES_ELECTRICITY_PROVIDER).toBe("paybeta");
+    expect(result.UTILITIES_CABLE_PROVIDER).toBe("accelerate");
+    expect(result.PAYBETA_BASE_URL).toBe("https://api.paybeta.ng");
+  });
+
+  it("rejects environment/host mismatches for Paybeta routes", () => {
+
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      UTILITIES_PROVIDER: "paybeta_sandbox",
+      UTILITIES_ENABLED: "true",
+      UTILITIES_TEST_MODE: "false",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
+      PAYBETA_API_KEY: "paybeta-sandbox-key-placeholder"
+    })).toThrow("Paybeta sandbox utility routing requires UTILITIES_TEST_MODE=true");
+
+    expect(() => validateEnvironment({
+      ...baseConfig(),
+      UTILITIES_PROVIDER: "mock",
+      UTILITIES_AIRTIME_PROVIDER: "paybeta",
+      UTILITIES_ENABLED: "true",
+      UTILITIES_TEST_MODE: "false",
+      UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
+      UTILITIES_WALLET_PAYMENT_ENABLED: "true",
+      UTILITIES_LIVE_FULFILLMENT_ENABLED: "true",
+      PAYBETA_BASE_URL: "https://api.sandbox.paybeta.ng",
+      PAYBETA_API_KEY: "paybeta-key-placeholder"
+    })).toThrow("Paybeta production utility routing requires https://api.paybeta.ng");
+  });
+
   it("rejects customer utility purchases without complete Accelerate configuration", () => {
     expect(() => validateEnvironment({
       ...baseConfig(),
@@ -689,7 +758,7 @@ describe("environment configuration", () => {
       UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
       ACCELERATE_ENABLED: "true",
       ACCELERATE_API_PRIVATE_KEY: "accelerate-private-key-placeholder"
-    })).toThrow("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_API_PUBLIC_KEY");
+    })).toThrow("Accelerate utility routing requires ACCELERATE_API_PUBLIC_KEY");
 
     expect(() => validateEnvironment({
       ...baseConfig(),
@@ -698,7 +767,7 @@ describe("environment configuration", () => {
       UTILITIES_CUSTOMER_PURCHASE_ENABLED: "true",
       ACCELERATE_ENABLED: "true",
       ACCELERATE_API_PUBLIC_KEY: "accelerate-public-key-placeholder"
-    })).toThrow("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_API_PRIVATE_KEY");
+    })).toThrow("Accelerate utility routing requires ACCELERATE_API_PRIVATE_KEY");
 
     expect(() => validateEnvironment({
       ...baseConfig(),

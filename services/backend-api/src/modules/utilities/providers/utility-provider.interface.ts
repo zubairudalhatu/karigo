@@ -6,6 +6,7 @@ export interface UtilityRecipientValidationResult {
   isValid: boolean;
   normalizedRecipient?: string;
   recipientName?: string;
+  recipientAddress?: string;
   message?: string;
 }
 
@@ -16,6 +17,7 @@ export interface UtilityQuoteInput {
   amountKobo: number;
   recipient: string;
   recipientName?: string;
+  recipientAddress?: string;
   meterType?: UtilityMeterType;
   customerPhoneNumber?: string | null;
   customerEmail?: string | null;

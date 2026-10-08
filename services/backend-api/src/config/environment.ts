@@ -452,9 +452,27 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     typeof configuredUtilitiesProvider === "string" && configuredUtilitiesProvider.trim()
       ? configuredUtilitiesProvider.trim().toLowerCase()
       : "mock";
-  if (!["mock", "accelerate"].includes(utilitiesProvider)) {
-    throw new Error("UTILITIES_PROVIDER must be mock or accelerate");
+  const utilityProviderModes = ["mock", "accelerate", "paybeta_sandbox", "paybeta"];
+  if (!utilityProviderModes.includes(utilitiesProvider)) {
+    throw new Error("UTILITIES_PROVIDER must be mock, accelerate, paybeta_sandbox or paybeta");
   }
+  const utilityServiceProvider = (key: string) => {
+    const value = stringAlias(config, [key], utilitiesProvider).toLowerCase();
+    if (!utilityProviderModes.includes(value)) {
+      throw new Error(`${key} must be mock, accelerate, paybeta_sandbox or paybeta`);
+    }
+    return value;
+  };
+  const utilitiesAirtimeProvider = utilityServiceProvider("UTILITIES_AIRTIME_PROVIDER");
+  const utilitiesDataProvider = utilityServiceProvider("UTILITIES_DATA_PROVIDER");
+  const utilitiesElectricityProvider = utilityServiceProvider("UTILITIES_ELECTRICITY_PROVIDER");
+  const utilitiesCableProvider = utilityServiceProvider("UTILITIES_CABLE_PROVIDER");
+  const utilityServiceProviders = [
+    utilitiesAirtimeProvider,
+    utilitiesDataProvider,
+    utilitiesElectricityProvider,
+    utilitiesCableProvider
+  ];
   const utilitiesEnabled = booleanAlias(
     config,
     ["UTILITIES_ENABLED", "UTILITIES_PROVIDER_ENABLED"],
@@ -504,6 +522,20 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     liveString(config, "ACCELERATE_API_SECRET") ??
     liveString(config, "UTILITIES_PROVIDER_SECRET");
   const accelerateWebhookSecret = liveString(config, "ACCELERATE_WEBHOOK_SECRET") ?? liveString(config, "UTILITIES_PROVIDER_WEBHOOK_SECRET");
+  const paybetaBaseUrl = stringAlias(config, ["PAYBETA_BASE_URL"], "https://api.sandbox.paybeta.ng");
+  const paybetaApiKey = liveString(config, "PAYBETA_API_KEY") ?? liveString(config, "PAYBETA_SANDBOX_API_KEY");
+  let paybetaUrl: URL;
+  try {
+    paybetaUrl = new URL(paybetaBaseUrl);
+  } catch {
+    throw new Error("PAYBETA_BASE_URL must be a valid URL");
+  }
+  if (paybetaUrl.protocol !== "https:" || paybetaUrl.username || paybetaUrl.password || ![
+    "https://api.sandbox.paybeta.ng",
+    "https://api.paybeta.ng"
+  ].includes(paybetaUrl.origin)) {
+    throw new Error("PAYBETA_BASE_URL must use an exact credential-free Paybeta API host");
+  }
   const accelerateEnv = stringAlias(
     config,
     ["ACCELERATE_ENV", "UTILITIES_PROVIDER_ENV"],
@@ -528,17 +560,35 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     if (!utilitiesEnabled) {
       throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires UTILITIES_ENABLED=true");
     }
-    if (utilitiesProvider !== "accelerate") {
-      throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires UTILITIES_PROVIDER=accelerate");
+    if (utilityServiceProviders.includes("paybeta_sandbox")) {
+      if (!utilitiesTestMode) {
+        throw new Error("Paybeta sandbox utility routing requires UTILITIES_TEST_MODE=true");
+      }
+      if (paybetaUrl.origin !== "https://api.sandbox.paybeta.ng") {
+        throw new Error("Paybeta sandbox utility routing requires the sandbox API host");
+      }
     }
-    if (!accelerateEnabled) {
-      throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_ENABLED=true");
+    if (utilityServiceProviders.includes("paybeta")) {
+      if (utilitiesTestMode) {
+        throw new Error("Paybeta production utility routing requires UTILITIES_TEST_MODE=false");
+      }
+      if (paybetaUrl.origin !== "https://api.paybeta.ng") {
+        throw new Error("Paybeta production utility routing requires https://api.paybeta.ng");
+      }
     }
-    if (!accelerateApiKey) {
-      throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_API_PUBLIC_KEY");
+    if ((utilityServiceProviders.includes("paybeta") || utilityServiceProviders.includes("paybeta_sandbox")) && !paybetaApiKey) {
+      throw new Error("Paybeta utility routing requires PAYBETA_API_KEY");
     }
-    if (!accelerateApiSecret) {
-      throw new Error("UTILITIES_CUSTOMER_PURCHASE_ENABLED=true requires ACCELERATE_API_PRIVATE_KEY");
+    if (utilityServiceProviders.includes("accelerate")) {
+      if (!accelerateEnabled) {
+        throw new Error("Accelerate utility routing requires ACCELERATE_ENABLED=true");
+      }
+      if (!accelerateApiKey) {
+        throw new Error("Accelerate utility routing requires ACCELERATE_API_PUBLIC_KEY");
+      }
+      if (!accelerateApiSecret) {
+        throw new Error("Accelerate utility routing requires ACCELERATE_API_PRIVATE_KEY");
+      }
     }
     if (!utilitiesTestMode && !utilitiesWalletPaymentEnabled) {
       throw new Error("UTILITIES_TEST_MODE=false requires UTILITIES_WALLET_PAYMENT_ENABLED=true");
@@ -940,6 +990,10 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       : "https://sandbox-api-d.squadco.com",
     UTILITIES_PROVIDER: utilitiesProvider,
     UTILITIES_PROVIDER_NAME: utilitiesProvider,
+    UTILITIES_AIRTIME_PROVIDER: utilitiesAirtimeProvider,
+    UTILITIES_DATA_PROVIDER: utilitiesDataProvider,
+    UTILITIES_ELECTRICITY_PROVIDER: utilitiesElectricityProvider,
+    UTILITIES_CABLE_PROVIDER: utilitiesCableProvider,
     UTILITIES_ENABLED: utilitiesEnabled,
     UTILITIES_PROVIDER_ENABLED: utilitiesEnabled,
     UTILITIES_TEST_MODE: utilitiesTestMode,
@@ -962,6 +1016,8 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     ACCELERATE_API_KEY: accelerateApiKey,
     ACCELERATE_API_SECRET: accelerateApiSecret,
     ACCELERATE_WEBHOOK_SECRET: accelerateWebhookSecret,
+    PAYBETA_BASE_URL: paybetaBaseUrl,
+    PAYBETA_API_KEY: paybetaApiKey,
     NOTIFICATION_PROVIDER: notificationProvider,
     EMAIL_PROVIDER: emailProvider,
     EMAIL_FROM: typeof config.EMAIL_FROM === "string" && config.EMAIL_FROM.trim()

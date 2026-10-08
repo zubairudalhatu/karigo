@@ -13,6 +13,7 @@ import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AccelerateUtilityProvider } from "./providers/accelerate-utility.provider";
 import { MockUtilityProvider } from "./providers/mock-utility.provider";
+import { PaybetaUtilityProvider } from "./providers/paybeta-utility.provider";
 import { UtilityProviderClient } from "./providers/utility-provider.interface";
 import { UtilitiesService } from "./utilities.service";
 
@@ -47,6 +48,7 @@ function serviceWith(options: {
   txOverrides?: Record<string, unknown>;
   configValues?: Record<string, unknown>;
   accelerateProvider?: Partial<UtilityProviderClient> & { isConfigured?: jest.Mock; connectivityReadiness?: jest.Mock };
+  paybetaProvider?: Partial<UtilityProviderClient> & { isConfigured?: jest.Mock };
 } = {}) {
   const now = new Date();
   const transactionCreate = jest.fn().mockImplementation(({ data }) => Promise.resolve({
@@ -160,7 +162,22 @@ function serviceWith(options: {
     checkStatus: jest.fn(),
     ...options.accelerateProvider
   } as unknown as AccelerateUtilityProvider;
-  return { prisma, tx, accelerateProvider, audit, service: new UtilitiesService(prisma, config, new MockUtilityProvider(), accelerateProvider, audit) };
+  const paybetaProvider = {
+    isConfigured: jest.fn().mockReturnValue(false),
+    validateRecipient: jest.fn(),
+    quote: jest.fn(),
+    purchase: jest.fn(),
+    checkStatus: jest.fn(),
+    ...options.paybetaProvider
+  } as unknown as PaybetaUtilityProvider;
+  return {
+    prisma,
+    tx,
+    accelerateProvider,
+    paybetaProvider,
+    audit,
+    service: new UtilitiesService(prisma, config, new MockUtilityProvider(), accelerateProvider, audit, paybetaProvider)
+  };
 }
 
 const liveWalletUtilityConfig = {
@@ -186,6 +203,32 @@ const successfulAccelerateProvider = {
 };
 
 describe("UtilitiesService", () => {
+  it("routes only Airtime and Electricity to Paybeta Production", () => {
+    const { service, paybetaProvider, accelerateProvider } = serviceWith({
+      configValues: {
+        UTILITIES_PROVIDER: "accelerate",
+        UTILITIES_AIRTIME_PROVIDER: "paybeta",
+        UTILITIES_DATA_PROVIDER: "accelerate",
+        UTILITIES_ELECTRICITY_PROVIDER: "paybeta",
+        UTILITIES_CABLE_PROVIDER: "accelerate",
+        UTILITIES_ENABLED: true,
+        UTILITIES_CUSTOMER_PURCHASE_ENABLED: true,
+        UTILITIES_TEST_MODE: false,
+        ACCELERATE_ENABLED: true
+      },
+      paybetaProvider: { isConfigured: jest.fn().mockReturnValue(true) },
+      accelerateProvider: { isConfigured: jest.fn().mockReturnValue(true) }
+    });
+    const select = (type: UtilityServiceType) => (service as unknown as {
+      activeUtilityProvider: (serviceType: UtilityServiceType) => { mode: string; client: UtilityProviderClient };
+    }).activeUtilityProvider(type);
+
+    expect(select(UtilityServiceType.AIRTIME)).toMatchObject({ mode: "paybeta", client: paybetaProvider });
+    expect(select(UtilityServiceType.ELECTRICITY)).toMatchObject({ mode: "paybeta", client: paybetaProvider });
+    expect(select(UtilityServiceType.DATA)).toMatchObject({ mode: "accelerate", client: accelerateProvider });
+    expect(select(UtilityServiceType.CABLE_TV)).toMatchObject({ mode: "accelerate", client: accelerateProvider });
+  });
+
   it("records a non-destructive readiness audit with the authenticated Admin UUID and no non-UUID target", async () => {
     const adminUserId = "78a90390-b713-4edf-86ca-862912859acd";
     const connectivity = {

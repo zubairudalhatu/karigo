@@ -5,13 +5,14 @@ import { AdminUtilitiesController } from "./admin-utilities.controller";
 import { CustomerUtilitiesController } from "./customer-utilities.controller";
 import { AccelerateUtilityProvider } from "./providers/accelerate-utility.provider";
 import { MockUtilityProvider } from "./providers/mock-utility.provider";
+import { PaybetaUtilityProvider } from "./providers/paybeta-utility.provider";
 import { UtilitiesController } from "./utilities.controller";
 import { UtilitiesService } from "./utilities.service";
 
 @Module({
   imports: [PrismaModule, AdminAuditModule],
   controllers: [UtilitiesController, CustomerUtilitiesController, AdminUtilitiesController],
-  providers: [UtilitiesService, MockUtilityProvider, AccelerateUtilityProvider],
+  providers: [UtilitiesService, MockUtilityProvider, AccelerateUtilityProvider, PaybetaUtilityProvider],
   exports: [UtilitiesService]
 })
 export class UtilitiesModule {}

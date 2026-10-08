@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   Prisma,
@@ -18,6 +18,7 @@ import { UtilityProductsQueryDto, UtilityProvidersQueryDto } from "./dto/utility
 import { UpdateUtilityTransactionStatusDto } from "./dto/update-utility-status.dto";
 import { AccelerateConnectivityStatus, AccelerateUtilityProvider } from "./providers/accelerate-utility.provider";
 import { MockUtilityProvider } from "./providers/mock-utility.provider";
+import { PaybetaUtilityProvider } from "./providers/paybeta-utility.provider";
 import { UtilityProviderClient, UtilityPurchaseResult } from "./providers/utility-provider.interface";
 
 const DEFAULT_AMOUNT_BOUNDARIES: Record<UtilityServiceType, { min: number; max: number }> = {
@@ -51,7 +52,8 @@ export class UtilitiesService {
     private readonly config: ConfigService,
     private readonly mockProvider: MockUtilityProvider,
     private readonly accelerateProvider: AccelerateUtilityProvider,
-    private readonly audit: AdminAuditService
+    private readonly audit: AdminAuditService,
+    @Optional() private readonly paybetaProvider?: PaybetaUtilityProvider
   ) {}
 
   listProviders(query: UtilityProvidersQueryDto) {
@@ -87,13 +89,10 @@ export class UtilitiesService {
 
   async publicReadiness() {
     const catalogue = await this.catalogueReadiness();
-    const paidProcessingEnabled = this.accelerateCustomerPurchasesEnabled() &&
-      !this.flagValue("UTILITIES_TEST_MODE", true) &&
-      this.flagValue("UTILITIES_WALLET_PAYMENT_ENABLED", false) &&
-      this.flagValue("UTILITIES_LIVE_FULFILLMENT_ENABLED", false);
     return {
       services: (Object.values(UtilityServiceType) as UtilityServiceType[]).map((serviceType) => {
         const gate = catalogue[serviceType];
+        const paidProcessingEnabled = this.liveCustomerPurchasesEnabled(serviceType);
         const availability = paidProcessingEnabled && gate.status === "READY"
           ? "AVAILABLE"
           : gate.status === "READY"
@@ -187,7 +186,11 @@ export class UtilitiesService {
       liveMetadata(item.metadata) &&
       liveMetadata(item.provider.metadata) &&
       validProductAmount(item);
-    const providerReady = (type: UtilityServiceType) => providers.some((item) => item.type === type && liveProvider(item));
+    const providerReady = (type: UtilityServiceType) => providers.some((item) => item.type === type && (
+      this.providerModeForService(type) === "paybeta"
+        ? Boolean(item.name.trim()) && !item.code.startsWith("DEMO_")
+        : liveProvider(item)
+    ));
     const liveProductReady = (type: UtilityServiceType) => products.some((item) => item.type === type && liveProduct(item));
     const gate = (type: UtilityServiceType, requiresLiveProducts: boolean) => {
       const ready = providerReady(type) && (!requiresLiveProducts || liveProductReady(type));
@@ -209,9 +212,9 @@ export class UtilitiesService {
   }
 
   async quote(userId: string, dto: UtilityQuoteDto) {
-    this.assertLiveCustomerPurchaseGate();
+    this.assertLiveCustomerPurchaseGate(dto.serviceType);
     const customer = await this.requireCustomer(userId);
-    const utilityProvider = this.activeUtilityProvider();
+    const utilityProvider = this.activeUtilityProvider(dto.serviceType);
     const resolved = await this.resolveRequest(dto, utilityProvider.client);
     this.assertAccelerateLiveRequestAllowed(resolved, utilityProvider);
     const providerQuote = await utilityProvider.client.quote({
@@ -245,9 +248,9 @@ export class UtilitiesService {
   }
 
   async createTransaction(userId: string, dto: CreateUtilityTransactionDto) {
-    this.assertLiveCustomerPurchaseGate();
+    this.assertLiveCustomerPurchaseGate(dto.serviceType);
     const customer = await this.requireCustomer(userId);
-    const utilityProvider = this.activeUtilityProvider();
+    const utilityProvider = this.activeUtilityProvider(dto.serviceType);
     if (this.walletUtilityPaymentEnabled(utilityProvider)) {
       const existing = await this.findIdempotentWalletUtilityTransaction(customer.id, dto.idempotencyKey);
       if (existing) return this.customerTransaction(existing);
@@ -258,7 +261,7 @@ export class UtilitiesService {
     if (this.walletUtilityPaymentEnabled(utilityProvider)) {
       return this.createWalletFundedTransaction(customer, dto, resolved, reference, utilityProvider);
     }
-    if (utilityProvider.mode === "accelerate" && !utilityProvider.testMode) {
+    if (["accelerate", "paybeta"].includes(utilityProvider.mode) && !utilityProvider.testMode) {
       throw new BadRequestException("Live Utilities require wallet payment and live fulfilment flags.");
     }
     const transaction = await this.prisma.utilityTransaction.create({
@@ -422,7 +425,9 @@ export class UtilitiesService {
         reference,
         totalKobo: resolved.totalKobo
       });
-      await this.recordAccelerateOperationReadiness([resolved.provider], purchase);
+      if (utilityProvider.mode === "accelerate") {
+        await this.recordAccelerateOperationReadiness([resolved.provider], purchase);
+      }
     } catch {
       const reversed = await this.reverseWalletDebitIfNeeded(created.transaction.id, "Utilities provider could not be reached safely.");
       return this.customerTransaction(reversed ?? created.transaction);
@@ -445,7 +450,9 @@ export class UtilitiesService {
 
     const utilityProvider = this.providerForMode(this.transactionProviderMode(transaction.metadata));
     const purchase = await utilityProvider.client.checkStatus(transaction.providerReference ?? transaction.reference, transaction.serviceType);
-    await this.recordAccelerateOperationReadiness([transaction.provider], purchase);
+    if (utilityProvider.mode === "accelerate") {
+      await this.recordAccelerateOperationReadiness([transaction.provider], purchase);
+    }
     const updated = await this.applyProviderResult(transaction.id, purchase, this.adminInclude(true), transaction.metadata);
     if (purchase.status === UtilityTransactionStatus.FAILED) {
       const reversed = await this.reverseWalletDebitIfNeeded(transaction.id, purchase.failureReason ?? "Utilities provider reported a failed transaction.", true);
@@ -843,8 +850,21 @@ export class UtilitiesService {
     return `${prefix}-${Date.now()}-${randomBytes(3).toString("hex").toUpperCase()}`;
   }
 
-  private activeUtilityProvider() {
-    if (this.accelerateCustomerPurchasesEnabled()) {
+  private activeUtilityProvider(serviceType: UtilityServiceType) {
+    const mode = this.providerModeForService(serviceType);
+    if (mode === "paybeta_sandbox" || mode === "paybeta") {
+      const environment = mode === "paybeta" ? "production" : "sandbox";
+      if (!this.paybetaProvider?.isConfigured(environment)) {
+        throw new BadRequestException("Paybeta utilities are not configured. Please try again later.");
+      }
+      return {
+        client: this.paybetaProvider,
+        mode,
+        providerStatusPrefix: mode === "paybeta" ? "PAYBETA" : "PAYBETA_SANDBOX",
+        testMode: mode === "paybeta_sandbox"
+      };
+    }
+    if (mode === "accelerate" && this.utilitiesPlatformEnabled() && this.customerUtilityPurchasesFlagEnabled()) {
       if (!this.accelerateProvider.isConfigured()) {
         throw new BadRequestException("Utilities are being activated. Please try again later.");
       }
@@ -855,10 +875,18 @@ export class UtilitiesService {
         testMode: this.flagValue("UTILITIES_TEST_MODE", true)
       };
     }
-    return this.providerForMode("mock");
+    return this.providerForMode(mode);
   }
 
   private providerForMode(mode: string) {
+    if ((mode === "paybeta_sandbox" || mode === "paybeta") && this.paybetaProvider?.isConfigured(mode === "paybeta" ? "production" : "sandbox")) {
+      return {
+        client: this.paybetaProvider,
+        mode,
+        providerStatusPrefix: mode === "paybeta" ? "PAYBETA" : "PAYBETA_SANDBOX",
+        testMode: mode === "paybeta_sandbox"
+      };
+    }
     if (mode === "accelerate" && this.accelerateProvider.isConfigured()) {
       return {
         client: this.accelerateProvider,
@@ -875,15 +903,28 @@ export class UtilitiesService {
     };
   }
 
-  private accelerateCustomerPurchasesEnabled() {
-    return this.utilitiesProviderName() === "accelerate" &&
-      this.utilitiesPlatformEnabled() &&
+  private liveCustomerPurchasesEnabled(serviceType: UtilityServiceType) {
+    const mode = this.providerModeForService(serviceType);
+    return this.utilitiesPlatformEnabled() &&
       this.customerUtilityPurchasesFlagEnabled() &&
-      this.accelerateIntegrationEnabled();
+      !this.flagValue("UTILITIES_TEST_MODE", true) &&
+      this.flagValue("UTILITIES_WALLET_PAYMENT_ENABLED", false) &&
+      this.flagValue("UTILITIES_LIVE_FULFILLMENT_ENABLED", false) &&
+      (mode === "paybeta" || (mode === "accelerate" && this.accelerateIntegrationEnabled()));
   }
 
   private utilitiesProviderName() {
     return this.stringValue("UTILITIES_PROVIDER", this.stringValue("UTILITIES_PROVIDER_NAME", "mock"));
+  }
+
+  private providerModeForService(serviceType: UtilityServiceType) {
+    const key: Record<UtilityServiceType, string> = {
+      AIRTIME: "UTILITIES_AIRTIME_PROVIDER",
+      DATA: "UTILITIES_DATA_PROVIDER",
+      ELECTRICITY: "UTILITIES_ELECTRICITY_PROVIDER",
+      CABLE_TV: "UTILITIES_CABLE_PROVIDER"
+    };
+    return this.stringValue(key[serviceType], this.utilitiesProviderName());
   }
 
   private utilitiesPlatformEnabled() {
@@ -895,7 +936,7 @@ export class UtilitiesService {
   }
 
   private walletUtilityPaymentEnabled(utilityProvider: ReturnType<UtilitiesService["activeUtilityProvider"]>) {
-    return utilityProvider.mode === "accelerate" &&
+    return ["accelerate", "paybeta"].includes(utilityProvider.mode) &&
       !utilityProvider.testMode &&
       this.customerUtilityPurchasesFlagEnabled() &&
       this.flagValue("UTILITIES_WALLET_PAYMENT_ENABLED", false) &&
@@ -967,11 +1008,12 @@ export class UtilitiesService {
     return typeof providerStatus === "string" && ACCELERATE_IP_DENIAL_STATUSES.includes(providerStatus);
   }
 
-  private assertLiveCustomerPurchaseGate() {
+  private assertLiveCustomerPurchaseGate(serviceType: UtilityServiceType) {
+    const mode = this.providerModeForService(serviceType);
     if (
-      this.utilitiesProviderName() === "accelerate" &&
+      (mode === "accelerate" || mode === "paybeta") &&
       this.utilitiesPlatformEnabled() &&
-      this.accelerateIntegrationEnabled() &&
+      (mode !== "accelerate" || this.accelerateIntegrationEnabled()) &&
       !this.flagValue("UTILITIES_TEST_MODE", true) &&
       !this.customerUtilityPurchasesFlagEnabled()
     ) {
