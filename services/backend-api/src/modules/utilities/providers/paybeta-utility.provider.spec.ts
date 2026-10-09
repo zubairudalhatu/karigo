@@ -66,6 +66,7 @@ describe("PaybetaUtilityProvider", () => {
     const fetchMock = jest.spyOn(global, "fetch")
       .mockResolvedValueOnce(response({ status: "successful", data: { reference: "KGO-1", transactionId: "PB-1" } }))
       .mockResolvedValueOnce(response({ status: "pending", code: "01", data: { reference: "KGO-2" } }))
+      .mockResolvedValueOnce(response({ status: "pending", code: "01", data: { reference: "KGO-2" } }))
       .mockResolvedValueOnce(response({ status: "failed", code: "02", data: { reference: "KGO-3" } }));
     const provider = new PaybetaUtilityProvider(config());
     const base = { serviceType: UtilityServiceType.AIRTIME, providerCode: "mtn_vtu", amountKobo: 10_000, totalKobo: 10_000, recipient: "08030000000" };
@@ -77,7 +78,65 @@ describe("PaybetaUtilityProvider", () => {
     expect(success.status).toBe(UtilityTransactionStatus.SUCCESSFUL);
     expect(pending.status).toBe(UtilityTransactionStatus.PROCESSING);
     expect(failed.status).toBe(UtilityTransactionStatus.FAILED);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("normalizes a fulfilled electricity purchase even when the immediate 201 body has a contradictory error code", async () => {
+    jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce(response({ status: "successful", data: { customerName: "Customer", customerAddress: "Address" } }))
+      .mockResolvedValueOnce(response({
+        status: "error",
+        code: "99",
+        data: {
+          reference: "KGO-ELECTRICITY-FULFILLED",
+          transactionId: "API-PROVIDER-TRANSACTION",
+          token: "provider-token",
+          unit: "4.4"
+        }
+      }, 201));
+    const provider = new PaybetaUtilityProvider(config());
+
+    const result = await provider.purchase({
+      serviceType: UtilityServiceType.ELECTRICITY,
+      providerCode: "abuja-electricity-aedc",
+      amountKobo: 100_000,
+      totalKobo: 100_000,
+      recipient: "meter-placeholder",
+      meterType: "PREPAID",
+      reference: "KGO-ELECTRICITY-FULFILLED"
+    });
+
+    expect(result).toMatchObject({
+      status: UtilityTransactionStatus.SUCCESSFUL,
+      providerStatus: "PAYBETA_SUCCESSFUL",
+      providerReference: "KGO-ELECTRICITY-FULFILLED",
+      mockToken: "provider-token",
+      metadata: { transactionId: "API-PROVIDER-TRANSACTION", units: "4.4" }
+    });
+  });
+
+  it("queries an ambiguous successful HTTP submission before returning a refundable status", async () => {
+    const fetchMock = jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce(response({ status: "accepted", data: { reference: "KGO-AMBIGUOUS" } }, 201))
+      .mockResolvedValueOnce(response({
+        status: "successful",
+        code: "00",
+        data: { paymentStatus: "Delivered", reference: "KGO-AMBIGUOUS", transactionId: "API-QUERY" }
+      }));
+    const provider = new PaybetaUtilityProvider(config());
+
+    const result = await provider.purchase({
+      serviceType: UtilityServiceType.AIRTIME,
+      providerCode: "mtn_vtu",
+      amountKobo: 10_000,
+      totalKobo: 10_000,
+      recipient: "08030000000",
+      reference: "KGO-AMBIGUOUS"
+    });
+
+    expect(result).toMatchObject({ status: UtilityTransactionStatus.SUCCESSFUL, providerStatus: "PAYBETA_SUCCESSFUL" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1][0])).toContain("/v2/transaction/query");
   });
 
   it("never repurchases a pending reference", async () => {
@@ -90,7 +149,7 @@ describe("PaybetaUtilityProvider", () => {
 
     expect(first.status).toBe(UtilityTransactionStatus.PROCESSING);
     expect(duplicate.providerStatus).toBe("PAYBETA_DUPLICATE_REFERENCE_BLOCKED");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("blocks a second submission after a successful reference", async () => {
@@ -182,6 +241,23 @@ describe("PaybetaUtilityProvider", () => {
       providerStatus: "PAYBETA_HTTP_401",
       providerReference: "KGO-AUTH-FAILURE"
     });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([401, 403, 402])("keeps HTTP %i definitive and never queries or retries it", async (status) => {
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(response({ message: "Provider rejected request" }, status));
+    const provider = new PaybetaUtilityProvider(config());
+
+    const result = await provider.purchase({
+      serviceType: UtilityServiceType.AIRTIME,
+      providerCode: "mtn_vtu",
+      amountKobo: 10_000,
+      totalKobo: 10_000,
+      recipient: "08030000000",
+      reference: `KGO-DEFINITIVE-${status}`
+    });
+
+    expect(result).toMatchObject({ status: UtilityTransactionStatus.FAILED, providerStatus: `PAYBETA_HTTP_${status}` });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

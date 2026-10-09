@@ -1050,6 +1050,126 @@ describe("UtilitiesService", () => {
     expect(result).toMatchObject({ status: UtilityTransactionStatus.SUCCESSFUL, providerMode: "accelerate" });
   });
 
+  it("flags provider success after wallet reversal for manual reconciliation without debiting again", async () => {
+    const reversedTransaction = {
+      id: "transaction-id",
+      reference: "KGO-UTIL-REFERENCE",
+      customerId: "customer-id",
+      serviceType: UtilityServiceType.ELECTRICITY,
+      providerId: provider.id,
+      productId: product.id,
+      amountKobo: 100000,
+      convenienceFeeKobo: 0,
+      totalKobo: 100000,
+      recipient: "meter-placeholder",
+      recipientName: null,
+      status: UtilityTransactionStatus.FAILED,
+      providerStatus: "PAYBETA_ERROR",
+      providerReference: "KGO-UTIL-REFERENCE",
+      mockToken: "provider-token",
+      customerNote: "Utility payment failed. Your wallet has been reversed.",
+      failureReason: "Provider result was misclassified.",
+      metadata: {
+        mode: "paybeta",
+        walletDebitStatus: WalletLedgerEntryStatus.REVERSED,
+        walletReversalReference: "KGO-UTIL-REFERENCE-WALLET-REVERSAL"
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+      provider: { ...provider, type: UtilityServiceType.ELECTRICITY },
+      product,
+      customer: { id: "customer-id", user: { id: "user-id", fullName: "Test Customer", phoneNumber: null, email: null } }
+    };
+    const conflict = {
+      ...reversedTransaction,
+      providerStatus: "PAYBETA_SUCCESSFUL_COMPENSATION_CONFLICT",
+      failureReason: "Provider fulfilled this transaction after its wallet debit was reversed; manual reconciliation is required.",
+      metadata: {
+        ...reversedTransaction.metadata,
+        compensationConflict: true,
+        manualReconciliationRequired: true,
+        providerConfirmedStatus: UtilityTransactionStatus.SUCCESSFUL
+      }
+    };
+    const paybetaProvider = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      checkStatus: jest.fn().mockResolvedValue({
+        status: UtilityTransactionStatus.SUCCESSFUL,
+        providerStatus: "PAYBETA_SUCCESSFUL",
+        providerReference: "KGO-UTIL-REFERENCE",
+        mockToken: "provider-token",
+        metadata: { transactionId: "API-PROVIDER-TRANSACTION", units: "4.4" }
+      })
+    };
+    const update = jest.fn().mockResolvedValue(conflict);
+    const { prisma, tx, audit, service } = serviceWith({
+      prismaOverrides: { utilityTransaction: { findUnique: jest.fn().mockResolvedValue(reversedTransaction), update } },
+      paybetaProvider
+    });
+
+    const result = await service.adminVerifyProviderStatus("admin-id", "transaction-id");
+
+    expect(paybetaProvider.checkStatus).toHaveBeenCalledWith("KGO-UTIL-REFERENCE", UtilityServiceType.ELECTRICITY);
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        providerStatus: "PAYBETA_SUCCESSFUL_COMPENSATION_CONFLICT",
+        metadata: expect.objectContaining({ compensationConflict: true, manualReconciliationRequired: true })
+      })
+    }));
+    expect(result).toMatchObject({
+      status: UtilityTransactionStatus.FAILED,
+      providerStatus: "PAYBETA_SUCCESSFUL_COMPENSATION_CONFLICT"
+    });
+    expect(audit.record).toHaveBeenCalledWith(
+      "admin-id",
+      "admin.utilities.compensation_conflict",
+      "UtilityTransaction",
+      "transaction-id",
+      expect.objectContaining({ manualReconciliationRequired: true })
+    );
+    expect(prisma.customerWallet.update).not.toHaveBeenCalled();
+    expect(tx.customerWallet.update).not.toHaveBeenCalled();
+    expect(tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("keeps a recorded compensation conflict idempotent without another query or wallet change", async () => {
+    const conflictTransaction = {
+      id: "transaction-id", reference: "KGO-UTIL-REFERENCE", customerId: "customer-id",
+      serviceType: UtilityServiceType.ELECTRICITY, providerId: provider.id, productId: product.id,
+      amountKobo: 100000, convenienceFeeKobo: 0, totalKobo: 100000,
+      recipient: "meter-placeholder", recipientName: null,
+      status: UtilityTransactionStatus.FAILED,
+      providerStatus: "PAYBETA_SUCCESSFUL_COMPENSATION_CONFLICT",
+      providerReference: "KGO-UTIL-REFERENCE", mockToken: "provider-token",
+      customerNote: "Provider fulfilment was confirmed after wallet compensation. Manual reconciliation is required.",
+      failureReason: "Manual reconciliation is required.",
+      metadata: {
+        mode: "paybeta",
+        walletDebitStatus: WalletLedgerEntryStatus.REVERSED,
+        compensationConflict: true,
+        manualReconciliationRequired: true
+      },
+      createdAt: new Date(), updatedAt: new Date(), completedAt: new Date(),
+      provider: { ...provider, type: UtilityServiceType.ELECTRICITY }, product,
+      customer: { id: "customer-id", user: { id: "user-id", fullName: "Test Customer", phoneNumber: null, email: null } }
+    };
+    const paybetaProvider = { checkStatus: jest.fn(), purchase: jest.fn() };
+    const { prisma, tx, audit, service } = serviceWith({
+      prismaOverrides: { utilityTransaction: { findUnique: jest.fn().mockResolvedValue(conflictTransaction), update: jest.fn() } },
+      paybetaProvider
+    });
+
+    const result = await service.adminVerifyProviderStatus("admin-id", "transaction-id");
+
+    expect(result).toMatchObject({ providerStatus: "PAYBETA_SUCCESSFUL_COMPENSATION_CONFLICT" });
+    expect(paybetaProvider.checkStatus).not.toHaveBeenCalled();
+    expect(prisma.utilityTransaction.update).not.toHaveBeenCalled();
+    expect(tx.customerWallet.update).not.toHaveBeenCalled();
+    expect(tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+
   it("does not requery or re-vend a terminal provider-denied transaction", async () => {
     const deniedTransaction = {
       id: "transaction-id", reference: "KGO-UTIL-REFERENCE", customerId: "customer-id",

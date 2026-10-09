@@ -206,7 +206,9 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
         retrySafe: false,
         acceptedStatuses: [200, 201, 202, 400, 404, 422]
       });
-      return this.purchaseResult(response, input.reference, input.serviceType, "purchase");
+      const purchase = this.purchaseResult(response, input.reference, input.serviceType, "purchase");
+      if (purchase.status !== UtilityTransactionStatus.PROCESSING) return purchase;
+      return this.checkStatus(input.reference, input.serviceType);
     } catch (error) {
       const errorCategory = this.safeErrorCategory(error);
       this.logger.warn(`Paybeta purchase failed reference=${input.reference} category=${errorCategory}`);
@@ -341,11 +343,23 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
   private normalizedStatus(response: JsonRecord): UtilityTransactionStatus {
     const httpStatus = Number(response.__httpStatus);
     if (httpStatus >= 400 && httpStatus < 500) return UtilityTransactionStatus.FAILED;
+    const data = this.record(response.data);
     const code = this.string(response.code);
     const rootStatus = this.string(response.status).toLowerCase();
-    const paymentStatus = this.string(this.record(response.data).paymentStatus).toLowerCase();
-    const statusValues = [rootStatus, paymentStatus];
-    if (code === "00" || statusValues.some((value) => ["successful", "success", "completed", "delivered"].includes(value))) {
+    const statusValues = [
+      rootStatus,
+      this.string(data.status).toLowerCase(),
+      this.string(data.paymentStatus).toLowerCase()
+    ];
+    const transactionId = this.string(data.transactionId);
+    const token = this.string(data.token);
+    const units = this.string(data.unit);
+    const hasFulfilmentEvidence = Boolean(transactionId && ((token && token !== "0") || (units && units !== "0")));
+    if (
+      code === "00" ||
+      hasFulfilmentEvidence ||
+      statusValues.some((value) => ["successful", "success", "completed", "delivered"].includes(value))
+    ) {
       return UtilityTransactionStatus.SUCCESSFUL;
     }
     if (["02", "99"].includes(code) || statusValues.some((value) => [
@@ -359,8 +373,8 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
   private providerStatus(response: JsonRecord): string {
     const httpStatus = Number(response.__httpStatus);
     if (httpStatus >= 400) return `HTTP_${httpStatus}`;
+    if (this.normalizedStatus(response) === UtilityTransactionStatus.SUCCESSFUL) return "SUCCESSFUL";
     const code = this.string(response.code);
-    if (code === "00") return "SUCCESSFUL";
     if (code === "01") return "PENDING";
     if (code === "02") return "FAILED";
     if (code === "99") return "ERROR";

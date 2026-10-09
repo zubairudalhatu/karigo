@@ -437,12 +437,46 @@ export class UtilitiesService {
       include: this.adminInclude(true)
     });
     if (!transaction) throw new NotFoundException("Utility transaction not found");
-    if (TERMINAL_STATUSES.includes(transaction.status)) return this.adminTransaction(transaction);
+    const transactionMetadata = this.jsonObject(transaction.metadata);
+    const providerMode = this.transactionProviderMode(transaction.metadata);
+    const compensationConflictCandidate = transaction.status === UtilityTransactionStatus.FAILED &&
+      providerMode === "paybeta" && transactionMetadata.walletDebitStatus === WalletLedgerEntryStatus.REVERSED;
+    if (transactionMetadata.manualReconciliationRequired === true && transactionMetadata.compensationConflict === true) {
+      return this.adminTransaction(transaction);
+    }
+    if (TERMINAL_STATUSES.includes(transaction.status) && !compensationConflictCandidate) return this.adminTransaction(transaction);
 
-    const utilityProvider = this.providerForMode(this.transactionProviderMode(transaction.metadata));
+    const utilityProvider = this.providerForMode(providerMode);
     const purchase = await utilityProvider.client.checkStatus(transaction.providerReference ?? transaction.reference, transaction.serviceType);
     if (utilityProvider.mode === "accelerate") {
       await this.recordAccelerateOperationReadiness([transaction.provider], purchase);
+    }
+    if (purchase.status === UtilityTransactionStatus.SUCCESSFUL && transactionMetadata.walletDebitStatus === WalletLedgerEntryStatus.REVERSED) {
+      const conflict = await this.prisma.utilityTransaction.update({
+        where: { id: transaction.id },
+        data: {
+          providerStatus: "PAYBETA_SUCCESSFUL_COMPENSATION_CONFLICT",
+          providerReference: purchase.providerReference,
+          mockToken: purchase.mockToken ?? transaction.mockToken,
+          customerNote: "Provider fulfilment was confirmed after wallet compensation. Manual reconciliation is required.",
+          failureReason: "Provider fulfilled this transaction after its wallet debit was reversed; manual reconciliation is required.",
+          metadata: this.mergeMetadata(transaction.metadata, {
+            ...purchase.metadata,
+            compensationConflict: true,
+            manualReconciliationRequired: true,
+            compensationConflictDetectedAt: new Date().toISOString(),
+            providerConfirmedStatus: purchase.status
+          })
+        },
+        include: this.adminInclude(true)
+      });
+      await this.audit.record(adminUserId, "admin.utilities.compensation_conflict", "UtilityTransaction", transactionId, {
+        providerMode: utilityProvider.mode,
+        status: conflict.status,
+        providerStatus: conflict.providerStatus,
+        manualReconciliationRequired: true
+      });
+      return this.adminTransaction(conflict);
     }
     const updated = await this.applyProviderResult(transaction.id, purchase, this.adminInclude(true), transaction.metadata);
     if (purchase.status === UtilityTransactionStatus.FAILED) {
