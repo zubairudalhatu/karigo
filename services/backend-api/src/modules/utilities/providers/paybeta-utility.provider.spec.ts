@@ -206,6 +206,170 @@ describe("PaybetaUtilityProvider", () => {
     expect(purchaseBody).not.toHaveProperty("apiKey");
   });
 
+  it.each([
+    ["customerName", { customerName: "Verified account" }],
+    ["customer_name", { customer_name: "Verified account" }],
+    ["accountName", { accountName: "Verified account" }],
+    ["account_name", { account_name: "Verified account" }],
+    ["subscriber_name", { subscriber_name: "Verified account" }],
+    ["nested customer.name", { customer: { name: "Verified account" } }]
+  ])("normalizes electricity customer identity from %s", async (_field, data) => {
+    jest.spyOn(global, "fetch").mockResolvedValue(response({ status: "successful", data }));
+    const provider = new PaybetaUtilityProvider(config());
+
+    await expect(provider.validateCustomer({
+      serviceType: UtilityServiceType.ELECTRICITY,
+      providerCode: "abuja-electric",
+      amountKobo: 100_000,
+      recipient: "0111100049",
+      meterType: "PREPAID"
+    })).resolves.toMatchObject({ isValid: true, recipientName: "Verified account" });
+  });
+
+  it("does not fabricate an electricity customer name when Paybeta omits it", async () => {
+    jest.spyOn(global, "fetch").mockResolvedValue(response({
+      status: "successful",
+      data: { customerAddress: "Verified address only" }
+    }));
+    const provider = new PaybetaUtilityProvider(config());
+
+    const result = await provider.validateCustomer({
+      serviceType: UtilityServiceType.ELECTRICITY,
+      providerCode: "abuja-electric",
+      amountKobo: 100_000,
+      recipient: "0111100049",
+      meterType: "PREPAID"
+    });
+
+    expect(result).toMatchObject({ isValid: true, recipientAddress: "Verified address only" });
+    expect(result).not.toHaveProperty("recipientName");
+  });
+
+  it("returns no verified identity and never vends when meter validation fails", async () => {
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(response({
+      status: "failed",
+      code: "02",
+      data: { customerName: "Untrusted response identity" }
+    }));
+    const provider = new PaybetaUtilityProvider(config());
+
+    const result = await provider.validateCustomer({
+      serviceType: UtilityServiceType.ELECTRICITY,
+      providerCode: "abuja-electric",
+      amountKobo: 100_000,
+      recipient: "0111100049",
+      meterType: "PREPAID"
+    });
+
+    expect(result).toEqual({ isValid: false, message: "Paybeta could not validate this meter." });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/v2/electricity/validate");
+  });
+
+  it("blocks a quote before customer-wallet debit when Paybeta funding is insufficient", async () => {
+    const fetchMock = jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce(response({ status: "successful", data: { customerName: "Verified account" } }))
+      .mockResolvedValueOnce(response({ status: "successful", data: { availableBalance: "543.50", lienAmount: "0" } }));
+    const provider = new PaybetaUtilityProvider(config({ PAYBETA_BASE_URL: "https://api.paybeta.ng" }));
+
+    await expect(provider.quote({
+      serviceType: UtilityServiceType.ELECTRICITY,
+      providerCode: "abuja-electric",
+      amountKobo: 100_000,
+      recipient: "0111100049",
+      meterType: "PREPAID"
+    })).resolves.toMatchObject({
+      providerStatus: "PAYBETA_INSUFFICIENT_PROVIDER_BALANCE",
+      recipientVerified: true,
+      recipientName: "Verified account",
+      isPurchasable: false,
+      availableBalanceKobo: 54_350
+    });
+    expect(fetchMock.mock.calls.every(([url]) => !String(url).includes("/purchase"))).toBe(true);
+  });
+
+  it("keeps repeated meter validation read-only and never creates a purchase", async () => {
+    const fetchMock = jest.spyOn(global, "fetch")
+      .mockResolvedValue(response({ status: "successful", data: { customerName: "Verified account" } }));
+    const provider = new PaybetaUtilityProvider(config());
+    const input = {
+      serviceType: UtilityServiceType.ELECTRICITY,
+      providerCode: "abuja-electric",
+      amountKobo: 100_000,
+      recipient: "0111100049",
+      meterType: "PREPAID" as const
+    };
+
+    await provider.validateCustomer(input);
+    await provider.validateCustomer(input);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.every(([url]) => String(url).endsWith("/v2/electricity/validate"))).toBe(true);
+  });
+
+  it("leaves the accepted Airtime quote path unchanged and does not require a provider-balance call", async () => {
+    const fetchMock = jest.spyOn(global, "fetch");
+    const provider = new PaybetaUtilityProvider(config());
+
+    await expect(provider.quote({
+      serviceType: UtilityServiceType.AIRTIME,
+      providerCode: "mtn_vtu",
+      amountKobo: 10_000,
+      recipient: "08030000000"
+    })).resolves.toMatchObject({
+      providerStatus: "PAYBETA_READY",
+      recipientVerified: true,
+      isPurchasable: true
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("normalizes Paybeta Cable discovery, bouquets, validation, purchase and status", async () => {
+    const fetchMock = jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce(response({ status: "successful", data: [{ name: "GOtv", slug: "gotv", status: true }] }))
+      .mockResolvedValueOnce(response({ status: "successful", data: { packages: [{ code: "GOTVNJ1", description: "GOtv Jinja Bouquet", price: "3900" }] } }))
+      .mockResolvedValueOnce(response({ status: "successful", data: { account_name: "Verified subscriber" } }))
+      .mockResolvedValueOnce(response({ status: "successful", data: { account_name: "Verified subscriber" } }))
+      .mockResolvedValueOnce(response({ status: "successful", code: "00", data: { reference: "KGO-CABLE", transactionId: "PB-CABLE" } }))
+      .mockResolvedValueOnce(response({ status: "successful", code: "00", data: { reference: "KGO-CABLE", transactionId: "PB-CABLE" } }));
+    const provider = new PaybetaUtilityProvider(config({ PAYBETA_BASE_URL: "https://api.paybeta.ng" }));
+
+    await expect(provider.listProviders(UtilityServiceType.CABLE_TV)).resolves.toEqual([
+      { name: "GOtv", code: "gotv", active: true }
+    ]);
+    await expect(provider.listProducts(UtilityServiceType.CABLE_TV, "gotv")).resolves.toEqual([
+      { code: "GOTVNJ1", name: "GOtv Jinja Bouquet", amountKobo: 390_000 }
+    ]);
+    await expect(provider.validateCustomer({
+      serviceType: UtilityServiceType.CABLE_TV,
+      providerCode: "gotv",
+      productCode: "GOTVNJ1",
+      amountKobo: 390_000,
+      recipient: "8072916698"
+    })).resolves.toMatchObject({ isValid: true, recipientName: "Verified subscriber" });
+    await expect(provider.purchase({
+      serviceType: UtilityServiceType.CABLE_TV,
+      providerCode: "gotv",
+      productCode: "GOTVNJ1",
+      amountKobo: 390_000,
+      totalKobo: 390_000,
+      recipient: "8072916698",
+      reference: "KGO-CABLE"
+    })).resolves.toMatchObject({ status: UtilityTransactionStatus.SUCCESSFUL, providerReference: "KGO-CABLE" });
+    await expect(provider.checkStatus("KGO-CABLE", UtilityServiceType.CABLE_TV)).resolves.toMatchObject({
+      status: UtilityTransactionStatus.SUCCESSFUL,
+      providerReference: "KGO-CABLE"
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[4][1]?.body))).toMatchObject({
+      service: "gotv",
+      smartCardNumber: "8072916698",
+      packageCode: "GOTVNJ1",
+      amount: 3900,
+      customerName: "Verified subscriber",
+      reference: "KGO-CABLE"
+    });
+  });
+
   it("does not retry an ambiguous purchase timeout", async () => {
     const fetchMock = jest.spyOn(global, "fetch").mockRejectedValue(new DOMException("timed out", "AbortError"));
     const provider = new PaybetaUtilityProvider(config());

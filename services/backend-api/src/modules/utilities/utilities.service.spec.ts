@@ -418,6 +418,103 @@ describe("UtilitiesService", () => {
     expect(tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
   });
 
+  it("blocks Electricity before wallet debit when Paybeta cannot fund the vend", async () => {
+    const electricityProvider = { ...provider, type: UtilityServiceType.ELECTRICITY, code: "abuja-electric" };
+    const { tx, service, paybetaProvider } = serviceWith({
+      configValues: {
+        UTILITIES_PROVIDER: "accelerate",
+        UTILITIES_ELECTRICITY_PROVIDER: "paybeta",
+        UTILITIES_ENABLED: true,
+        UTILITIES_CUSTOMER_PURCHASE_ENABLED: true,
+        UTILITIES_TEST_MODE: false,
+        UTILITIES_WALLET_PAYMENT_ENABLED: true,
+        UTILITIES_LIVE_FULFILLMENT_ENABLED: true
+      },
+      prismaOverrides: {
+        utilityProvider: {
+          findMany: jest.fn().mockResolvedValue([electricityProvider]),
+          findFirst: jest.fn().mockResolvedValue(electricityProvider),
+          update: jest.fn()
+        }
+      },
+      paybetaProvider: {
+        isConfigured: jest.fn().mockReturnValue(true),
+        validateRecipient: jest.fn().mockResolvedValue({ isValid: true, normalizedRecipient: "0000000000" }),
+        quote: jest.fn().mockResolvedValue({
+          providerStatus: "PAYBETA_INSUFFICIENT_PROVIDER_BALANCE",
+          customerNote: "This utility service is temporarily unavailable while provider funding is restored.",
+          recipientVerified: true,
+          recipientName: "Verified account",
+          isPurchasable: false,
+          availableBalanceKobo: 54_350
+        }),
+        purchase: jest.fn()
+      }
+    });
+
+    await expect(service.createTransaction("user-id", {
+      serviceType: UtilityServiceType.ELECTRICITY,
+      providerId: electricityProvider.id,
+      amountKobo: 100000,
+      recipient: "0000000000",
+      meterType: "PREPAID",
+      idempotencyKey: "KGO-ELECTRICITY-FUNDING-PREFLIGHT"
+    })).rejects.toThrow("This utility service is temporarily unavailable while provider funding is restored.");
+    expect(paybetaProvider.purchase).not.toHaveBeenCalled();
+    expect(tx.customerWallet.update).not.toHaveBeenCalled();
+    expect(tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("returns only the Paybeta-verified electricity identity and does not debit during validation", async () => {
+    const electricityProvider = { ...provider, type: UtilityServiceType.ELECTRICITY, code: "abuja-electric" };
+    const { tx, service } = serviceWith({
+      configValues: {
+        UTILITIES_PROVIDER: "accelerate",
+        UTILITIES_ELECTRICITY_PROVIDER: "paybeta",
+        UTILITIES_ENABLED: true,
+        UTILITIES_CUSTOMER_PURCHASE_ENABLED: true,
+        UTILITIES_TEST_MODE: false,
+        UTILITIES_WALLET_PAYMENT_ENABLED: true,
+        UTILITIES_LIVE_FULFILLMENT_ENABLED: true
+      },
+      prismaOverrides: {
+        utilityProvider: {
+          findMany: jest.fn().mockResolvedValue([electricityProvider]),
+          findFirst: jest.fn().mockResolvedValue(electricityProvider),
+          update: jest.fn()
+        }
+      },
+      paybetaProvider: {
+        isConfigured: jest.fn().mockReturnValue(true),
+        validateRecipient: jest.fn().mockResolvedValue({ isValid: true, normalizedRecipient: "0000000000" }),
+        quote: jest.fn().mockResolvedValue({
+          providerStatus: "PAYBETA_READY",
+          customerNote: "Your utility request passed Paybeta validation.",
+          recipientVerified: true,
+          recipientName: "Provider verified account",
+          recipientAddress: "Provider verified address",
+          isPurchasable: true
+        })
+      }
+    });
+
+    await expect(service.quote("user-id", {
+      serviceType: UtilityServiceType.ELECTRICITY,
+      providerId: electricityProvider.id,
+      amountKobo: 100000,
+      recipient: "0000000000",
+      recipientName: "Untrusted wallet-holder name",
+      meterType: "PREPAID"
+    })).resolves.toMatchObject({
+      recipientVerified: true,
+      recipientName: "Provider verified account",
+      recipientAddress: "Provider verified address"
+    });
+    expect(tx.customerWallet.update).not.toHaveBeenCalled();
+    expect(tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+    expect(tx.utilityTransaction.create).not.toHaveBeenCalled();
+  });
+
   it("creates a successful mock transaction with a unique reference", async () => {
     const { prisma, service } = serviceWith();
     const result = await service.createTransaction("user-id", {

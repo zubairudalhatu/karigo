@@ -49,6 +49,8 @@ export interface UtilityQuoteResult {
   totalKobo: number;
   recipient: string;
   recipientName?: string | null;
+  recipientAddress?: string | null;
+  recipientVerified?: boolean;
   providerStatus: string;
   customerNote: string;
   providerMode?: string;

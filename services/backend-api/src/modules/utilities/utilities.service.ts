@@ -19,7 +19,7 @@ import { UpdateUtilityTransactionStatusDto } from "./dto/update-utility-status.d
 import { AccelerateConnectivityStatus, AccelerateUtilityProvider } from "./providers/accelerate-utility.provider";
 import { MockUtilityProvider } from "./providers/mock-utility.provider";
 import { PaybetaUtilityProvider } from "./providers/paybeta-utility.provider";
-import { UtilityProviderClient, UtilityPurchaseResult } from "./providers/utility-provider.interface";
+import { UtilityProviderClient, UtilityPurchaseResult, UtilityQuoteResult } from "./providers/utility-provider.interface";
 
 const DEFAULT_AMOUNT_BOUNDARIES: Record<UtilityServiceType, { min: number; max: number }> = {
   AIRTIME: { min: 10000, max: 10000000 },
@@ -215,9 +215,11 @@ export class UtilitiesService {
     this.assertLiveCustomerPurchaseGate(dto.serviceType);
     const customer = await this.requireCustomer(userId);
     const utilityProvider = this.activeUtilityProvider(dto.serviceType);
-    const resolved = await this.resolveRequest(dto, utilityProvider.client);
+    let resolved: Awaited<ReturnType<UtilitiesService["resolveRequest"]>> & { recipientAddress?: string; recipientVerified?: boolean } =
+      await this.resolveRequest(dto, utilityProvider.client);
     this.assertAccelerateLiveRequestAllowed(resolved, utilityProvider);
     const providerQuote = await this.safeProviderQuote(customer, resolved, utilityProvider.client);
+    resolved = this.withVerifiedRecipient(resolved, providerQuote);
     return {
       quoteReference: this.reference("KGO-UTIL-QUOTE"),
       customerId: customer.id,
@@ -229,6 +231,8 @@ export class UtilitiesService {
       totalKobo: resolved.totalKobo,
       recipient: this.maskRecipient(resolved.recipient),
       recipientName: resolved.recipientName,
+      recipientAddress: resolved.recipientAddress,
+      recipientVerified: providerQuote.recipientVerified,
       providerStatus: providerQuote.providerStatus,
       customerNote: providerQuote.customerNote,
       providerMode: utilityProvider.mode,
@@ -245,9 +249,11 @@ export class UtilitiesService {
       const existing = await this.findIdempotentWalletUtilityTransaction(customer.id, dto.idempotencyKey);
       if (existing) return this.customerTransaction(existing);
     }
-    const resolved = await this.resolveRequest(dto, utilityProvider.client);
+    let resolved: Awaited<ReturnType<UtilitiesService["resolveRequest"]>> & { recipientAddress?: string; recipientVerified?: boolean } =
+      await this.resolveRequest(dto, utilityProvider.client);
     this.assertAccelerateLiveRequestAllowed(resolved, utilityProvider);
-    await this.safeProviderQuote(customer, resolved, utilityProvider.client);
+    const providerQuote = await this.safeProviderQuote(customer, resolved, utilityProvider.client);
+    resolved = this.withVerifiedRecipient(resolved, providerQuote);
     const reference = await this.uniqueReference();
     if (this.walletUtilityPaymentEnabled(utilityProvider)) {
       return this.createWalletFundedTransaction(customer, dto, resolved, reference, utilityProvider);
@@ -270,7 +276,14 @@ export class UtilitiesService {
         status: UtilityTransactionStatus.PENDING,
         providerStatus: `${utilityProvider.providerStatusPrefix}_PENDING`,
         customerNote: dto.customerNote,
-        metadata: this.utilityMetadata(utilityProvider.mode, utilityProvider.testMode, undefined, resolved.meterType)
+        metadata: this.utilityMetadata(
+          utilityProvider.mode,
+          utilityProvider.testMode,
+          undefined,
+          resolved.meterType,
+          resolved.recipientAddress,
+          providerQuote.recipientVerified
+        )
       },
       include: this.customerInclude()
     });
@@ -281,6 +294,7 @@ export class UtilitiesService {
       amountKobo: resolved.amountKobo,
       recipient: resolved.recipient,
       recipientName: resolved.recipientName,
+      recipientAddress: resolved.recipientAddress,
       meterType: resolved.meterType,
       customerPhoneNumber: customer.user?.phoneNumber,
       customerEmail: customer.user?.email,
@@ -294,7 +308,7 @@ export class UtilitiesService {
   private async createWalletFundedTransaction(
     customer: Awaited<ReturnType<UtilitiesService["requireCustomer"]>>,
     dto: CreateUtilityTransactionDto,
-    resolved: Awaited<ReturnType<UtilitiesService["resolveRequest"]>>,
+    resolved: Awaited<ReturnType<UtilitiesService["resolveRequest"]>> & { recipientAddress?: string; recipientVerified?: boolean },
     reference: string,
     utilityProvider: ReturnType<UtilitiesService["activeUtilityProvider"]>
   ) {
@@ -346,7 +360,14 @@ export class UtilitiesService {
           status: UtilityTransactionStatus.PENDING,
           providerStatus: `${utilityProvider.providerStatusPrefix}_PENDING`,
           customerNote: "Your KariGO Wallet has been debited. Utility fulfilment is being processed.",
-          metadata: this.utilityMetadata(utilityProvider.mode, utilityProvider.testMode, "WALLET", resolved.meterType)
+          metadata: this.utilityMetadata(
+            utilityProvider.mode,
+            utilityProvider.testMode,
+            "WALLET",
+            resolved.meterType,
+            resolved.recipientAddress,
+            resolved.recipientVerified
+          )
         }
       });
       await tx.customerWallet.update({
@@ -410,6 +431,7 @@ export class UtilitiesService {
         amountKobo: resolved.amountKobo,
         recipient: resolved.recipient,
         recipientName: resolved.recipientName,
+        recipientAddress: resolved.recipientAddress,
         meterType: resolved.meterType,
         customerPhoneNumber: customer.user?.phoneNumber,
         customerEmail: customer.user?.email,
@@ -822,7 +844,7 @@ export class UtilitiesService {
     providerClient: UtilityProviderClient
   ) {
     try {
-      return await providerClient.quote({
+      const quote = await providerClient.quote({
         serviceType: resolved.provider.type,
         providerCode: resolved.provider.code,
         productCode: resolved.product?.code,
@@ -832,10 +854,36 @@ export class UtilitiesService {
         meterType: resolved.meterType,
         customerPhoneNumber: customer.user?.phoneNumber,
         customerEmail: customer.user?.email
-      });
-    } catch {
+      }) ?? {
+        providerStatus: "PROVIDER_READY",
+        customerNote: "Utility request validated."
+      };
+      if (quote.recipientVerified === false) {
+        throw new BadRequestException(quote.customerNote || "Utility recipient validation failed.");
+      }
+      if (quote.isPurchasable === false) {
+        throw new ServiceUnavailableException(quote.customerNote || "Utility provider is temporarily unavailable. Please try again later.");
+      }
+      return quote;
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof ServiceUnavailableException) throw error;
       throw new ServiceUnavailableException("Utility provider is temporarily unavailable. Please try again later.");
     }
+  }
+
+  private withVerifiedRecipient<T extends { provider: { type: UtilityServiceType }; recipientName?: string; recipientAddress?: string; recipientVerified?: boolean }>(
+    resolved: T,
+    quote: UtilityQuoteResult
+  ): T & { recipientAddress?: string; recipientVerified?: boolean } {
+    if (resolved.provider.type !== UtilityServiceType.ELECTRICITY && resolved.provider.type !== UtilityServiceType.CABLE_TV) {
+      return resolved;
+    }
+    return {
+      ...resolved,
+      recipientName: quote.recipientName,
+      recipientAddress: quote.recipientAddress,
+      recipientVerified: quote.recipientVerified
+    };
   }
 
   private resolveAmount(type: UtilityServiceType, product: { amountKobo: number | null; minAmountKobo: number | null; maxAmountKobo: number | null } | null, requested?: number) {
@@ -1089,8 +1137,22 @@ export class UtilitiesService {
     }
   }
 
-  private utilityMetadata(mode: string, testMode: boolean, paymentMethod?: string, meterType?: string): Prisma.InputJsonObject {
-    return { mode, testMode, ...(paymentMethod ? { paymentMethod } : {}), ...(meterType ? { meterType } : {}) };
+  private utilityMetadata(
+    mode: string,
+    testMode: boolean,
+    paymentMethod?: string,
+    meterType?: string,
+    recipientAddress?: string,
+    recipientVerified?: boolean
+  ): Prisma.InputJsonObject {
+    return {
+      mode,
+      testMode,
+      ...(paymentMethod ? { paymentMethod } : {}),
+      ...(meterType ? { meterType } : {}),
+      ...(recipientAddress ? { recipientAddress } : {}),
+      ...(recipientVerified !== undefined ? { recipientVerified } : {})
+    };
   }
 
   private mergeMetadata(currentMetadata: Prisma.JsonValue | null | undefined, metadata: Record<string, unknown> | undefined): Prisma.InputJsonObject {

@@ -38,7 +38,11 @@ interface PaybetaRequestOptions {
 }
 
 class PaybetaHttpError extends Error {
-  constructor(readonly status: number) {
+  constructor(
+    readonly status: number,
+    readonly providerCode?: string,
+    readonly providerMessage?: string
+  ) {
     super(`PAYBETA_HTTP_${status}`);
     this.name = "PaybetaHttpError";
   }
@@ -145,11 +149,12 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
       return { isValid: false, message: electricity ? "Paybeta could not validate this meter." : "Paybeta could not validate this smartcard." };
     }
     const data = this.record(response.data);
+    const identity = this.customerIdentity(data);
     return {
       isValid: true,
       normalizedRecipient: local.normalizedRecipient,
-      recipientName: this.string(data.customerName) || undefined,
-      recipientAddress: this.string(data.customerAddress) || undefined
+      ...(identity.name ? { recipientName: identity.name } : {}),
+      ...(identity.address ? { recipientAddress: identity.address } : {})
     };
   }
 
@@ -160,12 +165,25 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
       return {
         providerStatus: "PAYBETA_VALIDATION_FAILED",
         customerNote: validation.message ?? "Paybeta validation failed.",
+        recipientVerified: false,
+        isPurchasable: false,
         metadata: this.safeMetadata("quote", input.serviceType)
       };
     }
+    const requiresFundingPreflight = input.serviceType === UtilityServiceType.ELECTRICITY
+      || input.serviceType === UtilityServiceType.CABLE_TV;
+    const balance = requiresFundingPreflight ? await this.getBalance() : undefined;
+    const isPurchasable = !balance || balance.availableBalanceKobo >= input.amountKobo;
     return {
-      providerStatus: "PAYBETA_READY",
-      customerNote: "Your utility request passed Paybeta validation.",
+      providerStatus: isPurchasable ? "PAYBETA_READY" : "PAYBETA_INSUFFICIENT_PROVIDER_BALANCE",
+      customerNote: isPurchasable
+        ? "Your utility request passed Paybeta validation."
+        : "This utility service is temporarily unavailable while provider funding is restored.",
+      recipientVerified: true,
+      recipientName: validation.recipientName,
+      recipientAddress: validation.recipientAddress,
+      isPurchasable,
+      availableBalanceKobo: balance?.availableBalanceKobo,
       metadata: this.safeMetadata("quote", input.serviceType)
     };
   }
@@ -213,13 +231,21 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
       const errorCategory = this.safeErrorCategory(error);
       this.logger.warn(`Paybeta purchase failed reference=${input.reference} category=${errorCategory}`);
       if (this.isDefinitiveClientFailure(error)) {
+        const providerError = error as PaybetaHttpError;
         return {
           status: UtilityTransactionStatus.FAILED,
           providerStatus: errorCategory.toUpperCase(),
           providerReference: input.reference,
           failureReason: "Paybeta rejected the utility request before confirming a transaction.",
-          customerNote: "The utility provider rejected this request. Any posted wallet debit will be reversed.",
-          metadata: { ...this.safeMetadata("purchase", input.serviceType), errorCategory }
+          customerNote: providerError.status === 402
+            ? "The utility provider is temporarily unable to fund this request. Any posted wallet debit will be reversed."
+            : "The utility provider rejected this request. Any posted wallet debit will be reversed.",
+          metadata: {
+            ...this.safeMetadata("purchase", input.serviceType),
+            errorCategory,
+            providerCode: providerError.providerCode,
+            providerMessage: providerError.providerMessage
+          }
         };
       }
       return {
@@ -401,7 +427,14 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
           signal: controller.signal
         });
         const payload = await response.json().catch(() => ({}));
-        if (!acceptedStatuses.includes(response.status)) throw new PaybetaHttpError(response.status);
+        if (!acceptedStatuses.includes(response.status)) {
+          const record = this.record(payload);
+          throw new PaybetaHttpError(
+            response.status,
+            this.string(record.code) || undefined,
+            this.safeProviderMessage(record)
+          );
+        }
         return { ...this.record(payload), __httpStatus: response.status };
       } catch (error) {
         lastError = error;
@@ -529,6 +562,38 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
 
   private string(value: unknown): string {
     return typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
+  }
+
+  private customerIdentity(data: JsonRecord): { name?: string; address?: string } {
+    const customer = this.record(data.customer);
+    const name = [
+      data.customerName,
+      data.customer_name,
+      data.accountName,
+      data.account_name,
+      data.subscriber_name,
+      data.name,
+      customer.name,
+      customer.customerName,
+      customer.customer_name
+    ].map((value) => this.string(value)).find(Boolean);
+    const address = [
+      data.customerAddress,
+      data.customer_address,
+      data.address,
+      customer.address,
+      customer.customerAddress,
+      customer.customer_address
+    ].map((value) => this.string(value)).find(Boolean);
+    return { name: name || undefined, address: address || undefined };
+  }
+
+  private safeProviderMessage(response: JsonRecord): string | undefined {
+    const value = [response.message, response.error, response.description]
+      .map((item) => this.string(item))
+      .find(Boolean);
+    if (!value) return undefined;
+    return value.replace(/[\r\n\t]+/g, " ").slice(0, 180);
   }
 
   private koboToNaira(value: number): number {

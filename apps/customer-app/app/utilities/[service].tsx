@@ -20,7 +20,6 @@ type UtilityFormConfig = {
   amountLabel: string;
   description: string;
   needsProduct: boolean;
-  showRecipientName?: boolean;
   supportsMeterType?: boolean;
 };
 
@@ -55,7 +54,6 @@ const configs: Record<string, UtilityFormConfig> = {
     amountLabel: "Electricity amount",
     description: "Select a distribution company, meter type and amount before reviewing your request.",
     needsProduct: false,
-    showRecipientName: true,
     supportsMeterType: true
   },
   "cable-tv": {
@@ -154,7 +152,6 @@ export default function UtilityServiceFlow() {
   const [providerId, setProviderId] = useState("");
   const [productId, setProductId] = useState("");
   const [recipient, setRecipient] = useState("");
-  const [recipientName, setRecipientName] = useState("");
   const [meterType, setMeterType] = useState<UtilityMeterType>("PREPAID");
   const [amount, setAmount] = useState("");
   const [quote, setQuote] = useState<UtilityQuoteResult | null>(null);
@@ -289,7 +286,6 @@ export default function UtilityServiceFlow() {
         productId: productId || undefined,
         amountKobo,
         recipient,
-        recipientName: recipientName || undefined,
         meterType: config.supportsMeterType ? meterType : undefined
       }));
     } catch (e) {
@@ -310,7 +306,6 @@ export default function UtilityServiceFlow() {
         productId: productId || undefined,
         amountKobo,
         recipient,
-        recipientName: recipientName || undefined,
         meterType: config.supportsMeterType ? meterType : undefined,
         idempotencyKey: quote.quoteReference
       });
@@ -402,11 +397,6 @@ export default function UtilityServiceFlow() {
       <Field placeholder={config.recipientLabel} value={recipient} onChangeText={(value) => { setRecipient(value); setQuote(null); setTransaction(null); }} keyboardType={config.type === "AIRTIME" || config.type === "DATA" ? "phone-pad" : "number-pad"} />
       {recipient ? <Text style={recipientValidation(config, recipient) ? styles.validationHint : styles.readyHint}>{recipientValidation(config, recipient) || "Recipient details look valid."}</Text> : null}
 
-      {config.showRecipientName ? <>
-        <Text style={ui.sectionTitle}>Customer name</Text>
-        <Field placeholder="Customer name (optional)" value={recipientName} onChangeText={(value) => { setRecipientName(value); setQuote(null); setTransaction(null); }} />
-      </> : null}
-
       {config.supportsMeterType ? <>
         <Text style={ui.sectionTitle}>Meter type</Text>
         <View style={styles.meterTypeRow}>
@@ -426,10 +416,13 @@ export default function UtilityServiceFlow() {
       {quote ? <Card>
         <Text style={ui.cardTitle}>{utilitiesEnabled ? "Confirm utility request" : "Confirm utility review"}</Text>
         <Text style={ui.muted}>Opening Review does not submit the request. Confirm only after checking the details below.</Text>
+        {config.supportsMeterType && quote.recipientVerified ? <Text style={styles.verifiedTitle}>Meter verified</Text> : null}
         <View style={ui.priceRow}><Text style={ui.priceLabel}>Service:</Text><Text style={ui.priceValue}>{config.title}</Text></View>
         <View style={ui.priceRow}><Text style={ui.priceLabel}>Provider:</Text><Text style={ui.priceValue}>{selectedProvider?.name ?? quote.provider.name}</Text></View>
         {selectedProduct || quote.product ? <View style={ui.priceRow}><Text style={ui.priceLabel}>{config.productLabel ?? "Package"}:</Text><Text style={ui.priceValue}>{selectedProduct?.name ?? quote.product?.name}</Text></View> : null}
         <View style={ui.priceRow}><Text style={ui.priceLabel}>{config.recipientLabel}:</Text><Text style={ui.priceValue}>{recipient}</Text></View>
+        {quote.recipientName ? <View style={ui.priceRow}><Text style={ui.priceLabel}>Customer:</Text><Text style={ui.priceValue}>{quote.recipientName}</Text></View> : null}
+        {quote.recipientAddress ? <View style={ui.priceRow}><Text style={ui.priceLabel}>Verified address:</Text><Text style={ui.priceValue}>{quote.recipientAddress}</Text></View> : null}
         {config.supportsMeterType ? <View style={ui.priceRow}><Text style={ui.priceLabel}>Meter type:</Text><Text style={ui.priceValue}>{meterType === "PREPAID" ? "Prepaid" : "Postpaid"}</Text></View> : null}
         <View style={ui.priceRow}><Text style={ui.priceLabel}>Amount:</Text><Text style={ui.priceValue}>{moneyKobo(quote.amountKobo)}</Text></View>
         <View style={ui.priceRow}><Text style={ui.priceLabel}>Fee:</Text><Text style={ui.priceValue}>{moneyKobo(quote.convenienceFeeKobo)}</Text></View>
@@ -477,6 +470,7 @@ const styles = StyleSheet.create({
   meterTypeTextActive: { color: brand.colors.primary },
   validationHint: { backgroundColor: "#FEF2F2", borderRadius: 10, color: brand.colors.primaryDark, fontSize: 13, fontWeight: "800", lineHeight: 19, padding: 10 },
   readyHint: { backgroundColor: "#ECFDF3", borderRadius: 10, color: brand.colors.success, fontSize: 13, fontWeight: "800", lineHeight: 19, padding: 10 },
+  verifiedTitle: { color: brand.colors.success, fontSize: 18, fontWeight: "900", marginTop: 12 },
   actionRow: { flexDirection: "row", gap: 10 },
   actionItem: { flex: 1 }
 });

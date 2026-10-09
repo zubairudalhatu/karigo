@@ -26,6 +26,11 @@ export interface UtilityQuoteInput {
 export interface UtilityQuoteResult {
   providerStatus: string;
   customerNote: string;
+  recipientVerified?: boolean;
+  recipientName?: string;
+  recipientAddress?: string;
+  isPurchasable?: boolean;
+  availableBalanceKobo?: number;
   metadata?: Record<string, unknown>;
 }
 
