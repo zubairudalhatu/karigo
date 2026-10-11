@@ -254,6 +254,7 @@ export default function OrderHistory() {
         {utilities.length === 0 ? <Empty message="Your utility purchases will appear here." /> : utilities.map((transaction) =>
           <Pressable key={transaction.id} onPress={() => router.push(`/utilities/transactions/${transaction.id}` as never)}><Card>
             <Text style={ui.cardTitle}>{transaction.serviceType.replace("_", " ")} · {transaction.provider.name}</Text>
+            {transaction.product ? <Text>{transaction.product.name}</Text> : null}
             <StatusBadge status={transaction.status} />
             <Text style={ui.muted}>{transaction.recipient}</Text>
             <Text style={ui.payable}>{money(transaction.totalKobo / 100)}</Text>

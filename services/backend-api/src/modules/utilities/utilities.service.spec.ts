@@ -48,7 +48,7 @@ function serviceWith(options: {
   txOverrides?: Record<string, unknown>;
   configValues?: Record<string, unknown>;
   accelerateProvider?: Partial<UtilityProviderClient> & { isConfigured?: jest.Mock; connectivityReadiness?: jest.Mock };
-  paybetaProvider?: Partial<UtilityProviderClient> & { isConfigured?: jest.Mock };
+  paybetaProvider?: Partial<UtilityProviderClient> & { isConfigured?: jest.Mock; listProducts?: jest.Mock };
 } = {}) {
   const now = new Date();
   const transactionCreate = jest.fn().mockImplementation(({ data }) => Promise.resolve({
@@ -180,6 +180,37 @@ function serviceWith(options: {
   };
 }
 
+describe("Paybeta Cable preparation", () => {
+  const cableProvider = { ...provider, type: UtilityServiceType.CABLE_TV, code: "gotv", metadata: { catalogueMode: "LIVE", integration: "PAYBETA" } };
+  const cableProduct = { ...product, type: UtilityServiceType.CABLE_TV, code: "PAYBETA_GOTV_GOHAN", amountKobo: 180000, metadata: { providerProductCode: "GOHAN", catalogueMode: "LIVE", integration: "PAYBETA" }, provider: cableProvider };
+  const configValues = { UTILITIES_CABLE_PROVIDER: "paybeta", UTILITIES_ENABLED: true, UTILITIES_TEST_MODE: false, UTILITIES_CUSTOMER_PURCHASE_ENABLED: true };
+
+  it("lists live bouquet prices and hides removed bouquets without persisting provider metadata", async () => {
+    const listProducts = jest.fn().mockResolvedValue([{ code: "GOHAN", name: "Current live bouquet", amountKobo: 190000 }]);
+    const fixture = serviceWith({ configValues, prismaOverrides: { utilityProduct: { findMany: jest.fn().mockResolvedValue([cableProduct, { ...cableProduct, code: "REMOVED", metadata: null }]) } }, paybetaProvider: { listProducts } });
+    const visible = await fixture.service.listProducts({ type: UtilityServiceType.CABLE_TV });
+    expect(visible).toHaveLength(1);
+    expect(visible[0]).toMatchObject({ name: "Current live bouquet", amountKobo: 190000 });
+    expect(visible[0]).not.toHaveProperty("metadata");
+    expect(listProducts).toHaveBeenCalledTimes(1);
+    expect(fixture.tx.utilityTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it("checks live bouquet amount before quote and causes no wallet debit or vend", async () => {
+    const quote = jest.fn().mockResolvedValue({ recipientVerified: true, recipientName: "Synthetic Cable account", isPurchasable: true });
+    const fixture = serviceWith({ configValues, prismaOverrides: { utilityProvider: { findFirst: jest.fn().mockResolvedValue(cableProvider) }, utilityProduct: { findFirst: jest.fn().mockResolvedValue(cableProduct) } }, paybetaProvider: { isConfigured: jest.fn().mockReturnValue(true), validateRecipient: jest.fn().mockResolvedValue({ isValid: true, normalizedRecipient: "1234567890" }), quote, listProducts: jest.fn().mockResolvedValue([{ code: "GOHAN", name: "Current live bouquet", amountKobo: 190000 }]) } });
+    const dto = { serviceType: UtilityServiceType.CABLE_TV, providerId: provider.id, productId: product.id, recipient: "1234567890", amountKobo: 190000 };
+    const result = await fixture.service.quote("user-id", dto);
+    expect(result).toMatchObject({ amountKobo: 190000, recipientName: "Synthetic Cable account" });
+    expect(quote).toHaveBeenCalledWith(expect.objectContaining({ productCode: "GOHAN", amountKobo: 190000 }));
+    await expect(fixture.service.quote("user-id", { ...dto, amountKobo: 180000 })).rejects.toThrow("does not match");
+    expect(fixture.tx.customerWallet.update).not.toHaveBeenCalled();
+    expect(fixture.tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+    expect(fixture.tx.utilityTransaction.create).not.toHaveBeenCalled();
+    expect(fixture.paybetaProvider.purchase).not.toHaveBeenCalled();
+  });
+});
+
 describe("Paybeta durable fulfilment recovery", () => {
   function setup(overrides: Record<string, unknown> = {}, resultOverrides: Record<string, unknown> = {}) {
     let row: any = {
@@ -209,6 +240,17 @@ describe("Paybeta durable fulfilment recovery", () => {
     });
     return { ...fixture, checkStatus, updateMany, row: () => row };
   }
+
+  it.each([UtilityServiceType.AIRTIME, UtilityServiceType.CABLE_TV])("recovers %s late success without another purchase or wallet action", async serviceType => {
+    const fixture = setup({ serviceType, provider: { ...provider, type: serviceType }, product: serviceType === "CABLE_TV" ? { ...product, type: serviceType, name: "Synthetic bouquet" } : null }, { mockToken: undefined, metadata: { transactionId: "API-LATE" } });
+    const receipt = await fixture.service.customerDetail("user-id", "recovery-id");
+    expect(receipt).toMatchObject({ serviceType, status: "SUCCESSFUL", providerTransactionId: "API-LATE" });
+    await fixture.service.customerDetail("user-id", "recovery-id");
+    expect(fixture.checkStatus).toHaveBeenCalledTimes(1);
+    expect(fixture.paybetaProvider.purchase).not.toHaveBeenCalled();
+    expect(fixture.tx.customerWallet.update).not.toHaveBeenCalled();
+    expect(fixture.tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+  });
 
   it("recovers late success, token, units and provider ID without another vend/debit/reversal", async () => {
     const fixture = setup();
@@ -283,13 +325,15 @@ describe("Paybeta durable fulfilment recovery", () => {
     expect(receipt.units).toBe("4.4");
   });
 
-  it("lists Electricity and Airtime without requiring commerce orders", async () => {
+  it("lists Electricity, Airtime and Cable bouquets without requiring commerce orders", async () => {
     const fixture = setup({ status: "SUCCESSFUL", mockToken: "existing-token" });
-    (fixture.prisma.utilityTransaction.findMany as jest.Mock).mockResolvedValue([fixture.row(), { ...fixture.row(), id: "airtime-id", serviceType: "AIRTIME", mockToken: null }]);
+    (fixture.prisma.utilityTransaction.findMany as jest.Mock).mockResolvedValue([fixture.row(), { ...fixture.row(), id: "airtime-id", serviceType: "AIRTIME", mockToken: null }, { ...fixture.row(), id: "cable-id", serviceType: "CABLE_TV", product: { ...product, name: "Verified bouquet" }, mockToken: null }]);
     const history = await fixture.service.listMine("user-id", {});
-    expect(history.map((item) => item.serviceType)).toEqual(["ELECTRICITY", "AIRTIME"]);
+    expect(history.map((item) => item.serviceType)).toEqual(["ELECTRICITY", "AIRTIME", "CABLE_TV"]);
     expect(history[0].recipient).not.toBe(fixture.row().recipient);
     expect(history[1].token).toBeUndefined();
+    expect(history[2].product?.name).toBe("Verified bouquet");
+    expect(history[2].recipient).not.toBe(fixture.row().recipient);
   });
 });
 

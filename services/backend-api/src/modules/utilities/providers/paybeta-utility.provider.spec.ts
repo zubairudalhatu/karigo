@@ -22,6 +22,59 @@ function config(overrides: Record<string, unknown> = {}): ConfigService {
 describe("PaybetaUtilityProvider", () => {
   afterEach(() => jest.restoreAllMocks());
 
+  it.each(["aba", "abuja", "benin", "eko", "enugu", "ibadan", "ikeja", "jos", "kaduna", "kano", "portharcourt"])("preserves discovered %s electricity slug for both meter types", async (disco) => {
+    const service = `${disco}-electric`;
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(response({ status: "successful", data: { customerName: "Synthetic verified account" } }));
+    const adapter = new PaybetaUtilityProvider(config());
+    for (const meterType of ["PREPAID", "POSTPAID"] as const) {
+      await expect(adapter.validateCustomer({ serviceType: "ELECTRICITY", providerCode: service, recipient: "12345678901", amountKobo: 100000, meterType })).resolves.toMatchObject({ isValid: true });
+    }
+    expect(fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)))).toEqual([
+      { service, meterNumber: "12345678901", meterType: "prepaid" },
+      { service, meterNumber: "12345678901", meterType: "postpaid" }
+    ]);
+    expect(fetchMock.mock.calls.every(([url]) => String(url).endsWith("/electricity/validate"))).toBe(true);
+  });
+
+  it("fails closed for unknown electricity providers without a provider request", async () => {
+    const fetchMock = jest.spyOn(global, "fetch");
+    await expect(new PaybetaUtilityProvider(config()).validateCustomer({ serviceType: "ELECTRICITY", providerCode: "unknown-electric", recipient: "12345678901", amountKobo: 100000 })).rejects.toThrow("Unsupported");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["dstv", "gotv", "startimes"])("discovers and validates %s Cable without vending", async service => {
+    const fetchMock = jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce(response({ status: "successful", data: [{ name: service, slug: service }] }))
+      .mockResolvedValueOnce(response({ status: "successful", data: { packages: [{ code: "TEST-PACKAGE", description: "Synthetic bouquet", price: 1900 }] } }))
+      .mockResolvedValueOnce(response({ status: "successful", data: { accountName: "Verified Cable customer" } }));
+    const adapter = new PaybetaUtilityProvider(config());
+    expect((await adapter.listProviders("CABLE_TV"))[0].code).toBe(service);
+    expect(await adapter.listProducts("CABLE_TV", service)).toEqual([{ code: "TEST-PACKAGE", name: "Synthetic bouquet", amountKobo: 190000 }]);
+    expect(await adapter.validateCustomer({ serviceType: "CABLE_TV", providerCode: service, recipient: "1234567890", amountKobo: 190000 })).toMatchObject({ isValid: true, recipientName: "Verified Cable customer" });
+    expect(fetchMock.mock.calls.map(([url]) => new URL(String(url)).pathname)).toEqual(["/v2/cable/providers", "/v2/cable/bouquet", "/v2/cable/validate"]);
+  });
+
+  it("does not present ambiguous validation or a missing Cable name as verified identity", async () => {
+    jest.spyOn(global, "fetch").mockResolvedValueOnce(response({ status: "pending", data: { customerName: "Unverified" } })).mockResolvedValueOnce(response({ status: "successful", data: {} }));
+    const adapter = new PaybetaUtilityProvider(config());
+    const input = { serviceType: UtilityServiceType.CABLE_TV, providerCode: "gotv", recipient: "1234567890", amountKobo: 190000 };
+    expect(await adapter.validateCustomer(input)).toMatchObject({ isValid: false });
+    expect(await adapter.validateCustomer(input)).toEqual({ isValid: true, normalizedRecipient: "1234567890" });
+  });
+
+  it("submits one Cable purchase with exact package and amount then queries pending without repurchasing", async () => {
+    const fetchMock = jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce(response({ status: "successful", data: { customerName: "Verified Cable customer" } }))
+      .mockResolvedValueOnce(response({ status: "pending", code: "01" }))
+      .mockResolvedValueOnce(response({ status: "successful", code: "00", data: { transactionId: "API-CABLE", paymentStatus: "Delivered" } }));
+    const adapter = new PaybetaUtilityProvider(config());
+    const input = { serviceType: UtilityServiceType.CABLE_TV, providerCode: "gotv", productCode: "GOHAN", recipient: "1234567890", amountKobo: 190000, totalKobo: 190000, reference: "SYNTHETIC-CABLE" };
+    expect(await adapter.purchase(input)).toMatchObject({ status: "SUCCESSFUL", metadata: { transactionId: "API-CABLE" } });
+    await adapter.purchase(input);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toMatchObject({ service: "gotv", packageCode: "GOHAN", amount: 1900, reference: "SYNTHETIC-CABLE" });
+  });
+
   it("recovers token and units through a status query without another purchase", async () => {
     const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(response({
       status: "successful", code: "00",

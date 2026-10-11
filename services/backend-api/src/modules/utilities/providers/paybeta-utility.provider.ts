@@ -50,6 +50,11 @@ class PaybetaHttpError extends Error {
 
 const SANDBOX_ORIGIN = "https://api.sandbox.paybeta.ng";
 const PRODUCTION_ORIGIN = "https://api.paybeta.ng";
+// Confirmed production discovery slugs; do not derive unknown biller identifiers.
+const ELECTRICITY_SERVICES = new Set([
+  "aba-electric", "abuja-electric", "benin-electric", "eko-electric", "enugu-electric",
+  "ibadan-electric", "ikeja-electric", "jos-electric", "kaduna-electric", "kano-electric", "portharcourt-electric"
+]);
 const PROVIDER_PATHS: Record<UtilityServiceType, string> = {
   AIRTIME: "/v2/airtime/providers",
   DATA: "/v2/data-bundle/providers",
@@ -145,7 +150,7 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
         smartCardNumber: local.normalizedRecipient
       }
     });
-    if (this.normalizedStatus(response) === UtilityTransactionStatus.FAILED) {
+    if (this.normalizedStatus(response) !== UtilityTransactionStatus.SUCCESSFUL) {
       return { isValid: false, message: electricity ? "Paybeta could not validate this meter." : "Paybeta could not validate this smartcard." };
     }
     const data = this.record(response.data);
@@ -531,6 +536,7 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
       if (lower.includes("9mobile")) return "9mobile_data";
     }
     if (serviceType === UtilityServiceType.ELECTRICITY) {
+      if (ELECTRICITY_SERVICES.has(lower)) return lower;
       const aliases: Array<[string[], string]> = [
         [["abuja", "aedc"], "abuja-electric"],
         [["benin", "bedc"], "benin-electric"],
@@ -541,11 +547,12 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
         [["jos", "jed"], "jos-electric"],
         [["kaduna", "kaedco"], "kaduna-electric"],
         [["kano", "kedco"], "kano-electric"],
-        [["port harcourt", "phed"], "port-harcourt-electric"],
-        [["yola", "yedc"], "yola-electric"]
+        [["port harcourt", "port-harcourt", "phed"], "portharcourt-electric"],
+        [["aba"], "aba-electric"]
       ];
       const match = aliases.find(([terms]) => terms.some((term) => lower.includes(term)));
       if (match) return match[1];
+      throw new Error("Unsupported Paybeta electricity provider");
     }
     if (serviceType === UtilityServiceType.CABLE_TV) {
       if (lower.includes("dstv")) return "dstv";

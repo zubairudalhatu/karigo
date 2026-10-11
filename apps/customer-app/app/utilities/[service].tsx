@@ -419,7 +419,7 @@ export default function UtilityServiceFlow() {
       <Text style={disabledReason ? styles.validationHint : styles.readyHint}>{disabledReason || "All required fields are ready. Review before submitting."}</Text>
 
       {quote ? <Card>
-        <Text style={ui.cardTitle}>{utilitiesEnabled ? "Confirm utility request" : "Confirm utility review"}</Text>
+        <Text style={ui.cardTitle}>{config.type === "CABLE_TV" ? "CABLE TV SUBSCRIPTION" : utilitiesEnabled ? "Confirm utility request" : "Confirm utility review"}</Text>
         <Text style={ui.muted}>Opening Review does not submit the request. Confirm only after checking the details below.</Text>
         {config.supportsMeterType && quote.recipientVerified ? <Text style={styles.verifiedTitle}>Meter verified</Text> : null}
         <View style={ui.priceRow}><Text style={ui.priceLabel}>Service:</Text><Text style={ui.priceValue}>{config.title}</Text></View>

@@ -142,8 +142,8 @@ export class UtilitiesService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  listProducts(query: UtilityProductsQueryDto) {
-    return this.prisma.utilityProduct.findMany({
+  async listProducts(query: UtilityProductsQueryDto) {
+    const products = await this.prisma.utilityProduct.findMany({
       where: {
         isActive: true,
         ...(query.providerId ? { providerId: query.providerId } : {}),
@@ -156,6 +156,7 @@ export class UtilitiesService implements OnModuleInit, OnModuleDestroy {
         type: true,
         name: true,
         code: true,
+        metadata: true,
         amountKobo: true,
         minAmountKobo: true,
         maxAmountKobo: true,
@@ -163,6 +164,25 @@ export class UtilitiesService implements OnModuleInit, OnModuleDestroy {
       },
       orderBy: [{ type: "asc" }, { name: "asc" }]
     });
+    const catalogues = new Map<string, Awaited<ReturnType<PaybetaUtilityProvider["listProducts"]>>>();
+    const visible = [];
+    for (const product of products) {
+      if (product.type !== UtilityServiceType.CABLE_TV || this.providerModeForService(product.type) !== "paybeta") {
+        visible.push(product);
+        continue;
+      }
+      if (!catalogues.has(product.providerId)) {
+        try {
+          catalogues.set(product.providerId, await this.paybetaProvider!.listProducts(product.type, product.provider.code));
+        } catch {
+          throw new ServiceUnavailableException("Cable packages are temporarily unavailable.");
+        }
+      }
+      const current = catalogues.get(product.providerId)!.find(item => item.code === this.paybetaProductCode(product));
+      if (current) visible.push({ ...product, name: current.name, amountKobo: current.amountKobo });
+    }
+    // Keep provider mapping metadata internal to the backend.
+    return visible.map(({ metadata: _metadata, ...product }) => product);
   }
 
   async publicReadiness() {
@@ -247,12 +267,13 @@ export class UtilitiesService implements OnModuleInit, OnModuleDestroy {
         }
       })
     ]);
-    const liveMetadata = (metadata: Prisma.JsonValue | null | undefined) => {
+    const liveMetadata = (metadata: Prisma.JsonValue | null | undefined, type: UtilityServiceType) => {
       const value = this.jsonObject(metadata);
-      return value.catalogueMode === "LIVE" && value.integration === "ACCELERATE" && value.demoOnly !== true;
+      const integration = this.providerModeForService(type) === "paybeta" ? "PAYBETA" : "ACCELERATE";
+      return value.catalogueMode === "LIVE" && value.integration === integration && value.demoOnly !== true;
     };
     const liveProvider = (item: typeof providers[number]) =>
-      Boolean(item.name.trim()) && !item.code.startsWith("DEMO_") && liveMetadata(item.metadata);
+      Boolean(item.name.trim()) && !item.code.startsWith("DEMO_") && liveMetadata(item.metadata, item.type);
     const validProductAmount = (item: typeof products[number]) =>
       (typeof item.amountKobo === "number" && item.amountKobo > 0) ||
       (typeof item.minAmountKobo === "number" && item.minAmountKobo > 0 &&
@@ -261,8 +282,8 @@ export class UtilitiesService implements OnModuleInit, OnModuleDestroy {
       Boolean(item.name.trim()) &&
       !item.code.startsWith("DEMO_") &&
       !item.provider.code.startsWith("DEMO_") &&
-      liveMetadata(item.metadata) &&
-      liveMetadata(item.provider.metadata) &&
+      liveMetadata(item.metadata, item.type) &&
+      liveMetadata(item.provider.metadata, item.type) &&
       validProductAmount(item);
     const providerReady = (type: UtilityServiceType) => providers.some((item) => item.type === type && (
       this.providerModeForService(type) === "paybeta"
@@ -368,7 +389,7 @@ export class UtilitiesService implements OnModuleInit, OnModuleDestroy {
     const purchase = await utilityProvider.client.purchase({
       serviceType: resolved.provider.type,
       providerCode: resolved.provider.code,
-      productCode: resolved.product?.code,
+      productCode: this.providerModeForService(resolved.provider.type).startsWith("paybeta") ? this.paybetaProductCode(resolved.product) : resolved.product?.code,
       amountKobo: resolved.amountKobo,
       recipient: resolved.recipient,
       recipientName: resolved.recipientName,
@@ -505,7 +526,7 @@ export class UtilitiesService implements OnModuleInit, OnModuleDestroy {
       purchase = await utilityProvider.client.purchase({
         serviceType: resolved.provider.type,
         providerCode: resolved.provider.code,
-        productCode: resolved.product?.code,
+        productCode: this.providerModeForService(resolved.provider.type).startsWith("paybeta") ? this.paybetaProductCode(resolved.product) : resolved.product?.code,
         amountKobo: resolved.amountKobo,
         recipient: resolved.recipient,
         recipientName: resolved.recipientName,
@@ -893,10 +914,20 @@ export class UtilitiesService implements OnModuleInit, OnModuleDestroy {
     });
     if (!provider) throw new NotFoundException("Utility provider not found");
 
-    const product = dto.productId ? await this.prisma.utilityProduct.findFirst({
+    let product = dto.productId ? await this.prisma.utilityProduct.findFirst({
       where: { id: dto.productId, providerId: provider.id, type: provider.type, isActive: true }
     }) : null;
     if (dto.productId && !product) throw new NotFoundException("Utility product not found");
+
+    if (provider.type === UtilityServiceType.CABLE_TV && this.providerModeForService(provider.type) === "paybeta") {
+      if (!product) throw new BadRequestException("Select a Cable TV package.");
+      let liveProducts;
+      try { liveProducts = await this.paybetaProvider!.listProducts(provider.type, provider.code); }
+      catch { throw new ServiceUnavailableException("Cable packages are temporarily unavailable."); }
+      const current = liveProducts.find(item => item.code === this.paybetaProductCode(product!));
+      if (!current) throw new BadRequestException("This Cable TV package is no longer available.");
+      product = { ...product, name: current.name, amountKobo: current.amountKobo };
+    }
 
     const amountKobo = this.resolveAmount(provider.type, product, dto.amountKobo);
     const validation = await providerClient.validateRecipient(provider.type, dto.recipient);
@@ -925,7 +956,7 @@ export class UtilitiesService implements OnModuleInit, OnModuleDestroy {
       const quote = await providerClient.quote({
         serviceType: resolved.provider.type,
         providerCode: resolved.provider.code,
-        productCode: resolved.product?.code,
+        productCode: this.providerModeForService(resolved.provider.type).startsWith("paybeta") ? this.paybetaProductCode(resolved.product) : resolved.product?.code,
         amountKobo: resolved.amountKobo,
         recipient: resolved.recipient,
         recipientName: resolved.recipientName,
@@ -977,6 +1008,12 @@ export class UtilitiesService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException(`Amount must be between ${min} and ${max} kobo.`);
     }
     return amount;
+  }
+
+  private paybetaProductCode(product: { code: string; metadata?: Prisma.JsonValue | null } | null | undefined) {
+    if (!product) return undefined;
+    const metadata = this.jsonObject(product.metadata);
+    return typeof metadata.providerProductCode === "string" ? metadata.providerProductCode : product.code;
   }
 
   private async requireCustomer(userId: string) {
