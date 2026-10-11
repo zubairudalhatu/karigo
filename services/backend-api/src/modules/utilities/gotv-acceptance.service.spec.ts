@@ -16,7 +16,7 @@ function setup() {
     listProducts: jest.fn().mockResolvedValue([{ code: "GOHAN", name: "GOtv Smallie - monthly", amountKobo: 190000 }]),
     purchase: jest.fn(), quote: jest.fn(), checkStatus: jest.fn()
   };
-  const service = new GotvAcceptanceService(prisma as unknown as PrismaService, paybeta as unknown as PaybetaUtilityProvider, new ConfigService({ APP_ENV: "production", UTILITY_CONVENIENCE_FEE_KOBO: 0, UTILITIES_CABLE_PROVIDER: "accelerate" }));
+  const service = new GotvAcceptanceService(prisma as unknown as PrismaService, paybeta as unknown as PaybetaUtilityProvider, new ConfigService({ APP_ENV: "staging", UTILITY_CONVENIENCE_FEE_KOBO: 0, UTILITIES_CABLE_PROVIDER: "accelerate" }));
   return { service, prisma, paybeta };
 }
 
@@ -38,7 +38,7 @@ describe("owner-only read-only GOtv acceptance", () => {
     jest.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-18T00:00:00Z"));
     await expect(service.access("owner")).rejects.toBeInstanceOf(NotFoundException);
   });
-  it("requires configured Production Paybeta", async () => {
+  it("requires configured Production Paybeta even with the historical staging label", async () => {
     const { service, paybeta } = setup(); paybeta.isConfigured.mockReturnValue(false);
     await expect(service.access("owner")).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(paybeta.isConfigured).toHaveBeenCalledWith("production");

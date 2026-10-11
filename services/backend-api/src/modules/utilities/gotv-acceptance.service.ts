@@ -15,7 +15,9 @@ export class GotvAcceptanceService {
   constructor(private readonly prisma: PrismaService, private readonly paybeta: PaybetaUtilityProvider, private readonly config: ConfigService) {}
 
   private async owner(userId: string) {
-    if (Date.now() >= EXPIRES_AT || this.config.get<string>("APP_ENV") !== "production") throw new NotFoundException();
+    // The live service retains APP_ENV=staging historically. Scope by verified
+    // receipt ownership and Production Paybeta configuration, not that label.
+    if (Date.now() >= EXPIRES_AT) throw new NotFoundException();
     const receipt = await this.prisma.utilityTransaction.findUnique({
       where: { reference: OWNER_RECEIPT },
       select: { status: true, customer: { select: { id: true, userId: true } } }
