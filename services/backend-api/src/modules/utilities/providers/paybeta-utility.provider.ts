@@ -267,6 +267,15 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
         retrySafe: true,
         acceptedStatuses: [200, 404, 422]
       });
+      if (Number(response.__httpStatus) === 404 || Number(response.__httpStatus) === 422) {
+        return {
+          status: UtilityTransactionStatus.PROCESSING,
+          providerStatus: "PAYBETA_STATUS_NOT_YET_FOUND",
+          providerReference: reference,
+          customerNote: "Provider confirmation is pending. Do not pay again.",
+          metadata: this.safeMetadata("query", serviceType)
+        };
+      }
       return this.purchaseResult(response, reference, serviceType, "query");
     } catch (error) {
       this.logger.warn(`Paybeta status query failed reference=${reference} category=${this.safeErrorCategory(error)}`);

@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import type { PublicPaymentConfig } from "@karigo/shared-types";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { CustomerWalletLedgerResult, walletApi, WalletLedgerDirection, WalletLedgerEntryStatus, WalletLedgerEntryType } from "../../src/api/wallet.api";
@@ -260,6 +260,7 @@ export default function CustomerWalletScreen() {
               <Text style={ui.muted}>{titleForType[entry.entryType]} - {formatDate(entry.postedAt ?? entry.createdAt)}</Text>
               <Text style={styles.statusText}>{walletEntryStatusLabel(entry.status)}</Text>
               <Text style={styles.referenceText}>{entry.reference}</Text>
+              {entry.sourceType?.startsWith("UTILITY_TRANSACTION") && entry.sourceId ? <Button title="View utility receipt" tone="muted" onPress={() => router.push(`/utilities/transactions/${entry.sourceId}` as never)} /> : null}
             </View>
             <View style={styles.ledgerAmount}>
               <Text style={[styles.amountText, entry.direction === "CREDIT" ? styles.credit : styles.debit]}>{signedAmount(entry.direction, entry.amount)}</Text>

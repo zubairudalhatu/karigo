@@ -607,12 +607,12 @@ assert(utilityFlow.includes("Your request is being processed. KariGO will confir
 assert(utilityFlow.includes("This request is queued for KariGO provider verification."), "Utility flow must include provider-verification receipt copy.");
 assert(utilityFlow.includes("utilitiesApi.quote"), "Utility flow must quote through backend.");
 assert(utilityFlow.includes("utilitiesApi.create"), "Utility flow must create through the backend utility transaction endpoint.");
-const utilityReceipt = read("app", "utilities", "transactions", "[id].tsx");
+const utilityReceipt = read("app", "utilities", "transactions", "[id].tsx") + read("src", "lib", "utility-receipt.ts");
 assert(utilityReceipt.includes("Utility review receipt"), "Utility receipt detail must be explicit.");
 assert(utilityReceipt.includes("Utility request receipt"), "Utility receipt detail must support provider-backed request receipts.");
 assert(utilityReceipt.includes("Your utility request was successful."), "Utility receipt must show successful provider fulfilment copy.");
-assert(utilityReceipt.includes("This utility request failed and your wallet has been reversed."), "Utility receipt must show failed/reversed copy.");
-assert(utilityReceipt.includes("This utility request failed. If your wallet was debited, KariGO will reverse it automatically."), "Utility receipt must not show processing copy for failed utility requests.");
+assert(utilityReceipt.includes("This utility request was compensated."), "Utility receipt must show failed/reversed copy.");
+assert(utilityReceipt.includes("This utility request failed. If your wallet was debited, KariGO will confirm its reversal."), "Utility receipt must not show processing copy for failed utility requests.");
 assert(utilityReceipt.includes("Cancel utility request"), "Utility receipt must expose cancellation for eligible non-terminal transactions.");
 assert(utilityReceipt.includes("cancellableStatuses"), "Utility receipt must hide cancellation for terminal transactions.");
 assert(utilityReceipt.includes("Alert.alert"), "Utility receipt cancellation must require explicit confirmation.");
@@ -622,8 +622,8 @@ assert(utilityReceipt.includes("setTransaction(cancelled)"), "Utility receipt mu
 assert(utilityReceipt.includes("Cancellation is available only before provider fulfilment becomes irreversible"), "Utility receipt must explain cancellation eligibility.");
 assert(utilityReceipt.includes("This utility request was cancelled before fulfilment."), "Utility receipt must show cancellation copy.");
 assert(utilityReceipt.includes("walletDebitReference") && utilityReceipt.includes("walletReversalReference"), "Utility receipt detail must show wallet debit and reversal references.");
-assert(utilityReceipt.includes("This request is queued for KariGO provider verification."), "Utility receipt must keep provider-verification copy.");
-assert(utilityReceipt.includes("Your request is being processed. KariGO will confirm once the provider completes fulfilment."), "Utility receipt must keep provider-backed pending copy.");
+assert(utilityReceipt.includes("utilityReceiptMessage(transaction)"), "Utility receipt must render the tested status model.");
+assert(utilityReceipt.includes("Do not pay again."), "Utility receipt must keep provider-backed pending copy.");
 
 const checkout = read("app", "checkout.tsx");
 const paymentStatus = read("src", "lib", "payment-status.ts");

@@ -180,6 +180,119 @@ function serviceWith(options: {
   };
 }
 
+describe("Paybeta durable fulfilment recovery", () => {
+  function setup(overrides: Record<string, unknown> = {}, resultOverrides: Record<string, unknown> = {}) {
+    let row: any = {
+      id: "recovery-id", reference: "KGO-RECOVERY", customerId: "customer-id",
+      serviceType: UtilityServiceType.ELECTRICITY, provider: { ...provider, type: UtilityServiceType.ELECTRICITY }, product: null,
+      recipient: "12345678901", recipientName: "Provider account", amountKobo: 100000, totalKobo: 100000, convenienceFeeKobo: 0,
+      status: UtilityTransactionStatus.PROCESSING, providerStatus: "PAYBETA_SUBMISSION_UNCONFIRMED", mockToken: null,
+      createdAt: new Date(Date.now() - 60000), updatedAt: new Date(Date.now() - 60000),
+      metadata: { mode: "paybeta", walletDebitStatus: "POSTED", meterType: "PREPAID", recipientAddress: "Provider address" },
+      ...overrides
+    };
+    const updateMany = jest.fn(async ({ where, data }) => {
+      if (where.status !== row.status || where.updatedAt.getTime() !== row.updatedAt.getTime()) return { count: 0 };
+      row = { ...row, ...data, updatedAt: data.updatedAt ?? new Date() };
+      return { count: 1 };
+    });
+    const checkStatus = jest.fn().mockResolvedValue({
+      status: UtilityTransactionStatus.SUCCESSFUL, providerStatus: "PAYBETA_SUCCESSFUL", providerReference: "KGO-RECOVERY",
+      mockToken: "synthetic-test-token", metadata: { transactionId: "API-RECOVERY", units: "4.4" }, ...resultOverrides
+    });
+    const fixture = serviceWith({
+      prismaOverrides: { utilityTransaction: {
+        findFirst: jest.fn(async () => row), findUnique: jest.fn(async () => row),
+        findMany: jest.fn(async () => [row]), updateMany
+      } },
+      paybetaProvider: { isConfigured: jest.fn().mockReturnValue(true), checkStatus }
+    });
+    return { ...fixture, checkStatus, updateMany, row: () => row };
+  }
+
+  it("recovers late success, token, units and provider ID without another vend/debit/reversal", async () => {
+    const fixture = setup();
+    const receipt = await fixture.service.customerDetail("user-id", "recovery-id");
+    expect(receipt).toMatchObject({ status: "SUCCESSFUL", token: "synthetic-test-token", units: "4.4", providerTransactionId: "API-RECOVERY", meterType: "PREPAID", recipientName: "Provider account" });
+    expect(fixture.row().mockToken).toBe("synthetic-test-token");
+    expect(fixture.row().metadata.units).toBe("4.4");
+    expect(fixture.checkStatus).toHaveBeenCalledWith("KGO-RECOVERY", "ELECTRICITY");
+    expect(fixture.paybetaProvider.purchase).not.toHaveBeenCalled();
+    expect(fixture.tx.customerWallet.update).not.toHaveBeenCalled();
+    expect(fixture.tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("reopening the historical receipt and running the worker again is idempotent", async () => {
+    const fixture = setup();
+    await fixture.service.customerDetail("user-id", "recovery-id");
+    const historical = await fixture.service.customerDetail("user-id", "recovery-id");
+    await fixture.service.reconcilePending();
+    expect(historical.token).toBe("synthetic-test-token");
+    expect(fixture.checkStatus).toHaveBeenCalledTimes(1);
+    expect(fixture.tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("automatically recovers without the customer keeping the app open", async () => {
+    const fixture = setup();
+    await fixture.service.reconcilePending();
+    expect(fixture.row().status).toBe("SUCCESSFUL");
+    expect(fixture.row().mockToken).toBe("synthetic-test-token");
+  });
+
+  it("claims the same attempt only once under simultaneous receipt refreshes", async () => {
+    const fixture = setup();
+    await Promise.all([fixture.service.customerDetail("user-id", "recovery-id"), fixture.service.customerDetail("user-id", "recovery-id")]);
+    expect(fixture.checkStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("backs off an ambiguous query without reversing or repurchasing", async () => {
+    const fixture = setup({}, { status: "PROCESSING", mockToken: undefined, metadata: {}, providerStatus: "PAYBETA_STATUS_UNAVAILABLE" });
+    await fixture.service.customerDetail("user-id", "recovery-id");
+    await fixture.service.customerDetail("user-id", "recovery-id");
+    expect(fixture.checkStatus).toHaveBeenCalledTimes(1);
+    expect(fixture.row().status).toBe("PROCESSING");
+    expect(fixture.tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("delegates a definitive failure to the existing exactly-once compensation path", async () => {
+    const fixture = setup({}, { status: "FAILED", mockToken: undefined, failureReason: "Provider confirmed failure" });
+    const reverse = jest.spyOn(fixture.service as any, "reverseWalletDebitIfNeeded").mockResolvedValue(null);
+    await fixture.service.customerDetail("user-id", "recovery-id");
+    await fixture.service.customerDetail("user-id", "recovery-id");
+    expect(reverse).toHaveBeenCalledTimes(1);
+    expect(reverse).toHaveBeenCalledWith("recovery-id", "Provider confirmed failure");
+    expect(fixture.paybetaProvider.purchase).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { mode: "paybeta", walletDebitStatus: "REVERSED" },
+    { mode: "paybeta", walletDebitStatus: "POSTED", compensationConflict: true },
+    { mode: "paybeta", walletDebitStatus: "POSTED", reconciliationAttempts: 6 },
+    { mode: "mock", walletDebitStatus: "POSTED" }
+  ])("does not act on compensated/conflicted/exhausted/other-provider requests: %j", async (metadata) => {
+    const fixture = setup({ metadata });
+    await fixture.service.customerDetail("user-id", "recovery-id");
+    expect(fixture.checkStatus).not.toHaveBeenCalled();
+    expect(fixture.tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("preserves a token and units when a response omits fulfilment fields", async () => {
+    const fixture = setup({ mockToken: "existing-token", metadata: { mode: "paybeta", walletDebitStatus: "POSTED", units: "4.4" } }, { mockToken: undefined, metadata: { units: undefined } });
+    const receipt = await fixture.service.customerDetail("user-id", "recovery-id");
+    expect(receipt.token).toBe("existing-token");
+    expect(receipt.units).toBe("4.4");
+  });
+
+  it("lists Electricity and Airtime without requiring commerce orders", async () => {
+    const fixture = setup({ status: "SUCCESSFUL", mockToken: "existing-token" });
+    (fixture.prisma.utilityTransaction.findMany as jest.Mock).mockResolvedValue([fixture.row(), { ...fixture.row(), id: "airtime-id", serviceType: "AIRTIME", mockToken: null }]);
+    const history = await fixture.service.listMine("user-id", {});
+    expect(history.map((item) => item.serviceType)).toEqual(["ELECTRICITY", "AIRTIME"]);
+    expect(history[0].recipient).not.toBe(fixture.row().recipient);
+    expect(history[1].token).toBeUndefined();
+  });
+});
+
 const liveWalletUtilityConfig = {
   UTILITIES_PROVIDER: "accelerate",
   UTILITIES_ENABLED: true,

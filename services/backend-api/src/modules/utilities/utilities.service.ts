@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional, ServiceUnavailableException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, Optional, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   Prisma,
@@ -46,7 +46,85 @@ const ACCELERATE_IP_DENIAL_STATUSES = [
 const ACCELERATE_IP_DENIAL_NOTE = "Accelerate rejected a protected production request from the current backend egress IP.";
 
 @Injectable()
-export class UtilitiesService {
+export class UtilitiesService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(UtilitiesService.name);
+  private reconciliationTimer?: NodeJS.Timeout;
+  private reconciling = false;
+
+  onModuleInit() {
+    this.reconciliationTimer = setInterval(() => void this.reconcilePending(), 30_000);
+    this.reconciliationTimer.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.reconciliationTimer) clearInterval(this.reconciliationTimer);
+  }
+
+  async reconcilePending() {
+    if (this.reconciling || !this.paybetaProvider?.isConfigured()) return;
+    this.reconciling = true;
+    try {
+      const pending = await this.prisma.utilityTransaction.findMany({
+        where: {
+          status: UtilityTransactionStatus.PROCESSING,
+          providerStatus: { startsWith: "PAYBETA_" },
+          // Older unresolved requests require an owner-scoped receipt/admin recovery;
+          // deployment must not sweep historical financial incidents.
+          createdAt: { gte: new Date(Date.now() - 90 * 60_000) },
+          updatedAt: { lte: new Date(Date.now() - 30_000) }
+        },
+        include: this.customerInclude(),
+        orderBy: { updatedAt: "asc" },
+        take: 20
+      });
+      for (const transaction of pending) await this.reconcileTransaction(transaction);
+    } catch {
+      // Provider payloads, tokens and credentials must never enter logs.
+      this.logger.warn("Utility status reconciliation deferred; no purchase was retried.");
+    } finally {
+      this.reconciling = false;
+    }
+  }
+
+  private async reconcileTransaction(transaction: Prisma.UtilityTransactionGetPayload<{ include: ReturnType<UtilitiesService["customerInclude"]> }>) {
+    const metadata = this.jsonObject(transaction.metadata);
+    if (transaction.status !== UtilityTransactionStatus.PROCESSING ||
+        this.transactionProviderMode(transaction.metadata) !== "paybeta" ||
+        metadata.walletDebitStatus !== "POSTED" || metadata.compensationConflict === true ||
+        metadata.manualReconciliationRequired === true) return transaction;
+    const attempt = Number(metadata.reconciliationAttempts ?? 0);
+    const due = metadata.reconciliationNextAt ? Date.parse(String(metadata.reconciliationNextAt)) : transaction.updatedAt.getTime() + 30_000;
+    if (attempt >= 6 || due > Date.now()) return transaction;
+    const claimTime = new Date();
+    const claimedMetadata = this.mergeMetadata(transaction.metadata, {
+      reconciliationAttempts: attempt + 1,
+      reconciliationNextAt: new Date(Date.now() + [60_000, 120_000, 300_000, 600_000, 1800_000, 3600_000][attempt]).toISOString()
+    });
+    // Durable optimistic claim prevents concurrent workers/receipt refreshes querying the same attempt.
+    const claim = await this.prisma.utilityTransaction.updateMany({
+      where: { id: transaction.id, status: UtilityTransactionStatus.PROCESSING, updatedAt: transaction.updatedAt },
+      data: { metadata: claimedMetadata, updatedAt: claimTime }
+    });
+    if (claim.count !== 1) return transaction;
+    const result = await this.paybetaProvider!.checkStatus(transaction.reference, transaction.serviceType);
+    const committed = await this.prisma.utilityTransaction.updateMany({
+      where: { id: transaction.id, status: UtilityTransactionStatus.PROCESSING, updatedAt: claimTime },
+      data: {
+        status: result.status,
+        providerStatus: result.providerStatus,
+        providerReference: result.providerReference,
+        mockToken: result.mockToken ?? transaction.mockToken,
+        metadata: this.mergeMetadata(claimedMetadata as Prisma.JsonValue, result.metadata),
+        customerNote: result.customerNote,
+        failureReason: result.failureReason,
+        completedAt: TERMINAL_STATUSES.includes(result.status) ? new Date() : undefined
+      }
+    });
+    if (committed.count === 1 && result.status === UtilityTransactionStatus.FAILED) {
+      await this.reverseWalletDebitIfNeeded(transaction.id, result.failureReason ?? "Provider confirmed utility failure.");
+    }
+    return await this.prisma.utilityTransaction.findUnique({ where: { id: transaction.id }, include: this.customerInclude() }) ?? transaction;
+  }
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
@@ -695,7 +773,7 @@ export class UtilitiesService {
       include: this.customerInclude()
     });
     if (!transaction) throw new NotFoundException("Utility transaction not found");
-    return this.customerTransaction(transaction);
+    return this.customerTransaction(await this.reconcileTransaction(transaction));
   }
 
   async cancel(userId: string, transactionId: string) {
@@ -1158,7 +1236,7 @@ export class UtilitiesService {
   private mergeMetadata(currentMetadata: Prisma.JsonValue | null | undefined, metadata: Record<string, unknown> | undefined): Prisma.InputJsonObject {
     return {
       ...(this.jsonObject(currentMetadata)),
-      ...(metadata ?? {})
+      ...Object.fromEntries(Object.entries(metadata ?? {}).filter(([, value]) => value !== undefined))
     } as Prisma.InputJsonObject;
   }
 
@@ -1253,6 +1331,11 @@ export class UtilitiesService {
       status: transaction.status,
       providerStatus: transaction.providerStatus,
       mockToken: transaction.mockToken,
+      token: !list && transaction.serviceType === UtilityServiceType.ELECTRICITY && transaction.status === UtilityTransactionStatus.SUCCESSFUL ? transaction.mockToken : undefined,
+      units: typeof metadata.units === "string" ? metadata.units : undefined,
+      providerTransactionId: typeof metadata.transactionId === "string" ? metadata.transactionId : undefined,
+      meterType: metadata.meterType === "PREPAID" || metadata.meterType === "POSTPAID" ? metadata.meterType : undefined,
+      recipientAddress: !list && typeof metadata.recipientAddress === "string" ? metadata.recipientAddress : undefined,
       customerNote: transaction.customerNote,
       failureReason: transaction.failureReason,
       providerMode: typeof metadata.mode === "string" ? metadata.mode : "mock",

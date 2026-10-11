@@ -22,6 +22,23 @@ function config(overrides: Record<string, unknown> = {}): ConfigService {
 describe("PaybetaUtilityProvider", () => {
   afterEach(() => jest.restoreAllMocks());
 
+  it("recovers token and units through a status query without another purchase", async () => {
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(response({
+      status: "successful", code: "00",
+      data: { paymentStatus: "Delivered", reference: "KGO-RECOVER", transactionId: "API-RECOVER", token: "synthetic-token", unit: 4.4 }
+    }));
+    const result = await new PaybetaUtilityProvider(config()).checkStatus("KGO-RECOVER", UtilityServiceType.ELECTRICITY);
+    expect(result).toMatchObject({ status: "SUCCESSFUL", mockToken: "synthetic-token", metadata: { transactionId: "API-RECOVER", units: "4.4" } });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/v2/transaction/query");
+  });
+
+  it.each([404, 422])("treats status-query HTTP %i as unresolved rather than evidence for a refund", async (httpStatus) => {
+    jest.spyOn(global, "fetch").mockResolvedValue(response({ code: "99", message: "Not found" }, httpStatus));
+    const result = await new PaybetaUtilityProvider(config()).checkStatus("KGO-PROPAGATING", UtilityServiceType.ELECTRICITY);
+    expect(result.status).toBe("PROCESSING");
+  });
+
   it("uses only the P-API-KEY header against the sandbox host", async () => {
     const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(response({
       status: "successful",

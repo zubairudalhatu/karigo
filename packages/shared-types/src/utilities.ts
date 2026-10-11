@@ -72,6 +72,11 @@ export interface UtilityTransactionSummary {
   status: UtilityTransactionStatus;
   providerStatus?: string | null;
   mockToken?: string | null;
+  token?: string | null;
+  units?: string | null;
+  providerTransactionId?: string | null;
+  meterType?: UtilityMeterType;
+  recipientAddress?: string | null;
   customerNote?: string | null;
   failureReason?: string | null;
   providerMode?: string;

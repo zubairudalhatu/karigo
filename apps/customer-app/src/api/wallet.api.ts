@@ -27,6 +27,7 @@ export interface CustomerWalletLedgerEntry {
   balanceAfter: string | number;
   reference: string;
   sourceType?: string | null;
+  sourceId?: string | null;
   description?: string | null;
   postedAt?: string | null;
   createdAt: string;

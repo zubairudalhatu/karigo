@@ -156,6 +156,7 @@ export default function UtilityServiceFlow() {
   const [amount, setAmount] = useState("");
   const [quote, setQuote] = useState<UtilityQuoteResult | null>(null);
   const [transaction, setTransaction] = useState<UtilityTransactionSummary | null>(null);
+  const [submissionUnknown, setSubmissionUnknown] = useState(false);
   const [utilitiesEnabled, setUtilitiesEnabled] = useState(false);
   const [walletPaymentEnabled, setWalletPaymentEnabled] = useState(false);
   const [utilitiesStatusNote, setUtilitiesStatusNote] = useState(fallbackCustomerPaymentConfig.utilitiesStatusNote);
@@ -254,7 +255,7 @@ export default function UtilityServiceFlow() {
   }
 
   const disabledReason = config ? reviewDisabledReason() : "";
-  const canQuote = Boolean(config && !loading && !busy && !disabledReason);
+  const canQuote = Boolean(config && !loading && !busy && !disabledReason && !submissionUnknown);
 
   function chooseProvider(id: string) {
     setProviderId(id);
@@ -310,9 +311,13 @@ export default function UtilityServiceFlow() {
         idempotencyKey: quote.quoteReference
       });
       setTransaction(created);
-      if (walletPaymentEnabled) setWallet(await walletApi.summary());
+      router.replace(`/utilities/transactions/${created.id}`);
+      if (walletPaymentEnabled) setWallet(await walletApi.summary().catch(() => wallet));
     } catch (e) {
-      setError(friendlyError(e));
+      // A lost client response is not proof of provider failure. History retrieves the same request.
+      setSubmissionUnknown(true);
+      setQuote(null);
+      setError("The payment response could not be confirmed. Do not pay again. Open Orders → Utilities to check your existing request.");
     } finally {
       setBusy(false);
     }

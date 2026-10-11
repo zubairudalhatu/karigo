@@ -266,6 +266,7 @@ export class WalletService {
       balanceAfter: entry.balanceAfter,
       reference: entry.reference,
       sourceType: entry.sourceType,
+      sourceId: entry.sourceType?.startsWith("UTILITY_TRANSACTION") ? entry.sourceId : undefined,
       description: entry.description,
       postedAt: entry.postedAt?.toISOString() ?? null,
       createdAt: entry.createdAt.toISOString()

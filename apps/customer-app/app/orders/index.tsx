@@ -4,12 +4,14 @@ import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { TaxiTrip, customerCancellableTaxiTripStatuses, isActiveTaxiTripStatus, isTerminalTaxiTripStatus, taxiLifecycleForStatus } from "@karigo/shared-types";
 import { Order, ordersApi } from "../../src/api/orders.api";
 import { taxiApi } from "../../src/api/taxi.api";
+import { utilitiesApi } from "../../src/api/utilities.api";
+import type { UtilityTransactionSummary } from "@karigo/shared-types";
 import { KariGoAppTopBar } from "../../src/components/kari-go-app-top-bar";
 import { Button, Card, Empty, Loading, Message, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { friendlyError, money } from "../../src/lib/errors";
 import { formatRideFareKobo, rideStatusLabel } from "../../src/lib/rides-format";
 
-type OrdersTab = "orders" | "rides";
+type OrdersTab = "orders" | "rides" | "utilities";
 
 const cancellableRideStatuses = new Set<string>(customerCancellableTaxiTripStatuses);
 
@@ -174,7 +176,9 @@ function RideTimeline({ trip }: { trip: TaxiTrip }) {
 
 export default function OrderHistory() {
   const params = useLocalSearchParams<{ tab?: string }>();
-  const [tab, setTab] = useState<OrdersTab>(params.tab === "rides" ? "rides" : "orders");
+  const [tab, setTab] = useState<OrdersTab>(params.tab === "utilities" ? "utilities" : params.tab === "rides" ? "rides" : "orders");
+  const [utilities, setUtilities] = useState<UtilityTransactionSummary[]>([]);
+  const [utilityError, setUtilityError] = useState("");
   const [orders, setOrders] = useState<Order[]>([]);
   const [rides, setRides] = useState<TaxiTrip[]>([]);
   const [selectedRide, setSelectedRide] = useState<TaxiTrip | null>(null);
@@ -188,6 +192,7 @@ export default function OrderHistory() {
 
   useEffect(() => {
     if (params.tab === "rides") setTab("rides");
+    if (params.tab === "utilities") setTab("utilities");
   }, [params.tab]);
 
   useFocusEffect(useCallback(() => {
@@ -197,13 +202,16 @@ export default function OrderHistory() {
   async function loadAll() {
     setLoading(true);
     setError("");
+    setUtilityError("");
     try {
-      const [nextOrders, nextRides] = await Promise.all([
+      const [nextOrders, nextRides, nextUtilities] = await Promise.all([
         ordersApi.mine(),
-        taxiApi.trips().catch(() => [])
+        taxiApi.trips().catch(() => []),
+        utilitiesApi.mine().catch((e) => { setUtilityError(friendlyError(e)); return []; })
       ]);
       setOrders(nextOrders);
       setRides(nextRides);
+      setUtilities(nextUtilities);
       setSelectedRide((current) => current ? nextRides.find((trip) => trip.id === current.id) ?? current : current);
     } catch (e) {
       setError(friendlyError(e));
@@ -236,10 +244,23 @@ export default function OrderHistory() {
       <View style={styles.tabRow}>
         <Button title="Orders" tone={tab === "orders" ? "primary" : "muted"} onPress={() => setTab("orders")} />
         <Button title="Rides" tone={tab === "rides" ? "primary" : "muted"} onPress={() => setTab("rides")} />
+        <Button title="Utilities" tone={tab === "utilities" ? "primary" : "muted"} onPress={() => setTab("utilities")} />
       </View>
       {loading ? <Loading /> : tab === "orders" ? <>
         {orders.length === 0 ? <Empty message="Your KariGO orders will appear here." /> : orders.map((order) =>
           <Pressable key={order.id} onPress={() => router.push(`/orders/${order.id}` as never)}><Card><Text style={ui.cardTitle}>{order.orderNumber}</Text><StatusBadge status={order.orderStatus} /><Text style={ui.muted}>Payment: {order.paymentStatus}</Text><Text style={ui.payable}>{money(order.totalAmount)}</Text></Card></Pressable>)}
+      </> : tab === "utilities" ? <>
+        <Message error>{utilityError}</Message>
+        {utilities.length === 0 ? <Empty message="Your utility purchases will appear here." /> : utilities.map((transaction) =>
+          <Pressable key={transaction.id} onPress={() => router.push(`/utilities/transactions/${transaction.id}` as never)}><Card>
+            <Text style={ui.cardTitle}>{transaction.serviceType.replace("_", " ")} · {transaction.provider.name}</Text>
+            <StatusBadge status={transaction.status} />
+            <Text style={ui.muted}>{transaction.recipient}</Text>
+            <Text style={ui.payable}>{money(transaction.totalKobo / 100)}</Text>
+            <Text style={ui.muted}>{transaction.reference}</Text>
+            <Text style={ui.muted}>{new Date(transaction.createdAt).toLocaleString()}</Text>
+            <Text>View utility receipt</Text>
+          </Card></Pressable>)}
       </> : <>
         {selectedRide ? <RideDetails
           trip={selectedRide}
@@ -270,7 +291,7 @@ const styles = StyleSheet.create({
   ref: { color: "#111827", flexShrink: 1, fontWeight: "900" },
   rideCardHeader: { alignItems: "flex-start", gap: 8 },
   rideStatusBadge: { alignSelf: "flex-start", backgroundColor: "#DBEAFE", borderRadius: 999, color: "#1E40AF", flexShrink: 1, flexWrap: "wrap", fontSize: 12, fontWeight: "800", lineHeight: 16, maxWidth: "100%", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 6 },
-  tabRow: { flexDirection: "row", gap: 10 },
+  tabRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   timelineBox: { backgroundColor: "#FFFFFF", borderColor: "#E5E7EB", borderRadius: 16, borderWidth: 1, gap: 10, padding: 12 },
   timelineDot: { backgroundColor: "#D1D5DB", borderRadius: 999, height: 12, marginTop: 3, width: 12 },
   timelineDotCurrent: { backgroundColor: "#DC2626" },
