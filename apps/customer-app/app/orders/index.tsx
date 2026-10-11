@@ -179,6 +179,7 @@ export default function OrderHistory() {
   const [tab, setTab] = useState<OrdersTab>(params.tab === "utilities" ? "utilities" : params.tab === "rides" ? "rides" : "orders");
   const [utilities, setUtilities] = useState<UtilityTransactionSummary[]>([]);
   const [utilityError, setUtilityError] = useState("");
+  const [gotvAcceptanceAllowed, setGotvAcceptanceAllowed] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [rides, setRides] = useState<TaxiTrip[]>([]);
   const [selectedRide, setSelectedRide] = useState<TaxiTrip | null>(null);
@@ -204,14 +205,16 @@ export default function OrderHistory() {
     setError("");
     setUtilityError("");
     try {
-      const [nextOrders, nextRides, nextUtilities] = await Promise.all([
+      const [nextOrders, nextRides, nextUtilities, acceptanceAllowed] = await Promise.all([
         ordersApi.mine(),
         taxiApi.trips().catch(() => []),
-        utilitiesApi.mine().catch((e) => { setUtilityError(friendlyError(e)); return []; })
+        utilitiesApi.mine().catch((e) => { setUtilityError(friendlyError(e)); return []; }),
+        utilitiesApi.gotvAcceptanceAccess().then(() => true).catch(() => false)
       ]);
       setOrders(nextOrders);
       setRides(nextRides);
       setUtilities(nextUtilities);
+      setGotvAcceptanceAllowed(acceptanceAllowed);
       setSelectedRide((current) => current ? nextRides.find((trip) => trip.id === current.id) ?? current : current);
     } catch (e) {
       setError(friendlyError(e));
@@ -250,6 +253,7 @@ export default function OrderHistory() {
         {orders.length === 0 ? <Empty message="Your KariGO orders will appear here." /> : orders.map((order) =>
           <Pressable key={order.id} onPress={() => router.push(`/orders/${order.id}` as never)}><Card><Text style={ui.cardTitle}>{order.orderNumber}</Text><StatusBadge status={order.orderStatus} /><Text style={ui.muted}>Payment: {order.paymentStatus}</Text><Text style={ui.payable}>{money(order.totalAmount)}</Text></Card></Pressable>)}
       </> : tab === "utilities" ? <>
+        {gotvAcceptanceAllowed ? <Button title="Verify GOtv account — review only" tone="muted" onPress={() => router.push("/utilities/gotv-acceptance" as never)} /> : null}
         <Message error>{utilityError}</Message>
         {utilities.length === 0 ? <Empty message="Your utility purchases will appear here." /> : utilities.map((transaction) =>
           <Pressable key={transaction.id} onPress={() => router.push(`/utilities/transactions/${transaction.id}` as never)}><Card>

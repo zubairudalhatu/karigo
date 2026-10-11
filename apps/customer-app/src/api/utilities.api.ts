@@ -19,6 +19,12 @@ export interface UtilityReadiness {
   }>;
 }
 
+export interface GotvAcceptanceProduct { id: string; name: string; amountKobo: number; provider: string; currency: string }
+export interface GotvAcceptanceAccount { recipient: string; recipientName: string | null; recipientVerified: true; provider: string; products: GotvAcceptanceProduct[]; readOnly: true; paymentAllowed: false }
+export interface GotvAcceptanceQuote extends Omit<GotvAcceptanceAccount, "products"> {
+  quoteReference: string; product: GotvAcceptanceProduct; amountKobo: number; convenienceFeeKobo: number; totalKobo: number; walletBeforeKobo: number; projectedWalletAfterKobo: number;
+}
+
 
 const query = (params: Record<string, string | undefined>) => {
   const search = new URLSearchParams();
@@ -30,6 +36,9 @@ const query = (params: Record<string, string | undefined>) => {
 };
 
 export const utilitiesApi = {
+  gotvAcceptanceAccess: () => api.get<{ provider: string; readOnly: true; paymentAllowed: false }>("customer/utilities/acceptance/gotv"),
+  gotvAcceptanceValidate: (recipient: string) => api.post<GotvAcceptanceAccount>("customer/utilities/acceptance/gotv/validate", { recipient }),
+  gotvAcceptanceQuote: (recipient: string, productId: string) => api.post<GotvAcceptanceQuote>("customer/utilities/acceptance/gotv/quote", { recipient, productId }),
   providers: (type?: UtilityServiceType) => api.get<UtilityProviderSummary[]>(`utilities/providers${query({ type })}`, { authenticated: false }),
   readiness: () => api.get<UtilityReadiness>("utilities/readiness", { authenticated: false }),
   products: (filters: { type?: UtilityServiceType; providerId?: string }) =>

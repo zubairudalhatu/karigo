@@ -181,6 +181,14 @@ function serviceWith(options: {
 }
 
 describe("Paybeta Cable preparation", () => {
+  it("keeps public Cable/Data unavailable and ordinary Cable quotes blocked without live rows", async () => {
+    const fixture = serviceWith({ configValues: { UTILITIES_ENABLED: true, UTILITIES_PROVIDER: "accelerate", UTILITIES_CABLE_PROVIDER: "accelerate", UTILITIES_TEST_MODE: false, UTILITIES_CUSTOMER_PURCHASE_ENABLED: true, ACCELERATE_ENABLED: true }, prismaOverrides: { utilityProvider: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) }, utilityProduct: { findMany: jest.fn().mockResolvedValue([]) } } });
+    const readiness = await fixture.service.publicReadiness();
+    for (const type of [UtilityServiceType.CABLE_TV, UtilityServiceType.DATA]) expect(readiness.services.find(item => item.serviceType === type)?.availability).toBe("TEMPORARILY_UNAVAILABLE");
+    await expect(fixture.service.quote("ordinary-user", { serviceType: UtilityServiceType.CABLE_TV, providerId: "unavailable", recipient: "1234567890" })).rejects.toThrow();
+    expect(fixture.paybetaProvider.purchase).not.toHaveBeenCalled();
+    expect(fixture.tx.customerWalletLedgerEntry.create).not.toHaveBeenCalled();
+  });
   const cableProvider = { ...provider, type: UtilityServiceType.CABLE_TV, code: "gotv", metadata: { catalogueMode: "LIVE", integration: "PAYBETA" } };
   const cableProduct = { ...product, type: UtilityServiceType.CABLE_TV, code: "PAYBETA_GOTV_GOHAN", amountKobo: 180000, metadata: { providerProductCode: "GOHAN", catalogueMode: "LIVE", integration: "PAYBETA" }, provider: cableProvider };
   const configValues = { UTILITIES_CABLE_PROVIDER: "paybeta", UTILITIES_ENABLED: true, UTILITIES_TEST_MODE: false, UTILITIES_CUSTOMER_PURCHASE_ENABLED: true };
