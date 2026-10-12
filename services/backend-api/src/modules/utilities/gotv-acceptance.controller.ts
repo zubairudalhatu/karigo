@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
-import { IsString, Matches } from "class-validator";
+import { IsString, Matches, MaxLength } from "class-validator";
 import { ApiExcludeController } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -15,6 +15,9 @@ class GotvAccountDto {
 class GotvQuoteDto extends GotvAccountDto {
   @IsString() @Matches(/^[a-f0-9]{64}$/) productId!: string;
 }
+class GotvPayDto extends GotvAccountDto {
+  @IsString() @MaxLength(4096) paymentToken!: string;
+}
 
 @Controller("customer/utilities/acceptance/gotv")
 @ApiExcludeController()
@@ -25,5 +28,5 @@ export class GotvAcceptanceController {
   @Get() async access(@CurrentUser() user: AuthenticatedUser) { return { data: await this.acceptance.access(user.id) }; }
   @Post("validate") async validate(@CurrentUser() user: AuthenticatedUser, @Body() dto: GotvAccountDto) { return { data: await this.acceptance.validate(user.id, dto.recipient) }; }
   @Post("quote") async quote(@CurrentUser() user: AuthenticatedUser, @Body() dto: GotvQuoteDto) { return { data: await this.acceptance.quote(user.id, dto.recipient, dto.productId) }; }
-  // Intentionally no payment/transaction endpoint.
+  @Post("pay") async pay(@CurrentUser() user: AuthenticatedUser, @Body() dto: GotvPayDto) { return { data: await this.acceptance.pay(user.id, dto.recipient, dto.paymentToken) }; }
 }

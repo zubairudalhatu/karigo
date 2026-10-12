@@ -16,6 +16,7 @@ import { MockUtilityProvider } from "./providers/mock-utility.provider";
 import { PaybetaUtilityProvider } from "./providers/paybeta-utility.provider";
 import { UtilityProviderClient } from "./providers/utility-provider.interface";
 import { UtilitiesService } from "./utilities.service";
+import { createHash } from "crypto";
 
 const provider = {
   id: "provider-id",
@@ -179,6 +180,53 @@ function serviceWith(options: {
     service: new UtilitiesService(prisma, config, new MockUtilityProvider(), accelerateProvider, audit, paybetaProvider)
   };
 }
+
+describe("controlled GOtv wallet routing", () => {
+  const key = `gotv-jolli-acceptance-${createHash("sha256").update("gotv:customer-id").digest("hex").slice(0, 32)}`;
+  function fixture() {
+    const f = serviceWith({ configValues: { UTILITIES_CABLE_PROVIDER: "accelerate", UTILITIES_CUSTOMER_PURCHASE_ENABLED: true, UTILITIES_WALLET_PAYMENT_ENABLED: true, UTILITIES_LIVE_FULFILLMENT_ENABLED: true }, paybetaProvider: { isConfigured: jest.fn().mockReturnValue(true), listProducts: jest.fn().mockResolvedValue([{ code: "GOTVNJ2", name: "GOtv Jolli Bouquet", amountKobo: 580000 }]) } });
+    jest.spyOn(f.prisma.utilityTransaction, "findUnique").mockResolvedValue({ status: "SUCCESSFUL", customer: { id: "customer-id", userId: "owner" } } as never);
+    Object.assign(f.paybetaProvider, { validateCustomer: jest.fn().mockResolvedValue({ isValid: true, recipientName: "Provider test identity" }), getBalance: jest.fn().mockResolvedValue({ availableBalanceKobo: 1001300 }) });
+    Object.assign(f.prisma.utilityProvider, { upsert: jest.fn().mockResolvedValue({ ...provider, type: UtilityServiceType.CABLE_TV, isActive: false }) });
+    Object.assign(f.prisma.utilityProduct, { upsert: jest.fn().mockResolvedValue({ ...product, isActive: false }) });
+    const wallet = jest.spyOn(f.service as unknown as { createWalletFundedTransaction: (...args: unknown[]) => Promise<unknown> }, "createWalletFundedTransaction").mockResolvedValue({ status: "PROCESSING" });
+    return { ...f, wallet };
+  }
+  const input = { recipient: "1234567890", recipientName: "Provider test identity", amountKobo: 580000, feeKobo: 0, idempotencyKey: key };
+  beforeEach(() => jest.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-12T18:00:00Z")));
+  afterEach(() => jest.restoreAllMocks());
+  it("passes the stable reference into the existing wallet engine with serializable isolation and explicit Paybeta", async () => {
+    const f = fixture();
+    await f.service.payControlledGotv("owner", input);
+    expect(f.wallet).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ idempotencyKey: key }), expect.objectContaining({ provider: expect.objectContaining({ code: "gotv", isActive: false }), product: expect.objectContaining({ code: "GOTVNJ2", isActive: false }), totalKobo: 580000 }), `KGO-GOTV-JOLLI-${key.slice(-32).toUpperCase()}`, expect.objectContaining({ mode: "paybeta", testMode: false }), true);
+    expect(f.paybetaProvider.purchase).not.toHaveBeenCalled();
+  });
+  it("blocks another customer, arbitrary key and insufficient provider funds before wallet debit/catalogue writes", async () => {
+    const f = fixture();
+    await expect(f.service.payControlledGotv("ordinary", input)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(f.service.payControlledGotv("owner", { ...input, idempotencyKey: "another-attempt" })).rejects.toBeInstanceOf(NotFoundException);
+    jest.spyOn(f.paybetaProvider, "getBalance").mockResolvedValue({ availableBalanceKobo: 580000, lienAmountKobo: 0 });
+    await expect(f.service.payControlledGotv("owner", input)).rejects.toThrow("funding is insufficient");
+    expect(f.wallet).not.toHaveBeenCalled();
+    expect(f.prisma.utilityProvider.upsert).not.toHaveBeenCalled();
+  });
+  it("debits once using the existing wallet engine and replay never vends again", async () => {
+    const f = fixture(); f.wallet.mockRestore();
+    jest.spyOn(f.tx.customerWallet, "upsert").mockResolvedValue({ id: "wallet-id", customerId: "customer-id", currency: "NGN", status: WalletStatus.ACTIVE, availableBalance: new Prisma.Decimal(10000), ledgerBalance: new Prisma.Decimal(10000) });
+    jest.spyOn(f.paybetaProvider, "purchase").mockResolvedValue({ status: UtilityTransactionStatus.SUCCESSFUL, providerStatus: "PAYBETA_SUCCESSFUL", providerReference: "test-provider-reference" });
+    await f.service.payControlledGotv("owner", input);
+    expect(f.prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    expect(f.tx.customerWalletLedgerEntry.create).toHaveBeenCalledTimes(1);
+    expect(f.tx.customerWalletLedgerEntry.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ amount: new Prisma.Decimal(5800), balanceAfter: new Prisma.Decimal(4200), direction: "DEBIT" }) }));
+    expect(f.paybetaProvider.purchase).toHaveBeenCalledTimes(1);
+    expect(f.paybetaProvider.purchase).toHaveBeenCalledWith(expect.objectContaining({ providerCode: "gotv", productCode: "GOTVNJ2", amountKobo: 580000 }));
+    jest.spyOn(f.prisma.customerWalletLedgerEntry, "findUnique").mockResolvedValue({ sourceId: "transaction-id" } as never);
+    jest.spyOn(f.prisma.utilityTransaction, "findFirst").mockResolvedValue({ id: "transaction-id", status: "SUCCESSFUL", serviceType: "CABLE_TV", provider, product, metadata: {} } as never);
+    await f.service.payControlledGotv("owner", input);
+    expect(f.tx.customerWalletLedgerEntry.create).toHaveBeenCalledTimes(1);
+    expect(f.paybetaProvider.purchase).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("Paybeta Cable preparation", () => {
   it("keeps public Cable/Data unavailable and ordinary Cable quotes blocked without live rows", async () => {

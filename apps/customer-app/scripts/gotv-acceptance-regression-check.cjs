@@ -6,13 +6,13 @@ const ts = require('typescript');
 const source = fs.readFileSync(path.join(__dirname, '../app/utilities/gotv-acceptance.tsx'), 'utf8');
 const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
 function render(allowed, account, quote) {
-  const states = [allowed, '1234567890', account, 'opaque-id', quote, false, '']; let next = 0;
+  const states = [allowed, '1234567890', account, 'opaque-id', quote, false, '', false, '']; let next = 0;
   const node = (type, props) => ({ type, props });
   const exports = {};
   vm.runInNewContext(output, { exports, require(name) {
     if (name === 'react') return { useState: () => [states[next++], () => {}], useEffect: () => {}, useRef: value => ({ current: value }) };
     if (name === 'react/jsx-runtime') return { jsx: node, jsxs: node, Fragment: 'Fragment' };
-    if (name === 'react-native') return { Text: 'Text' };
+    if (name === 'react-native') return { Text: 'Text', Alert: { alert() { throw Error('Render must not confirm a payment'); } } };
     if (name.includes('utilities.api')) return { utilitiesApi: {} };
     if (name.endsWith('/ui')) return { Button: 'Button', Card: 'Card', Field: 'Field', Loading: 'Loading', Message: 'Message', Protected: 'Protected', Screen: 'Screen', ui: {} };
     if (name.endsWith('/errors')) return { friendlyError: () => 'Safe error' };
@@ -30,6 +30,8 @@ for (const expected of ['CABLE TV SUBSCRIPTION', 'GOtv', 'Provider returned test
 assert(!displayed.includes('1234567890'), 'Confirmation must mask the IUC');
 const pay = nodes(tree).find(node => node.type === 'Button' && node.props.title === 'Pay — not enabled');
 assert(pay?.props.disabled && !pay.props.onPress, 'Read-only confirmation must have no payment handler');
+const funded = nodes(render(true, account, { ...quote, paymentAllowed: true, paymentToken: 'opaque-signed-token', expiresAt: Date.now()+300000 })).find(node => node.type === 'Button' && node.props.title === 'Pay GOtv Jolli');
+assert(!funded.props.disabled && typeof funded.props.onPress === 'function', 'Only server-authorized funded quote offers final confirmation');
 assert(!text(render(false, null, null)).includes('Account verified'), 'Unauthorized account must not receive confirmation');
 assert(!text(render(true, null, null)).includes('Account verified'), 'Failed/unperformed validation must not show verified identity');
 assert(text(render(true, { ...account, recipientName: null }, null)).includes('GOtv did not supply a customer name.'), 'Missing name must not be fabricated');

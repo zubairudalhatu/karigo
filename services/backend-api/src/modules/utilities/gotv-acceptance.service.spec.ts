@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../../prisma/prisma.service";
 import { PaybetaUtilityProvider } from "./providers/paybeta-utility.provider";
 import { GotvAcceptanceService } from "./gotv-acceptance.service";
+import { UtilitiesService } from "./utilities.service";
 
 function setup() {
   const prisma = {
@@ -14,10 +15,11 @@ function setup() {
     isConfigured: jest.fn().mockReturnValue(true),
     validateCustomer: jest.fn().mockResolvedValue({ isValid: true, recipientName: "Provider test name" }),
     listProducts: jest.fn().mockResolvedValue([{ code: "GOHAN", name: "GOtv Smallie - monthly", amountKobo: 190000 }]),
-    purchase: jest.fn(), quote: jest.fn(), checkStatus: jest.fn()
+    purchase: jest.fn(), quote: jest.fn(), checkStatus: jest.fn(), getBalance: jest.fn().mockResolvedValue({ availableBalanceKobo: 1001300, lienAmountKobo: 0 })
   };
-  const service = new GotvAcceptanceService(prisma as unknown as PrismaService, paybeta as unknown as PaybetaUtilityProvider, new ConfigService({ APP_ENV: "staging", UTILITY_CONVENIENCE_FEE_KOBO: 0, UTILITIES_CABLE_PROVIDER: "accelerate" }));
-  return { service, prisma, paybeta };
+  const utilities = { controlledGotvResult: jest.fn().mockResolvedValue(null), payControlledGotv: jest.fn().mockResolvedValue({ status: "SUCCESSFUL" }) };
+  const service = new GotvAcceptanceService(prisma as unknown as PrismaService, paybeta as unknown as PaybetaUtilityProvider, new ConfigService({ APP_ENV: "staging", JWT_SECRET: "unit-test-only-signing-key", UTILITY_CONVENIENCE_FEE_KOBO: 0, UTILITIES_CABLE_PROVIDER: "accelerate" }), utilities as unknown as UtilitiesService);
+  return { service, prisma, paybeta, utilities };
 }
 
 describe("owner-only read-only GOtv acceptance", () => {
@@ -90,5 +92,51 @@ describe("owner-only read-only GOtv acceptance", () => {
     const { service, paybeta } = setup();
     paybeta.validateCustomer.mockRejectedValueOnce(new Error("PRIVATE_PROVIDER_PAYLOAD"));
     await expect(service.validate("owner", "1234567890")).rejects.toThrow("GOtv account validation is temporarily unavailable.");
+  });
+  async function jolli() {
+    const fixture = setup();
+    fixture.prisma.customerWallet.findUnique.mockResolvedValue({ availableBalance: "10000.00" });
+    fixture.paybeta.listProducts.mockResolvedValue([{ code: "GOTVNJ2", name: "GOtv Jolli Bouquet", amountKobo: 580000 }]);
+    const account = await fixture.service.validate("owner", "1234567890");
+    const quote = await fixture.service.quote("owner", "1234567890", account.products[0].id);
+    return { ...fixture, quote };
+  }
+  it("prepares funded Jolli with stable idempotency and no financial write", async () => {
+    const f = await jolli();
+    expect(f.quote).toMatchObject({ paymentAllowed: true, totalKobo: 580000, projectedWalletAfterKobo: 420000 });
+    const again = await f.service.quote("owner", "1234567890", f.quote.product.id);
+    expect(again.idempotencyKey).toBe(f.quote.idempotencyKey);
+    expect(f.prisma.$transaction).not.toHaveBeenCalled();
+    expect(f.utilities.payControlledGotv).not.toHaveBeenCalled();
+  });
+  it("blocks wrong owner, tampered quote, changed IUC and expired quote before payment", async () => {
+    const f = await jolli();
+    await expect(f.service.pay("ordinary", "1234567890", f.quote.paymentToken!)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(f.service.pay("owner", "1234567890", `${f.quote.paymentToken}x`)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(f.service.pay("owner", "9999999999", f.quote.paymentToken!)).rejects.toBeInstanceOf(BadRequestException);
+    jest.spyOn(Date, "now").mockReturnValue(f.quote.expiresAt + 1);
+    await expect(f.service.pay("owner", "1234567890", f.quote.paymentToken!)).rejects.toBeInstanceOf(BadRequestException);
+    expect(f.utilities.payControlledGotv).not.toHaveBeenCalled();
+  });
+  it("blocks insufficient customer/provider funds and changed price before payment", async () => {
+    const f = await jolli();
+    f.paybeta.getBalance.mockResolvedValue({ availableBalanceKobo: 580000, lienAmountKobo: 0 });
+    await expect(f.service.pay("owner", "1234567890", f.quote.paymentToken!)).rejects.toBeInstanceOf(BadRequestException);
+    f.paybeta.getBalance.mockResolvedValue({ availableBalanceKobo: 1001300, lienAmountKobo: 0 });
+    f.prisma.customerWallet.findUnique.mockResolvedValue({ availableBalance: "500.00" });
+    await expect(f.service.pay("owner", "1234567890", f.quote.paymentToken!)).rejects.toBeInstanceOf(BadRequestException);
+    f.prisma.customerWallet.findUnique.mockResolvedValue({ availableBalance: "10000.00" });
+    f.paybeta.listProducts.mockResolvedValue([{ code: "GOTVNJ2", name: "GOtv Jolli Bouquet", amountKobo: 590000 }]);
+    await expect(f.service.pay("owner", "1234567890", f.quote.paymentToken!)).rejects.toBeInstanceOf(BadRequestException);
+    expect(f.utilities.payControlledGotv).not.toHaveBeenCalled();
+  });
+  it("returns an existing outcome without a second provider call", async () => {
+    const f = await jolli();
+    f.utilities.controlledGotvResult.mockResolvedValue({ status: "PROCESSING" });
+    f.paybeta.validateCustomer.mockClear(); f.paybeta.listProducts.mockClear();
+    expect(await f.service.pay("owner", "1234567890", f.quote.paymentToken!)).toEqual({ status: "PROCESSING" });
+    expect(f.paybeta.validateCustomer).not.toHaveBeenCalled();
+    expect(f.paybeta.listProducts).not.toHaveBeenCalled();
+    expect(f.utilities.payControlledGotv).not.toHaveBeenCalled();
   });
 });

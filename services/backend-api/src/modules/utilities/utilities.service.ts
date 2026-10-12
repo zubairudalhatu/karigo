@@ -9,7 +9,7 @@ import {
   WalletLedgerEntryType,
   WalletStatus
 } from "@prisma/client";
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateUtilityTransactionDto, UtilityQuoteDto } from "./dto/customer-utility.dto";
@@ -404,12 +404,56 @@ export class UtilitiesService implements OnModuleInit, OnModuleDestroy {
     return this.customerTransaction(updated);
   }
 
+  private async controlledGotvOwner(userId: string, key: string) {
+    const receipt = await this.prisma.utilityTransaction.findUnique({ where: { reference: "KGO-UTIL-1791675364743-79934E" }, select: { status: true, customer: { select: { id: true, userId: true } } } });
+    const expected = receipt ? `gotv-jolli-acceptance-${createHash("sha256").update(`gotv:${receipt.customer.id}`).digest("hex").slice(0, 32)}` : "";
+    if (!receipt || receipt.status !== "SUCCESSFUL" || receipt.customer.userId !== userId || key !== expected || Date.now() >= Date.parse("2026-10-18T00:00:00Z")) throw new NotFoundException();
+    return this.requireCustomer(userId);
+  }
+
+  async controlledGotvResult(userId: string, key: string) {
+    const customer = await this.controlledGotvOwner(userId, key);
+    const existing = await this.findIdempotentWalletUtilityTransaction(customer.id, key);
+    return existing ? this.customerTransaction(existing) : null;
+  }
+
+  async payControlledGotv(userId: string, input: { recipient: string; recipientName: string; amountKobo: number; feeKobo: number; idempotencyKey: string }) {
+    const customer = await this.controlledGotvOwner(userId, input.idempotencyKey);
+    const client = this.paybetaProvider;
+    const providerMode = { client: client!, mode: "paybeta", providerStatusPrefix: "PAYBETA", testMode: false };
+    if (!client?.isConfigured("production") || !this.walletUtilityPaymentEnabled(providerMode)) throw new ServiceUnavailableException("Controlled Cable payment is unavailable.");
+    const existing = await this.findIdempotentWalletUtilityTransaction(customer.id, input.idempotencyKey);
+    if (existing) return this.customerTransaction(existing);
+    const product = (await client.listProducts(UtilityServiceType.CABLE_TV, "gotv")).find(p => p.code === "GOTVNJ2" && p.name === "GOtv Jolli Bouquet");
+    const validation = await client.validateCustomer({ serviceType: UtilityServiceType.CABLE_TV, providerCode: "gotv", recipient: input.recipient, amountKobo: input.amountKobo });
+    const fee = Number(this.config.get("UTILITY_CONVENIENCE_FEE_KOBO", 0));
+    if (!product || product.amountKobo !== 580000 || input.amountKobo !== product.amountKobo || !Number.isSafeInteger(fee) || fee < 0 || fee !== input.feeKobo || !validation.isValid || !validation.recipientName || validation.recipientName !== input.recipientName) throw new BadRequestException("GOtv details changed. Refresh and review before confirming.");
+    const balance = await client.getBalance();
+    if (balance.availableBalanceKobo < product.amountKobo + 10000) throw new ServiceUnavailableException("Cable provider funding is insufficient.");
+    // These acceptance-only rows are created only on the later confirmed Pay action.
+    // They remain inactive; regular catalogue resolution cannot select them.
+    const provider = await this.prisma.utilityProvider.upsert({ where: { code: "PAYBETA_ACCEPTANCE_GOTV" }, update: {}, create: { type: UtilityServiceType.CABLE_TV, name: "GOtv", code: "PAYBETA_ACCEPTANCE_GOTV", isActive: false, metadata: { acceptanceOnly: true, paybetaService: "gotv" } } });
+    const storedProduct = await this.prisma.utilityProduct.upsert({ where: { code: "PAYBETA_ACCEPTANCE_GOTVNJ2" }, update: {}, create: { providerId: provider.id, type: UtilityServiceType.CABLE_TV, name: product.name, code: "PAYBETA_ACCEPTANCE_GOTVNJ2", amountKobo: product.amountKobo, isActive: false, metadata: { acceptanceOnly: true, providerProductCode: "GOTVNJ2" } } });
+    if (provider.isActive || storedProduct.isActive || provider.type !== UtilityServiceType.CABLE_TV || storedProduct.providerId !== provider.id) throw new ServiceUnavailableException("Acceptance catalogue scope mismatch.");
+    const resolved = { provider: { ...provider, code: "gotv" }, product: { ...storedProduct, code: "GOTVNJ2" }, amountKobo: product.amountKobo, convenienceFeeKobo: fee, totalKobo: product.amountKobo + fee, recipient: input.recipient, recipientName: validation.recipientName, meterType: undefined, recipientVerified: true };
+    const dto: CreateUtilityTransactionDto = { serviceType: UtilityServiceType.CABLE_TV, providerId: provider.id, recipient: input.recipient, idempotencyKey: input.idempotencyKey };
+    const reference = `KGO-GOTV-JOLLI-${input.idempotencyKey.slice(-32).toUpperCase()}`;
+    try { return await this.createWalletFundedTransaction(customer, dto, resolved, reference, providerMode, true); }
+    catch (error) {
+      // Serializable/unique conflicts never cause an automatic provider retry.
+      const duplicate = await this.findIdempotentWalletUtilityTransaction(customer.id, input.idempotencyKey);
+      if (duplicate) return this.customerTransaction(duplicate);
+      throw error;
+    }
+  }
+
   private async createWalletFundedTransaction(
     customer: Awaited<ReturnType<UtilitiesService["requireCustomer"]>>,
     dto: CreateUtilityTransactionDto,
     resolved: Awaited<ReturnType<UtilitiesService["resolveRequest"]>> & { recipientAddress?: string; recipientVerified?: boolean },
     reference: string,
-    utilityProvider: ReturnType<UtilitiesService["activeUtilityProvider"]>
+    utilityProvider: ReturnType<UtilitiesService["activeUtilityProvider"]>,
+    controlledAcceptance = false
   ) {
     const customerId = customer.id;
     const amount = this.walletAmountFromKobo(resolved.totalKobo);
@@ -517,7 +561,7 @@ export class UtilitiesService implements OnModuleInit, OnModuleDestroy {
         include: this.customerInclude()
       });
       return { transaction: transactionWithMetadata, duplicate: false };
-    });
+    }, controlledAcceptance ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : undefined);
 
     if (created.duplicate) return this.customerTransaction(created.transaction);
 
@@ -526,7 +570,7 @@ export class UtilitiesService implements OnModuleInit, OnModuleDestroy {
       purchase = await utilityProvider.client.purchase({
         serviceType: resolved.provider.type,
         providerCode: resolved.provider.code,
-        productCode: this.providerModeForService(resolved.provider.type).startsWith("paybeta") ? this.paybetaProductCode(resolved.product) : resolved.product?.code,
+        productCode: utilityProvider.mode.startsWith("paybeta") ? this.paybetaProductCode(resolved.product) : resolved.product?.code,
         amountKobo: resolved.amountKobo,
         recipient: resolved.recipient,
         recipientName: resolved.recipientName,

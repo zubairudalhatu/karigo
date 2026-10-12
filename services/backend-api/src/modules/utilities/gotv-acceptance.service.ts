@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { UtilityServiceType, UtilityTransactionStatus } from "@prisma/client";
-import { createHash, randomUUID } from "crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
+import { UtilitiesService } from "./utilities.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { PaybetaCatalogueProduct, PaybetaUtilityProvider } from "./providers/paybeta-utility.provider";
 
@@ -12,7 +13,7 @@ const EXPIRES_AT = Date.parse("2026-10-18T00:00:00Z");
 
 @Injectable()
 export class GotvAcceptanceService {
-  constructor(private readonly prisma: PrismaService, private readonly paybeta: PaybetaUtilityProvider, private readonly config: ConfigService) {}
+  constructor(private readonly prisma: PrismaService, private readonly paybeta: PaybetaUtilityProvider, private readonly config: ConfigService, private readonly utilities: UtilitiesService) {}
 
   private async owner(userId: string) {
     // The live service retains APP_ENV=staging historically. Scope by verified
@@ -73,6 +74,41 @@ export class GotvAcceptanceService {
     const totalKobo = product.amountKobo + fee;
     // Only SELECTs and Paybeta inquiry/catalogue endpoints. Never call quote(),
     // purchase(), reconciliation, ledger writes or wallet reservation here.
-    return { ...account, quoteReference: `KGO-GOTV-READONLY-${randomUUID()}`, provider: "GOtv", providerMode: "paybeta", product: this.publicProduct(product), currency: "NGN", amountKobo: product.amountKobo, convenienceFeeKobo: fee, totalKobo, walletBeforeKobo, projectedWalletAfterKobo: walletBeforeKobo - totalKobo, readOnly: true as const, paymentAllowed: false as const };
+    const balance = await this.paybeta.getBalance();
+    const jolli = product.code === "GOTVNJ2" && product.name === "GOtv Jolli Bouquet" && product.amountKobo === 580000;
+    const idempotencyKey = `gotv-jolli-acceptance-${this.id(customer.id).slice(0, 32)}`;
+    const expiresAt = Date.now() + 5 * 60_000;
+    const paymentAllowed = jolli && Boolean(account.recipientName) && walletBeforeKobo >= totalKobo && balance.availableBalanceKobo >= product.amountKobo + 10000;
+    const paymentToken = paymentAllowed ? this.sign({ userId, recipientHash: this.id(recipient), productId, amountKobo: product.amountKobo, fee, expiresAt, idempotencyKey }) : null;
+    return { ...account, quoteReference: `KGO-GOTV-QUOTE-${randomUUID()}`, provider: "GOtv", providerMode: "paybeta", product: this.publicProduct(product), currency: "NGN", amountKobo: product.amountKobo, convenienceFeeKobo: fee, totalKobo, walletBeforeKobo, projectedWalletAfterKobo: walletBeforeKobo - totalKobo, providerAvailableBalanceKobo: balance.availableBalanceKobo, expiresAt, idempotencyKey, paymentToken, readOnly: true as const, paymentAllowed };
+  }
+
+  private sign(payload: Record<string, unknown>) {
+    const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+    const signature = createHmac("sha256", this.config.getOrThrow<string>("JWT_SECRET")).update(`gotv-acceptance:${body}`).digest("base64url");
+    return `${body}.${signature}`;
+  }
+
+  async pay(userId: string, recipient: string, paymentToken: string) {
+    await this.owner(userId);
+    let payload: Record<string, unknown>;
+    try {
+      const [body, signature, extra] = paymentToken.split(".");
+      if (!body || !signature || extra) throw new Error();
+      payload = JSON.parse(Buffer.from(body, "base64url").toString());
+      const expected = this.sign(payload).split(".")[1];
+      const actualBytes = Buffer.from(signature), expectedBytes = Buffer.from(expected);
+      if (actualBytes.length !== expectedBytes.length || !timingSafeEqual(actualBytes, expectedBytes)) throw new Error();
+      if (payload.userId !== userId || payload.recipientHash !== this.id(recipient) || typeof payload.expiresAt !== "number" || payload.expiresAt <= Date.now()) throw new Error();
+    } catch { throw new BadRequestException("Refresh and review your GOtv quote before confirming payment."); }
+    const customer = await this.owner(userId);
+    const key = `gotv-jolli-acceptance-${this.id(customer.id).slice(0, 32)}`;
+    if (payload.idempotencyKey !== key) throw new BadRequestException("Invalid acceptance reference.");
+    // Replay returns the existing receipt. It must never call validation or vend again.
+    const existing = await this.utilities.controlledGotvResult(userId, key);
+    if (existing) return existing;
+    const refreshed = await this.quote(userId, recipient, String(payload.productId));
+    if (!refreshed.paymentAllowed || payload.amountKobo !== refreshed.amountKobo || payload.fee !== refreshed.convenienceFeeKobo) throw new BadRequestException("GOtv quote changed or funding is insufficient. Review again before payment.");
+    return this.utilities.payControlledGotv(userId, { recipient, recipientName: refreshed.recipientName!, amountKobo: refreshed.amountKobo, feeKobo: refreshed.convenienceFeeKobo, idempotencyKey: key });
   }
 }
