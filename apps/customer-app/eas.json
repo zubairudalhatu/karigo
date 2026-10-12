@@ -68,6 +68,13 @@
         "EXPO_PUBLIC_TAXI_SERVICE_ENABLED": "true"
       }
     },
+    "customer-production-ios": {
+      "extends": "customer-production",
+      "ios": {
+        "simulator": false,
+        "buildConfiguration": "Release"
+      }
+    },
     "customer-play-internal": {
       "extends": "customer-production",
       "distribution": "store",

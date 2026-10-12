@@ -35,6 +35,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
   slug: "karigo-customer",
   scheme: isStaging ? "karigo-customer-staging" : "karigo-customer",
   plugins: [
+    "../../scripts/with-customer-ios-permissions.cjs",
     "expo-router",
     "expo-web-browser",
     [
