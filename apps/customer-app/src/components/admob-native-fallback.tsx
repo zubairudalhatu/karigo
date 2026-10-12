@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, Platform, StyleSheet, Text, View } from "react-native";
 import {
   NativeAd,
   NativeAdChoicesPlacement,
@@ -26,7 +26,7 @@ export function AdMobNativeFallback({ eligible, firstPartyAdCount }: { eligible:
     && process.env.EXPO_PUBLIC_ADMOB_QA_FORCE_FALLBACK === "true"
     && Boolean(process.env.EXPO_PUBLIC_ADMOB_QA_TEST_DEVICE_ID?.trim());
   const unitId = useMemo(
-    () => selectNativeAdUnitId({ isDevelopment: __DEV__, appEnvironment, testMode, qaRealUnitTest }),
+    () => selectNativeAdUnitId({ platform: Platform.OS, isDevelopment: __DEV__, appEnvironment, testMode, qaRealUnitTest }),
     [appEnvironment, qaRealUnitTest, testMode]
   );
   const shouldLoad = shouldRequestAdMob({

@@ -62,6 +62,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
       "react-native-google-mobile-ads",
       {
         androidAppId: "ca-app-pub-8797316301984037~1272004979",
+        iosAppId: "ca-app-pub-8797316301984037~8850716285",
         delayAppMeasurementInit: true,
         optimizeInitialization: true,
         optimizeAdLoading: true
@@ -125,7 +126,12 @@ export default ({ config }: { config: Record<string, any> }) => ({
   },
   ios: {
     ...config.ios,
-    bundleIdentifier: isStaging ? "com.karigo.customer.staging" : "com.karigo.customer",
+    bundleIdentifier: isStaging ? "com.karigo.customer.staging" : "ng.com.karigo.customer",
+    appleTeamId: "6Y4WC7MQB6",
+    entitlements: {
+      ...(config.ios?.entitlements ?? {}),
+      "aps-environment": isStaging ? "development" : "production"
+    },
     infoPlist: {
       ...(config.ios?.infoPlist ?? {}),
       NSMicrophoneUsageDescription: "KariGO uses your microphone only when you make or receive an in-app Ride call."

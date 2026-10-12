@@ -1,6 +1,8 @@
 import Constants from "expo-constants";
 import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Platform } from "react-native";
 import mobileAds, { AdsConsent, AdsConsentPrivacyOptionsRequirementStatus } from "react-native-google-mobile-ads";
+import { ADMOB_IOS_APP_ID, isAdMobConfigurationReady } from "../lib/admob-policy";
 
 type AdMobConsentContextValue = {
   canRequestAds: boolean;
@@ -27,9 +29,14 @@ export function AdMobConsentProvider({ children }: { children: ReactNode }) {
     ? process.env.EXPO_PUBLIC_ADMOB_QA_TEST_DEVICE_ID?.trim()
     : undefined;
   const productionReady = process.env.EXPO_PUBLIC_ADMOB_PRODUCTION_READY === "true";
-  const configurationReady = __DEV__ || appEnvironment !== "production" || testMode || productionReady;
+  const configurationReady = isAdMobConfigurationReady({
+    platform: Platform.OS, isDevelopment: __DEV__, appEnvironment, testMode, productionReady,
+    iosProductionReady: process.env.EXPO_PUBLIC_ADMOB_IOS_PRODUCTION_READY === "true",
+    iosAppId: ADMOB_IOS_APP_ID
+  });
 
   useEffect(() => {
+    if (Platform.OS === "ios" && !configurationReady) return;
     let active = true;
     async function initializeConsent() {
       try {
@@ -50,7 +57,7 @@ export function AdMobConsentProvider({ children }: { children: ReactNode }) {
     }
     void initializeConsent();
     return () => { active = false; };
-  }, []);
+  }, [configurationReady]);
 
   useEffect(() => {
     let active = true;

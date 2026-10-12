@@ -70,9 +70,14 @@
     },
     "customer-production-ios": {
       "extends": "customer-production",
+      "node": "22.20.0",
+      "env": {
+        "EXPO_PUBLIC_ADMOB_IOS_PRODUCTION_READY": "false"
+      },
       "ios": {
         "simulator": false,
-        "buildConfiguration": "Release"
+        "buildConfiguration": "Release",
+        "image": "macos-sequoia-15.6-xcode-26.2"
       }
     },
     "customer-play-internal": {

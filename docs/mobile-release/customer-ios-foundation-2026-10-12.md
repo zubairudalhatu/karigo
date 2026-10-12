@@ -2,6 +2,8 @@
 
 Status: NOT READY TO CREATE A TESTFLIGHT BUILD. Local preparation only. No Apple registration, certificate/profile/key creation, build, upload, review submission, OTA or production change occurred.
 
+This is the initial foundation snapshot. Later owner-approved identifier correction, Apple record creation and iOS advertising preparation supersede the relevant fields: see customer-ios-apple-setup-2026-10-12.md. Do not attempt registration of the globally unavailable com.karigo.customer identifier.
+
 ## Identity and configuration
 
 Inspected source baseline: 63f17aa5998627b8b50d9effcad92fd4ab0a2fe7, with Customer code inherited from the existing release. Local foundation branch: codex/customer-ios-foundation.
