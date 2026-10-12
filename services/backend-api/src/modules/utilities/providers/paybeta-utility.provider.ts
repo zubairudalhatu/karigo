@@ -229,7 +229,7 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
         retrySafe: false,
         acceptedStatuses: [200, 201, 202, 400, 404, 422]
       });
-      const purchase = this.purchaseResult(response, input.reference, input.serviceType, "purchase");
+      const purchase = this.purchaseResult(response, input.reference, input.serviceType, "purchase", [input.recipient, validatedInput.recipientName, validatedInput.recipientAddress, input.customerPhoneNumber, input.customerEmail]);
       if (purchase.status !== UtilityTransactionStatus.PROCESSING) return purchase;
       return this.checkStatus(input.reference, input.serviceType);
     } catch (error) {
@@ -357,7 +357,7 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
     };
   }
 
-  private purchaseResult(response: JsonRecord, reference: string, serviceType: UtilityServiceType, stage: string): UtilityPurchaseResult {
+  private purchaseResult(response: JsonRecord, reference: string, serviceType: UtilityServiceType, stage: string, sensitiveValues: Array<string | null | undefined> = []): UtilityPurchaseResult {
     const status = this.normalizedStatus(response);
     const data = this.record(response.data);
     const token = this.string(data.token);
@@ -374,6 +374,11 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
           : "Paybeta is still processing the request. KariGO will reconcile it without repurchasing.",
       metadata: {
         ...this.safeMetadata(stage, serviceType),
+        ...(Number(response.__httpStatus) >= 400 ? {
+          providerHttpStatus: Number(response.__httpStatus),
+          providerErrorResponse: this.redactedErrorResponse(response, sensitiveValues),
+          providerRequestId: this.redactedErrorResponse({ requestId: this.string(response.__requestId) || undefined }, sensitiveValues).requestId
+        } : {}),
         transactionId: this.string(data.transactionId) || undefined,
         units: this.string(data.unit) || undefined
       }
@@ -449,7 +454,7 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
             this.safeProviderMessage(record)
           );
         }
-        return { ...this.record(payload), __httpStatus: response.status };
+        return { ...this.record(payload), __httpStatus: response.status, __requestId: response.headers?.get("x-request-id") || response.headers?.get("x-correlation-id") || undefined };
       } catch (error) {
         lastError = error;
         if (this.isDefinitiveClientFailure(error)) throw error;
@@ -610,6 +615,27 @@ export class PaybetaUtilityProvider implements UtilityProviderClient {
       .find(Boolean);
     if (!value) return undefined;
     return value.replace(/[\r\n\t]+/g, " ").slice(0, 180);
+  }
+
+  // Preserve diagnostic evidence for accepted 4xx responses without retaining
+  // credentials, account identity, contact details or echoed purchase payloads.
+  private redactedErrorResponse(response: JsonRecord, sensitiveValues: Array<string | null | undefined>): JsonRecord {
+    const secrets = [this.apiKey(), ...sensitiveValues].filter((v): v is string => typeof v === "string" && v.length > 0);
+    const cleanText = (value: string) => {
+      let text = value;
+      for (const secret of secrets) text = text.replace(new RegExp(secret.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "[REDACTED]");
+      return text.replace(/\b\d{6,}\b/g, "[REDACTED]").replace(/[\r\n\t]+/g, " ").slice(0, 512);
+    };
+    const redact = (value: unknown, depth = 0, inErrors = false): unknown => {
+      if (depth > 4) return "[TRUNCATED]";
+      if (typeof value === "string") return cleanText(value);
+      if (Array.isArray(value)) return value.slice(0, 20).map(v => redact(v, depth + 1, inErrors));
+      if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).slice(0, 30).filter(([key]) => !key.startsWith("__")).map(([key, item]) => [key,
+        !inErrors && /secret|password|api.?key|authorization|token|customer|smart.?card|iuc|recipient|phone|email|address|name/i.test(key) ? "[REDACTED]" : redact(item, depth + 1, inErrors || key === "errors")
+      ]));
+      return value;
+    };
+    return redact(response) as JsonRecord;
   }
 
   private koboToNaira(value: number): number {

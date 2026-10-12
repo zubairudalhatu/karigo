@@ -130,11 +130,11 @@ describe("owner-only read-only GOtv acceptance", () => {
     await expect(f.service.pay("owner", "1234567890", f.quote.paymentToken!)).rejects.toBeInstanceOf(BadRequestException);
     expect(f.utilities.payControlledGotv).not.toHaveBeenCalled();
   });
-  it("returns an existing outcome without a second provider call", async () => {
+  it.each(["PROCESSING", "FAILED"])("returns existing %s outcome without a second provider call", async status => {
     const f = await jolli();
-    f.utilities.controlledGotvResult.mockResolvedValue({ status: "PROCESSING" });
+    f.utilities.controlledGotvResult.mockResolvedValue({ status });
     f.paybeta.validateCustomer.mockClear(); f.paybeta.listProducts.mockClear();
-    expect(await f.service.pay("owner", "1234567890", f.quote.paymentToken!)).toEqual({ status: "PROCESSING" });
+    expect(await f.service.pay("owner", "1234567890", f.quote.paymentToken!)).toEqual({ status });
     expect(f.paybeta.validateCustomer).not.toHaveBeenCalled();
     expect(f.paybeta.listProducts).not.toHaveBeenCalled();
     expect(f.utilities.payControlledGotv).not.toHaveBeenCalled();

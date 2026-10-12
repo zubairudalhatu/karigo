@@ -75,6 +75,33 @@ describe("PaybetaUtilityProvider", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toMatchObject({ service: "gotv", packageCode: "GOHAN", amount: 1900, reference: "SYNTHETIC-CABLE" });
   });
 
+  it("builds the documented GOtv Jolli six-field contract with numeric naira amount and no legacy/contact fields", async () => {
+    const fetchMock = jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce(response({ status: "successful", data: { customerName: "Synthetic GOtv identity" } }))
+      .mockResolvedValueOnce(response({ status: "successful", data: { transactionId: "SYNTHETIC-PB" } }));
+    const adapter = new PaybetaUtilityProvider(config({ PAYBETA_BASE_URL: "https://api.paybeta.ng" }));
+    await adapter.purchase({ serviceType: UtilityServiceType.CABLE_TV, providerCode: "gotv", productCode: "GOTVNJ2", recipient: "1234567890", amountKobo: 580000, totalKobo: 580000, reference: "SYNTHETIC-JOLLI", customerPhoneNumber: "08000000000", customerEmail: "qa@example.invalid" });
+    expect(String(fetchMock.mock.calls[1][0])).toBe("https://api.paybeta.ng/v2/cable/purchase");
+    expect(fetchMock.mock.calls[1][1]?.method).toBe("POST");
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({ service: "gotv", smartCardNumber: "1234567890", amount: 5800, packageCode: "GOTVNJ2", customerName: "Synthetic GOtv identity", reference: "SYNTHETIC-JOLLI" });
+  });
+
+  it("preserves redacted HTTP 422 evidence and never retries or creates a provider transaction ID", async () => {
+    const rejection = response({ code: "99", status: "error", message: "The packageCode field is invalid.", errors: { packageCode: ["The selected packageCode is invalid."] }, data: { customerName: "Synthetic GOtv identity", smartCardNumber: "1234567890", apiKey: "pb_test_placeholder_not_a_real_secret" } }, 422);
+    Object.assign(rejection, { headers: new Headers({ "x-request-id": "synthetic-request-id" }) });
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValueOnce(response({ status: "successful", data: { customerName: "Synthetic GOtv identity" } })).mockResolvedValueOnce(rejection);
+    const logger = jest.spyOn(Logger.prototype, "warn");
+    const adapter = new PaybetaUtilityProvider(config());
+    const input = { serviceType: UtilityServiceType.CABLE_TV, providerCode: "gotv", productCode: "GOTVNJ2", recipient: "1234567890", amountKobo: 580000, totalKobo: 580000, reference: "SYNTHETIC-422" };
+    const result = await adapter.purchase(input);
+    expect(result).toMatchObject({ status: "FAILED", providerStatus: "PAYBETA_HTTP_422", metadata: { providerHttpStatus: 422, providerRequestId: "synthetic-request-id", providerErrorResponse: { code: "99", message: "The packageCode field is invalid.", errors: { packageCode: ["The selected packageCode is invalid."] } } } });
+    expect(result.metadata?.transactionId).toBeUndefined();
+    for (const sensitive of ["Synthetic GOtv identity", "1234567890", "pb_test_placeholder_not_a_real_secret"]) expect(JSON.stringify(result)).not.toContain(sensitive);
+    await adapter.purchase(input);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(logger).not.toHaveBeenCalled();
+  });
+
   it("recovers token and units through a status query without another purchase", async () => {
     const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue(response({
       status: "successful", code: "00",

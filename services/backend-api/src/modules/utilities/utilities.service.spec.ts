@@ -1086,16 +1086,16 @@ describe("UtilitiesService", () => {
     }));
   });
 
-  it("reverses a Paybeta-auth-rejected wallet debit exactly once", async () => {
+  it.each([401, 422])("reverses a Paybeta HTTP %i rejected wallet debit exactly once", async httpStatus => {
     const paybetaProvider = {
       isConfigured: jest.fn().mockReturnValue(true),
       validateRecipient: jest.fn().mockResolvedValue({ isValid: true, normalizedRecipient: "+2348030000000" }),
       purchase: jest.fn().mockResolvedValue({
         status: UtilityTransactionStatus.FAILED,
-        providerStatus: "PAYBETA_HTTP_401",
+        providerStatus: `PAYBETA_HTTP_${httpStatus}`,
         providerReference: "KGO-UTIL-REFERENCE",
         failureReason: "Paybeta rejected the utility request before confirming a transaction.",
-        metadata: { provider: "paybeta", errorCategory: "paybeta_http_401" }
+        metadata: { provider: "paybeta", errorCategory: `paybeta_http_${httpStatus}` }
       })
     };
     const { prisma, tx, service } = serviceWith({
@@ -1125,7 +1125,7 @@ describe("UtilitiesService", () => {
         recipient: "+2348030000000",
         recipientName: null,
         status: UtilityTransactionStatus.FAILED,
-        providerStatus: "PAYBETA_HTTP_401",
+        providerStatus: `PAYBETA_HTTP_${httpStatus}`,
         providerReference: "KGO-UTIL-REFERENCE",
         mockToken: null,
         customerNote: "The utility provider rejected this request. Any posted wallet debit will be reversed.",
@@ -1137,7 +1137,7 @@ describe("UtilitiesService", () => {
           walletDebitLedgerEntryId: "ledger-debit",
           walletDebitReference: "KGO-UTIL-REFERENCE-WALLET-DEBIT",
           walletDebitStatus: WalletLedgerEntryStatus.POSTED,
-          errorCategory: "paybeta_http_401"
+          errorCategory: `paybeta_http_${httpStatus}`
         },
         createdAt: new Date(),
         updatedAt: new Date(),
