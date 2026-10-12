@@ -126,6 +126,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
   },
   ios: {
     ...config.ios,
+    buildNumber: "2",
     bundleIdentifier: isStaging ? "com.karigo.customer.staging" : "ng.com.karigo.customer",
     appleTeamId: "6Y4WC7MQB6",
     entitlements: {
@@ -134,6 +135,7 @@ export default ({ config }: { config: Record<string, any> }) => ({
     },
     infoPlist: {
       ...(config.ios?.infoPlist ?? {}),
+      NSCameraUsageDescription: "KariGO may request camera access when using communication or media features that require it.",
       NSMicrophoneUsageDescription: "KariGO uses your microphone only when you make or receive an in-app Ride call."
     }
   },
