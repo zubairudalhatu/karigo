@@ -5,7 +5,7 @@ import type { CustomerAdPlacementDecision, LaunchAvailabilityResponse, LaunchSer
 import { isActiveTaxiTripStatus, taxiLifecycleForStatus } from "@karigo/shared-types";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Image, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Image, Linking, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { adsApi, CustomerHomeAd } from "../../src/api/ads.api";
 import { launchApi } from "../../src/api/launch.api";
 import { taxiApi } from "../../src/api/taxi.api";
@@ -18,6 +18,7 @@ import { AdMobNativeFallback } from "../../src/components/admob-native-fallback"
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
 import { ridesProductionEnabled } from "../../src/lib/rides-flags";
+import { detectHomeLocation } from "../../src/lib/customer-location";
 
 const ridesEnabled = ridesProductionEnabled();
 const ridesServiceAreaLabel =
@@ -203,6 +204,22 @@ export default function CustomerHome() {
     setDetectingLocation(true);
     if (showFeedback) setLocationMessage("");
     try {
+      if (Platform.OS === "ios") {
+        const result = await detectHomeLocation({
+          permission: () => Location.requestForegroundPermissionsAsync(),
+          position: () => Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          geocode: (point) => Location.reverseGeocodeAsync(point)
+        });
+        setDetectedCity(result.status === "resolved" ? result.city : null);
+        if (result.status !== "resolved" || !result.city) setLaunchAvailability(null);
+        if (showFeedback) setLocationMessage(result.status === "denied"
+          ? "Location permission was not granted. You can still enter your address manually."
+          : result.status === "unavailable"
+            ? "Location is unavailable right now. You can still enter your address manually."
+            : result.city ? `Detected city: ${result.city}.`
+              : "Your current location is outside our current Kano and Abuja service areas. You can still enter your address manually.");
+        return;
+      }
       const permission = await Location.requestForegroundPermissionsAsync();
       if (!permission.granted) {
         if (showFeedback) setLocationMessage("Location permission was not granted. You can still enter your address manually.");

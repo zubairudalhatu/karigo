@@ -41,6 +41,18 @@ describe("DeviceTokensService", () => {
     await expect(service.register("user-1", UserRole.CUSTOMER, dto)).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it("updates an existing iOS registration without creating a duplicate or exposing the token", async () => {
+    prisma.deviceToken.findUnique.mockResolvedValue({ id: "ios-token", userId: "user-1" });
+    prisma.deviceToken.update.mockResolvedValue({ id: "ios-token", platform: DevicePlatform.IOS });
+    await service.register("user-1", UserRole.CUSTOMER, { ...dto, platform: DevicePlatform.IOS });
+    expect(prisma.deviceToken.create).not.toHaveBeenCalled();
+    expect(prisma.deviceToken.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "ios-token" },
+      data: expect.objectContaining({ platform: DevicePlatform.IOS, isActive: true }),
+      select: expect.not.objectContaining({ token: true, deviceId: true })
+    }));
+  });
+
   it("does not allow a user to register a token for another app surface", async () => {
     await expect(service.register("user-1", UserRole.CUSTOMER, {
       ...dto,

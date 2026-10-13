@@ -70,7 +70,9 @@ export default function AppDiagnostics() {
       <Card>
         <Text style={ui.cardTitle}>Release identity</Text>
         <DiagnosticRow label="App version" value={diagnostics.appVersion} />
-        <DiagnosticRow label="Android versionCode" value={diagnostics.androidVersionCode} />
+        {diagnostics.platform === "ios"
+          ? <DiagnosticRow label="iOS build number" value={diagnostics.iosBuildNumber} />
+          : <DiagnosticRow label="Android versionCode" value={diagnostics.androidVersionCode} />}
         <DiagnosticRow label="Runtime version" value={diagnostics.runtimeVersion} />
         <DiagnosticRow label="EAS channel" value={diagnostics.channel} />
         <DiagnosticRow label="Update ID" value={diagnostics.updateId} />

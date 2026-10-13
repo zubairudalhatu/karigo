@@ -3,7 +3,7 @@ import { brand } from "@karigo/config";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Image, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Image, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { CustomerProfile, customerApi, RetentionSummary } from "../src/api/customer.api";
 import { KariGoAppTopBar } from "../src/components/kari-go-app-top-bar";
 import { Button, Card, Field, Loading, Message, Protected, Screen, ui } from "../src/components/ui";
@@ -229,20 +229,20 @@ export default function Profile() {
       <Message error>{error}</Message>
       <Message>{success}</Message>
       {profile ? <>
-        <View style={styles.hero}>
+        <View style={[styles.hero, Platform.OS === "ios" && styles.iosHero]}>
           <View style={styles.avatar}>
             {profile.profilePhotoUrl ? <Image source={{ uri: profile.profilePhotoUrl }} style={styles.avatarImage} /> : <Text style={styles.avatarText}>{initials}</Text>}
           </View>
-          <View style={styles.heroCopy}>
+          <View style={[styles.heroCopy, Platform.OS === "ios" && styles.iosHeroCopy]}>
             <Text style={styles.eyebrow}>Your KariGO account</Text>
             <Text style={styles.heroTitle}>{displayName}</Text>
             <Text style={styles.heroSubtitle}>Manage your orders, wallet, addresses and support.</Text>
-            <View style={styles.contactRow}>
+            <View style={[styles.contactRow, Platform.OS === "ios" && styles.iosContactRow]}>
               {displayPhone ? <Text style={styles.contactText}>{displayPhone}</Text> : null}
               {displayEmail ? <Text style={styles.contactText}>{displayEmail}</Text> : <Text style={styles.contactText}>Add your email below</Text>}
             </View>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Edit account details" onPress={() => setSuccess("Update your name or email in Account details below.")} style={styles.editButton}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Edit account details" onPress={() => setSuccess("Update your name or email in Account details below.")} style={[styles.editButton, Platform.OS === "ios" && styles.iosEditButton]}>
             <Feather name="edit-3" size={17} color={brand.colors.primary} />
           </Pressable>
         </View>
@@ -322,6 +322,10 @@ export default function Profile() {
 }
 
 const styles = StyleSheet.create({
+  iosHero: { flexDirection: "column", alignItems: "stretch" },
+  iosHeroCopy: { flex: 0, minWidth: 0 },
+  iosContactRow: { flexDirection: "column", alignItems: "stretch" },
+  iosEditButton: { position: "absolute", right: 18, top: 18 },
   actionRow: { gap: 10 },
   avatar: { alignItems: "center", backgroundColor: brand.colors.white, borderRadius: 999, height: 70, justifyContent: "center", overflow: "hidden", width: 70 },
   avatarImage: { height: "100%", width: "100%" },

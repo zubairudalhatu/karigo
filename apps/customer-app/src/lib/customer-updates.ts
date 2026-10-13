@@ -1,5 +1,6 @@
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
+import { Platform } from "react-native";
 
 export type CustomerUpdateCheckResult = {
   status: "idle" | "checking" | "no-update" | "downloaded" | "unavailable" | "failed" | "skipped";
@@ -10,6 +11,8 @@ export type CustomerUpdateCheckResult = {
 export type CustomerUpdateDiagnostics = {
   appVersion: string;
   androidVersionCode: string;
+  iosBuildNumber: string;
+  platform: string;
   runtimeVersion: string;
   channel: string;
   updateId: string;
@@ -100,6 +103,8 @@ export function getCustomerUpdateDiagnostics(): CustomerUpdateDiagnostics {
   return {
     appVersion: safeText(Constants.expoConfig?.version ?? Constants.nativeAppVersion),
     androidVersionCode: safeText(androidVersionCode),
+    iosBuildNumber: safeText(Constants.nativeBuildVersion ?? Constants.expoConfig?.ios?.buildNumber),
+    platform: Platform.OS,
     runtimeVersion: safeText(updateConstants.runtimeVersion ?? expoExtra.runtimeVersion),
     channel: safeText(updateConstants.channel ?? expoExtra.updateChannel),
     updateId: safeText(updateConstants.updateId),

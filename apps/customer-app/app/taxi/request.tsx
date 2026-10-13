@@ -1,4 +1,5 @@
 import * as Location from "expo-location";
+import { reverseGeocodeAddress } from "../../src/lib/customer-location";
 import { router, Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Animated, AppState, BackHandler, Keyboard, Linking, PanResponder, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
@@ -841,9 +842,7 @@ export default function TaxiRequest() {
     const cached = reverseGeocodeCache.current.get(key);
     if (cached) return cached;
     const [place] = await Location.reverseGeocodeAsync({ latitude, longitude }).catch(() => []);
-    const address = [place?.name, place?.street, place?.district, place?.city ?? place?.subregion, place?.region]
-      .filter(Boolean)
-      .join(", ");
+    const address = reverseGeocodeAddress(place);
     reverseGeocodeCache.current.set(key, address);
     return address;
   }

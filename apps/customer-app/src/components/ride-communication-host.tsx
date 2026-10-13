@@ -10,6 +10,7 @@ import { taxiApi } from "../api/taxi.api";
 import { useAuth } from "../contexts/auth-context";
 import { claimRideMessageEvent, hasHandledRideMessageEvent, incrementRideUnread } from "../lib/ride-alert-state";
 import { acknowledgeRideMessageDelivered, disconnectRideRealtime, isActiveRideConversation, subscribePersonalRideRealtime } from "../lib/ride-realtime";
+import { registerCustomerIosPush, resetIosPushRegistration } from "../lib/customer-ios-push";
 import { Button, Card, ui } from "./ui";
 
 type IncomingNotice = Pick<RideIncomingCallEvent, "id" | "rideId" | "rideReference" | "callerLabel">;
@@ -92,12 +93,14 @@ export function RideCommunicationHost() {
 
   useEffect(() => {
     if (!user) {
+      if (Platform.OS === "ios") resetIosPushRegistration();
       disconnectRideRealtime();
       setIncoming(null);
       return;
     }
     let unsubscribe: (() => void) | undefined;
-    void registerCustomerPush().catch(() => undefined);
+    if (Platform.OS === "ios") void registerCustomerIosPush(user.id).catch(() => undefined);
+    else void registerCustomerPush().catch(() => undefined);
     void subscribePersonalRideRealtime({
       "ride.message.new": (message: RideMessage) => {
         if (message.senderRole !== "CAPTAIN") return;
