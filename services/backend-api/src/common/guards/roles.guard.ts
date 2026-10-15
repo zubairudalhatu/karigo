@@ -19,6 +19,9 @@ export class RolesGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<{ user?: AuthenticatedUser }>();
+    // Customer-only APIs must not revive a deleted Customer role on a shared
+    // identity which still legitimately signs in for onboarding/business work.
+    if (roles.length === 1 && roles[0] === UserRole.CUSTOMER && request.user?.customerAccessDeletedAt) return false;
     return Boolean(request.user && roles.includes(request.user.role));
   }
 }

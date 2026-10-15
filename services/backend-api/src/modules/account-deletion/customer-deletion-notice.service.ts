@@ -23,7 +23,7 @@ export class CustomerDeletionNoticeService {
     } catch { throw new ServiceUnavailableException("Existing completion notice could not be verified."); }
   }
 
-  async send(to: string, reference: string): Promise<string> {
+  async send(to: string, reference: string, sharedIdentityRetained = false): Promise<string> {
     this.assertConfigured();
     const key = this.config.get<string>("RESEND_API_KEY");
     const from = this.config.get<string>("RESEND_FROM_EMAIL") ?? this.config.get<string>("EMAIL_FROM");
@@ -35,7 +35,7 @@ export class CustomerDeletionNoticeService {
         headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "Idempotency-Key": `customer-deletion:${reference}:v1` },
         body: JSON.stringify({ from, to: [to], reply_to: replyTo,
           subject: "KariGO account deletion confirmation",
-          text: `Your KariGO Customer personal-data cleanup has finished. Reference: ${reference}. This one-time confirmation is sent before your operational contact email is removed. Limited financial/legal records may remain where required by law; unnecessary personal details have been removed. Your account cannot be restored. Your saved deletion receipt will show final completion.` }),
+          text: `Your KariGO Customer personal-data cleanup has finished. Reference: ${reference}. ${sharedIdentityRetained ? "This one-time notice confirms Customer-role cleanup. Shared identity/contact data genuinely needed for your other active KariGO role remains available for that role only." : "This one-time confirmation is sent before your operational contact email is removed."} Minimum financial/service records may remain for 7 years from the end of the transaction financial year; fraud/dispute records for 7 years from final resolution, subject to active holds. Unnecessary Customer personal details have been removed. Your Customer account cannot be restored after completion. Your saved deletion receipt will show final completion. Retention policy: KGO-RETENTION-2026-10-15; see https://karigo.com.ng/privacy.` }),
         signal: AbortSignal.timeout(10_000)
       });
       const payload = await response.json().catch(() => ({})) as { id?: unknown };

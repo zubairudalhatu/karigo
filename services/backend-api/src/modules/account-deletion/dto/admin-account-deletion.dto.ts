@@ -27,6 +27,9 @@ export class ListAccountDeletionRequestsQueryDto {
 export class UpdateAccountDeletionRequestDto {
   @IsOptional()
   @IsBoolean()
+  scopedHoldsReviewed?: boolean;
+  @IsOptional()
+  @IsBoolean()
   noIdentifiableLegalHoldConfirmed?: boolean;
   @IsOptional()
   @IsIn(["DELETE_CUSTOMER_DATA"])

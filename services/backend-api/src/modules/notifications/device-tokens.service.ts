@@ -35,7 +35,7 @@ export class DeviceTokensService {
         data: { ...dto, token, userId, isActive: true, lastSeenAt: new Date() },
         select: this.safeFields
       });
-    });
+    }, dto.appSurface === AppSurface.CUSTOMER_APP);
   }
 
   listMine(userId: string) {

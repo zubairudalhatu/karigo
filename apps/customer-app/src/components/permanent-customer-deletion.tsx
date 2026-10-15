@@ -34,9 +34,9 @@ export function PermanentCustomerDeletion() {
   }
   return <Protected><Screen title="Delete account permanently">
     <Card><Text style={ui.cardTitle}>Permanent Customer account deletion</Text>
-      <Text style={ui.muted}>This permanently removes ordinary personal data, saved addresses, photos, preferences and device registrations. Your account cannot be restored after cleanup.</Text>
-      <Text style={ui.muted}>Deletion may take up to 30 days. Account access is disabled when you submit. Unresolved balances, purchases or disputes must be reconciled by KariGO before cleanup.</Text>
-      <Text style={ui.muted}>Limited financial/legal records may be retained where required by law, with unnecessary personal details removed. Exact retention durations are subject to legal review.</Text>
+      <Text style={ui.muted}>This permanently removes ordinary Customer personal data, saved addresses, photos, preferences and Customer device registrations. Your Customer account cannot be restored after cleanup. If another legitimate KariGO role remains active, only its required shared identity and role data remain; Customer-only personal data is still removed.</Text>
+      <Text style={ui.muted}>Deletion may take up to 30 days. Customer access is disabled when you submit. Unresolved balances, purchases or disputes must be reconciled by KariGO before cleanup. A legal hold delays cleanup only for the affected records.</Text>
+      <Text style={ui.muted}>Minimum financial/service records may remain for 7 years from the end of the transaction financial year; fraud/dispute records for 7 years from resolution. Unnecessary personal details are removed. Legal holds affect only the relevant records. See the Privacy Policy for the full retention schedule effective 15 October 2026.</Text>
       <Text style={ui.muted}>Keep your saved deletion receipt to check progress after sign-out. A one-time completion email is sent if your account has an email; otherwise the receipt provides completion confirmation. Support is available for problems but is not required to initiate deletion.</Text>
     </Card>
     <Field value={confirmation} onChangeText={setConfirmation} placeholder="Type DELETE to confirm" autoCapitalize="characters" accessibilityLabel="Confirm permanent deletion" />

@@ -69,6 +69,6 @@ export const accountDeletionApi = {
   },
   detail: (id: string) => api.get<AccountDeletionRequest>(`admin/account-deletion-requests/${id}`),
   updateStatus: (id: string, body: { status: AccountDeletionStatus; blockedReasonCode?: AccountDeletionBlockedReasonCode; adminNote?: string;
-    confirmCustomerErasure?: string; retentionApproval?: string; externalCleanupEvidence?: string; reconciledNoticeProviderId?: string; noIdentifiableLegalHoldConfirmed?: boolean }) =>
+    confirmCustomerErasure?: string; retentionApproval?: string; externalCleanupEvidence?: string; reconciledNoticeProviderId?: string; scopedHoldsReviewed?: boolean }) =>
     api.patch<AccountDeletionRequest>(`admin/account-deletion-requests/${id}/status`, body)
 };

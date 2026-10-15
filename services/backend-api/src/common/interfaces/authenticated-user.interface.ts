@@ -9,5 +9,6 @@ export interface AuthenticatedUser {
   adminRole: AdminRole | null;
   accountStatus: AccountStatus;
   phoneVerified: boolean;
+  customerAccessDeletedAt?: Date | null;
 }
 

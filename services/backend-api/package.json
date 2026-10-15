@@ -21,7 +21,8 @@
     "test": "jest --runInBand",
     "test:e2e:smoke": "node scripts/e2e-smoke.mjs",
     "test:coverage": "jest --runInBand --coverage",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "retention:dry-run": "node dist/services/backend-api/src/modules/account-deletion/retention-run.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1099.0",

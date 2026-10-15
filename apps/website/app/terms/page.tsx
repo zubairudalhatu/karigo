@@ -63,6 +63,12 @@ export default function TermsPage() {
           </article>
 
           <article className="info-card">
+            <h2>Customer account deletion</h2>
+            <p>You can initiate permanent Customer deletion in-app without contacting support. The retention/deletion schedule effective 15 October 2026, policy version KGO-RETENTION-2026-10-15, is described in the Privacy Policy. Ordinary Customer personal data is erased or minimized; limited financial/legal records and affected records under approved holds may remain under that schedule.</p>
+            <p>A Customer deletion request does not automatically close another legitimate active Captain, Vendor, staff or shared business role. Customer-specific data must still be cleaned. Outstanding payments, refunds, disputes and active work require the applicable authorized resolution; deletion is not permission for a new debit, credit or provider purchase.</p>
+          </article>
+
+          <article className="info-card">
             <h2>Changes to terms</h2>
             <p>KariGO may update these terms as services expand, provider integrations are approved and new public features become available.</p>
           </article>

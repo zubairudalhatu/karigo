@@ -923,6 +923,7 @@ model User {
   onboardingPasswordSetAt             DateTime?
   lastLoginAt                         DateTime?
   deletedAt                           DateTime?
+  customerAccessDeletedAt             DateTime?
   createdAt                           DateTime                             @default(now())
   updatedAt                           DateTime                             @updatedAt
   customerProfile                     CustomerProfile?
@@ -1006,6 +1007,9 @@ model AccountDeletionRequest {
   cleanupErrorCode    String?
   retentionApproval   String?
   externalCleanupEvidence String?
+  sharedIdentityRetained Boolean @default(false)
+  policyVersion String?
+  auditKeepUntil DateTime?
   createdAt           DateTime                          @default(now())
   updatedAt           DateTime                          @updatedAt
   user                User                              @relation("AccountDeletionRequestUser", fields: [userId], references: [id])
@@ -1014,6 +1018,69 @@ model AccountDeletionRequest {
   @@index([userId, accountType, status])
   @@index([status, requestedAt])
   @@map("account_deletion_requests")
+}
+
+// Record-scoped, never a blanket user hold. No Customer PII belongs in reason/evidence references.
+model DataRetentionHold {
+  id String @id @default(uuid()) @db.Uuid
+  resourceType String
+  resourceId String
+  kind String
+  authorityReference String
+  authorizedById String @db.Uuid
+  reasonCode String
+  startedAt DateTime
+  nextReviewAt DateTime
+  expiresAt DateTime?
+  releasedAt DateTime?
+  createdAt DateTime @default(now())
+  events DataRetentionHoldEvent[]
+  @@index([resourceType, resourceId])
+  @@index([nextReviewAt, releasedAt])
+  @@map("data_retention_holds")
+}
+
+model DataRetentionHoldEvent {
+  id String @id @default(uuid()) @db.Uuid
+  holdId String @db.Uuid
+  actorId String @db.Uuid
+  authorityReference String
+  action String
+  recordedAt DateTime @default(now())
+  hold DataRetentionHold @relation(fields: [holdId], references: [id])
+  @@index([holdId, recordedAt])
+  @@map("data_retention_hold_events")
+}
+
+// Explicitly registered exports/cases; no wildcard file deletion or invented resolution timestamp.
+model DataRetentionResource {
+  id String @id @default(uuid()) @db.Uuid
+  resourceType String
+  resourceId String
+  category String
+  triggerAt DateTime
+  retainUntil DateTime
+  policyVersion String
+  disposedAt DateTime?
+  evidenceReference String?
+  createdAt DateTime @default(now())
+  @@unique([resourceType, resourceId])
+  @@index([disposedAt, retainUntil])
+  @@map("data_retention_resources")
+}
+
+// Sponsor accounting only: no Customer, device, render token or dedupe hash.
+model AdCampaignBillingAggregate {
+  id String @id @default(uuid()) @db.Uuid
+  campaignId String @db.Uuid
+  campaignReference String
+  eventMonth DateTime
+  eventType AdCampaignEventType
+  eventCount BigInt @default(0)
+  costKobo BigInt @default(0)
+  createdAt DateTime @default(now())
+  @@unique([campaignId, eventMonth, eventType], map: "ad_billing_campaign_month_type_key")
+  @@map("ad_campaign_billing_aggregates")
 }
 
 model CaptainWorkState {

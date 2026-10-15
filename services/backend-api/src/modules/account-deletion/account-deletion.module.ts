@@ -12,6 +12,7 @@ import { CustomerDeletionReceiptController } from "./customer-deletion-receipt.c
 @Module({
   imports: [PrismaModule, AdminAuditModule, RidersModule, VendorsModule],
   controllers: [AccountDeletionController, AdminAccountDeletionController, CustomerDeletionReceiptController],
-  providers: [AccountDeletionService, CustomerErasureService, CustomerDeletionNoticeService]
+  providers: [AccountDeletionService, CustomerErasureService, CustomerDeletionNoticeService],
+  exports: [CustomerErasureService]
 })
 export class AccountDeletionModule {}

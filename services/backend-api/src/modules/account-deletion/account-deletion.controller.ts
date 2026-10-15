@@ -26,12 +26,12 @@ const accountDeletionAdminRoles = [
 @ApiBearerAuth()
 @Controller("account-deletion")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.CUSTOMER, UserRole.RIDER, UserRole.VENDOR)
+@Roles(UserRole.CUSTOMER, UserRole.RIDER, UserRole.VENDOR, UserRole.ADMIN)
 export class AccountDeletionController {
   constructor(private readonly accountDeletion: AccountDeletionService, private readonly erasure: CustomerErasureService) {}
 
   @Post("prepare")
-  @Roles(UserRole.CUSTOMER)
+  @Roles(UserRole.CUSTOMER, UserRole.RIDER, UserRole.VENDOR, UserRole.ADMIN)
   prepareReceipt() { return { message: "Save this private receipt before confirming deletion", data: this.erasure.prepareReceipt() }; }
 
   @Get()

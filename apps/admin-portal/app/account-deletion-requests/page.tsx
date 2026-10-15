@@ -38,7 +38,7 @@ export default function AccountDeletionRequestsPage() {
   const [externalCleanupEvidence, setExternalCleanupEvidence] = useState("");
   const [erasureConfirmation, setErasureConfirmation] = useState("");
   const [reconciledNoticeProviderId, setReconciledNoticeProviderId] = useState("");
-  const [noIdentifiableLegalHoldConfirmed, setNoIdentifiableLegalHoldConfirmed] = useState(false);
+  const [scopedHoldsReviewed, setScopedHoldsReviewed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState(false);
   const [error, setError] = useState("");
@@ -72,7 +72,7 @@ export default function AccountDeletionRequestsPage() {
       setSelected(await accountDeletionApi.detail(request.id));
       setAdminNote(request.adminNote ?? "");
       setRetentionApproval(""); setExternalCleanupEvidence(""); setErasureConfirmation(""); setReconciledNoticeProviderId("");
-      setNoIdentifiableLegalHoldConfirmed(false);
+      setScopedHoldsReviewed(false);
     } catch (e) {
       setError(friendlyError(e));
     }
@@ -81,7 +81,7 @@ export default function AccountDeletionRequestsPage() {
   async function updateStatus(status: AccountDeletionStatus) {
     if (!selected) return;
     const permanentCustomer = selected.accountType === "CUSTOMER" && selected.erasureVersion === 1;
-    if (permanentCustomer && status === "COMPLETED" && (erasureConfirmation !== "DELETE_CUSTOMER_DATA" || !retentionApproval || !externalCleanupEvidence || !noIdentifiableLegalHoldConfirmed)) {
+    if (permanentCustomer && status === "COMPLETED" && (erasureConfirmation !== "DELETE_CUSTOMER_DATA" || !retentionApproval || !externalCleanupEvidence || !scopedHoldsReviewed)) {
       setError("Enter the exact permanent-erasure confirmation and approved retention/external-cleanup evidence references."); return;
     }
     if (adminNote.trim().length < 3) {
@@ -100,7 +100,7 @@ export default function AccountDeletionRequestsPage() {
     setMessage("");
     try {
       const updated = await accountDeletionApi.updateStatus(selected.id, { status, adminNote,
-        ...(permanentCustomer && status === "COMPLETED" ? { confirmCustomerErasure: erasureConfirmation, retentionApproval, externalCleanupEvidence, noIdentifiableLegalHoldConfirmed,
+        ...(permanentCustomer && status === "COMPLETED" ? { confirmCustomerErasure: erasureConfirmation, retentionApproval, externalCleanupEvidence, scopedHoldsReviewed,
           ...(reconciledNoticeProviderId ? { reconciledNoticeProviderId } : {}) } : {}) });
       setSelected(updated);
       setMessage(`Request ${updated.requestReference} updated to ${label(updated.status)}.`);
@@ -210,7 +210,7 @@ export default function AccountDeletionRequestsPage() {
                 <div className="actions">
                   {selected.erasureVersion === 1 ? <div>
                     <p>Deadline: {dateLabel(selected.deadlineAt)}. Cleanup issue: {selected.cleanupErrorCode ?? "None"}. Exact retention durations: LEGAL REVIEW REQUIRED.</p>
-                    <label><input type="checkbox" checked={noIdentifiableLegalHoldConfirmed} onChange={e => setNoIdentifiableLegalHoldConfirmed(e.target.checked)} /> Legal/business review confirms no unresolved hold requiring identifiable Customer data.</label>
+                    <label><input type="checkbox" checked={scopedHoldsReviewed} onChange={e => setScopedHoldsReviewed(e.target.checked)} /> Legal/Compliance has reviewed record-scoped holds and approved cleanup of unrelated Customer data; active holds remain protected.</label>
                     <label className="field"><span>Approved retention-basis reference</span><input value={retentionApproval} onChange={e => setRetentionApproval(e.target.value)} placeholder="Evidence reference only; no personal data" /></label>
                     <label className="field"><span>Verified external cleanup reference</span><input value={externalCleanupEvidence} onChange={e => setExternalCleanupEvidence(e.target.value)} placeholder="Owned assets/provider cleanup evidence" /></label>
                     <label className="field"><span>Type DELETE_CUSTOMER_DATA</span><input value={erasureConfirmation} onChange={e => setErasureConfirmation(e.target.value)} /></label>

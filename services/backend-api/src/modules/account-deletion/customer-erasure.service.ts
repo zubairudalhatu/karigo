@@ -5,6 +5,9 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { RequestAccountDeletionDto } from "./dto/request-account-deletion.dto";
 import { UpdateAccountDeletionRequestDto } from "./dto/admin-account-deletion.dto";
 import { CustomerDeletionNoticeService } from "./customer-deletion-notice.service";
+import { receiptExpired, retentionExpiry, RETENTION_POLICY_VERSION } from "./retention-policy";
+import { heldErasureClient } from "./data-retention.service";
+import type { DeletionTombstone } from "./restore-deletion-replay";
 
 export const CUSTOMER_ERASURE_VERSION = 1;
 export const CUSTOMER_DELETION_MAX_DAYS = 30;
@@ -36,11 +39,36 @@ export class CustomerErasureService {
 
   prepareReceipt() { return { receiptToken: randomBytes(32).toString("base64url") }; }
 
+  async replayTombstone(item: DeletionTombstone) {
+    if (process.env.RESTORE_ISOLATED !== "true") throw new ForbiddenException("Deletion replay requires an isolated restore.");
+    await this.locked(item.userId, async tx => {
+      const user = await tx.user.findUnique({ where: { id: item.userId }, include: requestInclude.user.include });
+      if (!user) return; // Required FKs ensure no account-owned rows can outlive a missing user.
+      if (user.customerProfile?.id !== item.customerId) throw new ConflictException("Restore Customer identity mismatch; keep isolated.");
+      const completedAt = new Date(item.completedAt);
+      // Never resend notices, restore a receipt capability, vend, or adjust money.
+      const request = await tx.accountDeletionRequest.upsert({ where: { requestReference: item.requestReference },
+        create: { userId: user.id, accountType: "CUSTOMER", requestReference: item.requestReference, status: "PROCESSING",
+          erasureVersion: CUSTOMER_ERASURE_VERSION, sharedIdentityRetained: item.sharedIdentityRetained,
+          policyVersion: RETENTION_POLICY_VERSION, noticeSentAt: completedAt, noticeProviderId: "RESTORE_REPLAY_NO_RESEND" }, update: {}, include: requestInclude });
+      if (request.userId !== user.id || request.accountType !== "CUSTOMER") throw new ConflictException("Restore audit mismatch; keep isolated.");
+      await tx.user.update({ where: { id: user.id }, data: { customerAccessDeletedAt: user.customerAccessDeletedAt ?? completedAt,
+        ...(!item.sharedIdentityRetained ? { deletedAt: user.deletedAt ?? completedAt, accountStatus: "DEACTIVATED" as const } : {}) } });
+      request.sharedIdentityRetained = item.sharedIdentityRetained;
+      await this.erase(await heldErasureClient(tx), request);
+      if (!item.sharedIdentityRetained) await tx.user.update({ where: { id: user.id }, data: { email: null } });
+      await tx.accountDeletionRequest.update({ where: { id: request.id }, data: { status: "COMPLETED", completedAt,
+        erasurePreparedAt: request.erasurePreparedAt ?? completedAt, receiptTokenHash: null, sharedIdentityRetained: item.sharedIdentityRetained,
+        policyVersion: RETENTION_POLICY_VERSION, auditKeepUntil: retentionExpiry("DELETION_AUDIT", completedAt), cleanupErrorCode: null } });
+    });
+  }
+
   private async locked<T>(userId: string, operation: (tx: Prisma.TransactionClient) => Promise<T>) {
     for (let attempt = 0; ; attempt++) {
       try {
         return await this.prisma.$transaction(async tx => {
           await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))::text AS lock`;
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('karigo-retention-governance'))::text AS lock`;
           return operation(tx);
         }, { timeout: 60_000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
       } catch (error) {
@@ -62,21 +90,31 @@ export class CustomerErasureService {
         if (existing.receiptTokenHash !== hash(receiptToken)) throw new ConflictException("Use the saved receipt for your existing deletion request.");
         return { ...this.receipt(existing), receiptToken, blockers: [], canCancel: false };
       }
-      const user = await tx.user.findUnique({ where: { id: userId }, include: { customerProfile: true } });
-      if (!user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE || user.role !== UserRole.CUSTOMER || !user.customerProfile) {
+      const user = await tx.user.findUnique({ where: { id: userId }, include: requestInclude.user.include });
+      if (!user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE || user.customerAccessDeletedAt || !user.customerProfile) {
         throw new BadRequestException("An active Customer account is required.");
       }
+      const otherAssociations = await Promise.all([
+        tx.vendorTeamMember.count({ where: { userId } }), tx.partnerOnboardingDraft.count({ where: { userId } }),
+        tx.partnerCommercialAgreement.count({ where: { applicantUserId: userId } }),
+        tx.captainApplicationDocument.count({ where: { userId } }), tx.vendorAccountActivation.count({ where: { userId } }),
+        tx.serviceProviderApplication.count({ where: { OR: [{ phoneNumber: user.phoneNumber }, ...(user.email ? [{ email: user.email }] : [])] } })
+      ]);
+      const sharedIdentityRetained = user.role !== UserRole.CUSTOMER || Boolean(user.vendor || user.rider || user.taxiDriverProfiles.length
+        || user.vendorApplications.length || user.deliveryCaptainApplications.length || user.taxiDriverApplications.length || otherAssociations.some(Boolean));
       const now = new Date();
       const created = await tx.accountDeletionRequest.create({ data: { userId, accountType: "CUSTOMER",
         requestReference: `ADR-${randomUUID().toUpperCase()}`, status: "REQUESTED", requestedAt: now, confirmedAt: now,
         reason: null, erasureVersion: CUSTOMER_ERASURE_VERSION, receiptTokenHash: hash(receiptToken),
+        sharedIdentityRetained, policyVersion: RETENTION_POLICY_VERSION,
         deadlineAt: new Date(now.getTime() + CUSTOMER_DELETION_MAX_DAYS * 86_400_000) } });
       // Existing JWT/password/refresh paths reject disabled/deleted users. The
       // receipt is read-only and survives sign-out; it cannot buy or cancel.
-      await tx.user.update({ where: { id: userId }, data: { accountStatus: "DEACTIVATED", deletedAt: now } });
+      await tx.user.update({ where: { id: userId }, data: { customerAccessDeletedAt: now,
+        ...(!sharedIdentityRetained ? { accountStatus: AccountStatus.DEACTIVATED, deletedAt: now } : {}) } });
       await tx.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now } });
-      await tx.biometricCredential.deleteMany({ where: { userId } });
-      await tx.deviceToken.deleteMany({ where: { userId } });
+      await tx.biometricCredential.deleteMany({ where: { userId, ...(sharedIdentityRetained ? { appSurface: "CUSTOMER_APP" as const } : {}) } });
+      await tx.deviceToken.deleteMany({ where: { userId, ...(sharedIdentityRetained ? { appSurface: "CUSTOMER_APP" as const } : {}) } });
       await tx.customerWallet.updateMany({ where: { customerId: user.customerProfile.id }, data: { status: "SUSPENDED" } });
       return { ...this.receipt(created), receiptToken, blockers: [], canCancel: false };
     });
@@ -96,14 +134,14 @@ export class CustomerErasureService {
     if (!/^[A-Za-z0-9_-]{43}$/.test(token ?? "")) throw new NotFoundException("Deletion receipt not found.");
     const request = await this.prisma.accountDeletionRequest.findUnique({ where: { requestReference: reference } });
     const supplied = Buffer.from(hash(token), "hex"), expected = Buffer.from(request?.receiptTokenHash ?? "", "hex");
-    if (!request || expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) throw new NotFoundException("Deletion receipt not found.");
+    if (!request || receiptExpired(request, new Date()) || expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) throw new NotFoundException("Deletion receipt not found.");
     return this.receipt(request);
   }
 
   async recoverReceipt(token: string) {
     if (!/^[A-Za-z0-9_-]{43}$/.test(token ?? "")) throw new NotFoundException("Deletion receipt not found.");
     const request = await this.prisma.accountDeletionRequest.findFirst({ where: { receiptTokenHash: hash(token), erasureVersion: CUSTOMER_ERASURE_VERSION } });
-    if (!request) throw new NotFoundException("Deletion receipt not found.");
+    if (!request || receiptExpired(request, new Date())) throw new NotFoundException("Deletion receipt not found.");
     return this.receipt(request);
   }
 
@@ -127,15 +165,15 @@ export class CustomerErasureService {
     if (!admin || admin.role !== "ADMIN" || admin.deletedAt || admin.accountStatus !== "ACTIVE" || !["SUPER_ADMIN", "OPERATIONS_ADMIN", "FINANCE_OFFICER"].includes(admin.adminRole ?? "")) {
       throw new ForbiddenException("Permanent Customer erasure requires an authorized operations/finance approver.");
     }
-    if (dto.confirmCustomerErasure !== "DELETE_CUSTOMER_DATA" || !dto.retentionApproval || !dto.externalCleanupEvidence || dto.noIdentifiableLegalHoldConfirmed !== true) {
-      throw new BadRequestException("Completion requires erasure confirmation, no unresolved identifiable legal hold, approved retention-basis and verified external-cleanup evidence.");
+    if (dto.confirmCustomerErasure !== "DELETE_CUSTOMER_DATA" || !dto.retentionApproval || !dto.externalCleanupEvidence || (dto.noIdentifiableLegalHoldConfirmed !== true && dto.scopedHoldsReviewed !== true)) {
+      throw new BadRequestException("Completion requires erasure confirmation, reviewed record-scoped holds, approved retention-basis and verified external-cleanup evidence.");
     }
     try {
       await this.locked(request.userId, async tx => {
         const current = await tx.accountDeletionRequest.findUniqueOrThrow({ where: { id }, include: requestInclude });
         if (current.status === "COMPLETED" || current.erasurePreparedAt) return;
         await this.assertSafeToErase(tx, current);
-        await this.erase(tx, current);
+        await this.erase(await heldErasureClient(tx), current);
         await tx.accountDeletionRequest.update({ where: { id }, data: { status: "PROCESSING", erasurePreparedAt: new Date(),
           processingStartedAt: current.processingStartedAt ?? new Date(), cleanupErrorCode: null,
           retentionApproval: dto.retentionApproval, externalCleanupEvidence: dto.externalCleanupEvidence,
@@ -154,9 +192,11 @@ export class CustomerErasureService {
         const current = await tx.accountDeletionRequest.findUniqueOrThrow({ where: { id }, include: requestInclude });
         if (current.status === "COMPLETED") return current;
         if (!current.erasurePreparedAt || !current.noticeSentAt) throw new ConflictException("Erasure/confirmation is incomplete.");
-        await tx.user.update({ where: { id: current.userId }, data: { email: null } });
+        if (!current.sharedIdentityRetained) await tx.user.update({ where: { id: current.userId }, data: { email: null } });
+        const completedAt = new Date();
         const completed = await tx.accountDeletionRequest.update({ where: { id }, data: {
-          status: "COMPLETED", completedAt: new Date(), cleanupErrorCode: null }, include: requestInclude });
+          status: "COMPLETED", completedAt, auditKeepUntil: retentionExpiry("DELETION_AUDIT", completedAt),
+          policyVersion: RETENTION_POLICY_VERSION, cleanupErrorCode: null }, include: requestInclude });
         await tx.adminAuditLog.create({ data: { adminUserId: adminId, action: "CUSTOMER_ERASURE_COMPLETED", entityType: "AccountDeletionRequest", entityId: id,
           newValue: { erasureVersion: CUSTOMER_ERASURE_VERSION, retentionApproval: dto.retentionApproval, externalCleanupEvidence: dto.externalCleanupEvidence } } });
         return completed;
@@ -184,18 +224,24 @@ export class CustomerErasureService {
       if (request.noticeAttemptedAt) throw new ConflictException("Completion email outcome needs manual provider reconciliation; do not resend.");
       this.notice.assertConfigured();
       await tx.accountDeletionRequest.update({ where: { id }, data: { noticeAttemptedAt: new Date() } });
-      return { email: request.user.email, reference: request.requestReference };
+      return { email: request.user.email, reference: request.requestReference, sharedIdentityRetained: request.sharedIdentityRetained };
     });
     if (!claimed) return;
-    const providerId = await this.notice.send(claimed.email, claimed.reference);
+    const providerId = await this.notice.send(claimed.email, claimed.reference, claimed.sharedIdentityRetained);
     await this.prisma.accountDeletionRequest.update({ where: { id }, data: { noticeSentAt: new Date(), noticeProviderId: providerId } });
   }
 
   private async assertSafeToErase(tx: Prisma.TransactionClient, request: Request) {
     const user = request.user, customerId = user.customerProfile?.id;
-    if (!customerId || user.role !== "CUSTOMER" || user.vendor || user.rider || user.taxiDriverProfiles.length
-      || user.vendorApplications.length || user.deliveryCaptainApplications.length || user.taxiDriverApplications.length) {
-      throw new ConflictException("Multi-role/application data requires a separately reviewed deletion scope.");
+    if (!customerId) throw new ConflictException("Customer scope is missing.");
+    if (!request.sharedIdentityRetained) {
+      const newRoles = await Promise.all([tx.partnerOnboardingDraft.count({ where: { userId: user.id } }),
+        tx.vendorTeamMember.count({ where: { userId: user.id } }), tx.partnerCommercialAgreement.count({ where: { applicantUserId: user.id } }),
+        tx.captainApplicationDocument.count({ where: { userId: user.id } }), tx.vendorAccountActivation.count({ where: { userId: user.id } })]);
+      if (user.role !== "CUSTOMER" || user.vendor || user.rider || user.taxiDriverProfiles.length || user.vendorApplications.length
+        || user.deliveryCaptainApplications.length || user.taxiDriverApplications.length || newRoles.some(Boolean)) {
+        throw new ConflictException("Role scope changed after confirmation; resolve the scoped identity before erasure.");
+      }
     }
     if (Number(user.customerProfile!.loyaltyBalance) !== 0) throw new ConflictException("Unresolved loyalty/reward value requires financial review before erasure.");
     // External asset/provider deletion is attested by the required evidence
@@ -211,12 +257,6 @@ export class CustomerErasureService {
       tx.taxiRideSettlement.count({ where: { customerId, disputeOpenedAt: { not: null }, disputeResolvedAt: null } }),
       tx.taxiRideRefund.count({ where: { settlement: { customerId }, status: "CASH_REFUND_DUE" } }),
       tx.taxiRideReceiptEmailDelivery.count({ where: { trip: { customerId }, status: "PROCESSING" } }),
-      tx.vendorTeamMember.count({ where: { userId: user.id } }),
-      tx.partnerOnboardingDraft.count({ where: { userId: user.id } }),
-      tx.partnerCommercialAgreement.count({ where: { applicantUserId: user.id } }),
-      tx.captainApplicationDocument.count({ where: { userId: user.id } }),
-      tx.vendorAccountActivation.count({ where: { userId: user.id } }),
-      tx.serviceProviderApplication.count({ where: { OR: [{ phoneNumber: user.phoneNumber }, ...(user.email ? [{ email: user.email }] : [])] } }),
       tx.serviceProviderRequest.count({ where: { serviceAddress: { userId: user.id }, customerId: { not: customerId } } })
     ]);
     if (blockers.some(Boolean)) throw new ConflictException("Unresolved balances, transactions, work, disputes or in-flight emails must be reconciled before erasure.");
@@ -233,7 +273,7 @@ export class CustomerErasureService {
       tx.utilityTransaction.findMany({ where: { customerId }, select: { id: true, metadata: true } }),
       tx.taxiTrip.findMany({ where: trips, select: { id: true } }), tx.address.findMany({ where: { userId }, select: { id: true } }),
       tx.supportTicket.findMany({ where: { customerId }, select: { id: true } })]);
-    const entityIds = [userId, customerId, request.id, ...payments.map(row => row.id), ...owned.flatMap(rows => rows.map(row => row.id))];
+    const entityIds = [...(request.sharedIdentityRetained ? [] : [userId]), customerId, request.id, ...payments.map(row => row.id), ...owned.flatMap(rows => rows.map(row => row.id))];
     const childEntities = await Promise.all([
       tx.orderItem.findMany({ where: { order: orders }, select: { id: true } }),
       tx.orderStatusHistory.findMany({ where: { order: orders }, select: { id: true } }),
@@ -246,15 +286,17 @@ export class CustomerErasureService {
     ]);
     entityIds.push(...childEntities.flatMap(rows => rows.map(row => row.id)));
     await tx.refreshToken.deleteMany({ where: { userId } });
-    await tx.otpVerification.deleteMany({ where: { userId } });
-    await tx.biometricCredential.deleteMany({ where: { userId } });
-    await tx.deviceToken.deleteMany({ where: { userId } });
+    if (!request.sharedIdentityRetained) await tx.otpVerification.deleteMany({ where: { userId } });
+    await tx.biometricCredential.deleteMany({ where: { userId, ...(request.sharedIdentityRetained ? { appSurface: "CUSTOMER_APP" as const } : {}) } });
+    await tx.deviceToken.deleteMany({ where: { userId, ...(request.sharedIdentityRetained ? { appSurface: "CUSTOMER_APP" as const } : {}) } });
     await tx.notification.deleteMany({ where: { userId } });
-    await tx.phoneChangeRequest.deleteMany({ where: { userId } });
-    await tx.userLoginActivity.updateMany({ where: { userId }, data: { userId: null, phoneNumberMasked: null, reason: null } });
-    await tx.accountSecurityEvent.updateMany({ where: { userId }, data: { metadata: Prisma.JsonNull } });
+    if (!request.sharedIdentityRetained) {
+      await tx.phoneChangeRequest.deleteMany({ where: { userId } });
+      await tx.userLoginActivity.updateMany({ where: { userId }, data: { userId: null, phoneNumberMasked: null, reason: null } });
+      await tx.accountSecurityEvent.updateMany({ where: { userId }, data: { metadata: Prisma.JsonNull } });
+    }
     await tx.serviceProviderReview.deleteMany({ where: { customerId } });
-    await tx.supportTicketMessage.deleteMany({ where: { OR: [{ senderUserId: userId }, { ticket: { customerId } }] } });
+    await tx.supportTicketMessage.deleteMany({ where: { OR: [{ senderUserId: userId, ...(request.sharedIdentityRetained ? { senderRole: "CUSTOMER" } : {}) }, { ticket: { customerId } }] } });
     await tx.supportTicket.deleteMany({ where: { customerId } });
     await tx.serviceProviderRequest.deleteMany({ where: { customerId } });
     await tx.order.updateMany({ where: orders, data: { pickupAddressId: null, deliveryAddressId: null,
@@ -263,11 +305,11 @@ export class CustomerErasureService {
     await tx.order.updateMany({ where: { deliveryAddress: { userId } }, data: { deliveryAddressId: null } });
     await tx.orderItem.updateMany({ where: { order: orders }, data: { specialInstruction: null } });
     await tx.orderItem.updateMany({ where: { order: orders, productId: null }, data: { productName: "Personal item details removed" } });
-    await tx.orderStatusHistory.updateMany({ where: { OR: [{ order: orders }, { changedByUserId: userId }] }, data: { note: null } });
+    await tx.orderStatusHistory.updateMany({ where: request.sharedIdentityRetained ? { order: orders } : { OR: [{ order: orders }, { changedByUserId: userId }] }, data: { note: null } });
     await tx.address.deleteMany({ where: { userId } });
     await tx.taxiRideTracePoint.deleteMany({ where: { trip: trips } });
-    await tx.taxiRideCallSession.deleteMany({ where: { OR: [{ trip: trips }, { initiatorUserId: userId }, { recipientUserId: userId }] } });
-    await tx.taxiTripEvent.updateMany({ where: { OR: [{ trip: trips }, { actorId: userId }] }, data: { actorId: null, note: null, metadata: Prisma.JsonNull } });
+    await tx.taxiRideCallSession.deleteMany({ where: request.sharedIdentityRetained ? { trip: trips } : { OR: [{ trip: trips }, { initiatorUserId: userId }, { recipientUserId: userId }] } });
+    await tx.taxiTripEvent.updateMany({ where: request.sharedIdentityRetained ? { trip: trips } : { OR: [{ trip: trips }, { actorId: userId }] }, data: { actorId: null, note: null, metadata: Prisma.JsonNull } });
     await tx.taxiTrip.updateMany({ where: trips, data: { pickupAddress: tombstone, destinationAddress: tombstone,
       pickupLatitude: null, pickupLongitude: null, destinationLatitude: null, destinationLongitude: null,
       tripPinHash: null, tripPinEncrypted: null, tripPinLastFour: null, customerNote: null, driverNote: null, cancellationReason: null } });
@@ -299,7 +341,7 @@ export class CustomerErasureService {
     await tx.launchDrill.updateMany({ where: { customerUserId: userId }, data: { customerUserId: null, controlledCustomerId: null, notes: null, evidenceReference: null } });
     await tx.adminAuditLog.updateMany({ where: { entityId: { in: entityIds } }, data: { oldValue: Prisma.JsonNull, newValue: Prisma.JsonNull, ipAddress: null } });
     await tx.accountDeletionRequest.updateMany({ where: { userId }, data: { reason: null, adminNote: null, blockerSummary: Prisma.JsonNull } });
-    await tx.user.update({ where: { id: userId }, data: { fullName: tombstone, phoneNumber: `deleted:${userId}`, passwordHash: "",
+    if (!request.sharedIdentityRetained) await tx.user.update({ where: { id: userId }, data: { fullName: tombstone, phoneNumber: `deleted:${userId}`, passwordHash: "",
       profilePhotoUrl: null, phoneVerified: false, emailVerified: false, onboardingPasswordSetAt: null, lastLoginAt: null } });
     // Email alone remains until the durable notice outcome is confirmed. No
     // plaintext email is copied to a job/outbox/audit row.

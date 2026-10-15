@@ -38,7 +38,7 @@ export class CustomersService {
           ...publicUserSelect,
           customerProfile: true
         }
-      }));
+      }), true);
       if (!customer.customerProfile) throw new NotFoundException("Customer profile not found");
       return this.customerResponse(customer);
     } catch (error) {

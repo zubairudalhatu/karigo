@@ -19,6 +19,9 @@ import { JwtService } from "@nestjs/jwt";
 import supertest from "supertest";
 import { AccountDeletionController } from "./account-deletion.controller";
 import { AccountDeletionService } from "./account-deletion.service";
+import { DataRetentionService } from "./data-retention.service";
+import { RolesGuard } from "../../common/guards/roles.guard";
+import { DAY_MS } from "./retention-policy";
 
 // Real PostgreSQL cleanup spans many tables; allow bounded local I/O under
 // the full suite rather than the 5-second unit-test default.
@@ -26,7 +29,7 @@ jest.setTimeout(30_000);
 
 const url = process.env.KARIGO_DELETION_TEST_DATABASE_URL;
 const parsed = url ? new URL(url) : null;
-if (parsed && (parsed.hostname !== "127.0.0.1" || parsed.port !== "55439" || !["/karigo_deletion_qa_20261015_v4"].includes(parsed.pathname))) {
+if (parsed && (parsed.hostname !== "127.0.0.1" || parsed.port !== "55439" || !["/karigo_deletion_qa_20261015_v4", "/karigo_retention_qa_20261015"].includes(parsed.pathname))) {
   throw new Error("Refusing deletion fixtures outside the dedicated loopback database.");
 }
 const suite = url ? describe : describe.skip;
@@ -275,5 +278,73 @@ suite("Customer erasure — real isolated PostgreSQL", () => {
     await expect(db.notification.create({ data: { userId: f.user.id, title: "Must not recreate", message: "Personal data", type: "SYSTEM_ALERT" } })).rejects.toThrow();
     await expect(db.customerProfile.update({ where: { id: f.customerId }, data: { requireRidePin: true } })).rejects.toThrow();
     await expect(db.user.update({ where: { id: f.user.id }, data: { lastLoginAt: new Date() } })).rejects.toThrow();
+  });
+
+  it("expires both receipt paths at 90 days while retaining the minimal audit; cleanup is idempotent", async () => {
+    const r = await complete(); const completedAt = new Date("2026-01-01T00:00:00Z");
+    await db.accountDeletionRequest.update({ where: { id: r.id }, data: { completedAt } });
+    jest.useFakeTimers({ doNotFake: ["nextTick", "setImmediate", "setTimeout", "clearTimeout", "queueMicrotask", "performance"] }).setSystemTime(new Date(completedAt.getTime() + 90 * DAY_MS - 1));
+    try {
+      expect((await service.publicReceipt(r.requestReference, f.receiptToken)).status).toBe("COMPLETED");
+      jest.setSystemTime(new Date(completedAt.getTime() + 90 * DAY_MS));
+      await expect(service.publicReceipt(r.requestReference, f.receiptToken)).rejects.toThrow(NotFoundException);
+      await expect(service.recoverReceipt(f.receiptToken)).rejects.toThrow(NotFoundException);
+      const retention = new DataRetentionService(prisma);
+      expect((await retention.expireReceiptCapabilities(new Date(), true)).changed).toBeGreaterThan(0);
+      expect((await retention.expireReceiptCapabilities(new Date(), true)).changed).toBe(0);
+      expect(await db.accountDeletionRequest.findUnique({ where: { id: r.id } })).not.toBeNull();
+    } finally { jest.useRealTimers(); }
+  });
+  it.each(["RIDER", "VENDOR", "ADMIN", "CUSTOMER"] as const)("erases Customer scope while preserving legitimate %s identity/workspace", async role => {
+    await db.user.update({ where: { id: f.user.id }, data: { role, ...(role === "ADMIN" ? { adminRole: "SUPPORT_AGENT" } : {}) } });
+    let otherId: string | undefined;
+    if (role === "RIDER") otherId = (await db.rider.create({ data: { userId: f.user.id, riderCode: randomUUID(), phoneNumber: "synthetic-other-role" } })).id;
+    if (role === "VENDOR") otherId = (await db.vendor.create({ data: { userId: f.user.id, businessName: "Synthetic business", businessCategory: "FOOD", phoneNumber: "synthetic-business", address: "Synthetic business address", city: "Abuja", state: "FCT", status: "ACTIVE" } })).id;
+    if (role === "CUSTOMER") otherId = (await db.partnerOnboardingDraft.create({ data: { userId: f.user.id, draftData: { businessName: "Synthetic pending business" } } })).id;
+    await db.deviceToken.create({ data: { userId: f.user.id, token: `ExponentPushToken[other-${randomUUID()}]`, platform: "ANDROID", provider: "EXPO", appSurface: role === "ADMIN" ? "ADMIN_PORTAL" : role === "RIDER" ? "RIDER_APP" : "VENDOR_DASHBOARD" } });
+    const r = await complete(); const user = await db.user.findUniqueOrThrow({ where: { id: f.user.id } });
+    expect(user.accountStatus).toBe("ACTIVE"); expect(user.deletedAt).toBeNull(); expect(user.customerAccessDeletedAt).not.toBeNull();
+    expect(user.fullName).toBe(f.user.fullName); expect(user.passwordHash).toBe(f.user.passwordHash);
+    const strategy = new JwtStrategy({ getOrThrow: () => "fixture" } as never, new UsersService(prisma));
+    expect((await strategy.validate({ sub: user.id, role })).role).toBe(role);
+    expect((await db.accountDeletionRequest.findUniqueOrThrow({ where: { id: r.id } })).status).toBe("COMPLETED");
+    expect(await db.deviceToken.count({ where: { userId: user.id, appSurface: "CUSTOMER_APP" } })).toBe(0);
+    expect(await db.deviceToken.count({ where: { userId: user.id } })).toBe(1);
+    expect(await db.address.count({ where: { userId: user.id } })).toBe(0);
+    await expect(new CustomersService(prisma).update(user.id, { fullName: "Must not resurrect Customer" })).rejects.toThrow(UnauthorizedException);
+    if (role === "RIDER") expect(await db.rider.findUnique({ where: { id: otherId } })).not.toBeNull();
+    if (role === "VENDOR") expect((await db.vendor.findUniqueOrThrow({ where: { id: otherId } })).status).toBe("ACTIVE");
+    if (role === "CUSTOMER") expect(await db.partnerOnboardingDraft.findUnique({ where: { id: otherId } })).not.toBeNull();
+    expect(notice.send).toHaveBeenCalledTimes(1);
+  });
+  it("preserves a narrowly held utility record while erasing unrelated Customer PII", async () => {
+    const previous = process.env.RETENTION_LEGAL_AUTHORIZER_IDS;
+    process.env.RETENTION_LEGAL_AUTHORIZER_IDS = adminId;
+    try {
+      const retention = new DataRetentionService(prisma);
+      const hold = await retention.createHold({ actorId: adminId, authorityReference: "SYNTHETIC-LEGAL-CASE", resourceType: "UtilityTransaction", resourceId: f.utility.id, kind: "COURT", reasonCode: "SYNTHETIC-DISPUTE" });
+      const r = await complete();
+      expect((await db.utilityTransaction.findUniqueOrThrow({ where: { id: f.utility.id } })).mockToken).toBe("synthetic-token");
+      expect((await db.user.findUniqueOrThrow({ where: { id: f.user.id } })).email).toBeNull();
+      expect(await db.address.count({ where: { userId: f.user.id } })).toBe(0);
+      expect((await db.accountDeletionRequest.findUniqueOrThrow({ where: { id: r.id } })).status).toBe("COMPLETED");
+      await retention.reviewHold(hold.id, adminId, "SYNTHETIC-RELEASE", "RELEASE");
+      expect(await db.dataRetentionHoldEvent.count({ where: { holdId: hold.id } })).toBe(2);
+    } finally { if (previous === undefined) delete process.env.RETENTION_LEGAL_AUTHORIZER_IDS; else process.env.RETENTION_LEGAL_AUTHORIZER_IDS = previous; }
+  });
+
+  it("replays authenticated deletion tombstones twice without notices, vends or numerical ledger changes", async () => {
+    const old = process.env.RESTORE_ISOLATED; process.env.RESTORE_ISOLATED = "true";
+    try {
+      const item = { userId: f.user.id, customerId: f.customerId, requestReference: `ADR-${randomUUID().toUpperCase()}`, completedAt: new Date().toISOString(), sharedIdentityRetained: false };
+      await service.replayTombstone(item); await service.replayTombstone(item);
+      const user = await db.user.findUniqueOrThrow({ where: { id: f.user.id } });
+      expect(user.email).toBeNull(); expect(user.fullName).toBe("Deleted Customer");
+      expect(notice.send).not.toHaveBeenCalled();
+      expect(await db.accountDeletionRequest.count({ where: { requestReference: item.requestReference } })).toBe(1);
+      expect(await db.customerWalletLedgerEntry.count({ where: { customerId: f.customerId } })).toBe(2);
+      expect((await db.customerWallet.findUniqueOrThrow({ where: { id: f.wallet.id } })).availableBalance.toString()).toBe("0");
+      expect((await db.utilityTransaction.findUniqueOrThrow({ where: { id: f.utility.id } })).providerReference).toBe(f.utility.providerReference);
+    } finally { if (old === undefined) delete process.env.RESTORE_ISOLATED; else process.env.RESTORE_ISOLATED = old; }
   });
 });

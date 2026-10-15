@@ -39,7 +39,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: user.role,
       adminRole: user.adminRole,
       accountStatus: user.accountStatus,
-      phoneVerified: user.phoneVerified
+      phoneVerified: user.phoneVerified,
+      customerAccessDeletedAt: user.customerAccessDeletedAt
     };
   }
 }
