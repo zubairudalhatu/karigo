@@ -23,6 +23,7 @@ import { ListAccountDeletionRequestsQueryDto, UpdateAccountDeletionRequestDto } 
 import { CancelAccountDeletionDto, RequestAccountDeletionDto } from "./dto/request-account-deletion.dto";
 import { CaptainUploadStorageService } from "../riders/captain-upload-storage.service";
 import { VendorPrivateUploadStorageService } from "../vendors/vendor-private-upload-storage.service";
+import { CustomerErasureService } from "./customer-erasure.service";
 
 const openRequestStatuses = [
   AccountDeletionStatus.REQUESTED,
@@ -125,7 +126,8 @@ export class AccountDeletionService {
     private readonly prisma: PrismaService,
     private readonly audit: AdminAuditService,
     private readonly captainStorage: CaptainUploadStorageService,
-    private readonly vendorPrivateStorage: VendorPrivateUploadStorageService
+    private readonly vendorPrivateStorage: VendorPrivateUploadStorageService,
+    private readonly customerErasure: CustomerErasureService
   ) {}
 
   async currentStatus(userId: string) {
@@ -138,6 +140,7 @@ export class AccountDeletionService {
   }
 
   async request(userId: string, dto: RequestAccountDeletionDto) {
+    if (dto.accountType === AccountDeletionAccountType.CUSTOMER) return this.customerErasure.request(userId, dto);
     const user = await this.loadUser(userId);
     this.assertAccountScope(user, dto.accountType);
 
@@ -227,6 +230,16 @@ export class AccountDeletionService {
       include: { user: { include: accountDeletionUserInclude }, adminReviewedBy: true }
     });
     if (!request) throw new NotFoundException("Account deletion request was not found.");
+    if (request.accountType === AccountDeletionAccountType.CUSTOMER) {
+      if (request.erasureVersion !== 1) throw new BadRequestException("Legacy Customer requests require a separately approved remediation plan.");
+      const updated = await this.customerErasure.review(adminUserId, requestId, dto);
+      const refreshed = await this.prisma.accountDeletionRequest.findUniqueOrThrow({ where: { id: updated.id },
+        include: { user: { include: accountDeletionUserInclude }, adminReviewedBy: true } });
+      return this.toResponse(refreshed);
+    }
+    if (dto.status === AccountDeletionStatus.COMPLETED && request.accountType === AccountDeletionAccountType.COMPLETE_ACCOUNT && request.user.customerProfile) {
+      throw new BadRequestException("Complete-account requests containing Customer data require a separately reviewed multi-role erasure plan.");
+    }
     if (terminalRequestStatuses.includes(request.status)) {
       throw new BadRequestException("Completed or cancelled deletion requests cannot be changed.");
     }
@@ -727,10 +740,16 @@ export class AccountDeletionService {
       confirmedAt: request.confirmedAt,
       processingStartedAt: request.processingStartedAt,
       completedAt: request.completedAt,
+      erasureVersion: request.erasureVersion,
+      deadlineAt: request.deadlineAt,
+      cleanupErrorCode: request.cleanupErrorCode,
+      retentionApproval: request.retentionApproval,
+      externalCleanupEvidence: request.externalCleanupEvidence,
+      noticeSentAt: request.noticeSentAt,
       cancelledAt: request.cancelledAt,
       blockedReasonCode: request.blockedReasonCode,
       blockers,
-      canCancel: cancellableStatuses.includes(request.status),
+      canCancel: request.erasureVersion === 1 ? false : cancellableStatuses.includes(request.status),
       adminNote: request.adminNote,
       adminReviewedAt: request.adminReviewedAt,
       adminReviewedBy: request.adminReviewedBy ? {

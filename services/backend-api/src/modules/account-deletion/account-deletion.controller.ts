@@ -11,6 +11,7 @@ import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.in
 import { AccountDeletionService } from "./account-deletion.service";
 import { ListAccountDeletionRequestsQueryDto, UpdateAccountDeletionRequestDto } from "./dto/admin-account-deletion.dto";
 import { CancelAccountDeletionDto, RequestAccountDeletionDto } from "./dto/request-account-deletion.dto";
+import { CustomerErasureService } from "./customer-erasure.service";
 
 const accountDeletionAdminRoles = [
   AdminRole.SUPER_ADMIN,
@@ -27,7 +28,11 @@ const accountDeletionAdminRoles = [
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.CUSTOMER, UserRole.RIDER, UserRole.VENDOR)
 export class AccountDeletionController {
-  constructor(private readonly accountDeletion: AccountDeletionService) {}
+  constructor(private readonly accountDeletion: AccountDeletionService, private readonly erasure: CustomerErasureService) {}
+
+  @Post("prepare")
+  @Roles(UserRole.CUSTOMER)
+  prepareReceipt() { return { message: "Save this private receipt before confirming deletion", data: this.erasure.prepareReceipt() }; }
 
   @Get()
   @ApiOperation({ summary: "Get the signed-in user's current account deletion request, if any" })

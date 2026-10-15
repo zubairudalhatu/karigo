@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { NotificationChannel, NotificationType, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { activeUserOperation } from "../../common/services/active-customer-operation";
 import { ListAdminNotificationsQueryDto } from "./dto/list-admin-notifications-query.dto";
 import { ListNotificationsQueryDto } from "./dto/list-notifications-query.dto";
 import { SmsNotificationProvider } from "./providers/external-placeholder.providers";
@@ -44,27 +45,29 @@ export class NotificationsService {
   }
 
   async createNotification(input: CreateNotificationInput) {
-    const channel = input.channel ?? NotificationChannel.IN_APP;
-    if (channel === NotificationChannel.IN_APP) {
-      return this.prisma.notification.create({
-        data: {
-          userId: input.userId,
-          title: input.title,
-          message: input.message,
-          type: input.type,
-          channel,
-          entityType: input.entityType,
-          entityId: input.entityId,
-          metadata: input.metadata as Prisma.InputJsonValue | undefined
-        }
-      });
-    }
-    try {
-      return await this.providers.get(channel)!.send({ ...input, channel });
-    } catch (error) {
-      this.logger.warn(`External mock notification failed: ${error instanceof Error ? error.message : String(error)}`);
-      return { accepted: false, provider: "mock" };
-    }
+    return activeUserOperation(this.prisma, input.userId, async tx => {
+      const channel = input.channel ?? NotificationChannel.IN_APP;
+      if (channel === NotificationChannel.IN_APP) {
+        return tx.notification.create({
+          data: {
+            userId: input.userId,
+            title: input.title,
+            message: input.message,
+            type: input.type,
+            channel,
+            entityType: input.entityType,
+            entityId: input.entityId,
+            metadata: input.metadata as Prisma.InputJsonValue | undefined
+          }
+        });
+      }
+      try {
+        return await this.providers.get(channel)!.send({ ...input, channel });
+      } catch (error) {
+        this.logger.warn(`External mock notification failed: ${error instanceof Error ? error.message : String(error)}`);
+        return { accepted: false, provider: "mock" };
+      }
+    });
   }
 
   listMine(userId: string, query: ListNotificationsQueryDto) {

@@ -5,6 +5,9 @@ import { NotificationsService } from "./notifications.service";
 
 describe("NotificationsService", () => {
   const prisma = {
+    user: { findUnique: jest.fn().mockResolvedValue({ deletedAt: null, accountStatus: "ACTIVE" }) },
+    $queryRaw: jest.fn(),
+    $transaction: jest.fn(),
     notification: {
       create: jest.fn(), findMany: jest.fn(), count: jest.fn(),
       findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn()
@@ -16,7 +19,7 @@ describe("NotificationsService", () => {
     mock as never, mock as never, mock as never, mock as never, mock as never
   );
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => { jest.clearAllMocks(); prisma.$transaction.mockImplementation(fn => fn(prisma)); });
 
   it("stores in-app notifications", async () => {
     prisma.notification.create.mockResolvedValue({ id: "notification-1" });

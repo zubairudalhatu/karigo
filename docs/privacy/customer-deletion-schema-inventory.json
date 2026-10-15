@@ -1,0 +1,6389 @@
+[
+  {
+    "model": "User",
+    "table": "users",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "fullName",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "phoneNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "email",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "passwordHash",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "role",
+        "type": "UserRole",
+        "required": true
+      },
+      {
+        "name": "adminRole",
+        "type": "AdminRole",
+        "required": false
+      },
+      {
+        "name": "accountStatus",
+        "type": "AccountStatus",
+        "required": true
+      },
+      {
+        "name": "phoneVerified",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "emailVerified",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "profilePhotoUrl",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "onboardingPasswordSetAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "lastLoginAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "deletedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": []
+  },
+  {
+    "model": "AccountDeletionRequest",
+    "table": "account_deletion_requests",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "requestReference",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "accountType",
+        "type": "AccountDeletionAccountType",
+        "required": true
+      },
+      {
+        "name": "status",
+        "type": "AccountDeletionStatus",
+        "required": true
+      },
+      {
+        "name": "reason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "requestedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "confirmedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "processingStartedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "completedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "cancelledAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "blockedReasonCode",
+        "type": "AccountDeletionBlockedReasonCode",
+        "required": false
+      },
+      {
+        "name": "blockerSummary",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "adminNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "adminReviewedById",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "adminReviewedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "erasureVersion",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "deadlineAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "receiptTokenHash",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "erasurePreparedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "noticeAttemptedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "noticeSentAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "noticeProviderId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "cleanupErrorCode",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "retentionApproval",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "externalCleanupEvidence",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "adminReviewedById"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "CaptainWorkState",
+    "table": "captain_work_states",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "desiredDeliveryOnline",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "desiredRideOnline",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "activeWorkMode",
+        "type": "CaptainWorkMode",
+        "required": false
+      },
+      {
+        "name": "activeDeliveryAssignmentId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "activeRideTripId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "lockStage",
+        "type": "CaptainWorkLockStage",
+        "required": false
+      },
+      {
+        "name": "lockedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "lastAvailabilityChangeAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "lastLocationAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "version",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "UserLoginActivity",
+    "table": "user_login_activities",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "phoneNumberMasked",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "role",
+        "type": "UserRole",
+        "required": false
+      },
+      {
+        "name": "outcome",
+        "type": "LoginActivityOutcome",
+        "required": true
+      },
+      {
+        "name": "reason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "appSurface",
+        "type": "AppSurface",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "BiometricCredential",
+    "table": "biometric_credentials",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "credentialIdHash",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "appSurface",
+        "type": "AppSurface",
+        "required": true
+      },
+      {
+        "name": "platform",
+        "type": "DevicePlatform",
+        "required": false
+      },
+      {
+        "name": "displayName",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "status",
+        "type": "BiometricCredentialStatus",
+        "required": true
+      },
+      {
+        "name": "lastUsedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "RefreshToken",
+    "table": "refresh_tokens",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "tokenHash",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "expiresAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "revokedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "replacedBy",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "TaxiDriverApplication",
+    "table": "taxi_driver_applications",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "applicationReference",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "applicantUserId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "fullName",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "phoneNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "email",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "city",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "state",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "residentialStateCode",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "residentialCityCode",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "operatingAreaIds",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "primaryOperatingAreaId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "address",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "driverLicenceNumber",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "driverLicenceDocumentUrl",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "driverLicenceExpiry",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "vehicleMake",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vehicleModel",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vehicleYear",
+        "type": "Int",
+        "required": false
+      },
+      {
+        "name": "vehicleColour",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vehicleCustomMake",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vehicleCustomModel",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vehicleCustomColour",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vehiclePlateNumber",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vehicleType",
+        "type": "TaxiVehicleType",
+        "required": false
+      },
+      {
+        "name": "vehicleOwnership",
+        "type": "TaxiVehicleOwnership",
+        "required": false
+      },
+      {
+        "name": "vehicleParticularsDocumentUrl",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "insuranceDocumentUrl",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "notes",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "status",
+        "type": "TaxiApplicationStatus",
+        "required": true
+      },
+      {
+        "name": "adminNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "applicantVisibleNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "reviewedByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "reviewedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "trashedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "trashedByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "trashReason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "restoredAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "restoredByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "applicantUserId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "reviewedByAdminId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "DeliveryCaptainApplication",
+    "table": "delivery_captain_applications",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "applicationReference",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "applicantUserId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "fullName",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "phoneNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "email",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "city",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "state",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "residentialStateCode",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "residentialCityCode",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "operatingAreaIds",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "primaryOperatingAreaId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "address",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "preferredZone",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vehicleType",
+        "type": "DeliveryCaptainVehicleType",
+        "required": true
+      },
+      {
+        "name": "vehiclePlateNumber",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "driverLicenceNumber",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "riderExperience",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "profilePhotoUrl",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "guarantorName",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "guarantorPhone",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "notes",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "status",
+        "type": "DeliveryCaptainApplicationStatus",
+        "required": true
+      },
+      {
+        "name": "adminNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "applicantVisibleNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "reviewedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "trashedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "trashedByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "trashReason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "restoredAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "restoredByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "applicantUserId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "DeliveryCaptainApplicationDocument",
+    "table": "delivery_captain_application_documents",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "applicationId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "documentType",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "documentName",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "documentUrl",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "verificationStatus",
+        "type": "DocumentVerificationStatus",
+        "required": true
+      },
+      {
+        "name": "adminNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "uploadedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "verifiedByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "verifiedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "DeliveryCaptainApplication",
+        "fields": [
+          "applicationId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "verifiedByAdminId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "CaptainApplicationDocument",
+    "table": "captain_application_documents",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "deliveryApplicationId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "rideApplicationId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "documentType",
+        "type": "CaptainApplicationDocumentType",
+        "required": true
+      },
+      {
+        "name": "objectKey",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "storageProvider",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "storageBucket",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "originalFileName",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "mimeType",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "sizeBytes",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "uploadStatus",
+        "type": "CaptainDocumentUploadStatus",
+        "required": true
+      },
+      {
+        "name": "reviewStatus",
+        "type": "DocumentVerificationStatus",
+        "required": true
+      },
+      {
+        "name": "adminNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "applicantVisibleNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "uploadedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "replacedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "deletedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "externalDeletionState",
+        "type": "StoredObjectDeletionState",
+        "required": false
+      },
+      {
+        "name": "retentionReason",
+        "type": "StoredObjectRetentionReason",
+        "required": false
+      },
+      {
+        "name": "deletionAttempts",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "lastDeletionAttemptAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "deletionFailureCode",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "physicallyDeletedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "reviewedByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "reviewedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      },
+      {
+        "target": "DeliveryCaptainApplication",
+        "fields": [
+          "deliveryApplicationId"
+        ]
+      },
+      {
+        "target": "TaxiDriverApplication",
+        "fields": [
+          "rideApplicationId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "reviewedByAdminId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "TaxiDriverProfile",
+    "table": "taxi_driver_profiles",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "applicationId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "fullName",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "phoneNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "city",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "state",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "vehicleMake",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vehicleModel",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vehicleYear",
+        "type": "Int",
+        "required": false
+      },
+      {
+        "name": "vehicleColour",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vehiclePlateNumber",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vehicleType",
+        "type": "TaxiVehicleType",
+        "required": false
+      },
+      {
+        "name": "status",
+        "type": "TaxiDriverProfileStatus",
+        "required": true
+      },
+      {
+        "name": "isAvailableForTaxi",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "lastKnownLatitude",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "lastKnownLongitude",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "lastSeenAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      },
+      {
+        "target": "TaxiDriverApplication",
+        "fields": [
+          "applicationId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "TaxiTrip",
+    "table": "taxi_trips",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "tripReference",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "customerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "driverProfileId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "pickupAddress",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "pickupLatitude",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "pickupLongitude",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "destinationAddress",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "destinationLatitude",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "destinationLongitude",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "estimatedDistanceKm",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "estimatedDurationMin",
+        "type": "Int",
+        "required": false
+      },
+      {
+        "name": "estimatedFareKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "finalFareKobo",
+        "type": "Int",
+        "required": false
+      },
+      {
+        "name": "status",
+        "type": "TaxiTripStatus",
+        "required": true
+      },
+      {
+        "name": "ridePinRequired",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "tripPinHash",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "tripPinEncrypted",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "tripPinLastFour",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "cancellationReason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "customerNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "driverNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "isTestMode",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "requestedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "acceptedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "arrivedAtPickupAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "startedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "arrivedAtDestinationAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "completedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "cancelledAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "customerId"
+        ]
+      },
+      {
+        "target": "TaxiDriverProfile",
+        "fields": [
+          "driverProfileId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "TaxiRideSettlement",
+    "table": "taxi_ride_settlements",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "tripId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "driverProfileId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "customerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "tripReference",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "captainName",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "serviceArea",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "rideCategory",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "paymentMethod",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "financialOutcome",
+        "type": "TaxiRideFinancialOutcome",
+        "required": true
+      },
+      {
+        "name": "grossFareKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "rideFareKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "waitingChargeKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "discountKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "finalCustomerFareKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "commissionRateBasisPoints",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "karigoCommissionKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "captainGrossEarningKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "captainNetEarningKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "cashCollectedKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "platformReceivableKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "captainReceivableKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "remittedKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "refundedKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "platformAdjustmentKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "captainAdjustmentKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "settlementDirection",
+        "type": "TaxiRideSettlementDirection",
+        "required": true
+      },
+      {
+        "name": "status",
+        "type": "TaxiRideSettlementStatus",
+        "required": true
+      },
+      {
+        "name": "disputeReason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "disputeOpenedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "disputeResolvedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "reconciledAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "reconciliationReference",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "reconciliationNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "finalizedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "TaxiTrip",
+        "fields": [
+          "tripId"
+        ]
+      },
+      {
+        "target": "TaxiDriverProfile",
+        "fields": [
+          "driverProfileId"
+        ]
+      },
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "customerId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "TaxiRideFinancialLedgerEntry",
+    "table": "taxi_ride_financial_ledger_entries",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "settlementId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "tripId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "idempotencyKey",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "entryType",
+        "type": "TaxiRideLedgerEntryType",
+        "required": true
+      },
+      {
+        "name": "direction",
+        "type": "TaxiRideLedgerDirection",
+        "required": true
+      },
+      {
+        "name": "amountKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "actorUserId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "actorType",
+        "type": "TaxiTripActorType",
+        "required": true
+      },
+      {
+        "name": "reference",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "reason",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "financialResponsibility",
+        "type": "TaxiRideFinancialResponsibility",
+        "required": false
+      },
+      {
+        "name": "metadata",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "TaxiRideSettlement",
+        "fields": [
+          "settlementId"
+        ]
+      },
+      {
+        "target": "TaxiTrip",
+        "fields": [
+          "tripId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "actorUserId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "TaxiRideCommissionRemittance",
+    "table": "taxi_ride_commission_remittances",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "driverProfileId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "reference",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "amountKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "method",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "source",
+        "type": "TaxiRideCommissionRemittanceSource",
+        "required": true
+      },
+      {
+        "name": "note",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "remittedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "recordedByUserId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "TaxiDriverProfile",
+        "fields": [
+          "driverProfileId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "recordedByUserId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "TaxiRideRefund",
+    "table": "taxi_ride_refunds",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "settlementId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "idempotencyKey",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "amountKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "status",
+        "type": "TaxiRideRefundStatus",
+        "required": true
+      },
+      {
+        "name": "responsibility",
+        "type": "TaxiRideFinancialResponsibility",
+        "required": true
+      },
+      {
+        "name": "platformResponsibilityKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "captainResponsibilityKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "reason",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "method",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "externalReference",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "note",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "approvedByUserId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "approvedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "settledByUserId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "settledAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "TaxiRideSettlement",
+        "fields": [
+          "settlementId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "approvedByUserId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "settledByUserId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "TaxiRideCallSession",
+    "table": "taxi_ride_call_sessions",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "tripId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "initiatorUserId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "initiatorRole",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "recipientUserId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "recipientRole",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "state",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "provider",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "providerChannel",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "providerChannelHash",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "initiatorRtcUid",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "recipientRtcUid",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "ringingAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "acceptedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "connectedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "declinedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "missedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "endedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "endedByUserId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "endReason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "durationSeconds",
+        "type": "Int",
+        "required": false
+      },
+      {
+        "name": "lastTokenExpiresAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "TaxiTrip",
+        "fields": [
+          "tripId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "TaxiTripEvent",
+    "table": "taxi_trip_events",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "tripId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "actorType",
+        "type": "TaxiTripActorType",
+        "required": true
+      },
+      {
+        "name": "actorId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "eventType",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "note",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "metadata",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "TaxiTrip",
+        "fields": [
+          "tripId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "OtpVerification",
+    "table": "otp_verifications",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "purpose",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "codeHash",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "attempts",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "expiresAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "verifiedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "CustomerProfile",
+    "table": "customer_profiles",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "referralCode",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "referredBy",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "loyaltyBalance",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "totalOrders",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "averageRating",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "requireRidePin",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      },
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "referredBy"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "UtilityTransaction",
+    "table": "utility_transactions",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "reference",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "customerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "serviceType",
+        "type": "UtilityServiceType",
+        "required": true
+      },
+      {
+        "name": "providerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "productId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "amountKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "convenienceFeeKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "totalKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "recipient",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "recipientName",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "status",
+        "type": "UtilityTransactionStatus",
+        "required": true
+      },
+      {
+        "name": "providerStatus",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "providerReference",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "mockToken",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "customerNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "failureReason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "metadata",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "completedAt",
+        "type": "DateTime",
+        "required": false
+      }
+    ],
+    "relations": [
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "customerId"
+        ]
+      },
+      {
+        "target": "UtilityProvider",
+        "fields": [
+          "providerId"
+        ]
+      },
+      {
+        "target": "UtilityProduct",
+        "fields": [
+          "productId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "Address",
+    "table": "addresses",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "label",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "addressLine",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "city",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "state",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "country",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "latitude",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "longitude",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "deliveryNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "isDefault",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "ServiceProviderRequest",
+    "table": "service_provider_requests",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "requestNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "customerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "preferredProviderId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "assignedProviderId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "assignedByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "serviceType",
+        "type": "ServiceProviderType",
+        "required": true
+      },
+      {
+        "name": "serviceLabel",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "serviceAddressId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "contactPhone",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "preferredDate",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "preferredTimeWindow",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "customerNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "status",
+        "type": "ServiceProviderRequestStatus",
+        "required": true
+      },
+      {
+        "name": "readinessOnly",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "adminNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "customerUpdateNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "assignmentNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "assignedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "customerId"
+        ]
+      },
+      {
+        "target": "ServiceProvider",
+        "fields": [
+          "preferredProviderId"
+        ]
+      },
+      {
+        "target": "ServiceProvider",
+        "fields": [
+          "assignedProviderId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "assignedByAdminId"
+        ]
+      },
+      {
+        "target": "Address",
+        "fields": [
+          "serviceAddressId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "ServiceProviderReview",
+    "table": "service_provider_reviews",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "requestId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "customerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "providerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "rating",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "comment",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "isVisible",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "ServiceProviderRequest",
+        "fields": [
+          "requestId"
+        ]
+      },
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "customerId"
+        ]
+      },
+      {
+        "target": "ServiceProvider",
+        "fields": [
+          "providerId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "ServiceProviderApplication",
+    "table": "service_provider_applications",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "applicationReference",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "fullName",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "businessName",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "serviceType",
+        "type": "ServiceProviderType",
+        "required": true
+      },
+      {
+        "name": "phoneNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "email",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "city",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "state",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "serviceAreas",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "address",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "experienceSummary",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "toolsOrEquipment",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "availability",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "identificationType",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "identificationNumber",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "status",
+        "type": "ServiceProviderApplicationStatus",
+        "required": true
+      },
+      {
+        "name": "reviewNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "submittedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "reviewedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "reviewedByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "reviewedByAdminId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "VendorApplication",
+    "table": "vendor_applications",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "reference",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "applicantUserId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "businessCategory",
+        "type": "VendorApplicationCategory",
+        "required": true
+      },
+      {
+        "name": "businessName",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "tradingName",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "businessType",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "businessDescription",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "businessAddress",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "state",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "city",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "area",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "serviceAreas",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "operatingHours",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "businessPhoneNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "businessEmail",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "websiteOrSocialLink",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "contactFullName",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "contactRole",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "contactPhoneNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "contactEmail",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "preferredContactMethod",
+        "type": "PreferredContactMethod",
+        "required": true
+      },
+      {
+        "name": "deliveryReadiness",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "deliveryPreference",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "averagePreparationTime",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "numberOfStaff",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "catalogueCategory",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "estimatedCatalogueSize",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "existingDelivery",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "brandAssets",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "documentPlaceholders",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "declarationAccepted",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "privacyAccepted",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "contactConsentAccepted",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "status",
+        "type": "VendorApplicationStatus",
+        "required": true
+      },
+      {
+        "name": "submittedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "reviewedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "deletedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "trashReason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "trashNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "trashedByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "restoredAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "restoredByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vendorId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "applicantUserId"
+        ]
+      },
+      {
+        "target": "Vendor",
+        "fields": [
+          "vendorId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "PartnerOnboardingDraft",
+    "table": "partner_onboarding_drafts",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "applicationId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "onboardingStage",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "accountType",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "draftData",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "submittedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      },
+      {
+        "target": "VendorApplication",
+        "fields": [
+          "applicationId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "PartnerCommercialAgreement",
+    "table": "partner_commercial_agreements",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "applicationId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "applicantUserId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "policyId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "category",
+        "type": "VendorApplicationCategory",
+        "required": true
+      },
+      {
+        "name": "policyVersion",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "commercialModel",
+        "type": "PartnerCommercialModel",
+        "required": true
+      },
+      {
+        "name": "commissionRateBasisPoints",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "onboardingFeeKobo",
+        "type": "Int",
+        "required": false
+      },
+      {
+        "name": "renewalFeeKobo",
+        "type": "Int",
+        "required": false
+      },
+      {
+        "name": "currency",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "publicTitleSnapshot",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "publicSummarySnapshot",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "policySnapshot",
+        "type": "Json",
+        "required": true
+      },
+      {
+        "name": "policyHash",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "acceptedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "acceptedTermsVersion",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "acceptedFromAppSurface",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "VendorApplication",
+        "fields": [
+          "applicationId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "applicantUserId"
+        ]
+      },
+      {
+        "target": "PartnerCommercialPolicy",
+        "fields": [
+          "policyId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "VendorApplicationDocument",
+    "table": "vendor_application_documents",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "applicationId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "documentType",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "documentName",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "documentUrl",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "verificationStatus",
+        "type": "DocumentVerificationStatus",
+        "required": true
+      },
+      {
+        "name": "adminNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "uploadedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "verifiedByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "verifiedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "VendorApplication",
+        "fields": [
+          "applicationId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "verifiedByAdminId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "Vendor",
+    "table": "vendors",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "categoryId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "businessName",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "businessCategory",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "phoneNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "email",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "address",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "city",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "state",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "latitude",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "longitude",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "logoUrl",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "coverImageUrl",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "openingTime",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "closingTime",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "commercialAgreementId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "isOpen",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "commissionRate",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "bankName",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "accountNumber",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "accountName",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "status",
+        "type": "VendorStatus",
+        "required": true
+      },
+      {
+        "name": "rating",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "totalOrders",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "deletedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      },
+      {
+        "target": "VendorCategory",
+        "fields": [
+          "categoryId"
+        ]
+      },
+      {
+        "target": "PartnerCommercialAgreement",
+        "fields": [
+          "commercialAgreementId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "VendorTeamMember",
+    "table": "vendor_team_members",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "vendorId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "fullName",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "email",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "phoneNumber",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "role",
+        "type": "VendorTeamRole",
+        "required": true
+      },
+      {
+        "name": "invitationStatus",
+        "type": "VendorTeamInvitationStatus",
+        "required": true
+      },
+      {
+        "name": "invitationTokenHash",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "invitedByUserId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "acceptedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "revokedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "expiresAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "Vendor",
+        "fields": [
+          "vendorId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "invitedByUserId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "VendorAuditLog",
+    "table": "vendor_audit_logs",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "vendorId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "actorUserId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "action",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "entityType",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "entityId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "oldValue",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "newValue",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "Vendor",
+        "fields": [
+          "vendorId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "actorUserId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "VendorAccountActivation",
+    "table": "vendor_account_activations",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "vendorId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "tokenHash",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "status",
+        "type": "VendorActivationInvitationStatus",
+        "required": true
+      },
+      {
+        "name": "expiresAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "usedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "revokedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "Vendor",
+        "fields": [
+          "vendorId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "createdByAdminId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "VendorOnboardingDocument",
+    "table": "vendor_onboarding_documents",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "vendorId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "documentType",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "documentName",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "documentUrl",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "storageKey",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "externalDeletionState",
+        "type": "StoredObjectDeletionState",
+        "required": false
+      },
+      {
+        "name": "retentionReason",
+        "type": "StoredObjectRetentionReason",
+        "required": false
+      },
+      {
+        "name": "evidenceAvailability",
+        "type": "VendorEvidenceAvailabilityState",
+        "required": true
+      },
+      {
+        "name": "replacesDocumentId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "deletionAttempts",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "lastDeletionAttemptAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "deletionFailureCode",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "physicallyDeletedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "deletedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "verificationStatus",
+        "type": "DocumentVerificationStatus",
+        "required": true
+      },
+      {
+        "name": "adminNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "uploadedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "reviewedByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "reviewedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "Vendor",
+        "fields": [
+          "vendorId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "reviewedByAdminId"
+        ]
+      },
+      {
+        "target": "VendorOnboardingDocument",
+        "fields": [
+          "replacesDocumentId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "AdCampaign",
+    "table": "ad_campaigns",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "campaignReference",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "sponsorType",
+        "type": "AdSponsorType",
+        "required": true
+      },
+      {
+        "name": "vendorId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "placementSurface",
+        "type": "AdPlacementSurface",
+        "required": true
+      },
+      {
+        "name": "title",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "body",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "imageUrl",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "ctaLabel",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "ctaUrl",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "advertiserName",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "advertiserContactName",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "advertiserEmail",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "advertiserPhone",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "requestedBudgetKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "dailyBudgetKobo",
+        "type": "Int",
+        "required": false
+      },
+      {
+        "name": "reservedCreditKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "spentKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "status",
+        "type": "AdCampaignStatus",
+        "required": true
+      },
+      {
+        "name": "currentRevisionNumber",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "approvedRevisionId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "targeting",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "startsAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "endsAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "adminNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "rejectionReason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "reviewedByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "reviewedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "submittedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "Vendor",
+        "fields": [
+          "vendorId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "reviewedByAdminId"
+        ]
+      },
+      {
+        "target": "AdCampaignRevision",
+        "fields": [
+          "approvedRevisionId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "AdCampaignRevision",
+    "table": "ad_campaign_revisions",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "campaignId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "revisionNumber",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "title",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "body",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "imageUrl",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "creativeAssetId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "creativeAltText",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "ctaLabel",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "ctaUrl",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "requestedBudgetKobo",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "dailyBudgetKobo",
+        "type": "Int",
+        "required": false
+      },
+      {
+        "name": "startsAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "endsAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "placementSurface",
+        "type": "AdPlacementSurface",
+        "required": true
+      },
+      {
+        "name": "targeting",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "createdById",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "createdByType",
+        "type": "AdCampaignActorType",
+        "required": true
+      },
+      {
+        "name": "changeReason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "reviewNotes",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "submittedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "approvedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "publishedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "AdCampaign",
+        "fields": [
+          "campaignId"
+        ],
+        "onDelete": "Cascade"
+      },
+      {
+        "target": "AdCreativeAsset",
+        "fields": [
+          "creativeAssetId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "createdById"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "AdCampaignAuditEvent",
+    "table": "ad_campaign_audit_events",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "campaignId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "actorUserId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "actorType",
+        "type": "AdCampaignActorType",
+        "required": true
+      },
+      {
+        "name": "action",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "fromStatus",
+        "type": "AdCampaignStatus",
+        "required": false
+      },
+      {
+        "name": "toStatus",
+        "type": "AdCampaignStatus",
+        "required": false
+      },
+      {
+        "name": "revisionNumber",
+        "type": "Int",
+        "required": false
+      },
+      {
+        "name": "reason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "changedFields",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "AdCampaign",
+        "fields": [
+          "campaignId"
+        ],
+        "onDelete": "Cascade"
+      },
+      {
+        "target": "User",
+        "fields": [
+          "actorUserId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "PhoneChangeRequest",
+    "table": "phone_change_requests",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "oldPhoneNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "newPhoneNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "status",
+        "type": "PhoneChangeStatus",
+        "required": true
+      },
+      {
+        "name": "assurance",
+        "type": "PhoneChangeAssurance",
+        "required": true
+      },
+      {
+        "name": "attempts",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "expiresAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "verifiedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "completedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "cancelledAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "sensitiveActionsHoldUntil",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ],
+        "onDelete": "Cascade"
+      }
+    ]
+  },
+  {
+    "model": "AccountSecurityEvent",
+    "table": "account_security_events",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "action",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "metadata",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ],
+        "onDelete": "Cascade"
+      }
+    ]
+  },
+  {
+    "model": "Rider",
+    "table": "riders",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "riderCode",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "phoneNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "photoUrl",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vehicleType",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "plateNumber",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "licenseNumber",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "guarantorName",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "guarantorPhone",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "currentLatitude",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "currentLongitude",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "currentLocationUpdatedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "availabilityStatus",
+        "type": "RiderStatus",
+        "required": true
+      },
+      {
+        "name": "verificationStatus",
+        "type": "RiderStatus",
+        "required": true
+      },
+      {
+        "name": "rating",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "totalDeliveries",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "preferredServiceAreas",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "deletedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "RiderDocument",
+    "table": "rider_documents",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "riderId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "documentType",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "documentUrl",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "verificationStatus",
+        "type": "DocumentVerificationStatus",
+        "required": true
+      },
+      {
+        "name": "uploadedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "verifiedBy",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "verifiedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "Rider",
+        "fields": [
+          "riderId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "verifiedBy"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "Order",
+    "table": "orders",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "orderNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "customerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "vendorId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "riderId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "serviceCategory",
+        "type": "ServiceCategory",
+        "required": true
+      },
+      {
+        "name": "orderStatus",
+        "type": "OrderStatus",
+        "required": true
+      },
+      {
+        "name": "paymentStatus",
+        "type": "PaymentStatus",
+        "required": true
+      },
+      {
+        "name": "paymentMethod",
+        "type": "OrderPaymentMethod",
+        "required": false
+      },
+      {
+        "name": "cashCollectionStatus",
+        "type": "CashCollectionStatus",
+        "required": true
+      },
+      {
+        "name": "cashCollectedAmount",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "cashCollectedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "cashCollectedByRiderId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "cashReconciledAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "cashReconciledByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "cashReconciliationNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "pickupAddressId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "deliveryAddressId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "recipientName",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "recipientPhone",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "itemDescription",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "subtotal",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "deliveryFee",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "serviceFee",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "discountAmount",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "promoCodeId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "totalAmount",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "deliveryOtp",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "customerNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "cancellationReason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "completedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "customerId"
+        ]
+      },
+      {
+        "target": "Vendor",
+        "fields": [
+          "vendorId"
+        ]
+      },
+      {
+        "target": "Rider",
+        "fields": [
+          "riderId"
+        ]
+      },
+      {
+        "target": "Address",
+        "fields": [
+          "pickupAddressId"
+        ]
+      },
+      {
+        "target": "Address",
+        "fields": [
+          "deliveryAddressId"
+        ]
+      },
+      {
+        "target": "PromoCode",
+        "fields": [
+          "promoCodeId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "OrderStatusHistory",
+    "table": "order_status_history",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "orderId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "previousStatus",
+        "type": "OrderStatus",
+        "required": false
+      },
+      {
+        "name": "newStatus",
+        "type": "OrderStatus",
+        "required": true
+      },
+      {
+        "name": "changedByUserId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "changedByRole",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "note",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "Order",
+        "fields": [
+          "orderId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "changedByUserId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "Payment",
+    "table": "payments",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "orderId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "customerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "gateway",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "transactionReference",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "amount",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "currency",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "paymentPurpose",
+        "type": "PaymentPurpose",
+        "required": true
+      },
+      {
+        "name": "walletLedgerEntryId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "paymentMethod",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "paymentStatus",
+        "type": "PaymentStatus",
+        "required": true
+      },
+      {
+        "name": "gatewayResponse",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "paidAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "Order",
+        "fields": [
+          "orderId"
+        ]
+      },
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "customerId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "CustomerWallet",
+    "table": "customer_wallets",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "customerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "currency",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "availableBalance",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "ledgerBalance",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "status",
+        "type": "WalletStatus",
+        "required": true
+      },
+      {
+        "name": "lastActivityAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "customerId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "CustomerWalletLedgerEntry",
+    "table": "customer_wallet_ledger_entries",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "walletId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "customerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "entryType",
+        "type": "WalletLedgerEntryType",
+        "required": true
+      },
+      {
+        "name": "direction",
+        "type": "WalletLedgerDirection",
+        "required": true
+      },
+      {
+        "name": "status",
+        "type": "WalletLedgerEntryStatus",
+        "required": true
+      },
+      {
+        "name": "amount",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "currency",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "balanceBefore",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "balanceAfter",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "reference",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "idempotencyKey",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "sourceType",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "sourceId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "metadata",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "createdByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "postedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "reversedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "CustomerWallet",
+        "fields": [
+          "walletId"
+        ]
+      },
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "customerId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "createdByAdminId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "CustomerReferralProfile",
+    "table": "customer_referral_profiles",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "customerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "code",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "status",
+        "type": "CustomerReferralProfileStatus",
+        "required": true
+      },
+      {
+        "name": "shareEnabled",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "totalReferrals",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "activatedReferrals",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "eligibleReferrals",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "lastReferralAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "customerId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "CustomerReferral",
+    "table": "customer_referrals",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "referrerProfileId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "referrerCustomerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "referredCustomerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "referralCode",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "status",
+        "type": "CustomerReferralStatus",
+        "required": true
+      },
+      {
+        "name": "rewardRuleId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "accountActivatedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "firstValidTransactionAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "eligibleAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "rewardReviewedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "rewardIssuedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "adminNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "metadata",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "CustomerReferralProfile",
+        "fields": [
+          "referrerProfileId"
+        ]
+      },
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "referrerCustomerId"
+        ]
+      },
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "referredCustomerId"
+        ]
+      },
+      {
+        "target": "CustomerReferralRewardRule",
+        "fields": [
+          "rewardRuleId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "CustomerReferralRewardRule",
+    "table": "customer_referral_reward_rules",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "name",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "trigger",
+        "type": "ReferralRewardTrigger",
+        "required": true
+      },
+      {
+        "name": "rewardType",
+        "type": "ReferralRewardType",
+        "required": true
+      },
+      {
+        "name": "referrerRewardValue",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "referredCustomerRewardValue",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "minimumTransactionAmount",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "requiredValidTransactions",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "currency",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "isActive",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "startsAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "endsAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "createdByAdminId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "VendorPayoutAccount",
+    "table": "vendor_payout_accounts",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "vendorId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "accountName",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "bankName",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "bankCode",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "accountNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "maskedAccountNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "status",
+        "type": "PayoutAccountStatus",
+        "required": true
+      },
+      {
+        "name": "submittedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "verifiedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "verifiedByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "rejectionReason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "vendorVisibleNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "internalNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "lastUpdatedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "Vendor",
+        "fields": [
+          "vendorId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "verifiedByAdminId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "SupportTicket",
+    "table": "support_tickets",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "ticketNumber",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "customerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "orderId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "category",
+        "type": "SupportTicketCategory",
+        "required": true
+      },
+      {
+        "name": "priority",
+        "type": "SupportTicketPriority",
+        "required": true
+      },
+      {
+        "name": "subject",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "status",
+        "type": "SupportTicketStatus",
+        "required": true
+      },
+      {
+        "name": "assignedAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "resolutionNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "closedAt",
+        "type": "DateTime",
+        "required": false
+      }
+    ],
+    "relations": [
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "customerId"
+        ]
+      },
+      {
+        "target": "Order",
+        "fields": [
+          "orderId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "assignedAdminId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "SupportTicketMessage",
+    "table": "support_ticket_messages",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "ticketId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "senderUserId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "senderRole",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "message",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "attachmentUrl",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "isInternalNote",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "SupportTicket",
+        "fields": [
+          "ticketId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "senderUserId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "Notification",
+    "table": "notifications",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "title",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "message",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "channel",
+        "type": "NotificationChannel",
+        "required": true
+      },
+      {
+        "name": "type",
+        "type": "NotificationType",
+        "required": true
+      },
+      {
+        "name": "entityType",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "entityId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "isRead",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "readAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "metadata",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "DeviceToken",
+    "table": "device_tokens",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "token",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "platform",
+        "type": "DevicePlatform",
+        "required": true
+      },
+      {
+        "name": "provider",
+        "type": "PushProvider",
+        "required": true
+      },
+      {
+        "name": "appSurface",
+        "type": "AppSurface",
+        "required": true
+      },
+      {
+        "name": "deviceId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "isActive",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "lastSeenAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "userId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "PromoCode",
+    "table": "promo_codes",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "code",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "title",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "description",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "discountType",
+        "type": "PromoDiscountType",
+        "required": true
+      },
+      {
+        "name": "discountValue",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "maxDiscountAmount",
+        "type": "Decimal",
+        "required": false
+      },
+      {
+        "name": "minimumOrderAmount",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "usageLimit",
+        "type": "Int",
+        "required": false
+      },
+      {
+        "name": "usageLimitPerCustomer",
+        "type": "Int",
+        "required": false
+      },
+      {
+        "name": "usageCount",
+        "type": "Int",
+        "required": true
+      },
+      {
+        "name": "firstOrderOnly",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "serviceCategory",
+        "type": "ServiceCategory",
+        "required": false
+      },
+      {
+        "name": "vendorId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "createdByAdminId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "startsAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "endsAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "isActive",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "Vendor",
+        "fields": [
+          "vendorId"
+        ]
+      },
+      {
+        "target": "User",
+        "fields": [
+          "createdByAdminId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "PromoCodeUsage",
+    "table": "promo_code_usages",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "promoCodeId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "customerId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "orderId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "discountAmount",
+        "type": "Decimal",
+        "required": true
+      },
+      {
+        "name": "usedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "PromoCode",
+        "fields": [
+          "promoCodeId"
+        ]
+      },
+      {
+        "target": "CustomerProfile",
+        "fields": [
+          "customerId"
+        ]
+      },
+      {
+        "target": "Order",
+        "fields": [
+          "orderId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "AdminAuditLog",
+    "table": "admin_audit_logs",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "adminUserId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "action",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "entityType",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "entityId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "oldValue",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "newValue",
+        "type": "Json",
+        "required": false
+      },
+      {
+        "name": "ipAddress",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "User",
+        "fields": [
+          "adminUserId"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "LaunchCohortMember",
+    "table": "launch_cohort_members",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "cohortId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "status",
+        "type": "LaunchCohortMemberStatus",
+        "required": true
+      },
+      {
+        "name": "invitedAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "activatedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "removedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "reason",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "addedByAdminId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": [
+      {
+        "target": "LaunchCohort",
+        "fields": [
+          "cohortId"
+        ],
+        "onDelete": "Cascade"
+      }
+    ]
+  },
+  {
+    "model": "LaunchDrill",
+    "table": "launch_drills",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "cityCode",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "drillType",
+        "type": "LaunchDrillType",
+        "required": true
+      },
+      {
+        "name": "serviceType",
+        "type": "LaunchServiceType",
+        "required": false
+      },
+      {
+        "name": "customerUserId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "captainUserId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "partnerUserId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "controlledCustomerId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "controlledSupplyGroupId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "relatedReference",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "incidentId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "supportTicketId",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "criticalFailure",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "startedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "completedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "reopenedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "result",
+        "type": "LaunchDrillResult",
+        "required": true
+      },
+      {
+        "name": "failureStage",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "notes",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "evidenceReference",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "responsibleAdminId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": []
+  },
+  {
+    "model": "ControlledOperationsCustomer",
+    "table": "controlled_operations_customers",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "cityCode",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "customerProfileId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "userId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "label",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "enabled",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "excludedFromCampaigns",
+        "type": "Boolean",
+        "required": true
+      },
+      {
+        "name": "internalNote",
+        "type": "String",
+        "required": false
+      },
+      {
+        "name": "addedByAdminId",
+        "type": "String",
+        "required": true
+      },
+      {
+        "name": "activatedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "deactivatedAt",
+        "type": "DateTime",
+        "required": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DateTime",
+        "required": true
+      },
+      {
+        "name": "updatedAt",
+        "type": "DateTime",
+        "required": true
+      }
+    ],
+    "relations": []
+  }
+]

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { Platform, Text, View } from "react-native";
+import { PermanentCustomerDeletion } from "../../src/components/permanent-customer-deletion";
 import { AccountDeletionRequest, accountDeletionApi } from "../../src/api/account-deletion.api";
 import { Button, Card, Field, Message, Protected, Screen, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
@@ -9,7 +10,7 @@ function statusLabel(value?: string | null) {
   return value ? value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()) : "Not requested";
 }
 
-export default function DeleteAccountRequestScreen() {
+function DeleteAccountRequestScreen() {
   const { logout } = useAuth();
   const [current, setCurrent] = useState<AccountDeletionRequest | null>(null);
   const [reason, setReason] = useState("");
@@ -101,4 +102,8 @@ export default function DeleteAccountRequestScreen() {
       <Button title={busy ? "Sending request..." : "Delete my KariGO Customer account"} tone="danger" onPress={submit} disabled={busy || confirmText.trim().toUpperCase() !== "DELETE"} />
     </Screen>
   </Protected>;
+}
+
+export default function CustomerDeletionScreen() {
+  return Platform.OS === "ios" ? <PermanentCustomerDeletion /> : <DeleteAccountRequestScreen />;
 }

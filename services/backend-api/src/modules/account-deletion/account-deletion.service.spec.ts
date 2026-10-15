@@ -80,10 +80,11 @@ describe("AccountDeletionService", () => {
   const audit = { record: jest.fn() };
   const captainStorage = { deleteObject: jest.fn() };
   const vendorPrivateStorage = { deleteOwnedObject: jest.fn() };
-  const service = new AccountDeletionService(prisma as unknown as PrismaService, audit as never, captainStorage as never, vendorPrivateStorage as never);
+  const customerErasure = { request: jest.fn() };
+  const service = new AccountDeletionService(prisma as unknown as PrismaService, audit as never, captainStorage as never, vendorPrivateStorage as never, customerErasure as never);
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     prisma.user.findUnique.mockResolvedValue(baseUser);
     prisma.captainApplicationDocument.findMany.mockResolvedValue([]);
     prisma.vendorOnboardingDocument.findMany.mockResolvedValue([]);
@@ -110,7 +111,14 @@ describe("AccountDeletionService", () => {
     prisma.$transaction.mockImplementation((callback: (tx: typeof prisma) => Promise<unknown>) => callback(prisma));
   });
 
-  it("records a blocked customer deletion request when active orders exist", async () => {
+  it("routes Customer requests to the guarded permanent-erasure lifecycle", async () => {
+    customerErasure.request.mockResolvedValue({ status: "REQUESTED", erasureVersion: 1 });
+    const dto = { accountType: AccountDeletionAccountType.CUSTOMER, confirmation: "DELETE" as const };
+    expect(await service.request(baseUser.id, dto)).toEqual({ status: "REQUESTED", erasureVersion: 1 });
+    expect(customerErasure.request).toHaveBeenCalledWith(baseUser.id, dto);
+  });
+
+  it("records a blocked complete-account request when active orders exist", async () => {
     prisma.order.count.mockResolvedValueOnce(2);
     prisma.accountDeletionRequest.create.mockImplementationOnce(async ({ data }) => ({
       ...requestRecord,
@@ -120,7 +128,7 @@ describe("AccountDeletionService", () => {
     }));
 
     const result = await service.request(baseUser.id, {
-      accountType: AccountDeletionAccountType.CUSTOMER,
+      accountType: AccountDeletionAccountType.COMPLETE_ACCOUNT,
       confirmation: "DELETE"
     });
 
@@ -173,6 +181,7 @@ describe("AccountDeletionService", () => {
   });
 
   it("keeps a processing request blocked when live blockers are found", async () => {
+    prisma.accountDeletionRequest.findUnique.mockResolvedValueOnce({ ...requestRecord, accountType: AccountDeletionAccountType.COMPLETE_ACCOUNT });
     prisma.order.count.mockResolvedValueOnce(1);
 
     const result = await service.adminUpdate("99999999-9999-4999-8999-999999999999", requestRecord.id, {

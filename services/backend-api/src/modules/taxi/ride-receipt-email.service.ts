@@ -184,6 +184,7 @@ export class RideReceiptEmailService implements OnModuleInit, OnModuleDestroy {
       const candidates = await this.prisma.taxiRideReceiptEmailDelivery.findMany({
         where: {
           status: { in: [TaxiRideReceiptEmailStatus.PENDING, TaxiRideReceiptEmailStatus.FAILED] },
+          trip: { customer: { user: { deletedAt: null, accountStatus: "ACTIVE" } } },
           attemptCount: { lt: MAX_ATTEMPTS },
           OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }]
         },
@@ -200,7 +201,8 @@ export class RideReceiptEmailService implements OnModuleInit, OnModuleDestroy {
 
   private async processOne(id: string, expectedStatus: TaxiRideReceiptEmailStatus, previousAttempts: number) {
     const claimed = await this.prisma.taxiRideReceiptEmailDelivery.updateMany({
-      where: { id, status: expectedStatus, attemptCount: previousAttempts },
+      where: { id, status: expectedStatus, attemptCount: previousAttempts,
+        trip: { customer: { user: { deletedAt: null, accountStatus: "ACTIVE" } } } },
       data: { status: TaxiRideReceiptEmailStatus.PROCESSING, attemptCount: { increment: 1 }, lastAttemptAt: new Date(), nextAttemptAt: null }
     });
     if (claimed.count !== 1) return;

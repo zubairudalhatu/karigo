@@ -18,6 +18,12 @@ export interface AccountDeletionBlocker {
 }
 
 export interface AccountDeletionRequest {
+  erasureVersion?: number;
+  deadlineAt?: string | null;
+  cleanupErrorCode?: string | null;
+  retentionApproval?: string | null;
+  externalCleanupEvidence?: string | null;
+  noticeSentAt?: string | null;
   id: string;
   requestReference: string;
   accountType: AccountDeletionAccountType;
@@ -62,6 +68,7 @@ export const accountDeletionApi = {
     return api.get<AccountDeletionRequest[]>(`admin/account-deletion-requests${query ? `?${query}` : ""}`);
   },
   detail: (id: string) => api.get<AccountDeletionRequest>(`admin/account-deletion-requests/${id}`),
-  updateStatus: (id: string, body: { status: AccountDeletionStatus; blockedReasonCode?: AccountDeletionBlockedReasonCode; adminNote?: string }) =>
+  updateStatus: (id: string, body: { status: AccountDeletionStatus; blockedReasonCode?: AccountDeletionBlockedReasonCode; adminNote?: string;
+    confirmCustomerErasure?: string; retentionApproval?: string; externalCleanupEvidence?: string; reconciledNoticeProviderId?: string; noIdentifiableLegalHoldConfirmed?: boolean }) =>
     api.patch<AccountDeletionRequest>(`admin/account-deletion-requests/${id}/status`, body)
 };

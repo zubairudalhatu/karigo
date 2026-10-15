@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { activeUserOperation } from "../../common/services/active-customer-operation";
 import { publicUserSelect } from "../users/users.service";
 import { UpdateCustomerProfileDto } from "./dto/update-customer-profile.dto";
 
@@ -27,7 +28,7 @@ export class CustomersService {
   async update(userId: string, dto: UpdateCustomerProfileDto) {
     try {
       const { requireRidePin, ...userFields } = dto;
-      const customer = await this.prisma.user.update({
+      const customer = await activeUserOperation(this.prisma, userId, tx => tx.user.update({
         where: { id: userId },
         data: {
           ...userFields,
@@ -37,7 +38,7 @@ export class CustomersService {
           ...publicUserSelect,
           customerProfile: true
         }
-      });
+      }));
       if (!customer.customerProfile) throw new NotFoundException("Customer profile not found");
       return this.customerResponse(customer);
     } catch (error) {

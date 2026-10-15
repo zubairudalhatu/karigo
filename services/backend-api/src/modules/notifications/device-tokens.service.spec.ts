@@ -6,6 +6,9 @@ import { DeviceTokensService } from "./device-tokens.service";
 
 describe("DeviceTokensService", () => {
   const prisma = {
+    user: { findUnique: jest.fn().mockResolvedValue({ deletedAt: null, accountStatus: "ACTIVE" }) },
+    $queryRaw: jest.fn(),
+    $transaction: jest.fn(),
     deviceToken: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
@@ -22,7 +25,7 @@ describe("DeviceTokensService", () => {
     appSurface: AppSurface.CUSTOMER_APP
   };
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => { jest.clearAllMocks(); prisma.$transaction.mockImplementation(fn => fn(prisma)); });
 
   it("registers a token without returning its secret value", async () => {
     prisma.deviceToken.findUnique.mockResolvedValue(null);

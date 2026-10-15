@@ -34,6 +34,11 @@ export default function AccountDeletionRequestsPage() {
   const [selected, setSelected] = useState<AccountDeletionRequest | null>(null);
   const [filters, setFilters] = useState({ status: "", accountType: "", search: "" });
   const [adminNote, setAdminNote] = useState("");
+  const [retentionApproval, setRetentionApproval] = useState("");
+  const [externalCleanupEvidence, setExternalCleanupEvidence] = useState("");
+  const [erasureConfirmation, setErasureConfirmation] = useState("");
+  const [reconciledNoticeProviderId, setReconciledNoticeProviderId] = useState("");
+  const [noIdentifiableLegalHoldConfirmed, setNoIdentifiableLegalHoldConfirmed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState(false);
   const [error, setError] = useState("");
@@ -66,6 +71,8 @@ export default function AccountDeletionRequestsPage() {
     try {
       setSelected(await accountDeletionApi.detail(request.id));
       setAdminNote(request.adminNote ?? "");
+      setRetentionApproval(""); setExternalCleanupEvidence(""); setErasureConfirmation(""); setReconciledNoticeProviderId("");
+      setNoIdentifiableLegalHoldConfirmed(false);
     } catch (e) {
       setError(friendlyError(e));
     }
@@ -73,6 +80,10 @@ export default function AccountDeletionRequestsPage() {
 
   async function updateStatus(status: AccountDeletionStatus) {
     if (!selected) return;
+    const permanentCustomer = selected.accountType === "CUSTOMER" && selected.erasureVersion === 1;
+    if (permanentCustomer && status === "COMPLETED" && (erasureConfirmation !== "DELETE_CUSTOMER_DATA" || !retentionApproval || !externalCleanupEvidence || !noIdentifiableLegalHoldConfirmed)) {
+      setError("Enter the exact permanent-erasure confirmation and approved retention/external-cleanup evidence references."); return;
+    }
     if (adminNote.trim().length < 3) {
       setError("A safe admin note of at least 3 characters is required.");
       return;
@@ -80,14 +91,17 @@ export default function AccountDeletionRequestsPage() {
     const warning = status === "PROCESSING"
       ? "Processing will revoke active refresh sessions and take the relevant account surface offline. Continue?"
       : status === "COMPLETED"
-        ? "Completing records the deletion/deactivation as completed while preserving operational records. Continue?"
+        ? permanentCustomer ? "Permanently erase Customer personal data, send one completion confirmation and retain only minimized, justified records? This cannot be undone."
+          : "Complete the reviewed legacy scope? Customer erasure requires the new governed lifecycle."
         : `Move this request to ${label(status)}?`;
     if (!window.confirm(warning)) return;
     setActioning(true);
     setError("");
     setMessage("");
     try {
-      const updated = await accountDeletionApi.updateStatus(selected.id, { status, adminNote });
+      const updated = await accountDeletionApi.updateStatus(selected.id, { status, adminNote,
+        ...(permanentCustomer && status === "COMPLETED" ? { confirmCustomerErasure: erasureConfirmation, retentionApproval, externalCleanupEvidence, noIdentifiableLegalHoldConfirmed,
+          ...(reconciledNoticeProviderId ? { reconciledNoticeProviderId } : {}) } : {}) });
       setSelected(updated);
       setMessage(`Request ${updated.requestReference} updated to ${label(updated.status)}.`);
       await load();
@@ -120,6 +134,7 @@ export default function AccountDeletionRequestsPage() {
         <article className="card"><span className="muted">Requested</span><p className="metric">{counts.REQUESTED ?? 0}</p></article>
         <article className="card"><span className="muted">Blocked</span><p className="metric">{counts.BLOCKED ?? 0}</p></article>
         <article className="card"><span className="muted">Processing</span><p className="metric">{counts.PROCESSING ?? 0}</p></article>
+        <article className="card"><span className="muted">Overdue — escalate</span><p className="metric">{requests.filter(r => r.erasureVersion === 1 && r.status !== "COMPLETED" && r.deadlineAt && new Date(r.deadlineAt) < new Date()).length}</p></article>
       </section>
 
       <section className="section">
@@ -187,24 +202,32 @@ export default function AccountDeletionRequestsPage() {
                       ))}
                     </ul>
                   </div>
-                ) : <p className="success">No active blockers reported by backend.</p>}
+                ) : <p className="muted">{selected.erasureVersion === 1 ? "Completion rechecks balances, unresolved purchases/work, disputes, assets and legal/retention approval. A listed request is not completion approval." : "No active blockers reported by backend."}</p>}
                 <label className="field">
                   <span>Internal admin note</span>
                   <textarea value={adminNote} onChange={(event) => setAdminNote(event.target.value)} placeholder="Required audit note. Do not enter OTPs, secrets or payment credentials." />
                 </label>
                 <div className="actions">
+                  {selected.erasureVersion === 1 ? <div>
+                    <p>Deadline: {dateLabel(selected.deadlineAt)}. Cleanup issue: {selected.cleanupErrorCode ?? "None"}. Exact retention durations: LEGAL REVIEW REQUIRED.</p>
+                    <label><input type="checkbox" checked={noIdentifiableLegalHoldConfirmed} onChange={e => setNoIdentifiableLegalHoldConfirmed(e.target.checked)} /> Legal/business review confirms no unresolved hold requiring identifiable Customer data.</label>
+                    <label className="field"><span>Approved retention-basis reference</span><input value={retentionApproval} onChange={e => setRetentionApproval(e.target.value)} placeholder="Evidence reference only; no personal data" /></label>
+                    <label className="field"><span>Verified external cleanup reference</span><input value={externalCleanupEvidence} onChange={e => setExternalCleanupEvidence(e.target.value)} placeholder="Owned assets/provider cleanup evidence" /></label>
+                    <label className="field"><span>Type DELETE_CUSTOMER_DATA</span><input value={erasureConfirmation} onChange={e => setErasureConfirmation(e.target.value)} /></label>
+                    <label className="field"><span>Existing Resend notice ID, only for ambiguous-send reconciliation</span><input value={reconciledNoticeProviderId} onChange={e => setReconciledNoticeProviderId(e.target.value)} /></label>
+                  </div> : null}
                   {actionStatuses.map((status) => (
                     <button
                       key={status}
                       className={status === "COMPLETED" || status === "CANCELLED" ? "secondary" : undefined}
-                      disabled={actioning || selected.status === status}
+                      disabled={actioning || selected.status === status || (selected.accountType === "CUSTOMER" && (selected.erasureVersion !== 1 || status === "CANCELLED"))}
                       onClick={() => void updateStatus(status)}
                     >
                       {label(status)}
                     </button>
                   ))}
                 </div>
-                <p className="muted">Processing revokes refresh sessions and takes the affected Customer/Captain/Partner surface offline. Completion records operational deactivation while preserving retained records.</p>
+                <p className="muted">New Customer requests disable account access immediately. COMPLETED requires successful personal-data cleanup and one confirmed notice. Legacy Customer requests need a separately approved remediation plan; deployment does not process them automatically.</p>
               </>
             ) : <p className="muted">Open a request to review blockers and record a status action.</p>}
           </aside>

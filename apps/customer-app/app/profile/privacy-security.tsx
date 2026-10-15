@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { brand } from "@karigo/config";
 import { router } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { Button, Card, Message, Protected, Screen, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
@@ -91,7 +91,7 @@ export default function PrivacySecurityScreen() {
         <SecurityRow icon="shield" title="Protect your OTP" body="KariGO will never ask you to share an OTP, payment PIN or password in chat." />
         <SecurityRow icon="credit-card" title="Pay safely" body="Use only payment options shown inside KariGO and wait for backend verification before treating an order as paid." />
         <SecurityRow icon="trash-2" title="Delete or deactivate account" body="Request a support-reviewed deletion or deactivation. KariGO will verify ownership, active orders and retention requirements first." />
-        <Button title="Request account deletion/deactivation" tone="danger" onPress={() => router.push("/profile/delete-account")} />
+        <Button title={Platform.OS === "ios" ? "Delete account permanently" : "Request account deletion/deactivation"} tone="danger" onPress={() => router.push("/profile/delete-account")} />
       </Card>
 
       <Card>

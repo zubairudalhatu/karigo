@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { AppSurface, PushProvider, UserRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { activeUserOperation } from "../../common/services/active-customer-operation";
 import { RegisterDeviceTokenDto } from "./dto/register-device-token.dto";
 
 @Injectable()
@@ -11,27 +12,29 @@ export class DeviceTokensService {
     const token = dto.token.trim();
     this.assertAppSurface(role, dto.appSurface);
     this.assertTokenShape(dto.provider, token);
-    const existing = await this.prisma.deviceToken.findUnique({ where: { token } });
-    if (existing && existing.userId !== userId) {
-      throw new ConflictException("Device token is already registered");
-    }
-    if (existing) {
-      return this.prisma.deviceToken.update({
-        where: { id: existing.id },
-        data: {
-          platform: dto.platform,
-          provider: dto.provider,
-          appSurface: dto.appSurface,
-          deviceId: dto.deviceId,
-          isActive: true,
-          lastSeenAt: new Date()
-        },
+    return activeUserOperation(this.prisma, userId, async tx => {
+      const existing = await tx.deviceToken.findUnique({ where: { token } });
+      if (existing && existing.userId !== userId) {
+        throw new ConflictException("Device token is already registered");
+      }
+      if (existing) {
+        return tx.deviceToken.update({
+          where: { id: existing.id },
+          data: {
+            platform: dto.platform,
+            provider: dto.provider,
+            appSurface: dto.appSurface,
+            deviceId: dto.deviceId,
+            isActive: true,
+            lastSeenAt: new Date()
+          },
+          select: this.safeFields
+        });
+      }
+      return tx.deviceToken.create({
+        data: { ...dto, token, userId, isActive: true, lastSeenAt: new Date() },
         select: this.safeFields
       });
-    }
-    return this.prisma.deviceToken.create({
-      data: { ...dto, token, userId, isActive: true, lastSeenAt: new Date() },
-      select: this.safeFields
     });
   }
 

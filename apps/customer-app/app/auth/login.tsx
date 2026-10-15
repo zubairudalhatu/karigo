@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { Text } from "react-native";
+import { Platform, Text } from "react-native";
 import { Button, Field, Message, NavLink, PasswordField, Screen, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { friendlyError } from "../../src/lib/errors";
@@ -77,5 +77,6 @@ export default function CustomerLogin() {
     {biometricEnabled ? <Button title="Sign in with biometrics" tone="muted" onPress={biometricSignIn} disabled={busy || !biometricAvailable} /> : null}
     <NavLink href="/auth/forgot-password" label="Forgot password?" />
     <NavLink href="/auth/signup" label="New to KariGO? Create account" />
+    {Platform.OS === "ios" ? <NavLink href={"/account-deletion-status" as never} label="Check saved account-deletion receipt" /> : null}
   </Screen>;
 }

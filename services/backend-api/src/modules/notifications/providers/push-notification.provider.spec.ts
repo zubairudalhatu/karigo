@@ -27,7 +27,7 @@ describe("PushNotificationProvider", () => {
       entityId: "order-1"
     })).resolves.toEqual({ accepted: true, provider: "mock" });
     expect(prisma.deviceToken.findMany).toHaveBeenCalledWith({
-      where: { userId: "user-1", isActive: true },
+      where: { userId: "user-1", isActive: true, user: { deletedAt: null, accountStatus: "ACTIVE" } },
       select: { token: true }
     });
   });

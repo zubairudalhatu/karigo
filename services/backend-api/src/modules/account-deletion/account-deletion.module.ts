@@ -5,10 +5,13 @@ import { AccountDeletionController, AdminAccountDeletionController } from "./acc
 import { AccountDeletionService } from "./account-deletion.service";
 import { RidersModule } from "../riders/riders.module";
 import { VendorsModule } from "../vendors/vendors.module";
+import { CustomerErasureService } from "./customer-erasure.service";
+import { CustomerDeletionNoticeService } from "./customer-deletion-notice.service";
+import { CustomerDeletionReceiptController } from "./customer-deletion-receipt.controller";
 
 @Module({
   imports: [PrismaModule, AdminAuditModule, RidersModule, VendorsModule],
-  controllers: [AccountDeletionController, AdminAccountDeletionController],
-  providers: [AccountDeletionService]
+  controllers: [AccountDeletionController, AdminAccountDeletionController, CustomerDeletionReceiptController],
+  providers: [AccountDeletionService, CustomerErasureService, CustomerDeletionNoticeService]
 })
 export class AccountDeletionModule {}

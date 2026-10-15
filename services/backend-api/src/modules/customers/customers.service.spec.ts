@@ -21,6 +21,8 @@ describe("CustomersService Ride safety preference", () => {
     customerProfile: profile
   };
   const prisma: any = {
+    $queryRaw: jest.fn(),
+    $transaction: jest.fn(),
     user: { findUnique: jest.fn(), update: jest.fn() },
     customerProfile: { findUnique: jest.fn() }
   };
@@ -28,6 +30,7 @@ describe("CustomersService Ride safety preference", () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    prisma.$transaction.mockImplementation((fn: any) => fn(prisma));
     prisma.user.findUnique.mockResolvedValue(user);
     prisma.user.update.mockImplementation(async ({ data }: any) => ({
       ...user,

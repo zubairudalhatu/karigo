@@ -5,7 +5,8 @@ import { PhoneChangeService } from "./phone-change.service";
 
 describe("PhoneChangeService", () => {
   const tx: any = {
-    user: { update: jest.fn().mockResolvedValue({ role: UserRole.CUSTOMER }) },
+    $queryRaw: jest.fn(),
+    user: { findUnique: jest.fn().mockResolvedValue({ deletedAt: null, accountStatus: "ACTIVE" }), update: jest.fn().mockResolvedValue({ role: UserRole.CUSTOMER }) },
     vendor: { updateMany: jest.fn() }, rider: { updateMany: jest.fn() },
     phoneChangeRequest: { update: jest.fn() }, refreshToken: { updateMany: jest.fn() },
     accountSecurityEvent: { create: jest.fn() }, notification: { create: jest.fn() }

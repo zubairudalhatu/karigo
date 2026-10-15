@@ -12,7 +12,7 @@ export class PushNotificationProvider implements NotificationProvider {
 
   async send(request: ExternalNotificationRequest) {
     const tokens = await this.prisma.deviceToken.findMany({
-      where: { userId: request.userId, isActive: true },
+      where: { userId: request.userId, isActive: true, user: { deletedAt: null, accountStatus: "ACTIVE" } },
       select: { token: true }
     });
     if (!tokens.length) return { accepted: false, provider: "mock-no-recipient" };
