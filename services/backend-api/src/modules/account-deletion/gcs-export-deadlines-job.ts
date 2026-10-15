@@ -11,7 +11,7 @@ export async function metadataToken(fetcher: typeof fetch = fetch) {
   return data.access_token;
 }
 export async function runSyntheticExportJob(options: {
-  token: () => Promise<string>; fetcher?: typeof fetch; now?: Date;
+  token: () => Promise<string>; fetcher?: typeof fetch; now?: Date; dryRun?: boolean;
   log: (severity: "INFO" | "WARNING" | "ERROR", event: object) => Promise<void>;
 }) {
   const runId = randomUUID();
@@ -22,7 +22,7 @@ export async function runSyntheticExportJob(options: {
     audit: fact => options.log("INFO", { kind: "export_disposal", runId, ...fact }),
     alert: summary => options.log(summary.failed || summary.overdue || summary.invalid || !summary.complete ? "ERROR" : "WARNING",
       { kind: "export_deadline_alert", runId, destination: EXPORT_DEADLINE_OPERATIONS.alertRecipient, ...summary })
-  }, { now: options.now ?? new Date(), dispose: true });
+  }, { now: options.now ?? new Date(), dispose: options.dryRun !== true });
   await options.log(result.failed || result.invalid || result.overdue || !result.complete ? "ERROR" : "INFO",
     { kind: "export_deadline_heartbeat", runId, syntheticOnly: true, ...result });
   return result;
@@ -47,7 +47,8 @@ export async function reportToBackend(report: object, endpoint: string, fetcher:
     body: JSON.stringify(report), signal: AbortSignal.timeout(15_000), redirect: "error" });
   if (!response.ok) throw new Error("REPORT_NOT_ACKNOWLEDGED");
 }
-export async function executeAndReport(endpoint: string, run = () => runSyntheticExportJob({ token: metadataToken, log: cloudLog }),
+export async function executeAndReport(endpoint: string, run = () => runSyntheticExportJob({ token: metadataToken, log: cloudLog,
+  dryRun: process.env.RETENTION_EXPORT_DRY_RUN === "true" }),
   report = reportToBackend, now = new Date()) {
   const execution = process.env.CLOUD_RUN_EXECUTION ?? randomUUID();
   let aggregate = { execution, startedAt: now.toISOString(), success: false, overdue: 0, oldestOverdueHours: 0, failureCode: "CONTROLLER_FAILED" };

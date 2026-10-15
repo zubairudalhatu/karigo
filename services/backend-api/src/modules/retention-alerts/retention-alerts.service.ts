@@ -27,6 +27,7 @@ export class RetentionAlertEngine {
     return this.store.report(report.execution, hash, s => {
       if (s.lastExecutionStartedAt && Date.parse(report.startedAt) <= Date.parse(s.lastExecutionStartedAt)) return;
       s.lastExecutionStartedAt = report.startedAt; s.lastReportAt = now.toISOString();
+      s.lastResult = structuredClone(report);
       if (report.success) {
         s.lastSuccessfulAt = now.toISOString(); resolve(s, "CONTROLLER_FAILURE", now); resolve(s, "MISSED_RUN", now);
       } else this.signal(s, "CONTROLLER_FAILURE", now, 1, null, report.failureCode);

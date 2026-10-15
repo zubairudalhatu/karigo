@@ -2,6 +2,14 @@ import { executeAndReport, metadataToken, reportToBackend, runSyntheticExportJob
 
 describe("Independent synthetic-only export job", () => {
   const now = new Date("2026-10-15T12:00:00Z");
+  it("does not delete even an eligible synthetic fixture during read-only acceptance", async () => {
+    const item = { name: "temporary/v1/synthetic-verification/fixture.json", generation: "1", metageneration: "1", timeCreated: "2026-09-15T12:00:00Z" };
+    const fetcher = jest.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ items: [item] }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => item });
+    const result = await runSyntheticExportJob({ token: async () => "synthetic", fetcher, now, dryRun: true, log: async () => undefined });
+    expect(result).toMatchObject({ dryRun: true, eligible: 1, deleted: 0, overdue: 1 });
+    expect(fetcher.mock.calls.every(call => call[1].method === "GET")).toBe(true);
+  });
   it("reports sanitized failure even when the controller cannot complete", async () => {
     const report = jest.fn().mockResolvedValue(undefined);
     await executeAndReport("https://backend.test/api/v1/internal/retention-alerts/report", async () => { throw new Error("private/path token must-not-leak"); }, report, now);

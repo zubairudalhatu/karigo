@@ -20,6 +20,17 @@ class MemoryStore implements AlertStore {
 const report = (changes = {}) => ({ execution: "synthetic-execution-1", startedAt: now.toISOString(), success: true, overdue: 1, oldestOverdueHours: 721, failureCode: "NONE", ...changes });
 const response = (body: object, status = 200) => ({ ok: status < 300, status, json: async () => body }) as Response;
 describe("Retention primary alert safety", () => {
+  it("persists only the normalized aggregate result and distinguishes fresh and missed heartbeats", async () => {
+    const s = new MemoryStore(); const e = new RetentionAlertEngine(s, () => undefined);
+    const input = report({ overdue: 0, oldestOverdueHours: 0 });
+    await e.report(input, now);
+    expect(s.state.lastResult).toEqual(input);
+    expect(s.state.lastReportAt).toBe(now.toISOString());
+    await e.watchdog(new Date(now.getTime() + 60 * 60_000));
+    expect(s.state.incidents.some(i => i.type === "MISSED_RUN")).toBe(false);
+    await e.watchdog(new Date(now.getTime() + 91 * 60_000));
+    expect(s.state.incidents.some(i => i.type === "MISSED_RUN" && !i.resolvedAt)).toBe(true);
+  });
   it("rejects unknown/private fields and unbounded input before persistence", () => {
     expect(() => parseReport(report({ customerName: "must-not-accept" }), now)).toThrow();
     expect(() => parseReport(report({ overdue: -1 }), now)).toThrow();

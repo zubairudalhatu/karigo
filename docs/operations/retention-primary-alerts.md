@@ -11,6 +11,7 @@ Existing Resend credential stays in the backend. No DNS, email key, service-acco
 - `RETENTION_REPORT_SUBJECT` must be the independently verified numeric uniqueId of the existing export-custodian service account. No email-only identity bypass exists.
 - `RETENTION_ALERT_EMAIL_MODE=off` during initial deployment/report validation; `synthetic-only` for the separately approved single email; `live` only after that email's delivery is verified. Default is off.
 - Cloud Run `RETENTION_REPORT_ENDPOINT` equals the audience above. Existing custodian identity obtains a metadata ID token; it never receives the Resend key or database credentials.
+- Keep Cloud Run `RETENTION_EXPORT_DRY_RUN=true` for non-mutating acceptance: only synthetic-prefix metadata is read; no export is disposed. The normalized aggregate result is retained with the backend heartbeat, without object identifiers.
 - The backend watchdog ticks every minute independently of Cloud Scheduler and LogMatch. No successful controller report for >90 minutes opens MISSED_RUN, including when the controller has never reported.
 - Existing synthetic-only GCS prefix restriction remains. This release does not authorize processing real exports or broad cleanup.
 

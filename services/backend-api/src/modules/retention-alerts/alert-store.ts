@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
-import { AlertPayload, AlertType, FailureCode } from "./alert-policy";
+import { AlertPayload, AlertType, FailureCode, Report } from "./alert-policy";
 
 export type Incident = { id: string; type: AlertType; openedAt: string; resolvedAt: string | null;
   count?: number; age?: number | null; code?: FailureCode; observedAt?: string; synthetic?: boolean; notificationState?: string };
@@ -9,7 +9,7 @@ export type Delivery = { id: string; incidentId: string; type: AlertType; synthe
   attempts: number; firstAttemptAt?: string; nextAttemptAt?: string; leaseUntil?: string; claim?: string;
   providerId?: string; deliveredAt?: string; failureCode?: string; verificationAttempts?: number; nextVerifyAt?: string };
 export type AlertState = { startedAt: string; lastReportAt: string | null; lastSuccessfulAt: string | null;
-  lastExecutionStartedAt: string | null; incidents: Incident[]; deliveries: Delivery[] };
+  lastExecutionStartedAt: string | null; lastResult?: Report; incidents: Incident[]; deliveries: Delivery[] };
 export interface AlertStore {
   edit<T>(fn: (s: AlertState) => T | Promise<T>): Promise<T>;
   report(execution: string, hash: string, fn: (s: AlertState) => void): Promise<boolean>;
