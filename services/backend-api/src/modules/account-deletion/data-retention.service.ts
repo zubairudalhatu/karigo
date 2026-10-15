@@ -115,6 +115,17 @@ export class DataRetentionService {
     return this.governed(async tx => {
       const holds = await tx.dataRetentionHold.findMany();
       const heldIds = holds.filter(h => h.resourceType === "AdCampaignEvent" && holdActive(h, now)).map(h => h.resourceId);
+      if (!apply) {
+        const unlinkWhere = { occurredAt: { lte: new Date(now.getTime() - 90 * DAY_MS) }, dedupeKeyHash: { not: null } };
+        const disposeWhere = { occurredAt: { lte: addMonths(now, -24) } };
+        const [unlink, dispose, billingProjectionRequired, held] = await Promise.all([
+          tx.adCampaignEvent.count({ where: { ...unlinkWhere, id: { notIn: heldIds } } }),
+          tx.adCampaignEvent.count({ where: { ...disposeWhere, id: { notIn: heldIds } } }),
+          tx.adCampaignEvent.count({ where: { ...disposeWhere, id: { notIn: heldIds }, costKobo: { not: 0 } } }),
+          tx.adCampaignEvent.count({ where: { id: { in: heldIds }, OR: [unlinkWhere, disposeWhere] } })
+        ]);
+        return { dryRun: true, complete: true, unlink, dispose, billingProjectionRequired, held };
+      }
       const events = await tx.adCampaignEvent.findMany({ where: { id: { notIn: heldIds }, occurredAt: { lte: new Date(now.getTime() - 90 * DAY_MS) },
         OR: [{ dedupeKeyHash: { not: null } }, { dedupeKeyHash: null, occurredAt: { lte: addMonths(now, -24) } }] }, orderBy: { occurredAt: "asc" }, take: 500 });
       let unlink = 0, dispose = 0, billingProjectionRequired = 0, held = 0;
@@ -147,15 +158,47 @@ export class DataRetentionService {
     });
   }
 
-  async run(now = new Date(), apply = false, limit = 100, cursors: Record<string, string> = {}) {
+  // Traverse every page for reporting without persisting cursors or identifiers.
+  // A bounded stop is explicitly incomplete, never an empty/complete result.
+  async completeDryRun(now = new Date(), limit = 500, maxPages = 1000) {
+    if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 1000) throw new BadRequestException("Invalid retention reporting bound.");
+    const sources: Record<string, { scanned: number; eligible: number; held: number; dependencyReviewRequired: number }> = {};
+    for (const source of RETENTION_SOURCES) sources[`${source.model}:${source.category}`] = { scanned: 0, eligible: 0, held: 0, dependencyReviewRequired: 0 };
+    let cursors: Record<string, string> = {}, keys: string[] | undefined;
+    let pages = 0, overdueHoldReviews = 0;
+    do {
+      const page = await this.run(now, false, limit, cursors, keys);
+      pages++; overdueHoldReviews = page.overdueHoldReviews.length;
+      for (const [key, count] of Object.entries(page.scanned)) sources[key].scanned += count;
+      for (const [key, counts] of Object.entries(page.outcomes)) {
+        sources[key].eligible += counts.eligible;
+        sources[key].held += counts.held;
+        sources[key].dependencyReviewRequired += counts.dependencyReviewRequired;
+      }
+      cursors = page.nextCursors; keys = Object.keys(cursors);
+    } while (keys.length && pages < maxPages);
+    return { dryRun: true, complete: keys.length === 0, pages, sources, overdueHoldReviews, sourcesRequiringContinuation: keys };
+  }
+
+  async run(now = new Date(), apply = false, limit = 100, cursors: Record<string, string> = {}, sourceKeys?: string[]) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new BadRequestException("Retention batch must be 1–500.");
     return this.governed(async tx => {
       const holds = await tx.dataRetentionHold.findMany();
       const decisions: { model: string; id: string; outcome: string }[] = [];
+      const scanned: Record<string, number> = {};
+      const outcomes: Record<string, { eligible: number; held: number; dependencyReviewRequired: number }> = {};
       const nextCursors: Record<string, string> = {};
       for (const source of RETENTION_SOURCES) {
         // Fetch oldest first with bounded batches; an unfinished record never obtains a deadline.
         const cursorKey = `${source.model}:${source.category}`;
+        if (sourceKeys && !sourceKeys.includes(cursorKey)) continue;
+        outcomes[cursorKey] = { eligible: 0, held: 0, dependencyReviewRequired: 0 };
+        const recordDecision = (id: string, outcome: string) => {
+          if (outcome === "ELIGIBLE") outcomes[cursorKey].eligible++;
+          if (outcome === "HELD") outcomes[cursorKey].held++;
+          if (outcome === "DEPENDENCY_REVIEW_REQUIRED") outcomes[cursorKey].dependencyReviewRequired++;
+          decisions.push({ model: source.model, id, outcome });
+        };
         let after: { at: string; id: string } | undefined;
         if (cursors[cursorKey]) {
           try { after = JSON.parse(Buffer.from(cursors[cursorKey], "base64url").toString("utf8")); } catch { throw new BadRequestException("Invalid retention continuation."); }
@@ -163,8 +206,11 @@ export class DataRetentionService {
         }
         const records = await delegate(tx, source.model).findMany({ where: { AND: [source.where ?? {}, ...(after ? [{ OR: [
           { [source.trigger]: { gt: new Date(after.at) } }, { [source.trigger]: new Date(after.at), id: { gt: after.id } }
-        ] }] : [])] }, orderBy: [{ [source.trigger]: "asc" }, { id: "asc" }],
+        ] }] : [])] }, select: { id: true, [source.trigger]: true,
+          ...(source.caseResolved ? { disputeOpenedAt: true, [source.caseResolved]: true } : {}) },
+          orderBy: [{ [source.trigger]: "asc" }, { id: "asc" }],
           take: limit });
+        scanned[cursorKey] = records.length;
         if (records.length === limit) nextCursors[cursorKey] = Buffer.from(JSON.stringify({ at: (records[records.length - 1][source.trigger] as Date).toISOString(), id: records[records.length - 1].id })).toString("base64url");
         for (const row of records) {
           const id = String(row.id), trigger = row[source.trigger];
@@ -172,10 +218,13 @@ export class DataRetentionService {
           let expires = retentionExpiry(source.category, trigger, FINANCIAL_YEAR_END);
           if (source.caseResolved && row.disputeOpenedAt && !row[source.caseResolved]) continue;
           if (source.caseResolved && row[source.caseResolved] instanceof Date) expires = new Date(Math.max(expires.getTime(), retentionExpiry("CASE", row[source.caseResolved] as Date).getTime()));
+          // A case can only extend this deadline. Avoid per-row registry reads
+          // for young records while still counting every scanned source row.
+          if (expires > now) continue;
           const caseRule = await tx.dataRetentionResource.findUnique({ where: { resourceType_resourceId: { resourceType: source.model, resourceId: id } } });
           if (caseRule && !caseRule.disposedAt) expires = new Date(Math.max(expires.getTime(), caseRule.retainUntil.getTime()));
           if (expires > now) continue;
-          if (isHeld(holds, source.model, id, now) || (caseRule && isHeld(holds, "DataRetentionResource", caseRule.id, now))) { decisions.push({ model: source.model, id, outcome: "HELD" }); continue; }
+          if (isHeld(holds, source.model, id, now) || (caseRule && isHeld(holds, "DataRetentionResource", caseRule.id, now))) { recordDecision(id, "HELD"); continue; }
           // Never cascade away an unknown, younger or held dependency. An operator
           // resolves blocked aggregates explicitly; no force/cascade fallback exists.
           let blocked = false;
@@ -196,16 +245,16 @@ export class DataRetentionService {
               } else if (await delegate(tx, child.name).count({ where: childWhere })) blocked = true;
             }
           }
-          if (blocked) { decisions.push({ model: source.model, id, outcome: "DEPENDENCY_REVIEW_REQUIRED" }); continue; }
+          if (blocked) { recordDecision(id, "DEPENDENCY_REVIEW_REQUIRED"); continue; }
           if (apply) {
             for (const children of ownedChildren) await delegate(tx, children.model).deleteMany({ where: { id: { in: children.ids } } });
             await delegate(tx, source.model).deleteMany({ where: { id } });
             if (caseRule && caseRule.retainUntil <= now) await tx.dataRetentionResource.deleteMany({ where: { id: caseRule.id } });
           }
-          decisions.push({ model: source.model, id, outcome: apply ? "DISPOSED" : "ELIGIBLE" });
+          recordDecision(id, apply ? "DISPOSED" : "ELIGIBLE");
         }
       }
-      return { policyVersion: RETENTION_POLICY_VERSION, dryRun: !apply, decisions, nextCursors,
+      return { policyVersion: RETENTION_POLICY_VERSION, dryRun: !apply, decisions, nextCursors, scanned, outcomes,
         overdueHoldReviews: holds.filter(h => holdActive(h, now) && h.nextReviewAt <= now).map(h => h.id) };
     });
   }

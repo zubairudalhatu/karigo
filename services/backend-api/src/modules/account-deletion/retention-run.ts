@@ -23,6 +23,15 @@ async function main() {
     const now = new Date();
     const receipts = await retention.expireReceiptCapabilities(now, apply);
     const sponsoredEvents = await retention.sponsoredEventRetention(now, apply);
+    if (!apply) {
+      const run = await retention.completeDryRun(now);
+      const exports = await TemporaryPiiExports.inventory(db, now, Boolean(process.env.RETENTION_EXPORT_DIRECTORY));
+      console.log(JSON.stringify({ policyVersion: RETENTION_POLICY_VERSION, financialAccountingTimeZone: FINANCIAL_ACCOUNTING_TIME_ZONE,
+        asOf: now.toISOString(), dryRun: true, complete: run.complete, receipts, sponsoredEvents,
+        sources: run.sources, pages: run.pages, overdueHoldReviews: run.overdueHoldReviews,
+        sourcesRequiringContinuation: run.sourcesRequiringContinuation, exports }));
+      return;
+    }
     const cursorPath = process.env.RETENTION_CURSOR_FILE;
     const cursors = cursorPath ? JSON.parse(await readFile(cursorPath, "utf8").catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return "{}"; throw error; })) as Record<string, string> : {};
     const run = await retention.run(now, apply, 100, cursors);

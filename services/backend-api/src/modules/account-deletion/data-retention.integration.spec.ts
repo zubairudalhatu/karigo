@@ -119,4 +119,65 @@ suite("Retention enforcement — synthetic PostgreSQL only", () => {
     expect(await db.utilityTransaction.findUnique({ where: { id: row.id } })).toBeNull();
   });
 
+  it("counts every security/audit page without restarting completed sources; holds and repeat cleanup are safe", async () => {
+    const vendor = await db.vendor.create({ data: { userId: actorId, businessName: "Synthetic audit fixture", businessCategory: "FOOD",
+      phoneNumber: "fixture-only", address: "Synthetic", city: "Abuja", state: "FCT", status: "ACTIVE" } });
+    const sources = [
+      { model: "UserLoginActivity", make: (date: Date) => db.userLoginActivity.create({ data: { userId: actorId, outcome: "SUCCESS", createdAt: date } }) },
+      { model: "AdminAuditLog", make: (date: Date) => db.adminAuditLog.create({ data: { adminUserId: actorId, action: "fixture", entityType: "Synthetic", createdAt: date } }) },
+      { model: "VendorAuditLog", make: (date: Date) => db.vendorAuditLog.create({ data: { vendorId: vendor.id, actorUserId: actorId, action: "fixture", entityType: "Synthetic", createdAt: date } }) }
+    ];
+    const fixtures = [];
+    for (const source of sources) {
+      const expired = await source.make(new Date("1800-01-01Z"));
+      const held = await source.make(new Date("1800-01-02Z"));
+      const young = await source.make(new Date("2018-01-01Z"));
+      await service.createHold({ actorId, authorityReference: "SYNTHETIC-LOG-HOLD", resourceType: source.model, resourceId: held.id,
+        kind: "COURT", reasonCode: "SYNTHETIC-SECURITY" }, new Date("2018-01-01Z"));
+      fixtures.push({ ...source, expired, held, young });
+    }
+    const before = await service.completeDryRun(now, 5);
+    expect(before.complete).toBe(true); expect(before.sourcesRequiringContinuation).toEqual([]);
+    for (const source of fixtures) {
+      expect(before.sources[`${source.model}:SECURITY`].eligible).toBeGreaterThanOrEqual(1);
+      expect(before.sources[`${source.model}:SECURITY`].held).toBeGreaterThanOrEqual(1);
+      const d = (db as any)[source.model[0].toLowerCase() + source.model.slice(1)];
+      expect(before.sources[`${source.model}:SECURITY`].scanned).toBe(await d.count(source.model === "AdminAuditLog"
+        ? { where: { action: { not: "CUSTOMER_ERASURE_COMPLETED" } } } : {}));
+      expect(await d.findUnique({ where: { id: source.expired.id } })).not.toBeNull();
+    }
+    const applied = await service.run(now, true, 500);
+    const repeated = await service.run(now, true, 500);
+    for (const source of fixtures) {
+      const d = (db as any)[source.model[0].toLowerCase() + source.model.slice(1)];
+      expect(applied.decisions).toContainEqual({ model: source.model, id: source.expired.id, outcome: "DISPOSED" });
+      expect(await d.findUnique({ where: { id: source.held.id } })).not.toBeNull();
+      expect(await d.findUnique({ where: { id: source.young.id } })).not.toBeNull();
+      expect(repeated.decisions.some(r => r.id === source.expired.id)).toBe(false);
+    }
+    const bounded = await service.completeDryRun(now, 1, 1);
+    expect(bounded.complete).toBe(false); expect(bounded.sourcesRequiringContinuation.length).toBeGreaterThan(0);
+    expect(JSON.stringify(bounded)).not.toContain(actorId);
+  });
+
+  it("export inventory is complete without a guessed directory, and holds prevent file deletion", async () => {
+    const exports = new TemporaryPiiExports(db as unknown as PrismaService, directory);
+    const exported = await exports.create(Buffer.from("synthetic export"), new Date("2018-01-01Z"));
+    const hold = await service.createHold({ actorId, authorityReference: "SYNTHETIC-EXPORT-HOLD", resourceType: "DataRetentionResource",
+      resourceId: exported.id, kind: "COURT", reasonCode: "SYNTHETIC-EXPORT-CASE" }, new Date("2018-01-01Z"));
+    const report = await TemporaryPiiExports.inventory(db as unknown as PrismaService, now, false);
+    expect(report.directoryConfigured).toBe(false); expect(report.held).toBeGreaterThanOrEqual(1); expect(report.complete).toBe(true);
+    expect((await exports.cleanup(now, true)).held).toBeGreaterThanOrEqual(1);
+    expect((await db.dataRetentionResource.findUniqueOrThrow({ where: { id: exported.id } })).disposedAt).toBeNull();
+    await service.reviewHold(hold.id, actorId, "SYNTHETIC-RELEASE", "RELEASE", now);
+    expect((await exports.cleanup(now, false)).eligible).toBeGreaterThanOrEqual(1);
+    expect((await exports.cleanup(now, true)).disposed).toBeGreaterThanOrEqual(1);
+    expect((await exports.cleanup(now, true)).disposed).toBe(0);
+    expect((await db.dataRetentionResource.findUniqueOrThrow({ where: { id: exported.id } })).disposedAt).toEqual(now);
+    const unbound = await db.dataRetentionResource.create({ data: { resourceType: "TemporaryExport", resourceId: randomUUID(), category: "EXPORT",
+      triggerAt: new Date("2010-01-01Z"), retainUntil: new Date("2010-01-31Z"), policyVersion: "fixture" } });
+    expect((await exports.cleanup(now, true)).reviewRequired).toBeGreaterThanOrEqual(1);
+    expect((await db.dataRetentionResource.findUniqueOrThrow({ where: { id: unbound.id } })).disposedAt).toBeNull();
+  });
+
 });
