@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { RetentionAlertsModule } from "./modules/retention-alerts/retention-alerts.module";
 import { ConfigModule } from "@nestjs/config";
 import { validateEnvironment } from "./config/environment";
 import { DomainModule } from "./domain/domain.module";
@@ -39,6 +40,7 @@ import { ServiceProviderRequestsModule } from "./modules/service-provider-reques
 
 @Module({
   imports: [
+    RetentionAlertsModule,
     ConfigModule.forRoot({
       isGlobal: true,
       validate: validateEnvironment

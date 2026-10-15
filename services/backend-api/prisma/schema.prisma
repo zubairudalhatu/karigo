@@ -2,6 +2,20 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Operational aggregates only: no Customer/financial relationships or identity.
+model RetentionAlertState {
+  id        String   @id
+  state     Json
+  updatedAt DateTime @default(now())
+}
+
+model RetentionAlertReport {
+  id        String   @id
+  hash      String
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
