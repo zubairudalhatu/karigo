@@ -158,7 +158,9 @@ assert(services.includes("https://vendor.karigo.com.ng/register"), "Services pag
 
 const contact = read("app", "contact", "page.tsx");
 assert(contact.includes("ContactInquiryForm"), "Contact page must render the inquiry form.");
-assert(contact.includes("Public contact details are intentionally not displayed"), "Contact page must avoid direct contact detail exposure.");
+assert(contact.includes('href="mailto:meetup@karigo.com.ng"'), "Contact page must offer the approved public support mailbox.");
+assert(contact.includes('href="tel:+2348057092686"'), "Contact page must offer the approved public support phone.");
+assert(contact.includes("Contacting support is not required to start it."), "Support must not become a prerequisite for Customer deletion.");
 
 const contactForm = read("src", "components", "contact-inquiry-form.tsx");
 assert(contactForm.includes("Submit Inquiry"), "Contact inquiry form must include a visible submit button.");
