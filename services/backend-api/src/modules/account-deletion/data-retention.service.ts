@@ -1,7 +1,7 @@
 import { Injectable, ForbiddenException, BadRequestException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
-import { addMonths, DAY_MS, holdActive, isHeld, RetentionCategory, retentionExpiry, RETENTION_POLICY_VERSION } from "./retention-policy";
+import { accountingDayStart, accountingMonthStart, addMonths, DAY_MS, holdActive, isHeld, RetentionCategory, retentionExpiry, RETENTION_POLICY_VERSION } from "./retention-policy";
 
 export const FINANCIAL_YEAR_END = { month: 12, day: 31 }; // owner confirmed 15 October 2026
 const holdKinds = new Set(["INTERNAL", "LEGAL", "COURT", "REGULATORY"]);
@@ -125,14 +125,14 @@ export class DataRetentionService {
           // No User/Customer identifier or render token is otherwise stored on
           // this model. Remove the hash and precision useful for correlation.
           if (apply) await tx.adCampaignEvent.update({ where: { id: row.id }, data: { dedupeKeyHash: null,
-            occurredAt: new Date(Date.UTC(row.occurredAt.getUTCFullYear(), row.occurredAt.getUTCMonth(), row.occurredAt.getUTCDate())) } });
+            occurredAt: accountingDayStart(row.occurredAt) } });
         }
         if (addMonths(row.occurredAt, 24) <= now) {
           if (row.costKobo !== 0) {
             billingProjectionRequired++;
             if (apply) {
               const campaign = await tx.adCampaign.findUniqueOrThrow({ where: { id: row.campaignId }, select: { campaignReference: true } });
-              const eventMonth = new Date(Date.UTC(row.occurredAt.getUTCFullYear(), row.occurredAt.getUTCMonth(), 1));
+              const eventMonth = accountingMonthStart(row.occurredAt);
               await tx.adCampaignBillingAggregate.upsert({ where: { campaignId_eventMonth_eventType: { campaignId: row.campaignId, eventMonth, eventType: row.eventType } },
                 create: { campaignId: row.campaignId, campaignReference: campaign.campaignReference, eventMonth, eventType: row.eventType, eventCount: 1, costKobo: row.costKobo },
                 update: { eventCount: { increment: 1 }, costKobo: { increment: row.costKobo } } });

@@ -3,7 +3,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { DataRetentionService } from "./data-retention.service";
 import { TemporaryPiiExports } from "./temporary-pii-exports";
 import { databaseIdentityHash } from "./restore-deletion-replay";
-import { RETENTION_POLICY_VERSION } from "./retention-policy";
+import { FINANCIAL_ACCOUNTING_TIME_ZONE, RETENTION_POLICY_VERSION } from "./retention-policy";
 
 async function main() {
   const fixtureApply = process.argv.includes("--apply-fixtures");
@@ -30,7 +30,7 @@ async function main() {
     const counts: Record<string, number> = {};
     for (const decision of run.decisions) counts[`${decision.model}:${decision.outcome}`] = (counts[`${decision.model}:${decision.outcome}`] ?? 0) + 1;
     const exports = process.env.RETENTION_EXPORT_DIRECTORY ? await new TemporaryPiiExports(db, process.env.RETENTION_EXPORT_DIRECTORY).cleanup(now, apply) : { status: "MANAGED_EXPORT_DIRECTORY_NOT_CONFIGURED" };
-    console.log(JSON.stringify({ policyVersion: run.policyVersion, dryRun: !apply, receipts, sponsoredEvents, counts, overdueHoldReviews: run.overdueHoldReviews.length,
+    console.log(JSON.stringify({ policyVersion: run.policyVersion, financialAccountingTimeZone: FINANCIAL_ACCOUNTING_TIME_ZONE, dryRun: !apply, receipts, sponsoredEvents, counts, overdueHoldReviews: run.overdueHoldReviews.length,
       sourcesRequiringContinuation: Object.keys(run.nextCursors), exports }));
   } finally { await db.onModuleDestroy(); }
 }

@@ -110,4 +110,13 @@ suite("Retention enforcement — synthetic PostgreSQL only", () => {
     expect(next.decisions).toContainEqual({ model: "AccountSecurityEvent", id: second.id, outcome: "DISPOSED" });
   });
 
+  it("does not purge a Lagos New Year financial record one year early", async () => {
+    const row = await utility(new Date("2019-12-31T23:30:00Z")); // 1 January 2020 WAT
+    await service.run(new Date("2027-01-01T00:00:00Z"), true);
+    expect(await db.utilityTransaction.findUnique({ where: { id: row.id } })).not.toBeNull();
+    const due = await service.run(new Date("2027-12-31T23:00:00Z"), true);
+    expect(due.decisions).toContainEqual({ model: "UtilityTransaction", id: row.id, outcome: "DISPOSED" });
+    expect(await db.utilityTransaction.findUnique({ where: { id: row.id } })).toBeNull();
+  });
+
 });

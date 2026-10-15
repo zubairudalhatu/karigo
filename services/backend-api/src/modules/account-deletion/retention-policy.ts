@@ -1,5 +1,8 @@
 export const RETENTION_POLICY_VERSION = "KGO-RETENTION-2026-10-15";
 export const DAY_MS = 86_400_000;
+export const FINANCIAL_ACCOUNTING_TIME_ZONE = "Africa/Lagos";
+// Owner-confirmed WAT accounting boundary, UTC+1 (15 October 2026).
+const FINANCIAL_ACCOUNTING_OFFSET_MS = 60 * 60 * 1000;
 
 function validDate(date: Date) {
   if (!Number.isFinite(date.getTime())) throw new Error("A verified retention trigger is required.");
@@ -16,16 +19,30 @@ export function addMonths(date: Date, months: number) {
   return result;
 }
 
+export function accountingDayStart(date: Date) {
+  validDate(date);
+  const local = new Date(date.getTime() + FINANCIAL_ACCOUNTING_OFFSET_MS);
+  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - FINANCIAL_ACCOUNTING_OFFSET_MS);
+}
+export function accountingMonthStart(date: Date) {
+  validDate(date);
+  const local = new Date(date.getTime() + FINANCIAL_ACCOUNTING_OFFSET_MS);
+  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), 1) - FINANCIAL_ACCOUNTING_OFFSET_MS);
+}
+
 export function financialExpiry(transactionAt: Date, yearEnd: { month: number; day: number }) {
   validDate(transactionAt);
   if (!Number.isInteger(yearEnd.month) || !Number.isInteger(yearEnd.day) || yearEnd.month < 1 || yearEnd.month > 12
     || yearEnd.day < 1 || yearEnd.day > new Date(Date.UTC(2001, yearEnd.month, 0)).getUTCDate()) {
     throw new Error("An approved recurring financial year-end is required.");
   }
-  let year = transactionAt.getUTCFullYear();
-  let endExclusive = new Date(Date.UTC(year, yearEnd.month - 1, yearEnd.day + 1));
-  if (transactionAt >= endExclusive) endExclusive = new Date(Date.UTC(++year, yearEnd.month - 1, yearEnd.day + 1));
-  return addMonths(endExclusive, 84);
+  const localTransaction = new Date(transactionAt.getTime() + FINANCIAL_ACCOUNTING_OFFSET_MS);
+  let year = localTransaction.getUTCFullYear();
+  const endExclusive = (endYear: number) => new Date(Date.UTC(endYear, yearEnd.month - 1, yearEnd.day + 1) - FINANCIAL_ACCOUNTING_OFFSET_MS);
+  if (transactionAt >= endExclusive(year)) year++;
+  // Construct the local year-end after seven years, rather than adding months
+  // to a UTC date that falls on the preceding local calendar day.
+  return endExclusive(year + 7);
 }
 
 export type RetentionCategory = "FINANCIAL" | "CASE" | "SECURITY" | "SUPPORT" | "EXPORT" | "DELETION_AUDIT";

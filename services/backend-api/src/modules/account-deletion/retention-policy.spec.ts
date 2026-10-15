@@ -1,14 +1,24 @@
 import { Prisma } from "@prisma/client";
-import { addMonths, DAY_MS, financialExpiry, holdActive, isHeld, receiptExpired, retentionExpiry, ScopedHold } from "./retention-policy";
+import { accountingDayStart, accountingMonthStart, addMonths, DAY_MS, financialExpiry, holdActive, isHeld, receiptExpired, retentionExpiry, ScopedHold } from "./retention-policy";
 import { RETENTION_SOURCES } from "./data-retention.service";
 
 describe("Approved retention policy boundaries", () => {
   const now = new Date("2026-10-15T12:00:00Z");
   it("retains through seven complete years after the confirmed financial year end", () => {
-    expect(financialExpiry(new Date("2026-01-01T00:00:00Z"), { month: 12, day: 31 }).toISOString()).toBe("2034-01-01T00:00:00.000Z");
-    expect(financialExpiry(new Date("2026-12-31T23:59:59Z"), { month: 12, day: 31 }).toISOString()).toBe("2034-01-01T00:00:00.000Z");
-    expect(financialExpiry(new Date("2027-01-01T00:00:00Z"), { month: 12, day: 31 }).toISOString()).toBe("2035-01-01T00:00:00.000Z");
+    const yearEnd = { month: 12, day: 31 };
+    expect(financialExpiry(new Date("2026-01-01T00:00:00Z"), yearEnd).toISOString()).toBe("2033-12-31T23:00:00.000Z");
+    expect(financialExpiry(new Date("2026-12-31T22:59:59.999Z"), yearEnd).toISOString()).toBe("2033-12-31T23:00:00.000Z");
+    expect(financialExpiry(new Date("2026-12-31T23:00:00Z"), yearEnd).toISOString()).toBe("2034-12-31T23:00:00.000Z");
+    expect(financialExpiry(new Date("2027-01-01T00:00:00Z"), yearEnd).toISOString()).toBe("2034-12-31T23:00:00.000Z");
     expect(() => retentionExpiry("FINANCIAL", now)).toThrow("year-end");
+  });
+  it("does not assign Nigeria New Year transactions to the preceding financial year", () => {
+    const at = new Date("2019-12-31T23:30:00Z"); // 1 January 2020, 00:30 WAT
+    expect(accountingDayStart(at).toISOString()).toBe("2019-12-31T23:00:00.000Z");
+    expect(accountingMonthStart(at).toISOString()).toBe("2019-12-31T23:00:00.000Z");
+    expect(financialExpiry(accountingMonthStart(at), { month: 12, day: 31 }).toISOString()).toBe("2027-12-31T23:00:00.000Z");
+    expect(financialExpiry(at, { month: 12, day: 31 }).toISOString()).toBe("2027-12-31T23:00:00.000Z");
+    expect(financialExpiry(new Date("2026-06-30T23:00:00Z"), { month: 6, day: 30 }).toISOString()).toBe("2034-06-30T23:00:00.000Z");
   });
   it("uses calendar months and an actual resolution/closure trigger", () => {
     expect(addMonths(new Date("2024-02-29T12:00:00Z"), 24).toISOString()).toBe("2026-02-28T12:00:00.000Z");
