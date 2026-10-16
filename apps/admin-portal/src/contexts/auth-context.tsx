@@ -1,16 +1,16 @@
 "use client";
 
-import type { AuthenticatedUser, LoginRequest } from "@karigo/shared-types";
+import type { LoginRequest } from "@karigo/shared-types";
 import { KariGoApiError } from "@karigo/shared-types";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
-import { authApi } from "../api/auth.api";
+import { authApi, type AdminPortalUser } from "../api/auth.api";
 import { onUnauthorized } from "../api/client";
 import { normalizeNigerianPhoneNumber } from "../lib/phone";
 
 interface AuthContextValue {
-  user: AuthenticatedUser | null;
+  user: AdminPortalUser | null;
   loading: boolean;
-  login(body: LoginRequest): Promise<void>;
+  login(body: LoginRequest | {email:string;password:string}): Promise<void>;
   logout(): Promise<void>;
 }
 
@@ -21,7 +21,7 @@ function isAuthStatus(error: unknown): boolean {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthenticatedUser | null>(null);
+  const [user, setUser] = useState<AdminPortalUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         login: async (body) => {
-          const result = await authApi.login({
+          const result = "email" in body ? await authApi.emailLogin(body) : await authApi.login({
             ...body,
             phoneNumber: normalizeNigerianPhoneNumber(body.phoneNumber)
           });

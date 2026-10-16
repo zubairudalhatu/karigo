@@ -49,6 +49,11 @@ describe("RideRealtimeGateway", () => {
     expect(client.disconnect).toHaveBeenCalledWith(true);
   });
 
+  it("rejects restore-governance identities before joining any room", async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: "governance-fixture", accountStatus: AccountStatus.ACTIVE, deletedAt: null, adminRole: "RESTORE_GOVERNANCE" });
+    await gateway.handleConnection(client); expect(client.join).not.toHaveBeenCalled();expect(client.disconnect).toHaveBeenCalledWith(true);
+  });
+
   it("authorizes Ride membership before joining a Ride room", async () => {
     client.data.userId = "user-id";
     const result = await gateway.subscribe(client, { rideId });

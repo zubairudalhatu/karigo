@@ -7,10 +7,14 @@ import { NextResponse } from "next/server";
 const ACCESS_COOKIE = "karigo_admin_access";
 const REFRESH_COOKIE = "karigo_admin_refresh";
 const CSRF_COOKIE = "karigo_admin_csrf";
+const MODE_COOKIE = "karigo_admin_mode";
 const REQUIRED_ROLE = "ADMIN";
 
 const PUBLIC_AUTH_PATHS = [
   "auth/login",
+  "auth/admin-email/login",
+  "auth/admin-email/password-reset/request",
+  "auth/admin-email/password/complete",
   "auth/password-reset/request",
   "auth/password-reset/confirm",
   "auth/resend-otp",
@@ -111,7 +115,7 @@ function setSessionCookies(response: NextResponse, accessToken: string, refreshT
 }
 
 function clearSessionCookies(response: NextResponse) {
-  for (const name of [ACCESS_COOKIE, REFRESH_COOKIE, CSRF_COOKIE]) {
+  for (const name of [ACCESS_COOKIE, REFRESH_COOKIE, CSRF_COOKIE, MODE_COOKIE]) {
     response.cookies.set(name, "", {
       httpOnly: name !== CSRF_COOKIE,
       secure: cookieSecure(),
@@ -200,7 +204,11 @@ async function refreshSession(request: NextRequest) {
 }
 
 export async function handleBffRequest(request: NextRequest, pathParts: string[]) {
-  const path = pathParts.join("/");
+  let path = pathParts.join("/");
+  if (request.cookies.get(MODE_COOKIE)?.value === "governance") {
+    if (path === "auth/me") path = "auth/admin-email/me";
+    if (path === "auth/logout") path = "auth/admin-email/logout";
+  }
   const csrfFailure = validateCsrf(request, path);
   if (csrfFailure) return csrfFailure;
 
@@ -278,7 +286,12 @@ export async function handleBffRequest(request: NextRequest, pathParts: string[]
     status: backendResponse.status
   });
   if (refreshed?.accessToken) setSessionCookies(response, refreshed.accessToken, refreshed.refreshToken);
-  if (accessFromPayload) setSessionCookies(response, accessFromPayload, refreshFromPayload);
-  if (path === "auth/logout" || backendResponse.status === 401) clearSessionCookies(response);
+  if (accessFromPayload) {
+    setSessionCookies(response, accessFromPayload, refreshFromPayload);
+    const governance = isPlainRecord(data?.user) && data.user.adminRole === "RESTORE_GOVERNANCE";
+    response.cookies.set(MODE_COOKIE, governance ? "governance" : "", {httpOnly:true,secure:cookieSecure(),sameSite:sameSite(),path:"/",maxAge:governance?900:0});
+    if(governance) response.cookies.set(REFRESH_COOKIE,"",{httpOnly:true,secure:cookieSecure(),sameSite:sameSite(),path:"/",maxAge:0});
+  }
+  if (path === "auth/logout" || path === "auth/admin-email/logout" || backendResponse.status === 401) clearSessionCookies(response);
   return response;
 }

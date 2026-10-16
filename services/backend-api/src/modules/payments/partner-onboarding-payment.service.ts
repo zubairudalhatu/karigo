@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PartnerCommercialModel, PartnerOnboardingPaymentStatus, Prisma } from "@prisma/client";
@@ -55,7 +56,7 @@ export class PartnerOnboardingPaymentService {
         amount: (intent.amountKobo / 100).toFixed(2),
         currency: intent.currency,
         customerEmail: agreement.applicant.email,
-        customerPhone: agreement.applicant.phoneNumber,
+        customerPhone: requiredMobile(agreement.applicant.phoneNumber),
         metadata: { purpose: "PARTNER_ONBOARDING_FEE", agreementId: agreement.id, applicationId: agreement.applicationId, applicantUserId: userId }
       });
       const payment = await this.prisma.partnerOnboardingPayment.update({

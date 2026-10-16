@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import {
   AccountStatus,
@@ -185,14 +186,14 @@ export class QuickLaunchService {
     return users.filter((user) => !user.deletedAt).filter((user) => !term
       ? user.role === UserRole.CUSTOMER || Boolean(user.customerProfile)
       : [user.fullName, user.phoneNumber, user.email, user.customerProfile?.referralCode].some((value) => String(value ?? "").toLowerCase().includes(term))
-        || Boolean(phoneDigits && nigerianPhoneSearchDigits(user.phoneNumber) === phoneDigits))
+        || Boolean(phoneDigits && nigerianPhoneSearchDigits(requiredMobile(user.phoneNumber)) === phoneDigits))
       .map((user) => this.customerCandidate(city, user));
   }
 
   private customerCandidate(city: typeof CITIES[number], user: {
     id: string;
     fullName: string;
-    phoneNumber: string;
+    phoneNumber: string | null;
     email?: string | null;
     role?: UserRole;
     accountStatus: AccountStatus;
@@ -296,7 +297,7 @@ export class QuickLaunchService {
         businessName: source.businessName,
         tradingName: source.tradingName ?? undefined,
         partnerCode: source.applicationReference ?? undefined,
-        phoneNumber: source.phoneNumber || source.user.phoneNumber,
+        phoneNumber: requiredMobile(source.phoneNumber) || requiredMobile(source.user.phoneNumber),
         capability: eligibility?.capability ?? source.partnerType ?? "PRODUCT_SELLER",
         city: source.city,
         blockers: [...new Set(eligibility?.blockers ?? ["PROFILE_INCOMPLETE"])]

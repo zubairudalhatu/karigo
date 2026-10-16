@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { TaxiTripLifecycleDefinition } from "@karigo/shared-types";
@@ -398,7 +399,7 @@ export class TaxiService {
         trashedAt: null,
         OR: [
           { applicantUserId: user.id },
-          { phoneNumber: user.phoneNumber }
+          { phoneNumber: requiredMobile(user.phoneNumber) }
         ]
       },
       select: TAXI_APPLICATION_DETAIL_SELECT,

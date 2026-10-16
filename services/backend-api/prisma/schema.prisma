@@ -29,6 +29,7 @@ enum UserRole {
 }
 
 enum AdminRole {
+  RESTORE_GOVERNANCE
   SUPER_ADMIN
   OPERATIONS_ADMIN
   DISPATCH_OFFICER
@@ -923,9 +924,10 @@ enum TaxiRideCommissionPaymentStatus {
 }
 
 model User {
+  adminEmailIdentity AdminEmailIdentity?
   id                                  String                               @id @default(uuid()) @db.Uuid
   fullName                            String
-  phoneNumber                         String                               @unique
+  phoneNumber                         String?                              @unique
   email                               String?                              @unique
   passwordHash                        String
   role                                UserRole
@@ -3615,4 +3617,51 @@ model LaunchCapacityDenial {
 
   @@index([cityCode, serviceType, occurredAt])
   @@map("launch_capacity_denials")
+}
+
+
+
+model GovernanceSecurityEvent {
+  id        String   @id @db.Uuid
+  event     String
+  actor     String?  @db.Uuid
+  subject   String?  @db.Uuid
+  facts     Json
+  createdAt DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz
+
+  @@index([subject, createdAt], map: "governance_security_events_subject_time")
+  @@map("governance_security_events")
+}
+
+model GovernanceControlState {
+  key      String @id
+  payload  Json
+  revision Int    @default(0)
+
+  @@map("governance_control_state")
+}
+
+model AdminEmailIdentity {
+  emailKey String @unique
+  userId String @id @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  credentialVersion Int @default(0)
+  failedLogins Int @default(0)
+  lockedUntil DateTime?
+  lastChallengeAt DateTime?
+  createdAt DateTime @default(now())
+  challenges AdminEmailChallenge[]
+  @@map("admin_email_identities")
+}
+model AdminEmailChallenge {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  identity AdminEmailIdentity @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  tokenHash String @unique
+  purpose String
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, createdAt])
+  @@map("admin_email_challenges")
 }

@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import {
   AccountStatus,
@@ -225,7 +226,7 @@ export class RidersService {
           trashedAt: null,
           OR: [
             { applicantUserId: user.id },
-            { phoneNumber: user.phoneNumber }
+            { phoneNumber: requiredMobile(user.phoneNumber) }
           ]
         },
         select: DELIVERY_CAPTAIN_APPLICATION_SELECT,
@@ -240,7 +241,7 @@ export class RidersService {
           trashedAt: null,
           OR: [
             { applicantUserId: user.id },
-            { phoneNumber: user.phoneNumber }
+            { phoneNumber: requiredMobile(user.phoneNumber) }
           ]
         },
         select: RIDE_CAPTAIN_APPLICATION_SELECT,
@@ -614,7 +615,7 @@ export class RidersService {
         trashedAt: null,
         OR: [
           { applicantUserId: user.id },
-          { phoneNumber: user.phoneNumber }
+          { phoneNumber: requiredMobile(user.phoneNumber) }
         ]
       },
       select: DELIVERY_CAPTAIN_APPLICATION_SELECT,
@@ -650,7 +651,7 @@ export class RidersService {
         status: DeliveryCaptainApplicationStatus.CHANGES_REQUESTED,
         OR: [
           { applicantUserId: user.id },
-          { phoneNumber: user.phoneNumber }
+          { phoneNumber: requiredMobile(user.phoneNumber) }
         ]
       },
       select: DELIVERY_CAPTAIN_APPLICATION_SELECT,

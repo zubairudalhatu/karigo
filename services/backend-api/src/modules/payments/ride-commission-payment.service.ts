@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
@@ -72,7 +73,7 @@ export class RideCommissionPaymentService {
         amount: (outstandingKobo / 100).toFixed(2),
         currency: "NGN",
         customerEmail: profile.user.email,
-        customerPhone: profile.user.phoneNumber,
+        customerPhone: requiredMobile(profile.user.phoneNumber),
         metadata: {
           purpose: "RIDE_COMMISSION_REMITTANCE",
           commissionPaymentId: intent.id,

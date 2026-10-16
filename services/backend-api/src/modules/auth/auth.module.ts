@@ -1,3 +1,6 @@
+import { GovernanceAuthService, GovernanceEmailSender, GovernanceAuthController, GovernanceAuthGuard, GovernanceRequestLimitGuard, GovernanceLoginValidationAudit } from "./governance-auth";
+import { GovernanceControlsService, GovernanceAdministrationController, RestoreGovernanceController, RESTORE_RELEASE_AUDIT } from "./governance-controls";
+import { governanceJournalProvider } from "./governance-journal-provider";
 import { Module } from "@nestjs/common";
 import { PassportModule } from "@nestjs/passport";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -16,9 +19,14 @@ import { PhoneChangeService } from "./phone-change.service";
 
 @Module({
   imports: [PassportModule.register({ defaultStrategy: "jwt" }), UsersModule],
-  controllers: [AuthController],
+  controllers: [AuthController, GovernanceAuthController, GovernanceAdministrationController, RestoreGovernanceController],
   providers: [
-    AuthService,
+    AuthService, GovernanceAuthService, GovernanceEmailSender, GovernanceAuthGuard, GovernanceRequestLimitGuard,
+    GovernanceLoginValidationAudit,
+    GovernanceControlsService,
+    // No credentials or broad IAM are introduced by installing inert endpoints.
+    // A separately reviewed keyless GCS adapter must be bound before enabling approvals.
+    governanceJournalProvider,
     AccountActivationEmailService,
     ApplicationNotificationsService,
     OtpService,

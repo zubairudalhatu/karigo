@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import {
   BadGatewayException,
   BadRequestException,
@@ -115,7 +116,7 @@ export class PaymentsService {
         amount: order.totalAmount.toFixed(2),
         currency: payment.currency,
         customerEmail: order.customer.user.email,
-        customerPhone: order.customer.user.phoneNumber,
+        customerPhone: requiredMobile(order.customer.user.phoneNumber),
         metadata: {
           orderId: order.id,
           orderNumber: order.orderNumber,
@@ -202,7 +203,7 @@ export class PaymentsService {
         amount: amount.toFixed(2),
         currency: payment.currency,
         customerEmail: customer.user.email,
-        customerPhone: customer.user.phoneNumber,
+        customerPhone: requiredMobile(customer.user.phoneNumber),
         redirectUrl: this.walletTopUpReturnUrl(transactionReference),
         metadata: {
           paymentId: payment.id,

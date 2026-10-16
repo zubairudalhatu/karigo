@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NotificationType, PhoneChangeAssurance, PhoneChangeStatus, Prisma, UserRole } from "@prisma/client";
@@ -32,7 +33,7 @@ export class PhoneChangeService {
       await this.prisma.phoneChangeRequest.updateMany({ where: { userId, status: PhoneChangeStatus.PENDING_NEW_PHONE_VERIFICATION }, data: { status: PhoneChangeStatus.CANCELLED, cancelledAt: new Date() } });
       const expiresAt = new Date(Date.now() + this.config.get<number>("OTP_EXPIRY_MINUTES", 10) * 60_000);
       const request = await this.prisma.phoneChangeRequest.create({ data: {
-        userId, oldPhoneNumber: user.phoneNumber, newPhoneNumber, expiresAt, assurance: PhoneChangeAssurance.RECENT_PASSWORD
+        userId, oldPhoneNumber: requiredMobile(user.phoneNumber), newPhoneNumber, expiresAt, assurance: PhoneChangeAssurance.RECENT_PASSWORD
       }});
       const verification = await this.otp.issue(userId, newPhoneNumber, { enforceCooldown: true, purpose: this.purpose(request.id) });
       await this.prisma.accountSecurityEvent.create({ data: { userId, action: "phone_change.requested", metadata: { requestId: request.id, assurance: request.assurance } } });

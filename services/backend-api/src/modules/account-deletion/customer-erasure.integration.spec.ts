@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import { ConflictException, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
@@ -72,7 +73,7 @@ suite("Customer erasure — real isolated PostgreSQL", () => {
       amountKobo: 100000, totalKobo: 100000, recipient: "synthetic-private-meter", recipientName: user.fullName, mockToken: "synthetic-token",
       status: "SUCCESSFUL", providerStatus: "SUCCESSFUL", providerReference: `provider:${tag}`, metadata: { token: "synthetic-token", walletDebitReference: debit.reference, walletDebitStatus: "POSTED", email: user.email } } });
     const ticket = await db.supportTicket.create({ data: { customerId, ticketNumber: `ticket:${tag}`, category: "PAYMENT_ISSUE", subject: user.email!,
-      description: user.fullName, status: "CLOSED", messages: { create: { senderUserId: user.id, senderRole: "CUSTOMER", message: user.phoneNumber } } } });
+      description: user.fullName, status: "CLOSED", messages: { create: { senderUserId: user.id, senderRole: "CUSTOMER", message: requiredMobile(user.phoneNumber) } } } });
     await db.deviceToken.create({ data: { userId: user.id, token: `ExponentPushToken[fixture-${tag}]`, platform: "IOS", provider: "EXPO", appSurface: "CUSTOMER_APP" } });
     await db.refreshToken.create({ data: { userId: user.id, tokenHash: tag, expiresAt: new Date(Date.now() + 86_400_000) } });
     await db.biometricCredential.create({ data: { userId: user.id, credentialIdHash: tag, appSurface: "CUSTOMER_APP", platform: "IOS" } });

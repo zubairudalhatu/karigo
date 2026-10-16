@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { AccountStatus, Prisma, UserRole, VendorActivationInvitationStatus, VendorApplicationStatus, VendorStatus } from "@prisma/client";
@@ -287,7 +288,7 @@ export class VendorApplicationsService {
         deletedAt: null,
         OR: [
           { applicantUserId: user.id },
-          { contactPhoneNumber: user.phoneNumber },
+          { contactPhoneNumber: requiredMobile(user.phoneNumber) },
           ...(user.email ? [{ contactEmail: { equals: user.email, mode: "insensitive" as const } }] : [])
         ]
       },
@@ -377,7 +378,7 @@ export class VendorApplicationsService {
     const user = await this.loadPartnerOnboardingUser(userId);
     this.assertPartnerOnboardingAccount(user);
     const businessPhoneNumber = this.normalizePhone(dto.businessPhoneNumber);
-    const contactPhoneNumber = this.normalizePhone(dto.contactPhoneNumber || user.phoneNumber);
+    const contactPhoneNumber = this.normalizePhone(dto.contactPhoneNumber || requiredMobile(user.phoneNumber));
     const existingBeforeAgreement = await this.findCurrentUserApplication(this.prisma, user, contactPhoneNumber, dto.contactEmail);
     if (existingBeforeAgreement) {
       await this.prisma.partnerOnboardingDraft.upsert({
@@ -832,8 +833,8 @@ export class VendorApplicationsService {
         status: { notIn: [VendorApplicationStatus.REJECTED, VendorApplicationStatus.WITHDRAWN] },
         OR: [
           { applicantUserId: user.id },
-          { contactPhoneNumber: contactPhoneNumber ?? user.phoneNumber },
-          { businessPhoneNumber: contactPhoneNumber ?? user.phoneNumber },
+          { contactPhoneNumber: contactPhoneNumber ?? requiredMobile(user.phoneNumber) },
+          { businessPhoneNumber: contactPhoneNumber ?? requiredMobile(user.phoneNumber) },
           ...(user.email ? [
             { contactEmail: { equals: user.email, mode: "insensitive" as const } },
             { businessEmail: { equals: user.email, mode: "insensitive" as const } }
@@ -1205,7 +1206,7 @@ export class VendorApplicationsService {
   private partnerAccountSummary(user: {
     id: string;
     fullName: string;
-    phoneNumber: string;
+    phoneNumber: string | null;
     email: string | null;
     role: UserRole;
     accountStatus: AccountStatus;

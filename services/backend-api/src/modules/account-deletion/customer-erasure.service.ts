@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { AccountDeletionStatus, AccountStatus, Prisma, UserRole } from "@prisma/client";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "crypto";
@@ -98,7 +99,7 @@ export class CustomerErasureService {
         tx.vendorTeamMember.count({ where: { userId } }), tx.partnerOnboardingDraft.count({ where: { userId } }),
         tx.partnerCommercialAgreement.count({ where: { applicantUserId: userId } }),
         tx.captainApplicationDocument.count({ where: { userId } }), tx.vendorAccountActivation.count({ where: { userId } }),
-        tx.serviceProviderApplication.count({ where: { OR: [{ phoneNumber: user.phoneNumber }, ...(user.email ? [{ email: user.email }] : [])] } })
+        tx.serviceProviderApplication.count({ where: { OR: [{ phoneNumber: requiredMobile(user.phoneNumber) }, ...(user.email ? [{ email: user.email }] : [])] } })
       ]);
       const sharedIdentityRetained = user.role !== UserRole.CUSTOMER || Boolean(user.vendor || user.rider || user.taxiDriverProfiles.length
         || user.vendorApplications.length || user.deliveryCaptainApplications.length || user.taxiDriverApplications.length || otherAssociations.some(Boolean));
@@ -334,7 +335,7 @@ export class CustomerErasureService {
     await tx.customerProfile.update({ where: { id: customerId }, data: { referralCode: `deleted-${customerId}`, referredBy: null,
       requireRidePin: false, averageRating: null, totalOrders: 0, loyaltyBalance: 0 } });
     await tx.controlledOperationsCustomer.deleteMany({ where: { userId } });
-    await tx.taxiWaitlistEntry.deleteMany({ where: { OR: [{ phoneNumber: request.user.phoneNumber }, ...(request.user.email ? [{ email: request.user.email }] : [])] } });
+    await tx.taxiWaitlistEntry.deleteMany({ where: { OR: [{ phoneNumber: requiredMobile(request.user.phoneNumber) }, ...(request.user.email ? [{ email: request.user.email }] : [])] } });
     await tx.smeServicesPilotParticipant.deleteMany({ where: { OR: [{ relatedUserId: userId }, { phoneNumber: request.user.phoneNumber }, ...(request.user.email ? [{ email: request.user.email }] : [])] } });
     await tx.launchCohortMember.deleteMany({ where: { userId } });
     await tx.launchDrillEvent.updateMany({ where: { drill: { customerUserId: userId } }, data: { note: null, metadata: Prisma.JsonNull } });

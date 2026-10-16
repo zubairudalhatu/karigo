@@ -59,9 +59,14 @@ export function PortalShell({ children }: { children: ReactNode }) {
   }, [activeGroupLabel, path]);
   if (loading) return <Loading />;
   if (!user) {
-    if (typeof window !== "undefined" && path !== "/login") router.replace("/login");
-    return path === "/login" ? children : <Loading />;
+    if (typeof window !== "undefined" && !["/login","/governance-password"].includes(path)) router.replace("/login");
+    return ["/login","/governance-password"].includes(path) ? children : <Loading />;
   }
+  if (user.adminRole === "RESTORE_GOVERNANCE") return <main className="content">
+    <h1>Restore governance</h1><p>Signed in as {user.fullName}</p>
+    {["/restore-governance","/governance-password"].includes(path) ? children : <p>This identity has no operations access. <a href="/restore-governance">Open restore governance</a></p>}
+    <button onClick={async()=>{await logout();router.replace("/login");}}>Sign out</button>
+  </main>;
   return <main className="shell">
     <aside className={`sidebar ${mobileNavOpen ? "is-open" : ""}`} id="admin-navigation">
       <div className="sidebar-brand">

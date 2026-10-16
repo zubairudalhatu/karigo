@@ -41,13 +41,13 @@ export class RideRealtimeGateway implements OnGatewayInit, OnGatewayConnection {
       const supplied = client.handshake.auth?.token ?? client.handshake.headers.authorization;
       const token = typeof supplied === "string" ? supplied.replace(/^Bearer\s+/i, "") : "";
       if (!token) throw new Error("missing token");
-      const payload = await this.jwt.verifyAsync<{ sub?: string }>(token);
-      if (!payload.sub) throw new Error("missing subject");
+      const payload = await this.jwt.verifyAsync<{ sub?: string; scope?: string }>(token);
+      if (payload.scope === "restore-governance" || !payload.sub) throw new Error("missing subject");
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        select: { id: true, accountStatus: true, deletedAt: true }
+        select: { id: true, accountStatus: true, deletedAt: true, adminRole: true }
       });
-      if (!user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE) {
+      if (!user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE || user.adminRole === "RESTORE_GOVERNANCE") {
         throw new Error("inactive account");
       }
       client.data.userId = user.id;

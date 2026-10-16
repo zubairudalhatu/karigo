@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
@@ -317,7 +318,7 @@ export class OrdersService {
     await this.applicationNotifications.orderCreated({
       reference: order.orderNumber,
       recipientName: customer.user.fullName,
-      phoneNumber: customer.user.phoneNumber,
+      phoneNumber: requiredMobile(customer.user.phoneNumber),
       email: customer.user.email
     });
     return order;
@@ -508,7 +509,7 @@ export class OrdersService {
     await this.applicationNotifications.orderCreated({
       reference: order.orderNumber,
       recipientName: customer.user.fullName,
-      phoneNumber: customer.user.phoneNumber,
+      phoneNumber: requiredMobile(customer.user.phoneNumber),
       email: customer.user.email
     });
     return order;

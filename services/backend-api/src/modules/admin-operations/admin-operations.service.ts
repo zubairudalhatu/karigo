@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
@@ -803,7 +804,7 @@ export class AdminOperationsService {
     await this.applicationNotifications.vendorApplicationReviewed({
       reference: `VENDOR-${vendor.id.slice(0, 8).toUpperCase()}`,
       recipientName: vendor.user.fullName || vendor.businessName,
-      phoneNumber: vendor.user.phoneNumber,
+      phoneNumber: requiredMobile(vendor.user.phoneNumber),
       email: vendor.user.email,
       status: "APPROVED",
       activationUrl,

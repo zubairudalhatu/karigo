@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, ForbiddenException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
@@ -49,7 +50,7 @@ export class AuthService {
       passwordHash,
       referralCode: dto.referralCode
     });
-    const verification = await this.otpService.issue(user.id, user.phoneNumber);
+    const verification = await this.otpService.issue(user.id, requiredMobile(user.phoneNumber));
     return {
       user,
       otpExpiresAt: verification.expiresAt,
@@ -63,7 +64,7 @@ export class AuthService {
       return { resendAccepted: true };
     }
 
-    const verification = await this.otpService.issue(user.id, user.phoneNumber, { enforceCooldown: true });
+    const verification = await this.otpService.issue(user.id, requiredMobile(user.phoneNumber), { enforceCooldown: true });
     return {
       resendAccepted: true,
       otpExpiresAt: verification.expiresAt,
@@ -112,7 +113,7 @@ export class AuthService {
         throw new BadRequestException("Phone number is already linked to another KariGO account.");
       }
       if (!existingByPhone.phoneVerified) {
-        const verification = await this.otpService.issue(existingByPhone.id, existingByPhone.phoneNumber, { enforceCooldown: true });
+        const verification = await this.otpService.issue(existingByPhone.id, requiredMobile(existingByPhone.phoneNumber), { enforceCooldown: true });
         return this.applicantAccountResponse(existingByPhone, "OTP_REQUIRED", verification);
       }
       return this.applicantAccountResponse(
@@ -133,7 +134,7 @@ export class AuthService {
         emailVerified: false
       }
     });
-    const verification = await this.otpService.issue(user.id, user.phoneNumber);
+    const verification = await this.otpService.issue(user.id, requiredMobile(user.phoneNumber));
     return this.applicantAccountResponse(user, "OTP_REQUIRED", verification);
   }
 
@@ -142,7 +143,7 @@ export class AuthService {
     if (!user || user.role !== role || user.deletedAt || user.phoneVerified) {
       return { resendAccepted: true };
     }
-    const verification = await this.otpService.issue(user.id, user.phoneNumber, { enforceCooldown: true });
+    const verification = await this.otpService.issue(user.id, requiredMobile(user.phoneNumber), { enforceCooldown: true });
     return {
       resendAccepted: true,
       otpExpiresAt: verification.expiresAt,
@@ -203,13 +204,14 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     const user = await this.usersService.findByPhoneForAuth(dto.phoneNumber);
+    if (user?.adminRole === "RESTORE_GOVERNANCE") throw new UnauthorizedException("Use the dedicated governance email sign-in");
     const passwordMatches = user ? await compare(dto.password, user.passwordHash) : false;
 
     if (user && passwordMatches && !user.phoneVerified && !user.deletedAt) {
-      const verification = await this.otpService.issue(user.id, user.phoneNumber, { enforceCooldown: true });
+      const verification = await this.otpService.issue(user.id, requiredMobile(user.phoneNumber), { enforceCooldown: true });
       await this.recordLoginActivity({
         userId: user.id,
-        phoneNumber: user.phoneNumber,
+        phoneNumber: requiredMobile(user.phoneNumber),
         role: user.role,
         outcome: LoginActivityOutcome.BLOCKED,
         reason: "Phone verification required; OTP resent"
@@ -227,7 +229,7 @@ export class AuthService {
       const reason = this.inactiveLoginMessage(user.role, user.accountStatus);
       await this.recordLoginActivity({
         userId: user.id,
-        phoneNumber: user.phoneNumber,
+        phoneNumber: requiredMobile(user.phoneNumber),
         role: user.role,
         outcome: LoginActivityOutcome.BLOCKED,
         reason
@@ -255,7 +257,7 @@ export class AuthService {
     const publicUser = await this.usersService.markLogin(user.id);
     await this.recordLoginActivity({
       userId: user.id,
-      phoneNumber: user.phoneNumber,
+      phoneNumber: requiredMobile(user.phoneNumber),
       role: user.role,
       outcome: LoginActivityOutcome.SUCCESS,
       reason: "Login successful"
@@ -272,7 +274,7 @@ export class AuthService {
       return { requestAccepted: true };
     }
 
-    const verification = await this.otpService.issue(user.id, user.phoneNumber, { enforceCooldown: true });
+    const verification = await this.otpService.issue(user.id, requiredMobile(user.phoneNumber), { enforceCooldown: true });
     return {
       requestAccepted: true,
       otpExpiresAt: verification.expiresAt,
@@ -370,7 +372,7 @@ export class AuthService {
     const publicUser = await this.usersService.markLogin(activation.userId);
     await this.recordLoginActivity({
       userId: activation.userId,
-      phoneNumber: activation.user.phoneNumber,
+      phoneNumber: requiredMobile(activation.user.phoneNumber),
       role: activation.user.role,
       outcome: LoginActivityOutcome.SUCCESS,
       reason: "Vendor activation login"
@@ -467,7 +469,7 @@ export class AuthService {
     await this.applicationNotifications.vendorApplicationReviewed({
       reference: vendor.sourceApplication?.reference ?? vendor.id,
       recipientName: vendor.sourceApplication?.contactFullName ?? vendor.user.fullName ?? vendor.businessName,
-      phoneNumber: vendor.sourceApplication?.contactPhoneNumber ?? vendor.user.phoneNumber,
+      phoneNumber: vendor.sourceApplication?.contactPhoneNumber ?? requiredMobile(vendor.user.phoneNumber),
       email: vendor.sourceApplication?.contactEmail ?? vendor.user.email,
       status: vendor.sourceApplication?.status ?? "APPROVED",
       activationUrl,
@@ -493,7 +495,7 @@ export class AuthService {
       !existing ||
       existing.revokedAt ||
       existing.expiresAt.getTime() <= Date.now() ||
-      existing.user.deletedAt ||
+      existing.user.deletedAt || existing.user.adminRole === "RESTORE_GOVERNANCE" ||
       existing.user.accountStatus !== AccountStatus.ACTIVE
     ) {
       throw new UnauthorizedException({
@@ -586,7 +588,7 @@ export class AuthService {
     user: {
       id: string;
       fullName: string;
-      phoneNumber: string;
+      phoneNumber: string | null;
       email?: string | null;
       role: UserRole;
       accountStatus: AccountStatus;
@@ -652,7 +654,7 @@ export class AuthService {
 
   private async recordLoginActivity(input: {
     userId?: string;
-    phoneNumber: string;
+    phoneNumber: string | null;
     role?: UserRole;
     outcome: LoginActivityOutcome;
     reason: string;
@@ -661,7 +663,7 @@ export class AuthService {
       await this.prisma.userLoginActivity.create({
         data: {
           userId: input.userId,
-          phoneNumberMasked: this.maskPhone(input.phoneNumber),
+          phoneNumberMasked: input.phoneNumber === null ? null : this.maskPhone(input.phoneNumber),
           role: input.role,
           outcome: input.outcome,
           reason: input.reason

@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { OrderStatus, PaymentStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -76,7 +77,7 @@ export class VendorDashboardOrdersService {
       ...order,
       customer: {
         name: order.customer.user.fullName,
-        phoneNumber: this.maskPhone(order.customer.user.phoneNumber)
+        phoneNumber: this.maskPhone(requiredMobile(order.customer.user.phoneNumber))
       },
       rider: order.rider ? { id: order.rider.id, riderCode: order.rider.riderCode } : null,
       availableActions: this.statusService.actionsFor(order.orderStatus)

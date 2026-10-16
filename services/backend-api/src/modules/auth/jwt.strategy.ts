@@ -1,3 +1,4 @@
+import { requiredMobile } from "../../common/utils/required-mobile";
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PassportStrategy } from "@nestjs/passport";
@@ -7,6 +8,7 @@ import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.in
 import { UsersService } from "../users/users.service";
 
 interface JwtPayload {
+  scope?: string;
   sub: string;
   role: UserRole;
 }
@@ -27,14 +29,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: JwtPayload): Promise<AuthenticatedUser> {
     const user = await this.usersService.findByIdForAuth(payload.sub);
 
-    if (!user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE) {
+    if (payload.scope === "restore-governance" || !user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE || user.adminRole === "RESTORE_GOVERNANCE") {
       throw new UnauthorizedException("Authentication is no longer valid");
     }
 
     return {
       id: user.id,
       fullName: user.fullName,
-      phoneNumber: user.phoneNumber,
+      phoneNumber: requiredMobile(user.phoneNumber),
       email: user.email,
       role: user.role,
       adminRole: user.adminRole,
