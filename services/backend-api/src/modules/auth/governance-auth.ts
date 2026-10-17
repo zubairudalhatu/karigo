@@ -80,32 +80,44 @@ export class GovernanceAuthService {
   // Explicit operator recovery only; never invoked automatically after an ambiguous send.
   async resendSetup(actorToken:string,userId:string,approvalReference:string) {
     this.enabled();
-    if(this.config.get<string>("GOVERNANCE_ADMIN_PROVISIONING_ENABLED") !== "true") throw new NotFoundException();
-    const claims=await this.jwt.verifyAsync<{sub?:string;exp?:number}>(actorToken);
-    if(!claims.sub || !claims.exp || claims.exp*1000<=Date.now() || !/^[A-Za-z0-9._:/-]{1,128}$/.test(approvalReference)) throw new UnauthorizedException();
-    const actor=await this.db.user.findFirst({where:{id:claims.sub,role:"ADMIN",adminRole:"SUPER_ADMIN",accountStatus:"ACTIVE",deletedAt:null}});
-    if(!actor) throw new UnauthorizedException();
-    await this.db.adminAuditLog.create({data:{adminUserId:actor.id,action:"GOVERNANCE_SETUP_REISSUE_APPROVED",entityType:"User",entityId:userId,newValue:{approvalReference}}});
-    await this.challenge(userId,"SETUP");return {requestAccepted:true};
+    const claims=await this.jwt.verifyAsync<{sub?:string;scope?:string;exp?:number}>(actorToken);
+    if(!claims.sub || claims.scope || !claims.exp || claims.exp*1000<=Date.now() || !/^[a-f0-9-]{36}$/i.test(userId) || !/^[A-Za-z0-9._:/-]{1,128}$/.test(approvalReference)) throw new UnauthorizedException();
+    // Existing-account recovery only. The creation flag remains enforced by provision().
+    const issued=await this.challenge(userId,"SETUP",{actorId:claims.sub,approvalReference});
+    return {requestAccepted:true,challengeIssued:issued};
   }
-  private async challenge(userId:string,purpose:"SETUP"|"RESET") {
+  private async challenge(userId:string,purpose:"SETUP"|"RESET",reissue?:{actorId:string;approvalReference:string}) {
     const raw = randomBytes(32).toString("base64url"), now=new Date(), id=randomUUID();
     const staged = await this.db.$transaction(async tx => {
       await tx.$queryRaw`SELECT "userId" FROM admin_email_identities WHERE "userId"=${userId}::uuid FOR UPDATE`;
       const identity = await tx.adminEmailIdentity.findUniqueOrThrow({where:{userId},include:{user:true}});
       const u=identity.user;
+      if(reissue) {
+        const actor=await tx.user.findFirst({where:{id:reissue.actorId,role:"ADMIN",adminRole:"SUPER_ADMIN",accountStatus:"ACTIVE",deletedAt:null}});
+        if(!actor || !this.eligible(u) || u.accountStatus!=="PENDING" || u.emailVerified || u.onboardingPasswordSetAt || u.passwordHash || identity.emailKey!==u.email?.toLowerCase()) throw new UnauthorizedException();
+        const memberships=await tx.user.findUnique({where:{id:userId},select:{customerProfile:{select:{id:true}},vendor:{select:{id:true}},rider:{select:{id:true}},taxiDriverProfiles:{select:{id:true}}}});
+        if(!memberships || memberships.customerProfile || memberships.vendor || memberships.rider || memberships.taxiDriverProfiles.length) throw new UnauthorizedException();
+        const duplicate=await tx.adminAuditLog.findFirst({where:{adminUserId:reissue.actorId,entityId:userId,action:"GOVERNANCE_SETUP_CHALLENGE_REISSUED",newValue:{path:["approvalReference"],equals:reissue.approvalReference}}});
+        if(duplicate)return null;
+      }
       if (!this.eligible(u) || identity.emailKey !== u.email?.toLowerCase() ||
         (purpose === "SETUP" ? u.accountStatus !== "PENDING" || u.emailVerified : u.accountStatus !== "ACTIVE" || !u.emailVerified)) return null;
       if (identity.lastChallengeAt && now.getTime()-identity.lastChallengeAt.getTime()<15*60*1000) return null;
       await tx.adminEmailChallenge.updateMany({where:{userId,consumedAt:null},data:{consumedAt:now}});
       await tx.adminEmailChallenge.create({data:{id,userId,purpose,tokenHash:digest(raw),expiresAt:new Date(now.getTime()+30*60*1000)}});
       await tx.adminEmailIdentity.update({where:{userId},data:{lastChallengeAt:now}});
+      if(reissue) {
+        const facts={approvalReference:reissue.approvalReference,reason:"EXISTING_PENDING_SETUP_RECOVERY"};
+        await tx.adminAuditLog.create({data:{adminUserId:reissue.actorId,action:"GOVERNANCE_SETUP_CHALLENGE_REISSUED",entityType:"User",entityId:userId,newValue:facts}});
+        await governanceAudit(tx,"GOVERNANCE_SETUP_CHALLENGE_REISSUED",reissue.actorId,userId,facts);
+      }
       return u.email!;
     });
-    if (!staged) return;
+    if (!staged) return false;
     try {
       const providerId=await this.mail.send(staged,raw,purpose,id);
       await this.db.adminAuditLog.create({data:{adminUserId:userId,action:"GOVERNANCE_EMAIL_ACCEPTED",entityType:"AdminEmailChallenge",entityId:id,newValue:{providerId,purpose}}});
+      return true;
     } catch {
       // Ambiguous submission: invalidate the capability; do not blindly resend.
       await this.db.adminEmailChallenge.updateMany({where:{id,consumedAt:null},data:{consumedAt:new Date()}});
