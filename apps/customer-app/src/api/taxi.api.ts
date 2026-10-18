@@ -44,7 +44,7 @@ export const taxiApi = {
   fareEstimate: (body: TaxiFareEstimateInput) =>
     api.post<TaxiFareEstimate>("customer/taxi/fare-estimate", body),
   createTrip: (body: TaxiTripInput) =>
-    api.post<TaxiTrip>("customer/taxi/trips", body),
+    api.post<TaxiTrip>("customer/taxi/trips/content-safe", body),
   trips: () => api.get<TaxiTrip[]>("customer/taxi/trips"),
   trip: (tripId: string) => api.get<TaxiTrip>(`customer/taxi/trips/${tripId}`),
   tripFinance: (tripId: string) => api.get<TaxiRideFinancialSummary | null>(`customer/taxi/trips/${tripId}/finance`),

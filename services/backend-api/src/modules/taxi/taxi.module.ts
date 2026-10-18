@@ -1,3 +1,4 @@
+import { RideContentExpiryService } from "./ride-content-expiry.service";
 import { RideCommunicationsService } from "./ride-communications.service";
 import { Module } from "@nestjs/common";
 import { AdminAuditModule } from "../../common/services/admin-audit.module";
@@ -24,6 +25,7 @@ import { TaxiService } from "./taxi.service";
   providers: [
     TaxiService,
     TaxiMapsService,
+    RideContentExpiryService,
     RideCallService,
     RideCommunicationsService,
     RideRealtimeService,

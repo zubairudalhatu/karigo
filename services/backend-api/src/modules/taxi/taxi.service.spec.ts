@@ -7,6 +7,7 @@ import { CaptainWorkStateService } from "../../common/services/captain-work-stat
 import { PrismaService } from "../../prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { CaptainUploadStorageService } from "../riders/captain-upload-storage.service";
+import { googleLocationProof, REMOVED_GOOGLE_LOCATION } from "./ride-content-policy";
 import { TaxiService } from "./taxi.service";
 
 const now = new Date("2026-07-10T10:00:00.000Z");
@@ -303,6 +304,7 @@ describe("TaxiService", () => {
   function enableTaxiStaging() {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       const values: Record<string, unknown> = {
+        JWT_SECRET: "synthetic-location-test-key",
         RIDES_SERVICE_ENABLED: true,
         RIDES_PRODUCTION_ENABLED: true,
         RIDES_DISPATCH_MODE: "MANUAL",
@@ -840,6 +842,96 @@ describe("TaxiService", () => {
     expect(prisma.taxiTripEvent.create).not.toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ eventType: "RIDE_PIN_ISSUED" })
     }));
+  });
+
+  it("requires explicit known provenance on the new iOS booking path without breaking the legacy endpoint", async () => {
+    enableTaxiStaging();
+    await expect(service.createCustomerTripContentSafe("customer-user", {
+      pickupAddress: "Kano", destinationAddress: "Destination", routeContentSource: "GOOGLE_DERIVED"
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.taxiTrip.create).not.toHaveBeenCalled();
+    await expect(service.createCustomerTripContentSafe("customer-user", {
+      pickupAddress: "Kano", destinationAddress: "Destination", routeContentSource: "GOOGLE_DERIVED",
+      pickupContentSource: "USER_SUPPLIED", destinationContentSource: "LEGACY_UNKNOWN"
+    })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("books verified Google coordinates without persisting Places text, route metrics or proof", async () => {
+    enableTaxiStaging();
+    prisma.taxiTrip.findUnique.mockResolvedValue(null);
+    const proof = googleLocationProof("customer-user", 12.014, 8.541, "synthetic-location-test-key");
+    await service.createCustomerTripContentSafe("customer-user", {
+      pickupAddress: "User entered pickup, Kano", pickupLatitude: 12.0022, pickupLongitude: 8.592,
+      pickupContentSource: "USER_SUPPLIED",
+      destinationAddress: "Synthetic Google POI name", destinationLatitude: 12.014, destinationLongitude: 8.541,
+      destinationContentSource: "GOOGLE_DERIVED", destinationContentProof: proof,
+      routeContentSource: "GOOGLE_DERIVED", estimatedDistanceKm: 6.5, estimatedDurationMin: 18
+    });
+    const stored = prisma.taxiTrip.create.mock.calls[0][0].data;
+    expect(stored.pickupAddress).toBe("User entered pickup, Kano");
+    expect(stored.pickupLatitude).toEqual(new Prisma.Decimal(12.0022));
+    expect(stored.destinationAddress).toBe(REMOVED_GOOGLE_LOCATION);
+    expect(stored.destinationContentSource).toBe("GOOGLE_DERIVED");
+    expect(stored.destinationGoogleExpiresAt).toBeInstanceOf(Date);
+    expect(stored.estimatedDistanceKm).toBeNull();
+    expect(stored.estimatedDurationMin).toBeNull();
+    expect(JSON.stringify(stored)).not.toContain(proof);
+    expect(JSON.stringify(prisma.taxiTripEvent.create.mock.calls)).not.toContain("Synthetic Google POI name");
+    expect(stored.estimatedFareKobo).toBeGreaterThan(0);
+  });
+
+  it("hands an active Google stop to the Captain without persisting POI text or proof", async () => {
+    enableTaxiStaging();
+    const proof = googleLocationProof("customer-user", 12.01, 8.55, "synthetic-location-test-key");
+    await service.createCustomerTripContentSafe("customer-user", {
+      pickupAddress: "User pickup Kano", pickupLatitude: 12.0022, pickupLongitude: 8.592, pickupContentSource: "USER_SUPPLIED",
+      destinationAddress: "User destination Kano", destinationLatitude: 12.014, destinationLongitude: 8.541, destinationContentSource: "USER_SUPPLIED",
+      stopAddress: "Synthetic private Google POI", stopLatitude: 12.01, stopLongitude: 8.55,
+      stopContentSource: "GOOGLE_DERIVED", stopContentProof: proof, routeContentSource: "GOOGLE_DERIVED"
+    });
+    const stored = prisma.taxiTrip.create.mock.calls[0][0].data;
+    expect(stored.stopContentSource).toBe("GOOGLE_DERIVED");
+    expect(stored.stopGoogleExpiresAt).toBeInstanceOf(Date);
+    expect(stored.stopGoogleExpiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 22 * 86400000);
+    expect(JSON.stringify(stored)).not.toContain("Synthetic private Google POI");
+    expect(JSON.stringify(stored)).not.toContain(proof);
+    const active = { ...taxiTrip, ...stored, status: TaxiTripStatus.STARTED };
+    prisma.taxiTrip.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([active]);
+    const [captainTrip] = await service.riderTaxiTrips("rider-user");
+    expect(Number(captainTrip.stopLatitude)).toBe(12.01);
+    expect(Number(captainTrip.stopLongitude)).toBe(8.55);
+    expect(captainTrip.stopContentSource).toBe("GOOGLE_DERIVED");
+  });
+
+  it("clears Google stop coordinates at closure, preserves user pickup and financial hooks", async () => {
+    enableTaxiStaging();
+    const active = { ...taxiTrip, stopContentSource: "GOOGLE_DERIVED", stopLatitude: new Prisma.Decimal(12.01), stopLongitude: new Prisma.Decimal(8.55), stopGoogleExpiresAt: new Date(Date.now() + 86400000), pickupContentSource: "USER_SUPPLIED" };
+    prisma.taxiTrip.update.mockImplementation(async ({ data }: any) => ({ ...active, ...data }));
+    const afterUpdate = jest.fn().mockResolvedValue(undefined);
+    const result = await (service as any).updateTripWithEvent(taxiTrip.id, { status: TaxiTripStatus.CANCELLED_BY_CUSTOMER }, "customer-user", "CUSTOMER", "taxi.trip.cancelled", "Synthetic", { afterUpdate });
+    expect(afterUpdate).toHaveBeenCalled();
+    expect(result.stopLatitude).toBeNull();
+    expect(result.stopLongitude).toBeNull();
+    expect(result.stopGoogleExpiresAt).toBeNull();
+    expect(result.pickupLatitude).toEqual(active.pickupLatitude);
+    expect(prisma.taxiTrip.update.mock.calls[1][0].data).not.toHaveProperty("estimatedFareKobo");
+  });
+
+  it("suppresses expired Google stop coordinates in Captain projection before scheduled disposal", async () => {
+    enableTaxiStaging();
+    prisma.taxiTrip.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([{ ...taxiTrip, stopContentSource: "GOOGLE_DERIVED", stopLatitude: 12.01, stopLongitude: 8.55, stopGoogleExpiresAt: new Date(0) }]);
+    const [trip] = await service.riderTaxiTrips("rider-user");
+    expect(trip.stopLatitude).toBeNull();
+    expect(trip.stopLongitude).toBeNull();
+  });
+
+  it("rejects unverified Google location persistence before creating a Ride", async () => {
+    enableTaxiStaging();
+    await expect(service.createCustomerTrip("customer-user", {
+      pickupAddress: "Kano", destinationAddress: "Synthetic POI", destinationContentSource: "GOOGLE_DERIVED",
+      destinationLatitude: 12.014, destinationLongitude: 8.541
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.taxiTrip.create).not.toHaveBeenCalled();
   });
 
   it("rejects a second active immediate Ride request while a REQUESTED trip exists", async () => {

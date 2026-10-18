@@ -38,7 +38,7 @@ export default function EditAddress() {
         return;
       }
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      updateAddress({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+      updateAddress({ latitude: position.coords.latitude, longitude: position.coords.longitude, contentSource: "USER_SUPPLIED" });
       setLocationMessage("Current location captured. Your written address was not changed.");
     } catch {
       setLocationMessage("Unable to detect location. You can still enter the address manually.");

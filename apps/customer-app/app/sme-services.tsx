@@ -187,6 +187,7 @@ export default function SmeServices() {
     if (!usingNewAddress) return form.serviceAddressId;
     const created = await addressesApi.create({
       ...newAddress,
+      contentSource: "USER_SUPPLIED",
       label: newAddress.label.trim() || "Service address",
       addressLine: newAddress.addressLine.trim(),
       city: newAddress.city.trim(),

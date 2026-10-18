@@ -1,7 +1,7 @@
 import { brand } from "@karigo/config";
 import { formatKobo, type TaxiTrip } from "@karigo/shared-types";
 import { Feather } from "@expo/vector-icons";
-import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import { useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
@@ -18,6 +18,7 @@ type DriverTrip = TaxiTrip & {
 };
 
 function coordinate(latitude: unknown, longitude: unknown): Coordinate | null {
+  if (latitude == null || longitude == null) return null;
   const lat = Number(latitude);
   const lng = Number(longitude);
   return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
@@ -59,6 +60,8 @@ export function CaptainRideWorkspace({
   const cameraStateRef = useRef("");
   const pickup = coordinate(trip.pickupLatitude, trip.pickupLongitude);
   const destination = coordinate(trip.destinationLatitude, trip.destinationLongitude);
+  const stop = coordinate(trip.stopLatitude, trip.stopLongitude);
+  const mapContentAllowed = Platform.OS !== "ios" || ![trip.pickupContentSource, trip.destinationContentSource, trip.stopContentSource].includes("GOOGLE_DERIVED");
   const mapTarget = trip.status === "STARTED" || trip.status === "ARRIVED_DESTINATION" ? destination : pickup;
   const visibleCoordinates = [captainCoordinate, pickup, destination].filter((item): item is Coordinate => Boolean(item));
   const copy = stateCopy(trip.status);
@@ -182,7 +185,7 @@ export function CaptainRideWorkspace({
 
   return <View style={styles.workspace}>
     {trip.status !== "DRIVER_ASSIGNED" ? <View style={styles.mapShell}>
-      {visibleCoordinates[0] ? <MapView
+      {mapContentAllowed && visibleCoordinates[0] ? <MapView
         ref={mapRef}
         style={styles.map}
         initialRegion={{ ...visibleCoordinates[0], latitudeDelta: 0.02, longitudeDelta: 0.02 }}
@@ -214,6 +217,12 @@ export function CaptainRideWorkspace({
         <View style={styles.routeLine} />
         <View style={styles.routeRow}><View style={styles.destinationDot} /><View style={styles.routeCopy}><Text style={styles.routeLabel}>DESTINATION</Text><Text style={styles.routeAddress}>{trip.destinationAddress}</Text></View></View>
       </View>
+      {stop ? <View style={styles.waitingCard}>
+        <Text style={styles.waitingTitle}>Intermediate stop</Text>
+        <Text style={ui.muted}>{stop.latitude.toFixed(6)}, {stop.longitude.toFixed(6)}</Text>
+        {trip.stopContentSource === "GOOGLE_DERIVED" ? <Text style={{ color: "#5E5E5E", fontSize: 12, fontWeight: "400" }}>Google Maps</Text> : null}
+        <Button title="NAVIGATE TO STOP" tone="muted" onPress={() => void Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${stop.latitude},${stop.longitude}`)} />
+      </View> : null}
 
       <View style={styles.metrics}>
         <View style={styles.metric}><Text style={styles.metricLabel}>Distance</Text><Text style={styles.metricValue}>{Number(trip.estimatedDistanceKm ?? 0).toFixed(1)} km</Text></View>

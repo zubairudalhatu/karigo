@@ -1,8 +1,8 @@
 import * as Location from "expo-location";
 import { reverseGeocodeAddress } from "../../src/lib/customer-location";
 import { router, Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, AppState, BackHandler, Keyboard, Linking, PanResponder, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import { forwardRef, RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Animated, AppState, Platform, BackHandler, Keyboard, Linking, PanResponder, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import MapView, { Marker, Polyline, Region } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -41,6 +41,8 @@ interface RidePlace {
   secondaryText?: string;
   latitude?: number | null;
   longitude?: number | null;
+  contentSource?: "USER_SUPPLIED" | "GOOGLE_DERIVED" | "LEGACY_UNKNOWN";
+  contentProof?: string;
   providerPlaceId?: string | null;
   distanceKm?: number;
   source: "current" | "saved" | "recent" | "manual" | "search" | "map" | "stop";
@@ -81,8 +83,9 @@ function placeFromAddress(address: Address): RidePlace {
   return {
     label: address.label,
     address: `${address.addressLine}, ${address.city}`,
-    latitude: address.latitude,
-    longitude: address.longitude,
+    latitude: address.contentSource === "USER_SUPPLIED" && address.latitude != null ? Number(address.latitude) : undefined,
+    longitude: address.contentSource === "USER_SUPPLIED" && address.longitude != null ? Number(address.longitude) : undefined,
+    contentSource: address.contentSource ?? "LEGACY_UNKNOWN",
     source: "saved"
   };
 }
@@ -443,6 +446,7 @@ export default function TaxiRequest() {
   const recentPlaces = useMemo(() => {
     const seen = new Set<string>();
     return trips
+      .filter((trip) => trip.destinationContentSource === "USER_SUPPLIED")
       .map((trip) => {
         const latitude = coordinateFromUnknown(trip.destinationLatitude);
         const longitude = coordinateFromUnknown(trip.destinationLongitude);
@@ -454,7 +458,8 @@ export default function TaxiRequest() {
           providerPlaceId: latitude !== undefined && longitude !== undefined
             ? `${latitude.toFixed(6)},${longitude.toFixed(6)}`
             : null,
-          source: "recent" as const
+          source: "recent" as const,
+          contentSource: "USER_SUPPLIED" as const
         };
       })
       .filter((place) => {
@@ -776,6 +781,19 @@ export default function TaxiRequest() {
 
   function applyPlace(field: PlaceField, place: RidePlace, autoPreview = false) {
     Keyboard.dismiss();
+    // Never promote an old saved coordinate to user-supplied. Reacquire it in the current flow.
+    if (place.source === "saved" && place.contentSource !== "USER_SUPPLIED") {
+      setActiveField(field);
+      if (field === "pickup") { setPickup(null); setPickupText(""); }
+      else if (field === "stop") { setStop(null); setStopText(""); }
+      else { setDestination(null); setDestinationText(""); }
+      clearRouteState();
+      setSuggestions([]);
+      setStep("ROUTE");
+      setPanelState("expanded");
+      setError("Reselect this saved location using search or your current location before booking.");
+      return;
+    }
     const resolved = { ...place, address: place.address || place.label };
     const nextPickup = field === "pickup" ? resolved : pickup;
     const nextDestination = field === "destination" ? resolved : destination;
@@ -819,6 +837,8 @@ export default function TaxiRequest() {
     try {
       const detail = await taxiApi.placeDetails(place.providerPlaceId, placeSessionToken.current);
       applyPlace(field, {
+        contentSource: "GOOGLE_DERIVED",
+        contentProof: detail.contentProof,
         label: detail.name || place.label,
         address: detail.address,
         mainText: detail.name || place.mainText,
@@ -961,6 +981,11 @@ export default function TaxiRequest() {
   }
 
   function openMapPicker(field: PlaceField) {
+    if (Platform.OS === "ios") {
+      setMessage("Search for a pickup or destination, or use your current location.");
+      return;
+    }
+
     if (enforceActiveRideTracking()) return;
     Keyboard.dismiss();
     const currentPlace = field === "pickup" ? pickup : field === "stop" ? stop : destination;
@@ -1177,6 +1202,13 @@ export default function TaxiRequest() {
     setError("");
     try {
       const trip = await taxiApi.createTrip({
+        pickupContentSource: pickup.contentSource ?? (pickup.source === "search" ? "GOOGLE_DERIVED" : pickup.source === "recent" || pickup.source === "saved" ? "LEGACY_UNKNOWN" : "USER_SUPPLIED"),
+        destinationContentSource: destination.contentSource ?? (destination.source === "search" ? "GOOGLE_DERIVED" : destination.source === "recent" || destination.source === "saved" ? "LEGACY_UNKNOWN" : "USER_SUPPLIED"),
+        stopContentSource: stop?.contentSource ?? "USER_SUPPLIED",
+        pickupContentProof: pickup.contentProof,
+        destinationContentProof: destination.contentProof,
+        stopContentProof: stop?.contentProof,
+        routeContentSource: "GOOGLE_DERIVED",
         pickupAddress: pickup.address,
         destinationAddress: destination.address,
         pickupLatitude: pickup.latitude ?? undefined,
@@ -1290,7 +1322,7 @@ export default function TaxiRequest() {
     return <Protected><>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.fullScreenMap}>
-        <MapView
+        <RideMap
           ref={mapPickerRef}
           style={StyleSheet.absoluteFill}
           initialRegion={region}
@@ -1323,7 +1355,7 @@ export default function TaxiRequest() {
     return <Protected><>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.fullScreenMap}>
-        <MapView
+        <RideMap
           key={created?.id ?? "ride-tracking"}
           style={StyleSheet.absoluteFill}
           initialRegion={regionForPlaces(pickup, destination)}
@@ -1333,7 +1365,7 @@ export default function TaxiRequest() {
           {hasCoordinate(pickup) ? <Marker coordinate={{ latitude: pickup.latitude, longitude: pickup.longitude }} title="Pickup" description={pickup.address} /> : null}
           {hasCoordinate(destination) ? <Marker coordinate={{ latitude: destination.latitude, longitude: destination.longitude }} title="Destination" description={destination.address} pinColor={brand.colors.primary} /> : null}
           {routePoints.length >= 2 ? <Polyline coordinates={routePoints} strokeColor={brand.colors.primary} strokeWidth={5} /> : null}
-        </MapView>
+        </RideMap>
         <View style={[styles.mapTopBar, { paddingTop: Math.max(insets.top, 18) }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="Return to KariGO home" onPress={() => router.replace("/tabs/home")} style={styles.roundButton}>
             <Text style={styles.roundButtonText}>Home</Text>
@@ -1370,7 +1402,7 @@ export default function TaxiRequest() {
   return <Protected><>
     <Stack.Screen options={{ headerShown: false }} />
     <View style={styles.fullScreenMap}>
-      <MapView
+      <RideMap
         ref={mainMapRef}
         style={StyleSheet.absoluteFill}
         initialRegion={regionForPlaces(pickup, destination, stop)}
@@ -1381,7 +1413,7 @@ export default function TaxiRequest() {
         {hasCoordinate(stop) ? <Marker coordinate={{ latitude: stop.latitude, longitude: stop.longitude }} title="Stop" description={stop.address} pinColor={brand.colors.warning} /> : null}
         {hasCoordinate(destination) ? <Marker coordinate={{ latitude: destination.latitude, longitude: destination.longitude }} title="Destination" description={destination.address} pinColor={brand.colors.primary} /> : null}
         {routePoints.length >= 2 ? <Polyline coordinates={routePoints} strokeColor={brand.colors.primary} strokeWidth={5} /> : null}
-      </MapView>
+      </RideMap>
 
       <View style={[styles.mapTopBar, { paddingTop: Math.max(insets.top, 18) }]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close KariGO Rides" onPress={() => router.replace("/tabs/home")} style={styles.roundButton}>
@@ -1537,7 +1569,7 @@ function RideHomePanel({
         <Text style={styles.sheetTitle}>{rideTitle}</Text>
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel="Collapse ride panel" onPress={onCollapse} style={styles.smallPill}>
-        <Text style={styles.smallPillText}>Map</Text>
+        <Text style={styles.smallPillText}>{Platform.OS === "ios" ? "Overview" : "Map"}</Text>
       </Pressable>
     </View>
     <View style={styles.searchRow}>
@@ -1556,6 +1588,7 @@ function RideHomePanel({
         <Text style={ui.muted} numberOfLines={1}>{pickup?.address ?? "Use current location or choose pickup manually."}</Text>
       </View>
     </Pressable>
+    {pickup?.contentSource === "GOOGLE_DERIVED" ? <Text style={ui.muted}>Pickup search result: Google Maps</Text> : null}
     <CompactPlaceSection title="Recent destinations" places={recentPlaces} onSelect={onSelectDestination} />
     <CompactPlaceSection title="Saved places" places={savedPlaces.slice(0, 3)} onSelect={onSelectDestination} />
   </>;
@@ -1625,6 +1658,7 @@ function RideRoutePanel({
         <Text style={styles.smallPillText}>Swap</Text>
       </Pressable> : null}
     </View>
+    {(pickup?.contentSource === "GOOGLE_DERIVED" || destination?.contentSource === "GOOGLE_DERIVED" || stop?.contentSource === "GOOGLE_DERIVED") ? <Text style={ui.muted}>Selected search results: Google Maps</Text> : null}
     <View style={styles.routeComposer}>
       <RouteComposerRow label="Pickup" active={activeField === "pickup"} value={pickup?.address || pickupText} inputValue={pickupText} placeholder="Current location or pickup address" onPress={() => onFieldFocus("pickup")} onChangeText={(value) => onFieldChange("pickup", value)} inputRef={activeField === "pickup" ? inputRef : undefined} marker="pickup" />
       {stop ? <RouteComposerRow label="Stop" active={activeField === "stop"} value={stop.address || stopText} inputValue={stopText} placeholder="Selected stop" onPress={() => onFieldFocus("stop")} onChangeText={(value) => onFieldChange("stop", value)} inputRef={activeField === "stop" ? inputRef : undefined} marker="stop" onRemove={onRemoveStop} /> : null}
@@ -1639,7 +1673,7 @@ function RideRoutePanel({
     />
     <View style={styles.inlineActions}>
       {activeField === "pickup" ? <Button title="Use current location as pickup" tone="muted" onPress={onUseCurrentLocation} /> : null}
-      <Button title={mapLabel} tone="muted" onPress={() => onMapPick(activeField)} />
+      {Platform.OS !== "ios" ? <Button title={mapLabel} tone="muted" onPress={() => onMapPick(activeField)} /> : null}
       {hasCoordinate(pickup) && hasCoordinate(destination) && !stop ? <Button title="Add stop" tone="muted" onPress={onAddStop} /> : null}
       {hasCoordinate(pickup) && hasCoordinate(destination) ? <Button title={loading ? "Retrying..." : "Retry route"} tone="muted" disabled={loading} onPress={onRetry} /> : null}
     </View>
@@ -1740,11 +1774,12 @@ function RideOptionsPanel({
         </Pressable>
       </View>
       <View style={styles.routePanel}>
-        <RoutePoint label="Pickup" value={pickup?.address ?? "Pickup pending"} tone="pickup" />
-        {stop ? <RoutePoint label="Stop" value={stop.address} tone="stop" /> : null}
-        <RoutePoint label="Destination" value={destination?.address ?? "Destination pending"} tone="destination" />
+        <RoutePoint label="Pickup" value={pickup?.address ?? "Pickup pending"} tone="pickup" googleDerived={pickup?.contentSource === "GOOGLE_DERIVED"} />
+        {stop ? <RoutePoint label="Stop" value={stop.address} tone="stop" googleDerived={stop.contentSource === "GOOGLE_DERIVED"} /> : null}
+        <RoutePoint label="Destination" value={destination?.address ?? "Destination pending"} tone="destination" googleDerived={destination?.contentSource === "GOOGLE_DERIVED"} />
       </View>
       <View style={styles.metrics}>
+        <Text style={ui.muted}>Route estimate: Google Maps</Text>
         <Metric label="Distance" value={routePreview?.distanceKm ? `${routePreview.distanceKm} km` : "Pending"} />
         <Metric label="Duration" value={routePreview?.durationMin ? `${routePreview.durationMin} min` : "Pending"} />
       </View>
@@ -1876,7 +1911,7 @@ function SuggestionList({ activeField, places, searching, googleAttributionRequi
         <Text style={ui.muted}>{place.secondaryText || place.address}{place.distanceKm ? ` - ${place.distanceKm} km away` : ""}</Text>
       </View>
     </Pressable>)}
-    {googleAttributionRequired ? <Text style={styles.googleAttribution}>Powered by Google</Text> : null}
+    {googleAttributionRequired ? <Text style={styles.googleAttribution}>Google Maps</Text> : null}
   </View>;
 }
 
@@ -1894,12 +1929,13 @@ function CompactPlaceSection({ title, places, onSelect }: { title: string; place
   </View>;
 }
 
-function RoutePoint({ label, value, tone }: { label: string; value: string; tone: "pickup" | "stop" | "destination" }) {
+function RoutePoint({ label, value, tone, googleDerived }: { label: string; value: string; tone: "pickup" | "stop" | "destination"; googleDerived?: boolean }) {
   return <View style={styles.routePoint}>
     <View style={[styles.routeMarker, tone === "pickup" && styles.pickupMarker, tone === "stop" && styles.stopMarker]} />
     <View style={styles.routeText}>
       <Text style={styles.routeLabel}>{label}</Text>
       <Text style={styles.routeValue} numberOfLines={2}>{value}</Text>
+      {googleDerived ? <Text style={ui.muted}>Google Maps</Text> : null}
     </View>
   </View>;
 }
@@ -2242,7 +2278,7 @@ const styles = StyleSheet.create({
   detailsToggleText: { color: brand.colors.charcoal, fontWeight: "900" },
   finalFare: { color: brand.colors.charcoal, fontSize: 22, fontWeight: "900" },
   fullScreenMap: { backgroundColor: brand.colors.background, flex: 1 },
-  googleAttribution: { alignSelf: "flex-end", color: brand.colors.muted, fontSize: 11, fontWeight: "800" },
+  googleAttribution: { alignSelf: "flex-end", color: "#5E5E5E", fontSize: 12, fontWeight: "400" },
   headerButton: { backgroundColor: brand.colors.white, borderColor: brand.colors.border, borderRadius: 999, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 9 },
   headerButtonText: { color: brand.colors.charcoal, fontWeight: "900" },
   headerTitle: { color: brand.colors.charcoal, fontSize: 16, fontWeight: "900" },
@@ -2337,4 +2373,12 @@ const styles = StyleSheet.create({
   whereToControl: { backgroundColor: brand.colors.charcoal, borderRadius: 18, flex: 1, gap: 4, minHeight: 66, padding: 14 },
   whereToHint: { color: "#D1D5DB", fontWeight: "700" },
   whereToText: { color: brand.colors.white, fontSize: 22, fontWeight: "900" }
+});
+
+const RideMap = forwardRef<MapView, React.ComponentProps<typeof MapView>>(function RideMap(props, ref) {
+  if (Platform.OS === "ios") return <View style={[props.style, { backgroundColor: "#F3F4F6", justifyContent: "center", alignItems: "center" }]}>
+    <Text accessibilityRole="header" style={{ fontSize: 18, fontWeight: "700", color: "#27272A" }}>KariGO Rides</Text>
+    <Text style={{ color: "#52525B", padding: 16, textAlign: "center" }}>Search and confirm your pickup and destination below.</Text>
+  </View>;
+  return <MapView {...props} ref={ref} />;
 });

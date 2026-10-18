@@ -75,6 +75,28 @@ describe("AddressesService", () => {
     });
   });
 
+  it("keeps legacy locations UNKNOWN and records explicit new user-supplied provenance", async () => {
+    tx.address.count.mockResolvedValue(1);
+    tx.address.create.mockImplementation(({ data }) => data);
+    const input = { label: "Home", addressLine: "Synthetic street", city: "Kano", state: "Kano", latitude: 12, longitude: 8 };
+    expect((await service.create("user-1", input)).contentSource).toBe("LEGACY_UNKNOWN");
+    expect((await service.create("user-1", { ...input, contentSource: "USER_SUPPLIED" })).contentSource).toBe("USER_SUPPLIED");
+  });
+
+  it("never promotes an unknown saved address during an unrelated edit", async () => {
+    prisma.address.findFirst.mockResolvedValue({ id: "address-1", userId: "user-1", contentSource: "LEGACY_UNKNOWN", latitude: 12, longitude: 8 });
+    tx.address.update.mockImplementation(({ data }) => data);
+    expect((await service.update("user-1", "address-1", { label: "Work" })).contentSource).toBe("LEGACY_UNKNOWN");
+  });
+
+  it("preserves known user coordinates and allows fresh explicit user GPS without bulk relabelling", async () => {
+    prisma.address.findFirst.mockResolvedValue({ id: "address-1", userId: "user-1", contentSource: "USER_SUPPLIED", latitude: 12, longitude: 8 });
+    tx.address.update.mockImplementation(({ data }) => data);
+    expect((await service.update("user-1", "address-1", { latitude: 12, longitude: 8 })).contentSource).toBe("USER_SUPPLIED");
+    expect((await service.update("user-1", "address-1", { latitude: 13 })).contentSource).toBe("LEGACY_UNKNOWN");
+    expect((await service.update("user-1", "address-1", { latitude: 13, contentSource: "USER_SUPPLIED" })).contentSource).toBe("USER_SUPPLIED");
+  });
+
   it("does not allow a customer to set another customer's address as default", async () => {
     prisma.address.findFirst.mockResolvedValue(null);
 

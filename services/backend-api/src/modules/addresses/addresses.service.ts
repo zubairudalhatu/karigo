@@ -25,13 +25,16 @@ export class AddressesService {
       }
 
       return tx.address.create({
-        data: { ...dto, state: canonicalNigeriaStateCode(dto.state) ?? dto.state.trim(), userId, country: dto.country ?? "Nigeria", isDefault: makeDefault }
+        data: { ...dto, contentSource: dto.contentSource ?? "LEGACY_UNKNOWN", state: canonicalNigeriaStateCode(dto.state) ?? dto.state.trim(), userId, country: dto.country ?? "Nigeria", isDefault: makeDefault }
       });
     });
   }
 
   async update(userId: string, addressId: string, dto: UpdateAddressDto) {
-    await this.requireOwnedAddress(userId, addressId);
+    const existing = await this.requireOwnedAddress(userId, addressId);
+    const sameCoordinates = (dto.latitude === undefined || Number(dto.latitude) === Number(existing.latitude))
+      && (dto.longitude === undefined || Number(dto.longitude) === Number(existing.longitude));
+    const contentSource = dto.contentSource ?? (sameCoordinates ? existing.contentSource ?? "LEGACY_UNKNOWN" : "LEGACY_UNKNOWN");
 
     return this.prisma.$transaction(async (tx) => {
       if (dto.isDefault === true) {
@@ -39,7 +42,7 @@ export class AddressesService {
       }
       return tx.address.update({
         where: { id: addressId },
-        data: { ...dto, ...(dto.state ? { state: canonicalNigeriaStateCode(dto.state) ?? dto.state.trim() } : {}) }
+        data: { ...dto, contentSource, ...(dto.state ? { state: canonicalNigeriaStateCode(dto.state) ?? dto.state.trim() } : {}) }
       });
     });
   }

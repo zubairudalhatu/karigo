@@ -1,3 +1,4 @@
+import { googleLocationExpiry, googleLocationDisposal, REMOVED_GOOGLE_LOCATION } from "./ride-content-policy";
 import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -691,9 +692,33 @@ export class TaxiService {
     return this.calculateFare(dto);
   }
 
+  async createCustomerTripContentSafe(userId: string, dto: CreateTaxiTripDto) {
+    const points: Array<"pickup" | "destination" | "stop"> = dto.stopAddress ? ["pickup", "destination", "stop"] : ["pickup", "destination"];
+    for (const point of points) {
+      const source = dto[`${point}ContentSource`];
+      const proof = dto[`${point}ContentProof`];
+      if (source !== "USER_SUPPLIED" && source !== "GOOGLE_DERIVED") {
+        throw new BadRequestException("Select a fresh pickup and destination using search or current location");
+      }
+      if (proof && source !== "GOOGLE_DERIVED") throw new BadRequestException("Location source does not match its verification");
+    }
+    if (dto.routeContentSource !== "GOOGLE_DERIVED") throw new BadRequestException("Refresh the route estimate before requesting a Ride");
+    return this.createCustomerTrip(userId, dto);
+  }
+
   async createCustomerTrip(userId: string, dto: CreateTaxiTripDto) {
     this.assertTaxiStagingEnabled();
     await this.expireStaleTrips();
+    const pickupGoogleExpiresAt = dto.pickupContentSource === "GOOGLE_DERIVED"
+      ? googleLocationExpiry(dto.pickupContentProof, userId, dto.pickupLatitude, dto.pickupLongitude, this.config.get<string>("JWT_SECRET", "")) : null;
+    const destinationGoogleExpiresAt = dto.destinationContentSource === "GOOGLE_DERIVED"
+      ? googleLocationExpiry(dto.destinationContentProof, userId, dto.destinationLatitude, dto.destinationLongitude, this.config.get<string>("JWT_SECRET", "")) : null;
+    const stopGoogleExpiresAt = dto.stopContentSource === "GOOGLE_DERIVED"
+      ? googleLocationExpiry(dto.stopContentProof, userId, dto.stopLatitude, dto.stopLongitude, this.config.get<string>("JWT_SECRET", "")) : null;
+    const googleDeadlines = [pickupGoogleExpiresAt, destinationGoogleExpiresAt, stopGoogleExpiresAt].filter((at): at is Date => Boolean(at));
+    if (dto.scheduledPickupAt && googleDeadlines.some((at) => new Date(dto.scheduledPickupAt!).getTime() >= at.getTime() - 86400000)) {
+      throw new BadRequestException("Choose a nearer pickup time or provide a fresh location for this Ride");
+    }
     const pickupArea = resolveRideServiceArea(this.config, dto.pickupLatitude, dto.pickupLongitude);
     const pickupText = dto.pickupAddress.toLowerCase();
     const launchCity = pickupArea?.city ?? (pickupText.includes("kano") ? "Kano" : pickupText.includes("abuja") || pickupText.includes("fct") ? "Abuja" : null);
@@ -730,14 +755,23 @@ export class TaxiService {
         data: {
           tripReference,
           customerId: customer.id,
-          pickupAddress: dto.pickupAddress.trim(),
+          pickupContentSource: dto.pickupContentSource ?? "LEGACY_UNKNOWN",
+          destinationContentSource: dto.destinationContentSource ?? "LEGACY_UNKNOWN",
+          pickupGoogleExpiresAt,
+          destinationGoogleExpiresAt,
+          stopContentSource: dto.stopContentSource ?? "LEGACY_UNKNOWN",
+          stopLatitude: this.decimalOrUndefined(dto.stopLatitude),
+          stopLongitude: this.decimalOrUndefined(dto.stopLongitude),
+          stopGoogleExpiresAt,
+          pickupAddress: pickupGoogleExpiresAt ? REMOVED_GOOGLE_LOCATION : dto.pickupAddress.trim(),
           pickupLatitude: this.decimalOrUndefined(dto.pickupLatitude),
           pickupLongitude: this.decimalOrUndefined(dto.pickupLongitude),
-          destinationAddress: dto.destinationAddress.trim(),
+          destinationAddress: destinationGoogleExpiresAt ? REMOVED_GOOGLE_LOCATION : dto.destinationAddress.trim(),
           destinationLatitude: this.decimalOrUndefined(dto.destinationLatitude),
           destinationLongitude: this.decimalOrUndefined(dto.destinationLongitude),
-          estimatedDistanceKm: this.decimalOrUndefined(estimate.estimatedDistanceKm),
-          estimatedDurationMin: estimate.estimatedDurationMin,
+          // Google route metrics stay in the ephemeral quote UI, not permanent receipts/history.
+          estimatedDistanceKm: dto.routeContentSource === "GOOGLE_DERIVED" ? null : this.decimalOrUndefined(estimate.estimatedDistanceKm),
+          estimatedDurationMin: dto.routeContentSource === "GOOGLE_DERIVED" ? null : estimate.estimatedDurationMin,
           estimatedFareKobo: estimate.estimatedFareKobo,
           ridePinRequired,
           tripPinHash,
@@ -1821,7 +1855,7 @@ export class TaxiService {
   private composeTripCustomerNote(dto: CreateTaxiTripDto) {
     return [
       dto.customerNote?.trim(),
-      dto.stopAddress?.trim() ? `Stop: ${dto.stopAddress.trim()}` : null,
+      dto.stopAddress?.trim() ? `Stop: ${dto.stopContentSource === "GOOGLE_DERIVED" ? REMOVED_GOOGLE_LOCATION : dto.stopAddress.trim()}` : null,
       dto.rideCategory?.trim() ? `Ride category: ${dto.rideCategory.trim().toUpperCase()}` : null,
       dto.paymentMethod?.trim() ? `Payment preference: ${dto.paymentMethod.trim()}` : null,
       dto.scheduledPickupAt?.trim() ? `Scheduled pickup: ${dto.scheduledPickupAt.trim()}` : null,
@@ -2114,7 +2148,7 @@ export class TaxiService {
       afterUpdate?: (tx: Prisma.TransactionClient, updated: TaxiTripWithRelations) => Promise<void>;
       metadata?: Record<string, unknown>;
     } = {}
-  ) {
+  ): Promise<TaxiTripWithRelations> {
     const updated = await this.prisma.$transaction(async (tx) => {
       await hooks.beforeUpdate?.(tx);
       const next = await tx.taxiTrip.update({
@@ -2133,6 +2167,13 @@ export class TaxiService {
         }
       });
       await hooks.afterUpdate?.(tx, next);
+      if (CLOSED_TAXI_TRIP_STATUSES.includes(next.status) && (next.pickupContentSource === "GOOGLE_DERIVED" || next.destinationContentSource === "GOOGLE_DERIVED" || next.stopContentSource === "GOOGLE_DERIVED")) {
+        return tx.taxiTrip.update({ where: { id: tripId }, data: {
+          ...(next.pickupContentSource === "GOOGLE_DERIVED" ? { pickupLatitude: null, pickupLongitude: null, pickupGoogleExpiresAt: null } : {}),
+          ...(next.destinationContentSource === "GOOGLE_DERIVED" ? { destinationLatitude: null, destinationLongitude: null, destinationGoogleExpiresAt: null } : {}),
+          ...(next.stopContentSource === "GOOGLE_DERIVED" ? { stopLatitude: null, stopLongitude: null, stopGoogleExpiresAt: null } : {})
+        }, include: this.tripInclude() });
+      }
       return next;
     });
     this.rideRealtime.emitToRide(tripId, "ride.lifecycle.updated", {
@@ -2160,6 +2201,10 @@ export class TaxiService {
     if (!Number.isFinite(recordedAt.getTime()) || ageMs > 120_000 || ageMs < -30_000) {
       throw new BadRequestException("Refresh Captain GPS before recording this Ride milestone.");
     }
+    const source = target === "pickup" ? trip.pickupContentSource : trip.destinationContentSource;
+    const deadline = target === "pickup" ? trip.pickupGoogleExpiresAt : trip.destinationGoogleExpiresAt;
+    if (googleLocationDisposal(source, deadline)) throw new BadRequestException("Refresh the Ride location before continuing");
+    if ((target === "pickup" ? trip.pickupLatitude : trip.destinationLatitude) === null) throw new BadRequestException("Ride location unavailable");
     const targetLatitude = Number(target === "pickup" ? trip.pickupLatitude : trip.destinationLatitude);
     const targetLongitude = Number(target === "pickup" ? trip.pickupLongitude : trip.destinationLongitude);
     if (!Number.isFinite(targetLatitude) || !Number.isFinite(targetLongitude)) {
@@ -2298,12 +2343,17 @@ export class TaxiService {
     return {
       id: trip.id,
       tripReference: trip.tripReference,
+      pickupContentSource: trip.pickupContentSource,
+      destinationContentSource: trip.destinationContentSource,
+      stopContentSource: trip.stopContentSource,
+      stopLatitude: googleLocationDisposal(trip.stopContentSource, trip.stopGoogleExpiresAt, new Date(), CLOSED_TAXI_TRIP_STATUSES.includes(trip.status)) ? null : trip.stopLatitude,
+      stopLongitude: googleLocationDisposal(trip.stopContentSource, trip.stopGoogleExpiresAt, new Date(), CLOSED_TAXI_TRIP_STATUSES.includes(trip.status)) ? null : trip.stopLongitude,
       pickupAddress: trip.pickupAddress,
-      pickupLatitude: trip.pickupLatitude,
-      pickupLongitude: trip.pickupLongitude,
+      pickupLatitude: googleLocationDisposal(trip.pickupContentSource, trip.pickupGoogleExpiresAt) ? null : trip.pickupLatitude,
+      pickupLongitude: googleLocationDisposal(trip.pickupContentSource, trip.pickupGoogleExpiresAt) ? null : trip.pickupLongitude,
       destinationAddress: trip.destinationAddress,
-      destinationLatitude: trip.destinationLatitude,
-      destinationLongitude: trip.destinationLongitude,
+      destinationLatitude: googleLocationDisposal(trip.destinationContentSource, trip.destinationGoogleExpiresAt) ? null : trip.destinationLatitude,
+      destinationLongitude: googleLocationDisposal(trip.destinationContentSource, trip.destinationGoogleExpiresAt) ? null : trip.destinationLongitude,
       estimatedDistanceKm: trip.estimatedDistanceKm,
       estimatedDurationMin: trip.estimatedDurationMin,
       estimatedFareKobo: trip.estimatedFareKobo,

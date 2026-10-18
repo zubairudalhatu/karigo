@@ -427,6 +427,8 @@ export interface TaxiPlaceAutocompleteResult {
 }
 
 export interface TaxiPlaceDetails {
+  contentSource?: "GOOGLE_DERIVED";
+  contentProof?: string;
   placeId: string;
   providerPlaceResource?: string | null;
   name: string;
@@ -534,7 +536,15 @@ export interface TaxiRidePricingDefaults {
   paymentMode?: "CASH" | "WALLET" | "ONLINE";
 }
 
+export type RideLocationSource = "USER_SUPPLIED" | "GOOGLE_DERIVED" | "LEGACY_UNKNOWN";
 export interface TaxiTripInput extends TaxiFareEstimateInput {
+  pickupContentSource?: RideLocationSource;
+  destinationContentSource?: RideLocationSource;
+  stopContentSource?: RideLocationSource;
+  pickupContentProof?: string;
+  destinationContentProof?: string;
+  stopContentProof?: string;
+  routeContentSource?: "GOOGLE_DERIVED" | "USER_SUPPLIED";
   customerNote?: string;
   paymentMethod?: string;
   scheduledPickupAt?: string;
@@ -655,6 +665,11 @@ export interface TaxiRideFinancialSummary {
 }
 
 export interface TaxiTrip {
+  stopContentSource?: RideLocationSource;
+  stopLatitude?: number | string | null;
+  stopLongitude?: number | string | null;
+  pickupContentSource?: RideLocationSource;
+  destinationContentSource?: RideLocationSource;
   id: string;
   tripReference: string;
   pickupAddress: string;

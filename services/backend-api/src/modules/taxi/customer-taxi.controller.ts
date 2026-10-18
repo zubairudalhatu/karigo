@@ -65,6 +65,12 @@ export class CustomerTaxiController {
     return { message: "KariGO Rides fare estimate calculated", data: this.taxi.customerFareEstimate(user.id, dto) };
   }
 
+  @Post("trips/content-safe")
+  @ApiOperation({ summary: "Create a Ride with explicit location provenance and transient Google route content" })
+  async createContentSafeTrip(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateTaxiTripDto) {
+    return { message: "KariGO Rides request submitted", data: await this.taxi.createCustomerTripContentSafe(user.id, dto) };
+  }
+
   @Post("trips")
   @ApiOperation({ summary: "Create a KariGO Rides trip request" })
   async createTrip(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateTaxiTripDto) {

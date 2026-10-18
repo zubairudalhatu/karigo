@@ -1,4 +1,5 @@
 import { BadRequestException, HttpException, HttpStatus, Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
+import { googleLocationProof } from "./ride-content-policy";
 import { ConfigService } from "@nestjs/config";
 import { TaxiPlaceAutocompleteQueryDto } from "./dto/taxi-place-autocomplete-query.dto";
 import { TaxiPlaceDetailsQueryDto } from "./dto/taxi-place-details-query.dto";
@@ -197,6 +198,8 @@ export class TaxiMapsService {
     }
 
     return {
+      contentSource: "GOOGLE_DERIVED" as const,
+      contentProof: googleLocationProof(userId, response.location.latitude, response.location.longitude, this.config.get<string>("JWT_SECRET", "")),
       placeId: response.id ?? safePlaceId,
       providerPlaceResource: response.name ?? null,
       name: response.displayName?.text ?? response.shortFormattedAddress ?? "Selected place",

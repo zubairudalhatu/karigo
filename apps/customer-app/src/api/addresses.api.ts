@@ -1,6 +1,7 @@
 import { api } from "./client";
 
 export interface Address {
+  contentSource?: "USER_SUPPLIED" | "GOOGLE_DERIVED" | "LEGACY_UNKNOWN";
   id: string;
   label: string;
   addressLine: string;
@@ -14,6 +15,7 @@ export interface Address {
 }
 
 export type AddressInput = {
+  contentSource?: "USER_SUPPLIED" | "LEGACY_UNKNOWN";
   label: string;
   addressLine: string;
   city: string;
@@ -26,11 +28,12 @@ export type AddressInput = {
 };
 
 export type AddressUpdateInput = Pick<AddressInput,
-  "label" | "addressLine" | "city" | "state" | "deliveryNote" | "latitude" | "longitude"
+  "label" | "addressLine" | "city" | "state" | "deliveryNote" | "latitude" | "longitude" | "contentSource"
 >;
 
 export function addressUpdateInput(address: Address): AddressUpdateInput {
   return {
+    contentSource: address.contentSource === "USER_SUPPLIED" ? "USER_SUPPLIED" : "LEGACY_UNKNOWN",
     label: address.label.trim(),
     addressLine: address.addressLine.trim(),
     city: address.city.trim(),

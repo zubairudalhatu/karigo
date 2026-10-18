@@ -1,6 +1,7 @@
 import { Type } from "class-transformer";
 import {
   IsBoolean,
+  IsIn,
   IsLatitude,
   IsLongitude,
   IsNumber,
@@ -11,6 +12,11 @@ import {
 } from "class-validator";
 
 export class CreateAddressDto {
+  // Google selections must be reacquired through the compliant Ride search, never saved indefinitely.
+  @IsOptional()
+  @IsIn(["USER_SUPPLIED", "LEGACY_UNKNOWN"])
+  contentSource?: "USER_SUPPLIED" | "LEGACY_UNKNOWN";
+
   @IsString()
   @MinLength(2)
   @MaxLength(50)

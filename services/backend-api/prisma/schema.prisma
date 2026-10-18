@@ -1388,6 +1388,14 @@ model TaxiTrip {
   tripReference          String                         @unique
   customerId             String                         @db.Uuid
   driverProfileId        String?                        @db.Uuid
+  pickupContentSource    String                         @default("LEGACY_UNKNOWN")
+  destinationContentSource String                       @default("LEGACY_UNKNOWN")
+  pickupGoogleExpiresAt  DateTime?
+  destinationGoogleExpiresAt DateTime?
+  stopContentSource      String                         @default("LEGACY_UNKNOWN")
+  stopLatitude           Decimal?                       @db.Decimal(10, 7)
+  stopLongitude          Decimal?                       @db.Decimal(10, 7)
+  stopGoogleExpiresAt    DateTime?
   pickupAddress          String
   pickupLatitude         Decimal?                       @db.Decimal(10, 7)
   pickupLongitude        Decimal?                       @db.Decimal(10, 7)
@@ -1426,6 +1434,9 @@ model TaxiTrip {
   settlement             TaxiRideSettlement?
   financialLedgerEntries TaxiRideFinancialLedgerEntry[]
 
+  @@index([pickupGoogleExpiresAt])
+  @@index([destinationGoogleExpiresAt])
+  @@index([stopGoogleExpiresAt])
   @@index([customerId, createdAt])
   @@index([driverProfileId, status])
   @@index([status, createdAt])
@@ -1855,6 +1866,7 @@ model Address {
   country                 String                   @default("Nigeria")
   latitude                Decimal?                 @db.Decimal(10, 7)
   longitude               Decimal?                 @db.Decimal(10, 7)
+  contentSource           String                   @default("LEGACY_UNKNOWN")
   deliveryNote            String?
   isDefault               Boolean                  @default(false)
   createdAt               DateTime                 @default(now())

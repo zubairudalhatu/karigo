@@ -201,7 +201,7 @@ assert(taxiRequest.includes("reverseGeocodeDebounceMs") && taxiRequest.includes(
 assert(taxiRequest.includes("mapReverseGeocodeRequest") && taxiRequest.includes("lastReverseGeocodedCoordinate"), "Ride map picker must ignore stale reverse-geocode responses.");
 assert(taxiRequest.includes("mapResolvingAddress") && taxiRequest.includes("mapAddressError"), "Ride map picker must separate pending address lookup copy from selected coordinate state.");
 assert(!taxiRequest.includes('address: "Updating selected address..."'), "Ride map picker must not store loading copy as the selected address.");
-assert(taxiRequest.includes("Powered by Google"), "Ride search predictions must include Google attribution.");
+assert(taxiRequest.includes("Google Maps"), "Ride search predictions must include Google attribution.");
 assert(taxiRequest.includes("rideStatusCopy"), "Ride tracking must use backend-driven status copy.");
 assert(taxiRequest.includes("isActiveTaxiTripStatus"), "Ride request flow must use shared active lifecycle status classification.");
 assert(taxiRequest.includes("isTerminalTaxiTripStatus"), "Ride request flow must use shared terminal lifecycle status classification.");

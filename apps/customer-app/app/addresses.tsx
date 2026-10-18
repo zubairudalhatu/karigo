@@ -65,6 +65,7 @@ export default function Addresses() {
         return;
       }
       await addressesApi.create({
+        contentSource: "USER_SUPPLIED",
         label: form.label.trim(),
         addressLine: form.addressLine.trim(),
         city: form.city.trim(),

@@ -36,6 +36,7 @@ describe("TaxiMapsService", () => {
     config.get.mockImplementation((key: string, fallback?: unknown) => {
       const values: Record<string, unknown> = {
         GOOGLE_MAPS_SERVER_API_KEY: "fake-google-server-key",
+        JWT_SECRET: "synthetic-location-test-key",
         RIDES_ACTIVE_SERVICE_AREAS: "Abuja,Kano",
         RIDES_ACTIVE_SERVICE_AREA: "Abuja"
       };
