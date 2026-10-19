@@ -45,6 +45,7 @@ export default function CaptainAccessBootstrap() {
       <Message error>{error}</Message>
       {error ? <Button title="Try again" onPress={resolveAccess} /> : null}
       {error ? <Button title="Sign out" tone="muted" onPress={logout} /> : null}
+      <Button title="Permanent account / Captain deletion" tone="muted" onPress={() => router.push("/account-deletion" as never)} />
     </Card>
   </Screen>;
 }

@@ -11,6 +11,7 @@ import { friendlyError } from "../lib/errors";
 import { acknowledgeRideMessageDelivered, subscribeRideRealtime } from "../lib/ride-realtime";
 import { useRideUnreadCount } from "../lib/ride-alert-state";
 import { CaptainLocation } from "../lib/location";
+import { captainTripMapAllowed } from "../lib/captain-map-policy";
 
 type Coordinate = { latitude: number; longitude: number };
 type DriverTrip = TaxiTrip & {
@@ -61,7 +62,11 @@ export function CaptainRideWorkspace({
   const pickup = coordinate(trip.pickupLatitude, trip.pickupLongitude);
   const destination = coordinate(trip.destinationLatitude, trip.destinationLongitude);
   const stop = coordinate(trip.stopLatitude, trip.stopLongitude);
-  const mapContentAllowed = Platform.OS !== "ios" || ![trip.pickupContentSource, trip.destinationContentSource, trip.stopContentSource].includes("GOOGLE_DERIVED");
+  const mapContentAllowed = captainTripMapAllowed(Platform.OS, [
+    { coordinate: pickup, source: trip.pickupContentSource },
+    { coordinate: destination, source: trip.destinationContentSource },
+    { coordinate: stop, source: trip.stopContentSource }
+  ]);
   const mapTarget = trip.status === "STARTED" || trip.status === "ARRIVED_DESTINATION" ? destination : pickup;
   const visibleCoordinates = [captainCoordinate, pickup, destination].filter((item): item is Coordinate => Boolean(item));
   const copy = stateCopy(trip.status);
@@ -217,6 +222,7 @@ export function CaptainRideWorkspace({
         <View style={styles.routeLine} />
         <View style={styles.routeRow}><View style={styles.destinationDot} /><View style={styles.routeCopy}><Text style={styles.routeLabel}>DESTINATION</Text><Text style={styles.routeAddress}>{trip.destinationAddress}</Text></View></View>
       </View>
+      {[trip.pickupContentSource, trip.destinationContentSource, trip.stopContentSource].includes("GOOGLE_DERIVED") ? <Text style={ui.muted}>Google Maps</Text> : null}
       {stop ? <View style={styles.waitingCard}>
         <Text style={styles.waitingTitle}>Intermediate stop</Text>
         <Text style={ui.muted}>{stop.latitude.toFixed(6)}, {stop.longitude.toFixed(6)}</Text>
@@ -225,7 +231,7 @@ export function CaptainRideWorkspace({
       </View> : null}
 
       <View style={styles.metrics}>
-        <View style={styles.metric}><Text style={styles.metricLabel}>Distance</Text><Text style={styles.metricValue}>{Number(trip.estimatedDistanceKm ?? 0).toFixed(1)} km</Text></View>
+        <View style={styles.metric}><Text style={styles.metricLabel}>Distance</Text><Text style={styles.metricValue}>{trip.estimatedDistanceKm != null && Number.isFinite(Number(trip.estimatedDistanceKm)) && Number(trip.estimatedDistanceKm) > 0 ? `${Number(trip.estimatedDistanceKm).toFixed(1)} km` : "Unavailable"}</Text></View>
         <View style={styles.metric}><Text style={styles.metricLabel}>Estimate</Text><Text style={styles.metricValue}>{trip.estimatedDurationMin ? `${trip.estimatedDurationMin} min` : "—"}</Text></View>
         <View style={styles.metric}><Text style={styles.metricLabel}>Fare</Text><Text style={styles.metricValue}>{formatKobo(trip.estimatedFareKobo)}</Text></View>
       </View>

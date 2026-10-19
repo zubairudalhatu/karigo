@@ -1,99 +1,58 @@
 import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { Text } from "react-native";
 import { AccountDeletionRequest, accountDeletionApi } from "../src/api/account-deletion.api";
 import { Button, Card, Field, Message, Protected, Screen, ui } from "../src/components/ui";
 import { useAuth } from "../src/contexts/auth-context";
 import { friendlyError } from "../src/lib/errors";
-
-function statusLabel(value?: string | null) {
-  return value ? value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()) : "Not requested";
-}
+import { readDeletionReceipt, saveDeletionReceipt } from "../src/lib/deletion-receipt";
 
 export default function CaptainAccountDeletionScreen() {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const router = useRouter();
   const [current, setCurrent] = useState<AccountDeletionRequest | null>(null);
-  const [reason, setReason] = useState("");
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-
-  async function load() {
-    setLoading(true);
-    setError("");
+  useEffect(() => {
+    let active = true;
+    void accountDeletionApi.current().then(value => { if (active) setCurrent(value); })
+      .catch(cause => { if (active) setError(friendlyError(cause)); });
+    return () => { active = false; };
+  }, []);
+  async function submit(wholeAccount = false) {
+    if (!user || busy) return;
+    setBusy(true); setError("");
     try {
-      setCurrent(await accountDeletionApi.current());
-    } catch (e) {
-      setError(friendlyError(e));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { void load(); }, []);
-
-  async function signOutIfFinal(request: AccountDeletionRequest) {
-    if (request.status === "PROCESSING" || request.status === "COMPLETED") {
-      await logout();
-    }
-  }
-
-  async function submit() {
-    setBusy(true);
-    setError("");
-    setMessage("");
-    try {
-      const request = await accountDeletionApi.requestCaptainDeactivation(reason.trim() || undefined);
+      const saved = await readDeletionReceipt();
+      const accountType = wholeAccount ? "COMPLETE_ACCOUNT" as const : "CAPTAIN" as const;
+      const receipt = saved?.userId === user.id && (saved.accountType ?? "CAPTAIN") === accountType ? saved
+        : { userId: user.id, accountType, ...(await accountDeletionApi.prepare()) };
+      // Persist before submission: a lost response must not lose the receipt or cause a second request.
+      await saveDeletionReceipt(receipt);
+      const request = await accountDeletionApi.requestPermanentCaptainDeletion(receipt.receiptToken, wholeAccount);
+      await saveDeletionReceipt({ ...receipt, requestReference: request.requestReference });
       setCurrent(request);
-      setReason("");
-      setConfirmText("");
-      setMessage(request.status === "BLOCKED"
-        ? "Your request was recorded but active assignments, rides or earnings must be closed first."
-        : "Your Captain access deactivation request has been recorded for KariGO Operations review.");
-      await signOutIfFinal(request);
-    } catch (e) {
-      setError(friendlyError(e));
-    } finally {
-      setBusy(false);
-    }
+      await logout();
+      router.replace("/account-deletion-status" as never);
+    } catch (cause) { setError(friendlyError(cause)); }
+    finally { setBusy(false); }
   }
-
-  async function cancel() {
-    setBusy(true);
-    setError("");
-    setMessage("");
-    try {
-      setCurrent(await accountDeletionApi.cancel("Cancelled by Captain in app."));
-      setMessage("Your Captain access deactivation request has been cancelled.");
-    } catch (e) {
-      setError(friendlyError(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return <Protected>
-    <Screen title="Deactivate Captain access" subtitle="Request review before KariGO disables your delivery or ride operations access." refreshing={loading} onRefresh={load}>
-      <Card>
-        <Text style={ui.sectionTitle}>Deactivate my Captain access</Text>
-        <Text style={ui.muted}>KariGO Operations will confirm that active deliveries, ride assignments, earnings and settlement records are closed before processing.</Text>
-        <Text style={ui.muted}>Operational, payment, security and audit records that KariGO must retain are preserved.</Text>
-      </Card>
-      {current ? <Card>
-        <Text style={ui.sectionTitle}>Current request</Text>
-        <Text style={ui.muted}>Reference: {current.requestReference}</Text>
-        <Text style={ui.muted}>Status: {statusLabel(current.status)}</Text>
-        {current.blockers.length ? <View>
-          {current.blockers.map((blocker) => <Text key={blocker.code} style={ui.muted}>{blocker.message}</Text>)}
-        </View> : null}
-        {current.canCancel ? <Button title={busy ? "Cancelling..." : "Cancel request"} tone="muted" onPress={cancel} disabled={busy} /> : null}
-      </Card> : null}
-      <Field multiline numberOfLines={5} value={reason} onChangeText={setReason} placeholder="Reason optional" />
-      <Field value={confirmText} onChangeText={setConfirmText} placeholder="Type DELETE to confirm request" autoCapitalize="characters" />
-      <Message>{message}</Message>
-      <Message error>{error}</Message>
-      <Button title={busy ? "Sending request..." : "Deactivate my Captain access"} tone="danger" onPress={submit} disabled={busy || confirmText.trim().toUpperCase() !== "DELETE"} />
-    </Screen>
-  </Protected>;
+  return <Protected><Screen title="Permanently delete Captain account" subtitle="Delete Captain personal data, not just deactivate access.">
+    <Card>
+      <Text style={ui.sectionTitle}>Permanent Captain deletion</Text>
+      <Text style={ui.muted}>Submitting disables Captain operational access and signs this app out. Active work and unsettled earnings must be resolved before final cleanup.</Text>
+      <Text style={ui.muted}>We remove or minimize your Captain profile, residential address, licence and vehicle information, uploaded onboarding photos/documents, device registrations and preferences. Ordinary data is removed within 30 days after blockers are resolved.</Text>
+      <Text style={ui.muted}>Only necessary financial, fraud, legal and audit evidence is retained under the KariGO Privacy Policy. This does not require contacting Support to initiate.</Text>
+      <Text style={ui.muted}>If Captain is your only genuine KariGO role, your account identity is deleted too. A genuine Customer or Partner role is preserved; its data is not silently deleted.</Text>
+      <Text style={ui.muted}>To delete both Captain and Customer access, choose entire account below. Both role-deletion workflows must complete before identity removal. A separate business or administrative role requires its existing role-specific deletion review first; Captain-only deletion remains available.</Text>
+      <Text style={ui.muted}>A private status/completion receipt stays on this device for access after sign-out, and remains available for 90 days after completion. Do not share it. Permanent deletion cannot be cancelled.</Text>
+    </Card>
+    {current ? <Card><Text style={ui.muted}>Request: {current.requestReference}</Text><Text style={ui.muted}>Status: {current.status}</Text></Card> : null}
+    <Field value={confirmText} onChangeText={setConfirmText} placeholder="Type DELETE to confirm permanent deletion" autoCapitalize="characters" />
+    <Message error>{error}</Message>
+    <Button title={busy ? "Submitting…" : "Permanently delete Captain role"} tone="danger" onPress={() => void submit(false)} disabled={busy || confirmText.trim().toUpperCase() !== "DELETE"} />
+    <Button title="Permanently delete my entire KariGO account" tone="danger" onPress={() => void submit(true)} disabled={busy || confirmText.trim().toUpperCase() !== "DELETE"} />
+    <Button title="View saved deletion receipt" tone="muted" onPress={() => router.push("/account-deletion-status" as never)} />
+  </Screen></Protected>;
 }

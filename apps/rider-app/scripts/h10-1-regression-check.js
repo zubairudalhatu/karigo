@@ -24,7 +24,7 @@ for (const file of ["assets/sounds/karigo_ride_call.wav", "assets/sounds/karigo_
   if (path.extname(file) !== ".wav" || !/^[a-z0-9_]+$/.test(basename)) throw new Error(`Captain sound resource name is not Android-safe: ${file}`);
   if (!fs.existsSync(path.join(root, file)) || fs.statSync(path.join(root, file)).size < 1_000) throw new Error(`Missing Captain sound asset: ${file}`);
 }
-for (const expected of ["createAgoraRtcEngine", "requestMicrophone", "onTokenPrivilegeWillExpire", "muteLocalAudioStream", "setEnableSpeakerphone", "endCall"]) {
+for (const expected of ["createAgoraRtcEngine", "requestCallMicrophone", "onTokenPrivilegeWillExpire", "muteLocalAudioStream", "setEnableSpeakerphone", "endCall"]) {
   if (!call.includes(expected)) throw new Error(`Missing Captain call contract: ${expected}`);
 }
 for (const expected of ["ride.message.new", "ride.message.delivered", "ride.message.read", "acknowledgeRideMessageDelivered"]) {

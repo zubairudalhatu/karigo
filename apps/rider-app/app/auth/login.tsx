@@ -77,6 +77,7 @@ export default function CaptainLogin() {
       <Button title={busy ? "Signing in..." : "Sign in"} disabled={busy || !phoneNumber || !password} onPress={submit} />
       {biometricEnabled ? <Button title="Sign in with biometrics" tone="muted" disabled={busy || !biometricAvailable} onPress={biometricSignIn} /> : null}
       <Link href="/auth/forgot-password" style={styles.forgotLink}>Forgot password?</Link>
+      <Link href="/account-deletion-status" style={styles.forgotLink}>Saved Captain deletion receipt</Link>
       <Text style={styles.applyCopy}>New to KariGO Captain?</Text>
       <Link href="/auth/apply" style={styles.applyLink}>Apply to become a Captain</Link>
     </Screen>

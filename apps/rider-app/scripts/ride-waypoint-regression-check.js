@@ -6,7 +6,12 @@ const ts = require("typescript");
 const source = fs.readFileSync(path.join(__dirname, "../src/components/captain-ride-workspace.tsx"), "utf8");
 const jsx = (type, props) => ({ type, props });
 const urls = [];
+const mapPolicy = { exports: {} };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, "../src/lib/captain-map-policy.ts"), "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS }
+}).outputText, mapPolicy);
 const mocks = {
+  "../lib/captain-map-policy": mapPolicy.exports,
   "react/jsx-runtime": { jsx, jsxs: jsx },
   "@karigo/config": { brand: { colors: {} } },
   "@karigo/shared-types": { formatKobo: () => "synthetic fare" },

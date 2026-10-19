@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import NetInfo from "@react-native-community/netinfo";
 import { router } from "expo-router";
-import { AppState, AppStateStatus, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { AppState, AppStateStatus, Image, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import MapView, { Marker, Region } from "react-native-maps";
 import { brand } from "@karigo/config";
@@ -411,6 +411,8 @@ export default function RiderDashboard() {
   }
 
   function promoteReadinessLocation(location: CaptainLocation) {
+    // Offline iOS positioning is local display only, never dispatch telemetry.
+    if (Platform.OS === "ios" && !operationalLocationRequiredRef.current) return;
     if (location.isApproximate || operationalLocationRequiredRef.current || !latestProjectionRef.current?.hasAnyActiveMode) return;
     if (readinessHeartbeatInFlightRef.current) return;
     const now = Date.now();

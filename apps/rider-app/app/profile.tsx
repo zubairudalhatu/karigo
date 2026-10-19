@@ -104,7 +104,7 @@ export default function Profile() {
       <SettingRow icon="eye" label="Privacy Policy" onPress={() => router.push("/legal/privacy")} />
       <SettingRow icon="book-open" label="Terms" onPress={() => router.push("/legal/terms")} />
       <SettingRow icon="info" label="About KariGO" value="Captain 1.1" />
-      <SettingRow icon="user-x" label="Deactivate Captain access" warning onPress={() => router.push("/account-deletion")} />
+      <SettingRow icon="user-x" label="Permanently delete Captain account" warning onPress={() => router.push("/account-deletion")} />
     </View>
     <Button tone="muted" title="Log out" onPress={async () => { await logout(); router.replace("/auth/login"); }} />
   </Screen></Protected>;

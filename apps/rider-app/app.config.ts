@@ -49,8 +49,9 @@ export default ({ config }: ExpoConfigInput) => {
     plugins: [
       "expo-router",
       ["expo-location", {
-        locationWhenInUsePermission: "KariGO Captain uses your location while you are online or completing assigned Ride and Delivery work.",
+        locationWhenInUsePermission: "KariGO Captain shows your location on this device while offline and shares it for dispatch while online or completing accepted Ride and Delivery work.",
         locationAlwaysAndWhenInUsePermission: "KariGO Captain uses background location only while assigned work is active so pickup and destination progress remain current.",
+        locationAlwaysPermission: false,
         isIosBackgroundLocationEnabled: true,
         isAndroidBackgroundLocationEnabled: true,
         isAndroidForegroundServiceEnabled: true
@@ -62,7 +63,9 @@ export default ({ config }: ExpoConfigInput) => {
       }],
       "@react-native-community/datetimepicker",
       ["expo-build-properties", androidApi36BuildProperties],
-      "../../scripts/with-approved-android-launcher-icons.cjs"
+      "../../scripts/with-approved-android-launcher-icons.cjs",
+      "expo-task-manager",
+      "./plugins/with-captain-ios-background-modes.cjs"
     ],
     icon: "./assets/icon.png",
     splash: {
@@ -116,10 +119,18 @@ export default ({ config }: ExpoConfigInput) => {
     },
     ios: {
       ...config.ios,
-      bundleIdentifier: isStaging ? "com.karigo.rider.staging" : "com.karigo.rider",
+      bundleIdentifier: isStaging ? "com.karigo.rider.staging" : "ng.com.karigo.captain",
+      appleTeamId: "6Y4WC7MQB6",
+      buildNumber: "1",
+      supportsTablet: false,
+      entitlements: { ...objectValue(config.ios?.entitlements), "aps-environment": isStaging ? "development" : "production" },
       infoPlist: {
         ...objectValue(config.ios?.infoPlist),
-        NSMicrophoneUsageDescription: "KariGO Captain uses your microphone only when you make or receive an in-app Ride call."
+        UIBackgroundModes: ["location"],
+        NSMicrophoneUsageDescription: "KariGO Captain uses your microphone only when you make or receive an in-app Ride call.",
+        NSCameraUsageDescription: "KariGO Captain uses your camera when you choose to photograph your profile, licence or vehicle for Captain onboarding.",
+        NSPhotoLibraryUsageDescription: "KariGO Captain lets you select profile, licence and vehicle photos for Captain onboarding.",
+        NSFaceIDUsageDescription: "KariGO Captain uses Face ID when you enable biometric sign-in to unlock your saved Captain session."
       }
     },
     extra: {

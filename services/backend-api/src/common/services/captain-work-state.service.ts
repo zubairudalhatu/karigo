@@ -24,6 +24,7 @@ import {
 } from "../../modules/taxi/ride-commission-policy";
 import { LaunchOperationsService } from "../../modules/launch-operations/launch-operations.service";
 import { captainIsApprovedForOperatingArea, captainOperatingAreaFromCoordinates, captainOperatingAreaSummary } from "../../modules/platform/captain-operating-areas";
+import { assertCaptainNotDeleted, captainDeletionSelection } from "../utils/captain-deletion";
 
 type PrismaTx = Prisma.TransactionClient | PrismaService;
 
@@ -396,6 +397,7 @@ export class CaptainWorkStateService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
+        accountDeletionRequests: captainDeletionSelection,
         rider: true,
         taxiDriverProfiles: { orderBy: { createdAt: "desc" }, take: 1 },
         deliveryCaptainApplications: { where: { status: DeliveryCaptainApplicationStatus.APPROVED }, orderBy: { createdAt: "desc" }, take: 1 },
@@ -404,6 +406,7 @@ export class CaptainWorkStateService {
       }
     });
     if (!user) throw new NotFoundException("Captain account not found");
+    assertCaptainNotDeleted(user);
     return user;
   }
 

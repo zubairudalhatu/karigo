@@ -1,3 +1,4 @@
+import { assertCaptainNotDeleted, captainDeletionSelection } from "../../common/utils/captain-deletion";
 import { googleLocationExpiry, googleLocationDisposal, REMOVED_GOOGLE_LOCATION } from "./ride-content-policy";
 import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
@@ -1575,7 +1576,7 @@ export class TaxiService {
   private async requireApplicantAccount(phoneNumber: string) {
     const applicant = await this.prisma.user.findUnique({
       where: { phoneNumber },
-      select: {
+      select: { accountDeletionRequests: captainDeletionSelection,
         id: true,
         role: true,
         phoneNumber: true,
@@ -1589,6 +1590,7 @@ export class TaxiService {
     if (!applicant || applicant.deletedAt) {
       throw new BadRequestException("Create a Captain applicant account before submitting the Ride Captain application.");
     }
+    assertCaptainNotDeleted(applicant);
     if (applicant.role === UserRole.CUSTOMER) {
       throw new BadRequestException("This phone number already has a KariGO account. Sign in with your existing KariGO password to continue your Captain application.");
     }
@@ -1607,7 +1609,7 @@ export class TaxiService {
   private async requireApplicantUserById(applicantUserId: string, phoneNumber: string) {
     const applicant = await this.prisma.user.findUnique({
       where: { id: applicantUserId },
-      select: {
+      select: { accountDeletionRequests: captainDeletionSelection,
         id: true,
         role: true,
         phoneNumber: true,
@@ -1621,6 +1623,7 @@ export class TaxiService {
     if (!applicant || applicant.deletedAt) {
       throw new BadRequestException("Captain applicant account is not ready for application submission.");
     }
+    assertCaptainNotDeleted(applicant);
     if (applicant.phoneNumber !== phoneNumber) {
       throw new BadRequestException("Use your signed-in KariGO account phone number for this Captain application.");
     }

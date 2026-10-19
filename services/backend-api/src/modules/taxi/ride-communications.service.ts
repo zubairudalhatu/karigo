@@ -7,6 +7,7 @@ import { NotificationsService } from "../notifications/notifications.service";
 import { CreateRideMessageDto, ListRideMessagesQueryDto, MarkRideMessagesReadDto } from "./dto/ride-message.dto";
 import { RideCallService } from "./ride-call.service";
 import { RideRealtimeService } from "./ride-realtime.service";
+import { assertCaptainNotDeleted, captainDeletionSelection } from "../../common/utils/captain-deletion";
 
 export const RIDE_MESSAGE_EVENT = "taxi.trip.message";
 export const RIDE_MESSAGE_DELIVERED_EVENT = "taxi.trip.message_delivered";
@@ -55,9 +56,10 @@ export class RideCommunicationsService {
           { driverProfile: { is: { userId } } }
         ]
       },
-      include: COMMUNICATION_TRIP_INCLUDE
+      include: { ...COMMUNICATION_TRIP_INCLUDE, driverProfile: { include: { user: { select: { accountDeletionRequests: captainDeletionSelection } } } } }
     });
     if (!trip) throw new NotFoundException("Ride not found");
+    if (trip.customer.user.id !== userId && trip.driverProfile?.user) assertCaptainNotDeleted(trip.driverProfile.user);
     this.assertReadable(trip);
     return {
       trip,

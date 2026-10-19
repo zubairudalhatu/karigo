@@ -934,6 +934,7 @@ export default function CaptainApplication() {
       onClose={() => setSelector(null)}
       onSelect={onSelectorSelect}
     />
+    {user ? <Button title="Permanent account / Captain deletion" tone="muted" onPress={() => router.push("/account-deletion")} /> : null}
   </Screen>;
 }
 

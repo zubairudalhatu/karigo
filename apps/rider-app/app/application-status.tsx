@@ -216,6 +216,7 @@ export default function ApplicationStatus() {
         <Text style={ui.muted}>Use your KariGO account details when contacting support about your Captain application. Do not share OTPs or passwords.</Text>
         <Pressable onPress={() => router.push("/profile")}><Text style={ui.link}>Open Profile</Text></Pressable>
       </Card>
+      <Button title="Permanent account / Captain deletion" tone="muted" onPress={() => router.push("/account-deletion")} />
     </Screen>
   </Protected>;
 }

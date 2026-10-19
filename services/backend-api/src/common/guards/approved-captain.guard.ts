@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from "@
 import { AccountStatus, RiderStatus, TaxiDriverProfileStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
+import { assertCaptainNotDeleted, captainDeletionSelection } from "../utils/captain-deletion";
 
 @Injectable()
 export class ApprovedCaptainGuard implements CanActivate {
@@ -20,18 +21,20 @@ export class ApprovedCaptainGuard implements CanActivate {
         select: {
           deletedAt: true,
           verificationStatus: true,
-          user: { select: { accountStatus: true, deletedAt: true } }
+          user: { select: { accountStatus: true, deletedAt: true, accountDeletionRequests: captainDeletionSelection } }
         }
       }),
       this.prisma.taxiDriverProfile.findUnique({
         where: { userId },
         select: {
           status: true,
-          user: { select: { accountStatus: true, deletedAt: true } }
+          user: { select: { accountStatus: true, deletedAt: true, accountDeletionRequests: captainDeletionSelection } }
         }
       })
     ]);
 
+    if (rider?.user) assertCaptainNotDeleted(rider.user);
+    if (rideProfile?.user) assertCaptainNotDeleted(rideProfile.user);
     const deliveryActive = Boolean(
       rider &&
       !rider.deletedAt &&

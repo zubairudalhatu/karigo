@@ -10,12 +10,21 @@ export interface AccountDeletionRequest {
   status: AccountDeletionStatus;
   reason?: string | null;
   requestedAt: string;
+  completedAt?: string | null;
+  deadlineAt?: string | null;
+  sharedIdentityRetained?: boolean;
+  retainedRecords?: string;
+  timing?: string;
   blockers: { code: string; message: string; count: number }[];
   canCancel: boolean;
 }
 
 export const accountDeletionApi = {
   current: () => api.get<AccountDeletionRequest | null>("account-deletion"),
+  prepare: () => api.post<{ receiptToken: string }>("account-deletion/prepare", {}),
+  requestPermanentCaptainDeletion: (receiptToken: string, wholeAccount = false) => api.post<AccountDeletionRequest>("account-deletion", {
+    accountType: wholeAccount ? "COMPLETE_ACCOUNT" : "CAPTAIN", permanent: true, confirmation: "DELETE", receiptToken
+  }),
   requestCaptainDeactivation: (reason?: string) =>
     api.post<AccountDeletionRequest>("account-deletion", {
       accountType: "CAPTAIN",

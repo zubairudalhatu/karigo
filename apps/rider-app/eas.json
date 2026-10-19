@@ -57,6 +57,15 @@
       "android": {
         "buildType": "app-bundle"
       }
+    },
+    "captain-production-ios": {
+      "ios": {
+        "simulator": false,
+        "image": "macos-sequoia-15.6-xcode-26.2",
+        "buildConfiguration": "Release"
+      },
+      "extends": "captain-production",
+      "node": "22.20.0"
     }
   },
   "submit": {
