@@ -436,6 +436,15 @@ export class RidersService {
     return this.toPublicCaptainDocument(document);
   }
 
+  async ownCaptainApplicationDocuments(userId: string) {
+    await this.requireCaptainUploadUser(userId);
+    const documents = await this.prisma.captainApplicationDocument.findMany({
+      where: { userId, deletedAt: null, uploadStatus: CaptainDocumentUploadStatus.UPLOADED },
+      orderBy: { uploadedAt: "desc" }
+    });
+    return documents.map(document => this.toPublicCaptainDocument(document));
+  }
+
   async removeCaptainApplicationDocument(userId: string, documentId: string) {
     const document = await this.prisma.captainApplicationDocument.findFirst({
       where: {

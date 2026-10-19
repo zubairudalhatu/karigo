@@ -6,6 +6,7 @@ import { AccountStatus, UserRole } from "@prisma/client";
 import { ExtractJwt, Strategy } from "passport-jwt";
 import { AuthenticatedUser } from "../../common/interfaces/authenticated-user.interface";
 import { UsersService } from "../users/users.service";
+import { CAPTAIN_ONBOARDING_SCOPE } from "../../common/decorators/captain-onboarding.decorator";
 
 interface JwtPayload {
   scope?: string;
@@ -29,11 +30,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: JwtPayload): Promise<AuthenticatedUser> {
     const user = await this.usersService.findByIdForAuth(payload.sub);
 
-    if (payload.scope === "restore-governance" || !user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE || user.adminRole === "RESTORE_GOVERNANCE") {
+    const onboarding = payload.scope === CAPTAIN_ONBOARDING_SCOPE;
+    if ((payload.scope && !onboarding) || !user || user.deletedAt || user.adminRole === "RESTORE_GOVERNANCE" ||
+        (onboarding ? !(await this.usersService.canUseCaptainOnboarding(user.id)) : user.accountStatus !== AccountStatus.ACTIVE)) {
       throw new UnauthorizedException("Authentication is no longer valid");
     }
 
     return {
+      ...(onboarding ? { sessionScope: CAPTAIN_ONBOARDING_SCOPE } : {}),
       id: user.id,
       fullName: user.fullName,
       phoneNumber: requiredMobile(user.phoneNumber),

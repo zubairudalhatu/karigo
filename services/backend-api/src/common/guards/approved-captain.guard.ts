@@ -11,7 +11,7 @@ export class ApprovedCaptainGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<{ user?: AuthenticatedUser }>();
     const userId = request.user?.id;
-    if (!userId) {
+    if (!userId || request.user?.sessionScope === "captain-onboarding") {
       throw new ForbiddenException("Captain operations will be available after KariGO approves your application.");
     }
 

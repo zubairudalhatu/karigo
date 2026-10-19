@@ -1,6 +1,7 @@
 import { AccountStatus, AdminRole, UserRole } from "@prisma/client";
 
 export interface AuthenticatedUser {
+  sessionScope?: "captain-onboarding";
   id: string;
   fullName: string;
   phoneNumber: string;

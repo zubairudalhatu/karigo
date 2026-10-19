@@ -1,3 +1,4 @@
+import { AllowCaptainOnboarding } from "../../common/decorators/captain-onboarding.decorator";
 import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -36,6 +37,7 @@ export class TaxiController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Submit a Ride Captain application for the authenticated KariGO account" })
+  @AllowCaptainOnboarding()
   async submitDriverApplicationForCurrentUser(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateTaxiDriverApplicationDto) {
     return { message: "Ride Captain application submitted", data: await this.taxi.submitDriverApplication(dto, user.id) };
   }
@@ -44,6 +46,7 @@ export class TaxiController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Check the authenticated user's Ride Captain application status" })
+  @AllowCaptainOnboarding()
   async currentUserDriverApplicationStatus(@CurrentUser() user: AuthenticatedUser) {
     return { message: "Ride Captain application status retrieved", data: await this.taxi.currentUserApplicationStatus(user.id) };
   }

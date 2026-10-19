@@ -1,3 +1,4 @@
+import { AllowCaptainOnboarding } from "../../common/decorators/captain-onboarding.decorator";
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
@@ -52,6 +53,7 @@ export class DeliveryCaptainApplicationsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Submit a Delivery Captain application for the authenticated KariGO account" })
+  @AllowCaptainOnboarding()
   async createForCurrentUser(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateDeliveryCaptainApplicationDto) {
     return { message: "Delivery Captain application submitted", data: await this.ridersService.createDeliveryCaptainApplicationForUser(user.id, dto) };
   }
@@ -60,6 +62,7 @@ export class DeliveryCaptainApplicationsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Check the authenticated user's Delivery Captain application status" })
+  @AllowCaptainOnboarding()
   async statusForCurrentUser(@CurrentUser() user: AuthenticatedUser) {
     return { message: "Delivery Captain application status retrieved", data: await this.ridersService.currentUserDeliveryCaptainApplicationStatus(user.id) };
   }
@@ -68,6 +71,7 @@ export class DeliveryCaptainApplicationsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Submit requested Delivery Captain revision documents for the authenticated account" })
+  @AllowCaptainOnboarding()
   async submitRevision(@CurrentUser() user: AuthenticatedUser, @Body() dto: SubmitDeliveryCaptainRevisionDto) {
     return { message: "Delivery Captain revision submitted", data: await this.ridersService.submitDeliveryCaptainRevision(user.id, dto) };
   }
@@ -177,6 +181,7 @@ export class CaptainAccessController {
 
   @Get("access")
   @ApiOperation({ summary: "Resolve safe Captain onboarding and operational access for the authenticated account" })
+  @AllowCaptainOnboarding()
   async access(@CurrentUser() user: AuthenticatedUser) {
     return { message: "Captain access resolved", data: await this.ridersService.resolveCaptainAccess(user.id) };
   }
@@ -196,6 +201,7 @@ export class CaptainAccessController {
   @Post("application-documents/uploads")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 10 * 1024 * 1024 } }))
   @ApiOperation({ summary: "Upload a private Captain application document for the authenticated applicant" })
+  @AllowCaptainOnboarding()
   async uploadDocument(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CaptainApplicationDocumentUploadDto,
@@ -204,8 +210,15 @@ export class CaptainAccessController {
     return { message: "Captain application document uploaded", data: await this.ridersService.uploadCaptainApplicationDocument(user.id, dto.documentType, file) };
   }
 
+  @Get("application-documents")
+  @AllowCaptainOnboarding()
+  async documents(@CurrentUser() user: AuthenticatedUser) {
+    return { message: "Captain application documents retrieved", data: await this.ridersService.ownCaptainApplicationDocuments(user.id) };
+  }
+
   @Delete("application-documents/:documentId")
   @ApiOperation({ summary: "Remove an unsubmitted Captain application upload owned by the authenticated applicant" })
+  @AllowCaptainOnboarding()
   async removeDocument(@CurrentUser() user: AuthenticatedUser, @Param("documentId", ParseUUIDPipe) documentId: string) {
     return { message: "Captain application document removed", data: await this.ridersService.removeCaptainApplicationDocument(user.id, documentId) };
   }

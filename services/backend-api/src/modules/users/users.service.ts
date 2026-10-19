@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { AccountStatus, CustomerReferralStatus, Prisma, UserRole } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
+import { captainDeletionSelection } from "../../common/utils/captain-deletion";
 
 export const publicUserSelect = {
   id: true,
@@ -23,6 +24,28 @@ export const publicUserSelect = {
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async canUseCaptainOnboarding(userId: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        role: true, adminRole: true, accountStatus: true, deletedAt: true,
+        phoneVerified: true, onboardingPasswordSetAt: true,
+        accountDeletionRequests: captainDeletionSelection,
+        deliveryCaptainApplications: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, trashedAt: true } },
+        taxiDriverApplications: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, trashedAt: true } },
+        rider: { select: { deletedAt: true, verificationStatus: true } },
+        taxiDriverProfiles: { select: { status: true } }
+      }
+    });
+    return Boolean(user && user.role === UserRole.RIDER && !user.adminRole &&
+      !user.deletedAt && user.phoneVerified && user.onboardingPasswordSetAt &&
+      (user.accountStatus === AccountStatus.PENDING || user.accountStatus === AccountStatus.ACTIVE) &&
+      !user.accountDeletionRequests.length &&
+      ![...user.deliveryCaptainApplications, ...user.taxiDriverApplications].some(a => a.status === "REJECTED" || a.trashedAt) &&
+      !user.rider?.deletedAt && user.rider?.verificationStatus !== "SUSPENDED" &&
+      !user.taxiDriverProfiles.some(p => p.status === "SUSPENDED" || p.status === "DEACTIVATED"));
+  }
 
   async createCustomer(input: {
     fullName: string;

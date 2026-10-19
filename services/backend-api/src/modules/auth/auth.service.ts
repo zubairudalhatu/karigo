@@ -1,4 +1,5 @@
 import { requiredMobile } from "../../common/utils/required-mobile";
+import { CAPTAIN_ONBOARDING_SCOPE } from "../../common/decorators/captain-onboarding.decorator";
 import { BadRequestException, ForbiddenException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
@@ -76,6 +77,11 @@ export class AuthService {
     const user = await this.usersService.findByPhoneForAuth(dto.phoneNumber);
     if (!user) {
       throw new UnauthorizedException("OTP is invalid or expired");
+    }
+
+    // The general Customer OTP route must not activate a pending Captain.
+    if (user.role === UserRole.RIDER && user.accountStatus !== AccountStatus.ACTIVE) {
+      throw new BadRequestException("Use Captain onboarding phone verification.");
     }
 
     await this.otpService.verify(user.id, dto.otp);
@@ -156,6 +162,9 @@ export class AuthService {
     if (!user || user.role !== role || user.deletedAt) {
       throw new UnauthorizedException("OTP is invalid or expired");
     }
+    if (role === UserRole.RIDER && (user.accountStatus !== AccountStatus.PENDING || user.phoneVerified)) {
+      throw new UnauthorizedException("Captain setup verification is unavailable.");
+    }
 
     await this.otpService.verify(user.id, dto.otp);
     const verifiedUser = await this.prisma.user.update({
@@ -173,6 +182,9 @@ export class AuthService {
     const user = await this.usersService.findByPhoneForAuth(dto.phoneNumber);
     if (!user || user.role !== role || user.deletedAt) {
       throw new BadRequestException("Applicant account could not be found.");
+    }
+    if (role === UserRole.RIDER && (user.accountStatus !== AccountStatus.PENDING || user.onboardingPasswordSetAt)) {
+      throw new BadRequestException("Use the normal sign-in or password recovery flow.");
     }
     if (!user.phoneVerified) {
       throw new BadRequestException("Verify your phone number before creating a password.");
@@ -225,7 +237,10 @@ export class AuthService {
       };
     }
 
-    if (user && passwordMatches && !user.deletedAt && user.accountStatus !== AccountStatus.ACTIVE) {
+    const onboarding = Boolean(user && passwordMatches && user.role === UserRole.RIDER &&
+      user.accountStatus === AccountStatus.PENDING && user.phoneVerified &&
+      await this.usersService.canUseCaptainOnboarding(user.id));
+    if (user && passwordMatches && !user.deletedAt && user.accountStatus !== AccountStatus.ACTIVE && !onboarding) {
       const reason = this.inactiveLoginMessage(user.role, user.accountStatus);
       await this.recordLoginActivity({
         userId: user.id,
@@ -241,7 +256,7 @@ export class AuthService {
       !user ||
       !passwordMatches ||
       !user.phoneVerified ||
-      user.accountStatus !== AccountStatus.ACTIVE ||
+      (user.accountStatus !== AccountStatus.ACTIVE && !onboarding) ||
       user.deletedAt
     ) {
       await this.recordLoginActivity({
@@ -264,7 +279,7 @@ export class AuthService {
     });
     return {
       user: publicUser,
-      ...(await this.issueSession(user.id, user.role))
+      ...(await this.issueSession(user.id, user.role, onboarding))
     };
   }
 
@@ -491,12 +506,17 @@ export class AuthService {
       include: { user: true }
     });
 
+    const restrictedRefresh = dto.refreshToken.startsWith("co1.");
+    const eligibleOnboarding = Boolean(existing && restrictedRefresh &&
+      await this.usersService.canUseCaptainOnboarding(existing.user.id));
+    const onboarding = eligibleOnboarding && existing?.user.accountStatus === AccountStatus.PENDING;
     if (
       !existing ||
       existing.revokedAt ||
       existing.expiresAt.getTime() <= Date.now() ||
       existing.user.deletedAt || existing.user.adminRole === "RESTORE_GOVERNANCE" ||
-      existing.user.accountStatus !== AccountStatus.ACTIVE
+      (restrictedRefresh && !eligibleOnboarding) ||
+      (existing.user.accountStatus !== AccountStatus.ACTIVE && !onboarding)
     ) {
       throw new UnauthorizedException({
         message: "Your session has expired. Please sign in again.",
@@ -504,7 +524,7 @@ export class AuthService {
       });
     }
 
-    const session = await this.issueSession(existing.user.id, existing.user.role);
+    const session = await this.issueSession(existing.user.id, existing.user.role, onboarding);
     await this.prisma.refreshToken.update({
       where: { id: existing.id },
       data: {
@@ -535,13 +555,16 @@ export class AuthService {
     return { loggedOut: true };
   }
 
-  private signToken(userId: string, role: string): Promise<string> {
-    return this.jwtService.signAsync({ sub: userId, role });
+  private signToken(userId: string, role: string, onboarding = false): Promise<string> {
+    return onboarding
+      ? this.jwtService.signAsync({ sub: userId, role, scope: CAPTAIN_ONBOARDING_SCOPE }, { expiresIn: "15m" })
+      : this.jwtService.signAsync({ sub: userId, role });
   }
 
-  private async issueSession(userId: string, role: string) {
-    const refreshToken = randomBytes(48).toString("base64url");
-    const expiresAt = new Date(Date.now() + this.refreshTokenTtlDays() * 24 * 60 * 60 * 1000);
+  private async issueSession(userId: string, role: string, onboarding = false) {
+    // The prefix is hashed with the random secret; modifying it invalidates lookup.
+    const refreshToken = `${onboarding ? "co1." : ""}${randomBytes(48).toString("base64url")}`;
+    const expiresAt = new Date(Date.now() + (onboarding ? 1 : this.refreshTokenTtlDays()) * 24 * 60 * 60 * 1000);
     const stored = await this.prisma.refreshToken.create({
       data: {
         userId,
@@ -552,7 +575,7 @@ export class AuthService {
     });
 
     return {
-      accessToken: await this.signToken(userId, role),
+      accessToken: await this.signToken(userId, role, onboarding),
       refreshToken,
       refreshTokenId: stored.id
     };

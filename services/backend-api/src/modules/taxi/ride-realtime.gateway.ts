@@ -42,7 +42,7 @@ export class RideRealtimeGateway implements OnGatewayInit, OnGatewayConnection {
       const token = typeof supplied === "string" ? supplied.replace(/^Bearer\s+/i, "") : "";
       if (!token) throw new Error("missing token");
       const payload = await this.jwt.verifyAsync<{ sub?: string; scope?: string }>(token);
-      if (payload.scope === "restore-governance" || !payload.sub) throw new Error("missing subject");
+      if (payload.scope || !payload.sub) throw new Error("restricted or missing subject");
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
         select: { id: true, accountStatus: true, deletedAt: true, adminRole: true }

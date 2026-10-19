@@ -16,7 +16,8 @@ describe("AuthService", () => {
     findByIdForAuth: jest.fn(),
     markLogin: jest.fn(),
     markPhoneVerified: jest.fn(),
-    findPublicById: jest.fn()
+    findPublicById: jest.fn(),
+    canUseCaptainOnboarding: jest.fn().mockResolvedValue(false)
   };
   const otpService = { issue: jest.fn(), verify: jest.fn() };
   const accountActivationEmail = { sendAccountActivatedEmail: jest.fn().mockResolvedValue({ accepted: true }) };

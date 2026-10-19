@@ -1,3 +1,4 @@
+import { AllowCaptainOnboarding } from "../../common/decorators/captain-onboarding.decorator";
 import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
@@ -189,6 +190,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Log out and revoke the current refresh token when supplied" })
+  @AllowCaptainOnboarding()
   async logout(@CurrentUser() user: AuthenticatedUser, @Body() dto: LogoutDto) {
     return {
       message: "Logged out",
@@ -212,6 +214,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get the authenticated user" })
+  @AllowCaptainOnboarding()
   async me(@CurrentUser() user: AuthenticatedUser) {
     return {
       message: "Authenticated user retrieved",
