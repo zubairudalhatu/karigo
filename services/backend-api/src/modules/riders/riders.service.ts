@@ -1,3 +1,4 @@
+import { assertCaptainNotDeleted, captainDeletionSelection } from "../../common/utils/captain-deletion";
 import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import {
@@ -179,7 +180,7 @@ export class RidersService {
   async resolveCaptainAccess(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: {
+      select: { accountDeletionRequests: captainDeletionSelection,
         id: true,
         fullName: true,
         phoneNumber: true,
@@ -194,6 +195,7 @@ export class RidersService {
       }
     });
     if (!user || user.deletedAt) throw new NotFoundException("KariGO account not found");
+    assertCaptainNotDeleted(user);
     if (user.role !== UserRole.CUSTOMER && user.role !== UserRole.RIDER) {
       throw new ForbiddenException("This KariGO account cannot use Captain onboarding.");
     }
@@ -1012,9 +1014,10 @@ export class RidersService {
   private async requireCaptainUploadUser(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true, deletedAt: true }
+      select: { accountDeletionRequests: captainDeletionSelection, id: true, role: true, deletedAt: true }
     });
     if (!user || user.deletedAt) throw new NotFoundException("KariGO account not found");
+    assertCaptainNotDeleted(user);
     if (user.role !== UserRole.CUSTOMER && user.role !== UserRole.RIDER) {
       throw new ForbiddenException("This KariGO account cannot upload Captain application documents.");
     }
@@ -1492,7 +1495,7 @@ export class RidersService {
   private async requireApplicantAccount(phoneNumber: string, applicantUserId?: string) {
     const applicant = await this.prisma.user.findUnique({
       where: applicantUserId ? { id: applicantUserId } : { phoneNumber },
-      select: {
+      select: { accountDeletionRequests: captainDeletionSelection,
         id: true,
         role: true,
         phoneNumber: true,
@@ -1506,6 +1509,7 @@ export class RidersService {
     if (!applicant || applicant.deletedAt) {
       throw new BadRequestException("Create a Captain applicant account before submitting the application.");
     }
+    assertCaptainNotDeleted(applicant);
     if (applicantUserId && applicant.phoneNumber !== phoneNumber) {
       throw new BadRequestException("Use your signed-in KariGO account phone number for this Captain application.");
     }

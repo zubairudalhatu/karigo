@@ -16,7 +16,7 @@ import {
   VendorBranchStatus,
   VendorStatus
 } from "@prisma/client";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ListAccountDeletionRequestsQueryDto, UpdateAccountDeletionRequestDto } from "./dto/admin-account-deletion.dto";
@@ -24,6 +24,8 @@ import { CancelAccountDeletionDto, RequestAccountDeletionDto } from "./dto/reque
 import { CaptainUploadStorageService } from "../riders/captain-upload-storage.service";
 import { VendorPrivateUploadStorageService } from "../vendors/vendor-private-upload-storage.service";
 import { CustomerErasureService } from "./customer-erasure.service";
+import { assertLegacyCaptainObjectsCleared, minimizeCaptainPersonalData, suspendCaptainAccess } from "./captain-erasure";
+import { retentionExpiry } from "./retention-policy";
 
 const openRequestStatuses = [
   AccountDeletionStatus.REQUESTED,
@@ -141,6 +143,7 @@ export class AccountDeletionService {
 
   async request(userId: string, dto: RequestAccountDeletionDto) {
     if (dto.accountType === AccountDeletionAccountType.CUSTOMER) return this.customerErasure.request(userId, dto);
+    if (dto.permanent && (dto.accountType === "CAPTAIN" || dto.accountType === "COMPLETE_ACCOUNT")) return this.requestPermanentCaptain(userId, dto);
     const user = await this.loadUser(userId);
     this.assertAccountScope(user, dto.accountType);
 
@@ -169,6 +172,87 @@ export class AccountDeletionService {
     return this.toResponse(created);
   }
 
+  private async requestPermanentCaptain(userId: string, dto: RequestAccountDeletionDto) {
+    if (dto.confirmation !== "DELETE") throw new BadRequestException("Confirm permanent deletion by typing DELETE.");
+    const token = dto.receiptToken;
+    if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) throw new BadRequestException("Save a private deletion receipt before confirming.");
+    const receiptTokenHash = createHash("sha256").update(token).digest("hex");
+    const wholeAccount = dto.accountType === "COMPLETE_ACCOUNT";
+    let hasCustomerRole = false;
+    if (wholeAccount) {
+      const initial = await this.loadUser(userId);
+      this.assertAccountScope(initial, "CAPTAIN");
+      if (await this.captainSharesIdentity(this.prisma, initial, true)) {
+        throw new BadRequestException("Another business or administrative role requires its role-specific deletion review first. You can permanently delete the Captain role without changing that role.");
+      }
+      hasCustomerRole = Boolean(initial.customerProfile);
+    }
+    const result = await this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))::text AS lock`;
+      const user = await tx.user.findUnique({ where: { id: userId }, include: accountDeletionUserInclude });
+      if (!user || user.deletedAt || user.accountStatus !== "ACTIVE") throw new NotFoundException("Active account not found.");
+      this.assertAccountScope(user, "CAPTAIN");
+      const previous = await tx.accountDeletionRequest.findFirst({ where: { userId, accountType: dto.accountType, status: { not: "CANCELLED" } }, orderBy: { requestedAt: "desc" } });
+      if (previous) {
+        if (previous.erasureVersion !== 2 || previous.receiptTokenHash !== receiptTokenHash) throw new BadRequestException("Use your existing deletion receipt; an existing request cannot be replaced.");
+        return this.captainReceipt(previous);
+      }
+      // Genuine shared roles remain accessible. A Captain-only identity is erased too.
+      const sharedIdentityRetained = await this.captainSharesIdentity(tx, user, wholeAccount);
+      if (wholeAccount && sharedIdentityRetained) throw new BadRequestException("Another genuine role requires a separate deletion review.");
+      const now = new Date();
+      const request = await tx.accountDeletionRequest.create({ data: { userId, accountType: dto.accountType, requestReference: requestReference(),
+        status: "REQUESTED", confirmedAt: now, erasureVersion: 2, receiptTokenHash, sharedIdentityRetained,
+        deadlineAt: new Date(now.getTime() + 30 * 86400_000), reason: null } });
+      await suspendCaptainAccess(tx, userId, now);
+      await tx.adminAuditLog.create({ data: { adminUserId: userId, action: "CAPTAIN_PERMANENT_DELETION_REQUESTED",
+        entityType: "AccountDeletionRequest", entityId: request.id, newValue: { sharedIdentityRetained, erasureVersion: 2 } } });
+      return this.captainReceipt(request);
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    if (wholeAccount && hasCustomerRole) {
+      const existingCustomer = await this.prisma.accountDeletionRequest.findFirst({ where: {
+        userId, accountType: "CUSTOMER", erasureVersion: 1, status: { not: "CANCELLED" } }, orderBy: { requestedAt: "desc" } });
+      if (!existingCustomer) {
+        // Parent consent/receipt is already durable. Reuse the Customer pipeline
+        // unchanged, with a distinct deterministic receipt and no nested lock.
+        const customerReceipt = createHash("sha256").update("captain-whole-account/customer/").update(token).digest("base64url");
+        await this.customerErasure.request(userId, { accountType: "CUSTOMER", confirmation: "DELETE", receiptToken: customerReceipt });
+      }
+    }
+    return result;
+  }
+
+  private async captainSharesIdentity(tx: Prisma.TransactionClient, user: AccountDeletionUserContext, ignoreCustomer = false) {
+    const userId = user.id;
+    const otherMemberships = await Promise.all([
+      tx.vendorTeamMember.count({ where: { userId } }),
+      tx.partnerOnboardingDraft.count({ where: { userId } }),
+      tx.partnerCommercialAgreement.count({ where: { applicantUserId: userId } }),
+      tx.serviceProviderApplication.count({ where: { OR: [
+        ...(user.phoneNumber ? [{ phoneNumber: user.phoneNumber }] : []), ...(user.email ? [{ email: user.email }] : [])
+      ] } })
+    ]);
+    return Boolean((!ignoreCustomer && user.customerProfile && !user.customerAccessDeletedAt) || user.vendor || user.adminRole ||
+      user.role === "VENDOR" || user.role === "ADMIN" || user.vendorApplications.some(application => application.status !== "REJECTED") || otherMemberships.some(Boolean));
+  }
+
+
+  private captainReceipt(request: { accountType?: AccountDeletionAccountType; requestReference: string; status: AccountDeletionStatus; requestedAt: Date; completedAt: Date | null; deadlineAt: Date | null; sharedIdentityRetained: boolean | null }) {
+    return { requestReference: request.requestReference, accountType: request.accountType ?? "CAPTAIN", status: request.status,
+      requestedAt: request.requestedAt, completedAt: request.completedAt, deadlineAt: request.deadlineAt,
+      sharedIdentityRetained: request.sharedIdentityRetained, canCancel: false, blockers: [],
+      retainedRecords: "Only required financial, fraud, legal and deletion-audit evidence; other genuine roles are preserved.",
+      timing: "Ordinary Captain data is permanently minimized within 30 days after unresolved assignments, settlements or legal blockers are resolved. Receipt available for 90 days after completion." };
+  }
+
+  async captainDeletionReceipt(token: string) {
+    if (!/^[A-Za-z0-9_-]{43}$/.test(token ?? "")) throw new NotFoundException("Deletion receipt not found.");
+    const request = await this.prisma.accountDeletionRequest.findFirst({ where: {
+      accountType: { in: ["CAPTAIN", "COMPLETE_ACCOUNT"] }, erasureVersion: 2, receiptTokenHash: createHash("sha256").update(token).digest("hex") } });
+    if (!request || (request.completedAt && Date.now() >= request.completedAt.getTime() + 90 * 86400_000)) throw new NotFoundException("Deletion receipt not found.");
+    return this.captainReceipt(request);
+  }
+
   async cancel(userId: string, dto: CancelAccountDeletionDto) {
     const existing = await this.prisma.accountDeletionRequest.findFirst({
       where: { userId, status: { in: cancellableStatuses } },
@@ -176,6 +260,7 @@ export class AccountDeletionService {
       include: { user: { include: accountDeletionUserInclude }, adminReviewedBy: true }
     });
     if (!existing) throw new NotFoundException("No cancellable account deletion request was found.");
+    if (existing.erasureVersion === 2) throw new BadRequestException("Permanent Captain deletion cannot be cancelled.");
 
     const updated = await this.prisma.accountDeletionRequest.update({
       where: { id: existing.id },
@@ -238,11 +323,15 @@ export class AccountDeletionService {
       return this.toResponse(refreshed);
     }
     if (dto.status === AccountDeletionStatus.COMPLETED && request.accountType === AccountDeletionAccountType.COMPLETE_ACCOUNT && request.user.customerProfile) {
-      throw new BadRequestException("Complete-account requests containing Customer data require a separately reviewed multi-role erasure plan.");
+      if (request.erasureVersion !== 2) throw new BadRequestException("Complete-account requests containing Customer data require a separately reviewed multi-role erasure plan.");
+      const customer = await this.prisma.accountDeletionRequest.findFirst({ where: {
+        userId: request.userId, accountType: "CUSTOMER", erasureVersion: 1, status: "COMPLETED" } });
+      if (!customer || !request.user.customerAccessDeletedAt) throw new BadRequestException("Complete-account requests containing Customer data require completed Customer erasure before Captain completion.");
     }
     if (terminalRequestStatuses.includes(request.status)) {
       throw new BadRequestException("Completed or cancelled deletion requests cannot be changed.");
     }
+    if (request.erasureVersion === 2 && dto.status === "CANCELLED") throw new BadRequestException("Permanent Captain deletion cannot be cancelled.");
 
     const now = new Date();
     const blockers = await this.collectBlockers(request.user, request.accountType);
@@ -275,16 +364,30 @@ export class AccountDeletionService {
       if (blockers.length) {
         throw new BadRequestException("Account deletion cannot complete while operational blockers remain.");
       }
-      await this.reconcileStoredObjectsForCompletion(adminUserId, request.user, request.accountType);
+      if (request.erasureVersion === 2) {
+        await assertLegacyCaptainObjectsCleared(this.prisma, request.userId);
+      }
+      await this.reconcileStoredObjectsForCompletion(adminUserId, request.user, request.accountType, request.erasureVersion === 2);
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      if (request.erasureVersion === 2) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${request.userId}))::text AS lock`;
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('karigo-retention-governance'))::text AS lock`;
+      }
       if (dto.status === AccountDeletionStatus.PROCESSING) {
         await this.applyProcessingSafeguards(tx, request.user, request.accountType, now);
       }
       if (dto.status === AccountDeletionStatus.COMPLETED) {
         await this.applyProcessingSafeguards(tx, request.user, request.accountType, now);
         await this.applyCompletionSafeguards(tx, request.user, request.accountType, now);
+        if (request.erasureVersion === 2) {
+          const currentUser = await tx.user.findUniqueOrThrow({ where: { id: request.userId }, include: accountDeletionUserInclude });
+          const shared = Boolean(request.sharedIdentityRetained) || await this.captainSharesIdentity(tx, currentUser);
+          if (request.accountType === "COMPLETE_ACCOUNT" && shared) throw new BadRequestException("Another genuine role must finish its deletion review before whole-account completion.");
+          await minimizeCaptainPersonalData(tx, request.user.id, shared, now);
+          if (shared !== request.sharedIdentityRetained) await tx.accountDeletionRequest.update({ where: { id: request.id }, data: { sharedIdentityRetained: shared } });
+        }
       }
 
       return tx.accountDeletionRequest.update({
@@ -300,11 +403,14 @@ export class AccountDeletionService {
           adminReviewedAt: now,
           processingStartedAt: dto.status === AccountDeletionStatus.PROCESSING ? now : request.processingStartedAt,
           completedAt: dto.status === AccountDeletionStatus.COMPLETED ? now : request.completedAt,
+          ...(dto.status === "COMPLETED" && request.erasureVersion === 2 ? {
+            auditKeepUntil: retentionExpiry("DELETION_AUDIT", now)
+          } : {}),
           cancelledAt: dto.status === AccountDeletionStatus.CANCELLED ? now : request.cancelledAt
         },
         include: { user: { include: accountDeletionUserInclude }, adminReviewedBy: true }
       });
-    });
+    }, request.erasureVersion === 2 ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : undefined);
 
     await this.audit.record(adminUserId, `ACCOUNT_DELETION_${dto.status}`, "AccountDeletionRequest", request.id, {
       requestReference: request.requestReference,
@@ -317,7 +423,8 @@ export class AccountDeletionService {
   private async reconcileStoredObjectsForCompletion(
     adminUserId: string,
     user: AccountDeletionUserContext,
-    accountType: AccountDeletionAccountType
+    accountType: AccountDeletionAccountType,
+    permanentCaptain = false
   ) {
     const summary = { captainDeleted: 0, captainRetained: 0, partnerDeleted: 0, partnerRetained: 0 };
 
@@ -332,7 +439,13 @@ export class AccountDeletionService {
         }
       });
       for (const document of documents) {
-        const retained = Boolean(document.deliveryApplicationId || document.rideApplicationId);
+        if (permanentCaptain) {
+          const configured = this.captainStorage.storageLocation();
+          if (!document.storageProvider || !document.storageBucket || document.storageProvider !== configured.provider || document.storageBucket !== configured.bucket) {
+            throw new ServiceUnavailableException("CAPTAIN_DOCUMENT_STORAGE_LOCATION_UNVERIFIED");
+          }
+        }
+        const retained = !permanentCaptain && Boolean(document.deliveryApplicationId || document.rideApplicationId);
         if (retained) {
           await this.prisma.captainApplicationDocument.update({
             where: { id: document.id },
@@ -749,7 +862,7 @@ export class AccountDeletionService {
       cancelledAt: request.cancelledAt,
       blockedReasonCode: request.blockedReasonCode,
       blockers,
-      canCancel: request.erasureVersion === 1 ? false : cancellableStatuses.includes(request.status),
+      canCancel: request.erasureVersion === 1 || request.erasureVersion === 2 ? false : cancellableStatuses.includes(request.status),
       adminNote: request.adminNote,
       adminReviewedAt: request.adminReviewedAt,
       adminReviewedBy: request.adminReviewedBy ? {

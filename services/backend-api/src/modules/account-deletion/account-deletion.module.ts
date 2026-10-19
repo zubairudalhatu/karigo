@@ -8,10 +8,11 @@ import { VendorsModule } from "../vendors/vendors.module";
 import { CustomerErasureService } from "./customer-erasure.service";
 import { CustomerDeletionNoticeService } from "./customer-deletion-notice.service";
 import { CustomerDeletionReceiptController } from "./customer-deletion-receipt.controller";
+import { CaptainDeletionReceiptController } from "./captain-deletion-receipt.controller";
 
 @Module({
   imports: [PrismaModule, AdminAuditModule, RidersModule, VendorsModule],
-  controllers: [AccountDeletionController, AdminAccountDeletionController, CustomerDeletionReceiptController],
+  controllers: [AccountDeletionController, AdminAccountDeletionController, CustomerDeletionReceiptController, CaptainDeletionReceiptController],
   providers: [AccountDeletionService, CustomerErasureService, CustomerDeletionNoticeService],
   exports: [CustomerErasureService]
 })
