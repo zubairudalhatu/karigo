@@ -72,7 +72,9 @@ export async function minimizeCaptainPersonalData(tx: Prisma.TransactionClient, 
     await tx.phoneChangeRequest.deleteMany({ where: { userId } });
     await held.notification.deleteMany({ where: { userId } });
     await tx.address.deleteMany({ where: { userId } });
-    await tx.user.update({ where: { id: userId }, data: { fullName: "Deleted Captain", email: null, phoneNumber: null,
+    // Preserve the existing non-governance phone NOT NULL check without retaining
+    // a dialable identifier. Deleted/deactivated status still blocks all login.
+    await tx.user.update({ where: { id: userId }, data: { fullName: "Deleted Captain", email: null, phoneNumber: `ERASED-CAPTAIN-${userId}`,
       profilePhotoUrl: null, passwordHash: `ERASED-${randomBytes(32).toString("hex")}`, phoneVerified: false,
       emailVerified: false, accountStatus: "DEACTIVATED", deletedAt: now } });
   }

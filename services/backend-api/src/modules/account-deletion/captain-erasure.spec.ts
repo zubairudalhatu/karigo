@@ -98,7 +98,8 @@ describe("Permanent Captain deletion (local synthetic fixtures)", () => {
     expect(tx.rider.updateMany.mock.calls[0][0].data).toMatchObject({ phoneNumber: "ERASED", licenseNumber: null, guarantorPhone: null, photoUrl: null, currentLatitude: null });
     expect(tx.deliveryCaptainApplication.updateMany.mock.calls[0][0].data).toMatchObject({ address: "ERASED", guarantorName: "ERASED", profilePhotoUrl: null });
     expect(tx.taxiDriverApplication.updateMany.mock.calls[0][0].data).toMatchObject({ driverLicenceNumber: null, vehiclePlateNumber: null });
-    expect(tx.user.update.mock.calls[0][0].data).toMatchObject({ accountStatus: "DEACTIVATED", phoneNumber: null, email: null });
+    expect(tx.user.update.mock.calls[0][0].data).toMatchObject({ accountStatus: "DEACTIVATED", phoneNumber: `ERASED-CAPTAIN-${userId}`, email: null });
+    expect(tx.user.update.mock.calls[0][0].data.phoneNumber).not.toMatch(/^\+?\d+$/);
     expect(tx).not.toHaveProperty("payment"); expect(tx).not.toHaveProperty("riderEarning");
   });
   it("does not require authentication for the sanitized completion receipt, and expires it", async () => {
