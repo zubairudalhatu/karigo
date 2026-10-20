@@ -1,3 +1,4 @@
+import { InternalRideQaPolicy } from "../../modules/taxi/internal-ride-qa.policy";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import {
   AccountStatus,
@@ -88,12 +89,14 @@ export class CaptainWorkStateService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AdminAuditService,
-    private readonly launchOperations: LaunchOperationsService
+    private readonly launchOperations: LaunchOperationsService,
+    private readonly internalQa?: InternalRideQaPolicy
   ) {}
 
   async getForUser(userId: string) {
     const user = await this.loadUser(userId);
     const state = await this.ensureState(this.prisma, userId, user);
+    if (state.activeRideTripId) await this.internalQa?.assertTrip(state.activeRideTripId, userId);
     const financialEligibility = user.taxiDriverProfiles[0] ? await this.rideFinancialEligibility(this.prisma, user.taxiDriverProfiles[0].id) : null;
     return this.formatState(state, user, financialEligibility);
   }
@@ -103,6 +106,7 @@ export class CaptainWorkStateService {
     const state = await this.ensureState(this.prisma, userId, user);
     const locationOnly = dto.deliveryOnline === undefined && dto.rideOnline === undefined && this.hasValidLocation(dto);
     if (locationOnly) {
+      if (state.activeRideTripId) await this.internalQa?.assertTrip(state.activeRideTripId, userId);
       return this.updateLocationOnly(userId, user, dto);
     }
     if (state.activeWorkMode) {
@@ -439,6 +443,7 @@ export class CaptainWorkStateService {
     if (!this.hasValidLocation(dto)) {
       throw new BadRequestException("Current foreground location is required before going online.");
     }
+    if (mode === CaptainWorkMode.RIDE && await this.internalQa?.armedCaptain(user.id)) return;
     const currentArea = captainOperatingAreaFromCoordinates(dto.latitude, dto.longitude);
     const application = mode === CaptainWorkMode.RIDE
       ? user.taxiDriverApplications[0]

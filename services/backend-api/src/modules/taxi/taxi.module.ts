@@ -1,3 +1,6 @@
+import { InternalRideQaPolicyModule } from "./internal-ride-qa.policy";
+import { InternalRideQaController } from "./internal-ride-qa.controller";
+import { InternalRideQaService } from "./internal-ride-qa.service";
 import { RideContentExpiryService } from "./ride-content-expiry.service";
 import { RideCommunicationsService } from "./ride-communications.service";
 import { Module } from "@nestjs/common";
@@ -20,9 +23,10 @@ import { TaxiController } from "./taxi.controller";
 import { TaxiService } from "./taxi.service";
 
 @Module({
-  imports: [PrismaModule, AdminAuditModule, PaymentsModule],
-  controllers: [TaxiController, CustomerTaxiController, RiderTaxiController, AdminTaxiController],
+  imports: [InternalRideQaPolicyModule, PrismaModule, AdminAuditModule, PaymentsModule],
+  controllers: [InternalRideQaController, TaxiController, CustomerTaxiController, RiderTaxiController, AdminTaxiController],
   providers: [
+    InternalRideQaService,
     TaxiService,
     TaxiMapsService,
     RideContentExpiryService,

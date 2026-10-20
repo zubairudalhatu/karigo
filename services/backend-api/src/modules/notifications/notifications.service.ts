@@ -1,3 +1,4 @@
+import { InternalRideQaPolicy } from "../taxi/internal-ride-qa.policy";
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { NotificationChannel, NotificationType, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -33,7 +34,8 @@ export class NotificationsService {
     sms: SmsNotificationProvider,
     email: EmailNotificationProvider,
     whatsapp: WhatsAppNotificationProvider,
-    push: PushNotificationProvider
+    push: PushNotificationProvider,
+    private readonly internalQa?: InternalRideQaPolicy
   ) {
     this.providers = new Map<NotificationChannel, NotificationProvider>([
       [NotificationChannel.IN_APP, mock],
@@ -45,6 +47,13 @@ export class NotificationsService {
   }
 
   async createNotification(input: CreateNotificationInput) {
+    if (input.entityType === "TaxiTrip" && input.entityId) {
+      const qa = await this.internalQa?.lookup(input.entityId);
+      if (qa && (input.userId !== qa.captainUserId || input.type !== NotificationType.RIDER_ASSIGNED || !([NotificationChannel.IN_APP, NotificationChannel.PUSH] as NotificationChannel[]).includes(input.channel ?? NotificationChannel.IN_APP))) {
+        return { accepted: false, provider: "internal-qa-suppressed" };
+      }
+      if (qa) await this.internalQa!.assertTrip(input.entityId, qa.captainUserId);
+    }
     return activeUserOperation(this.prisma, input.userId, async tx => {
       const channel = input.channel ?? NotificationChannel.IN_APP;
       if (channel === NotificationChannel.IN_APP) {

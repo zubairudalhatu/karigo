@@ -1,3 +1,4 @@
+import { InternalRideQaPolicy } from "./internal-ride-qa.policy";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
@@ -76,7 +77,8 @@ export class RideFinanceService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly audit: AdminAuditService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly internalQa?: InternalRideQaPolicy
   ) {}
 
   commissionRatePercent() {
@@ -125,6 +127,7 @@ export class RideFinanceService {
   }
 
   async createCompletedSettlement(tx: Prisma.TransactionClient, input: CompletedRideSettlementInput) {
+    await this.internalQa?.forbidFinancial(input.tripId, tx);
     const basisPoints = this.commissionRateBasisPoints();
     const money = calculateRideSettlementMoney(input.finalCustomerFareKobo, basisPoints);
     const paymentMethod = input.paymentMethod.trim().toUpperCase() || "CASH";
@@ -176,6 +179,7 @@ export class RideFinanceService {
     serviceArea?: string | null; rideCategory: string; paymentMethod?: string; finalizedAt: Date; actorUserId: string; actorType: TaxiTripActorType;
     reviewRequired: boolean; reason: string;
   }) {
+    await this.internalQa?.forbidFinancial(input.tripId, tx);
     const outcome = input.reviewRequired ? TaxiRideFinancialOutcome.FINANCIAL_REVIEW_REQUIRED : TaxiRideFinancialOutcome.ZERO_VALUE_CANCELLATION;
     const status = input.reviewRequired ? TaxiRideSettlementStatus.DISPUTED : TaxiRideSettlementStatus.CANCELLED;
     const settlement = await tx.taxiRideSettlement.upsert({

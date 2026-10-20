@@ -1,3 +1,4 @@
+import { InternalRideQaPolicy } from "./internal-ride-qa.policy";
 import { BadRequestException, ConflictException, HttpException, HttpStatus, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Prisma, TaxiRideReceiptEmailKind, TaxiRideReceiptEmailStatus, TaxiTripActorType } from "@prisma/client";
@@ -20,7 +21,8 @@ export class RideReceiptEmailService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly internalQa?: InternalRideQaPolicy
   ) {}
 
   onModuleInit() {
@@ -39,6 +41,7 @@ export class RideReceiptEmailService implements OnModuleInit, OnModuleDestroy {
   }
 
   async enqueueAutomatic(tx: Prisma.TransactionClient, receipt: ReceiptForEmail, customerEmail?: string | null) {
+    await this.internalQa?.forbidFinancial(receipt.tripId, tx);
     const recipientEmail = this.validEmail(customerEmail) ? customerEmail!.trim().toLowerCase() : null;
     const applicable = this.enabled() && Boolean(recipientEmail);
     return tx.taxiRideReceiptEmailDelivery.upsert({

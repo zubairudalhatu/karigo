@@ -1,3 +1,4 @@
+import { InternalRideQaPolicy } from "./internal-ride-qa.policy";
 import {
   BadRequestException,
   ForbiddenException,
@@ -37,7 +38,8 @@ export class RideCallService {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
-    private readonly realtime: RideRealtimeService
+    private readonly realtime: RideRealtimeService,
+    private readonly internalQa?: InternalRideQaPolicy
   ) {
     this.provider = new AgoraRideCallProvider(config);
   }
@@ -53,6 +55,7 @@ export class RideCallService {
   }
 
   async initiate(request: RideCallSessionRequest) {
+    await this.internalQa?.forbidFinancial(request.tripId); // Synthetic context must never enter the external Agora provider.
     this.assertEnabled();
     await this.expireStaleRinging(request.tripId);
     const existing = await this.prisma.taxiRideCallSession.findFirst({

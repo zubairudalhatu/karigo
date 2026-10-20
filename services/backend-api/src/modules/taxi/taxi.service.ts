@@ -1,3 +1,4 @@
+import { InternalRideQaPolicy } from "./internal-ride-qa.policy";
 import { assertCaptainNotDeleted, captainDeletionSelection } from "../../common/utils/captain-deletion";
 import { googleLocationExpiry, googleLocationDisposal, REMOVED_GOOGLE_LOCATION } from "./ride-content-policy";
 import { requiredMobile } from "../../common/utils/required-mobile";
@@ -270,7 +271,8 @@ export class TaxiService {
     private readonly rideCommunications: RideCommunicationsService,
     private readonly rideRealtime: RideRealtimeService,
     private readonly receiptEmails: RideReceiptEmailService,
-    private readonly rideFinance: RideFinanceService
+    private readonly rideFinance: RideFinanceService,
+    private readonly internalQa?: InternalRideQaPolicy
   ) {}
 
   async joinWaitlist(dto: CreateTaxiWaitlistDto) {
@@ -1068,6 +1070,7 @@ export class TaxiService {
     await this.assertDriverHasNoActiveTrip(profile.id, tripId);
     const trip = await this.prisma.taxiTrip.findUnique({ where: { id: tripId } });
     if (!trip) throw new NotFoundException("Ride request not found");
+    await this.internalQa?.assertTrip(trip.id, userId);
     if (!trip.driverProfileId) {
       throw new BadRequestException("Ride request must be manually assigned by KariGO Operations before it can be accepted");
     }
@@ -1105,6 +1108,7 @@ export class TaxiService {
     }
     const requestExpiryMs = this.config.get<number>("RIDES_REQUEST_EXPIRY_MINUTES", 10) * 60 * 1000;
     const expired = Date.now() - trip.requestedAt.getTime() > requestExpiryMs;
+    if (await this.internalQa?.lookup(trip.id)) throw new ForbiddenException("Use Admin QA cleanup to retire this fixture.");
     const updated = await this.updateTripWithEvent(trip.id, {
       status: expired ? TaxiTripStatus.EXPIRED : TaxiTripStatus.REQUESTED,
       driverProfile: { disconnect: true },
@@ -1151,7 +1155,7 @@ export class TaxiService {
       }
     }
     const startedAt = new Date();
-    const waiting = calculatePickupWaiting(trip.arrivedAtPickupAt, startedAt, this.ridePricingDefaults().freePickupWaitSeconds, this.ridePricingDefaults().waitingChargeKoboPerMinute);
+    const waiting = await this.internalQa?.lookup(trip.id) ? { waitingChargeKobo: 0, totalWaitingSeconds: 0 } : calculatePickupWaiting(trip.arrivedAtPickupAt, startedAt, this.ridePricingDefaults().freePickupWaitSeconds, this.ridePricingDefaults().waitingChargeKoboPerMinute);
     const eventType = trip.ridePinRequired ? "RIDE_PIN_VERIFIED_AND_TRIP_STARTED" : "RIDE_STARTED_WITHOUT_PIN";
     const note = trip.ridePinRequired
       ? `Ride Captain ${profile.fullName} verified the PIN and started the Ride`
@@ -1200,6 +1204,17 @@ export class TaxiService {
     const { profile, trip } = await this.requireDriverTrip(userId, tripId);
     if (trip.status === TaxiTripStatus.COMPLETED) return this.formatTrip(trip, { viewer: "driver" });
     if (trip.status !== TaxiTripStatus.ARRIVED_DESTINATION) throw new BadRequestException("Ride Captain must arrive at destination before completing the trip");
+    const qa = await this.internalQa?.assertTrip(trip.id, userId);
+    if (qa) {
+      const completed = await this.updateTripWithEvent(trip.id, { status: TaxiTripStatus.COMPLETED, completedAt: new Date(), finalFareKobo: 0, tripPinHash: null, tripPinEncrypted: null }, userId, TaxiTripActorType.DRIVER, "INTERNAL_QA_COMPLETED", "SYNTHETIC NON-BILLABLE completion; no financial effects", {
+        afterUpdate: async tx => {
+          await tx.captainWorkState.updateMany({ where: { userId, activeRideTripId: trip.id, activeWorkMode: "RIDE" }, data: { desiredRideOnline: false, desiredDeliveryOnline: false } });
+          await this.captainWorkState.releaseLock(tx, { userId, mode: CaptainWorkMode.RIDE, workId: trip.id, actorId: userId });
+          await tx.taxiDriverProfile.update({ where: { id: profile.id }, data: { isAvailableForTaxi: false } });
+        }
+      });
+      return this.formatTrip(completed, { viewer: "driver" });
+    }
     const completedAt = new Date();
     const requestMetadata = this.tripRequestMetadata(trip);
     const rideCategory = normalizeRideCategory(typeof requestMetadata.rideCategory === "string" ? requestMetadata.rideCategory : undefined);
@@ -1466,6 +1481,7 @@ export class TaxiService {
   }
 
   async adminAssignDriver(adminUserId: string, tripId: string, dto: AdminAssignTaxiDriverDto) {
+    if (await this.internalQa?.lookup(tripId)) throw new ForbiddenException("Use the bound internal QA offer route.");
     this.assertTaxiStagingEnabled();
     await this.expireStaleTrips();
     const [trip, profile] = await Promise.all([
@@ -1494,6 +1510,7 @@ export class TaxiService {
     }
     await this.launchOperations.assertCaptainCanReceive({ city: pickupArea.cityName, serviceType: LaunchServiceType.RIDES, userId: profile.user!.id });
     if (trip.status !== TaxiTripStatus.REQUESTED) throw new BadRequestException("Only requested Ride requests can be assigned");
+    if (profile.userId && await this.internalQa?.armedCaptain(profile.userId)) throw new ForbiddenException("QA Captain cannot receive normal dispatch during the QA window.");
     await this.assertDriverHasNoActiveTrip(profile.id, trip.id);
     const updated = await this.updateTripWithEvent(trip.id, {
       driverProfile: { connect: { id: profile.id } },
@@ -1555,10 +1572,10 @@ export class TaxiService {
     const [driverProfiles, availableDrivers, requestedTrips, activeTrips, completedTrips, cancelledTrips] = await Promise.all([
       this.prisma.taxiDriverProfile.count(),
       this.prisma.taxiDriverProfile.count({ where: { status: TaxiDriverProfileStatus.ACTIVE, isAvailableForTaxi: true } }),
-      this.prisma.taxiTrip.count({ where: { status: TaxiTripStatus.REQUESTED } }),
-      this.prisma.taxiTrip.count({ where: { status: { in: ACTIVE_TAXI_TRIP_STATUSES } } }),
-      this.prisma.taxiTrip.count({ where: { status: TaxiTripStatus.COMPLETED } }),
-      this.prisma.taxiTrip.count({ where: { status: { in: [TaxiTripStatus.CANCELLED_BY_ADMIN, TaxiTripStatus.CANCELLED_BY_CUSTOMER, TaxiTripStatus.CANCELLED_BY_DRIVER] } } })
+      this.prisma.taxiTrip.count({ where: { isTestMode: false, status: TaxiTripStatus.REQUESTED } }),
+      this.prisma.taxiTrip.count({ where: { isTestMode: false, status: { in: ACTIVE_TAXI_TRIP_STATUSES } } }),
+      this.prisma.taxiTrip.count({ where: { isTestMode: false, status: TaxiTripStatus.COMPLETED } }),
+      this.prisma.taxiTrip.count({ where: { isTestMode: false, status: { in: [TaxiTripStatus.CANCELLED_BY_ADMIN, TaxiTripStatus.CANCELLED_BY_CUSTOMER, TaxiTripStatus.CANCELLED_BY_DRIVER] } } })
     ]);
     return {
       driverProfiles,
@@ -2003,6 +2020,7 @@ export class TaxiService {
       include: this.tripInclude()
     });
     if (!trip) throw new NotFoundException("Ride request not found for this Captain");
+    await this.internalQa?.assertTrip(trip.id, userId);
     return { profile, trip };
   }
 
@@ -2034,6 +2052,7 @@ export class TaxiService {
     ]);
 
     for (const trip of staleRequests) {
+      if (await this.internalQa?.lookup(trip.id)) continue;
       await this.updateTripWithEvent(trip.id, {
         status: TaxiTripStatus.EXPIRED,
         cancellationReason: "No Ride Captain was assigned in time.",
@@ -2044,6 +2063,7 @@ export class TaxiService {
     }
 
     for (const trip of staleAssignments) {
+      if (await this.internalQa?.lookup(trip.id)) continue;
       const requestExpired = trip.requestedAt < requestCutoff;
       await this.updateTripWithEvent(trip.id, {
         status: requestExpired ? TaxiTripStatus.EXPIRED : TaxiTripStatus.REQUESTED,
@@ -2101,6 +2121,7 @@ export class TaxiService {
   private async cancelTrip(tripId: string, status: TaxiTripStatus, actorId: string, actorType: TaxiTripActorType, reason?: string, viewer: TaxiTripViewer = "internal") {
     const original = await this.prisma.taxiTrip.findUnique({ where: { id: tripId }, include: this.tripInclude() });
     if (!original) throw new NotFoundException("Ride request not found");
+    if (await this.internalQa?.lookup(tripId)) throw new ForbiddenException("Use authenticated internal QA cleanup to retire a synthetic fixture.");
     const requestMetadata = this.tripRequestMetadata(original);
     const cancelledAt = new Date();
     const reviewRequired = original.status === TaxiTripStatus.STARTED || original.status === TaxiTripStatus.ARRIVED_DESTINATION;
@@ -2152,7 +2173,9 @@ export class TaxiService {
       metadata?: Record<string, unknown>;
     } = {}
   ): Promise<TaxiTripWithRelations> {
+    const qa = await this.internalQa?.assertTrip(tripId, actorType === TaxiTripActorType.DRIVER ? actorId : undefined);
     const updated = await this.prisma.$transaction(async (tx) => {
+      if (qa) await this.internalQa!.assertTrip(tripId, undefined, tx);
       await hooks.beforeUpdate?.(tx);
       const next = await tx.taxiTrip.update({
         where: { id: tripId },
@@ -2170,6 +2193,7 @@ export class TaxiService {
         }
       });
       await hooks.afterUpdate?.(tx, next);
+      if (qa) await tx.adminAuditLog.create({ data: { adminUserId: actorId, action: "INTERNAL_RIDE_QA_TRANSITION", entityType: "InternalRideQa", entityId: tripId, newValue: { marker: qa.marker, eventType, status: next.status } } });
       if (CLOSED_TAXI_TRIP_STATUSES.includes(next.status) && (next.pickupContentSource === "GOOGLE_DERIVED" || next.destinationContentSource === "GOOGLE_DERIVED" || next.stopContentSource === "GOOGLE_DERIVED")) {
         return tx.taxiTrip.update({ where: { id: tripId }, data: {
           ...(next.pickupContentSource === "GOOGLE_DERIVED" ? { pickupLatitude: null, pickupLongitude: null, pickupGoogleExpiresAt: null } : {}),
@@ -2184,9 +2208,9 @@ export class TaxiService {
       status: updated.status,
       eventType,
       updatedAt: updated.updatedAt.toISOString(),
-      receiptReady: updated.status === TaxiTripStatus.COMPLETED
+      receiptReady: !qa && updated.status === TaxiTripStatus.COMPLETED
     });
-    if (updated.status === TaxiTripStatus.ARRIVED_PICKUP && updated.arrivedAtPickupAt) {
+    if (!qa && updated.status === TaxiTripStatus.ARRIVED_PICKUP && updated.arrivedAtPickupAt) {
       this.rideRealtime.schedulePaidWaiting(tripId, updated.arrivedAtPickupAt, this.ridePricingDefaults().freePickupWaitSeconds);
     }
     if (updated.startedAt || CLOSED_TAXI_TRIP_STATUSES.includes(updated.status)) {
@@ -2304,6 +2328,8 @@ export class TaxiService {
   }
 
   private formatTrip(trip: TaxiTripWithRelations, options: { viewer?: TaxiTripViewer } = {}) {
+    // Presentation only; all authorization/financial decisions use the immutable server registry.
+    const qaPresentation = trip.isTestMode && trip.tripReference.startsWith("INTERNAL-QA-");
     const viewer = options.viewer ?? "internal";
     const lifecycle = this.lifecycleForStatus(trip.status);
     const requestMetadata = this.tripRequestMetadata(trip);
@@ -2326,7 +2352,7 @@ export class TaxiService {
       cancelledAt: trip.cancelledAt?.toISOString() ?? null,
       expiredAt: trip.status === TaxiTripStatus.EXPIRED ? trip.updatedAt.toISOString() : null
     };
-    const activeWaiting = calculatePickupWaiting(
+    const activeWaiting = qaPresentation ? { totalWaitingSeconds: 0, freeWaitingSeconds: 0, billableWaitingSeconds: 0, freeWaitingRemainingSeconds: 0, waitingChargeKobo: 0, rateKoboPerMinute: 0, state: "STOPPED" as const } : calculatePickupWaiting(
       trip.arrivedAtPickupAt,
       trip.startedAt ?? new Date(),
       this.ridePricingDefaults().freePickupWaitSeconds,
@@ -2381,6 +2407,7 @@ export class TaxiService {
       customerNote: trip.customerNote,
       driverNote: trip.driverNote,
       isTestMode: trip.isTestMode,
+      ...(qaPresentation ? { nonBillable: true, billingStatus: "INTERNAL_QA_NON_BILLABLE" } : {}),
       requestedAt: trip.requestedAt.toISOString(),
       acceptedAt: trip.acceptedAt?.toISOString() ?? null,
       arrivedAtPickupAt: trip.arrivedAtPickupAt?.toISOString() ?? null,

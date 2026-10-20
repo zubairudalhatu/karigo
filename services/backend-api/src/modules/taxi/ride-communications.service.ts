@@ -1,3 +1,4 @@
+import { InternalRideQaPolicy } from "./internal-ride-qa.policy";
 import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { RideMessageSenderRole } from "@karigo/shared-types";
@@ -44,10 +45,12 @@ export class RideCommunicationsService {
     private readonly config: ConfigService,
     private readonly notifications: NotificationsService,
     private readonly rideCalls: RideCallService,
-    private readonly realtime: RideRealtimeService
+    private readonly realtime: RideRealtimeService,
+    private readonly internalQa?: InternalRideQaPolicy
   ) {}
 
   async authorizeRealtimeParticipant(userId: string, tripId: string) {
+    await this.internalQa?.assertTrip(tripId, userId);
     const trip = await this.prisma.taxiTrip.findFirst({
       where: {
         id: tripId,
@@ -193,13 +196,14 @@ export class RideCommunicationsService {
 
   contactOptions(trip: RideCommunicationTrip, viewerRole: RideMessageSenderRole) {
     this.assertWritable(trip);
-    const configured = this.config.get<string | boolean>("RIDE_PHONE_FALLBACK_ENABLED", true);
+    const synthetic = trip.isTestMode && trip.tripReference.startsWith("INTERNAL-QA-");
+    const configured = synthetic ? false : this.config.get<string | boolean>("RIDE_PHONE_FALLBACK_ENABLED", true);
     const phoneFallbackEnabled = String(configured).toLowerCase() !== "false";
     const phoneNumber = viewerRole === "CUSTOMER" ? trip.driverProfile?.phoneNumber : trip.customer.user.phoneNumber;
     return {
       rideId: trip.id,
       chatAvailable: true,
-      inAppCall: this.rideCalls.readiness(),
+      inAppCall: synthetic ? { enabled: true, requestedEnabled: true, provider: null, recordingEnabled: false as const, state: "AVAILABLE" as const, reason: "Internal QA microphone permission check only; external calling disabled." } : this.rideCalls.readiness(),
       phoneFallbackAvailable: phoneFallbackEnabled && Boolean(phoneNumber),
       phoneNumber: phoneFallbackEnabled ? phoneNumber ?? null : null,
       phoneFallbackLabel: "Call by phone" as const,
@@ -213,6 +217,15 @@ export class RideCommunicationsService {
 
   callSession(trip: RideCommunicationTrip, participantUserId: string, participantRole: RideMessageSenderRole) {
     this.assertWritable(trip);
+    return this.callSessionAfterQaCheck(trip, participantUserId, participantRole);
+  }
+
+  private async callSessionAfterQaCheck(trip: RideCommunicationTrip, participantUserId: string, participantRole: RideMessageSenderRole) {
+    const fixture = await this.internalQa?.assertTrip(trip.id, participantUserId);
+    if (fixture) {
+      await this.prisma.taxiTripEvent.create({ data: { tripId: trip.id, actorType: "DRIVER", actorId: participantUserId, eventType: "INTERNAL_QA_MICROPHONE_CONTEXT", note: "Synthetic permission check reached; no Agora credentials, media connection or recipient notification created." } });
+      throw new BadRequestException({ message: "Synthetic QA microphone check complete. External calling is disabled; return to your QA Ride.", code: "INTERNAL_QA_NO_NETWORK_CALL" });
+    }
     const recipientUserId = participantRole === "CUSTOMER" ? trip.driverProfile?.userId : trip.customer.user.id;
     if (!recipientUserId) throw new BadRequestException("The assigned Ride participant is not available for in-app calling");
     return this.rideCalls.initiate({

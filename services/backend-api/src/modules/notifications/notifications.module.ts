@@ -1,3 +1,4 @@
+import { InternalRideQaPolicyModule } from "../taxi/internal-ride-qa.policy";
 import { Global, Module } from "@nestjs/common";
 import { AdminRolesGuard } from "../../common/guards/admin-roles.guard";
 import { AuthModule } from "../auth/auth.module";
@@ -26,7 +27,7 @@ import { FirebasePushProvider } from "./push/providers/firebase-push.provider";
 
 @Global()
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, InternalRideQaPolicyModule],
   controllers: [NotificationsController, AdminNotificationsController],
   providers: [
     NotificationsService,
