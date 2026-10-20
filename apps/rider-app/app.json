@@ -54,6 +54,9 @@
       }
     },
     "ios": {
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
         "NSMicrophoneUsageDescription": "KariGO Captain uses your microphone only when you make or receive an in-app Ride call."
       }

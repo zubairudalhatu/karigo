@@ -69,6 +69,11 @@
     }
   },
   "submit": {
+    "captain-production-ios": {
+      "ios": {
+        "ascAppId": "6824656404"
+      }
+    },
     "captain-play-internal": {
       "android": {
         "track": "internal"

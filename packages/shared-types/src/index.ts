@@ -15,11 +15,21 @@ export interface LaunchServiceAvailability {
   message: string;
   timezone: string;
   operatingHours: unknown;
+  areaState?: "LOCATION_UNKNOWN" | "AREA_APPROVED" | "AREA_NOT_APPROVED" | "AREA_NOT_EVALUATED";
+  accessState?: "CONTROLLED_ACCESS_REQUIRED" | "ELIGIBLE" | "BLOCKED";
 }
 export interface LaunchAvailabilityResponse {
   city: { code: string; name: string };
   services: LaunchServiceAvailability[];
   refreshedAt: string;
+  readiness?: {
+    locationState: "LOCATION_UNKNOWN" | "LOCATION_RESOLVED";
+    currentArea: { id: string; cityName: string; label: string } | null;
+    reasonCode: string | null;
+    accuracyMeters: number | null;
+    capturedAt: string | null;
+    validUntil: string | null;
+  };
 }
 
 export const serviceCategories = [
