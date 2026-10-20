@@ -157,7 +157,8 @@ export class ControlledSupplyService {
       const captain = (await this.captainEligibility(group.cityCode, group.serviceType))
         .find((candidate) => candidate.userId === dto.captainUserId);
       if (!captain) throw new BadRequestException("Captain account not found");
-      if (captain.blockers.includes("CITY_MISMATCH")) throw new BadRequestException("Captain city does not match the controlled group");
+      const blocking = this.captainMembershipBlockers(captain.blockers);
+      if (blocking.length) throw new BadRequestException(`Controlled membership blocked: ${blocking.join(", ")}`);
     } else {
       const vendor = await this.prisma.vendor.findFirst({ where: { id: dto.vendorId, deletedAt: null }, select: { id: true, city: true } });
       if (!vendor) throw new BadRequestException("Partner account not found");
@@ -179,12 +180,21 @@ export class ControlledSupplyService {
       const candidate = member.captainUserId
         ? (await this.captainEligibility(member.group.cityCode, member.group.serviceType)).find((item) => item.userId === member.captainUserId)
         : (await this.partnerEligibility(member.group.cityCode, member.group.serviceType)).find((item) => item.vendorId === member.vendorId);
-      const blocking = candidate?.blockers.filter((code) => code !== "MEMBERSHIP_ACTIVATION_PENDING" && code !== "NOT_IN_CONTROLLED_GROUP") ?? ["PROFILE_INACTIVE"];
+      const blocking = candidate ? (member.captainUserId
+        ? this.captainMembershipBlockers(candidate.blockers)
+        : candidate.blockers.filter((code) => code !== "MEMBERSHIP_ACTIVATION_PENDING" && code !== "NOT_IN_CONTROLLED_GROUP")) : ["PROFILE_INACTIVE"];
       if (blocking.length) throw new BadRequestException(`Controlled activation blocked: ${blocking.join(", ")}`);
     }
     const updated = await this.prisma.controlledSupplyMember.update({ where: { id: memberId }, data: { enabled: dto.enabled, reason: dto.reason.trim(), activatedAt: dto.enabled ? new Date() : member.activatedAt, deactivatedAt: dto.enabled ? null : new Date() } });
     await this.audit.record(adminUserId, dto.enabled ? "admin.production_launch.controlled_member_activated" : "admin.production_launch.controlled_member_deactivated", "ControlledSupplyMember", memberId, { groupId, reason: dto.reason.trim() });
     return updated;
+  }
+
+  // Membership is an audited Admin entitlement, not a dispatch-location grant.
+  // Fresh physical presence remains mandatory in the separate online-readiness path.
+  private captainMembershipBlockers(blockers: string[]) {
+    return blockers.filter(code => code !== "NOT_IN_CONTROLLED_GROUP" &&
+      code !== "MEMBERSHIP_ACTIVATION_PENDING" && code !== "LOCATION_STALE");
   }
 
   private documentsApproved(documents: Array<{ verificationStatus?: DocumentVerificationStatus; reviewStatus?: DocumentVerificationStatus }>) {

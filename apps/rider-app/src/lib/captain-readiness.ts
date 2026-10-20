@@ -18,3 +18,12 @@ export function preferReadinessResult(current: LaunchAvailabilityResponse | null
     Date.parse(current!.readiness!.capturedAt!) > Date.parse(incoming.readiness.capturedAt ?? "")) return current;
   return incoming;
 }
+
+export function captainReadinessLabel(result: LaunchAvailabilityResponse | null, serviceType: string) {
+  const service = result?.services.find(item => item.serviceType === serviceType);
+  if (!isReadinessCurrent(result) || service?.areaState === "LOCATION_UNKNOWN") return "Locating";
+  if (service?.areaState === "AREA_NOT_APPROVED") return "Area not approved";
+  if (service?.accessState === "CONTROLLED_ACCESS_REQUIRED") return "Controlled access required";
+  if (service?.available) return "Eligible to go online";
+  return service?.message ?? "Checking service eligibility";
+}

@@ -13,7 +13,7 @@ import { jobsApi, RiderJob } from "../../src/api/jobs.api";
 import type { EarningsSummary } from "../../src/api/earnings.api";
 import { earningsApi } from "../../src/api/earnings.api";
 import { notificationsApi } from "../../src/api/notifications.api";
-import { CAPTAIN_READINESS_REUSE_MS, isReadinessCurrent, preferReadinessResult } from "../../src/lib/captain-readiness";
+import { CAPTAIN_READINESS_REUSE_MS, captainReadinessLabel, isReadinessCurrent, preferReadinessResult } from "../../src/lib/captain-readiness";
 import { launchApi } from "../../src/api/launch.api";
 import { taxiApi } from "../../src/api/taxi.api";
 import { CaptainRideWorkspace } from "../../src/components/captain-ride-workspace";
@@ -855,7 +855,9 @@ export default function RiderDashboard() {
       : workState?.effectiveRideOnline ? "ONLINE • RIDES"
         : workState?.effectiveDeliveryOnline ? "ONLINE • DELIVERY"
           : "OFFLINE";
-  const serviceNotice = rideLaunch?.available && rideLaunch.launchStage === "OPERATIONS_ONLY" || deliveryLaunch?.available && deliveryLaunch.launchStage === "OPERATIONS_ONLY"
+  const serviceNotice = !isOnline && !activeJob
+    ? captainReadinessLabel(launchAvailability, projection.ride.active ? "RIDES" : "PARCEL_DELIVERY")
+    : rideLaunch?.available && rideLaunch.launchStage === "OPERATIONS_ONLY" || deliveryLaunch?.available && deliveryLaunch.launchStage === "OPERATIONS_ONLY"
     ? "Go online only during your scheduled operating window."
     : rideLaunch && !rideLaunch.available && projection.ride.active ? rideLaunch.message
       : deliveryLaunch && !deliveryLaunch.available && projection.delivery.active ? deliveryLaunch.message : null;

@@ -6,7 +6,7 @@ import { CaptainReadinessDto } from "./dto/captain-readiness.dto";
 import { validateReadinessLocation } from "./captain-readiness-location";
 import { ControlledSupplyService } from "./controlled-supply.service";
 import { LaunchOperationsService } from "./launch-operations.service";
-import { LaunchAvailabilityController } from "./launch-operations.controller";
+import { AdminLaunchOperationsController, LaunchAvailabilityController } from "./launch-operations.controller";
 
 const subject = "readiness-captain";
 const fix = (latitude = 9.0765, longitude = 7.3986) => ({ city: "Abuja", latitude, longitude, recordedAt: new Date(Date.now() - 100).toISOString(), accuracyMeters: 15 });
@@ -92,10 +92,13 @@ describe("transient Captain readiness", () => {
     const h = harness(); h.setStage(stage); expect(ride(await h.service.captainReadiness(fix(), subject)).available).toBe(false);
   });
   it("rejects caller-supplied identity/role/availability/trace fields and requires authenticated guards", async () => {
-    const body = Object.assign(new CaptainReadinessDto(), fix(), { userId: "other", role: "ADMIN", rideOnline: true, tracePoints: [] });
+    const body = Object.assign(new CaptainReadinessDto(), fix(), { userId: "other", role: "ADMIN", rideOnline: true, tracePoints: [], membership: true, readinessProof: "forged" });
     const errors = await validate(body, { whitelist: true, forbidNonWhitelisted: true });
-    for (const key of ["userId", "role", "rideOnline", "tracePoints"]) expect(errors.some(e => e.property === key)).toBe(true);
+    for (const key of ["userId", "role", "rideOnline", "tracePoints", "membership", "readinessProof"]) expect(errors.some(e => e.property === key)).toBe(true);
     expect(Reflect.getMetadata('__guards__', LaunchAvailabilityController.prototype.captainReadiness)).toHaveLength(2);
     expect(Reflect.getMetadata('__httpCode__', LaunchAvailabilityController.prototype.captainReadiness)).toBe(200);
+    expect(Reflect.getMetadata('__guards__', AdminLaunchOperationsController).map((guard: any) => guard.name)).toEqual(['JwtAuthGuard', 'RolesGuard', 'AdminRolesGuard']);
+    expect(Reflect.getMetadata('roles', AdminLaunchOperationsController)).toEqual(['ADMIN']);
+    expect(Reflect.getMetadata('adminRoles', AdminLaunchOperationsController)).toEqual(['SUPER_ADMIN', 'OPERATIONS_ADMIN', 'DISPATCH_OFFICER']);
   });
 });

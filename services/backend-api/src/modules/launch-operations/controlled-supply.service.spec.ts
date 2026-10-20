@@ -244,6 +244,43 @@ describe("ControlledSupplyService", () => {
     eligibility.mockRestore();
   });
 
+  it("adds and activates an offline approved Captain without stored GPS or availability writes", async () => {
+    const captain = rideCaptain();
+    captain.taxiDriverProfiles[0].lastSeenAt = null as any;
+    prisma.user.findMany.mockResolvedValue([captain]);
+    const group = { id: "group", cityCode: "KANO", serviceType: LaunchServiceType.RIDES, status: "ACTIVE", maximumMembers: 2, _count: { members: 0 } };
+    prisma.controlledSupplyGroup.findUnique.mockResolvedValue(group);
+    prisma.controlledSupplyMember.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "member", captainUserId: captain.id, group });
+    prisma.controlledSupplyMember.create.mockResolvedValue({ id: "member" });
+    prisma.controlledSupplyMember.update.mockResolvedValue({ id: "member", enabled: true });
+    await service.addMember("group", "admin", { memberType: ControlledSupplyMemberType.RIDE_CAPTAIN, captainUserId: captain.id, reason: "Controlled operations" });
+    await service.updateMember("group", "member", "admin", { enabled: true, reason: "Approved entitlement" });
+    expect(prisma.controlledSupplyMember.create.mock.calls[0][0].data).toEqual({ groupId: "group", memberType: ControlledSupplyMemberType.RIDE_CAPTAIN, captainUserId: captain.id, vendorId: undefined, reason: "Controlled operations", addedByAdminId: "admin" });
+    expect(Object.keys(prisma.controlledSupplyMember.update.mock.calls[0][0].data).sort()).toEqual(["activatedAt", "deactivatedAt", "enabled", "reason"]);
+    expect(captain.captainWorkState).toBeNull();
+    expect(captain.taxiDriverProfiles[0].lastSeenAt).toBeNull();
+    expect((await service.captainEligibility("Kano", LaunchServiceType.RIDES))[0].blockers).toContain("LOCATION_STALE");
+    expect(audit.record).toHaveBeenCalledWith("admin", "admin.production_launch.controlled_member_activated", "ControlledSupplyMember", "member", expect.anything());
+  });
+
+  it.each(["CITY_MISMATCH", "APPLICATION_NOT_APPROVED", "DOCUMENTS_NOT_APPROVED", "PROFILE_INACTIVE", "SUSPENDED", "LOGIN_NOT_READY", "ACTIVE_ASSIGNMENT"])("does not waive %s for an Admin membership grant", async blocker => {
+    prisma.controlledSupplyGroup.findUnique.mockResolvedValue({ id: "group", cityCode: "KANO", serviceType: LaunchServiceType.RIDES, maximumMembers: 2, _count: { members: 0 } });
+    const spy = jest.spyOn(service, "captainEligibility").mockResolvedValue([{ userId: "captain", blockers: ["LOCATION_STALE", blocker] }] as any);
+    await expect(service.addMember("group", "admin", { memberType: ControlledSupplyMemberType.RIDE_CAPTAIN, captainUserId: "captain", reason: "Controlled operations" })).rejects.toThrow(blocker);
+    expect(prisma.controlledSupplyMember.create).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("revokes entitlement through the existing audited Admin path without location or availability changes", async () => {
+    const activatedAt = new Date();
+    prisma.controlledSupplyMember.findFirst.mockResolvedValue({ id: "member", captainUserId: "captain", activatedAt, group: { status: "ACTIVE" } });
+    prisma.controlledSupplyMember.update.mockResolvedValue({ id: "member", enabled: false });
+    await service.updateMember("group", "member", "admin", { enabled: false, reason: "Admin revocation" });
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+    expect(prisma.controlledSupplyMember.update).toHaveBeenCalledWith({ where: { id: "member" }, data: { enabled: false, reason: "Admin revocation", activatedAt, deactivatedAt: expect.any(Date) } });
+    expect(audit.record).toHaveBeenCalledWith("admin", "admin.production_launch.controlled_member_deactivated", "ControlledSupplyMember", "member", { groupId: "group", reason: "Admin revocation" });
+  });
+
   it("requires the correct controlled group service and Captain member type", async () => {
     prisma.controlledSupplyMember.findFirst.mockResolvedValue({ id: "member" });
 

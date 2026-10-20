@@ -91,3 +91,45 @@ Validated locally on 20 October 2026:
 - Credential/diff/protected-scope scans: PASS.
 - Read-only Production recheck: SHA 92012bf unchanged; QA OFF; Captain offline;
   zero fixtures/financial records; controlled membership remains absent.
+
+
+## Controlled-supply entitlement correction (local, not deployed)
+
+ControlledSupplyGroup provides city/service scope, an administrative operating window,
+capacity and Admin ownership. ControlledSupplyMember provides an enabled entitlement,
+activation/deactivation timestamps, reason and granting Admin. Neither stores a physical
+presence attestation. Existing accountEligible reads this administrative entitlement;
+physical presence belongs to online readiness. The model is ADMIN_ENTITLEMENT.
+
+Captain add/activation now ignores only LOCATION_STALE and the two membership-not-yet-enabled
+blockers. It retains approval, documents, vehicle/profile, account/login, city/service,
+capacity, group-window and active-assignment safeguards. Partner behavior is unchanged.
+Operational captainEligibility still reports LOCATION_STALE. No coordinates, dispatch
+telemetry or availability writes are added. No attestation, schema migration or native
+configuration change is required. Existing Admin guards and audit events remain intact.
+The QA Captain has not been granted membership.
+
+The offline cockpit shows Locating, Area not approved, Controlled access required or
+Eligible to go online from the fresh server response. Area and membership are independent;
+a valid entitlement never overrides an outside-area result. Online remains gated by all
+existing server conditions and the 30-second readiness expiry.
+
+Proposed release order (requires separate review/approval): deploy the combined backend
+transient-readiness and entitlement changes first, without migrations and with QA OFF;
+verify health/readiness and authenticated fail-closed readiness. Then publish the reviewed
+Captain iOS-only runtime 1.2.0 JS candidate after export/config validation, with Android
+unchanged. Physically verify area/status while offline. Any QA Captain entitlement must
+subsequently use the existing authorized Admin add/activation path under separate approval.
+No fixture or QA window is part of this release.
+
+Validation: full backend 1,440 passed / 98 skipped / 0 failed, including isolated
+PostgreSQL constraint/lifecycle regressions; final focused readiness/membership suite
+50 passed. Backend and Captain typechecks, backend build, Captain regression/location/
+waypoint/pre-offer/background checks and credential/diff scans passed. The final focused
+run includes an additional revocation test added after the full run started.
+
+iOS Hermes export passed with the previously reviewed Metro realpath canonicalization
+used temporarily for local validation (not committed or published); new readiness API
+and distinct eligibility labels were confirmed in the exported bytecode. Native/runtime
+configuration was not changed. A release artifact must be prepared in the reviewed Build 1
+release workspace before any separately approved OTA publication.

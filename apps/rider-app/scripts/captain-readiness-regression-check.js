@@ -7,6 +7,10 @@ const payload=helpers.toTransientReadinessLocation(location);assert.deepEqual(Ob
 const future=new Date(Date.now()+20000).toISOString();const current={services:[{available:true}],readiness:{validUntil:future,capturedAt:location.recordedAt}};
 assert.equal(helpers.isReadinessCurrent(current),true);assert.equal(helpers.isReadinessCurrent({...current,readiness:{...current.readiness,validUntil:new Date(Date.now()-1).toISOString()}}),false);
 assert.equal(helpers.preferReadinessResult(current,{services:[]}),current,'late city-only response cannot erase valid fix');
+for (const [service, label] of [[{areaState:'AREA_NOT_APPROVED'},'Area not approved'],[{areaState:'AREA_APPROVED',accessState:'CONTROLLED_ACCESS_REQUIRED'},'Controlled access required'],[{areaState:'AREA_APPROVED',available:true},'Eligible to go online']]) {
+  assert.equal(helpers.captainReadinessLabel({...current,services:[{serviceType:'RIDES',...service}]},'RIDES'),label);
+}
+assert.equal(helpers.captainReadinessLabel(null,'RIDES'),'Locating');
 const calls=[];const api=load(read('src/api/launch.api.ts'),name=>name==='./client'?{api:{post:(route,body)=>{calls.push({route,body});return Promise.resolve(current)},get:()=>{throw Error('unexpected GET')}}}:name.includes('captain-readiness')?helpers:{}).launchApi;
 (async()=>{await api.readiness('Abuja',location);assert.equal(calls[0].route,'launch/availability/me/captain');assert.equal(calls[0].route.includes('?'),false);assert.deepEqual(Object.keys(calls[0].body).sort(),['accuracyMeters','city','latitude','longitude','recordedAt']);
 const source=read('app/tabs/dashboard.tsx');const start=source.indexOf('  async function promoteReadinessLocation('),end=source.indexOf('\n  useEffect(',start);const promote=source.slice(start,end);
