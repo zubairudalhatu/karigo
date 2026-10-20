@@ -31,10 +31,12 @@ export class InternalRideQaService {
       if (!captain || captain.role !== "RIDER" || captain.adminRole || captain.accountStatus !== "ACTIVE" || !captain.phoneVerified || captain.deletedAt || captain.customerProfile || captain.vendor || captain.taxiDriverProfiles.length !== 1 || profile?.status !== "ACTIVE") throw new ForbiddenException("Approved QA Captain is not eligible.");
       if (captain.captainWorkState?.activeWorkMode || captain.captainWorkState?.desiredDeliveryOnline || captain.captainWorkState?.desiredRideOnline || profile.isAvailableForTaxi || captain.rider?.availabilityStatus !== "OFFLINE" || await tx.taxiTrip.count({ where: { driverProfileId: profile.id, status: { notIn: terminal } } })) throw new ConflictException("QA Captain must have no work and be offline before fixture creation.");
       const marker = randomUUID(), tripId = randomUUID(), expiresAt = new Date(Date.now() + 2 * 60 * 60_000).toISOString();
+      // Reserve the target only in the server registry. Like a normal REQUESTED Ride,
+      // the trip has no Captain binding until the atomic offer + OFFERED lock.
       // A disabled, unverified, non-login synthetic FK holder; never a real Customer or recipient.
       const customer = await tx.user.create({ data: { fullName: "INTERNAL QA — NO REAL CUSTOMER", role: "CUSTOMER", accountStatus: "DEACTIVATED", phoneNumber: qaPlaceholderPhone(windowId), email: null, passwordHash: `!INTERNAL_QA_NO_LOGIN:${randomBytes(32).toString("hex")}`, customerProfile: { create: { referralCode: `INTERNAL-QA-${marker}` } } }, include: { customerProfile: true } });
       const fixture: QaFixture = { marker, windowId, captainUserId: captain.id, driverProfileId: profile.id, customerUserId: customer.id, customerProfileId: customer.customerProfile!.id, expiresAt };
-      await tx.taxiTrip.create({ data: { id: tripId, tripReference: `INTERNAL-QA-${marker}`, customerId: fixture.customerProfileId, driverProfileId: profile.id,
+      await tx.taxiTrip.create({ data: { id: tripId, tripReference: `INTERNAL-QA-${marker}`, customerId: fixture.customerProfileId, driverProfileId: null,
         isTestMode: true, status: "REQUESTED", estimatedFareKobo: 0, finalFareKobo: 0, ridePinRequired: false,
         pickupAddress: "SYNTHETIC QA — public park pickup, Abuja", pickupLatitude: 9.0765, pickupLongitude: 7.4938, pickupContentSource: "USER_SUPPLIED",
         destinationAddress: "SYNTHETIC QA — public park destination, Abuja", destinationLatitude: 9.0768, destinationLongitude: 7.4993, destinationContentSource: "USER_SUPPLIED",
@@ -62,7 +64,7 @@ export class InternalRideQaService {
       if (await tx.adminAuditLog.findFirst({ where: { action: "INTERNAL_RIDE_QA_OFFER_CLAIMED", entityType: QA_ENTITY, entityId: tripId } })) throw new ConflictException("Offer already attempted; no blind push retry.");
       await this.policy.assertTrip(tripId, fixture.captainUserId, tx);
       await this.work.acquireLock(tx, { userId: fixture.captainUserId, mode: CaptainWorkMode.RIDE, workId: tripId, stage: CaptainWorkLockStage.OFFERED, actorId });
-      const changed = await tx.taxiTrip.updateMany({ where: { id: tripId, status: "REQUESTED", driverProfileId: fixture.driverProfileId }, data: { status: "DRIVER_ASSIGNED" } });
+      const changed = await tx.taxiTrip.updateMany({ where: { id: tripId, status: "REQUESTED", driverProfileId: null }, data: { driverProfileId: fixture.driverProfileId, status: "DRIVER_ASSIGNED" } });
       if (changed.count !== 1) throw new ConflictException("Fixture is no longer ready for its first offer.");
       await tx.taxiTripEvent.create({ data: { tripId, actorType: "ADMIN", actorId, eventType: "taxi.trip.driver_assigned", note: "SYNTHETIC QA — NON-BILLABLE offer to approved Captain only" } });
       await this.audit(tx, actorId, "INTERNAL_RIDE_QA_OFFER_CLAIMED", tripId, { marker: fixture.marker, recipient: fixture.captainUserId });
@@ -90,7 +92,7 @@ export class InternalRideQaService {
       if (Object.values(residuals).some(value => value !== 0)) throw new ConflictException({ code: "QA_FINANCIAL_RESIDUALS_BLOCK_CLEANUP", residuals });
       const trip = await tx.taxiTrip.findUnique({ where: { id: tripId } });
       if (!trip) { if (await tx.adminAuditLog.findFirst({ where: { action: QA_CLEANED, entityType: QA_ENTITY, entityId: tripId } })) return; throw new ConflictException("Fixture is missing without cleanup evidence."); }
-      if (trip.customerId !== fixture.customerProfileId || trip.driverProfileId !== fixture.driverProfileId || !trip.isTestMode) throw new ForbiddenException("Fixture binding changed; refusing cleanup.");
+      await this.policy.assertBinding(tripId, trip, fixture, tx);
       const work = await tx.captainWorkState.findUnique({ where: { userId: fixture.captainUserId } });
       if (work?.activeWorkMode && (work.activeWorkMode !== "RIDE" || work.activeRideTripId !== tripId)) throw new ConflictException("A different work lock exists; cleanup will not alter it.");
       await tx.captainWorkState.updateMany({ where: { userId: fixture.captainUserId }, data: { desiredDeliveryOnline: false, desiredRideOnline: false, activeWorkMode: null, activeDeliveryAssignmentId: null, activeRideTripId: null, lockStage: null, lockedAt: null, lastLocationAt: null, version: { increment: 1 } } });
@@ -134,7 +136,8 @@ export class InternalRideQaService {
     await this.prisma.$transaction(async tx => {
       const trip = await tx.taxiTrip.findUnique({ where: { id: tripId } });
       const state = await tx.captainWorkState.findUnique({ where: { userId: fixture.captainUserId } });
-      if (!trip || trip.customerId !== fixture.customerProfileId || trip.driverProfileId !== fixture.driverProfileId || !trip.isTestMode || (state?.activeWorkMode && state.activeRideTripId !== tripId)) {
+      await this.policy.assertBinding(tripId, trip, fixture, tx);
+      if (state?.activeWorkMode && state.activeRideTripId !== tripId) {
         throw new ConflictException({ code: "QA_QUARANTINE_BINDING_OR_LOCK_MISMATCH", tripId, requiredOperatorAction: "Disable the QA feature flag; inspect the immutable fixture binding and work lock. No unrelated work was changed." });
       }
       await tx.taxiTrip.update({ where: { id: tripId }, data: { status: "EXPIRED", cancelledAt: new Date() } });

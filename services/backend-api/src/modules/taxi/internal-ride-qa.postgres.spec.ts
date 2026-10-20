@@ -12,6 +12,7 @@ import { ResendOtpDto } from "../auth/dto/resend-otp.dto";
 import { LoginDto } from "../auth/dto/login.dto";
 import { UsersService } from "../users/users.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
 import { InternalRideQaService } from "./internal-ride-qa.service";
 import { APPROVED_QA_CAPTAIN, InternalRideQaPolicy, qaPlaceholderPhone } from "./internal-ride-qa.policy";
 import { TaxiService } from "./taxi.service";
@@ -28,7 +29,7 @@ postgres("QA placeholder with real PostgreSQL and the shipped phone CHECK", () =
   const phone = qaPlaceholderPhone(windowId);
   const config = new ConfigService({ CAPTAIN_RIDE_QA_ENABLED: "true", CAPTAIN_RIDE_QA_WINDOW_ID: windowId, CAPTAIN_RIDE_QA_CAPTAIN_IDS: JSON.stringify([APPROVED_QA_CAPTAIN]) });
   const provider = { send: jest.fn(), issue: jest.fn(async () => ({ expiresAt: new Date(Date.now() + 600_000), provider: "mock" })) };
-  const realtime = { stopWaiting: jest.fn(), emitToRide: jest.fn(), revokeRideAccess: jest.fn() };
+  const realtime = { emitToUser: jest.fn(), stopWaiting: jest.fn(), emitToRide: jest.fn(), revokeRideAccess: jest.fn() };
   const pipe = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true });
   const auth = () => new AuthService(new UsersService(db as any), provider as any, db as any, new JwtService(), config, {} as any, {} as any);
 
@@ -104,7 +105,8 @@ postgres("QA placeholder with real PostgreSQL and the shipped phone CHECK", () =
       expect(JSON.stringify(result)).not.toContain(phone);
     }
     const communications = new RideCommunicationsService(db as any, config, {} as any, {} as any, realtime as any, policy);
-    const contact = communications.contactOptions({ ...trip, status: "ACCEPTED" } as any, "CAPTAIN");
+    expect(() => communications.contactOptions(trip as any, "CAPTAIN")).toThrow(/after a Ride Captain is assigned/);
+    const contact = communications.contactOptions({ ...trip, status: "ACCEPTED", driverProfileId: (await policy.lookup(fixture.tripId))!.driverProfileId } as any, "CAPTAIN");
     expect(contact.phoneFallbackAvailable).toBe(false);
     expect(contact.phoneNumber).toBeNull();
     expect(await db.order.count({ where: { customerId: holder.customerProfile.id } })).toBe(0);
@@ -138,4 +140,35 @@ postgres("QA placeholder with real PostgreSQL and the shipped phone CHECK", () =
     const constraintAfter = (await db.$queryRawUnsafe<any[]>("SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conrelid='users'::regclass AND conname='governance_email_phone_required'"))[0].definition;
     expect(constraintAfter).toBe(constraintBefore);
   });
+  it.each([false, true])("keeps a real DB REQUESTED fixture invisible until atomic offer and cleans either stage (offered=%s)", async offered => {
+    config.set("CAPTAIN_RIDE_QA_WINDOW_ID", randomUUID());
+    const work = new CaptainWorkStateService(db as any, {} as any, {} as any, policy);
+    const notifications = { createNotification: jest.fn(async () => ({ accepted: true })) };
+    const qa = new InternalRideQaService(db as any, policy, work, notifications as any, realtime as any);
+    const created = await qa.create(adminId);
+    const binding = (await policy.lookup(created.tripId))!;
+    const before = await db.taxiTrip.findUniqueOrThrow({ where: { id: created.tripId } });
+    expect(before).toMatchObject({ status: "REQUESTED", driverProfileId: null });
+    expect(await db.taxiTrip.count({ where: { driverProfileId: binding.driverProfileId } })).toBe(0);
+    expect(await policy.armedCaptain(APPROVED_QA_CAPTAIN)).toBe(true);
+    expect((await db.taxiDriverProfile.findUniqueOrThrow({ where: { id: binding.driverProfileId } })).isAvailableForTaxi).toBe(false);
+    expect((await db.captainWorkState.findUnique({ where: { userId: APPROVED_QA_CAPTAIN } }))?.activeWorkMode ?? null).toBeNull();
+    await expect(qa.offer(adminId, created.tripId)).rejects.toThrow();
+    expect(await db.taxiTrip.findUniqueOrThrow({ where: { id: created.tripId } })).toMatchObject({ status: "REQUESTED", driverProfileId: null });
+    if (offered) {
+      await db.captainWorkState.upsert({ where: { userId: APPROVED_QA_CAPTAIN }, create: { userId: APPROVED_QA_CAPTAIN, desiredRideOnline: true }, update: { desiredRideOnline: true } });
+      const attempts = await Promise.allSettled([qa.offer(adminId, created.tripId), qa.offer(adminId, created.tripId)]);
+      expect(attempts.filter(x => x.status === "fulfilled")).toHaveLength(1);
+      expect(attempts.filter(x => x.status === "rejected")).toHaveLength(1);
+      expect(await db.taxiTrip.findUniqueOrThrow({ where: { id: created.tripId } })).toMatchObject({ status: "DRIVER_ASSIGNED", driverProfileId: binding.driverProfileId });
+      expect(await db.captainWorkState.findUniqueOrThrow({ where: { userId: APPROVED_QA_CAPTAIN } })).toMatchObject({ activeWorkMode: "RIDE", activeRideTripId: created.tripId, lockStage: "OFFERED" });
+      expect(notifications.createNotification).toHaveBeenCalledTimes(2);
+      await expect(qa.offer(adminId, created.tripId)).rejects.toThrow(/already attempted/);
+    }
+    const cleaned = await qa.cleanup(adminId, created.tripId);
+    expect(Object.values(cleaned.residuals).every(x => x === 0)).toBe(true);
+    const finalState = await db.captainWorkState.findUnique({ where: { userId: APPROVED_QA_CAPTAIN } });
+    if (finalState) expect(finalState).toMatchObject({ desiredRideOnline: false, activeWorkMode: null, activeRideTripId: null, lockStage: null });
+  });
+
 });

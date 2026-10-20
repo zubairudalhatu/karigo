@@ -33,7 +33,7 @@ function harness(values: Record<string, unknown> = {}) {
   const db: any = {
     user: { count: jest.fn(async () => 0), findUnique: jest.fn(async ({ where }: any) => where.id === adminId ? admin : where.id === APPROVED_QA_CAPTAIN ? captain : where.id === customerId ? identity : null), create: jest.fn(async ({ data }: any) => Object.assign(identity, { phoneNumber: data.phoneNumber })), delete: jest.fn() },
     adminAuditLog: { findFirst: jest.fn(async ({ where }: any) => audits.find(a => a.action === where.action && a.entityType === where.entityType && (!where.entityId || a.entityId === where.entityId) && (!where.newValue || a.newValue.windowId === where.newValue.equals))), create: jest.fn(async ({ data }: any) => { audits.push(data); return data; }) },
-    taxiTrip: { count: jest.fn(async () => 0), create: jest.fn(async ({ data }: any) => (trip = { ...data, updatedAt: new Date() })), findUnique: jest.fn(async () => trip), update: jest.fn(async ({ data }: any) => Object.assign(trip, data, { updatedAt: new Date() })), updateMany: jest.fn(async ({ where, data }: any) => { if (trip?.status !== where.status) return { count: 0 }; Object.assign(trip, data); return { count: 1 }; }), delete: jest.fn(async () => { trip = null; }) },
+    taxiTrip: { findMany: jest.fn(async ({ where }: any) => trip && trip.driverProfileId === where.driverProfileId && (!where.status || where.status.in.includes(trip.status)) ? [trip] : []), count: jest.fn(async () => 0), create: jest.fn(async ({ data }: any) => (trip = { ...data, updatedAt: new Date() })), findUnique: jest.fn(async () => trip), update: jest.fn(async ({ data }: any) => Object.assign(trip, data, { updatedAt: new Date() })), updateMany: jest.fn(async ({ where, data }: any) => { if (trip?.status !== where.status || trip?.driverProfileId !== where.driverProfileId) return { count: 0 }; Object.assign(trip, data); return { count: 1 }; }), delete: jest.fn(async () => { trip = null; }) },
     taxiDriverProfile: { update: jest.fn(async ({ data }: any) => Object.assign(profile, data)) },
     rider: { updateMany: jest.fn(async () => ({ count: 1 })) },
     captainWorkState: { count: jest.fn(async () => 0), findUnique: jest.fn(async () => state), updateMany: jest.fn(async ({ data }: any) => { Object.assign(state, data); return { count: 1 }; }) },
@@ -95,7 +95,7 @@ describe("restricted internal Captain QA authorization", () => {
     const h = harness(); const controller = new InternalRideQaController(h.service);
     const result = await controller.create({ id: adminId } as any);
     expect(result.captainUserId).toBe(APPROVED_QA_CAPTAIN);
-    expect(h.trip()).toMatchObject({ isTestMode: true, estimatedFareKobo: 0, finalFareKobo: 0, driverProfileId: profileId, pickupContentSource: "USER_SUPPLIED", stopContentSource: "USER_SUPPLIED" });
+    expect(h.trip()).toMatchObject({ isTestMode: true, estimatedFareKobo: 0, finalFareKobo: 0, driverProfileId: null, pickupContentSource: "USER_SUPPLIED", stopContentSource: "USER_SUPPLIED" });
     expect(h.identity).toMatchObject({ accountStatus: "DEACTIVATED", phoneNumber: qaPlaceholderPhone(windowId), email: null, phoneVerified: false });
     expect(h.db.$executeRaw).toHaveBeenCalled();
   });
@@ -126,6 +126,63 @@ describe("restricted internal Captain QA authorization", () => {
   });
 });
 
+describe("synthetic pre-offer state boundary", () => {
+  function captainSurface(h: ReturnType<typeof harness>) {
+    const service: any = Object.create(TaxiService.prototype);
+    Object.assign(service, { prisma: h.db, assertTaxiStagingEnabled: jest.fn(), expireStaleTrips: jest.fn(),
+      requireActiveTaxiDriverProfile: jest.fn(async () => h.profile), formatTrip: (trip: any) => trip });
+    return service;
+  }
+  it("keeps REQUESTED unassigned/offline, absent from both Captain feeds and work/location/realtime state", async () => {
+    const h = harness(); const f = await h.service.create(adminId);
+    expect(h.trip()).toMatchObject({ status: "REQUESTED", driverProfileId: null });
+    expect(await h.policy.armedCaptain(APPROVED_QA_CAPTAIN)).toBe(true);
+    expect(h.state).toMatchObject({ desiredRideOnline: false, activeWorkMode: null, activeRideTripId: null, lockStage: null });
+    expect(h.profile.isAvailableForTaxi).toBe(false);
+    const surface = captainSurface(h);
+    expect(await surface.availableTaxiTrips(APPROVED_QA_CAPTAIN)).toEqual([]);
+    expect(await surface.riderTaxiTrips(APPROVED_QA_CAPTAIN)).toEqual([]);
+    expect(h.work.acquireLock).not.toHaveBeenCalled();
+    expect(h.db.captainWorkState.updateMany).not.toHaveBeenCalled();
+    expect(h.realtime.emitToUser).not.toHaveBeenCalled();
+    expect(h.notifications.createNotification).not.toHaveBeenCalled();
+    await expect(h.service.offer(adminId, f.tripId)).rejects.toThrow(ConflictException);
+    expect(h.trip()).toMatchObject({ status: "REQUESTED", driverProfileId: null });
+  });
+  it("binds only on offer with the normal OFFERED lock, then acceptance advances to ACCEPTED", async () => {
+    const h = harness(); const f = await h.service.create(adminId);
+    h.state.desiredRideOnline = true;
+    await h.service.offer(adminId, f.tripId);
+    expect(h.trip()).toMatchObject({ status: "DRIVER_ASSIGNED", driverProfileId: profileId });
+    expect(h.state).toMatchObject({ activeWorkMode: "RIDE", activeRideTripId: f.tripId, lockStage: "OFFERED" });
+    expect(await captainSurface(h).availableTaxiTrips(APPROVED_QA_CAPTAIN)).toHaveLength(1);
+    const service = captainSurface(h);
+    Object.assign(service, { internalQa: h.policy, assertDriverHasNoActiveTrip: jest.fn(), rideFinance: { assertCaptainFinanciallyEligible: jest.fn() },
+      updateTripWithEvent: jest.fn(async (_id, data, _actor, _type, _event, _note, hooks) => { await hooks.beforeUpdate(h.db); return Object.assign(h.trip(), data); }),
+      captainWorkState: { transitionLock: jest.fn(async (_tx, _user, _mode, _id, stage) => { h.state.lockStage = stage; }) } });
+    await service.acceptTaxiTrip(APPROVED_QA_CAPTAIN, f.tripId);
+    expect(h.trip().status).toBe("ACCEPTED");
+    expect(h.state).toMatchObject({ activeWorkMode: "RIDE", activeRideTripId: f.tripId, lockStage: "ACCEPTED" });
+    expect(service.captainWorkState.transitionLock).toHaveBeenCalledWith(h.db, APPROVED_QA_CAPTAIN, "RIDE", f.tripId, "ACCEPTED");
+    expect(h.db.taxiRideSettlement.upsert).not.toHaveBeenCalled();
+  });
+  it.each([false, true])("cleans unoffered/offered fixture safely (offered=%s)", async offered => {
+    const h = harness(); const f = await h.service.create(adminId);
+    if (offered) { h.state.desiredRideOnline = true; await h.service.offer(adminId, f.tripId); }
+    await expect(h.service.cleanup(adminId, f.tripId)).resolves.toMatchObject({ cleaned: true });
+    expect(h.trip()).toBeNull();
+    expect(h.state).toMatchObject({ desiredRideOnline: false, activeWorkMode: null, activeRideTripId: null, lockStage: null });
+  });
+  it("rejects removal of the Captain binding after offer, even if state is changed back to REQUESTED", async () => {
+    const h = harness(); const f = await h.service.create(adminId); h.state.desiredRideOnline = true;
+    await h.service.offer(adminId, f.tripId);
+    Object.assign(h.trip(), { driverProfileId: null, status: "REQUESTED" });
+    await expect(h.policy.assertTrip(f.tripId, APPROVED_QA_CAPTAIN)).rejects.toThrow(ForbiddenException);
+    await expect(h.service.cleanup(adminId, f.tripId)).rejects.toThrow(ForbiddenException);
+    expect(h.db.taxiTrip.delete).not.toHaveBeenCalled();
+  });
+});
+
 describe("internal QA operational and financial fences", () => {
   it("offers once, through the existing notification path, only to the approved Captain", async () => {
     const h = harness(); const f = await h.service.create(adminId); h.state.desiredRideOnline = true;
@@ -153,7 +210,7 @@ describe("internal QA operational and financial fences", () => {
     expect(h.db.taxiRideSettlement.upsert).not.toHaveBeenCalled(); expect(h.db.taxiRideFinancialLedgerEntry.createMany).not.toHaveBeenCalled(); expect(h.db.taxiRideReceiptEmailDelivery.upsert).not.toHaveBeenCalled();
   });
   it("runs real lifecycle completion hooks without entering minimum-fare/finance/receipt branches", async () => {
-    const h = harness(); const f = await h.service.create(adminId); Object.assign(h.trip(), { status: "ARRIVED_DESTINATION", events: [], pickupContentSource: "USER_SUPPLIED", destinationContentSource: "USER_SUPPLIED", stopContentSource: "USER_SUPPLIED" });
+    const h = harness(); const f = await h.service.create(adminId); Object.assign(h.trip(), { status: "ARRIVED_DESTINATION", driverProfileId: profileId, events: [], pickupContentSource: "USER_SUPPLIED", destinationContentSource: "USER_SUPPLIED", stopContentSource: "USER_SUPPLIED" });
     Object.assign(h.state, { desiredRideOnline: true, activeWorkMode: "RIDE", activeRideTripId: f.tripId, lockStage: "IN_PROGRESS" });
     const fare = jest.spyOn(pricing, "applyCategoryMinimumRideFare");
     const service: any = Object.create(TaxiService.prototype);

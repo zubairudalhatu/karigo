@@ -55,9 +55,19 @@ export class InternalRideQaPolicy {
     if (this.window() !== fixture.windowId || Date.parse(fixture.expiresAt) <= Date.now() || (userId && userId !== fixture.captainUserId)) {
       throw new ForbiddenException("Internal QA fixture is not authorized for this operation.");
     }
-    const trip = await db.taxiTrip.findUnique({ where: { id: tripId }, select: { driverProfileId: true, customerId: true, isTestMode: true } });
-    if (!trip || trip.driverProfileId !== fixture.driverProfileId || trip.customerId !== fixture.customerProfileId || !trip.isTestMode) throw new ForbiddenException("Internal QA fixture binding changed.");
+    const trip = await db.taxiTrip.findUnique({ where: { id: tripId }, select: { driverProfileId: true, customerId: true, isTestMode: true, status: true } });
+    await this.assertBinding(tripId, trip, fixture, db);
     return fixture;
+  }
+
+  async assertBinding(tripId: string, trip: { driverProfileId: string | null; customerId: string; isTestMode: boolean; status: string } | null, fixture: QaFixture, db: Db = this.prisma) {
+    if (!trip || trip.customerId !== fixture.customerProfileId || !trip.isTestMode) throw new ForbiddenException("Internal QA fixture binding changed.");
+    if (trip.driverProfileId === fixture.driverProfileId) return;
+    // Only an unoffered REQUESTED fixture (or its quarantined/expired remnant)
+    // may be unassigned. Removing a binding after an offer must fail closed.
+    if (trip.driverProfileId === null && ["REQUESTED", "EXPIRED"].includes(trip.status) &&
+      !await db.adminAuditLog.findFirst({ where: { action: "INTERNAL_RIDE_QA_OFFER_CLAIMED", entityType: QA_ENTITY, entityId: tripId } })) return;
+    throw new ForbiddenException("Internal QA fixture binding changed.");
   }
 
   async armedCaptain(userId: string) {
