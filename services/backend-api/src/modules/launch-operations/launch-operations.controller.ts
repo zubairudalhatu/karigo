@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Header, Param, ParseEnumPipe, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { CaptainReadinessDto } from "./dto/captain-readiness.dto";
+import { Body, Controller, Get, Header, HttpCode, Param, ParseEnumPipe, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AdminRole, LaunchServiceType, UserRole } from "@prisma/client";
 import { AdminRoles } from "../../common/decorators/admin-roles.decorator";
@@ -60,6 +61,17 @@ export class LaunchAvailabilityController {
   @ApiOperation({ summary: "Resolve server-verified Captain launch availability" })
   async myCaptainAvailability(@CurrentUser() user: AuthenticatedUser, @Query() query: LaunchAvailabilityQueryDto) {
     return { message: "Captain launch availability resolved", data: await this.launch.captainAvailability(query.city, query.zoneId, user.id) };
+  }
+
+  @Post("availability/me/captain")
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CUSTOMER, UserRole.RIDER, UserRole.VENDOR, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @Header("Cache-Control", "no-store")
+  @ApiOperation({ summary: "Evaluate transient foreground Captain readiness without changing availability or storing location" })
+  async captainReadiness(@CurrentUser() user: AuthenticatedUser, @Body() body: CaptainReadinessDto) {
+    return { message: "Captain readiness evaluated", data: await this.launch.captainReadiness(body, user.id) };
   }
 
   @Get("availability/me")

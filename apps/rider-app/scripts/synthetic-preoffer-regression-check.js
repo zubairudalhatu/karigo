@@ -10,7 +10,7 @@ const selector = dashboard.match(/const activeRide = useMemo\(\(\) => (.*), \[ri
 const declaration = name => dashboard.match(new RegExp('const ' + name + ' = ([\\s\\S]*?);'))[1];
 const select = rideTrips => vm.runInNewContext(selector, { rideTrips });
 const state = { desiredRideOnline: false, activeWorkMode: null, rideEligibility: { eligible: true } };
-const context = { workState: state, availabilityUpdating: false, projection: { ride: { active: true } },
+const context = { readinessAllowsOnline: true, workState: state, availabilityUpdating: false, projection: { ride: { active: true } },
   launchAvailabilityLoading: false, rideLaunch: { available: true }, rideCanRefreshStaleLocation: false };
 context.canToggle = vm.runInNewContext(declaration('canToggle'), context);
 context.canStartRide = vm.runInNewContext(declaration('canStartRide'), context);

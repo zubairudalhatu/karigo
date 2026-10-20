@@ -1,3 +1,5 @@
+import { CaptainReadinessDto } from "./dto/captain-readiness.dto";
+import { validateReadinessLocation, TransientCaptainLocation, CAPTAIN_READINESS_MAX_AGE_MS } from "./captain-readiness-location";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
@@ -127,6 +129,7 @@ type EligibilityInput = {
   enforceCapacity?: boolean;
   participantRole?: UserRole;
   actorContext?: "CAPTAIN";
+  transientLocation?: TransientCaptainLocation;
 };
 
 @Injectable()
@@ -306,7 +309,7 @@ export class LaunchOperationsService {
     const user = input.userId ? await this.prisma.user.findUnique({ where: { id: input.userId }, select: { role: true, accountStatus: true, deletedAt: true } }) : null;
     if (input.userId && (!user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE)) return this.safeEligibility(city, input.serviceType, config.launchStage, false, "ACCOUNT_NOT_ELIGIBLE", config);
     if (input.actorContext === "CAPTAIN") {
-      return this.resolveCaptainCapabilityEligibility({ city, config, serviceType: input.serviceType, userId: input.userId! });
+      return this.resolveCaptainCapabilityEligibility({ city, config, serviceType: input.serviceType, userId: input.userId!, transientLocation: input.transientLocation });
     }
     const cohortEligible = await this.cohortEligible(config, input.userId);
     if (config.launchStage === LaunchStage.OPERATIONS_ONLY) {
@@ -336,11 +339,14 @@ export class LaunchOperationsService {
     };
     serviceType: LaunchServiceType;
     userId: string;
+    transientLocation?: TransientCaptainLocation;
   }) {
     if (!([LaunchServiceType.RIDES, LaunchServiceType.PARCEL_DELIVERY] as LaunchServiceType[]).includes(input.serviceType)) {
       return this.safeEligibility(input.city, input.serviceType, input.config.launchStage, false, "CAPABILITY_NOT_AVAILABLE", input.config, "Captain capability is not available for this service.");
     }
-    const candidate = (await this.controlledSupply.captainEligibility(input.city.name, input.serviceType))
+    const candidate = (await (input.transientLocation
+      ? this.controlledSupply.captainEligibility(input.city.name, input.serviceType, { userId: input.userId, location: input.transientLocation })
+      : this.controlledSupply.captainEligibility(input.city.name, input.serviceType)))
       .find((item) => item.userId === input.userId);
     if (!candidate) {
       return this.safeEligibility(input.city, input.serviceType, input.config.launchStage, false, "CAPABILITY_NOT_AVAILABLE", input.config, "Approved Captain access is not available for this service.");
@@ -348,6 +354,9 @@ export class LaunchOperationsService {
     const membershipBlockers = new Set(["NOT_IN_CONTROLLED_GROUP", "MEMBERSHIP_ACTIVATION_PENDING"]);
     const blockers = candidate.blockers.filter((blocker) => input.config.launchStage === LaunchStage.OPERATIONS_ONLY || !membershipBlockers.has(blocker));
     const targetArea = captainOperatingAreaFromText(input.city.name, input.city.code);
+    if (!candidate.currentGpsArea && !candidate.locationSupplied) {
+      return this.safeEligibility(input.city, input.serviceType, input.config.launchStage, false, "LOCATION_UNKNOWN", input.config, "Check your current foreground location before going online.");
+    }
     if (!targetArea || candidate.currentGpsArea?.id !== targetArea.id) blockers.unshift("CURRENT_AREA_MISMATCH");
     const blocker = blockers[0];
     if (!blocker) return this.safeEligibility(input.city, input.serviceType, input.config.launchStage, true, null, input.config);
@@ -435,14 +444,36 @@ export class LaunchOperationsService {
     return { city: { code: city.code, name: city.name }, services, refreshedAt: new Date().toISOString() };
   }
 
-  async captainAvailability(cityInput: string, zoneId: string | undefined, userId: string) {
+  async captainAvailability(cityInput: string, zoneId: string | undefined, userId: string, transientLocation?: TransientCaptainLocation) {
     const city = this.normalizeCity(cityInput);
     const services = await Promise.all(LAUNCH_SERVICES.map((serviceType) => this.resolveEligibility({
       city: city.name, serviceType, zoneId, userId,
       enforceCapacity: false,
-      actorContext: "CAPTAIN"
+      actorContext: "CAPTAIN", transientLocation
     })));
     return { city: { code: city.code, name: city.name }, services, refreshedAt: new Date().toISOString() };
+  }
+
+  async captainReadiness(input: CaptainReadinessDto, userId: string) {
+    const checked = validateReadinessLocation(input);
+    const area = checked.location ? captainOperatingAreaFromCoordinates(checked.location.latitude, checked.location.longitude) : null;
+    // Coordinates, never a caller's city/profile label, select the resolved market.
+    const result = await this.captainAvailability(area?.cityName ?? input.city, input.zoneId, userId, checked.location ?? undefined);
+    if (!checked.location) {
+      result.services = result.services.map(service => ({ ...service, available: false,
+        reasonCode: checked.reason, message: "A fresh precise foreground location is required to evaluate current readiness." }));
+    }
+    return { ...result, readiness: {
+      locationState: checked.location ? "LOCATION_RESOLVED" : "LOCATION_UNKNOWN",
+      currentArea: area ? { id: area.id, cityName: area.cityName, label: area.cityName } : null,
+      reasonCode: checked.reason,
+      accuracyMeters: checked.location?.accuracyMeters ?? null,
+      capturedAt: checked.location?.recordedAt.toISOString() ?? null,
+      validUntil: checked.location ? new Date(checked.location.recordedAt.getTime() + CAPTAIN_READINESS_MAX_AGE_MS).toISOString() : null
+    }, services: result.services.map(service => ({ ...service,
+      areaState: !checked.location ? "LOCATION_UNKNOWN" : !area || service.reasonCode === "OPERATING_AREA_NOT_APPROVED" ? "AREA_NOT_APPROVED" : service.available || ["CONTROLLED_ACCESS_NOT_ENABLED", "LOCATION_NOT_CURRENT", "ACTIVE_WORK_CONFLICT"].includes(service.reasonCode ?? "") ? "AREA_APPROVED" : "AREA_NOT_EVALUATED",
+      accessState: service.reasonCode === "CONTROLLED_ACCESS_NOT_ENABLED" ? "CONTROLLED_ACCESS_REQUIRED" : service.available ? "ELIGIBLE" : "BLOCKED"
+    })) };
   }
 
   async configs() {

@@ -13,6 +13,7 @@ import { jobsApi, RiderJob } from "../../src/api/jobs.api";
 import type { EarningsSummary } from "../../src/api/earnings.api";
 import { earningsApi } from "../../src/api/earnings.api";
 import { notificationsApi } from "../../src/api/notifications.api";
+import { CAPTAIN_READINESS_REUSE_MS, isReadinessCurrent, preferReadinessResult } from "../../src/lib/captain-readiness";
 import { launchApi } from "../../src/api/launch.api";
 import { taxiApi } from "../../src/api/taxi.api";
 import { CaptainRideWorkspace } from "../../src/components/captain-ride-workspace";
@@ -42,8 +43,6 @@ const ACTIVE_DELIVERY_STATUSES = new Set([
 
 const LOCAL_MAP_FRESH_MS = 120_000;
 const ONLINE_LOCATION_REUSE_MS = 30_000;
-const READINESS_HEARTBEAT_INTERVAL_MS = 10 * 60_000;
-const READINESS_AREA_CHANGE_METERS = 5_000;
 
 function firstName(fullName?: string | null) {
   const name = fullName?.trim();
@@ -113,14 +112,15 @@ function timestampValue(value?: string | null) {
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
-function locationSummary(access: CaptainAccess | null, profile: RiderProfile | null, workState: CaptainWorkState | null, deviceLocation: { location: CaptainLocation; seenAt: string } | null) {
+function locationSummary(access: CaptainAccess | null, profile: RiderProfile | null, workState: CaptainWorkState | null, deviceLocation: { location: CaptainLocation; seenAt: string } | null, readiness?: LaunchAvailabilityResponse["readiness"], resolving = false) {
   const deliveryLat = coordinateNumber(profile?.currentLatitude);
   const deliveryLng = coordinateNumber(profile?.currentLongitude);
   const rideProfile = access?.rideCaptainProfile;
   const rideLat = coordinateNumber(rideProfile?.lastKnownLatitude);
   const rideLng = coordinateNumber(rideProfile?.lastKnownLongitude);
-  const currentArea = workState?.currentGpsArea ?? access?.deliveryCaptainProfile?.currentGpsArea ?? rideProfile?.currentGpsArea;
-  const localFixIsFresh = Boolean(deviceLocation && Date.now() - timestampValue(deviceLocation.seenAt) <= LOCAL_MAP_FRESH_MS);
+  const hasOperationalLocation = Boolean(workState?.desiredDeliveryOnline || workState?.desiredRideOnline || workState?.activeWorkMode);
+  const currentArea = hasOperationalLocation ? workState?.currentGpsArea ?? access?.deliveryCaptainProfile?.currentGpsArea ?? rideProfile?.currentGpsArea : null;
+  const localFixIsFresh = Boolean(deviceLocation && Date.now() - timestampValue(deviceLocation.location.recordedAt) <= LOCAL_MAP_FRESH_MS);
   const candidates = [
     deviceLocation && localFixIsFresh ? {
       coordinate: { latitude: deviceLocation.location.latitude, longitude: deviceLocation.location.longitude },
@@ -152,7 +152,7 @@ function locationSummary(access: CaptainAccess | null, profile: RiderProfile | n
   return {
     coordinate: candidates[0]?.coordinate ?? null,
     source: candidates[0]?.source ?? null,
-    area: currentArea?.label ?? currentArea?.cityName ?? "Locating",
+    area: resolving ? "Resolving current area" : readiness ? readiness.currentArea?.label ?? (readiness.locationState === "LOCATION_RESOLVED" ? "Outside supported areas" : "Location not evaluated") : currentArea?.label ?? currentArea?.cityName ?? "Location not evaluated",
     lastSeen: candidates[0]?.lastSeen ?? profile?.currentLocationUpdatedAt ?? access?.rideCaptainProfile?.lastSeenAt ?? null
   };
 }
@@ -211,8 +211,6 @@ export default function RiderDashboard() {
   const deviceLocationRef = useRef<{ location: CaptainLocation; seenAt: string } | null>(null);
   const localLocationRequestRef = useRef<Promise<CaptainLocation> | null>(null);
   const operationalLocationRequiredRef = useRef(false);
-  const readinessHeartbeatRef = useRef<{ location: CaptainLocation; sentAt: number } | null>(null);
-  const readinessHeartbeatInFlightRef = useRef<Promise<void> | null>(null);
   const watcherRef = useRef<{ remove: () => void } | null>(null);
   const watcherStartingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -258,7 +256,7 @@ export default function RiderDashboard() {
 
         const captainCity = captainAvailabilityCity(access, state);
         const [launchState, deliveryProfile, deliveryJobs, notificationCount, earningsSummary, assignedRides] = await Promise.all([
-          captainCity ? secondary(launchApi.myAvailability(captainCity, { signal: controller.signal }), null) : Promise.resolve(null),
+          captainCity ? secondary(queryCaptainAvailability(captainCity), null) : Promise.resolve(null),
           projection.hasActiveDeliveryMode ? secondary(riderApi.profile({ signal: controller.signal }), null) : Promise.resolve(null),
           projection.hasActiveDeliveryMode ? secondary(jobsApi.list({ signal: controller.signal }), []) : Promise.resolve([]),
           projection.hasAnyActiveMode ? secondary(notificationsApi.unreadCount({ signal: controller.signal }), { count: 0 }) : Promise.resolve({ count: 0 }),
@@ -266,7 +264,7 @@ export default function RiderDashboard() {
           projection.hasActiveRideMode ? secondary(taxiApi.availableTrips(), rideTripsRef.current) : Promise.resolve([])
         ]);
         if (controller.signal.aborted || !mountedRef.current) return;
-        setLaunchAvailability(launchState);
+        setLaunchAvailability(current => launchState ? preferReadinessResult(current, launchState) : null);
         setLaunchAvailabilityLoading(false);
         setProfile(deliveryProfile);
         setJobs(deliveryJobs);
@@ -312,13 +310,13 @@ export default function RiderDashboard() {
         const [assignedRides, deliveryJobs, launchState] = await Promise.all([
           access?.rideCaptainProfile ? taxiApi.availableTrips() : Promise.resolve([]),
           access?.deliveryCaptainProfile ? jobsApi.list() : Promise.resolve([]),
-          captainCity ? launchApi.myAvailability(captainCity).catch(() => null) : Promise.resolve(null)
+          captainCity ? queryCaptainAvailability(captainCity).catch(() => null) : Promise.resolve(null)
         ]);
         if (!mountedRef.current) return;
         latestWorkStateRef.current = state;
         rideTripsRef.current = assignedRides;
         setWorkState(state);
-        setLaunchAvailability(launchState);
+        setLaunchAvailability(current => launchState ? preferReadinessResult(current, launchState) : null);
         setLaunchAvailabilityLoading(false);
         setRideTrips(assignedRides);
         setJobs(deliveryJobs);
@@ -360,7 +358,7 @@ export default function RiderDashboard() {
   function localFixIsAcceptable(maxAgeMs: number, requirePrecise: boolean) {
     const record = deviceLocationRef.current;
     if (!record) return null;
-    const ageMs = Date.now() - timestampValue(record.seenAt);
+    const ageMs = Date.now() - timestampValue(record.location.recordedAt);
     if (ageMs > maxAgeMs || requirePrecise && record.location.isApproximate) return null;
     return record.location;
   }
@@ -404,42 +402,51 @@ export default function RiderDashboard() {
 
   async function recenterLocalMap() {
     try {
-      return await acquireLocalMapLocation({ allowCached: true, manual: true });
+      const location = await acquireLocalMapLocation({ strong: true, allowCached: true, manual: true });
+      await promoteReadinessLocation(location);
+      return location;
     } catch {
       return null;
     }
   }
 
-  function promoteReadinessLocation(location: CaptainLocation) {
-    if (location.isApproximate || operationalLocationRequiredRef.current || !latestProjectionRef.current?.hasAnyActiveMode) return;
-    if (readinessHeartbeatInFlightRef.current) return;
-    const now = Date.now();
-    const previous = readinessHeartbeatRef.current;
-    const movedArea = Boolean(previous && distanceMeters(previous.location, location) >= READINESS_AREA_CHANGE_METERS);
-    const previousIsRecent = Boolean(previous && now - previous.sentAt < READINESS_HEARTBEAT_INTERVAL_MS);
-    const backendLocationAt = timestampValue(latestWorkStateRef.current?.lastLocationAt);
-    const backendLocationIsStale = !backendLocationAt || now - backendLocationAt >= READINESS_HEARTBEAT_INTERVAL_MS;
-    if ((!backendLocationIsStale || previousIsRecent) && !movedArea) return;
-
-    const request = (async () => {
-      try {
-        const updated = await captainAccessApi.updateAvailability({ ...toOperationalLocationPayload(location), tracePoints: [foregroundRideTracePoint(location)] });
-        if (!mountedRef.current) return;
-        readinessHeartbeatRef.current = { location, sentAt: Date.now() };
-        latestWorkStateRef.current = updated;
-        setWorkState(updated);
-        console.log("captain_readiness_location_updated");
-      } catch (cause) {
-        console.warn("captain_readiness_location_failed", {
-          kind: cause instanceof Error ? cause.name : "unknown"
-        });
-      }
-    })();
-    readinessHeartbeatInFlightRef.current = request;
-    void request.finally(() => {
-      if (readinessHeartbeatInFlightRef.current === request) readinessHeartbeatInFlightRef.current = null;
-    });
+  async function queryCaptainAvailability(city: string) {
+    if (AppState.currentState !== "active") return launchApi.myAvailability(city);
+    const fix = deviceLocationRef.current?.location;
+    const age = fix ? Date.now() - timestampValue(fix.recordedAt) : Infinity;
+    return fix && age >= 0 && age <= CAPTAIN_READINESS_REUSE_MS
+      ? launchApi.readiness(city, fix) : launchApi.myAvailability(city);
   }
+
+  async function promoteReadinessLocation(location: CaptainLocation) {
+    // Transient decision only: no offline PATCH availability, trace or dispatch telemetry.
+    if (AppState.currentState !== "active") return;
+    if (!latestProjectionRef.current?.hasAnyActiveMode || operationalLocationRequiredRef.current) return;
+    const city = captainAvailabilityCity(captainAccessRef.current, latestWorkStateRef.current);
+    if (!city) return;
+    setLaunchAvailabilityLoading(true);
+    try {
+      const result = await launchApi.readiness(city, location);
+      if (mountedRef.current) {
+        setLaunchAvailability(current => preferReadinessResult(current, result));
+        if (isReadinessCurrent(result)) setLocationIssue("");
+      }
+    } catch {
+      if (mountedRef.current) { setLaunchAvailability(null); setLocationIssue("Current area could not be checked. Refresh your foreground location to retry."); }
+    } finally {
+      if (mountedRef.current) setLaunchAvailabilityLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const until = launchAvailability?.readiness?.validUntil;
+    if (!until) return;
+    const timer = setTimeout(() => setLaunchAvailability(current => current?.readiness?.validUntil === until ? {
+      ...current, services: current.services.map(service => ({ ...service, available: false, reasonCode: "LOCATION_STALE", message: "Refresh your foreground location before going online." })),
+      readiness: { ...current.readiness!, locationState: "LOCATION_UNKNOWN", currentArea: null, reasonCode: "LOCATION_STALE", validUntil: null }
+    } : current), Math.max(0, Date.parse(until) - Date.now()));
+    return () => clearTimeout(timer);
+  }, [launchAvailability?.readiness?.validUntil]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -486,7 +493,7 @@ export default function RiderDashboard() {
   }, [message, projection.effectiveDeliveryOnline, projection.effectiveRideOnline]);
   const activeJob = useMemo(() => jobs.find((job) => ACTIVE_DELIVERY_STATUSES.has(job.orderStatus)), [jobs]);
   const activeRide = useMemo(() => rideTrips.find((trip) => !["COMPLETED", "CANCELLED_BY_CUSTOMER", "CANCELLED_BY_DRIVER", "CANCELLED_BY_ADMIN", "EXPIRED"].includes(trip.status)) ?? null, [rideTrips]);
-  const mapState = locationSummary(captainAccess, profile, workState, deviceLocation);
+  const mapState = locationSummary(captainAccess, profile, workState, deviceLocation, launchAvailability?.readiness, launchAvailabilityLoading);
   const hasMapCoordinate = Boolean(mapState.coordinate);
   const currentMapRegion = mapRegion(mapState.coordinate);
   const operationalLocationRequired = Boolean(
@@ -814,10 +821,11 @@ export default function RiderDashboard() {
   const rideLaunch = launchAvailability?.services.find((item) => item.serviceType === "RIDES");
   const deliveryCanRefreshStaleLocation = workState?.deliveryEligibility.reasonCode === "LOCATION_STALE";
   const rideCanRefreshStaleLocation = workState?.rideEligibility.reasonCode === "LOCATION_STALE";
-  const canStartDelivery = !!workState && canToggle && !availabilityUpdating && projection.delivery.active &&
+  const readinessAllowsOnline = isReadinessCurrent(launchAvailability);
+  const canStartDelivery = readinessAllowsOnline && !!workState && canToggle && !availabilityUpdating && projection.delivery.active &&
     !launchAvailabilityLoading && deliveryLaunch?.available === true &&
     (workState.deliveryEligibility.eligible || deliveryCanRefreshStaleLocation);
-  const canStartRide = !!workState && canToggle && !availabilityUpdating && projection.ride.active &&
+  const canStartRide = readinessAllowsOnline && !!workState && canToggle && !availabilityUpdating && projection.ride.active &&
     !launchAvailabilityLoading && rideLaunch?.available === true &&
     (workState.rideEligibility.eligible || rideCanRefreshStaleLocation);
   const canToggleDelivery = !!workState && canToggle && !availabilityUpdating && projection.delivery.active && (

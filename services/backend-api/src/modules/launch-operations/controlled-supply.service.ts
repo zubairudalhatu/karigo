@@ -1,3 +1,4 @@
+import type { TransientCaptainLocation } from "./captain-readiness-location";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import {
   AccountStatus,
@@ -190,10 +191,11 @@ export class ControlledSupplyService {
     return documents.length > 0 && documents.every((document) => (document.verificationStatus ?? document.reviewStatus) === DocumentVerificationStatus.APPROVED);
   }
 
-  async captainEligibility(cityInput: string, serviceType: LaunchServiceType) {
+  async captainEligibility(cityInput: string, serviceType: LaunchServiceType, transient?: { userId: string; location: TransientCaptainLocation }) {
     const city = this.city(cityInput);
     const users = await this.prisma.user.findMany({
       where: {
+        ...(transient ? { id: transient.userId } : {}),
         deletedAt: null,
         OR: [
           { rider: { isNot: null } },
@@ -246,15 +248,16 @@ export class ControlledSupplyService {
       const applicationApproved = needsRide ? rideApplication?.status === TaxiApplicationStatus.APPROVED : deliveryApplication?.status === DeliveryCaptainApplicationStatus.APPROVED;
       const documents = needsRide ? rideApplication?.captainDocuments ?? [] : [...(deliveryApplication?.captainDocuments ?? []), ...(deliveryApplication?.documents ?? [])];
       const profileActive = needsRide ? rideProfile?.status === TaxiDriverProfileStatus.ACTIVE : user.rider?.verificationStatus === RiderStatus.ACTIVE;
-      const locationAt = needsRide ? rideProfile?.lastSeenAt : (user.captainWorkState?.lastLocationAt ?? user.rider?.currentLocationUpdatedAt);
+      const supplied = transient?.userId === user.id ? transient.location : null;
+      const locationAt = supplied?.recordedAt ?? (needsRide ? rideProfile?.lastSeenAt : (user.captainWorkState?.lastLocationAt ?? user.rider?.currentLocationUpdatedAt));
       const vehicleValid = needsRide
         ? Boolean(rideProfile?.vehicleMake && rideProfile.vehicleModel && rideProfile.vehiclePlateNumber)
         : Boolean(user.rider?.vehicleType && user.rider.plateNumber);
       const operatingAreaProjection = captainOperatingAreaProjection(applicationApproved ? relevantApplication : null, legacyLocation);
-      const currentArea = captainOperatingAreaFromCoordinates(
-        needsRide ? Number(rideProfile?.lastKnownLatitude) : Number(user.rider?.currentLatitude),
-        needsRide ? Number(rideProfile?.lastKnownLongitude) : Number(user.rider?.currentLongitude)
-      );
+      const latitude = supplied?.latitude ?? (needsRide ? rideProfile?.lastKnownLatitude : user.rider?.currentLatitude);
+      const longitude = supplied?.longitude ?? (needsRide ? rideProfile?.lastKnownLongitude : user.rider?.currentLongitude);
+      const locationSupplied = latitude != null && longitude != null && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude));
+      const currentArea = locationSupplied ? captainOperatingAreaFromCoordinates(Number(latitude), Number(longitude)) : null;
       const membership = memberships.find((item) => item.captainUserId === user.id && requiredTypes.includes(item.memberType) && item.group.status === ControlledSupplyGroupStatus.ACTIVE && this.activeWindow(item.group));
       const blockers: string[] = [];
       if (user.accountStatus === AccountStatus.SUSPENDED || user.rider?.verificationStatus === RiderStatus.SUSPENDED || rideProfile?.status === TaxiDriverProfileStatus.SUSPENDED) blockers.push("SUSPENDED");
@@ -277,7 +280,7 @@ export class ControlledSupplyService {
         lastGpsUpdate: locationAt, vehicle: needsRide ? [rideProfile?.vehicleMake, rideProfile?.vehicleModel, rideProfile?.vehiclePlateNumber].filter(Boolean).join(" ") : [user.rider?.vehicleType, user.rider?.plateNumber].filter(Boolean).join(" "),
         ...operatingAreaProjection,
         residentialLocation: captainResidentialLocation(relevantApplication, legacyLocation),
-        currentGpsArea: currentArea ? captainOperatingAreaSummary(currentArea) : null,
+        currentGpsArea: currentArea ? captainOperatingAreaSummary(currentArea) : null, locationSupplied,
         documentStatus: this.documentsApproved(documents) ? "APPROVED" : "INCOMPLETE", eligibility: blockers[0] ?? "ELIGIBLE", blockers: [...new Set(blockers)],
         controlledGroup: membership ? { id: membership.groupId, name: membership.group.name, enabled: membership.enabled, memberId: membership.id } : null
       };
