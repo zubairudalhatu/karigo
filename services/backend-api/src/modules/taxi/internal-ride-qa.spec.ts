@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { BadRequestException, ConflictException, ForbiddenException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { validate } from "class-validator";
-import { APPROVED_QA_CAPTAIN, InternalRideQaPolicy, QA_CREATED, QA_ENTITY } from "./internal-ride-qa.policy";
+import { APPROVED_QA_CAPTAIN, InternalRideQaPolicy, QA_CREATED, QA_ENTITY, qaPlaceholderPhone } from "./internal-ride-qa.policy";
 import { InternalRideQaService } from "./internal-ride-qa.service";
 import { InternalRideQaController } from "./internal-ride-qa.controller";
 import { RideFinanceService } from "./ride-finance.service";
@@ -14,6 +14,7 @@ import { PushNotificationProvider } from "../notifications/providers/push-notifi
 import { TaxiService } from "./taxi.service";
 import { CreateTaxiTripDto } from "./dto/create-taxi-trip.dto";
 import * as pricing from "./ride-pricing-policy";
+import { normalizePhoneNumber, NIGERIAN_PHONE_PATTERN } from "../../common/utils/phone.util";
 
 const adminId = "10000000-0000-4000-8000-000000000001";
 const customerId = "10000000-0000-4000-8000-000000000002";
@@ -26,11 +27,11 @@ function harness(values: Record<string, unknown> = {}) {
   const audits: any[] = []; let trip: any = null;
   const state: any = { desiredRideOnline: false, desiredDeliveryOnline: false, activeWorkMode: null, activeRideTripId: null, lockStage: null };
   const profile: any = { id: profileId, userId: APPROVED_QA_CAPTAIN, status: "ACTIVE", isAvailableForTaxi: false };
-  const identity: any = { id: customerId, role: "CUSTOMER", accountStatus: "DEACTIVATED", phoneNumber: null, email: null, phoneVerified: false, deletedAt: null, passwordHash: "!INTERNAL_QA_NO_LOGIN:synthetic", customerProfile: { id: customerProfileId } };
+  const identity: any = { id: customerId, role: "CUSTOMER", accountStatus: "DEACTIVATED", phoneNumber: qaPlaceholderPhone(windowId), email: null, phoneVerified: false, deletedAt: null, passwordHash: "!INTERNAL_QA_NO_LOGIN:synthetic", customerProfile: { id: customerProfileId } };
   const captain: any = { id: APPROVED_QA_CAPTAIN, role: "RIDER", adminRole: null, accountStatus: "ACTIVE", phoneVerified: true, deletedAt: null, customerProfile: null, vendor: null, captainWorkState: state, rider: { availabilityStatus: "OFFLINE" }, taxiDriverProfiles: [profile] };
   const admin: any = { role: "ADMIN", adminRole: "SUPER_ADMIN", accountStatus: "ACTIVE", deletedAt: null };
   const db: any = {
-    user: { count: jest.fn(async () => 0), findUnique: jest.fn(async ({ where }: any) => where.id === adminId ? admin : where.id === APPROVED_QA_CAPTAIN ? captain : where.id === customerId ? identity : null), create: jest.fn(async () => identity), delete: jest.fn() },
+    user: { count: jest.fn(async () => 0), findUnique: jest.fn(async ({ where }: any) => where.id === adminId ? admin : where.id === APPROVED_QA_CAPTAIN ? captain : where.id === customerId ? identity : null), create: jest.fn(async ({ data }: any) => Object.assign(identity, { phoneNumber: data.phoneNumber })), delete: jest.fn() },
     adminAuditLog: { findFirst: jest.fn(async ({ where }: any) => audits.find(a => a.action === where.action && a.entityType === where.entityType && (!where.entityId || a.entityId === where.entityId) && (!where.newValue || a.newValue.windowId === where.newValue.equals))), create: jest.fn(async ({ data }: any) => { audits.push(data); return data; }) },
     taxiTrip: { count: jest.fn(async () => 0), create: jest.fn(async ({ data }: any) => (trip = { ...data, updatedAt: new Date() })), findUnique: jest.fn(async () => trip), update: jest.fn(async ({ data }: any) => Object.assign(trip, data, { updatedAt: new Date() })), updateMany: jest.fn(async ({ where, data }: any) => { if (trip?.status !== where.status) return { count: 0 }; Object.assign(trip, data); return { count: 1 }; }), delete: jest.fn(async () => { trip = null; }) },
     taxiDriverProfile: { update: jest.fn(async ({ data }: any) => Object.assign(profile, data)) },
@@ -58,6 +59,15 @@ function harness(values: Record<string, unknown> = {}) {
 }
 
 describe("restricted internal Captain QA authorization", () => {
+  it("uses a deterministic, injective, letters-only non-phone marker per window", () => {
+    const marker = qaPlaceholderPhone(windowId);
+    expect(marker).toMatch(/^INTERNAL_QA_[A-P]{32}$/);
+    expect(qaPlaceholderPhone(windowId)).toBe(marker);
+    expect(qaPlaceholderPhone("10000000-0000-4000-8000-000000000006")).not.toBe(marker);
+    expect(normalizePhoneNumber(marker)).toBe("");
+    expect(NIGERIAN_PHONE_PATTERN.test(marker)).toBe(false);
+    expect(() => qaPlaceholderPhone("caller-controlled-phone")).toThrow(ForbiddenException);
+  });
   it.each([{}, { CAPTAIN_RIDE_QA_ENABLED: "false" }, { CAPTAIN_RIDE_QA_ENABLED: "1" }])("defaults closed without a valid explicit window/allowlist: %j", values => {
     const policy = new InternalRideQaPolicy({} as any, new ConfigService(values));
     expect(() => policy.window()).toThrow(ForbiddenException);
@@ -86,7 +96,7 @@ describe("restricted internal Captain QA authorization", () => {
     const result = await controller.create({ id: adminId } as any);
     expect(result.captainUserId).toBe(APPROVED_QA_CAPTAIN);
     expect(h.trip()).toMatchObject({ isTestMode: true, estimatedFareKobo: 0, finalFareKobo: 0, driverProfileId: profileId, pickupContentSource: "USER_SUPPLIED", stopContentSource: "USER_SUPPLIED" });
-    expect(h.identity).toMatchObject({ accountStatus: "DEACTIVATED", phoneNumber: null, email: null, phoneVerified: false });
+    expect(h.identity).toMatchObject({ accountStatus: "DEACTIVATED", phoneNumber: qaPlaceholderPhone(windowId), email: null, phoneVerified: false });
     expect(h.db.$executeRaw).toHaveBeenCalled();
   });
   it("rejects client isTestMode/fare injection on the ordinary DTO", async () => {

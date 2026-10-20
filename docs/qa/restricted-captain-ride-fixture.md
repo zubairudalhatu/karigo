@@ -47,3 +47,33 @@ No changes to schema, migrations, payment/provider configuration, utilities, ret
 - Credential-pattern scan: zero matches; git diff whitespace check passed.
 
 Concurrency tests serialize the mock transaction harness and check use of the PostgreSQL advisory lock; no live PostgreSQL race or physical-device lifecycle was executed in this local-only task. Production deployment, enabling flags, fixture creation, notification delivery and cleanup certification remain unperformed.
+
+## Placeholder phone correction (local review)
+
+The placeholder phone is `INTERNAL_QA_` followed by the window UUID's 32 hexadecimal digits encoded injectively as letters A–P (hex 0→A, …, f→P). It is deterministic per window, unique across distinct windows, contains no dialable digits, and normal phone normalization produces an empty string. It satisfies the existing text/non-null constraint without reserving or impersonating a Nigerian number. The identity remains DEACTIVATED, unverified, email-less, and has an invalid non-login password sentinel. There is one disposable identity per one-fixture window; no shared persistent Customer is introduced.
+
+Cleanup now requires the exact window-derived phone as well as the immutable identity binding and disabled/sentinel checks. A changed phone causes transactional rollback/quarantine. All QA Ride viewer representations redact the phone; existing synthetic contact options already disable phone fallback. Ordinary registration/auth, phone uniqueness, migration SQL and normal Ride pricing/finance are unchanged.
+
+### PostgreSQL regression reproduction
+
+Use an empty, disposable PostgreSQL database named exactly `karigo_qa_placeholder`, bound to `127.0.0.1`. Populate it from the current Prisma schema using an explicitly local DATABASE_URL and `prisma db push --skip-generate`. This is test setup only; never run it against Production.
+
+Set `INTERNAL_QA_TEST_DATABASE_URL` to that loopback database, then run:
+
+```
+npm test --workspace @karigo/backend-api -- --runTestsByPath src/modules/taxi/internal-ride-qa.postgres.spec.ts src/modules/taxi/internal-ride-qa.spec.ts
+```
+
+The test never falls back to DATABASE_URL. It checks host/database identity and requires an empty user table before taking ownership of test cleanup. It installs the exact existing `governance_email_phone_required` CHECK statement read from the shipped migration into this local schema. Real service creation and cleanup run against PostgreSQL. NULL ordinary phones fail, valid ordinary Customer registration/uniqueness remain intact, synthetic login/OTP validation and notification guards reject the placeholder, no provider is called, and the CHECK definition is compared unchanged after cleanup. Without the explicit test URL this integration suite is skipped; the deployment-review evidence must include an explicit passing run.
+
+### Correction validation
+
+Validated locally on 2026-10-20 with native PostgreSQL 18.4 bound only to loopback:
+
+- Focused fixture + PostgreSQL: 49/49 passed (15 PostgreSQL checks).
+- Full backend, with PostgreSQL integration explicitly enabled: 1,403 passed; 98 skipped; zero failures.
+- Existing Taxi service/pricing: 48 passed; Ride finance: 21 passed; Auth service: 23 passed.
+- Captain regression/location/waypoint and Customer/Ride scripts: passed.
+- Backend typecheck/build/runtime-import checks: passed.
+- Credential-pattern matches: zero; diff whitespace check: passed.
+- No schema/migration/auth/mobile/provider configuration changes; no Production access or deployment performed for this correction.

@@ -2420,7 +2420,7 @@ export class TaxiService {
       customer: trip.customer ? {
         id: trip.customer.id,
         fullName: trip.customer.user.fullName,
-        phoneNumber: viewer === "admin" || viewer === "internal" ? trip.customer.user.phoneNumber : null
+        phoneNumber: !qaPresentation && (viewer === "admin" || viewer === "internal") ? trip.customer.user.phoneNumber : null
       } : null,
       driver: (viewer === "admin" || viewer === "internal") && trip.driverProfile ? this.formatDriverProfile(trip.driverProfile) : null,
       conversationSummary: (() => {

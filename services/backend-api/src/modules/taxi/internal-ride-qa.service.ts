@@ -4,7 +4,7 @@ import { randomBytes, randomUUID } from "crypto";
 import { CaptainWorkStateService } from "../../common/services/captain-work-state.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
-import { APPROVED_QA_CAPTAIN, InternalRideQaPolicy, QA_CLEANED, QA_CREATED, QA_ENTITY, QaFixture } from "./internal-ride-qa.policy";
+import { APPROVED_QA_CAPTAIN, InternalRideQaPolicy, QA_CLEANED, QA_CREATED, QA_ENTITY, QaFixture, qaPlaceholderPhone } from "./internal-ride-qa.policy";
 import { RideRealtimeService } from "./ride-realtime.service";
 
 const terminal = [TaxiTripStatus.COMPLETED, TaxiTripStatus.CANCELLED_BY_ADMIN, TaxiTripStatus.CANCELLED_BY_CUSTOMER, TaxiTripStatus.CANCELLED_BY_DRIVER, TaxiTripStatus.EXPIRED];
@@ -32,7 +32,7 @@ export class InternalRideQaService {
       if (captain.captainWorkState?.activeWorkMode || captain.captainWorkState?.desiredDeliveryOnline || captain.captainWorkState?.desiredRideOnline || profile.isAvailableForTaxi || captain.rider?.availabilityStatus !== "OFFLINE" || await tx.taxiTrip.count({ where: { driverProfileId: profile.id, status: { notIn: terminal } } })) throw new ConflictException("QA Captain must have no work and be offline before fixture creation.");
       const marker = randomUUID(), tripId = randomUUID(), expiresAt = new Date(Date.now() + 2 * 60 * 60_000).toISOString();
       // A disabled, unverified, non-login synthetic FK holder; never a real Customer or recipient.
-      const customer = await tx.user.create({ data: { fullName: "INTERNAL QA — NO REAL CUSTOMER", role: "CUSTOMER", accountStatus: "DEACTIVATED", phoneNumber: null, email: null, passwordHash: `!INTERNAL_QA_NO_LOGIN:${randomBytes(32).toString("hex")}`, customerProfile: { create: { referralCode: `INTERNAL-QA-${marker}` } } }, include: { customerProfile: true } });
+      const customer = await tx.user.create({ data: { fullName: "INTERNAL QA — NO REAL CUSTOMER", role: "CUSTOMER", accountStatus: "DEACTIVATED", phoneNumber: qaPlaceholderPhone(windowId), email: null, passwordHash: `!INTERNAL_QA_NO_LOGIN:${randomBytes(32).toString("hex")}`, customerProfile: { create: { referralCode: `INTERNAL-QA-${marker}` } } }, include: { customerProfile: true } });
       const fixture: QaFixture = { marker, windowId, captainUserId: captain.id, driverProfileId: profile.id, customerUserId: customer.id, customerProfileId: customer.customerProfile!.id, expiresAt };
       await tx.taxiTrip.create({ data: { id: tripId, tripReference: `INTERNAL-QA-${marker}`, customerId: fixture.customerProfileId, driverProfileId: profile.id,
         isTestMode: true, status: "REQUESTED", estimatedFareKobo: 0, finalFareKobo: 0, ridePinRequired: false,
@@ -104,7 +104,7 @@ export class InternalRideQaService {
       await tx.customerProfile.delete({ where: { id: fixture.customerProfileId } });
       // Only the disabled identity created for this exact immutable fixture can be removed.
       const identity = await tx.user.findUnique({ where: { id: fixture.customerUserId } });
-      if (!identity || identity.role !== "CUSTOMER" || identity.accountStatus !== "DEACTIVATED" || identity.phoneNumber || identity.email || identity.phoneVerified || identity.deletedAt || !identity.passwordHash.startsWith("!INTERNAL_QA_NO_LOGIN:")) throw new ConflictException("Synthetic FK identity changed; cleanup rolled back.");
+      if (!identity || identity.role !== "CUSTOMER" || identity.accountStatus !== "DEACTIVATED" || identity.phoneNumber !== qaPlaceholderPhone(fixture.windowId) || identity.email || identity.phoneVerified || identity.deletedAt || !identity.passwordHash.startsWith("!INTERNAL_QA_NO_LOGIN:")) throw new ConflictException("Synthetic FK identity changed; cleanup rolled back.");
       await tx.user.delete({ where: { id: fixture.customerUserId } });
       await this.audit(tx, actorId, QA_CLEANED, tripId, { marker: fixture.marker, financialMutations: 0, offline: true });
     }, { isolationLevel: "Serializable" });

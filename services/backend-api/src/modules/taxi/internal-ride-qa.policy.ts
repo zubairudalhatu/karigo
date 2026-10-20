@@ -10,6 +10,13 @@ export const QA_CREATED = "INTERNAL_RIDE_QA_CREATED";
 export const QA_CLEANED = "INTERNAL_RIDE_QA_CLEANED";
 export const QA_ENTITY = "InternalRideQa";
 export const QA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Injective UUID encoding into letters only: normalization can never produce a dialable number.
+// One immutable window owns one disposable placeholder; never reserve a plausible real phone.
+export function qaPlaceholderPhone(windowId: string): string {
+  if (!QA_UUID.test(windowId)) throw new ForbiddenException("Invalid internal QA window.");
+  return "INTERNAL_QA_" + windowId.replace(/-/g, "").toLowerCase()
+    .replace(/[0-9a-f]/g, digit => String.fromCharCode(65 + parseInt(digit, 16)));
+}
 type Db = Prisma.TransactionClient | PrismaService;
 export interface QaFixture {
   marker: string; windowId: string; captainUserId: string; driverProfileId: string;
