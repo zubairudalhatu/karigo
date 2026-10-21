@@ -19,7 +19,7 @@ import { taxiApi } from "../../src/api/taxi.api";
 import { CaptainRideWorkspace } from "../../src/components/captain-ride-workspace";
 import { CaptainHomeCockpit, CaptainHomeSkeleton } from "../../src/components/captain-home-cockpit";
 import { disableActiveWorkBackgroundLocation, enableActiveWorkBackgroundLocation, hasAcceptedActiveWork } from "../../src/lib/background-location";
-import { foregroundRideTracePoint } from "../../src/lib/ride-trace-buffer";
+import { foregroundRideTracePoint, isTraceSampleInScope, readActiveWorkTraceScope, traceUploadContext } from "../../src/lib/ride-trace-buffer";
 import { Button, Card, Message, NavLink, Protected, Screen, StatusBadge, ui } from "../../src/components/ui";
 import { useAuth } from "../../src/contexts/auth-context";
 import { CaptainLocation, CaptainLocationError, captainLocationErrorMessage, distanceMeters, requestCaptainForegroundLocation, toOperationalLocationPayload, watchCaptainForegroundLocation } from "../../src/lib/location";
@@ -528,6 +528,7 @@ export default function RiderDashboard() {
   }, [isForeground, workState?.activeWorkMode, workState?.desiredDeliveryOnline, workState?.desiredRideOnline]);
 
   useEffect(() => {
+    if (!workState) return; // Unknown bootstrap state is not a terminal assignment.
     if (hasAcceptedActiveWork(workState)) {
       void enableActiveWorkBackgroundLocation().catch(() => undefined);
     } else {
@@ -584,7 +585,13 @@ export default function RiderDashboard() {
     uploadInFlightRef.current = true;
     setLocationUpdating(true);
     try {
-      const updated = await captainAccessApi.updateAvailability({ ...toOperationalLocationPayload(location), tracePoints: [foregroundRideTracePoint(location)] });
+      const scope = await readActiveWorkTraceScope();
+      const scoped = scope && scope.captainUserId === user?.id && scope.mode === currentWorkState.activeWorkMode &&
+        scope.workId === (scope.mode === "RIDE" ? currentWorkState.activeRideTripId : currentWorkState.activeDeliveryAssignmentId);
+      if (scoped && !isTraceSampleInScope(location, scope)) return;
+      const updated = await captainAccessApi.updateAvailability({ ...toOperationalLocationPayload(location),
+        tracePoints: scoped ? [foregroundRideTracePoint(location)] : [],
+        ...(scoped ? { traceContext: traceUploadContext(scope) } : {}) });
       lastUploadedLocationRef.current = { location, uploadedAt: now };
       failureCountRef.current = 0;
       backoffUntilRef.current = 0;

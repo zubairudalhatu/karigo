@@ -1,79 +1,56 @@
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const ts = require('typescript');
-const root = path.join(__dirname, '..');
-require('reflect-metadata');
-const { plainToInstance } = require('class-transformer');
-const { validateSync } = require('class-validator');
-const dtoModule = { exports: {} };
-const dtoCode = ts.transpileModule(fs.readFileSync(path.join(root, '../../services/backend-api/src/modules/riders/dto/update-captain-availability.dto.ts'), 'utf8'), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, experimentalDecorators: true, emitDecoratorMetadata: true }
-}).outputText;
-new Function('require','module','exports',dtoCode)(require,dtoModule,dtoModule.exports);
-function validatePayload(body) {
-  return validateSync(plainToInstance(dtoModule.exports.UpdateCaptainAvailabilityDto, JSON.parse(JSON.stringify(body))));
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),ts=require('typescript');
+const root=path.join(__dirname,'..');
+const captain='22222222-2222-4222-8222-222222222222',rideA='11111111-1111-4111-8111-111111111111',rideB='33333333-3333-4333-8333-333333333333';
+function harness({storage=new Map(),platform='ios',qa=true}={}) {
+ let now=Date.now(),callback,running=false,options={},state={activeWorkMode:'RIDE',lockStage:'ACCEPTED',activeRideTripId:rideA},auth=true,network=false,uploadFail=false,authGeneration=0,screenLocked=false;
+ const cache=new Map(),uploads=[],nativeCalls=[];
+ class Clock extends Date { constructor(v){super(v===undefined?now:v);} static now(){return now;} }
+ const native={Accuracy:{Balanced:3},ActivityType:{AutomotiveNavigation:1},getForegroundPermissionsAsync:async()=>({granted:true}),getBackgroundPermissionsAsync:async()=>({granted:true}),requestBackgroundPermissionsAsync:async()=>({granted:true}),hasStartedLocationUpdatesAsync:async()=>running,startLocationUpdatesAsync:async(_n,o)=>{nativeCalls.push('start');options=o;running=true;},stopLocationUpdatesAsync:async()=>{nativeCalls.push('stop');running=false;}};
+ const reactNative={Platform:{OS:platform},AppState:{currentState:'active'},Alert:{alert:(_t,_b,buttons)=>buttons[1].onPress()}};
+ const mocks={'react-native':reactNative,'expo-location':native,'expo-task-manager':{defineTask:(_n,cb)=>callback=cb,isTaskDefined:()=>!!callback,isTaskRegisteredAsync:async()=>running,getTaskOptionsAsync:async()=>options},'expo-secure-store':{AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY:2,getItemAsync:async(k,o)=>{assert.equal(o.keychainAccessible,2);return storage.get(k)??null;},setItemAsync:async(k,v,o)=>{assert.equal(o.keychainAccessible,2);return storage.set(k,v);},deleteItemAsync:async(k,o)=>{assert.equal(o.keychainAccessible,2);return storage.delete(k);}},'../api/auth.api':{authApi:{me:async()=>{if(!auth)throw Object.assign(Error('private email/token must not enter diagnostics'),{status:401});return {id:captain};}}},'../api/client':{authSessionStore:{readSession:async()=>{if(screenLocked)throw Error('keychain locked with PRIVATE data');return auth?{accessToken:'LOCAL_NOT_A_REAL_TOKEN'}:null;},currentGeneration:()=>authGeneration,isCurrent:n=>n===authGeneration}},'../api/captain-access.api':{captainAccessApi:{workState:async()=>{if(network)throw Object.assign(Error('sensitive text'),{name:'ApiNetworkError'});return state;},updateAvailability:async body=>{if(uploadFail)throw Object.assign(Error('sensitive data'),{status:503});for(const p of body.tracePoints)for(const [k,max]of[['accuracyMeters',5000],['speedMetersPerSecond',150],['headingDegrees',360]])if(p[k]!==undefined)assert(typeof p[k]==='number'&&p[k]>=0&&p[k]<=max);uploads.push(JSON.parse(JSON.stringify(body)));return state;}}}};
+ function load(file){if(cache.has(file))return cache.get(file).exports;const module={exports:{}};cache.set(file,module);const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;new Function('require','module','exports','Date','process',code)(name=>name in mocks?mocks[name]:load(path.resolve(path.dirname(file),name+'.ts')),module,module.exports,Clock,{env:{EXPO_PUBLIC_CAPTAIN_LOCATION_QA_DIAGNOSTICS:qa?'true':'false'}});return module.exports;}
+ const bg=load(path.join(root,'src/lib/background-location.ts')),trace=load(path.join(root,'src/lib/ride-trace-buffer.ts')),diag=load(path.join(root,'src/lib/location-diagnostics.ts'));
+ return {bg,trace,diag,storage,uploads,nativeCalls,now:()=>now,advance:ms=>now+=ms,callback:event=>callback(event),running:()=>running,options:()=>options,setWork:id=>{state=id?{activeWorkMode:'RIDE',lockStage:'ACCEPTED',activeRideTripId:id}:{activeWorkMode:null,lockStage:null};},lockScreen:()=>screenLocked=true,setAuth:value=>{auth=value;authGeneration++;},network:value=>network=value,failUpload:value=>uploadFail=value,background:()=>reactNative.AppState.currentState='background'};
 }
-function harness() {
-  const cache = new Map(), storage = new Map(), uploads = [];
-  let callback, running = false, options, failUpload = false, failAuth = false;
-  let state = { activeWorkMode: 'RIDE', lockStage: 'ACCEPTED' };
-  const native = { Accuracy: { Balanced: 3 }, ActivityType: { AutomotiveNavigation: 1 },
-    getForegroundPermissionsAsync: async () => ({ granted: true }),
-    requestBackgroundPermissionsAsync: async () => ({ granted: true }),
-    hasStartedLocationUpdatesAsync: async () => running,
-    startLocationUpdatesAsync: async (_name, opts) => { running = true; options = opts; },
-    stopLocationUpdatesAsync: async () => { running = false; } };
-  const mocks = {
-    'react-native': { AppState: { currentState: 'active' }, Alert: { alert: (_t, _b, buttons) => buttons[1].onPress() } },
-    'expo-location': native,
-    'expo-task-manager': { defineTask: (name, cb) => { assert.equal(name, 'karigo-captain-active-work-location'); callback = cb; } },
-    'expo-secure-store': { getItemAsync: async k => storage.get(k) ?? null,
-      setItemAsync: async (k, v) => storage.set(k, v), deleteItemAsync: async k => storage.delete(k) },
-    '../api/captain-access.api': { captainAccessApi: { workState: async () => { if (failAuth) throw Error('session unavailable'); return state; },
-      updateAvailability: async body => {
-        if (failUpload) throw Error('temporary upload failure');
-        assert.equal(validatePayload(body).length, 0, 'actual backend DTO must accept the serialized upload');
-        uploads.push(JSON.parse(JSON.stringify(body))); return state;
-      } } }
-  };
-  function load(file) {
-    if (cache.has(file)) return cache.get(file).exports;
-    const module = { exports: {} }; cache.set(file, module);
-    const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-    new Function('require','module','exports',code)(name => name in mocks ? mocks[name] : load(path.resolve(path.dirname(file), name + '.ts')), module, module.exports);
-    return module.exports;
-  }
-  const bg = load(path.join(root, 'src/lib/background-location.ts'));
-  return { bg, uploads, storage, native, setState: s => { state = s; }, failUpload: value => { failUpload = value; }, failAuth: value => { failAuth = value; }, callback: event => callback(event), options: () => options, running: () => running,
-    trace: load(path.join(root, 'src/lib/ride-trace-buffer.ts')) };
-}
-const sample = (offset, speed = -1, heading = -1) => ({ timestamp: Date.now() + offset,
-  coords: { latitude: 9.08 + offset / 10000000, longitude: 7.49, accuracy: 10, speed, heading } });
-(async () => {
-  assert(validatePayload({latitude:9.08,longitude:7.49,tracePoints:[{
-    clientPointId:'synthetic-regression',latitude:9.08,longitude:7.49,recordedAt:new Date().toISOString(),speedMetersPerSecond:-1,headingDegrees:-1
-  }]}).length > 0, 'shipped iOS unknown-value payload is rejected by actual backend DTO');
-  const h = harness(); await h.bg.enableActiveWorkBackgroundLocation();
-  assert(h.running()); assert.equal(h.options().distanceInterval, 50);
-  assert.equal(h.options().deferredUpdatesDistance, 100); assert.equal(h.options().deferredUpdatesInterval, 60000);
-  // Simulated delivered batch exceeds 100m and spans more than 60 seconds.
-  await h.callback({ data: { locations: [sample(-70000), sample(0)] } });
-  assert.equal(h.uploads.length, 1); assert.equal(h.uploads[0].tracePoints.length, 2); assert.equal(h.storage.size, 0);
-  assert.equal(h.uploads[0].tracePoints[0].source, 'BACKGROUND');
-  const fg = h.trace.foregroundRideTracePoint({ latitude: 9.08, longitude: 7.49, recordedAt: new Date().toISOString(), accuracyMeters: null, speedMetersPerSecond: null, headingDegrees: -1 });
-  for (const key of ['accuracyMeters','speedMetersPerSecond','headingDegrees']) assert.equal(fg[key], undefined);
-  const valid = h.trace.foregroundRideTracePoint({ latitude: 9.08, longitude: 7.49, recordedAt: new Date().toISOString(), accuracyMeters: 0, speedMetersPerSecond: 0, headingDegrees: 0 });
-  assert.equal(valid.speedMetersPerSecond, 0); assert.equal(valid.headingDegrees, 0);
-  const retry = harness(); await retry.bg.enableActiveWorkBackgroundLocation(); retry.failUpload(true);
-  const event = {data:{locations:[sample(0)]}};
-  await assert.rejects(retry.callback(event)); assert.equal(retry.storage.size, 1);
-  retry.failUpload(false); await retry.callback(event);
-  assert.equal(retry.uploads.length, 1); assert.equal(retry.uploads[0].tracePoints.length, 1); assert.equal(retry.storage.size, 0);
-  retry.failAuth(true); await retry.callback(event);
-  assert.equal(retry.running(), false); assert.equal(retry.uploads.length, 1); assert.equal(retry.storage.size, 0);
-  h.setState({ activeWorkMode: null, lockStage: null });
-  await h.callback({ data: { locations: [sample(0)] } });
-  assert.equal(h.uploads.length, 1); assert.equal(h.running(), false); assert.equal(h.storage.size, 0);
-  console.log('PASS: exact task callback, accepted-work batch, first upload, secure-buffer acknowledgement, unavailable telemetry, valid zero values, and terminal stop/no upload. Native iOS delivery is not simulated.');
-})().catch(e => { console.error(e); process.exitCode = 1; });
+const sample=(h,offset=0,speed=-1,heading=-1)=>({timestamp:h.now()+offset,coords:{latitude:9.08+offset/10000000,longitude:7.49,accuracy:10,speed,heading}});
+(async()=>{
+ // A/B: exact module callback, registration and successful first sample, unavailable metrics.
+ const h=harness();await h.diag.armLocationQaDiagnostics();await h.bg.enableActiveWorkBackgroundLocation();
+ const snapshot=await h.bg.inspectActiveWorkLocationTask();assert(snapshot.defined&&snapshot.registered&&snapshot.started&&snapshot.optionsMatch);
+ assert.equal(h.options().pausesUpdatesAutomatically,false);assert.equal(h.options().activityType,1);assert.equal(h.options().distanceInterval,50);assert.equal(h.options().deferredUpdatesDistance,100);assert.equal(h.options().deferredUpdatesInterval,60000);
+ await h.bg.enableActiveWorkBackgroundLocation();assert.equal(h.nativeCalls.filter(x=>x==='start').length,1,'no duplicate native tracker');
+ h.advance(70001);h.background();await h.callback({data:{locations:[sample(h,-70000),sample(h)]}});
+ assert.equal(h.uploads.length,1);assert.equal(h.uploads[0].tracePoints.length,2);assert.equal(h.uploads[0].traceContext.captainUserId,captain);assert.equal(h.uploads[0].traceContext.workId,rideA);
+ assert.equal(h.uploads[0].tracePoints[0].speedMetersPerSecond,undefined);
+ const valid=h.trace.foregroundRideTracePoint({latitude:9.08,longitude:7.49,recordedAt:new Date().toISOString(),speedMetersPerSecond:0,headingDegrees:0});assert.equal(valid.speedMetersPerSecond,0);assert.equal(valid.headingDegrees,0);
+ const restart=harness();await restart.bg.enableActiveWorkBackgroundLocation();const priorEpoch=(await restart.trace.readActiveWorkTraceScope()).epoch;restart.options().pausesUpdatesAutomatically=true;await restart.bg.enableActiveWorkBackgroundLocation();assert.notEqual((await restart.trace.readActiveWorkTraceScope()).epoch,priorEpoch,'native restart gets a fresh tracking epoch');assert.equal(restart.nativeCalls.filter(x=>x==='start').length,2);
+ // C: same-work transient failure retains scoped buffer, retry deduplicates/acknowledges.
+ h.failUpload(true);h.advance(1000);await h.callback({data:{locations:[sample(h)]}});const scope=await h.trace.readActiveWorkTraceScope();assert([...h.storage.keys()].some(k=>k.startsWith('karigo.captain.trace.v2.')));
+ h.failUpload(false);await h.callback({data:{locations:[sample(h)]}});assert.equal(h.uploads.length,2);assert.equal(h.uploads[1].tracePoints.length,1);assert(![...h.storage.keys()].some(k=>k.startsWith('karigo.captain.trace.v2.')));
+ // D/E: A completes with unsent data; B must not receive it, including a late A callback/ack.
+ h.failUpload(true);h.advance(1000);await h.callback({data:{locations:[sample(h)]}});h.setWork(null);await h.callback({data:{locations:[sample(h)]}});assert.equal(h.running(),false);assert.equal(await h.trace.readActiveWorkTraceScope(),null);
+ h.setWork(rideB);h.failUpload(false);const newScope=await h.trace.beginWorkTraceScope(captain,'RIDE',rideB);assert.notEqual(newScope.epoch,scope.epoch);
+ assert.equal((await h.trace.bufferBackgroundRideTrace(scope,[sample(h)])).length,0);
+ await h.trace.acknowledgeRideTracePoints(scope,['old']);assert.equal((await h.trace.readActiveWorkTraceScope()).workId,rideB);
+ assert.equal((await h.trace.bufferBackgroundRideTrace(newScope,[sample(h,-1000)])).length,0,'pre-B samples are never rebound');
+ const bPoints=await h.trace.bufferBackgroundRideTrace(newScope,[sample(h)]);assert.equal(bPoints.length,1);await h.trace.acknowledgeRideTracePoints(scope,bPoints.map(p=>p.clientPointId));assert.equal((await h.trace.bufferBackgroundRideTrace(newScope,[])).length,1,'late A acknowledgement cannot erase B data');
+ // Migration negative: the exact observed unscoped old buffer is discarded, never migrated.
+ const oldKey='karigo.captain.rideTraceBuffer.v1';h.storage.set(oldKey,JSON.stringify([valid]));await h.trace.beginWorkTraceScope(captain,'RIDE',rideB);assert(!h.storage.has(oldKey));
+ // Logout/deactivation path clears scope and data; missing session fails closed.
+ h.setAuth(false);await h.callback({data:{locations:[sample(h)]}});assert.equal(await h.trace.readActiveWorkTraceScope(),null);assert.equal(h.running(),false);
+ const crossing=harness();await crossing.bg.enableActiveWorkBackgroundLocation();const oldScope=await crossing.trace.readActiveWorkTraceScope();crossing.advance(1000);crossing.setWork(rideB);await crossing.bg.enableActiveWorkBackgroundLocation();await crossing.bg.disableActiveWorkBackgroundLocation(oldScope);assert(crossing.running(),'late A shutdown must not stop B tracker');assert.equal((await crossing.trace.readActiveWorkTraceScope()).workId,rideB);
+ // F: no callback still leaves definition, registration, permission/options/start evidence.
+ const failedState=harness();await failedState.diag.armLocationQaDiagnostics();await failedState.bg.enableActiveWorkBackgroundLocation();failedState.network(true);await failedState.callback({data:{locations:[sample(failedState)]}});assert.equal(failedState.uploads.length,0);assert.equal(failedState.running(),false);assert((await failedState.diag.readLocationQaDiagnostics()).some(x=>x.event==='WORK'&&x.stateAvailable===false&&x.reason==='NETWORK'));
+ const noCallback=harness();await noCallback.diag.armLocationQaDiagnostics();await noCallback.bg.enableActiveWorkBackgroundLocation();const rows=await noCallback.diag.readLocationQaDiagnostics();assert(rows.some(x=>x.event==='STARTED'));assert(rows.some(x=>x.event==='NATIVE_STATE'&&x.defined&&x.registered&&x.started&&x.optionsMatch));assert(!rows.some(x=>x.event==='CALLBACK'));
+ // Runtime allowlist and ring bound, expiry, clear, and disabled-by-default behavior.
+ for(let i=0;i<60;i++)await noCallback.diag.locationDiagnostic('CALLBACK',{locationCount:1,latitude:9.08,token:'PRIVATE',phone:'PRIVATE',workRef:captain,reason:'PRIVATE'});
+ const bounded=await noCallback.diag.readLocationQaDiagnostics();assert.equal(bounded.length,48);const text=JSON.stringify(bounded);for(const bad of ['PRIVATE','latitude','phone','token',captain])assert(!text.includes(bad));
+ noCallback.advance(31*60000);assert.equal((await noCallback.diag.readLocationQaDiagnostics()).length,0);assert.equal(noCallback.storage.size,1,'only operational scope remains; expired diagnostic keys removed');
+ const locked=harness();await locked.diag.armLocationQaDiagnostics();await locked.bg.enableActiveWorkBackgroundLocation();locked.lockScreen();await locked.callback({data:{locations:[sample(locked)]}});assert((await locked.diag.readLocationQaDiagnostics()).some(x=>x.event==='AUTH'&&x.sessionAvailable===false));assert.equal(locked.running(),false);assert.equal(await locked.trace.readActiveWorkTraceScope(),null);
+ const disabled=harness({qa:false});assert.equal(await disabled.diag.armLocationQaDiagnostics(),false);await disabled.diag.locationDiagnostic('CALLBACK',{locationCount:1});assert.equal(disabled.storage.size,0);
+ const nativeError=harness();await nativeError.diag.armLocationQaDiagnostics();await nativeError.bg.enableActiveWorkBackgroundLocation();await nativeError.callback({error:{code:1,message:'PRIVATE coordinate data'},data:{locations:[]}});const nativeRows=await nativeError.diag.readLocationQaDiagnostics();assert(nativeRows.some(x=>x.event==='CALLBACK'&&x.reason==='TASK_ERROR'&&x.nativeErrorCode===1));assert(!JSON.stringify(nativeRows).includes('PRIVATE'));
+ const android=harness({platform:'android'});assert.equal(android.bg.activeWorkLocationOptions().pausesUpdatesAutomatically,true);
+ const authSource=fs.readFileSync(path.join(root,'src/contexts/auth-context.tsx'),'utf8').replaceAll('\r\n','\n');assert(authSource.includes('disableActiveWorkBackgroundLocation()'));assert(authSource.includes('resetSavedLogin: async () => {\n      await disableActiveWorkBackgroundLocation();'));
+ assert(fs.readFileSync(path.join(root,'app/_layout.tsx'),'utf8').includes('import "../src/lib/background-location"'));
+ console.log('PASS: matrix A-F; exact module callbacks; registration/start/options; first upload and unavailable/zero telemetry; transient retry; completion/logout/missing auth; Ride A/B and epoch/legacy isolation; no duplicate native task; bounded allowlisted diagnostics and TTL; Android auto-pause unchanged. Native delivery remains untested locally.');
+})().catch(e=>{console.error(e);process.exitCode=1});

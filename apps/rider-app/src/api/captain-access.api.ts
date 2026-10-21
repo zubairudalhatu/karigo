@@ -133,6 +133,7 @@ export const captainAccessApi = {
   resolve: (options?: ApiRequestOptions) => api.get<CaptainAccess>("captain/access", captainGetOptions(options)),
   workState: (options?: ApiRequestOptions) => api.get<CaptainWorkState>("captain/work-state", captainGetOptions(options)),
   updateAvailability: (body: {
+    traceContext?: { captainUserId: string; workId: string; mode: "RIDE" | "DELIVERY"; epoch: string; startedAt: string };
     deliveryOnline?: boolean;
     rideOnline?: boolean;
     latitude?: number;

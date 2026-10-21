@@ -5,14 +5,14 @@ const ts = require('typescript');
 const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/lib/background-location.ts'), 'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 function harness(options={}) {
   const calls=[]; let task, buttons, running=Boolean(options.running);
-  let state={activeWorkMode:'RIDE',lockStage:'ACCEPTED'};
-  const location={Accuracy:{Balanced:3},ActivityType:{AutomotiveNavigation:3},getForegroundPermissionsAsync:async()=>({granted:true}),requestBackgroundPermissionsAsync:async()=>{calls.push('permission');return {granted:options.permission!==false}},hasStartedLocationUpdatesAsync:async()=>running,startLocationUpdatesAsync:async()=>{calls.push('start'); if(options.start)await options.start(); running=true},stopLocationUpdatesAsync:async()=>{calls.push('stop');running=false}};
+  let state={activeWorkMode:'RIDE',lockStage:'ACCEPTED',activeRideTripId:'11111111-1111-4111-8111-111111111111'}; let taskOptions={}; const scope={captainUserId:'22222222-2222-4222-8222-222222222222',workId:state.activeRideTripId,mode:'RIDE',epoch:'abcdefgh_abcdefgh',startedAt:new Date().toISOString()};
+  const location={Accuracy:{Balanced:3},ActivityType:{AutomotiveNavigation:3},getBackgroundPermissionsAsync:async()=>({granted:true}),getForegroundPermissionsAsync:async()=>({granted:true}),requestBackgroundPermissionsAsync:async()=>{calls.push('permission');return {granted:options.permission!==false}},hasStartedLocationUpdatesAsync:async()=>running,startLocationUpdatesAsync:async(_name,opts)=>{taskOptions=opts;calls.push('start'); if(options.start)await options.start(); running=true},stopLocationUpdatesAsync:async()=>{calls.push('stop');running=false}};
   const api={workState:async()=>{if(options.workState) return options.workState();return state},updateAvailability:async()=>{calls.push('upload');return state}};
   const dependencies={
-    'react-native':{AppState:{currentState:'active'},Alert:{alert:(_title,_body,actions)=>{calls.push('disclosure');buttons=actions;if(options.consent!==undefined) actions[options.consent?1:0].onPress()}}},
-    'expo-location':location,'expo-task-manager':{defineTask:(_name,callback)=>task=callback},
+    'react-native':{Platform:{OS:'ios'},AppState:{currentState:'active'},Alert:{alert:(_title,_body,actions)=>{calls.push('disclosure');buttons=actions;if(options.consent!==undefined) actions[options.consent?1:0].onPress()}}},
+    'expo-location':location,'expo-task-manager':{defineTask:(_name,callback)=>task=callback,isTaskDefined:()=>true,isTaskRegisteredAsync:async()=>running,getTaskOptionsAsync:async()=>taskOptions},
     '../api/captain-access.api':{captainAccessApi:api},'./location':{toOperationalLocationPayload:x=>x},
-    './ride-trace-buffer':{bufferBackgroundRideTrace:async()=>{calls.push('buffer');return []},acknowledgeRideTracePoints:async()=>{}}
+    '../api/auth.api':{authApi:{me:async()=>({id:scope.captainUserId})}},'../api/client':{authSessionStore:{currentGeneration:()=>0,isCurrent:()=>true,readSession:async()=>({accessToken:'local-only'})}},'./location-diagnostics':{locationDiagnostic:async()=>{},diagnosticFailure:()=>({reason:'UNKNOWN'})},'./ride-trace-buffer':{beginWorkTraceScope:async()=>scope,readActiveWorkTraceScope:async()=>scope,clearActiveWorkTraceBuffer:async()=>{},sameTraceScope:(a,b)=>a===b,traceUploadContext:x=>x,bufferBackgroundRideTrace:async()=>{calls.push('buffer');return []},acknowledgeRideTracePoints:async()=>{}}
   };
   const module={exports:{}}; new Function('require','module','exports',code)(name=>{if(!(name in dependencies))throw Error(name);return dependencies[name]},module,module.exports);
   return {module:module.exports,calls,setState:s=>{state=s},task:()=>task,consent:()=>buttons[1].onPress(),running:()=>running};

@@ -68,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       setUser(null);
+      void disableActiveWorkBackgroundLocation().catch(() => undefined);
       setSessionMessage("Your session has expired. Please sign in again.");
     });
     let active = true;
@@ -86,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const session = await authSessionStore.readSession();
         if (!session) {
+          await disableActiveWorkBackgroundLocation().catch(() => undefined);
           if (active && authSessionStore.isCurrent(generation)) setLoading(false);
           return;
         }
@@ -97,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSessionMessage("");
           setSessionRepairRequired(false);
         } else {
+          await disableActiveWorkBackgroundLocation().catch(() => undefined);
           await authSessionStore.clearSession(generation);
           setUser(null);
           setSessionMessage("This account cannot use the Captain app.");
@@ -106,11 +109,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         if (error instanceof SessionCorruptionError) {
+          await disableActiveWorkBackgroundLocation().catch(() => undefined);
           setUser(null);
           setSessionRepairRequired(true);
           setSessionMessage("Your saved Captain login could not be read safely. Reset saved login, then sign in again.");
           logMobileAuthDiagnostic("captain", "bootstrap_session_repair_required", { generation });
         } else if (isAuthStatus(error)) {
+          await disableActiveWorkBackgroundLocation().catch(() => undefined);
           await authSessionStore.clearSession(generation);
           setUser(null);
           setSessionMessage("Your session has expired. Please sign in again.");
@@ -185,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setBiometricEnabledState(true);
     },
     resetSavedLogin: async () => {
+      await disableActiveWorkBackgroundLocation();
       await authSessionStore.resetSavedLogin();
       setUser(null);
       setSessionRepairRequired(false);

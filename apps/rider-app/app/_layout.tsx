@@ -1,8 +1,8 @@
+import "../src/lib/background-location";
 import { Stack } from "expo-router";
 import { brand } from "@karigo/config";
 import { AuthProvider } from "../src/contexts/auth-context";
 import { CaptainBottomNav } from "../src/components/rider-navigation";
-import "../src/lib/background-location";
 import { RideCommunicationHost } from "../src/components/ride-communication-host";
 
 const hiddenHeader = {
