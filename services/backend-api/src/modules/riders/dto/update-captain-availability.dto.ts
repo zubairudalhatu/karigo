@@ -1,5 +1,13 @@
 import { Type } from "class-transformer";
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsISO8601, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsISO8601, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateNested } from "class-validator";
+
+export class CaptainTraceContextDto {
+  @IsUUID() captainUserId!: string;
+  @IsUUID() workId!: string;
+  @IsIn(["RIDE", "DELIVERY"]) mode!: "RIDE" | "DELIVERY";
+  @Matches(/^[a-z0-9]{8,20}_[a-z0-9]{8,20}$/) epoch!: string;
+  @IsISO8601() startedAt!: string;
+}
 
 export class CaptainRideTracePointDto {
   @IsString()
@@ -29,6 +37,8 @@ export class CaptainRideTracePointDto {
 }
 
 export class UpdateCaptainAvailabilityDto {
+  @IsOptional() @ValidateNested() @Type(() => CaptainTraceContextDto)
+  traceContext?: CaptainTraceContextDto;
   @IsOptional()
   @IsBoolean()
   deliveryOnline?: boolean;

@@ -40,6 +40,7 @@ type WorkStateUser = Prisma.UserGetPayload<{
 }>;
 
 export interface CaptainAvailabilityUpdate {
+  traceContext?: { captainUserId: string; workId: string; mode: "RIDE" | "DELIVERY"; epoch: string; startedAt: string };
   deliveryOnline?: boolean;
   rideOnline?: boolean;
   latitude?: number;
@@ -105,6 +106,7 @@ export class CaptainWorkStateService {
     const user = await this.loadUser(userId);
     const state = await this.ensureState(this.prisma, userId, user);
     const locationOnly = dto.deliveryOnline === undefined && dto.rideOnline === undefined && this.hasValidLocation(dto);
+    if (dto.traceContext && !locationOnly) throw new BadRequestException("Trace context is valid only for a location-only update.");
     if (locationOnly) {
       if (state.activeRideTripId) await this.internalQa?.assertTrip(state.activeRideTripId, userId);
       return this.updateLocationOnly(userId, user, dto);
@@ -193,6 +195,20 @@ export class CaptainWorkStateService {
       throw new BadRequestException("Captain activation is required before readiness location can be verified.");
     }
     await this.prisma.$transaction(async (tx) => {
+      if (dto.traceContext) {
+        const context = dto.traceContext;
+        // Serialize with assignment transitions before writing any location or trace.
+        await tx.$queryRaw(Prisma.sql`SELECT id FROM captain_work_states WHERE "userId" = ${userId}::uuid FOR UPDATE`);
+        const current = await tx.captainWorkState.findUnique({ where: { userId } });
+        const currentId = current?.activeWorkMode === CaptainWorkMode.RIDE ? current.activeRideTripId : current?.activeDeliveryAssignmentId;
+        const start = Date.parse(context.startedAt);
+        if (context.captainUserId !== userId || current?.activeWorkMode !== context.mode || currentId !== context.workId ||
+          (current?.lockStage !== CaptainWorkLockStage.ACCEPTED && current?.lockStage !== CaptainWorkLockStage.IN_PROGRESS) ||
+          !Number.isFinite(start) || start > Date.now() + 30_000 ||
+          dto.tracePoints?.some(p => !Number.isFinite(Date.parse(p.recordedAt)) || Date.parse(p.recordedAt) < start || Date.parse(p.recordedAt) > Date.now() + 30_000 || Date.parse(p.recordedAt) < Date.now() - 15 * 60_000)) {
+          throw new ConflictException({ message: "Active work changed; discard the previous location buffer.", error_code: "TRACE_WORK_CONTEXT_CHANGED" });
+        }
+      }
       const now = new Date();
       await tx.captainWorkState.update({
         where: { userId },
@@ -222,7 +238,7 @@ export class CaptainWorkStateService {
           }
         });
       }
-      const activeRideTripId = user.captainWorkState?.activeWorkMode === CaptainWorkMode.RIDE
+      const activeRideTripId = dto.traceContext ? (dto.traceContext.mode === "RIDE" ? dto.traceContext.workId : null) : user.captainWorkState?.activeWorkMode === CaptainWorkMode.RIDE
         ? user.captainWorkState.activeRideTripId
         : null;
       if (activeRideTripId && dto.tracePoints?.length) {

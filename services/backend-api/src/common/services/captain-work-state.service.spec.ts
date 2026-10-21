@@ -231,6 +231,49 @@ describe("CaptainWorkStateService", () => {
     expect(audit.record).not.toHaveBeenCalled();
   });
 
+  it.each(["RIDE", "DELIVERY"] as const)("atomically accepts a correctly bound %s trace without changing availability", async mode => {
+    const user = userWithModes({ activeWorkMode: mode as CaptainWorkMode });
+    const tx = { $queryRaw: jest.fn().mockResolvedValue([{ id: "work-state" }]),
+      captainWorkState: { findUnique: jest.fn().mockResolvedValue(user.captainWorkState), update: jest.fn() },
+      rider: { update: jest.fn() }, taxiDriverProfile: { update: jest.fn() }, taxiRideTracePoint: { createMany: jest.fn() } };
+    prisma.user.findUnique.mockResolvedValue(user);
+    prisma.captainWorkState.findUnique.mockResolvedValue(user.captainWorkState);
+    prisma.$transaction.mockImplementationOnce(async (fn: any) => fn(tx));
+    const time = new Date().toISOString();
+    await service.updateAvailability("captain-user", { latitude: 9.08, longitude: 7.49,
+      traceContext: { captainUserId: "captain-user", workId: mode === "RIDE" ? "ride-1" : "delivery-1", mode, epoch: "abcdefgh_abcdefgh", startedAt: time },
+      tracePoints: [{ clientPointId: "local-point", latitude: 9.08, longitude: 7.49, recordedAt: time, source: "BACKGROUND" }] });
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.captainWorkState.findUnique).toHaveBeenCalledWith({ where: { userId: "captain-user" } });
+    expect(tx.captainWorkState.update).toHaveBeenCalledWith(expect.objectContaining({ data: { lastLocationAt: expect.any(Date), version: { increment: 1 } } }));
+    if (mode === "RIDE") expect(tx.taxiRideTracePoint.createMany).toHaveBeenCalledWith(expect.objectContaining({ data: [expect.objectContaining({ tripId: "ride-1" })] }));
+    else expect(tx.taxiRideTracePoint.createMany).not.toHaveBeenCalled();
+  });
+
+  it("does not allow a trace context to bypass ordinary availability authorization", async () => {
+    const user=userWithModes({activeWorkMode:CaptainWorkMode.RIDE});
+    prisma.user.findUnique.mockResolvedValue(user); prisma.captainWorkState.findUnique.mockResolvedValue(user.captainWorkState);
+    await expect(service.updateAvailability("captain-user", {rideOnline:true,latitude:9.08,longitude:7.49,
+      traceContext:{captainUserId:"captain-user",workId:"ride-1",mode:"RIDE",epoch:"abcdefgh_abcdefgh",startedAt:new Date().toISOString()}})).rejects.toThrow("Trace context is valid only for a location-only update");
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each(["different-work", "foreign-captain", "completed", "offered", "pre-epoch-sample", "old-sample"])("rejects %s before any trace/location write", async scenario => {
+    const user = userWithModes({ activeWorkMode: CaptainWorkMode.RIDE });
+    const current = { ...user.captainWorkState, ...(scenario === "different-work" ? { activeRideTripId: "ride-B" } : {}),
+      ...(scenario === "completed" ? { activeWorkMode: null, lockStage: null } : {}), ...(scenario === "offered" ? { lockStage: "OFFERED" } : {}) };
+    const tx = { $queryRaw: jest.fn(), captainWorkState: { findUnique: jest.fn().mockResolvedValue(current), update: jest.fn() },
+      rider: { update: jest.fn() }, taxiDriverProfile: { update: jest.fn() }, taxiRideTracePoint: { createMany: jest.fn() } };
+    prisma.user.findUnique.mockResolvedValue(user); prisma.captainWorkState.findUnique.mockResolvedValue(user.captainWorkState);
+    prisma.$transaction.mockImplementationOnce(async (fn: any) => fn(tx));
+    const now = Date.now();
+    await expect(service.updateAvailability("captain-user", { latitude: 9.08, longitude: 7.49,
+      traceContext: { captainUserId: scenario === "foreign-captain" ? "other-user" : "captain-user", workId: "ride-1", mode: "RIDE", epoch: "abcdefgh_abcdefgh", startedAt: new Date(scenario === "old-sample" ? now - 20 * 60_000 : now).toISOString() },
+      tracePoints: [{ clientPointId: "local-point", latitude: 9.08, longitude: 7.49, recordedAt: new Date(scenario === "pre-epoch-sample" ? now-1000 : scenario === "old-sample" ? now-16*60_000 : now).toISOString() }] })).rejects.toThrow("Active work changed");
+    expect(tx.captainWorkState.update).not.toHaveBeenCalled(); expect(tx.rider.update).not.toHaveBeenCalled();
+    expect(tx.taxiDriverProfile.update).not.toHaveBeenCalled(); expect(tx.taxiRideTracePoint.createMany).not.toHaveBeenCalled();
+  });
+
   it("rejects readiness location updates for an account without an approved active Captain profile", async () => {
     const user = userWithModes({
       riderStatus: RiderStatus.PENDING_APPROVAL,
