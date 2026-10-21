@@ -12,11 +12,16 @@ export type CaptainLocation = {
 
 export type CaptainOperationalLocationPayload = Pick<CaptainLocation, "latitude" | "longitude" | "accuracyMeters">;
 
+// Core Location uses negative values for unavailable telemetry; absence is not zero.
+export function optionalLocationMetric(value: number | null | undefined, maximum: number) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= maximum ? value : undefined;
+}
+
 export function toOperationalLocationPayload(location: CaptainLocation): CaptainOperationalLocationPayload {
   return {
     latitude: location.latitude,
     longitude: location.longitude,
-    accuracyMeters: location.accuracyMeters
+    accuracyMeters: optionalLocationMetric(location.accuracyMeters, 5000)
   };
 }
 

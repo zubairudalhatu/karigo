@@ -1,6 +1,6 @@
 import * as Location from "expo-location";
 import * as SecureStore from "expo-secure-store";
-import { CaptainLocation } from "./location";
+import { CaptainLocation, optionalLocationMetric } from "./location";
 
 const TRACE_BUFFER_KEY = "karigo.captain.rideTraceBuffer.v1";
 const MAX_BUFFERED_POINTS = 100;
@@ -20,6 +20,15 @@ function pointId(recordedAt: string, latitude: number, longitude: number) {
   return `${recordedAt}:${latitude.toFixed(6)}:${longitude.toFixed(6)}`;
 }
 
+function normalizeTelemetry(point: BufferedRideTracePoint): BufferedRideTracePoint {
+  return {
+    ...point,
+    accuracyMeters: optionalLocationMetric(point.accuracyMeters, 5000),
+    speedMetersPerSecond: optionalLocationMetric(point.speedMetersPerSecond, 150),
+    headingDegrees: optionalLocationMetric(point.headingDegrees, 360)
+  };
+}
+
 async function load() {
   try {
     const value = await SecureStore.getItemAsync(TRACE_BUFFER_KEY);
@@ -36,7 +45,7 @@ async function save(points: BufferedRideTracePoint[]) {
 }
 
 export function foregroundRideTracePoint(location: CaptainLocation): BufferedRideTracePoint {
-  return {
+  return normalizeTelemetry({
     clientPointId: pointId(location.recordedAt, location.latitude, location.longitude),
     latitude: location.latitude,
     longitude: location.longitude,
@@ -45,12 +54,12 @@ export function foregroundRideTracePoint(location: CaptainLocation): BufferedRid
     headingDegrees: location.headingDegrees,
     recordedAt: location.recordedAt,
     source: "FOREGROUND"
-  };
+  });
 }
 
 export async function bufferBackgroundRideTrace(locations: Location.LocationObject[]) {
   const current = await load();
-  const byId = new Map(current.map((point) => [point.clientPointId, point]));
+  const byId = new Map(current.map((point) => [point.clientPointId, normalizeTelemetry(point)]));
   for (const location of locations) {
     const recordedAt = new Date(location.timestamp).toISOString();
     const point: BufferedRideTracePoint = {
@@ -63,7 +72,7 @@ export async function bufferBackgroundRideTrace(locations: Location.LocationObje
       recordedAt,
       source: "BACKGROUND"
     };
-    byId.set(point.clientPointId, point);
+    byId.set(point.clientPointId, normalizeTelemetry(point));
   }
   const points = [...byId.values()].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt)).slice(-MAX_BUFFERED_POINTS);
   await save(points);
