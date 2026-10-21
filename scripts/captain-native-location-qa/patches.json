@@ -2,11 +2,11 @@
   {
     "file": "expo-location/ios/TaskConsumers/EXLocationTaskConsumer.m",
     "before": "8d046171f52ab7e985c7603a987648a059b6b3a11e94b5346010acac01cff207",
-    "after": "dafa3ebd210cdabcf299b0fe34fff8c4b75db5168d99e23c251cfba743344fc8",
+    "after": "4c8d8041a1b1625e8b9774b9eef9470b7d371c13bb915ec09c85800eaeba5228",
     "edits": [
       [
         "#import <CoreLocation/CLLocationManager.h>",
-        "#import \"KGLocationDiagnostics.h\"\n#import <CoreLocation/CLLocationManager.h>"
+        "#import \"KGLocationDiagnostics.h\"\n#import <CoreLocation/CLError.h>\n#import <CoreLocation/CLLocationManager.h>"
       ],
       [
         "    locationManager.allowsBackgroundLocationUpdates = YES;",
