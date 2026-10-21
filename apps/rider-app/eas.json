@@ -66,6 +66,16 @@
       },
       "extends": "captain-production",
       "node": "22.20.0"
+    },
+    "captain-ios-build2-diagnostic": {
+      "extends": "captain-production-ios",
+      "channel": "captain-ios-native-qa",
+      "env": {
+        "CAPTAIN_IOS_NATIVE_QA": "1",
+        "EXPO_PUBLIC_CAPTAIN_NATIVE_LOCATION_QA": "true",
+        "EXPO_PUBLIC_CAPTAIN_LOCATION_QA_DIAGNOSTICS": "true",
+        "EXPO_USE_SOURCE": "1"
+      }
     }
   },
   "submit": {

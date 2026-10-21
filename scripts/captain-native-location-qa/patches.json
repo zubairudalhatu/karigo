@@ -1,0 +1,103 @@
+[
+  {
+    "file": "expo-location/ios/TaskConsumers/EXLocationTaskConsumer.m",
+    "before": "8d046171f52ab7e985c7603a987648a059b6b3a11e94b5346010acac01cff207",
+    "after": "dafa3ebd210cdabcf299b0fe34fff8c4b75db5168d99e23c251cfba743344fc8",
+    "edits": [
+      [
+        "#import <CoreLocation/CLLocationManager.h>",
+        "#import \"KGLocationDiagnostics.h\"\n#import <CoreLocation/CLLocationManager.h>"
+      ],
+      [
+        "    locationManager.allowsBackgroundLocationUpdates = YES;",
+        "    locationManager.allowsBackgroundLocationUpdates = YES;\n    KGLocationRecord(@\"CONSUMER_REGISTER\", @{@\"allowsBackground\": @(locationManager.allowsBackgroundLocationUpdates)});"
+      ],
+      [
+        "    [locationManager startUpdatingLocation];",
+        "    @try { [locationManager startUpdatingLocation]; } @catch (NSException *exception) {\n      KGLocationRecord(@\"NATIVE_ERROR\", @{@\"reason\": @\"CONSUMER_START_FAILURE\"}); @throw exception;\n    }"
+      ],
+      [
+        "  if (_task != nil && locations.count > 0) {",
+        "  KGLocationRecord(@\"CORELOCATION\", @{@\"count\": @(locations.count), @\"background\": @([[UIApplication sharedApplication] applicationState] != UIApplicationStateActive)});\n  if (_task != nil && locations.count > 0) {"
+      ],
+      [
+        "  [_task executeWithData:nil withError:error];",
+        "  NSString *category = error.code == kCLErrorDenied ? @\"AUTHORIZATION_DENIED\" : error.code == kCLErrorLocationUnknown ? @\"LOCATION_UNAVAILABLE\" : @\"NATIVE_ERROR\";\n  KGLocationRecord(@\"NATIVE_ERROR\", @{@\"reason\": category, @\"errorCode\": @(MAX(0,error.code))});\n  [_task executeWithData:nil withError:error];"
+      ],
+      [
+        "    [self->_locationManager stopUpdatingLocation];",
+        "    KGLocationRecord(@\"CONSUMER_STOP\", @{});\n    [self->_locationManager stopUpdatingLocation];"
+      ],
+      [
+        "  [_task executeWithData:data withError:nil];",
+        "  KGLocationRecord(@\"CONSUMER_EXECUTE\", @{@\"count\": @(_deferredLocations.count)});\n  [_task executeWithData:data withError:nil];"
+      ],
+      [
+        "    // Don't defer location updates when app is in foreground state.",
+        "    KGLocationRecord(@\"BATCH_GATE\", @{@\"buffered\": @(_deferredLocations.count), @\"ready\": @YES, @\"background\": @NO, @\"reason\": @\"BATCH_READY\"});\n    // Don't defer location updates when app is in foreground state."
+      ],
+      [
+        "  return [newestLocation.timestamp timeIntervalSinceDate:oldestLocation.timestamp] >= interval / 1000.0 && _deferredDistance >= distance;",
+        "  // Build2 diagnostic override is native, opt-in, expiring and never changes saved Production task options.\n  BOOL diagnostic = KGLocationDiagnosticsEnabled() && [_task.name isEqualToString:@\"karigo-captain-active-work-location\"];\n  if (diagnostic) { distance = 0; interval = 0; }\n  NSTimeInterval elapsed = [newestLocation.timestamp timeIntervalSinceDate:oldestLocation.timestamp];\n  BOOL timePassed = elapsed >= interval / 1000.0, distancePassed = _deferredDistance >= distance;\n  KGLocationRecord(@\"BATCH_GATE\", @{@\"buffered\": @(_deferredLocations.count), @\"background\": @YES, @\"diagnosticDeferral\": @(diagnostic), @\"elapsedSeconds\": @(MAX(0,elapsed)), @\"distanceBucket\": @(MIN(20, floor(MAX(0,_deferredDistance)/50.0))), @\"timePassed\": @(timePassed), @\"distancePassed\": @(distancePassed), @\"ready\": @(timePassed && distancePassed), @\"reason\": !distancePassed ? @\"WAIT_DISTANCE\" : !timePassed ? @\"WAIT_TIME\" : @\"BATCH_READY\"});\n  return timePassed && distancePassed;"
+      ],
+      [
+        "# pragma mark - internal",
+        "- (void)locationManagerDidChangeAuthorization:(CLLocationManager *)manager\n{\n  CLAuthorizationStatus status = manager.authorizationStatus;\n  if (status == kCLAuthorizationStatusDenied || status == kCLAuthorizationStatusRestricted) {\n    KGLocationRecord(@\"NATIVE_ERROR\", @{@\"denied\": @(status == kCLAuthorizationStatusDenied), @\"restricted\": @(status == kCLAuthorizationStatusRestricted), @\"reason\": status == kCLAuthorizationStatusRestricted ? @\"AUTHORIZATION_RESTRICTED\" : @\"AUTHORIZATION_DENIED\"});\n  }\n}\n\n# pragma mark - internal"
+      ]
+    ]
+  },
+  {
+    "file": "expo-task-manager/ios/EXTaskManager/EXTaskService.m",
+    "before": "7affb6ffbb8d03d73891c9b4252599d330a072a0bb7f1327b7bacf7b33a5efc3",
+    "after": "17be21a25630041f7a5017fe2a0c5aa442594255a6da3749d11ce9bc6a032388",
+    "edits": [
+      [
+        "#import <EXTaskManager/EXTaskService.h>",
+        "#import <EXTaskManager/EXTaskService.h>\n#import \"EXKariGOLocationDiagnostics.h\""
+      ],
+      [
+        "  id<EXTaskManagerInterface> taskManager = [self _taskManagerForAppId:task.appId];",
+        "  id<EXTaskManagerInterface> taskManager = [self _taskManagerForAppId:task.appId];\n  if ([task.name isEqualToString:@\"karigo-captain-active-work-location\"]) {\n    [EXKariGOLocationDiagnostics recordStage:@\"TASK_BEGIN\" fields:@{@\"success\": @(error == nil)}];\n    [EXKariGOLocationDiagnostics recordStage:@\"MANAGER_LOOKUP\" fields:@{@\"managerFound\": @(taskManager != nil)}];\n    if (error) [EXKariGOLocationDiagnostics recordStage:@\"NATIVE_ERROR\" fields:@{@\"reason\": @\"TASK_EXECUTION_FAILURE\"}];\n  }"
+      ],
+      [
+        "  // App record for that app exists, but it's not fully loaded as its task manager is not there yet.",
+        "  if ([task.name isEqualToString:@\"karigo-captain-active-work-location\"]) [EXKariGOLocationDiagnostics recordStage:@\"TASK_QUEUED\" fields:@{}];\n  // App record for that app exists, but it's not fully loaded as its task manager is not there yet."
+      ],
+      [
+        "  id result = response[@\"result\"];",
+        "  if ([task.name isEqualToString:@\"karigo-captain-active-work-location\"]) [EXKariGOLocationDiagnostics recordStage:@\"TASK_COMPLETE\" fields:@{@\"success\": @YES}];\n  id result = response[@\"result\"];"
+      ],
+      [
+        "  id<UMAppLoaderInterface> appLoader = [[UMAppLoaderProvider sharedInstance] createAppLoader:@\"react-native-experience\"];",
+        "  [EXKariGOLocationDiagnostics recordStage:@\"HEADLESS_BEGIN\" fields:@{}];\n  id<UMAppLoaderInterface> appLoader = [[UMAppLoaderProvider sharedInstance] createAppLoader:@\"react-native-experience\"];"
+      ],
+      [
+        "    appRecord = [appLoader loadAppWithUrl:appUrl options:nil callback:^(BOOL success, NSError *error) {",
+        "    appRecord = [appLoader loadAppWithUrl:appUrl options:nil callback:^(BOOL success, NSError *error) {\n      [EXKariGOLocationDiagnostics recordStage:@\"HEADLESS_RESULT\" fields:@{@\"success\": @(success && error == nil)}];"
+      ]
+    ]
+  },
+  {
+    "file": "expo-task-manager/ios/EXTaskManager/EXTaskManager.m",
+    "before": "8de71eacb94f51f57fdfa57c1af0a751953114cf761748836ad87920738e8c1e",
+    "after": "4cde81b66dc2d54666a5f22335a81c24c16f0a3435ffa86ebd84804be4035ecf",
+    "edits": [
+      [
+        "#import <EXTaskManager/EXTaskManager.h>",
+        "#import <EXTaskManager/EXTaskManager.h>\n#import \"EXKariGOLocationDiagnostics.h\""
+      ],
+      [
+        "# pragma mark - EXTaskManagerInterface",
+        "EX_EXPORT_METHOD_AS(karigoNativeLocationQaArm, karigoNativeLocationQaArm:(EXPromiseResolveBlock)resolve reject:(EXPromiseRejectBlock)reject) {\n  resolve(@([EXKariGOLocationDiagnostics arm]));\n}\nEX_EXPORT_METHOD_AS(karigoNativeLocationQaRead, karigoNativeLocationQaRead:(EXPromiseResolveBlock)resolve reject:(EXPromiseRejectBlock)reject) {\n  resolve([EXKariGOLocationDiagnostics read]);\n}\nEX_EXPORT_METHOD_AS(karigoNativeLocationQaClear, karigoNativeLocationQaClear:(EXPromiseResolveBlock)resolve reject:(EXPromiseRejectBlock)reject) {\n  [EXKariGOLocationDiagnostics clear]; resolve(nil);\n}\n\n# pragma mark - EXTaskManagerInterface"
+      ],
+      [
+        "    [_eventEmitter sendEventWithName:EXTaskManagerEventName body:body];",
+        "    if ([body[@\"executionInfo\"][@\"taskName\"] isEqualToString:@\"karigo-captain-active-work-location\"]) [EXKariGOLocationDiagnostics recordStage:@\"JS_EVENT_EMIT\" fields:@{}];\n    @try { [_eventEmitter sendEventWithName:EXTaskManagerEventName body:body]; } @catch (NSException *exception) {\n      [EXKariGOLocationDiagnostics recordStage:@\"NATIVE_ERROR\" fields:@{@\"reason\": @\"TASK_EXECUTION_FAILURE\"}]; @throw exception;\n    }"
+      ],
+      [
+        "    [_eventsQueue addObject:body];",
+        "    if ([body[@\"executionInfo\"][@\"taskName\"] isEqualToString:@\"karigo-captain-active-work-location\"]) [EXKariGOLocationDiagnostics recordStage:@\"JS_EVENT_QUEUED\" fields:@{}];\n    [_eventsQueue addObject:body];"
+      ]
+    ]
+  }
+]

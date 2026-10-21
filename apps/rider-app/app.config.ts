@@ -1,3 +1,5 @@
+if (process.env.CAPTAIN_IOS_NATIVE_QA === "1" && process.env.EAS_BUILD_PLATFORM === "android") throw new Error("Captain native QA profile is iOS-only");
+const captainNativeQa = process.env.CAPTAIN_IOS_NATIVE_QA === "1";
 const isStaging =
   process.env.APP_VARIANT === "staging" ||
   process.env.EAS_BUILD_PROFILE === "rider-staging" ||
@@ -121,7 +123,8 @@ export default ({ config }: ExpoConfigInput) => {
       ...config.ios,
       bundleIdentifier: isStaging ? "com.karigo.rider.staging" : "ng.com.karigo.captain",
       appleTeamId: "6Y4WC7MQB6",
-      buildNumber: "1",
+      buildNumber: captainNativeQa ? "2" : "1",
+      ...(captainNativeQa ? { runtimeVersion: "1.2.0-captain-nativeqa2" } : {}),
       supportsTablet: false,
       entitlements: { ...objectValue(config.ios?.entitlements), "aps-environment": isStaging ? "development" : "production" },
       infoPlist: {
