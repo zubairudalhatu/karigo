@@ -4,6 +4,10 @@
 
 // Diagnostic payloads never contain native locations, task payloads or identifiers.
 // Access is serialized independently of the React Native/JS lifecycle.
+@interface EXKariGOLocationDiagnostics ()
++ (NSMutableDictionary * _Nullable)kg_readStoredState;
+@end
+
 @implementation EXKariGOLocationDiagnostics
 + (NSURL *)file {
   NSURL *base = [[[NSFileManager defaultManager] URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask] firstObject];
@@ -12,7 +16,7 @@
 + (void)erase {
   [[NSFileManager defaultManager] removeItemAtURL:[self file] error:nil];
 }
-+ (NSMutableDictionary *)load {
++ (NSMutableDictionary * _Nullable)kg_readStoredState {
   NSData *data = [NSData dataWithContentsOfURL:[self file]];
   id value = data ? [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:nil] : nil;
   NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
@@ -35,7 +39,7 @@
   return data && [data writeToURL:file options:NSDataWritingAtomic | NSDataWritingFileProtectionCompleteUntilFirstUserAuthentication error:nil];
 }
 + (BOOL)enabled {
-  @synchronized(self) { return [self load] != nil; }
+  @synchronized(self) { return [self kg_readStoredState] != nil; }
 }
 + (BOOL)arm {
   @synchronized(self) {
@@ -46,13 +50,13 @@
 + (void)clear { @synchronized(self) { [self erase]; } }
 + (NSDictionary *)read {
   @synchronized(self) {
-    NSDictionary *state = [self load];
+    NSDictionary *state = [self kg_readStoredState];
     return @{@"enabled": @(state != nil), @"maxEvents": @64, @"retentionSeconds": @1800, @"events": state[@"events"] ?: @[]};
   }
 }
 + (void)recordStage:(NSString *)stage fields:(NSDictionary *)fields {
   @synchronized(self) {
-    NSMutableDictionary *state = [self load]; if (!state) return;
+    NSMutableDictionary *state = [self kg_readStoredState]; if (!state) return;
     NSSet *stages = [NSSet setWithArray:@[@"CORELOCATION", @"CONSUMER_REGISTER", @"CONSUMER_EXECUTE", @"BATCH_GATE", @"NATIVE_ERROR", @"MANAGER_LOOKUP", @"TASK_BEGIN", @"TASK_QUEUED", @"HEADLESS_BEGIN", @"HEADLESS_RESULT", @"JS_EVENT_EMIT", @"JS_EVENT_QUEUED", @"TASK_COMPLETE", @"CONSUMER_STOP"]];
     if (![stages containsObject:stage]) return;
     NSMutableDictionary *row = [@{@"at": @([[NSDate date] timeIntervalSince1970]), @"stage": stage} mutableCopy];

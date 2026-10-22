@@ -13,6 +13,20 @@ assert.equal(run('1').status,0);for(const rule of rules)assert.equal(hash(fs.rea
 assert.equal(run('1').status,0); // repeat application is deterministic
 fs.appendFileSync(path.join(temp,'node_modules',rules[0].file),'\n// unexpected upstream edit');assert.notEqual(run('1').status,0);
 const native=fs.readFileSync(path.join(source,'EXKariGOLocationDiagnostics.m'),'utf8');assert.match(native,/rows\.count > 64/);assert.match(native,/now \+ 1800/);assert.match(native,/expires.*<= now/);assert.match(native,/NSDataWritingFileProtectionCompleteUntilFirstUserAuthentication/);
+// NSObject reserves +load with a void return type; never use it as the ring reader.
+assert.doesNotMatch(native,/\+\s*\([^)]*\)\s*load\s*\{|\[self\s+load\]/);
+assert.equal((native.match(/\+ \(NSMutableDictionary \* _Nullable\)kg_readStoredState/g)||[]).length,2);
+assert.equal((native.match(/\[self kg_readStoredState\]/g)||[]).length,3);
+// Windows source safeguard only; actual Objective-C typechecking requires Xcode.
+const guard=text=>{
+  assert.doesNotMatch(text,/\[self\s+load\]|(?:=|\breturn)\s*dispatch_(?:sync|async)\s*\(/);
+  assert.doesNotMatch(text,/^[+-]\s*\([^)]*\)\s*(?:load|initialize|dealloc|finalize|forwardInvocation|forwardingTargetForSelector|methodSignatureForSelector|resolveInstanceMethod|resolveClassMethod)\b/m);
+  assert.doesNotMatch(text,/(?:=|\breturn)\s*\[self\s+(?:erase|clear|recordStage\b)/);
+};
+guard(native);
+for(const invalid of ['id x = dispatch_sync(queue, ^{});','return dispatch_sync(queue, ^{});','id x = dispatch_async(queue, ^{});','id x = [self load];','id x = [self erase];','+ (id)initialize { return nil; }'])assert.throws(()=>guard(invalid));
+assert.equal(native.indexOf('+ (NSMutableDictionary * _Nullable)kg_readStoredState;') < native.indexOf('@implementation'),true);
+assert.equal(fs.readFileSync(path.join(temp,'node_modules/expo-task-manager/ios/EXTaskManager/EXKariGOLocationDiagnostics.m'),'utf8'),native);
 assert.doesNotMatch(native,/latitude|longitude|phoneNumber|accessToken|password|customerId/i);
 const patched=rules[0].edits.map(x=>x[1]).join('\n');assert.match(patched,/BOOL diagnostic = KGLocationDiagnosticsEnabled\(\)/);assert.match(patched,/if \(diagnostic\) \{ distance = 0; interval = 0; \}/);
 for(const reason of ['WAIT_DISTANCE','WAIT_TIME','BATCH_READY','AUTHORIZATION_DENIED','AUTHORIZATION_RESTRICTED','LOCATION_UNAVAILABLE','CONSUMER_START_FAILURE'])assert.ok(patched.includes(reason));
