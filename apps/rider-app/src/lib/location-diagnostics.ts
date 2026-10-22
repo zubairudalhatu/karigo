@@ -1,4 +1,5 @@
 import * as SecureStore from "expo-secure-store";
+import { backgroundAuthReasons, backgroundSessionFailure } from "./background-session";
 // Accepted-work buffer / sanitized QA evidence only. Auth-token storage is unchanged.
 const STORAGE_OPTIONS = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY };
 const readSecure = (key: string) => SecureStore.getItemAsync(key, STORAGE_OPTIONS);
@@ -11,7 +12,7 @@ const LIMIT = 48;
 const TTL = 30 * 60_000;
 let queue: Promise<unknown> = Promise.resolve();
 const events = ["DEFINED", "START_REQUEST", "NATIVE_STATE", "PERMISSION", "STARTED", "CALLBACK", "AUTH", "WORK", "FILTER", "BUFFER", "UPLOAD", "STOP", "FAILURE"] as const;
-const reasons = ["OK", "NO_SESSION", "NO_SCOPE", "NO_WORK", "WORK_CHANGED", "SESSION_CHANGED", "NO_LOCATIONS", "INVALID_OR_OLD_SAMPLE", "PERMISSION_DENIED", "CONSENT_DECLINED", "TASK_ERROR", "STORAGE_ERROR", "NETWORK", "TIMEOUT", "HTTP", "UNKNOWN"] as const;
+const reasons = [...backgroundAuthReasons, "OK", "NO_SESSION", "NO_SCOPE", "NO_WORK", "WORK_CHANGED", "SESSION_CHANGED", "NO_LOCATIONS", "INVALID_OR_OLD_SAMPLE", "PERMISSION_DENIED", "CONSENT_DECLINED", "TASK_ERROR", "STORAGE_ERROR", "NETWORK", "TIMEOUT", "HTTP", "UNKNOWN"] as const;
 type Reason = typeof reasons[number];
 type Event = typeof events[number];
 export type LocationDiagnostic = {
@@ -78,6 +79,8 @@ export function readLocationQaDiagnostics() {
   });
 }
 export function diagnosticFailure(error: unknown): { reason: Reason; httpStatus?: number } {
+  const authReason = backgroundSessionFailure(error);
+  if (authReason !== "OTHER") return { reason: authReason };
   const e=error as { name?: string; status?: number } | null;
   if (typeof e?.status === "number" && e.status>=100 && e.status<=599) return { reason:"HTTP", httpStatus:e.status };
   if (e?.name === "ApiTimeoutError" || e?.name === "AbortError") return { reason:"TIMEOUT" };

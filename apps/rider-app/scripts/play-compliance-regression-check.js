@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
+const sessionModule={exports:{}};
+new Function('exports','module',ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/lib/background-session.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(sessionModule.exports,sessionModule);
 const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/lib/background-location.ts'), 'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 function harness(options={}) {
   const calls=[]; let task, buttons, running=Boolean(options.running);
@@ -9,6 +11,7 @@ function harness(options={}) {
   const location={Accuracy:{Balanced:3},ActivityType:{AutomotiveNavigation:3},getBackgroundPermissionsAsync:async()=>({granted:true}),getForegroundPermissionsAsync:async()=>({granted:true}),requestBackgroundPermissionsAsync:async()=>{calls.push('permission');return {granted:options.permission!==false}},hasStartedLocationUpdatesAsync:async()=>running,startLocationUpdatesAsync:async(_name,opts)=>{taskOptions=opts;calls.push('start'); if(options.start)await options.start(); running=true},stopLocationUpdatesAsync:async()=>{calls.push('stop');running=false}};
   const api={workState:async()=>{if(options.workState) return options.workState();return state},updateAvailability:async()=>{calls.push('upload');return state}};
   const dependencies={
+    './background-session':sessionModule.exports,
     'react-native':{Platform:{OS:'ios'},AppState:{currentState:'active'},Alert:{alert:(_title,_body,actions)=>{calls.push('disclosure');buttons=actions;if(options.consent!==undefined) actions[options.consent?1:0].onPress()}}},
     'expo-location':location,'expo-task-manager':{defineTask:(_name,callback)=>task=callback,isTaskDefined:()=>true,isTaskRegisteredAsync:async()=>running,getTaskOptionsAsync:async()=>taskOptions},
     '../api/captain-access.api':{captainAccessApi:api},'./location':{toOperationalLocationPayload:x=>x},

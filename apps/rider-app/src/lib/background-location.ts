@@ -6,6 +6,7 @@ import { authApi } from "../api/auth.api";
 import { authSessionStore } from "../api/client";
 import { toOperationalLocationPayload } from "./location";
 import { acknowledgeRideTracePoints, beginWorkTraceScope, bufferBackgroundRideTrace, clearActiveWorkTraceBuffer, readActiveWorkTraceScope, sameTraceScope, traceUploadContext, type RideTraceScope } from "./ride-trace-buffer";
+import { readBackgroundSession } from "./background-session";
 import { diagnosticFailure, locationDiagnostic } from "./location-diagnostics";
 export const CAPTAIN_BACKGROUND_LOCATION_TASK = "karigo-captain-active-work-location";
 export const ACTIVE_WORK_LOCATION_DISCLOSURE = "KariGO Captain collects your location while the app is minimized or not in use during an accepted Ride or Delivery assignment. This enables live trip or delivery tracking and safety. Background tracking stops when your active assignment ends. Your location is not used for advertising. Choose Continue to allow background location, or Not now to keep working with the app open.";
@@ -64,9 +65,8 @@ TaskManager.defineTask<{locations?: Location.LocationObject[]}>(CAPTAIN_BACKGROU
   let capturedScope: RideTraceScope | null | undefined;
   try {
     let session: Awaited<ReturnType<typeof authSessionStore.readSession>>;
-    try { session=await authSessionStore.readSession(); }
-    catch(e) { await locationDiagnostic("AUTH",{sessionAvailable:false,...diagnosticFailure(e)}); if(ownsRuntime()) await disableActiveWorkBackgroundLocation(); return; }
-    await locationDiagnostic("AUTH",{sessionAvailable:!!session});
+    try { session=await readBackgroundSession(authSessionStore, fields => locationDiagnostic("AUTH", fields)); }
+    catch { if(ownsRuntime()) await disableActiveWorkBackgroundLocation(); return; }
     if(!session) { if(ownsRuntime()) await disableActiveWorkBackgroundLocation(); return; }
     const scope=await readActiveWorkTraceScope();
     capturedScope=scope;
@@ -78,7 +78,7 @@ TaskManager.defineTask<{locations?: Location.LocationObject[]}>(CAPTAIN_BACKGROU
     try { state=await diagnosedWorkState(scope.epoch); }
     catch { await disableActiveWorkBackgroundLocation(scope); return; }
     if(sampleGeneration!==generation || !authSessionStore.isCurrent(authGeneration) || !sameTraceScope(await readActiveWorkTraceScope(),scope)) { await locationDiagnostic("FILTER",{accepted:false,reason:"SESSION_CHANGED"}); return; }
-    if(identity.id!==scope.captainUserId || !matches(state,scope)) { await locationDiagnostic("FILTER",{accepted:false,reason:"WORK_CHANGED"}); await disableActiveWorkBackgroundLocation(scope); return; }
+    if(identity.id!==scope.captainUserId || !matches(state,scope)) { await locationDiagnostic("AUTH",{sessionAvailable:false,reason:"WORK_SESSION_MISMATCH"}); await locationDiagnostic("FILTER",{accepted:false,reason:"WORK_CHANGED"}); await disableActiveWorkBackgroundLocation(scope); return; }
     let tracePoints: Awaited<ReturnType<typeof bufferBackgroundRideTrace>>;
     try { tracePoints=await bufferBackgroundRideTrace(scope,data.locations); }
     catch { await locationDiagnostic("BUFFER",{reason:"STORAGE_ERROR",workRef:scope.epoch}); return; }

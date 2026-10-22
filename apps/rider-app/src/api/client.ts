@@ -10,6 +10,8 @@ import {
   validateMobileApiBaseUrl
 } from "@karigo/config";
 import * as SecureStore from "expo-secure-store";
+import { diagnosedSessionStorage } from "../lib/background-session";
+import { locationDiagnostic } from "../lib/location-diagnostics";
 
 const LEGACY_TOKEN_KEY = "karigo_rider_access_token";
 const LEGACY_REFRESH_TOKEN_KEY = "karigo_rider_refresh_token";
@@ -24,7 +26,7 @@ const API_BASE_URL = validateMobileApiBaseUrl(
 
 export const authSessionStore = createVersionedAuthSessionStore({
   appName: "Captain App",
-  storage: SecureStore,
+  storage: diagnosedSessionStorage(SecureStore, reason => { void locationDiagnostic("AUTH", { reason }); }),
   sessionKey: SESSION_KEY,
   legacyAccessTokenKey: LEGACY_TOKEN_KEY,
   legacyRefreshTokenKey: LEGACY_REFRESH_TOKEN_KEY
@@ -92,6 +94,7 @@ async function performRefreshAuth(operationGeneration?: number): Promise<Refresh
 
   const session = await authSessionStore.readSession();
   if (!session?.refreshToken) {
+    void locationDiagnostic("AUTH", { sessionAvailable: false, reason: "REFRESH_TOKEN_UNAVAILABLE" });
     logMobileAuthDiagnostic("captain", "refresh_no_saved_session", { generation: operationGeneration });
     return "rejected";
   }
@@ -106,6 +109,7 @@ async function performRefreshAuth(operationGeneration?: number): Promise<Refresh
     } | null;
 
     if (!response.ok || !payload?.success) {
+      void locationDiagnostic("AUTH", { sessionAvailable: false, reason: "REFRESH_FAILED" });
       const errorCode = payload?.error_code;
       if (refreshFailureIsTemporary(response.status, errorCode)) {
         logMobileAuthDiagnostic("captain", "refresh_temporary_failure", {
