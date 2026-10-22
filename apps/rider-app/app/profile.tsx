@@ -13,7 +13,6 @@ import { useAuth } from "../src/contexts/auth-context";
 import { friendlyError } from "../src/lib/errors";
 import { hasAnyCaptainApplication } from "../src/lib/captain-application-status";
 import { projectCaptainOperationalState } from "../src/lib/captain-operational-state";
-import { LOCATION_QA_DIAGNOSTICS_AVAILABLE } from "../src/lib/location-diagnostics";
 
 function initials(name?: string | null) { const parts = name?.trim().split(/\s+/).filter(Boolean) ?? []; return (parts[0]?.[0] ?? "C") + (parts[1]?.[0] ?? ""); }
 function catalogLabel(value?: string | null) {
@@ -104,10 +103,9 @@ export default function Profile() {
     <View style={styles.settingsSurface}>
       <SettingRow icon="eye" label="Privacy Policy" onPress={() => router.push("/legal/privacy")} />
       <SettingRow icon="book-open" label="Terms" onPress={() => router.push("/legal/terms")} />
-      <SettingRow icon="info" label="About KariGO" value="Captain 1.1" />
+      <SettingRow icon="info" label="About KariGO" value="Captain 1.2.0" />
       <SettingRow icon="user-x" label="Permanently delete Captain account" warning onPress={() => router.push("/account-deletion")} />
     </View>
-    {LOCATION_QA_DIAGNOSTICS_AVAILABLE ? <SettingRow icon="activity" label="Active-work location QA" onPress={() => router.push("/location-diagnostics")} /> : null}
     <Button tone="muted" title="Log out" onPress={async () => { await logout(); router.replace("/auth/login"); }} />
   </Screen></Protected>;
 }

@@ -1,0 +1,17 @@
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict'),ts=require('typescript');
+const root=path.resolve(__dirname,'../../..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const pristine={
+ 'expo-location/ios/TaskConsumers/EXLocationTaskConsumer.m':'8d046171f52ab7e985c7603a987648a059b6b3a11e94b5346010acac01cff207',
+ 'expo-task-manager/ios/EXTaskManager/EXTaskService.m':'7affb6ffbb8d03d73891c9b4252599d330a072a0bb7f1327b7bacf7b33a5efc3',
+ 'expo-task-manager/ios/EXTaskManager/EXTaskManager.m':'8de71eacb94f51f57fdfa57c1af0a751953114cf761748836ad87920738e8c1e'
+};
+for(const [p,hash]of Object.entries(pristine))assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(root,'node_modules',p))).digest('hex'),hash,'Native dependency must be pristine: '+p);
+for(const p of ['scripts/captain-native-location-qa','apps/rider-app/app/location-diagnostics.tsx','apps/rider-app/src/lib/native-location-diagnostics.ts','node_modules/expo-task-manager/ios/EXTaskManager/EXKariGOLocationDiagnostics.m','node_modules/expo-task-manager/ios/EXTaskManager/EXKariGOLocationDiagnostics.h','node_modules/expo-location/ios/TaskConsumers/KGLocationDiagnostics.h'])assert(!fs.existsSync(path.join(root,p)),p+' must be absent');
+assert(!read('apps/rider-app/app/profile.tsx').includes('location-diagnostics'));
+assert(!JSON.parse(read('package.json')).scripts.postinstall);
+assert(!JSON.parse(read('apps/rider-app/package.json')).scripts['eas-build-post-install']);
+const eas=JSON.parse(read('apps/rider-app/eas.json'));assert(!eas.build['captain-ios-build2-diagnostic']);assert.equal(eas.build['captain-production'].channel,'captain-production');assert.equal(eas.build['captain-production-ios'].extends,'captain-production');
+process.env.APP_VARIANT='production';process.env.CAPTAIN_IOS_NATIVE_QA='1';const m={exports:{}};new Function('module','exports',ts.transpileModule(read('apps/rider-app/app.config.ts'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(m,m.exports);const c=m.exports.default({config:JSON.parse(read('apps/rider-app/app.json')).expo});assert.equal(c.version,'1.2.0');assert.equal(c.ios.buildNumber,'3');assert.equal(c.ios.runtimeVersion,'1.2.0-captain-prod3');assert.equal(c.ios.bundleIdentifier,'ng.com.karigo.captain');assert.equal(c.ios.appleTeamId,'6Y4WC7MQB6');assert.deepEqual(c.ios.infoPlist.UIBackgroundModes,['location']);assert.equal(c.android.versionCode,17);assert.deepEqual(c.runtimeVersion,{policy:'appVersion'});
+const source=read('apps/rider-app/src/lib/location-diagnostics.ts');assert(!/expo-secure-store|expo-modules-core|process\.env|setItemAsync|readLocationQaDiagnostics|armLocationQaDiagnostics|clearLocationQaDiagnostics/.test(source),'Production diagnostics must have no persistence or controls');
+const bg=read('apps/rider-app/src/lib/background-location.ts');assert(bg.includes('distanceInterval: 50, deferredUpdatesDistance: 100, deferredUpdatesInterval: 60_000'));assert(bg.includes('Location.Accuracy.Balanced'));assert(bg.includes('Location.ActivityType.AutomotiveNavigation'));assert(bg.includes('Platform.OS === "ios" ? false : true'));
+console.log('PASS production Build 3 identity/runtime; pristine Expo Location/TaskManager; native diagnostics/0-0 override/hooks/UI absent; inert production evidence calls; normal location policy preserved; Android identity unchanged.');

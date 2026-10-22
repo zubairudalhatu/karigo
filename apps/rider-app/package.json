@@ -15,8 +15,7 @@
     "test:h8-h3": "node scripts/h8-h3-regression-check.js",
     "test:h8-h5": "node scripts/h8-h5-regression-check.js",
     "audit:production-copy": "node scripts/production-copy-audit.js",
-    "test:native-location-qa": "node scripts/native-location-patch-regression.cjs && node scripts/native-diagnostics-bridge-regression.cjs",
-    "eas-build-post-install": "node ../../scripts/captain-native-location-qa/apply.cjs"
+    "test:production-native": "node scripts/production-native-regression.cjs"
   },
   "dependencies": {
     "@karigo/config": "*",

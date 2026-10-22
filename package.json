@@ -25,8 +25,7 @@
     "db:validate": "npm run prisma:validate --workspace @karigo/backend-api",
     "audit:production-copy": "node scripts/production-copy-audit.cjs",
     "test": "npm run test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "postinstall": "node scripts/captain-native-location-qa/apply.cjs"
+    "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "engines": {
     "node": "22.x"

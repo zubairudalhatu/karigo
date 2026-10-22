@@ -1,5 +1,4 @@
 // No React, token cache, raw error logging, or alternative credential store.
-export const BACKGROUND_AUTH_DIAGNOSTIC_VERSION = "captain-bg-auth-v2";
 export const backgroundAuthReasons = [
   "SESSION_NOT_PERSISTED", "SECURESTORE_RETURNED_NULL", "SECURESTORE_READ_ERROR",
   "SECURESTORE_PROTECTED_DATA_UNAVAILABLE", "SECURESTORE_INTERACTION_NOT_ALLOWED",

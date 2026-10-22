@@ -14,7 +14,7 @@ const reply=(status,data,code)=>({ok:status===200,status,json:async()=>status===
  const h=harness();await h.client.authSessionStore.persistTokenPair('LOCAL_EXPIRED_ACCESS','LOCAL_REFRESH');
  assert((await h.read()).accessToken);assert.equal(h.events.at(-1).sessionAvailable,true);
  // A/B: entirely new module runtime, durable storage retained, no React/UI imports permitted.
- const cold=harness({values:h.values});assert.equal(cold.bg.BACKGROUND_AUTH_DIAGNOSTIC_VERSION,'captain-bg-auth-v2');assert.equal(cold.client.authSessionStore.currentGeneration(),0);assert((await cold.read()).refreshToken);
+ const cold=harness({values:h.values});assert.equal(cold.client.authSessionStore.currentGeneration(),0);assert((await cold.read()).refreshToken);
  const absent=harness();assert.equal(await absent.read(),null);assert.equal(absent.events.at(-1).reason,'SESSION_NOT_PERSISTED');
  for(const [error,reason]of [[Error('PRIVATE token/phone/coordinate'),'SECURESTORE_READ_ERROR'],[{code:-25308},'SECURESTORE_PROTECTED_DATA_UNAVAILABLE'],[{protectedDataAvailable:false},'SECURESTORE_PROTECTED_DATA_UNAVAILABLE']]){
  const x=harness({readError:error});await assert.rejects(x.read());assert.equal(x.events.at(-1).reason,reason);assert(!JSON.stringify(x.events).includes('PRIVATE'));assert.equal(x.calls.length,0);}
