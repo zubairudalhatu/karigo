@@ -10,12 +10,13 @@ import {
 } from "@karigo/config";
 import type { AuthenticatedUser, LoginRequest } from "@karigo/shared-types";
 import { KariGoApiError } from "@karigo/shared-types";
+import { AppState, Platform } from "react-native";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { authApi } from "../api/auth.api";
 import { deactivateCaptainPushNotifications } from "../lib/captain-notifications";
 import { disableActiveWorkBackgroundLocation } from "../lib/background-location";
 
-import { authSessionStore, onUnauthorized, refreshTokenStore } from "../api/client";
+import { authSessionStore, captainLogoutRefreshToken, migrateCaptainSessionAfterForegroundAuth, onUnauthorized, refreshTokenStore } from "../api/client";
 import { authenticateWithBiometrics, getBiometricCapability, getBiometricSignInEnabled, setBiometricSignInEnabled } from "../lib/biometric-auth";
 import { normalizeNigerianPhoneNumber } from "../lib/phone";
 
@@ -71,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void disableActiveWorkBackgroundLocation().catch(() => undefined);
       setSessionMessage("Your session has expired. Please sign in again.");
     });
-    let active = true;
+    let active = true, migrationPending = false;
 
     async function bootstrap() {
       const generation = authSessionStore.beginOperation();
@@ -95,6 +96,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const current = await authApi.me();
         if (!active || !authSessionStore.isCurrent(generation)) return;
         if (canUseCaptainApp(current)) {
+          await migrateCaptainSessionAfterForegroundAuth(current.id);
+          migrationPending = false;
+          if (!active || !authSessionStore.isCurrent(generation)) return;
           setUser(current);
           setSessionMessage("");
           setSessionRepairRequired(false);
@@ -108,7 +112,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!active || !authSessionStore.isCurrent(generation)) {
           return;
         }
-        if (error instanceof SessionCorruptionError) {
+        if ((error as { name?: string })?.name === "SessionMigrationPendingError") {
+          migrationPending = true;
+          setSessionMessage("Open Captain to finish secure session setup.");
+        } else if (Platform.OS === "ios" && error instanceof SessionPersistenceError) {
+          migrationPending = true;
+          setUser(null);
+          setSessionMessage("Secure session setup could not finish. Reopen Captain to retry, or sign in again.");
+        } else if (error instanceof SessionCorruptionError) {
           await disableActiveWorkBackgroundLocation().catch(() => undefined);
           setUser(null);
           setSessionRepairRequired(true);
@@ -129,8 +140,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    const foreground = Platform.OS === "ios" ? AppState.addEventListener("change", state => {
+      if (state === "active" && migrationPending) void bootstrap();
+    }) : undefined;
     void bootstrap();
     return () => {
+      foreground?.remove();
       active = false;
       unsubscribe();
     };
@@ -201,7 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         deactivateCaptainPushNotifications(),
         disableActiveWorkBackgroundLocation()
       ]);
-      const refreshToken = await refreshTokenStore.getToken();
+      const refreshToken = await captainLogoutRefreshToken();
       const generation = authSessionStore.beginNewSession();
       if (refreshToken) {
         await authApi.logout({ refreshToken }).catch(() => undefined);

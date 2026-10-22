@@ -9,6 +9,8 @@ import {
   logMobileAuthDiagnostic,
   validateMobileApiBaseUrl
 } from "@karigo/config";
+import { AppState, Platform } from "react-native";
+import { createCaptainIosSessionStore } from "../lib/captain-ios-session";
 import * as SecureStore from "expo-secure-store";
 import { diagnosedSessionStorage } from "../lib/background-session";
 import { locationDiagnostic } from "../lib/location-diagnostics";
@@ -24,7 +26,23 @@ const API_BASE_URL = validateMobileApiBaseUrl(
   }
 );
 
-export const authSessionStore = createVersionedAuthSessionStore({
+const iosSessionStore = Platform.OS === "ios" ? createCaptainIosSessionStore({
+  storage: diagnosedSessionStorage(SecureStore),
+  afterFirstUnlock: SecureStore.AFTER_FIRST_UNLOCK,
+  isForeground: () => AppState.currentState === "active",
+  verifyLegacyAccess: async accessToken => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), DEFAULT_AUTH_API_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/me`, { headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` }, signal: controller.signal });
+      const payload = await response.json().catch(() => null);
+      if (response.status === 401 || response.status === 403) return "";
+      if (!response.ok || !payload?.success || !payload?.data?.id) throw new SessionPersistenceError("Captain session validation could not complete.");
+      return payload.data.id as string;
+    } finally { clearTimeout(timeout); }
+  }
+}) : null;
+export const authSessionStore = iosSessionStore ?? createVersionedAuthSessionStore({
   appName: "Captain App",
   storage: diagnosedSessionStorage(SecureStore, reason => { void locationDiagnostic("AUTH", { reason }); }),
   sessionKey: SESSION_KEY,
@@ -143,7 +161,8 @@ async function performRefreshAuth(operationGeneration?: number): Promise<Refresh
       return "temporarily_unavailable";
     }
 
-    await authSessionStore.persistTokenPair(nextAccessToken, nextRefreshToken, operationGeneration);
+    if (iosSessionStore) await iosSessionStore.persistRefreshedPair(session, nextAccessToken, nextRefreshToken, operationGeneration);
+    else await authSessionStore.persistTokenPair(nextAccessToken, nextRefreshToken, operationGeneration);
     logMobileAuthDiagnostic("captain", "refresh_succeeded", { generation: operationGeneration });
     return "refreshed";
   } catch (error) {
@@ -208,3 +227,12 @@ export const api = createApiClient({
 });
 
 export { API_BASE_URL };
+
+export async function migrateCaptainSessionAfterForegroundAuth(userId: string) {
+  if (iosSessionStore) await iosSessionStore.migrateForegroundSession(userId);
+}
+
+export async function captainLogoutRefreshToken() {
+  if (Platform.OS !== "ios") return await refreshTokenStore.getToken();
+  try { return await refreshTokenStore.getToken(); } catch { return null; }
+}

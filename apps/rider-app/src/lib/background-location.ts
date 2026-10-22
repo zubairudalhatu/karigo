@@ -6,6 +6,7 @@ import { authApi } from "../api/auth.api";
 import { authSessionStore } from "../api/client";
 import { toOperationalLocationPayload } from "./location";
 import { acknowledgeRideTracePoints, beginWorkTraceScope, bufferBackgroundRideTrace, clearActiveWorkTraceBuffer, readActiveWorkTraceScope, sameTraceScope, traceUploadContext, type RideTraceScope } from "./ride-trace-buffer";
+import { createBackgroundAuthRetry, isTransientSessionRead } from "./background-auth-retry";
 import { readBackgroundSession } from "./background-session";
 import { diagnosticFailure, locationDiagnostic } from "./location-diagnostics";
 export const CAPTAIN_BACKGROUND_LOCATION_TASK = "karigo-captain-active-work-location";
@@ -64,16 +65,44 @@ TaskManager.defineTask<{locations?: Location.LocationObject[]}>(CAPTAIN_BACKGROU
   const ownsRuntime = () => sampleGeneration === generation && authSessionStore.isCurrent(authGeneration);
   let capturedScope: RideTraceScope | null | undefined;
   try {
+    let scope: RideTraceScope | null = null;
+    let retry: ReturnType<typeof createBackgroundAuthRetry> | undefined;
+    if (Platform.OS === "ios") {
+      scope = await readActiveWorkTraceScope(); capturedScope = scope;
+      if (!scope) { await locationDiagnostic("FILTER",{accepted:false,reason:"NO_SCOPE"}); await disableActiveWorkBackgroundLocation(null); return; }
+      const retryScope = scope;
+      retry = createBackgroundAuthRetry(ownsRuntime, async () => {
+        if (!ownsRuntime() || !sameTraceScope(await readActiveWorkTraceScope(), retryScope)) throw new Error("WORK_SESSION_MISMATCH");
+        // Previously accepted work only, existing bounded UUID/work/epoch buffer.
+        // Authorization is still required before identity checks or upload.
+        const points = await bufferBackgroundRideTrace(retryScope, data.locations!);
+        await locationDiagnostic("BUFFER",{bufferedCount:points.length,workRef:retryScope.epoch});
+      });
+    }
     let session: Awaited<ReturnType<typeof authSessionStore.readSession>>;
-    try { session=await readBackgroundSession(authSessionStore, fields => locationDiagnostic("AUTH", fields)); }
-    catch { if(ownsRuntime()) await disableActiveWorkBackgroundLocation(); return; }
-    if(!session) { if(ownsRuntime()) await disableActiveWorkBackgroundLocation(); return; }
-    const scope=await readActiveWorkTraceScope();
+    try {
+      const read = () => readBackgroundSession(authSessionStore, fields => locationDiagnostic("AUTH", fields));
+      session = retry ? await retry(read) : await read();
+    } catch(e) {
+      await locationDiagnostic("AUTH",{sessionAvailable:false,...diagnosticFailure(e)});
+      if(ownsRuntime()) await disableActiveWorkBackgroundLocation(scope ?? undefined); return;
+    }
+    if(!session) { if(ownsRuntime()) await disableActiveWorkBackgroundLocation(scope ?? undefined); return; }
+    scope=scope ?? await readActiveWorkTraceScope();
     capturedScope=scope;
     if(!scope) { await locationDiagnostic("FILTER",{accepted:false,reason:"NO_SCOPE"}); await disableActiveWorkBackgroundLocation(null); return; }
     let identity: Awaited<ReturnType<typeof authApi.me>>;
     try { identity=await authApi.me(); }
-    catch(e) { await locationDiagnostic("AUTH",{sessionAvailable:false,...diagnosticFailure(e)}); await disableActiveWorkBackgroundLocation(scope); return; }
+    catch(e) {
+      await locationDiagnostic("AUTH",{sessionAvailable:false,...diagnosticFailure(e)});
+      if (retry && isTransientSessionRead(e)) {
+        try {
+          const restored = await retry(() => readBackgroundSession(authSessionStore, fields => locationDiagnostic("AUTH",fields)));
+          if (!restored) throw e;
+          identity = await authApi.me();
+        } catch(failure) { await locationDiagnostic("AUTH",{sessionAvailable:false,...diagnosticFailure(failure)}); await disableActiveWorkBackgroundLocation(scope); return; }
+      } else { await disableActiveWorkBackgroundLocation(scope); return; }
+    }
     let state: CaptainWorkState;
     try { state=await diagnosedWorkState(scope.epoch); }
     catch { await disableActiveWorkBackgroundLocation(scope); return; }
