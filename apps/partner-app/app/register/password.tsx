@@ -4,18 +4,21 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { authApi } from "../../src/api/auth.api";
 import { Card, Hero, MutedText, PrimaryButton, Screen, TextField } from "../../src/components/ui";
+import { useAuth } from "../../src/contexts/auth-context";
 import { usePartnerRegistration } from "../../src/contexts/partner-registration-context";
 
 export default function RegisterPasswordScreen() {
   const router = useRouter();
   const { registration, updateRegistration } = usePartnerRegistration();
+  const [password, setPassword] = useState("");
+  const { login } = useAuth();
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
-    if (registration.password !== confirmPassword) {
+    if (password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
@@ -24,9 +27,13 @@ export default function RegisterPasswordScreen() {
     try {
       await authApi.createVendorApplicantPassword({
         phoneNumber: registration.phoneNumber,
-        password: registration.password
+        password, verificationTicket: registration.verificationTicket
       });
-      router.push("/register/account-type");
+      updateRegistration({ verificationTicket: "" });
+      await login({ phoneNumber: registration.phoneNumber, password });
+      setPassword("");
+      setConfirmPassword("");
+      router.replace("/register");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Password could not be created.");
     } finally {
@@ -41,9 +48,9 @@ export default function RegisterPasswordScreen() {
         <View>
           <TextField
             label="Password"
-            value={registration.password}
+            value={password}
             secureTextEntry={!passwordVisible}
-            onChangeText={(password) => updateRegistration({ password })}
+            onChangeText={setPassword}
           />
           <Pressable onPress={() => setPasswordVisible((value) => !value)} style={styles.passwordToggle}>
             <Text style={styles.passwordToggleText}>{passwordVisible ? "Hide" : "Show"}</Text>
@@ -55,7 +62,7 @@ export default function RegisterPasswordScreen() {
         <PrimaryButton
           label={submitting ? "Saving..." : "Create password"}
           onPress={() => void submit()}
-          disabled={submitting || registration.password.length < 8 || confirmPassword.length < 8}
+          disabled={submitting || password.length < 8 || confirmPassword.length < 8}
         />
       </Card>
     </Screen>

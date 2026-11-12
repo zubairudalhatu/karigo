@@ -95,6 +95,18 @@ describe("VendorPayoutAccountsService", () => {
     }));
   });
 
+  it("redacts bank input from persistence-failure exceptions before global logging", async () => {
+    prisma.vendorPayoutAccount.findUnique.mockResolvedValue(null);
+    prisma.vendorPayoutAccount.create.mockRejectedValueOnce(new Error("Prisma input contained 1234567890"));
+    try {
+      await service.createVendorAccount("vendor-user-a", { accountName: "Synthetic owner", bankName: "Synthetic bank", accountNumber: "1234567890", confirmAccountNumber: "1234567890" });
+      throw new Error("Expected a sanitized failure");
+    } catch (error) {
+      expect(String(error)).toContain("Payout account could not be saved");
+      expect(String(error instanceof Error ? error.stack : error)).not.toContain("1234567890");
+    }
+  });
+
   it("blocks mismatched account confirmation", async () => {
     await expect(service.createVendorAccount("vendor-user-a", {
       accountName: "Kano Kitchen Vendor",

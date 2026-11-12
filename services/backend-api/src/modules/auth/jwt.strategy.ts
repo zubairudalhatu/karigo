@@ -29,7 +29,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: JwtPayload): Promise<AuthenticatedUser> {
     const user = await this.usersService.findByIdForAuth(payload.sub);
 
-    if (payload.scope === "restore-governance" || !user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE || user.adminRole === "RESTORE_GOVERNANCE") {
+    if (payload.scope === "partner-onboarding" || payload.scope === "restore-governance" || !user || user.deletedAt || user.accountStatus !== AccountStatus.ACTIVE || user.adminRole === "RESTORE_GOVERNANCE") {
       throw new UnauthorizedException("Authentication is no longer valid");
     }
 

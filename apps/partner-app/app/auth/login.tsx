@@ -1,3 +1,4 @@
+import { PrivateDeletionReceipt } from "../../src/components/permanent-account-deletion";
 import { ApiNetworkError, ApiTimeoutError, SessionTemporarilyUnavailableError, brand } from "@karigo/config";
 import { KariGoApiError } from "@karigo/shared-types";
 import { Redirect, useRouter } from "expo-router";
@@ -113,6 +114,7 @@ export default function LoginScreen() {
       <Text style={styles.note}>
         Product Sellers, Service Providers and mixed partners use the same approved Partner Workspace account.
       </Text>
+      <PrivateDeletionReceipt />
     </Screen>
   );
 }

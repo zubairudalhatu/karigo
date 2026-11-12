@@ -1,3 +1,4 @@
+import { validatePartnerDocument } from "../../common/utils/partner-file-validation";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Prisma, ProductCategory, ServiceCategory, StoredObjectDeletionState, VendorEvidenceAvailabilityState, VendorServiceStatus } from "@prisma/client";
@@ -41,6 +42,11 @@ export class VendorsService {
     @Optional() private readonly privateUploads?: VendorPrivateUploadStorageService
   ) {}
 
+  private profileWithoutBankSecrets<T extends { accountNumber?: unknown; accountName?: unknown; bankName?: unknown }>(profile: T) {
+    const { accountNumber: _number, accountName: _name, bankName: _bank, ...safe } = profile;
+    return safe;
+  }
+
   async me(userId: string) {
     const vendor = await this.prisma.vendor.findFirst({
       where: { userId, deletedAt: null },
@@ -59,7 +65,7 @@ export class VendorsService {
     }
 
     return {
-      ...vendor,
+      ...this.profileWithoutBankSecrets(vendor),
       onboardingDocuments: vendor.onboardingDocuments.map((document) => this.onboardingDocumentView(document))
     };
   }
@@ -80,7 +86,7 @@ export class VendorsService {
     await this.logVendorAudit(vendor.id, userId, "vendor.profile.updated", "Vendor", vendor.id, {
       fields: Object.keys(dto)
     });
-    return updated;
+    return this.profileWithoutBankSecrets(updated);
   }
 
   async capabilities(userId: string) {
@@ -397,6 +403,7 @@ export class VendorsService {
     if (!config.mimeTypes.includes(file.mimetype)) {
       throw new BadRequestException(`Unsupported file type for ${purpose.replaceAll("-", " ")}.`);
     }
+    validatePartnerDocument(file);
     if (file.size > config.maxBytes) {
       throw new BadRequestException(`File is too large. Maximum size is ${Math.round(config.maxBytes / 1024 / 1024)}MB.`);
     }
@@ -762,8 +769,6 @@ export class VendorsService {
   }
 
   private safeFileExtension(originalName: string, mimeType: string) {
-    const fromName = extname(originalName).toLowerCase();
-    if ([".jpg", ".jpeg", ".png", ".webp", ".pdf"].includes(fromName)) return fromName;
     return mimeType === "image/png"
       ? ".png"
       : mimeType === "image/webp"

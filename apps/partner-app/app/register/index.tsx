@@ -55,7 +55,6 @@ export default function RegisterStartScreen() {
           hydrateRegistration(draftData);
         }
         updateRegistration({
-          ...(draftData ?? {}),
           fullName: visibleFullName.trim(),
           phoneNumber: normalizedPhone,
           businessPhoneNumber: normalizedPhone,
@@ -95,7 +94,7 @@ export default function RegisterStartScreen() {
         setMessage(result.message ?? "Your KariGO account has been recognised. Sign in to continue Partner onboarding.");
         router.replace("/auth/login");
       }
-      else router.push("/register/account-type");
+      else router.replace("/auth/login");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Partner onboarding could not be started.");
     } finally {

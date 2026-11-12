@@ -14,6 +14,7 @@ export class DeviceTokensService {
     this.assertTokenShape(dto.provider, token);
     return activeUserOperation(this.prisma, userId, async tx => {
       const existing = await tx.deviceToken.findUnique({ where: { token } });
+      if (existing?.appSurface === "PARTNER_APP") throw new ConflictException("Use Partner notification settings for this registration.");
       if (existing && existing.userId !== userId) {
         throw new ConflictException("Device token is already registered");
       }

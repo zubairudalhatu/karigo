@@ -1,4 +1,5 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { PartnerPushService } from "./partner-push.service";
+import { Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import { NotificationChannel, NotificationType, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { activeUserOperation } from "../../common/services/active-customer-operation";
@@ -33,7 +34,8 @@ export class NotificationsService {
     sms: SmsNotificationProvider,
     email: EmailNotificationProvider,
     whatsapp: WhatsAppNotificationProvider,
-    push: PushNotificationProvider
+    push: PushNotificationProvider,
+    @Optional() private readonly partnerPush?: PartnerPushService
   ) {
     this.providers = new Map<NotificationChannel, NotificationProvider>([
       [NotificationChannel.IN_APP, mock],
@@ -45,7 +47,7 @@ export class NotificationsService {
   }
 
   async createNotification(input: CreateNotificationInput) {
-    return activeUserOperation(this.prisma, input.userId, async tx => {
+    const result = await activeUserOperation(this.prisma, input.userId, async tx => {
       const channel = input.channel ?? NotificationChannel.IN_APP;
       if (channel === NotificationChannel.IN_APP) {
         return tx.notification.create({
@@ -68,6 +70,17 @@ export class NotificationsService {
         return { accepted: false, provider: "mock" };
       }
     });
+    if (input.entityType === "Order" && input.entityId) await this.notifyPartnerOrder(input.entityId);
+    if (input.entityType === "VendorSettlement" && input.entityId) await this.notifyPartnerSettlement(input.entityId);
+    return result;
+  }
+
+  async notifyPartnerSettlement(id: string) {
+    try { await this.partnerPush?.settlementChanged(id); } catch { this.logger.warn("Partner settlement notification deferred."); }
+  }
+
+  async notifyPartnerOrder(orderId: string) {
+    try { await this.partnerPush?.orderChanged(orderId); } catch { this.logger.warn("Partner order notification deferred"); }
   }
 
   listMine(userId: string, query: ListNotificationsQueryDto) {

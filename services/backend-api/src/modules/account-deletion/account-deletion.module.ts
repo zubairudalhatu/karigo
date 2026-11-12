@@ -1,3 +1,5 @@
+import { PartnerDeletionController, PartnerDeletionReviewController } from "./partner-deletion.controller";
+import { AuthModule } from "../auth/auth.module";
 import { Module } from "@nestjs/common";
 import { AdminAuditModule } from "../../common/services/admin-audit.module";
 import { PrismaModule } from "../../prisma/prisma.module";
@@ -11,8 +13,8 @@ import { CustomerDeletionReceiptController } from "./customer-deletion-receipt.c
 import { CaptainDeletionReceiptController } from "./captain-deletion-receipt.controller";
 
 @Module({
-  imports: [PrismaModule, AdminAuditModule, RidersModule, VendorsModule],
-  controllers: [AccountDeletionController, AdminAccountDeletionController, CustomerDeletionReceiptController, CaptainDeletionReceiptController],
+  imports: [AuthModule, PrismaModule, AdminAuditModule, RidersModule, VendorsModule],
+  controllers: [PartnerDeletionController, PartnerDeletionReviewController, AccountDeletionController, AdminAccountDeletionController, CustomerDeletionReceiptController, CaptainDeletionReceiptController],
   providers: [AccountDeletionService, CustomerErasureService, CustomerDeletionNoticeService],
   exports: [CustomerErasureService]
 })

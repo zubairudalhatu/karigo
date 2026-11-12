@@ -25,6 +25,7 @@ import { CaptainUploadStorageService } from "../riders/captain-upload-storage.se
 import { VendorPrivateUploadStorageService } from "../vendors/vendor-private-upload-storage.service";
 import { CustomerErasureService } from "./customer-erasure.service";
 import { assertLegacyCaptainObjectsCleared, minimizeCaptainPersonalData, suspendCaptainAccess } from "./captain-erasure";
+import { minimizePartnerPersonalData } from "./partner-erasure";
 import { retentionExpiry } from "./retention-policy";
 
 const openRequestStatuses = [
@@ -131,6 +132,121 @@ export class AccountDeletionService {
     private readonly vendorPrivateStorage: VendorPrivateUploadStorageService,
     private readonly customerErasure: CustomerErasureService
   ) {}
+
+  async requestPartnerPermanent(userId: string, confirmation: string, token: string) {
+    if (confirmation !== "DELETE" || !/^[A-Za-z0-9_-]{43}$/.test(token)) throw new BadRequestException("Save your private receipt and type DELETE.");
+    const receiptTokenHash = createHash("sha256").update(token).digest("hex");
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))::text AS lock`;
+      const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, include: accountDeletionUserInclude });
+      this.assertAccountScope(user, "PARTNER");
+      if (user.adminRole || user.role === "ADMIN") throw new ForbiddenException("An administrative account requires separate governance review.");
+      const previous = await tx.accountDeletionRequest.findFirst({ where: { userId, erasureVersion: 3, accountType: "COMPLETE_ACCOUNT" }, orderBy: { requestedAt: "desc" } });
+      if (previous) {
+        if (previous.receiptTokenHash !== receiptTokenHash) throw new BadRequestException("Use your existing private deletion receipt.");
+        return this.partnerReceipt(previous);
+      }
+      if (user.deletedAt) throw new ForbiddenException("Account is not available.");
+      const now = new Date();
+      const request = await tx.accountDeletionRequest.create({ data: { userId, requestReference: `PDR-${receiptTokenHash.slice(0, 24)}`, accountType: "COMPLETE_ACCOUNT",
+        erasureVersion: 3, status: "REQUESTED", confirmedAt: now, sharedIdentityRetained: false, receiptTokenHash,
+        deadlineAt: new Date(now.getTime() + 30 * 86400_000) } });
+      // Freeze eligibility without abandoning existing assignments. Operations
+      // must reconcile any work before the reviewed completion can proceed.
+      await tx.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now } });
+      await tx.rider.updateMany({ where: { userId }, data: { availabilityStatus: "OFFLINE" } });
+      await tx.taxiDriverProfile.updateMany({ where: { userId }, data: { isAvailableForTaxi: false } });
+      await tx.captainWorkState.updateMany({ where: { userId }, data: { desiredDeliveryOnline: false, desiredRideOnline: false } });
+      if (user.vendor) await tx.vendor.update({ where: { id: user.vendor.id }, data: { isOpen: false } });
+      await tx.user.update({ where: { id: userId }, data: { deletedAt: now, accountStatus: "DEACTIVATED", passwordHash: "" } });
+      await tx.partnerMobileSession.deleteMany({ where: { userId } });
+      await tx.deviceToken.deleteMany({ where: { userId } });
+      await tx.biometricCredential.deleteMany({ where: { userId } });
+      await tx.adminAuditLog.create({ data: { adminUserId: userId, action: "PARTNER_WHOLE_ACCOUNT_DELETION_REQUESTED", entityType: "AccountDeletionRequest", entityId: request.id,
+        newValue: { erasureVersion: 3, allRoles: true } } });
+      return this.partnerReceipt(request);
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  async partnerDeletionReceipt(reference: string, token: string) {
+    const request = await this.prisma.accountDeletionRequest.findFirst({ where: { requestReference: reference, erasureVersion: 3,
+      receiptTokenHash: createHash("sha256").update(token).digest("hex") } });
+    if (!request || (request.completedAt && Date.now() - request.completedAt.getTime() > 90 * 86400_000)) throw new NotFoundException("Private receipt not found or expired.");
+    return this.partnerReceipt(request);
+  }
+
+  async completePartnerPermanent(adminId: string, requestId: string, review: { retentionReviewed: boolean; noIdentifiableHold: boolean; externalCleanupEvidence: string }) {
+    if (!review.retentionReviewed || !review.noIdentifiableHold || !/^[A-Za-z0-9._:/-]{3,120}$/.test(review.externalCleanupEvidence)) throw new BadRequestException("Document retention/holds and external cleanup before completion.");
+    const request = await this.prisma.accountDeletionRequest.findUniqueOrThrow({ where: { id: requestId } });
+    if (request.erasureVersion !== 3 || request.accountType !== "COMPLETE_ACCOUNT") throw new ForbiddenException("Not a Partner whole-account request.");
+    if (request.status === "COMPLETED") return this.partnerReceipt(request);
+    const user = await this.loadUser(request.userId);
+    const blockers = await this.collectBlockers(user, "COMPLETE_ACCOUNT");
+    if (blockers.length) {
+      await this.prisma.accountDeletionRequest.update({ where: { id: requestId }, data: { status: "BLOCKED", blockedReasonCode: firstBlockerCode(blockers), blockerSummary: blockerSummary(blockers) } });
+      throw new BadRequestException("Work or financial reconciliation blocks erasure.");
+    }
+    // Unlinked legacy provider identities cannot be guessed from matching contacts.
+    // Require reviewed legacy cleanup rather than silently preserving another role.
+    if (await this.prisma.serviceProvider.count({ where: { OR: [{ phoneNumber: user.phoneNumber ?? "" }, ...(user.email ? [{ email: user.email }] : [])] } })) {
+      throw new BadRequestException("Legacy provider identity needs verified ownership and erasure before whole-account completion.");
+    }
+    const subjects = [user.id, ...(user.vendor ? [user.vendor.id] : []), ...(user.customerProfile ? [user.customerProfile.id] : []),
+      ...(user.rider ? [user.rider.id] : []), ...user.taxiDriverProfiles.map(profile => profile.id)];
+    const ownedRecords = await Promise.all([
+      this.prisma.order.findMany({ where: { OR: [{ customer: { userId: user.id } }, { vendor: { userId: user.id } }, { rider: { userId: user.id } }] }, select: { id: true } }),
+      this.prisma.payment.findMany({ where: { customer: { userId: user.id } }, select: { id: true } }),
+      this.prisma.vendorSettlement.findMany({ where: { vendor: { userId: user.id } }, select: { id: true } }),
+      this.prisma.vendorAuditLog.findMany({ where: { vendor: { userId: user.id } }, select: { id: true } }),
+      this.prisma.utilityTransaction.findMany({ where: { customer: { userId: user.id } }, select: { id: true } }),
+      this.prisma.customerWallet.findMany({ where: { customer: { userId: user.id } }, select: { id: true } }),
+      this.prisma.supportTicket.findMany({ where: { customer: { userId: user.id } }, select: { id: true } }),
+      this.prisma.taxiTrip.findMany({ where: { OR: [{ customer: { userId: user.id } }, { driverProfile: { userId: user.id } }] }, select: { id: true } })
+    ]);
+    subjects.push(...ownedRecords.flat().map(record => record.id));
+    const held = await this.prisma.dataRetentionHold.findFirst({ where: { resourceId: { in: subjects }, releasedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } });
+    if (held) throw new BadRequestException("An active retention hold blocks permanent erasure.");
+    await this.customerErasure.assertSafeForPartnerAccount(this.prisma, requestId);
+    // External cleanup must succeed before a completed receipt can be written.
+    // Reviewed evidence covers legacy public/catalogue assets and external processors.
+    await this.reconcileStoredObjectsForCompletion(adminId, user, "COMPLETE_ACCOUNT", true, true);
+    await assertLegacyCaptainObjectsCleared(this.prisma, user.id);
+    const files = await this.prisma.partnerMobileFile.findMany({ where: { userId: user.id, deletedAt: null } });
+    for (const file of files) {
+      const location = this.vendorPrivateStorage.storageLocation();
+      if (!file.storageProvider || !file.storageBucket || file.storageProvider !== location.provider || file.storageBucket !== location.bucket) throw new ServiceUnavailableException("Partner document storage provenance requires review.");
+      await this.vendorPrivateStorage.deleteOwnedObject(user.id, file.storageKey);
+      await this.prisma.partnerMobileFile.update({ where: { id: file.id }, data: { deletedAt: new Date(), documentName: null } });
+    }
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${user.id}))::text AS lock`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('karigo-retention-governance'))::text AS lock`;
+      const fresh = await tx.user.findUniqueOrThrow({ where: { id: user.id }, include: accountDeletionUserInclude });
+      if (!fresh.deletedAt || fresh.accountStatus !== "DEACTIVATED") throw new ForbiddenException("Account must remain frozen for erasure.");
+      await tx.accountDeletionRequest.update({ where: { id: requestId }, data: { status: "PROCESSING" } });
+      await this.customerErasure.eraseForPartnerAccount(tx, requestId);
+      await minimizeCaptainPersonalData(tx, user.id, true, new Date());
+      await minimizePartnerPersonalData(tx, user.id, new Date());
+      await this.applyCompletionSafeguards(tx, fresh, "COMPLETE_ACCOUNT", new Date());
+      await tx.refreshToken.deleteMany({ where: { userId: user.id } });
+      await tx.deviceToken.deleteMany({ where: { userId: user.id } });
+      await tx.biometricCredential.deleteMany({ where: { userId: user.id } });
+      await tx.user.update({ where: { id: user.id }, data: { fullName: "Deleted KariGO account", phoneNumber: `deleted:${user.id}`, email: null, passwordHash: "",
+        phoneVerified: false, emailVerified: false, profilePhotoUrl: null, lastLoginAt: null, onboardingPasswordSetAt: null } });
+      const result = await tx.accountDeletionRequest.update({ where: { id: requestId }, data: { status: "COMPLETED", completedAt: new Date(),
+        reason: null, adminNote: null, blockerSummary: Prisma.JsonNull, auditKeepUntil: retentionExpiry("DELETION_AUDIT", new Date()) } });
+      await tx.adminAuditLog.create({ data: { adminUserId: adminId, action: "PARTNER_WHOLE_ACCOUNT_ERASED", entityType: "AccountDeletionRequest", entityId: requestId,
+        newValue: { allRoles: true, externalCleanupEvidence: review.externalCleanupEvidence } } });
+      return this.partnerReceipt(result);
+    }, { timeout: 60_000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  private partnerReceipt(request: Parameters<AccountDeletionService["captainReceipt"]>[0]) {
+    return { ...this.captainReceipt(request), sharedIdentityRetained: false,
+      retainedRecords: "Only necessary financial, fraud, legal and deletion-audit evidence is retained. All genuine roles are included in permanent erasure.",
+      timing: "Ordinary account and Partner data is removed or minimized within 30 days after work, financial or legal blockers are resolved. Private receipt available for 90 days after completion." };
+  }
 
   async currentStatus(userId: string) {
     const request = await this.prisma.accountDeletionRequest.findFirst({
@@ -424,7 +540,8 @@ export class AccountDeletionService {
     adminUserId: string,
     user: AccountDeletionUserContext,
     accountType: AccountDeletionAccountType,
-    permanentCaptain = false
+    permanentCaptain = false,
+    permanentPartner = false
   ) {
     const summary = { captainDeleted: 0, captainRetained: 0, partnerDeleted: 0, partnerRetained: 0 };
 
@@ -508,7 +625,7 @@ export class AccountDeletionService {
         include: { onboardingDocument: true }
       });
       for (const upload of uploads) {
-        const retained = upload.onboardingDocument?.verificationStatus === "APPROVED";
+        const retained = !permanentPartner && upload.onboardingDocument?.verificationStatus === "APPROVED";
         if (retained) {
           await this.prisma.vendorPrivateUpload.update({
             where: { id: upload.id },

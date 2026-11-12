@@ -1,3 +1,4 @@
+import { PermanentAccountDeletion } from "../../src/components/permanent-account-deletion";
 import { useEffect, useState } from "react";
 import { View, Text } from "react-native";
 import { AccountDeletionRequest, accountDeletionApi } from "../../src/api/account-deletion.api";
@@ -77,12 +78,13 @@ function DeletePartnerAccessContent() {
 
   return (
     <Screen>
-      <Hero eyebrow="Account controls" title="Delete Partner business access" subtitle="Request a safe review before KariGO closes your Partner profile." />
+      <Hero eyebrow="Account controls" title="Account controls" subtitle="Choose business-access closure or permanent deletion of your entire KariGO account." />
       <Card>
-        <Text>Delete my KariGO Partner business access</Text>
+        <Text>Close Partner business access</Text>
         <MutedText>Open orders, pending settlements, branch availability and required business records must be reconciled before KariGO processes this request.</MutedText>
         <MutedText>Order, settlement, tax, security and audit records that KariGO must retain are preserved.</MutedText>
       </Card>
+      <Card><MutedText>Closing Partner business access preserves any genuine Customer or Captain role. It is not permanent whole-account deletion.</MutedText></Card>
       {current ? <Card>
         <Text>Current request</Text>
         <MutedText>Reference: {current.requestReference}</MutedText>
@@ -96,7 +98,8 @@ function DeletePartnerAccessContent() {
       <TextField label="Type DELETE to confirm request" value={confirmText} onChangeText={setConfirmText} autoCapitalize="characters" />
       {message ? <MutedText>{message}</MutedText> : null}
       {error ? <MutedText>{error}</MutedText> : null}
-      <PrimaryButton label={busy ? "Sending request..." : "Delete my KariGO Partner business access"} onPress={() => void submit()} disabled={busy || confirmText.trim().toUpperCase() !== "DELETE"} />
+      <PrimaryButton label={busy ? "Sending request..." : "Close Partner business access"} onPress={() => void submit()} disabled={busy || confirmText.trim().toUpperCase() !== "DELETE"} />
+      <PermanentAccountDeletion />
     </Screen>
   );
 }

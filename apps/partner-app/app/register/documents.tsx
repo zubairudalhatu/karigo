@@ -42,7 +42,7 @@ export default function RegisterDocumentsScreen() {
 
   return (
     <Screen>
-      <Hero eyebrow="Documents" title="Prepare review evidence" subtitle="Tell KariGO which documents are ready. File uploads happen after approval/login from the mobile Documents screen." />
+      <Hero eyebrow="Documents" title="Prepare review evidence" subtitle="Tell KariGO which documents are ready. Upload evidence while signed in from the Documents screen." />
       <Card>
         <TextField
           label="Business registration number optional"
@@ -64,6 +64,7 @@ export default function RegisterDocumentsScreen() {
           value={registration.serviceEvidenceReady}
           onPress={() => updateRegistration({ serviceEvidenceReady: !registration.serviceEvidenceReady })}
         />
+        <PrimaryButton label="Upload onboarding documents" onPress={() => router.push("/documents")} variant="secondary" />
         <MutedText>Do not upload or share passwords, OTPs, card details or unrelated private records. KariGO will request only necessary onboarding evidence.</MutedText>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <PrimaryButton label={saving ? "Saving..." : "Review application"} onPress={() => void continueNext()} disabled={saving} />

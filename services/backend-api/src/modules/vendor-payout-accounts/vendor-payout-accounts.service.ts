@@ -63,7 +63,7 @@ export class VendorPayoutAccountsService {
     const existing = await this.prisma.vendorPayoutAccount.findUnique({ where: { vendorId: vendor.id }, select: { id: true } });
     if (existing) throw new BadRequestException("Payout account already exists. Update the existing payout account instead.");
 
-    const account = await this.prisma.vendorPayoutAccount.create({
+    const account = await this.writeBankAccount(() => this.prisma.vendorPayoutAccount.create({
       data: {
         vendorId: vendor.id,
         accountName: dto.accountName,
@@ -75,7 +75,7 @@ export class VendorPayoutAccountsService {
         vendorVisibleNote: "Your payout account has been submitted for verification."
       },
       select: VENDOR_ACCOUNT_SELECT
-    });
+    }));
 
     await this.notifyVendor(vendor.userId, NotificationType.PAYOUT_ACCOUNT_SUBMITTED, account.id, "Payout account submitted", "Your payout account has been submitted for verification.");
     return this.toVendorSummary(account);
@@ -88,7 +88,7 @@ export class VendorPayoutAccountsService {
     const existing = await this.prisma.vendorPayoutAccount.findUnique({ where: { vendorId: vendor.id }, select: { id: true } });
     if (!existing) throw new NotFoundException("Payout account not found");
 
-    const account = await this.prisma.vendorPayoutAccount.update({
+    const account = await this.writeBankAccount(() => this.prisma.vendorPayoutAccount.update({
       where: { id: existing.id },
       data: {
         accountName: dto.accountName,
@@ -105,7 +105,7 @@ export class VendorPayoutAccountsService {
         internalNote: null
       },
       select: VENDOR_ACCOUNT_SELECT
-    });
+    }));
 
     await this.notifyVendor(vendor.userId, NotificationType.PAYOUT_ACCOUNT_UPDATED, account.id, "Payout account updated", "Your payout account has been updated and is awaiting verification.");
     return this.toVendorSummary(account);
@@ -237,6 +237,13 @@ export class VendorPayoutAccountsService {
   private assertMatchingAccountNumbers(dto: UpsertVendorPayoutAccountDto) {
     if (dto.accountNumber !== dto.confirmAccountNumber) {
       throw new BadRequestException("Account number and confirmation account number do not match");
+    }
+  }
+
+  private async writeBankAccount<T>(operation: () => Promise<T>): Promise<T> {
+    try { return await operation(); }
+    catch { // Prisma validation/query errors can include input values in their stacks.
+      throw new ServiceUnavailableException("Payout account could not be saved. Please try again.");
     }
   }
 

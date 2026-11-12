@@ -9,8 +9,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "KariGO Partner uses photo access only when you choose product images, business logo or cover images to upload.",
-          "microphonePermission": false
+          "photosPermission": false,
+          "microphonePermission": false,
+          "cameraPermission": false
         }
       ],
       "expo-document-picker",
@@ -24,7 +25,13 @@
           }
         }
       ],
-      "../../scripts/with-approved-android-launcher-icons.cjs"
+      "../../scripts/with-approved-android-launcher-icons.cjs",
+      [
+        "expo-notifications",
+        {
+          "enableBackgroundRemoteNotifications": false
+        }
+      ]
     ],
     "icon": "./assets/icon.png",
     "splash": {
@@ -64,7 +71,14 @@
       "url": "https://u.expo.dev/44e595bd-739a-430f-8d4d-99e961ac2451"
     },
     "ios": {
-      "bundleIdentifier": "com.karigo.partner"
+      "bundleIdentifier": "ng.com.karigo.partner",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false
+        },
+        "ITSAppUsesNonExemptEncryption": false
+      }
     }
   }
 }

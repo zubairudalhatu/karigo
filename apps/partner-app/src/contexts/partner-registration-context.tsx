@@ -1,4 +1,6 @@
-import { createContext, ReactNode, useContext, useState } from "react";
+import { createContext, ReactNode, useContext, useEffect, useState } from "react";
+import { partnerDraft } from "@karigo/shared-types";
+import { useAuth } from "./auth-context";
 import type { PreferredContactMethod, VendorApplicationCategory } from "../api/registration.api";
 
 export type PartnerAccountType = "PRODUCT_SELLER" | "SERVICE_PROVIDER" | "BOTH";
@@ -7,8 +9,7 @@ export interface PartnerRegistrationState {
   fullName: string;
   phoneNumber: string;
   email: string;
-  otp: string;
-  password: string;
+  verificationTicket: string;
   accountType: PartnerAccountType;
   businessCategory: VendorApplicationCategory;
   businessName: string;
@@ -52,8 +53,7 @@ const initialRegistration: PartnerRegistrationState = {
   fullName: "",
   phoneNumber: "",
   email: "",
-  otp: "",
-  password: "",
+  verificationTicket: "",
   accountType: "PRODUCT_SELLER",
   businessCategory: "RESTAURANT",
   businessName: "",
@@ -104,13 +104,24 @@ const RegistrationContext = createContext<RegistrationContextValue | null>(null)
 
 export function PartnerRegistrationProvider({ children }: { children: ReactNode }) {
   const [registration, setRegistration] = useState<PartnerRegistrationState>(initialRegistration);
+  const { user } = useAuth();
+  useEffect(() => { setRegistration(initialRegistration); }, [user?.id]);
 
   return (
     <RegistrationContext.Provider
       value={{
         registration,
         updateRegistration: (patch) => setRegistration((current) => ({ ...current, ...patch })),
-        hydrateRegistration: (nextState) => setRegistration((current) => ({ ...current, ...nextState })),
+        hydrateRegistration: (nextState) => setRegistration((current) => {
+          const draft = partnerDraft(nextState);
+          return { ...current, ...draft,
+            accountType: draft.accountType === "PRODUCT_SELLER" || draft.accountType === "SERVICE_PROVIDER" || draft.accountType === "BOTH" ? draft.accountType : current.accountType,
+            businessCategory: nextState.businessCategory && ["RESTAURANT", "GROCERIES", "MARKET_ITEMS", "PHARMACY", "PARCEL_LOGISTICS_PARTNER", "SME_SERVICES", "OTHER_MARKETPLACE_VENDOR"].includes(nextState.businessCategory) ? nextState.businessCategory : current.businessCategory,
+            city: draft.city === "Kano" || draft.city === "Abuja" ? draft.city : current.city,
+            state: draft.state === "Kano" || draft.state === "FCT" ? draft.state : current.state,
+            preferredContactMethod: draft.preferredContactMethod === "PHONE" || draft.preferredContactMethod === "EMAIL" || draft.preferredContactMethod === "WHATSAPP" ? draft.preferredContactMethod : current.preferredContactMethod
+          };
+        }),
         resetRegistration: () => setRegistration(initialRegistration)
       }}
     >

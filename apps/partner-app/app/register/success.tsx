@@ -1,3 +1,4 @@
+import { PermanentAccountDeletion } from "../../src/components/permanent-account-deletion";
 import { brand } from "@karigo/config";
 import { useRouter } from "expo-router";
 import { Image, StyleSheet, Text, View } from "react-native";
@@ -25,6 +26,7 @@ export default function RegisterSuccessScreen() {
         <MutedText>Approval is not automatic. Marketplace visibility, payouts and service dispatch stay disabled until KariGO completes review and activation.</MutedText>
         <PrimaryButton label="Back to sign in" onPress={backToLogin} />
       </Card>
+      <PermanentAccountDeletion />
     </Screen>
   );
 }

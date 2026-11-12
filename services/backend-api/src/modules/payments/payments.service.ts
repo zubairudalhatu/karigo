@@ -742,7 +742,12 @@ export class PaymentsService {
     }
     if (payment.order.vendorId) {
       const vendor = await tx.vendor.findUnique({ where: { id: payment.order.vendorId }, select: { userId: true } });
-      if (vendor) await tx.notification.create({ data: { userId: vendor.userId, title: "New paid order", message: `Order ${payment.order.orderNumber} is ready for confirmation.`, type: NotificationType.PAYMENT_SUCCESSFUL, entityType: "Order", entityId: payment.orderId } });
+      if (vendor) {
+        await tx.notification.create({ data: { userId: vendor.userId, title: "New paid order", message: `Order ${payment.order.orderNumber} is ready for confirmation.`, type: NotificationType.PAYMENT_SUCCESSFUL, entityType: "Order", entityId: payment.orderId } });
+        // Transactional outbox: no push can escape a rolled-back payment.
+        await tx.partnerPushDelivery.upsert({ where: { eventKey: `paid-order:${payment.orderId}` },
+          create: { eventKey: `paid-order:${payment.orderId}`, userId: vendor.userId, entityId: payment.orderId!, kind: "NEW_ORDER" }, update: {} });
+      }
     }
     return updatedPayment;
   }

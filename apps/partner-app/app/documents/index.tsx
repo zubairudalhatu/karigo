@@ -141,6 +141,7 @@ function DocumentsContent() {
             </View>
             <MutedText>Uploaded {new Date(document.uploadedAt).toLocaleDateString()}</MutedText>
             <MutedText>Scope: Partner application{document.applicationReference ? ` · ${document.applicationReference}` : ""}</MutedText>
+            {document.documentUrl?.startsWith("/partner-mobile/onboarding/files/") && document.verificationStatus !== "APPROVED" ? <PrimaryButton label="Remove uploaded document" variant="secondary" onPress={() => { void partnerApi.removeDocument(document.id).then(() => load(true)).catch(() => setError("Document removal requires review or could not finish.")); }} /> : null}
             {document.adminNote ? <MutedText>Admin note: {document.adminNote}</MutedText> : null}
           </Card>
         ))

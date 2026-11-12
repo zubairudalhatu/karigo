@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, ForbiddenException, Get, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -109,7 +109,7 @@ export class AuthController {
   @Post("vendor-onboarding/password")
   @ApiOperation({ summary: "Create vendor applicant password after OTP verification" })
   async createVendorApplicantPassword(@Body() dto: CreateApplicantPasswordDto) {
-    return { message: "Vendor applicant password created", data: await this.authService.createApplicantPassword(UserRole.VENDOR, dto) };
+    throw new ForbiddenException("Use the verified Partner password flow.");
   }
 
   @Post("captain-onboarding/password")

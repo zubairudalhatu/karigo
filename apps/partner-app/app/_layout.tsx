@@ -1,3 +1,4 @@
+import { PartnerPushLifecycle } from "../src/components/partner-push-lifecycle";
 import { brand } from "@karigo/config";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -12,6 +13,7 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <PartnerRegistrationProvider>
+        <PartnerPushLifecycle />
         <Stack
           screenOptions={{
             headerBackTitle: "Back",

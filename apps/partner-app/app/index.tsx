@@ -1,3 +1,4 @@
+import { PermanentAccountDeletion } from "../src/components/permanent-account-deletion";
 import { brand } from "@karigo/config";
 import { KariGoApiError, LaunchAvailabilityResponse, PartnerCapabilities, ProductSummary, VendorServiceSummary } from "@karigo/shared-types";
 import { useRouter } from "expo-router";
@@ -189,6 +190,8 @@ function DashboardContent() {
           </MutedText>
           {canContinue ? <PrimaryButton label={isCorrection ? "Update application" : "Continue Partner onboarding"} onPress={() => router.push("/register")} /> : null}
           <PrimaryButton label="Contact Support" onPress={() => void Linking.openURL("https://www.karigo.com.ng/contact")} variant="secondary" />
+          <PrimaryButton label="Application documents" onPress={() => router.push("/documents")} variant="secondary" />
+          <PermanentAccountDeletion />
           <PrimaryButton label="Log out" onPress={() => void logout()} variant="secondary" />
         </Card>
       </Screen>

@@ -76,7 +76,7 @@ expect(appJson.expo.updates?.url === "https://u.expo.dev/44e595bd-739a-430f-8d4d
 expect(appJson.expo.android?.package === "com.karigo.partner", "Partner app base Android package must remain com.karigo.partner.");
 expect(appJson.expo.version === "1.0.0", "Partner app version must be 1.0.0 for the Play release line.");
 expect(appJson.expo.android?.versionCode === 7, "Partner app base Android versionCode must be 7 for the replacement production AAB.");
-expect(appJson.expo.ios?.bundleIdentifier === "com.karigo.partner", "Partner app base iOS bundle identifier must remain com.karigo.partner.");
+expect(appJson.expo.ios?.bundleIdentifier === "ng.com.karigo.partner", "Partner iOS must use the approved bundle namespace.");
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-image-picker"), "Base app.json must configure Expo Image Picker.");
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-document-picker"), "Base app.json must configure Expo Document Picker.");
 expect(JSON.stringify(appJson.expo.plugins).includes("expo-build-properties"), "Base app.json must configure Expo build-properties.");
@@ -88,7 +88,7 @@ expect(appConfig.includes("KariGO Partner Staging"), "App config must support st
 expect(appConfig.includes("com.karigo.partner"), "Production package must be com.karigo.partner.");
 expect(appConfig.includes("com.karigo.partner.staging"), "Staging package must be com.karigo.partner.staging.");
 expect(appConfig.includes("karigo-partner"), "Production scheme must be karigo-partner.");
-expect(appConfig.includes("EXPO_PUBLIC_API_BASE_URL"), "App config must read EXPO_PUBLIC_API_BASE_URL.");
+expect(appConfig.includes("partnerApiTarget(isStaging, process.env)"), "App config must validate the API target.");
 expect(appConfig.includes("expo-image-picker") && appConfig.includes("expo-document-picker"), "App config must register mobile upload plugins.");
 expect(appConfig.includes("expo-build-properties"), "App config must register Android build-properties.");
 expect(appConfig.includes("compileSdkVersion: 36"), "Partner app must compile against Android API 36.");
@@ -157,12 +157,12 @@ expect(nav.includes('state.state === "approved"'), "Bottom nav must show only af
 expect(nav.includes("useSafeAreaInsets") && nav.includes("Math.max(insets.bottom, 12)"), "Bottom nav must respect bottom safe-area insets.");
 
 expect(authApi.includes("auth/password-reset/request") && authApi.includes("auth/password-reset/confirm"), "Auth API must expose password reset endpoints.");
-expect(authApi.includes("auth/vendor-onboarding/account") && authApi.includes("auth/vendor-onboarding/password"), "Auth API must expose vendor applicant onboarding endpoints.");
+expect(authApi.includes("auth/vendor-onboarding/account") && authApi.includes("partner-mobile/password"), "Auth API must expose vendor applicant onboarding endpoints.");
 expect(authApi.includes("auth/vendor/activation-link/request"), "Auth API must expose vendor activation link request endpoint.");
 expect(registrationApi.includes("vendor-applications") && registrationApi.includes("submitVendorApplication"), "Registration API must submit public Partner applications.");
-expect(registrationApi.includes("vendor-applications/me/ensure") && registrationApi.includes("ensurePartnerOnboarding"), "Registration API must ensure authenticated Partner onboarding draft state.");
-expect(registrationApi.includes("vendor-applications/me/draft") && registrationApi.includes("savePartnerDraft"), "Registration API must persist authenticated Partner onboarding drafts.");
-expect(registrationApi.includes("vendor-applications/me/submit") && registrationApi.includes("submitCurrentUserVendorApplication"), "Registration API must submit authenticated Partner applications idempotently.");
+expect(registrationApi.includes("partner-mobile/onboarding/ensure") && registrationApi.includes("ensurePartnerOnboarding"), "Registration API must ensure authenticated Partner onboarding draft state.");
+expect(registrationApi.includes("partner-mobile/onboarding/draft") && registrationApi.includes("savePartnerDraft"), "Registration API must persist authenticated Partner onboarding drafts.");
+expect(registrationApi.includes("partner-mobile/onboarding/submit") && registrationApi.includes("submitCurrentUserVendorApplication"), "Registration API must submit authenticated Partner applications idempotently.");
 expect(uploadsApi.includes("vendors/uploads") && uploadsApi.includes("FormData") && uploadsApi.includes("Bearer"), "Upload API must use authenticated vendor-scoped multipart uploads.");
 expect(uploadPickers.includes("expo-image-picker") && uploadPickers.includes("expo-document-picker"), "Upload picker helper must use native image and document pickers.");
 expect(uploadPickers.includes("pickAndUploadImage") && uploadPickers.includes("pickAndUploadDocument"), "Upload picker helper must expose image and document upload helpers.");
@@ -194,8 +194,8 @@ expect(partnerApi.includes("vendors/services"), "Partner API must load existing 
 expect(partnerApi.includes("createService") && partnerApi.includes('api.post<VendorServiceSummary>("vendors/services"'), "Partner API must create vendor services through existing service endpoints.");
 expect(partnerApi.includes("updateService") && partnerApi.includes("vendors/services/${serviceId}"), "Partner API must update vendor services through owned endpoints.");
 expect(partnerApi.includes("archiveService") && partnerApi.includes('api.delete<VendorServiceSummary>(`vendors/services/${serviceId}`'), "Partner API must archive vendor services safely.");
-expect(partnerApi.includes("vendors/onboarding-documents"), "Partner API must load onboarding document endpoint.");
-expect(partnerApi.includes("uploadOnboardingDocument") && partnerApi.includes('api.post<PartnerOnboardingDocument>("vendors/onboarding-documents"'), "Partner API must submit onboarding document metadata.");
+expect(partnerApi.includes("partner-mobile/onboarding/files"), "Partner API must load onboarding document endpoint.");
+expect(partnerApi.includes("uploadOnboardingDocument") && partnerApi.includes('api.post<PartnerOnboardingDocument>("partner-mobile/onboarding/documents"'), "Partner API must submit onboarding document metadata.");
 expect(partnerApi.includes("vendor/settlements"), "Partner API must load vendor settlement visibility endpoint.");
 expect(partnerApi.includes("vendor/payout-account"), "Partner API must maintain vendor payout account details through vendor-scoped endpoints.");
 expect(!partnerApi.includes("admin/vendor-payout-accounts"), "Partner app must not call admin payout account endpoints.");

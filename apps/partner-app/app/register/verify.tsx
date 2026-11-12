@@ -9,6 +9,7 @@ import { usePartnerRegistration } from "../../src/contexts/partner-registration-
 export default function RegisterVerifyScreen() {
   const router = useRouter();
   const { registration, updateRegistration } = usePartnerRegistration();
+  const [otp, setOtp] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -21,11 +22,13 @@ export default function RegisterVerifyScreen() {
     try {
       const result = await authApi.verifyVendorApplicantOtp({
         phoneNumber: registration.phoneNumber,
-        otp: registration.otp.trim()
+        otp: otp.trim()
       });
+      setOtp("");
+      updateRegistration({ verificationTicket: result.verificationTicket ?? "" });
       setMessage("Phone number verified.");
       if (result.nextStep === "PASSWORD_REQUIRED") router.push("/register/password");
-      else router.push("/register/account-type");
+      else router.push("/auth/login");
     } catch (err) {
       setError(err instanceof Error ? err.message : "OTP could not be verified.");
     } finally {
@@ -51,10 +54,10 @@ export default function RegisterVerifyScreen() {
     <Screen>
       <Hero eyebrow="Phone verification" title="Enter your OTP" subtitle={`We sent a verification code to ${registration.phoneNumber || "your phone number"}.`} />
       <Card>
-        <TextField label="OTP" keyboardType="number-pad" value={registration.otp} onChangeText={(otp) => updateRegistration({ otp })} />
+        <TextField label="OTP" keyboardType="number-pad" value={otp} onChangeText={setOtp} />
         {message ? <MutedText>{message}</MutedText> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <PrimaryButton label={submitting ? "Verifying..." : "Verify phone"} onPress={() => void verify()} disabled={submitting || registration.otp.trim().length < 4} />
+        <PrimaryButton label={submitting ? "Verifying..." : "Verify phone"} onPress={() => void verify()} disabled={submitting || otp.trim().length < 4} />
         <PrimaryButton label={resending ? "Resending..." : "Resend OTP"} onPress={() => void resend()} disabled={resending || !registration.phoneNumber} variant="secondary" />
       </Card>
     </Screen>

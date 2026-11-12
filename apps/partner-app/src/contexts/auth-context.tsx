@@ -1,3 +1,4 @@
+import { clearPartnerPush } from "../lib/partner-push";
 import {
   ApiNetworkError,
   ApiParseError,
@@ -174,6 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSessionMessage("Saved login reset. Please sign in again.");
         },
         logout: async () => {
+          await clearPartnerPush().catch(() => undefined);
           const refreshToken = await refreshTokenStore.getToken();
           const generation = authSessionStore.beginNewSession();
           if (refreshToken) {

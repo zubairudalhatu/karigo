@@ -1,4 +1,5 @@
 import { api } from "./client";
+import { partnerDraft } from "@karigo/shared-types";
 
 export type VendorApplicationCategory =
   | "RESTAURANT"
@@ -119,17 +120,15 @@ export interface PartnerOnboardingResult {
 export const registrationApi = {
   commercialPolicies: () => api.get<PartnerCommercialPolicy[]>("partner-commercial/policies", { authenticated: false }),
   ensurePartnerOnboarding: () =>
-    api.post<PartnerOnboardingResult>("vendor-applications/me/ensure"),
+    api.post<PartnerOnboardingResult>("partner-mobile/onboarding/ensure"),
   savePartnerDraft: (body: PartnerOnboardingDraftInput) =>
-    api.patch<PartnerOnboardingResult>("vendor-applications/me/draft", body),
+    api.patch<PartnerOnboardingResult>("partner-mobile/onboarding/draft", { ...body, draftData: body.draftData === undefined ? undefined : partnerDraft(body.draftData) }),
   submitCurrentUserVendorApplication: (body: VendorApplicationInput) =>
-    api.post<VendorApplicationStatus>("vendor-applications/me/submit", body),
+    api.post<VendorApplicationStatus>("partner-mobile/onboarding/submit", body),
   submitVendorApplication: (body: VendorApplicationInput) =>
-    api.post<VendorApplicationStatus>("vendor-applications", body, { authenticated: false }),
-  applicationStatus: (params: { reference?: string; phoneNumber?: string }) => {
-    const query = new URLSearchParams();
-    if (params.reference) query.set("reference", params.reference);
-    if (params.phoneNumber) query.set("phoneNumber", params.phoneNumber);
-    return api.get<VendorApplicationStatus>(`vendor-applications/status?${query.toString()}`, { authenticated: false });
+    api.post<VendorApplicationStatus>("partner-mobile/onboarding/submit", body),
+  applicationStatus: async () => {
+    const state = await api.get<PartnerOnboardingResult>("partner-mobile/onboarding/status");
+    return state.application ?? null;
   }
 };

@@ -1,3 +1,4 @@
+import { PartnerPushService } from "./partner-push.service";
 import { Global, Module } from "@nestjs/common";
 import { AdminRolesGuard } from "../../common/guards/admin-roles.guard";
 import { AuthModule } from "../auth/auth.module";
@@ -29,6 +30,7 @@ import { FirebasePushProvider } from "./push/providers/firebase-push.provider";
   imports: [AuthModule],
   controllers: [NotificationsController, AdminNotificationsController],
   providers: [
+    PartnerPushService,
     NotificationsService,
     DeviceTokensService,
     EmailService,
@@ -54,6 +56,6 @@ import { FirebasePushProvider } from "./push/providers/firebase-push.provider";
     PushNotificationProvider,
     AdminRolesGuard
   ],
-  exports: [NotificationsService, EmailService, WhatsAppService, PushService]
+  exports: [PartnerPushService, NotificationsService, EmailService, WhatsAppService, PushService]
 })
 export class NotificationsModule {}

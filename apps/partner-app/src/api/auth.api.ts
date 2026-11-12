@@ -15,6 +15,7 @@ export interface VendorApplicantOtpInput {
 export interface VendorApplicantPasswordInput {
   phoneNumber: string;
   password: string;
+  verificationTicket: string;
 }
 
 export interface ApplicantOnboardingResult {
@@ -26,20 +27,22 @@ export interface ApplicantOnboardingResult {
   nextStep: "CREATE_ACCOUNT" | "OTP_REQUIRED" | "PASSWORD_REQUIRED" | "READY_FOR_APPLICATION" | "SIGN_IN_REQUIRED";
   message?: string;
   otpExpiresAt?: string;
+  verificationTicket?: string;
   mockOtp?: string;
 }
 
 export interface PasswordResetRequestResult {
   requestAccepted: boolean;
   otpExpiresAt?: string;
+  verificationTicket?: string;
   mockOtp?: string;
 }
 
 export const authApi = {
-  login: (body: LoginRequest) => api.post<LoginResult>("auth/login", body, { authenticated: false, retryOnNetworkFailure: true }),
+  login: (body: LoginRequest) => api.post<LoginResult>("partner-mobile/session", body, { authenticated: false, retryOnNetworkFailure: true }),
   refresh: (body: RefreshSessionRequest) => api.post<LoginResult>("auth/refresh", body, { authenticated: false }),
-  logout: (body: LogoutRequest) => api.post<{ loggedOut: boolean }>("auth/logout", body),
-  me: () => api.get<AuthenticatedUser>("auth/me"),
+  logout: (body: LogoutRequest) => api.post<{ loggedOut: boolean }>("partner-mobile/session/logout", body),
+  me: () => api.get<AuthenticatedUser>("partner-mobile/me"),
   startPhoneChange: (body: StartPhoneChangeRequest) => api.post<StartPhoneChangeResult>("auth/phone-change/start", body),
   confirmPhoneChange: (body: ConfirmPhoneChangeRequest) => api.post<ConfirmPhoneChangeResult>("auth/phone-change/confirm", body),
   requestPasswordReset: (body: { phoneNumber: string }) =>
@@ -51,9 +54,9 @@ export const authApi = {
   resendVendorApplicantOtp: (body: { phoneNumber: string }) =>
     api.post<{ resendAccepted: boolean; otpExpiresAt?: string; mockOtp?: string }>("auth/vendor-onboarding/resend-otp", body, { authenticated: false }),
   verifyVendorApplicantOtp: (body: VendorApplicantOtpInput) =>
-    api.post<ApplicantOnboardingResult>("auth/vendor-onboarding/verify-otp", body, { authenticated: false }),
+    api.post<ApplicantOnboardingResult>("partner-mobile/verification", body, { authenticated: false }),
   createVendorApplicantPassword: (body: VendorApplicantPasswordInput) =>
-    api.post<ApplicantOnboardingResult>("auth/vendor-onboarding/password", body, { authenticated: false }),
+    api.post<ApplicantOnboardingResult>("partner-mobile/password", body, { authenticated: false }),
   vendorApplicantStatus: (phoneNumber: string) =>
     api.get<ApplicantOnboardingResult>(`auth/vendor-onboarding/status?phoneNumber=${encodeURIComponent(phoneNumber)}`, { authenticated: false }),
   requestVendorActivationLink: (body: { phoneNumber?: string; email?: string }) =>

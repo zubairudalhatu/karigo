@@ -64,6 +64,25 @@ export class CustomerErasureService {
     });
   }
 
+  async assertSafeForPartnerAccount(tx: Prisma.TransactionClient, requestId: string) {
+    const request = await tx.accountDeletionRequest.findUniqueOrThrow({ where: { id: requestId }, include: requestInclude });
+    if (request.erasureVersion !== 3 || request.accountType !== "COMPLETE_ACCOUNT" || !request.user.deletedAt) throw new ForbiddenException("Partner whole-account erasure scope is missing.");
+    if (request.user.customerProfile) await this.assertSafeToErase(tx, { ...request, sharedIdentityRetained: true });
+  }
+
+  /** Only the separately consented Partner whole-account pipeline may use this adapter. */
+  async eraseForPartnerAccount(tx: Prisma.TransactionClient, requestId: string) {
+    const request = await tx.accountDeletionRequest.findUniqueOrThrow({ where: { id: requestId }, include: requestInclude });
+    if (request.erasureVersion !== 3 || request.accountType !== "COMPLETE_ACCOUNT" || !request.user.deletedAt || request.status !== "PROCESSING") {
+      throw new ForbiddenException("Partner whole-account erasure scope is missing.");
+    }
+    if (!request.user.customerProfile) return;
+    // Check financial/work safety without the Customer-only role restriction:
+    // this pipeline has explicit consent to remove every genuine role.
+    await this.assertSafeToErase(tx, { ...request, sharedIdentityRetained: true });
+    await this.erase(await heldErasureClient(tx), { ...request, sharedIdentityRetained: false });
+  }
+
   private async locked<T>(userId: string, operation: (tx: Prisma.TransactionClient) => Promise<T>) {
     for (let attempt = 0; ; attempt++) {
       try {

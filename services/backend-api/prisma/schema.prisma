@@ -725,6 +725,7 @@ enum AppSurface {
   CUSTOMER_APP
   RIDER_APP
   VENDOR_DASHBOARD
+  PARTNER_APP
   ADMIN_PORTAL
 }
 
@@ -948,6 +949,9 @@ model User {
   addresses                           Address[]
   notifications                       Notification[]
   deviceTokens                        DeviceToken[]
+  partnerMobileSessions                PartnerMobileSession[]
+  partnerMobileFiles                   PartnerMobileFile[]
+  partnerPushPreference                PartnerPushPreference?
   refreshTokens                       RefreshToken[]
   statusChanges                       OrderStatusHistory[]                 @relation("StatusChangedBy")
   verifiedDocuments                   RiderDocument[]                      @relation("DocumentVerifiedBy")
@@ -2096,6 +2100,7 @@ model VendorCategory {
 }
 
 model VendorApplication {
+  mobileFiles PartnerMobileFile[]
   id                     String                           @id @default(uuid()) @db.Uuid
   reference              String                           @unique
   applicantUserId        String?                          @db.Uuid
@@ -3676,4 +3681,59 @@ model AdminEmailChallenge {
   createdAt DateTime @default(now())
   @@index([userId, createdAt])
   @@map("admin_email_challenges")
+}
+
+model PartnerMobileSession {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  purpose String @default("ONBOARDING")
+  refreshHash String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId, revokedAt])
+  @@map("partner_mobile_sessions")
+}
+model PartnerMobileFile {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  applicationId String? @db.Uuid
+  application VendorApplication? @relation(fields: [applicationId], references: [id])
+  storageKey String @unique
+  storageProvider String?
+  storageBucket String?
+  purpose String
+  mimeType String
+  size Int
+  documentType String @default("OTHER")
+  documentName String?
+  createdAt DateTime @default(now())
+  deletedAt DateTime?
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId, deletedAt])
+  @@map("partner_mobile_files")
+}
+model PartnerPushPreference {
+  userId String @id @db.Uuid
+  orders Boolean @default(true)
+  settlements Boolean @default(false)
+  enabled Boolean @default(false)
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id])
+  @@map("partner_push_preferences")
+}
+model PartnerPushDelivery {
+  id String @id @default(uuid()) @db.Uuid
+  eventKey String @unique
+  userId String @db.Uuid
+  entityId String @db.Uuid
+  kind String
+  state String @default("PENDING")
+  attempts Int @default(0)
+  claimedAt DateTime?
+  createdAt DateTime @default(now())
+  sentAt DateTime?
+  @@index([state, createdAt])
+  @@map("partner_push_deliveries")
 }

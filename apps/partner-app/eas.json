@@ -11,19 +11,18 @@
         "buildType": "apk"
       },
       "env": {
-        "APP_VARIANT": "staging",
-        "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1"
+        "APP_VARIANT": "staging"
       }
     },
     "partner-staging-ios-simulator": {
       "distribution": "internal",
       "channel": "partner-staging",
       "ios": {
-        "simulator": true
+        "simulator": true,
+        "image": "macos-sequoia-15.6-xcode-26.2"
       },
       "env": {
-        "APP_VARIANT": "staging",
-        "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1"
+        "APP_VARIANT": "staging"
       }
     },
     "partner-production": {
@@ -36,6 +35,9 @@
       "env": {
         "APP_VARIANT": "production",
         "EXPO_PUBLIC_API_BASE_URL": "https://karigo-8htn.onrender.com/api/v1"
+      },
+      "ios": {
+        "image": "macos-sequoia-15.6-xcode-26.2"
       }
     },
     "partner-play-internal": {

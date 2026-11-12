@@ -10,18 +10,24 @@ import {
   validateMobileApiBaseUrl
 } from "@karigo/config";
 import * as SecureStore from "expo-secure-store";
+import Constants from "expo-constants";
 
 const LEGACY_TOKEN_KEY = "karigo_partner_access_token";
 const LEGACY_REFRESH_TOKEN_KEY = "karigo_partner_refresh_token";
 const SESSION_KEY = "karigo_partner_session_v2";
-const API_BASE_URL = validateMobileApiBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL, {
+const { runtimePartnerApiTarget } = require("../../config/api-target.cjs");
+const API_BASE_URL = validateMobileApiBaseUrl(runtimePartnerApiTarget(Constants.expoConfig?.extra), {
   appName: "Partner App",
   production: process.env.APP_VARIANT === "production"
 });
 
 export const authSessionStore = createVersionedAuthSessionStore({
   appName: "Partner App",
-  storage: SecureStore,
+  storage: {
+    getItemAsync: (key) => SecureStore.getItemAsync(key, { keychainAccessible: SecureStore.WHEN_UNLOCKED }),
+    setItemAsync: (key, value) => SecureStore.setItemAsync(key, value, { keychainAccessible: SecureStore.WHEN_UNLOCKED }),
+    deleteItemAsync: (key) => SecureStore.deleteItemAsync(key)
+  },
   sessionKey: SESSION_KEY,
   legacyAccessTokenKey: LEGACY_TOKEN_KEY,
   legacyRefreshTokenKey: LEGACY_REFRESH_TOKEN_KEY
@@ -82,7 +88,7 @@ async function fetchRefreshSession(refreshToken: string): Promise<Response> {
   const timeout = setTimeout(() => controller.abort(), DEFAULT_AUTH_API_TIMEOUT_MS);
 
   try {
-    return await fetch(`${API_BASE_URL}/auth/refresh`, {
+    return await fetch(`${API_BASE_URL}/${refreshToken.startsWith("po_") ? "partner-mobile/session/refresh" : "auth/refresh"}`, {
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -155,7 +161,7 @@ async function performRefreshAuth(operationGeneration?: number): Promise<Refresh
   }
 }
 
-async function refreshAuth(meta: { generation?: number }): Promise<RefreshAuthResult> {
+export async function refreshAuth(meta: { generation?: number }): Promise<RefreshAuthResult> {
   const operationGeneration = meta.generation;
   if (refreshFlight && refreshFlight.generation === operationGeneration && authSessionStore.isCurrent(operationGeneration)) {
     logMobileAuthDiagnostic("partner", "refresh_joined_existing", { generation: operationGeneration });

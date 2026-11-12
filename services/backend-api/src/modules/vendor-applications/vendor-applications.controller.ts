@@ -1,3 +1,5 @@
+import { PartnerOnboardingGuard, PartnerPrincipal } from "../auth/partner-session";
+import { NotFoundException } from "@nestjs/common";
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AdminRole, UserRole, VendorApplicationStatus } from "@prisma/client";
@@ -23,15 +25,19 @@ export class PublicVendorApplicationsController {
   constructor(private readonly vendorApplicationsService: VendorApplicationsService) {}
 
   @Post()
-  @ApiOperation({ summary: "Submit a public KariGO vendor application" })
-  async create(@Body() dto: CreateVendorApplicationDto) {
-    return { message: "Vendor application submitted", data: await this.vendorApplicationsService.create(dto) };
+  @UseGuards(PartnerOnboardingGuard)
+  @ApiOperation({ summary: "Submit the authenticated applicant's own KariGO Partner application" })
+  async create(@CurrentUser() user: PartnerPrincipal, @Body() dto: CreateVendorApplicationDto) {
+    return { message: "Vendor application submitted", data: await this.vendorApplicationsService.submitForCurrentUser(user.id, dto, user.partnerScope === "onboarding") };
   }
 
   @Get("status")
-  @ApiOperation({ summary: "Look up public vendor application status" })
-  async status(@Query() query: VendorApplicationStatusQueryDto) {
-    return { message: "Vendor application status retrieved", data: await this.vendorApplicationsService.publicStatus(query) };
+  @UseGuards(PartnerOnboardingGuard)
+  @ApiOperation({ summary: "Look up the authenticated applicant's own status" })
+  async status(@CurrentUser() user: PartnerPrincipal, @Query() query: VendorApplicationStatusQueryDto) {
+    const state = await this.vendorApplicationsService.ensurePartnerApplicant(user.id, user.partnerScope === "onboarding");
+    if (!state.application || (query.reference && query.reference !== state.application.reference)) throw new NotFoundException("Own Partner application not found.");
+    return { message: "Vendor application status retrieved", data: state.application };
   }
 
   @Get("me")

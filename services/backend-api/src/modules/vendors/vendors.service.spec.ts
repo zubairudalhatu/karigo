@@ -28,6 +28,12 @@ describe("VendorsService public listing", () => {
     privateUploads.storageLocation.mockReturnValue({ provider: "GCS", bucket: "partner-private-test" });
   });
 
+  it("does not repeat full bank details through the merchant profile", async () => {
+    prisma.vendor.findFirst.mockResolvedValue({ id: "vendor-private", bankName: "Synthetic bank", accountNumber: "0000000000", accountName: "Synthetic owner", onboardingDocuments: [] });
+    const result = await service.me("owner");
+    expect(result).not.toHaveProperty("accountNumber"); expect(result).not.toHaveProperty("accountName");
+  });
+
   it("returns a safe public vendor shape without bank details", async () => {
     prisma.vendor.findMany.mockResolvedValue([{
       id: "vendor-1",
@@ -321,7 +327,7 @@ describe("VendorsService public listing", () => {
     prisma.vendorPrivateUpload.create.mockResolvedValueOnce({ id: "private-upload-1", storageKey: "vendors/vendor-1/onboarding-documents/private.pdf" });
 
     const privateResult = await serviceUnderTest().uploadFile("vendor-user-1", VendorUploadPurpose.ONBOARDING_DOCUMENT, {
-      originalname: "cac.pdf", mimetype: "application/pdf", size: 100, buffer: Buffer.from("private")
+      originalname: "cac.pdf", mimetype: "application/pdf", size: 9, buffer: Buffer.from("%PDF-test")
     });
 
     expect(privateResult).toMatchObject({ access: "PRIVATE_CONTROLLED", relativeUrl: null });

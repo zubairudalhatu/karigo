@@ -1,3 +1,5 @@
+import { PartnerSessionService, PartnerOnboardingGuard, PartnerOnboardingStrategy } from "./partner-session";
+import { PartnerAuthController } from "./partner-auth.controller";
 import { GovernanceAuthService, GovernanceEmailSender, GovernanceAuthController, GovernanceAuthGuard, GovernanceRequestLimitGuard, GovernanceLoginValidationAudit } from "./governance-auth";
 import { GovernanceControlsService, GovernanceAdministrationController, RestoreGovernanceController, RESTORE_RELEASE_AUDIT } from "./governance-controls";
 import { governanceJournalProvider } from "./governance-journal-provider";
@@ -19,8 +21,9 @@ import { PhoneChangeService } from "./phone-change.service";
 
 @Module({
   imports: [PassportModule.register({ defaultStrategy: "jwt" }), UsersModule],
-  controllers: [AuthController, GovernanceAuthController, GovernanceAdministrationController, RestoreGovernanceController],
+  controllers: [PartnerAuthController, AuthController, GovernanceAuthController, GovernanceAdministrationController, RestoreGovernanceController],
   providers: [
+    PartnerSessionService, PartnerOnboardingGuard, PartnerOnboardingStrategy,
     AuthService, GovernanceAuthService, GovernanceEmailSender, GovernanceAuthGuard, GovernanceRequestLimitGuard,
     GovernanceLoginValidationAudit,
     GovernanceControlsService,
@@ -38,6 +41,6 @@ import { PhoneChangeService } from "./phone-change.service";
     JwtStrategy,
     RolesGuard
   ],
-  exports: [AuthService, RolesGuard]
+  exports: [AuthService, RolesGuard, PartnerSessionService, PartnerOnboardingGuard]
 })
 export class AuthModule {}

@@ -1,3 +1,4 @@
+const { partnerApiTarget } = require("./config/api-target.cjs");
 type ExpoConfigInput = {
   config: {
     android?: Record<string, unknown>;
@@ -37,11 +38,13 @@ export default ({ config }: ExpoConfigInput) => {
       [
         "expo-image-picker",
         {
-          photosPermission: "KariGO Partner uses photo access only when you choose product images, business logo or cover images to upload.",
+          photosPermission: false,
+          cameraPermission: false,
           microphonePermission: false
         }
       ],
       "expo-document-picker",
+      ["expo-notifications", { enableBackgroundRemoteNotifications: false }],
       ["expo-build-properties", androidApi36BuildProperties],
       "../../scripts/with-approved-android-launcher-icons.cjs"
     ],
@@ -82,12 +85,15 @@ export default ({ config }: ExpoConfigInput) => {
     },
     ios: {
       ...config.ios,
-      bundleIdentifier: isStaging ? "com.karigo.partner.staging" : "com.karigo.partner"
+      supportsTablet: false,
+      bundleIdentifier: isStaging ? "ng.com.karigo.partner.staging" : "ng.com.karigo.partner",
+      infoPlist: { NSAppTransportSecurity: { NSAllowsArbitraryLoads: false }, ITSAppUsesNonExemptEncryption: false }
     },
     extra: {
       ...extra,
       router: {},
-      apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? ""
+      appVariant: isStaging ? "staging" : "production",
+      apiBaseUrl: partnerApiTarget(isStaging, process.env)
     }
   };
 };

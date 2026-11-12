@@ -229,7 +229,7 @@ export interface PayoutAccountPayload {
 }
 
 export const partnerApi = {
-  onboardingState: () => api.get<PartnerOnboardingState>("vendor-applications/me"),
+  onboardingState: () => api.get<PartnerOnboardingState>("partner-mobile/onboarding/status"),
   capabilities: () => api.get<PartnerCapabilities>("vendors/capabilities"),
   profile: () => api.get<PartnerProfile>("vendors/me"),
   updateProfile: (body: PartnerProfileUpdateInput) => api.patch<PartnerProfile>("vendors/me", body),
@@ -251,9 +251,10 @@ export const partnerApi = {
   createService: (body: VendorServiceInput) => api.post<VendorServiceSummary>("vendors/services", body),
   updateService: (serviceId: string, body: Partial<VendorServiceInput>) => api.patch<VendorServiceSummary>(`vendors/services/${serviceId}`, body),
   archiveService: (serviceId: string) => api.delete<VendorServiceSummary>(`vendors/services/${serviceId}`),
-  documents: () => api.get<PartnerOnboardingDocument[]>("vendors/onboarding-documents"),
+  removeDocument: (id: string) => api.delete(`partner-mobile/onboarding/files/${id}`),
+  documents: () => api.get<PartnerOnboardingDocument[]>("partner-mobile/onboarding/files"),
   uploadOnboardingDocument: (body: { documentType: string; documentName?: string; documentUrl: string }) =>
-    api.post<PartnerOnboardingDocument>("vendors/onboarding-documents", body),
+    api.post<PartnerOnboardingDocument>("partner-mobile/onboarding/documents", body),
   settlements: (status: VendorSettlementFilter = "ALL") =>
     api.get<VendorSettlementsResult>(`vendor/settlements${status === "ALL" ? "" : `?status=${status}`}`),
   commercialState: () => api.get<PartnerCommercialState>("partner-commercial/me"),

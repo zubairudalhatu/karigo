@@ -74,10 +74,11 @@ function ProfileContent() {
         <Card>
           <Text style={styles.sectionTitle}>Privacy, support and account controls</Text>
           <MutedText>Review KariGO policies, contact Support, or request closure of Partner business access.</MutedText>
-          <PrimaryButton label="Privacy Policy" onPress={() => router.push("/legal/privacy")} variant="secondary" />
+          <PrimaryButton label="Notifications" onPress={() => router.push("/profile/notifications")} variant="secondary" />
+        <PrimaryButton label="Privacy Policy" onPress={() => router.push("/legal/privacy")} variant="secondary" />
           <PrimaryButton label="Terms of Service" onPress={() => router.push("/legal/terms")} variant="secondary" />
           <PrimaryButton label="Support" onPress={() => router.push("/support")} variant="secondary" />
-          <PrimaryButton label="Delete my KariGO Partner business access" onPress={() => router.push("/profile/delete-account")} variant="secondary" />
+          <PrimaryButton label="Close Partner access / delete account" onPress={() => router.push("/profile/delete-account")} variant="secondary" />
         </Card>
         <PrimaryButton label="Log out" onPress={() => void logout()} variant="secondary" />
       </Screen>
@@ -137,11 +138,12 @@ function ProfileContent() {
       <Card>
         <Text style={styles.sectionTitle}>Privacy, support and account controls</Text>
         <MutedText>Review KariGO policies, get support, or request safe closure of Partner business access.</MutedText>
+        <PrimaryButton label="Notifications" onPress={() => router.push("/profile/notifications")} variant="secondary" />
         <PrimaryButton label="Privacy Policy" onPress={() => router.push("/legal/privacy")} variant="secondary" />
         <PrimaryButton label="Terms of Service" onPress={() => router.push("/legal/terms")} variant="secondary" />
         <PrimaryButton label="Support" onPress={() => router.push("/support")} variant="secondary" />
         <PrimaryButton label="Change verified phone number" onPress={() => router.push("/profile/change-phone")} variant="secondary" />
-        <PrimaryButton label="Delete my KariGO Partner business access" onPress={() => router.push("/profile/delete-account")} variant="secondary" />
+        <PrimaryButton label="Close Partner access / delete account" onPress={() => router.push("/profile/delete-account")} variant="secondary" />
       </Card>
       <PrimaryButton label="Log out" onPress={() => void logout()} variant="secondary" />
     </Screen>

@@ -1,3 +1,5 @@
+import { PartnerMobileFilesService } from "./partner-mobile-files.service";
+import { partnerDraft } from "@karigo/shared-types";
 import { requiredMobile } from "../../common/utils/required-mobile";
 import { BadRequestException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -130,7 +132,8 @@ export class VendorApplicationsService {
     private readonly applicationNotifications: ApplicationNotificationsService,
     private readonly config?: ConfigService,
     @Optional()
-    private readonly partnerCommercial?: PartnerCommercialService
+    private readonly partnerCommercial?: PartnerCommercialService,
+    @Optional() private readonly mobileFiles?: PartnerMobileFilesService
   ) {}
 
   async create(dto: CreateVendorApplicationDto) {
@@ -320,9 +323,9 @@ export class VendorApplicationsService {
     };
   }
 
-  async ensurePartnerApplicant(userId: string) {
+  async ensurePartnerApplicant(userId: string, onboardingOnly = false) {
     const user = await this.loadPartnerOnboardingUser(userId);
-    this.assertPartnerOnboardingAccount(user);
+    this.assertPartnerOnboardingAccount(user, onboardingOnly);
 
     const application = await this.findCurrentUserApplication(this.prisma, user);
     const stage = application ? "SUBMITTED" : "START";
@@ -341,9 +344,9 @@ export class VendorApplicationsService {
     return this.toPartnerOnboardingResult(user, draft, application);
   }
 
-  async savePartnerOnboardingDraft(userId: string, dto: PartnerOnboardingDraftDto) {
+  async savePartnerOnboardingDraft(userId: string, dto: PartnerOnboardingDraftDto, onboardingOnly = false) {
     const user = await this.loadPartnerOnboardingUser(userId);
-    this.assertPartnerOnboardingAccount(user);
+    this.assertPartnerOnboardingAccount(user, onboardingOnly);
     const application = await this.findCurrentUserApplication(this.prisma, user);
     const requestedStage = dto.onboardingStage ?? (application ? "SUBMITTED" : "START");
     const stage = application && requestedStage !== "SUBMITTED" ? "SUBMITTED" : requestedStage;
@@ -353,14 +356,14 @@ export class VendorApplicationsService {
       update: {
         onboardingStage: stage,
         ...(dto.accountType !== undefined ? { accountType: dto.accountType } : {}),
-        ...(dto.draftData !== undefined ? { draftData: this.json(dto.draftData) } : {}),
+        ...(dto.draftData !== undefined ? { draftData: this.json(this.validateDraft(dto.draftData)) } : {}),
         ...(application ? { applicationId: application.id, submittedAt: application.submittedAt } : {})
       },
       create: {
         userId,
         onboardingStage: stage,
         accountType: dto.accountType,
-        draftData: this.json(dto.draftData),
+        draftData: this.json(this.validateDraft(dto.draftData)),
         ...(application ? { applicationId: application.id, submittedAt: application.submittedAt } : {})
       },
       select: PARTNER_DRAFT_SELECT
@@ -369,14 +372,14 @@ export class VendorApplicationsService {
     return this.toPartnerOnboardingResult(user, draft, application);
   }
 
-  async submitForCurrentUser(userId: string, dto: CreateVendorApplicationDto) {
+  async submitForCurrentUser(userId: string, dto: CreateVendorApplicationDto, onboardingOnly = false) {
     if (!dto.declarationAccepted || !dto.privacyAccepted || !dto.contactConsentAccepted) {
       throw new BadRequestException("Application declaration, privacy acknowledgement and contact consent are required");
     }
     this.assertLaunchLocation(dto);
 
     const user = await this.loadPartnerOnboardingUser(userId);
-    this.assertPartnerOnboardingAccount(user);
+    this.assertPartnerOnboardingAccount(user, onboardingOnly);
     const businessPhoneNumber = this.normalizePhone(dto.businessPhoneNumber);
     const contactPhoneNumber = this.normalizePhone(dto.contactPhoneNumber || requiredMobile(user.phoneNumber));
     const existingBeforeAgreement = await this.findCurrentUserApplication(this.prisma, user, contactPhoneNumber, dto.contactEmail);
@@ -407,13 +410,13 @@ export class VendorApplicationsService {
         update: {
           onboardingStage: "REVIEW",
           accountType: dto.businessType ?? dto.catalogueCategory,
-          draftData: this.json(this.safeDraftDataFromApplicationDto(dto))
+          draftData: this.json(partnerDraft(this.safeDraftDataFromApplicationDto(dto)))
         },
         create: {
           userId,
           onboardingStage: "REVIEW",
           accountType: dto.businessType ?? dto.catalogueCategory,
-          draftData: this.json(this.safeDraftDataFromApplicationDto(dto))
+          draftData: this.json(partnerDraft(this.safeDraftDataFromApplicationDto(dto)))
         },
         select: PARTNER_DRAFT_SELECT
       });
@@ -456,6 +459,7 @@ export class VendorApplicationsService {
       return { application: created, createdForNotification: created };
     });
 
+    await this.mobileFiles?.attachToApplication(user.id, application.id);
     if (createdForNotification) {
       await this.applicationNotifications.vendorApplicationSubmitted({
         reference: createdForNotification.reference,
@@ -599,6 +603,7 @@ export class VendorApplicationsService {
       });
     });
 
+    if (dto.status === VendorApplicationStatus.WITHDRAWN) await this.mobileFiles?.cleanupWithdrawn(applicationId);
     await this.applicationNotifications.vendorApplicationReviewed({
       reference: application.reference,
       recipientName: application.contactFullName,
@@ -773,12 +778,18 @@ export class VendorApplicationsService {
       statusHistory: application.statusHistory.map((history) => ({ ...history, createdAt: history.createdAt.toISOString() })),
       documents: (application.documents ?? []).map((document) => ({
         ...document,
+        documentUrl: document.documentUrl.replace(/^\/partner-mobile\/onboarding\/files\/([0-9a-f-]{36})$/i, "/admin/partner-onboarding/files/$1"),
         uploadedAt: document.uploadedAt.toISOString(),
         verifiedAt: document.verifiedAt?.toISOString() ?? null,
         createdAt: document.createdAt.toISOString(),
         updatedAt: document.updatedAt.toISOString()
       }))
     };
+  }
+
+  private validateDraft(value: unknown) {
+    if (value === undefined) return undefined;
+    try { return partnerDraft(value, true); } catch { throw new BadRequestException("Invalid business draft. Only business fields are accepted."); }
   }
 
   private json(value: unknown): Prisma.InputJsonValue | undefined {
@@ -811,12 +822,12 @@ export class VendorApplicationsService {
     return user;
   }
 
-  private assertPartnerOnboardingAccount(user: Awaited<ReturnType<VendorApplicationsService["loadPartnerOnboardingUser"]>>) {
+  private assertPartnerOnboardingAccount(user: Awaited<ReturnType<VendorApplicationsService["loadPartnerOnboardingUser"]>>, onboardingOnly = false) {
     const allowedRoles: UserRole[] = [UserRole.CUSTOMER, UserRole.RIDER, UserRole.VENDOR];
     if (!allowedRoles.includes(user.role)) {
       throw new BadRequestException("This KariGO account cannot continue Partner onboarding.");
     }
-    if (user.accountStatus !== AccountStatus.ACTIVE || !user.phoneVerified) {
+    if ((user.accountStatus !== AccountStatus.ACTIVE && !(onboardingOnly && user.role === "VENDOR" && user.accountStatus === "PENDING")) || !user.phoneVerified) {
       throw new BadRequestException("Sign in with an active verified KariGO account before continuing Partner onboarding.");
     }
   }
@@ -831,19 +842,7 @@ export class VendorApplicationsService {
       where: {
         deletedAt: null,
         status: { notIn: [VendorApplicationStatus.REJECTED, VendorApplicationStatus.WITHDRAWN] },
-        OR: [
-          { applicantUserId: user.id },
-          { contactPhoneNumber: contactPhoneNumber ?? requiredMobile(user.phoneNumber) },
-          { businessPhoneNumber: contactPhoneNumber ?? requiredMobile(user.phoneNumber) },
-          ...(user.email ? [
-            { contactEmail: { equals: user.email, mode: "insensitive" as const } },
-            { businessEmail: { equals: user.email, mode: "insensitive" as const } }
-          ] : []),
-          ...(contactEmail ? [
-            { contactEmail: { equals: contactEmail, mode: "insensitive" as const } },
-            { businessEmail: { equals: contactEmail, mode: "insensitive" as const } }
-          ] : [])
-        ]
+        applicantUserId: user.id
       },
       select: APPLICATION_SELECT,
       orderBy: { createdAt: "desc" }
@@ -923,7 +922,7 @@ export class VendorApplicationsService {
       id: draft.id,
       onboardingStage: draft.onboardingStage,
       accountType: draft.accountType,
-      draftData: draft.draftData ?? null,
+      draftData: draft.draftData ? partnerDraft(draft.draftData) : null,
       applicationId: draft.applicationId,
       submittedAt: draft.submittedAt?.toISOString() ?? null,
       updatedAt: draft.updatedAt.toISOString()
