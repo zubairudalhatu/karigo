@@ -1,3 +1,4 @@
+import { VendorOrderAccessGuard } from "./vendor-order-access";
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { VendorDashboardOrdersController } from "./vendor-dashboard-orders.controller";
@@ -8,6 +9,6 @@ import { VendorOrderStatusService } from "./vendor-order-status.service";
 @Module({
   imports: [AuthModule],
   controllers: [VendorDashboardOrdersController],
-  providers: [VendorDashboardOrdersService, VendorOrderStatusService, VendorOrderEventsService]
+  providers: [VendorOrderAccessGuard, VendorDashboardOrdersService, VendorOrderStatusService, VendorOrderEventsService]
 })
 export class VendorDashboardOrdersModule {}

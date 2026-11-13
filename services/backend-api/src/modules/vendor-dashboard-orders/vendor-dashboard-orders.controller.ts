@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from "@nestjs/common";
+import { VendorOrderAccessGuard } from "./vendor-order-access";
+import { OrderPreconditionDto } from "./dto/order-precondition.dto";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -10,32 +12,34 @@ import { ListVendorOrdersQueryDto } from "./dto/list-vendor-orders-query.dto";
 import { RejectVendorOrderDto } from "./dto/reject-vendor-order.dto";
 import { VendorDashboardOrdersService } from "./vendor-dashboard-orders.service";
 
+type OrderRequest = { partnerOrderAccessHash: string };
+
 const PARTNER_WORKSPACE_ROLES = [UserRole.VENDOR, UserRole.CUSTOMER];
 
 @ApiTags("Vendor Dashboard Orders")
 @ApiBearerAuth()
 @Controller("vendor-dashboard/orders")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, VendorOrderAccessGuard)
 @Roles(...PARTNER_WORKSPACE_ROLES)
 export class VendorDashboardOrdersController {
   constructor(private readonly ordersService: VendorDashboardOrdersService) {}
 
   @Get()
   @ApiOperation({ summary: "List orders belonging to the authenticated vendor" })
-  async list(@CurrentUser() user: AuthenticatedUser, @Query() query: ListVendorOrdersQueryDto) {
-    return { message: "Vendor orders retrieved", data: await this.ordersService.list(user.id, query) };
+  async list(@CurrentUser() user: AuthenticatedUser, @Query() query: ListVendorOrdersQueryDto, @Req() req: OrderRequest) {
+    return { message: "Vendor orders retrieved", data: await this.ordersService.list(user.id, query, req.partnerOrderAccessHash) };
   }
 
   @Get(":orderId")
   @ApiOperation({ summary: "Get an order belonging to the authenticated vendor" })
-  async detail(@CurrentUser() user: AuthenticatedUser, @Param("orderId", ParseUUIDPipe) orderId: string) {
-    return { message: "Vendor order retrieved", data: await this.ordersService.detail(user.id, orderId) };
+  async detail(@CurrentUser() user: AuthenticatedUser, @Param("orderId", ParseUUIDPipe) orderId: string, @Req() req: OrderRequest) {
+    return { message: "Vendor order retrieved", data: await this.ordersService.detail(user.id, orderId, req.partnerOrderAccessHash) };
   }
 
   @Post(":orderId/accept")
   @ApiOperation({ summary: "Accept a paid vendor order" })
-  async accept(@CurrentUser() user: AuthenticatedUser, @Param("orderId", ParseUUIDPipe) orderId: string) {
-    return { message: "Order accepted", data: await this.ordersService.accept(user.id, orderId) };
+  async accept(@CurrentUser() user: AuthenticatedUser, @Param("orderId", ParseUUIDPipe) orderId: string, @Body() dto: OrderPreconditionDto = {}, @Req() req: OrderRequest) {
+    return { message: "Order accepted", data: await this.ordersService.accept(user.id, orderId, dto, req.partnerOrderAccessHash) };
   }
 
   @Post(":orderId/reject")
@@ -43,23 +47,24 @@ export class VendorDashboardOrdersController {
   async reject(
     @CurrentUser() user: AuthenticatedUser,
     @Param("orderId", ParseUUIDPipe) orderId: string,
-    @Body() dto: RejectVendorOrderDto
+    @Body() dto: RejectVendorOrderDto,
+    @Req() req: OrderRequest
   ) {
     return {
       message: "Order rejected; paid orders require refund review",
-      data: await this.ordersService.reject(user.id, orderId, dto)
+      data: await this.ordersService.reject(user.id, orderId, dto, req.partnerOrderAccessHash)
     };
   }
 
   @Post(":orderId/preparing")
   @ApiOperation({ summary: "Mark an accepted order as preparing" })
-  async preparing(@CurrentUser() user: AuthenticatedUser, @Param("orderId", ParseUUIDPipe) orderId: string) {
-    return { message: "Order marked as preparing", data: await this.ordersService.preparing(user.id, orderId) };
+  async preparing(@CurrentUser() user: AuthenticatedUser, @Param("orderId", ParseUUIDPipe) orderId: string, @Body() dto: OrderPreconditionDto = {}, @Req() req: OrderRequest) {
+    return { message: "Order marked as preparing", data: await this.ordersService.preparing(user.id, orderId, dto, req.partnerOrderAccessHash) };
   }
 
   @Post(":orderId/ready")
   @ApiOperation({ summary: "Mark a preparing order as ready for pickup" })
-  async ready(@CurrentUser() user: AuthenticatedUser, @Param("orderId", ParseUUIDPipe) orderId: string) {
-    return { message: "Order ready for pickup", data: await this.ordersService.ready(user.id, orderId) };
+  async ready(@CurrentUser() user: AuthenticatedUser, @Param("orderId", ParseUUIDPipe) orderId: string, @Body() dto: OrderPreconditionDto = {}, @Req() req: OrderRequest) {
+    return { message: "Order ready for pickup", data: await this.ordersService.ready(user.id, orderId, dto, req.partnerOrderAccessHash) };
   }
 }

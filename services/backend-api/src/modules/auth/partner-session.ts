@@ -1,3 +1,4 @@
+import { partnerOrderAccessHash } from "../vendor-dashboard-orders/vendor-order-access";
 import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
@@ -30,6 +31,13 @@ export class PartnerSessionService {
     if (user.accountStatus === "ACTIVE" && user.vendor?.status === "ACTIVE" && !user.vendor.deletedAt) {
       const session = await this.auth.login({ phoneNumber: normalizePhoneNumber(phoneNumber), password });
       await this.prisma.partnerMobileSession.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
+      if ("accessToken" in session && typeof session.accessToken === "string") {
+        // A Partner sign-out tombstone must not collide with another login
+        // issued for the same account in the same second.
+        const payload = this.jwt.decode(session.accessToken) as { exp?: number } | null;
+        const options = payload?.exp ? { expiresIn: Math.max(1, payload.exp - Math.floor(Date.now() / 1000)) } : {};
+        return { ...session, accessToken: await this.jwt.signAsync({ sub: user.id, role: user.role, jti: randomBytes(16).toString("hex") }, options) };
+      }
       return session;
     }
     return this.issue(user.id);
@@ -65,10 +73,16 @@ export class PartnerSessionService {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
-  async logout(userId: string) {
+  async logout(userId: string, accessToken?: string) {
     return this.prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))::text AS lock`;
       await tx.partnerMobileSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+      if (accessToken) {
+        const payload = this.jwt.decode(accessToken) as { exp?: number } | null;
+        const expiresAt = payload?.exp ? new Date(payload.exp * 1000) : new Date("9999-01-01T00:00:00Z");
+        const refreshHash = partnerOrderAccessHash(accessToken);
+        await tx.partnerMobileSession.upsert({ where: { refreshHash }, create: { userId, refreshHash, purpose: "REVOKED_ACCESS", expiresAt }, update: {} });
+      }
       await tx.deviceToken.deleteMany({ where: { userId, appSurface: "PARTNER_APP" } });
       return { loggedOut: true };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

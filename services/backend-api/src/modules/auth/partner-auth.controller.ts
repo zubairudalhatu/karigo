@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Post, Req, UseGuards } from "@nestjs/common";
 import { IsString, Length, MaxLength } from "class-validator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { LoginDto } from "./dto/login.dto";
@@ -19,8 +19,8 @@ export class PartnerAuthController {
   @Get("me") @UseGuards(PartnerOnboardingGuard)
   async me(@CurrentUser() user: PartnerPrincipal) { return { data: user.partnerScope ? user : await this.auth.me(user.id) }; }
   @Post("session/logout") @UseGuards(PartnerOnboardingGuard)
-  async logout(@CurrentUser() user: PartnerPrincipal, @Body() body: Partial<PartnerRefreshDto>) {
-    await this.sessions.logout(user.id);
+  async logout(@CurrentUser() user: PartnerPrincipal, @Body() body: Partial<PartnerRefreshDto>, @Req() req: { headers: { authorization?: string } }) {
+    await this.sessions.logout(user.id, req.headers.authorization?.match(/^Bearer\s+(\S+)$/i)?.[1]);
     if (!user.partnerScope && body.refreshToken) await this.auth.logout(user.id, { refreshToken: body.refreshToken });
     return { data: { loggedOut: true } };
   }

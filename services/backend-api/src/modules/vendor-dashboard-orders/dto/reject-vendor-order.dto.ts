@@ -1,3 +1,4 @@
+import { OrderPreconditionDto } from "./order-precondition.dto";
 import { IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
 
 export enum VendorOrderRejectionReason {
@@ -9,7 +10,7 @@ export enum VendorOrderRejectionReason {
   OTHER = "OTHER"
 }
 
-export class RejectVendorOrderDto {
+export class RejectVendorOrderDto extends OrderPreconditionDto {
   @IsEnum(VendorOrderRejectionReason)
   reason!: VendorOrderRejectionReason;
 

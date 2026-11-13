@@ -42,7 +42,7 @@ suite("Partner onboarding handoff — real JWT, HTTP guards and PostgreSQL", () 
     const module = await Test.createTestingModule({ imports: [PassportModule.register({ defaultStrategy: "jwt" })],
       controllers: [PublicVendorApplicationsController, PartnerAuthController, PartnerMobileOnboardingController, VendorDashboardOrdersController], providers: [
         PartnerOnboardingGuard, PartnerOnboardingStrategy, JwtStrategy, RolesGuard,
-        { provide: ConfigService, useValue: config }, { provide: PartnerSessionService, useValue: sessions }, { provide: AuthService, useValue: auth },
+        { provide: PrismaService, useValue: db }, { provide: ConfigService, useValue: config }, { provide: PartnerSessionService, useValue: sessions }, { provide: AuthService, useValue: auth },
         { provide: UsersService, useValue: { findByIdForAuth: (id: string) => db.user.findUnique({ where: { id } }) } },
         { provide: VendorApplicationsService, useValue: applications }, { provide: PartnerMobileFilesService, useValue: files },
         { provide: VendorDashboardOrdersService, useValue: orders }

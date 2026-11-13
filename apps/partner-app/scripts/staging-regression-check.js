@@ -159,7 +159,7 @@ expect(nav.includes("useSafeAreaInsets") && nav.includes("Math.max(insets.bottom
 expect(authApi.includes("auth/password-reset/request") && authApi.includes("auth/password-reset/confirm"), "Auth API must expose password reset endpoints.");
 expect(authApi.includes("auth/vendor-onboarding/account") && authApi.includes("partner-mobile/password"), "Auth API must expose vendor applicant onboarding endpoints.");
 expect(authApi.includes("auth/vendor/activation-link/request"), "Auth API must expose vendor activation link request endpoint.");
-expect(registrationApi.includes("vendor-applications") && registrationApi.includes("submitVendorApplication"), "Registration API must submit public Partner applications.");
+expect(registrationApi.includes("partner-mobile/onboarding/submit") && registrationApi.includes("submitVendorApplication"), "Registration API must submit through the authenticated Partner onboarding boundary.");
 expect(registrationApi.includes("partner-mobile/onboarding/ensure") && registrationApi.includes("ensurePartnerOnboarding"), "Registration API must ensure authenticated Partner onboarding draft state.");
 expect(registrationApi.includes("partner-mobile/onboarding/draft") && registrationApi.includes("savePartnerDraft"), "Registration API must persist authenticated Partner onboarding drafts.");
 expect(registrationApi.includes("partner-mobile/onboarding/submit") && registrationApi.includes("submitCurrentUserVendorApplication"), "Registration API must submit authenticated Partner applications idempotently.");
@@ -222,7 +222,7 @@ expect(orders.includes("Tap to view order detail"), "Orders list must show a cle
 expect(orderDetail.includes("Order detail"), "Order detail route must render order detail heading.");
 expect(orderDetail.includes("partnerApi.orderDetail"), "Order detail route must fetch order detail.");
 expect(orderDetail.includes("Status history"), "Order detail route must show status history.");
-expect(orderDetail.includes("Read-only order view"), "Order detail route must stay read-only.");
+expect(orderDetail.includes("OrderOperations") && orderDetail.includes("confirmOrderAction") && orderDetail.includes("Read-only until a connected refresh succeeds"), "Order detail must use confirmed, fail-closed merchant operations with offline read-only state.");
 expect(products.includes("Product Seller"), "Products screen must use Product Seller language.");
 expect(products.includes("partnerApi.capabilities") && products.includes("canManageProducts"), "Products screen must hide product management for service-only partners.");
 expect(products.includes("Products unavailable for this account"), "Products screen must show a clear capability unavailable state.");

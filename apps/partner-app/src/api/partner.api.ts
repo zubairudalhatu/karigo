@@ -7,7 +7,7 @@ import type {
   VendorServiceInput,
   VendorServiceSummary
 } from "@karigo/shared-types";
-import { api } from "./client";
+import { api, authSessionStore, tokenStore } from "./client";
 
 export interface PartnerProfile {
   id: string;
@@ -77,49 +77,8 @@ export interface PartnerOnboardingState {
   correctionNote?: string | null;
 }
 
-export interface PartnerOrderSummary {
-  id: string;
-  orderNumber: string;
-  customerName: string;
-  serviceCategory: string;
-  orderStatus: string;
-  paymentStatus: string;
-  paymentMethod?: string | null;
-  totalAmount: string | number;
-  createdAt: string;
-  itemsCount: number;
-  availableActions: string[];
-}
-
-export interface PartnerOrderDetail extends Omit<PartnerOrderSummary, "customerName" | "itemsCount"> {
-  subtotal: string | number;
-  deliveryFee: string | number;
-  customer: {
-    name: string;
-    phoneNumber: string;
-  };
-  deliveryAddress?: {
-    label: string;
-    addressLine: string;
-    city: string;
-    state: string;
-    deliveryNote?: string | null;
-  } | null;
-  items: Array<{
-    id: string;
-    productName: string;
-    unitPrice: string | number;
-    quantity: number;
-    totalPrice: string | number;
-    specialInstruction?: string | null;
-  }>;
-  statusHistory: Array<{
-    id: string;
-    newStatus: string;
-    note?: string | null;
-    createdAt: string;
-  }>;
-}
+export type PartnerOrderSummary = import("@karigo/shared-types").PartnerOrderSummaryContract;
+export type PartnerOrderDetail = import("@karigo/shared-types").PartnerOrderDetailContract;
 
 export interface PartnerOnboardingDocument {
   id: string;
@@ -233,8 +192,17 @@ export const partnerApi = {
   capabilities: () => api.get<PartnerCapabilities>("vendors/capabilities"),
   profile: () => api.get<PartnerProfile>("vendors/me"),
   updateProfile: (body: PartnerProfileUpdateInput) => api.patch<PartnerProfile>("vendors/me", body),
-  orders: () => api.get<PartnerOrderSummary[]>("vendor-dashboard/orders"),
-  orderDetail: (orderId: string) => api.get<PartnerOrderDetail>(`vendor-dashboard/orders/${orderId}`),
+  orders: () => api.get<PartnerOrderSummary[]>("vendor-dashboard/orders", { timeoutMs: 10000 }),
+  orderDetail: (orderId: string) => api.get<PartnerOrderDetail>(`vendor-dashboard/orders/${orderId}`, { timeoutMs: 10000 }),
+  orderAction: async (orderId: string, action: import("@karigo/shared-types").PartnerOrderAction, version: import("@karigo/shared-types").PartnerOrderVersion, reason?: import("@karigo/shared-types").PartnerOrderRejectionReason, details?: string) => {
+    const generation = authSessionStore.currentGeneration();
+    const accessToken = await tokenStore.getToken();
+    if (!accessToken || !authSessionStore.isCurrent(generation)) throw new Error("Partner session changed. Refresh and confirm again.");
+    // Pin this write to the confirming session. Reads may refresh auth, but a
+    // write never switches accounts or replays automatically after a refresh.
+    return api.post<PartnerOrderDetail>(`vendor-dashboard/orders/${orderId}/${action}`, { ...version, ...(action === "reject" ? { reason, details } : {}) },
+      { authenticated: false, headers: { Authorization: `Bearer ${accessToken}` }, timeoutMs: 15000, retryOnNetworkFailure: false, retryOnTemporaryFailure: false });
+  },
   products: (params?: { productCategory?: ProductCategory; search?: string }) => {
     const query = new URLSearchParams();
     if (params?.productCategory) query.set("category", params.productCategory);

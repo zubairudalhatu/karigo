@@ -65,6 +65,18 @@ describe("Partner restricted session boundary", () => {
     await expect(service.login(user.phoneNumber, "synthetic-password")).resolves.toEqual({ approved: true });
     expect(auth.login).toHaveBeenCalledTimes(1);
   });
+  it("approved Partner access tokens remain distinct across same-second sign-ins", async () => {
+    user.accountStatus = "ACTIVE"; user.vendor = { status: "ACTIVE", deletedAt: null };
+    const original = jwt.sign({ sub: user.id, role: user.role }, { expiresIn: "15m" });
+    auth.login.mockResolvedValue({ accessToken: original, refreshToken: "synthetic-refresh" });
+    const first = await service.login(user.phoneNumber, "synthetic-password") as any;
+    const second = await service.login(user.phoneNumber, "synthetic-password") as any;
+    expect(first.accessToken).not.toBe(second.accessToken);
+    const a = jwt.verify(first.accessToken), b = jwt.verify(second.accessToken);
+    expect(a.sub).toBe(user.id); expect(a.role).toBe("VENDOR"); expect(a.jti).not.toBe(b.jti);
+    expect(a.exp).toBeLessThanOrEqual(jwt.decode(original).exp);
+    expect(first.refreshToken).toBe("synthetic-refresh");
+  });
   it("password setup needs fresh one-use verified proof, not phoneVerified alone", async () => {
     await expect(service.setPassword(user.phoneNumber, "synthetic-password", "bad-proof")).rejects.toThrow();
     const proof = await service.verifiedPasswordTicket(user.phoneNumber, "synthetic-otp");
