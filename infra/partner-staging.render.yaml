@@ -7,7 +7,7 @@ services:
     plan: 0.5c-512mb
     branch: codex/partner-ios-p2-5
     autoDeployTrigger: off
-    buildCommand: git merge-base --is-ancestor 3da40419db3319247ad000a1ffec535b2e76b96c HEAD && npm ci --include=dev --no-audit --no-fund && npm run prisma:generate --workspace @karigo/backend-api && npm run build:partner-staging --workspace @karigo/backend-api
+    buildCommand: git fetch --deepen=32 origin codex/partner-ios-p2-5 && git merge-base --is-ancestor 3da40419db3319247ad000a1ffec535b2e76b96c HEAD && npm ci --include=dev --no-audit --no-fund && npm run prisma:generate --workspace @karigo/backend-api && npm run build:partner-staging --workspace @karigo/backend-api
     startCommand: cd services/backend-api && node scripts/partner-staging-launch.cjs
     healthCheckPath: /ready
     disk:
