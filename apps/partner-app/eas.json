@@ -11,7 +11,8 @@
         "buildType": "apk"
       },
       "env": {
-        "APP_VARIANT": "staging"
+        "APP_VARIANT": "staging",
+        "PARTNER_STAGING_API_BASE_URL": "https://karigo-partner-p25-api-ratd.onrender.com/api/v1"
       },
       "environment": "preview"
     },
@@ -23,7 +24,8 @@
         "image": "macos-sequoia-15.6-xcode-26.2"
       },
       "env": {
-        "APP_VARIANT": "staging"
+        "APP_VARIANT": "staging",
+        "PARTNER_STAGING_API_BASE_URL": "https://karigo-partner-p25-api-ratd.onrender.com/api/v1"
       },
       "environment": "preview"
     },

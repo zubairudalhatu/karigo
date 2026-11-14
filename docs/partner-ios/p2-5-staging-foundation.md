@@ -1,6 +1,6 @@
 # P2.5 isolated staging foundation
 
-Base 3da40419db3319247ad000a1ffec535b2e76b96c; branch codex/partner-ios-p2-5. Deployment evidence is pending until the new Blueprint is reviewed/applied and hosted checks pass. This is not a claim of staging readiness.
+Base 3da40419db3319247ad000a1ffec535b2e76b96c; branch codex/partner-ios-p2-5. The user-approved isolated Blueprint is applied. Hosted health/readiness and all 20 smoke checks passed. Physical iOS/APNs remains deferred.
 
 ## Architecture
 
@@ -12,7 +12,7 @@ Base 3da40419db3319247ad000a1ffec535b2e76b96c; branch codex/partner-ios-p2-5. De
 - Mock financial, OTP, SMS, email, WhatsApp and push adapters. Staging-only HTTP guard denies external JavaScript HTTP/fetch destinations and allows loopback/self checks. This is application transport enforcement, not a claim of a provider-level network firewall. No Production secrets are available to native clients or migration processes; DB identity is pinned independently through the new Blueprint reference.
 - Existing full backend is booted with a staging route allowlist; unrelated public operational/admin/provider webhook routes are unavailable. Staging account registration requires marked reserved synthetic names/email/phones. Framework/provider free-form logs are suppressed; bounded safe API status/push/audit-stage evidence contains no passwords/OTPs/tokens/bank/document payloads. Operator evidence is secret-protected. Health/readiness expose only safe environment/source/database-hash metadata.
 - Partner push backend uses the P1 outbox and exact order deep-link payload, with a staging scheme marker and mock capture. Only PARTNER_STAGE_ synthetic Expo registrations are accepted today. Actual iOS APNs/Apple identity and real native device-token delivery are DEFERRED. Mock backend success is not APNs proof.
-- Mobile has a staging-only banner, staging runtime and preview environment/channel separation. The profiles remain fail-closed without explicit staging URL. They will be pointed to a real URL only after hosted verification. Android Production and Partner Production iOS config remain unchanged.
+- Mobile has a staging-only banner, staging runtime and preview environment/channel separation. The profiles remain fail-closed without explicit staging URL. They now point to the verified staging API after hosted verification. Android Production and Partner Production iOS config remain unchanged.
 - No web dashboard is required for these mobile workflows. Controlled setup uses synthetic seed and authenticated backend contracts; no production web dependency.
 
 ## Local/hosted validation design
@@ -30,3 +30,13 @@ A full migration replay on a new empty database exposed an existing historical m
 The historical migration chain also differs from the P2 Prisma model in legacy defaults, truncated index names, two foreign-key delete policies, one redundant index and the obsolete ACTIVE_TEST database enum variant. The committed staging-only alignment SQL is exactly the generated model diff. It can execute only on an empty business database (no users/vendors/orders/payments/drivers/trips), must match its reviewed hash AND a newly generated diff, and must finish at zero schema drift. No Production migration, source schema or Customer/Captain application is changed. On populated staging, any new drift fails closed for review rather than auto-repairing data. All 57 original migration records/checksums remain the readiness authority.
 
 Full-suite validation also exposed an obsolete generic-push test expectation predating P1's PARTNER_APP exclusion. Only the assertion was updated to require that existing isolation filter; notification implementation is unchanged.
+
+## Hosted deployment evidence (2026-11-14)
+
+- Blueprint exs-dbs1bcjbc2fs73aa4pug; approved sync exe-dbs1bcrbc2fs73aa4qg0. Auto-sync and service auto-deploy remain OFF.
+- API srv-dbs1cj3rjlhs73ct4q30; PostgreSQL dpg-dbs1c73rjlhs73ct3r5g-a; disk dsk-dbs1cjbrjlhs73ct4r7g. All are new Frankfurt staging resources. Database IP allow list is empty; the external query tool correctly refused access and no exception was added.
+- Live deployment dep-dbs1fjlg1s2s73du2ipg; backend source ecc252ae782814f8d109a147d7619383fd4972c6. API base https://karigo-partner-p25-api-ratd.onrender.com/api/v1. External /health and /ready both 200, environment header partner-staging, exact source SHA verified. Unauthenticated orders/operator evidence return 401; financial webhook 404; unapproved browser origins receive no allow-origin header.
+- Hosted original migration resolution, empty-database model alignment and zero-drift verification passed. The full hosted 20-check HTTP smoke passed, with three synthetic new/changed/cancelled mock push results carrying the staging scheme. No real provider Payment record was created. The successful smoke receipt is on the dedicated staging disk.
+- Two initial builds failed before boot because Render's isolated checkout had neither the P2 ancestor object nor an origin remote. The final build uses a committed 484-file P2 runtime/schema hash manifest, checked before install, instead of relying on Git history. No P2 business source changed. The corrected build command was applied only to the new staging service and matches the committed Blueprint.
+- Production remains dep-dbd8gquq1p3s73cstagg at c907d04b11c1b08cf57c0c82cff604abee07918e. No Production code/config/data/storage/provider mutation occurred.
+- QA credentials: Render-generated STAGING_QA_PASSWORD, shared only by the synthetic staging fixtures, available privately through the staging service Environment page. Never put it in repository/chat/screenshots. Approved phone +2348000000001, wrong-business +2348000000002, verified pending applicant +2348000000003, fresh deletion QA +2348000000006. The smoke consumed the separate deletion-check identity, not the fresh QA deletion identity. All identities are synthetic and marked in their names/emails.
