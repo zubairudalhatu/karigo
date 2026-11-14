@@ -64,7 +64,7 @@
   "stagingRuntime": "partner-staging-1.0.0",
   "stagingConfigTestUrl": "https://partner-staging.invalid/api/v1",
   "hostedStagingUrlVerified": true,
-  "nativeBuild": "NOT_RUN_YET",
+  "nativeBuild": "PASS",
   "appleRegistration": false,
   "productionDeployed": false,
   "appleHold": true,
@@ -81,5 +81,40 @@
   "databaseExternalAllowList": [],
   "directExternalDatabaseQuery": "Correctly blocked; access was not opened",
   "pushTransport": "Mock synthetic registrations only; real APNs deferred",
-  "easPreviewProjectAndAccountVariables": "Both empty; no inherited Production credentials"
+  "easPreviewProjectAndAccountVariables": "Both empty; no inherited Production credentials",
+  "simulatorBuildId": "5feeb54f-5864-4478-9eba-df167a3b1a2f",
+  "simulatorSourceSha": "7c9683533f142aa0a8aa2fa6ae9a240999b28372",
+  "simulatorBundleId": "ng.com.karigo.partner.staging",
+  "simulatorVersion": "1.0.0 (1)",
+  "iosApns": "DEFERRED",
+  "storeOrDeviceIpaCreated": false,
+  "iosSimulatorExecution": "NOT_RUN_ON_WINDOWS",
+  "publicWebsiteLinkNote": "Existing explicit public legal/support links were not opened; P3 zero-Production-traffic checklist excludes them. No operational API fallback.",
+  "simulatorArtifact": {
+    "result": "PASS",
+    "bundleId": "ng.com.karigo.partner.staging",
+    "displayName": "KariGO Partner Staging",
+    "version": "1.0.0",
+    "build": "1",
+    "supportedPlatforms": [
+      "iPhoneSimulator"
+    ],
+    "deviceFamily": [
+      1
+    ],
+    "runtime": "partner-staging-1.0.0",
+    "channel": "partner-staging",
+    "embeddedApiUrls": [
+      "https://karigo-partner-p25-api-ratd.onrender.com/api/v1"
+    ],
+    "cameraLocationMicrophonePermissionKeys": [],
+    "embeddedProvisioningProfile": false,
+    "archiveBytes": 16364139,
+    "archiveSha256": "02ede7fce9588c8af98ca1b00744e4ea09f19c4156e2266cb6fd9aa41ee29e94",
+    "simulatorExecution": "NOT_RUN_ON_WINDOWS"
+  },
+  "readyForP3SimulatorQa": true,
+  "readyForP3PhysicalIosQa": false,
+  "productionDeploymentFinal": "dep-dbd8gquq1p3s73cstagg",
+  "productionShaFinal": "c907d04b11c1b08cf57c0c82cff604abee07918e"
 }

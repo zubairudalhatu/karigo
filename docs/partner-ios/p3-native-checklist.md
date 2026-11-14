@@ -1,4 +1,4 @@
-# P3 checklist — prepared only, not executed
+# P3 checklist â€” prepared only, not executed
 
 Apple submission hold remains YES. No Partner Apple identifier, provisioning, ASC record or TestFlight distribution is authorized by P2.5. Customer/Captain submissions remain untouched.
 
@@ -7,6 +7,7 @@ Apple submission hold remains YES. No Partner Apple identifier, provisioning, AS
 - Confirm the recorded staging deploy/source SHA, /health and /ready 200 and X-KariGO-Environment partner-staging.
 - Confirm dedicated synthetic database, dedicated persistent public/private storage roots, generated staging-only secrets, mock financial/OTP/email/WhatsApp/push providers and external HTTP deny guard.
 - Confirm no Production data/credentials/device tokens or provider calls; inspect bounded sanitized staging logs/evidence.
+- For a zero-Production-traffic QA run, do not open the pre-existing public Privacy/Terms/Support website links or submit contact forms. They are explicit user-tapped public web links, not API fallbacks; native summaries remain available. All operational requests must stay on the staging API.
 - Use staging app branding, scheme karigo-partner-staging, staging runtime/channel and explicit verified staging API. Missing API must fail closed. Keep Production mobile profiles unchanged.
 - Obtain synthetic QA credentials directly from the staging service Environment page/password manager; never paste them in chat, screenshots, fixtures or committed files. No Production accounts.
 
