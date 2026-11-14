@@ -22,7 +22,8 @@
     "test:e2e:smoke": "node scripts/e2e-smoke.mjs",
     "test:coverage": "jest --runInBand --coverage",
     "typecheck": "tsc --noEmit",
-    "retention:dry-run": "node dist/services/backend-api/src/modules/account-deletion/retention-run.js"
+    "retention:dry-run": "node dist/services/backend-api/src/modules/account-deletion/retention-run.js",
+    "build:partner-staging": "node scripts/verify-h11-2-partner-migration.cjs && node scripts/clean-dist.cjs && nest build && node scripts/partner-staging-link.cjs && node scripts/verify-render-build.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1099.0",

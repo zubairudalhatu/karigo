@@ -12,7 +12,8 @@
       },
       "env": {
         "APP_VARIANT": "staging"
-      }
+      },
+      "environment": "preview"
     },
     "partner-staging-ios-simulator": {
       "distribution": "internal",
@@ -23,7 +24,8 @@
       },
       "env": {
         "APP_VARIANT": "staging"
-      }
+      },
+      "environment": "preview"
     },
     "partner-production": {
       "distribution": "store",

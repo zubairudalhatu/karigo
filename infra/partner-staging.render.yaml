@@ -1,0 +1,102 @@
+# New resources only. No Production resource adoption or environment groups.
+services:
+  - type: web
+    name: karigo-partner-p25-api
+    runtime: node
+    region: frankfurt
+    plan: 0.5c-512mb
+    branch: codex/partner-ios-p2-5
+    autoDeployTrigger: off
+    buildCommand: git merge-base --is-ancestor 3da40419db3319247ad000a1ffec535b2e76b96c HEAD && npm ci --include=dev --no-audit --no-fund && npm run prisma:generate --workspace @karigo/backend-api && npm run build:partner-staging --workspace @karigo/backend-api
+    startCommand: cd services/backend-api && node scripts/partner-staging-launch.cjs
+    healthCheckPath: /ready
+    disk:
+      name: partner-staging-files
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PARTNER_ISOLATED_STAGING
+        value: "true"
+      - key: APP_ENV
+        value: "staging"
+      - key: NODE_ENV
+        value: "production"
+      - key: NODE_VERSION
+        value: "22.23.2"
+      - key: API_PREFIX
+        value: "/api/v1"
+      - key: CORS_ORIGINS
+        value: "http://localhost:8081,http://localhost:19006"
+      - key: OTP_PROVIDER
+        value: "mock"
+      - key: SMS_PROVIDER
+        value: "mock"
+      - key: PAYMENT_PROVIDER
+        value: "mock"
+      - key: PAYMENTS_PROVIDER
+        value: "mock"
+      - key: PAYMENTS_LIVE_ENABLED
+        value: "false"
+      - key: EMAIL_PROVIDER
+        value: "mock"
+      - key: WHATSAPP_PROVIDER
+        value: "mock"
+      - key: PUSH_PROVIDER
+        value: "mock"
+      - key: NOTIFICATION_PROVIDER
+        value: "mock"
+      - key: APPLICATION_EMAIL_NOTIFICATION_PROVIDER
+        value: "mock"
+      - key: APPLICATION_SMS_NOTIFICATION_PROVIDER
+        value: "mock"
+      - key: UTILITIES_ENABLED
+        value: "false"
+      - key: RIDES_SERVICE_ENABLED
+        value: "false"
+      - key: RIDES_PRODUCTION_ENABLED
+        value: "false"
+      - key: RIDES_AUTO_DISPATCH_ENABLED
+        value: "false"
+      - key: RIDE_IN_APP_CALL_ENABLED
+        value: "false"
+      - key: PARTNER_ONBOARDING_PAYMENT_ENABLED
+        value: "false"
+      - key: PRISMA_ACCELERATE_ENABLED
+        value: "false"
+      - key: PARTNER_PRIVATE_STORAGE_DRIVER
+        value: "local"
+      - key: PARTNER_PRIVATE_STORAGE_LOCAL_ROOT
+        value: "/var/data/partner-stage/private"
+      - key: PARTNER_PUBLIC_ONBOARDING_ENABLED
+        value: "true"
+      - key: STAGING_RUN_BOOT_SMOKE
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: karigo-partner-p25-db
+          property: connectionString
+      - key: DIRECT_URL
+        fromDatabase:
+          name: karigo-partner-p25-db
+          property: connectionString
+      - key: STAGING_DATABASE_URL
+        fromDatabase:
+          name: karigo-partner-p25-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PARTNER_PRIVATE_STORAGE_KEY_SECRET
+        generateValue: true
+      - key: STAGING_QA_PASSWORD
+        generateValue: true
+      - key: STAGING_OPERATOR_SECRET
+        generateValue: true
+databases:
+  - name: karigo-partner-p25-db
+    databaseName: karigo_partner_p25
+    user: partner_staging
+    region: frankfurt
+    plan: 0.1c-256mb
+    diskSizeGB: 1
+    postgresMajorVersion: "17"
+    ipAllowList: []

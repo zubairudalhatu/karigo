@@ -1,3 +1,5 @@
+import Constants from "expo-constants";
+import { Text, View } from "react-native";
 import { PartnerPushLifecycle } from "../src/components/partner-push-lifecycle";
 import { brand } from "@karigo/config";
 import { Stack } from "expo-router";
@@ -13,6 +15,7 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <PartnerRegistrationProvider>
+        {Constants.expoConfig?.extra?.appVariant === "staging" ? <View accessibilityRole="header" style={{ padding: 8, backgroundColor: "#FFF0B3" }}><Text style={{ textAlign: "center", fontWeight: "700" }}>STAGING — synthetic data only</Text></View> : null}
         <PartnerPushLifecycle />
         <Stack
           screenOptions={{

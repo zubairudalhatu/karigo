@@ -54,7 +54,7 @@ export default ({ config }: ExpoConfigInput) => {
       resizeMode: "contain",
       backgroundColor: "#FFFFFF"
     },
-    runtimeVersion: {
+    runtimeVersion: isStaging ? "partner-staging-1.0.0" : {
       policy: "appVersion"
     },
     android: {
