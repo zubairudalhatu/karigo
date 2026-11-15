@@ -152,4 +152,3 @@ ALTER TABLE "order_payment_discrepancies" ADD CONSTRAINT "order_payment_discrepa
 
 -- AddForeignKey
 ALTER TABLE "order_payment_audit" ADD CONSTRAINT "order_payment_audit_attemptId_fkey" FOREIGN KEY ("attemptId") REFERENCES "order_payment_attempts"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
