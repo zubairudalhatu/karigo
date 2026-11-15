@@ -63,18 +63,18 @@ export async function startPaymentSandbox() {
     void (async () => {
       if (req.path === "/sandbox/orders" && req.method === "POST") {
         const user = await db.user.upsert({
-          where: { email: "checkout@payment-sandbox.invalid" },
+          where: { phoneNumber: "+2348000000901" },
           create: {
             fullName: "[PAY02] Synthetic Customer",
             phoneNumber: "+2348000000901",
-            email: "checkout@payment-sandbox.invalid",
+            email: "karigo-pay02-synthetic@example.com",
             passwordHash: "NO_LOGIN_ALLOWED",
             role: "CUSTOMER",
             customerProfile: {
               create: { referralCode: "PAY02_SYNTHETIC_ONLY" },
             },
           },
-          update: {},
+          update: { email: "karigo-pay02-synthetic@example.com" },
           include: { customerProfile: true },
         });
         const order = await db.order.create({
@@ -100,7 +100,7 @@ export async function startPaymentSandbox() {
       );
       if (verify && req.method === "POST") {
         const user = await db.user.findUniqueOrThrow({
-          where: { email: "checkout@payment-sandbox.invalid" },
+          where: { phoneNumber: "+2348000000901" },
         });
         return res.json(await runtime.verify(user.id, verify[1]));
       }

@@ -16,5 +16,18 @@
   "recordedWebhookEvents": 0,
   "secretValueReadByAgent": false,
   "liveProviderTransaction": false,
-  "nextStep": "DEPLOY_CATEGORICAL_SANDBOX_DIAGNOSTICS_THEN_REVERIFY_ORIGINAL_REFERENCE"
+  "nextStep": "DEPLOY_CATEGORICAL_SANDBOX_DIAGNOSTICS_THEN_REVERIFY_ORIGINAL_REFERENCE",
+  "diagnosticFollowup": {
+    "sourceSha": "d093a482d0213da8c2187c7705a9a73aaabc8f52",
+    "deployId": "dep-dbstrkff3r2c73bc84n0",
+    "originalReferenceLookupProviderHttpStatus": 500,
+    "secondIndependentAttemptId": "e007cf0b-b98d-488b-8c75-57184699f22d",
+    "secondIndependentReference": "KGO-ORDER-bb480d65-6194-4416-ab2b-f7bc56f8738d",
+    "initializationAuditReason": "INIT_EMAIL_REJECTED_HTTP_400",
+    "state": "UNKNOWN",
+    "checkoutUrlReturned": false,
+    "recordedWebhookEvents": 0,
+    "diagnosticContainsRawProviderMessage": false,
+    "nextStep": "REPLACE_ONLY_SYNTHETIC_FIXTURE_EMAIL_KEEP_ACCOUNT_ID_AND_PRIOR_ATTEMPTS"
+  }
 }
