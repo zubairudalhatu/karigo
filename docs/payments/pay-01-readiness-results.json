@@ -1,0 +1,131 @@
+{
+  "task": "PAY-01 audit/plan only",
+  "date": "2026-11-15",
+  "partnerAcceptedCommit": "274db9823fcbd3f75ac525b41b69958163a24b31",
+  "partnerBoundaryCommit": "2b6f32a5a3cc633fe577cb2ca13f5ca8de3a6a96",
+  "partnerBoundary": {
+    "PARTNER_SOFTWARE_STAGING_READY": "YES",
+    "PARTNER_P3B_BLOCKED_BY_APPLE_HOLD": "YES",
+    "PARTNER_APPLE_SUBMISSION_HOLD": "YES"
+  },
+  "productionSource": "c907d04b11c1b08cf57c0c82cff604abee07918e",
+  "productionDeploy": "dep-dbd8gquq1p3s73cstagg",
+  "productionObservation": {
+    "method": "Public-safe GET config plus protected shell; aggregate Prisma queries inside explicitly READ ONLY transaction",
+    "flags": {
+      "PAYMENTS_PROVIDER": "flutterwave",
+      "PAYMENT_PROVIDER": "flutterwave",
+      "PAYMENTS_LIVE_ENABLED": true,
+      "FLUTTERWAVE_ENVIRONMENT": "live",
+      "FLUTTERWAVE_API_MODE": "v3",
+      "SQUAD_MODE": "live",
+      "SQUAD_CUSTOMER_CHECKOUT_ENABLED": false,
+      "SQUAD_LIVE_ACTIVATION_APPROVED": true,
+      "WALLET_TOP_UP_ENABLED": true,
+      "WALLET_PAYMENTS_ENABLED": false,
+      "UTILITIES_WALLET_PAYMENT_ENABLED": true,
+      "RIDES_PAYMENT_ENABLED": false,
+      "RIDE_CAPTAIN_COMMISSION_PAYMENT_ENABLED": true,
+      "RIDE_CAPTAIN_COMMISSION_PAYMENT_PROVIDER": "flutterwave",
+      "PARTNER_ONBOARDING_PAYMENT_ENABLED": "UNSET_DEFAULT_FALSE"
+    },
+    "presenceOnly": {
+      "SQUAD_SECRET_KEY": true,
+      "SQUAD_WEBHOOK_SECRET": true,
+      "SQUAD_CALLBACK_URL": true,
+      "SQUAD_BASE_URL": true,
+      "FLUTTERWAVE_SECRET_KEY": true,
+      "FLUTTERWAVE_SECRET_HASH": true,
+      "FLUTTERWAVE_WEBHOOK_SECRET": false,
+      "PAYSTACK_SECRET_KEY": true,
+      "MONNIFY_API_KEY": true,
+      "MONNIFY_SECRET_KEY": true
+    },
+    "aggregates": {
+      "Payment": 0,
+      "PaymentWebhookLog": 0,
+      "TaxiRideCommissionPayment": 0,
+      "PartnerOnboardingPayment": 0
+    },
+    "limitation": "No provider/dashboard statement inspection or proof of historical external payments; presence is not validity"
+  },
+  "publicConfig": {
+    "livePaymentsEnabled": true,
+    "activeProvider": "flutterwave",
+    "customerSelectableProviders": [
+      "flutterwave"
+    ],
+    "launchProviderLabel": "Flutterwave",
+    "mockPaymentVisible": false,
+    "flutterwaveCustomerCheckoutEnabled": true,
+    "flutterwaveReady": true,
+    "squadCustomerCheckoutEnabled": false,
+    "squadReady": false,
+    "monnifyVisible": false,
+    "paystackVisible": false,
+    "cashPaymentEnabled": true,
+    "cashPaymentLabel": "Pay on Delivery",
+    "cashPaymentNote": "Pay on Delivery is available for supported KariGO orders.",
+    "walletTopUpEnabled": true,
+    "walletPaymentsEnabled": false,
+    "walletTopUpProvider": "flutterwave",
+    "walletTopUpProviderLabel": "Flutterwave",
+    "walletMinimumTopUpAmount": 100,
+    "walletPaymentNote": "Wallet top-up credits only after Flutterwave verification. Wallet order payment is not active yet.",
+    "utilitiesEnabled": true,
+    "utilitiesCustomerPurchaseEnabled": true,
+    "utilitiesProvider": "accelerate",
+    "utilitiesProviderLabel": "Accelerate.ng",
+    "utilitiesTestMode": false,
+    "utilitiesWalletPaymentEnabled": true,
+    "utilitiesLiveFulfillmentEnabled": true,
+    "utilitiesPaymentMethod": "WALLET",
+    "utilitiesStatusNote": "Utilities are paid with KariGO Wallet. Your balance is debited by the backend before provider fulfilment and reversed automatically if fulfilment fails.",
+    "launchCities": [
+      "Kano",
+      "Abuja"
+    ]
+  },
+  "flags": {
+    "CURRENT_PRIMARY_PROVIDER": "flutterwave",
+    "CURRENT_SECONDARY_PROVIDER": "NONE_ACTIVE",
+    "SQUAD_ADAPTER_EXISTS": "YES",
+    "SQUAD_TEST_MODE_READY": "NO",
+    "PAYMENT_RUNTIME_PROVIDER_NEUTRAL": "NO",
+    "WEBHOOK_PROVIDER_ISOLATION_READY": "NO",
+    "RECONCILIATION_PROVIDER_ISOLATION_READY": "NO",
+    "REFUND_REVERSAL_READY": "NO",
+    "IDEMPOTENCY_READY": "NO",
+    "PRODUCTION_PROVIDER_SWITCH_REQUIRED": "YES",
+    "DATABASE_MIGRATION_REQUIRED": "YES",
+    "CLIENT_CHANGE_REQUIRED": "YES",
+    "PRODUCTION_CHANGED": "NO",
+    "LIVE_PROVIDER_CONFIG_CHANGED": "NO",
+    "READY_FOR_PAY_02_SQUAD_STAGING": "YES"
+  },
+  "qualification": {
+    "DATABASE_MIGRATION_REQUIRED": "YES for recommended full durable attempt/webhook/refund/reconciliation model; no new SQUAD enum is needed for a minimum prototype",
+    "READY_FOR_PAY_02_SQUAD_STAGING": "Plan ready for separate approval with merchant documentation and sandbox preflight; no current sandbox credential/configuration/transaction approval",
+    "PRODUCTION_PROVIDER_SWITCH_REQUIRED": "Future objective only; none performed",
+    "SQUAD_TEST_MODE_READY": "NO: mocked tests only, no current isolated sandbox setup or real test receipt"
+  },
+  "plans": {
+    "SQUAD_STAGING_TEST_PLAN": "Separate payment sandbox; current official merchant contract first; no Partner-stage reuse; harden locally, then approved synthetic sandbox matrix and reconciliation",
+    "SQUAD_PRODUCTION_CUTOVER_PLAN": "Compatibility receiver/schema release first; leave current credentials/webhooks unchanged; separately approved bounded order-only canary; migrate wallet/fees later",
+    "ROLLBACK_PLAN": "Stop new Squad attempts, restore Flutterwave selection only on compatibility release; keep both receivers/keys and process all old attempts by stored provider; preserve ledgers and reconcile unknown outcomes"
+  },
+  "mockedTests": {
+    "suites": 6,
+    "tests": 78,
+    "result": "PASS",
+    "providerTransactions": 0
+  },
+  "runtimeChanges": false,
+  "externalDocumentation": {
+    "current": "https://docs.squadco.com/",
+    "currentAccess": "403; not certified",
+    "historicalOfficialRefund": "https://squadinc.gitbook.io/squad-api-documentation/refund-api",
+    "historicalOfficialWebhook": "https://squadinc.gitbook.io/squad-api-documentation/webhook-and-redirect-url",
+    "historicalCaveat": "Official legacy documentation says deprecated since 2025-09-08; not current API authority"
+  }
+}
