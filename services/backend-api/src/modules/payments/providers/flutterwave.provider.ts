@@ -38,12 +38,20 @@ type FlutterwaveApiMode = "v3" | "v4";
 @Injectable()
 export class FlutterwaveProvider implements PaymentProvider {
   readonly name = "flutterwave" as const;
+  readonly capabilities = { refunds: false, refundLookup: false, reconciliation: "REFERENCE" as const };
   private readonly logger = new Logger(FlutterwaveProvider.name);
   private tokenCache: FlutterwaveTokenCache | null = null;
 
   constructor(private readonly config: ConfigService) {}
 
+  identity() {
+    const merchantAccountId = configText(this.config.get<unknown>("FLUTTERWAVE_MERCHANT_ACCOUNT_ID"));
+    if (!merchantAccountId || !/^[A-Za-z0-9_-]{3,100}$/.test(merchantAccountId)) throw new BadRequestException("Flutterwave merchant identity is required for the new order runtime");
+    return { environment: "live" as const, merchantAccountId };
+  }
+
   async initialize(input: InitializePaymentInput): Promise<InitializePaymentResult> {
+    this.assertLiveMode(true);
     const apiMode = this.apiMode();
     const response = await this.request(this.checkoutPath(apiMode), {
       method: "POST",
@@ -83,10 +91,12 @@ export class FlutterwaveProvider implements PaymentProvider {
     );
     const data = this.record(response.data) ?? {};
     return {
-      transactionReference: this.string(data.tx_ref) ?? transactionReference,
+      transactionReference: this.string(data.tx_ref) ?? "",
       successful: this.string(data.status)?.toLowerCase() === "successful",
       amountMinor: this.toMinorAmount(data.amount),
       currency: this.string(data.currency),
+      normalizedStatus: this.string(data.status)?.toLowerCase() === "successful" ? "SUCCEEDED" : this.string(data.status)?.toLowerCase() === "failed" ? "FAILED" : "PENDING",
+      providerTransactionReference: this.string(data.flw_ref) ?? this.string(data.id),
       providerResponse: response as unknown as Record<string, unknown>
     };
   }
@@ -108,6 +118,8 @@ export class FlutterwaveProvider implements PaymentProvider {
       verified: true,
       amountMinor: this.toMinorAmount(data.amount),
       currency: this.string(data.currency),
+      providerEventId: this.string(data.id) ?? this.string(data.flw_ref),
+      providerTransactionReference: this.string(data.flw_ref) ?? this.string(data.id),
       providerResponse: payload
     };
   }
@@ -394,15 +406,15 @@ export class FlutterwaveProvider implements PaymentProvider {
     return value;
   }
 
-  private assertLiveMode(): void {
+  private assertLiveMode(initializing = false): void {
     const liveEnabled = configText(this.config.get<unknown>("PAYMENTS_LIVE_ENABLED", "false"))?.toLowerCase() === "true";
     const selectedProvider = configText(this.config.get<unknown>("PAYMENTS_PROVIDER"))
       ?? configText(this.config.get<unknown>("PAYMENT_PROVIDER"));
     const environment = configText(this.config.get<unknown>("FLUTTERWAVE_ENVIRONMENT"))?.toLowerCase();
-    if (!liveEnabled) {
+    if (initializing && !liveEnabled) {
       throw new BadRequestException("PAYMENTS_LIVE_ENABLED must be true for Flutterwave live checkout");
     }
-    if (selectedProvider !== "flutterwave") {
+    if (initializing && selectedProvider !== "flutterwave") {
       throw new BadRequestException("PAYMENTS_PROVIDER must be flutterwave for Flutterwave live checkout");
     }
     if (environment !== "live") {

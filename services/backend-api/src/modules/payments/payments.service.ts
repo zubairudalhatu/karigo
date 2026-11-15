@@ -40,6 +40,7 @@ import { PartnerOnboardingPaymentService } from "./partner-onboarding-payment.se
 import { AdminAuditService } from "../../common/services/admin-audit.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { paymentProviderEvidence } from "./payment-provider-evidence";
+import { OrderPaymentRuntime } from "./order-payment-runtime.service";
 
 type TransactionClient = Prisma.TransactionClient;
 type ReadinessStatus = "READY" | "WAITING_FOR_CONFIGURATION" | "BLOCKED";
@@ -64,10 +65,17 @@ export class PaymentsService {
     private readonly config: ConfigService,
     private readonly rideCommissionPayments: RideCommissionPaymentService,
     @Optional()
-    private readonly partnerOnboardingPayments?: PartnerOnboardingPaymentService
-  ) {}
+    private readonly partnerOnboardingPayments?: PartnerOnboardingPaymentService,
+    @Optional() private readonly orderRuntime?: OrderPaymentRuntime
+  ) {
+    this.orderRuntime?.bindFinalizer((tx, reference, response, provider) => this.processSuccessfulPaymentWithClient(tx, reference, response, provider));
+  }
 
   async initiate(userId: string, dto: InitiatePaymentDto) {
+    if (this.orderRuntime?.enabled()) {
+      if (!dto.idempotencyKey) throw new BadRequestException("A stable payment idempotency key is required");
+      return this.orderRuntime.initiate(userId, { ...dto, idempotencyKey: dto.idempotencyKey });
+    }
     const order = await this.prisma.order.findFirst({
       where: { id: dto.orderId, customer: { userId } },
       include: { customer: { include: { user: true } } }
@@ -230,6 +238,7 @@ export class PaymentsService {
 
   async verify(userId: string, transactionReference: string) {
     const payment = await this.requireCustomerPaymentByReference(userId, transactionReference);
+    if (payment.paymentPurpose === PaymentPurpose.ORDER_PAYMENT && this.orderRuntime && await this.orderRuntime.has(transactionReference)) return this.orderRuntime.verify(userId, transactionReference);
     if (payment.paymentStatus === PaymentStatus.SUCCESSFUL) {
       return { payment, alreadyProcessed: true };
     }
@@ -374,6 +383,7 @@ export class PaymentsService {
 
     return {
       livePaymentsEnabled,
+      ...(this.orderRuntime?.enabled() ? { orderCheckout: this.orderRuntime.publicConfig() } : {}),
       activeProvider,
       customerSelectableProviders,
       launchProviderLabel: livePaymentsEnabled ? "Flutterwave" : "Staging payment providers",
@@ -486,6 +496,8 @@ export class PaymentsService {
       return this.rideCommissionPayments.processWebhook(provider, result);
     }
 
+    if (this.orderRuntime && result.transactionReference && (await this.orderRuntime.has(result.transactionReference) || (this.orderRuntime.enabled() && provider.name === "squad"))) return this.orderRuntime.webhook(provider, result, context);
+
     try {
       return await this.prisma.$transaction(async (tx) => {
         await tx.paymentWebhookLog.create({
@@ -535,6 +547,7 @@ export class PaymentsService {
     if (!payment) {
       throw new NotFoundException("Payment not found");
     }
+    if (this.orderRuntime && payment.paymentPurpose === PaymentPurpose.ORDER_PAYMENT && await this.orderRuntime.trackedPayment(paymentId)) return this.orderRuntime.requestCustomerRefund(userId, paymentId);
     if (payment.paymentStatus === PaymentStatus.REFUND_PENDING) {
       return payment;
     }
@@ -587,6 +600,7 @@ export class PaymentsService {
     if (!payment) {
       throw new NotFoundException("Payment not found");
     }
+    if (this.orderRuntime && payment.paymentPurpose === PaymentPurpose.ORDER_PAYMENT && await this.orderRuntime.trackedPayment(paymentId)) throw new BadRequestException("Tracked order refunds require provider processing and authoritative confirmation; use the order-payment refund workflow");
     if (payment.paymentStatus === PaymentStatus.REFUNDED) {
       return payment;
     }
@@ -646,12 +660,21 @@ export class PaymentsService {
     providerResponse: Record<string, unknown>,
     expectedGateway: string
   ) {
-    const payment = await tx.payment.findUnique({
+    let payment = await tx.payment.findUnique({
       where: { transactionReference },
       include: { order: true }
     });
     if (!payment) {
       throw new NotFoundException("Payment not found");
+    }
+    // Serialize legacy and new order finalizers on the same lock. Wallet paths are unchanged.
+    if (this.orderRuntime && payment.paymentPurpose === PaymentPurpose.ORDER_PAYMENT && payment.orderId) {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${"order-payment:" + payment.orderId}))::text AS lock`;
+      payment = await tx.payment.findUniqueOrThrow({ where: { transactionReference }, include: { order: true } });
+      const claim = await tx.orderPaymentClaim.findUnique({ where: { orderId: payment.orderId! } });
+      const attempt = await tx.orderPaymentAttempt.findUnique({ where: { paymentId: payment.id } });
+      if (claim && ((claim.successfulAttemptId && claim.successfulAttemptId !== attempt?.id) || (claim.activeAttemptId && claim.activeAttemptId !== attempt?.id))) throw new BadRequestException("Order has another payment attempt; reconciliation required");
+      if (payment.paymentStatus !== PaymentStatus.SUCCESSFUL && payment.order?.paymentStatus === PaymentStatus.SUCCESSFUL) throw new BadRequestException("Order already paid; reconciliation required");
     }
     if (payment.gateway !== expectedGateway) {
       throw new BadRequestException("Payment gateway does not match the transaction");

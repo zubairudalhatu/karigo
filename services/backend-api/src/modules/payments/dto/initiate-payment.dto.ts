@@ -1,9 +1,12 @@
 import { Type } from "class-transformer";
-import { IsIn, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min } from "class-validator";
+import { IsIn, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, Matches } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { CUSTOMER_TEST_PAYMENT_PROVIDERS, CustomerTestPaymentProviderName } from "../providers/payment-provider.registry";
 
 export class InitiatePaymentDto {
+  @IsOptional()
+  @Matches(/^[A-Za-z0-9:._-]{12,128}$/)
+  idempotencyKey?: string;
   @ApiProperty({ format: "uuid" })
   @IsUUID()
   orderId!: string;

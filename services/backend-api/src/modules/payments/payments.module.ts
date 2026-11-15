@@ -12,11 +12,14 @@ import { PaystackProvider } from "./providers/paystack.provider";
 import { SquadProvider } from "./providers/squad.provider";
 
 import { PartnerOnboardingPaymentService } from "./partner-onboarding-payment.service";
+import { OrderPaymentRuntime } from "./order-payment-runtime.service";
+import { OrderPaymentAdminController } from "./order-payment-admin.controller";
 @Module({
   imports: [AuthModule],
-  controllers: [PaymentsController, AdminPaymentsController],
+  controllers: [PaymentsController, AdminPaymentsController, OrderPaymentAdminController],
   providers: [
     PaymentsService,
+    OrderPaymentRuntime,
     PaymentProviderRegistry,
     MockPaymentProvider,
     PaystackProvider,

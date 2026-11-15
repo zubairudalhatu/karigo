@@ -12,7 +12,9 @@ import {
   PaymentProvider,
   PaymentWebhookContext,
   VerifyPaymentResult,
-  WebhookPaymentResult
+  WebhookPaymentResult,
+  ProviderRefundInput,
+  ProviderRefundResult
 } from "./payment-provider.interface";
 import {
   configText,
@@ -33,10 +35,19 @@ type SquadMode = "sandbox" | "live";
 @Injectable()
 export class SquadProvider implements PaymentProvider {
   readonly name = "squad" as const;
+  readonly capabilities = { refunds: true, refundLookup: false, reconciliation: "REFERENCE" as const };
 
   constructor(private readonly config: ConfigService) {}
 
+  identity() {
+    const environment = this.assertConfiguredMode();
+    const merchantAccountId = configText(this.config.get<unknown>("SQUAD_MERCHANT_ID"));
+    if (!merchantAccountId || !/^[A-Za-z0-9_-]{3,100}$/.test(merchantAccountId)) throw new BadRequestException("Squad merchant identity is required for order-payment certification");
+    return { environment, merchantAccountId };
+  }
+
   async initialize(input: InitializePaymentInput): Promise<InitializePaymentResult> {
+    this.assertConfiguredMode(true);
     const email = this.customerEmail(input);
     const response = await this.request("/transaction/initiate", {
       method: "POST",
@@ -46,7 +57,7 @@ export class SquadProvider implements PaymentProvider {
         currency: input.currency,
         initiate_type: "inline",
         transaction_ref: input.transactionReference,
-        callback_url: this.config.get<string>("SQUAD_CALLBACK_URL") || undefined,
+        callback_url: input.redirectUrl || this.config.get<string>("SQUAD_CALLBACK_URL") || undefined,
         metadata: input.metadata
       })
     }, "initialize-transaction");
@@ -70,10 +81,14 @@ export class SquadProvider implements PaymentProvider {
     const data = this.record(response.data) ?? {};
     const status = this.string(data.transaction_status);
     return {
-      transactionReference: this.string(data.transaction_ref) ?? transactionReference,
+      transactionReference: this.string(data.transaction_ref) ?? "",
       successful: status?.toLowerCase() === "success",
       amountMinor: this.number(data.transaction_amount),
       currency: this.string(data.transaction_currency_id) ?? this.string(data.currency),
+      normalizedStatus: status?.toLowerCase() === "success" ? "SUCCEEDED" : status?.toLowerCase() === "failed" ? "FAILED" : status?.toLowerCase() === "abandoned" ? "CANCELLED" : "PENDING",
+      providerTransactionReference: this.string(data.gateway_transaction_ref) ?? this.string(data.gateway_ref),
+      merchantAccountId: this.string(data.merchant_id),
+      refundConfirmed: typeof data.is_refund === "boolean" ? data.is_refund : undefined,
       providerResponse: response as unknown as Record<string, unknown>
     };
   }
@@ -95,6 +110,9 @@ export class SquadProvider implements PaymentProvider {
       verified: true,
       amountMinor: this.number(body.amount),
       currency: this.string(body.currency),
+      providerEventId: this.string(body.gateway_ref),
+      providerTransactionReference: this.string(body.gateway_ref),
+      merchantAccountId: this.string(body.merchant_id),
       providerResponse: payload
     };
   }
@@ -167,22 +185,22 @@ export class SquadProvider implements PaymentProvider {
     return value;
   }
 
-  private assertConfiguredMode(): SquadMode {
+  private assertConfiguredMode(initializing = false): SquadMode {
     const mode = configText(this.config.get<unknown>("SQUAD_MODE"))?.toLowerCase();
     const liveEnabled = configText(this.config.get<unknown>("PAYMENTS_LIVE_ENABLED", "false"))?.toLowerCase() === "true";
     if (mode === "live") {
-      if (!liveEnabled) {
+      if (initializing && !liveEnabled) {
         throw new BadRequestException("PAYMENTS_LIVE_ENABLED must be true for Squad live mode");
       }
       const selectedProvider = configText(this.config.get<unknown>("PAYMENTS_PROVIDER"))
         ?? configText(this.config.get<unknown>("PAYMENT_PROVIDER"));
-      if (selectedProvider !== "squad") {
+      if (initializing && selectedProvider !== "squad") {
         throw new BadRequestException("PAYMENTS_PROVIDER must be squad for Squad live mode");
       }
-      if (configText(this.config.get<unknown>("SQUAD_LIVE_ACTIVATION_APPROVED"))?.toLowerCase() !== "true") {
+      if (initializing && configText(this.config.get<unknown>("SQUAD_LIVE_ACTIVATION_APPROVED"))?.toLowerCase() !== "true") {
         throw new BadRequestException("SQUAD_LIVE_ACTIVATION_APPROVED must be true for Squad live mode");
       }
-      if (!configText(this.config.get<unknown>("SQUAD_CALLBACK_URL"))?.startsWith("https://")) {
+      if (initializing && !configText(this.config.get<unknown>("SQUAD_CALLBACK_URL"))?.startsWith("https://")) {
         throw new BadRequestException("SQUAD_CALLBACK_URL must use HTTPS for Squad live mode");
       }
       if (!configText(this.config.get<unknown>("SQUAD_WEBHOOK_SECRET"))) {
@@ -190,7 +208,7 @@ export class SquadProvider implements PaymentProvider {
       }
       return "live";
     }
-    if (liveEnabled) throw new BadRequestException("PAYMENTS_LIVE_ENABLED must be false for Squad Sandbox");
+    if (initializing && liveEnabled) throw new BadRequestException("PAYMENTS_LIVE_ENABLED must be false for Squad Sandbox");
     if (!["test", "sandbox"].includes(mode ?? "")) {
       throw new BadRequestException("missing SQUAD_MODE=test or sandbox");
     }
@@ -198,16 +216,27 @@ export class SquadProvider implements PaymentProvider {
   }
 
   private validSignature(rawBody: Buffer, supplied: string): boolean {
-    const mode = this.assertConfiguredMode();
-    const secret = configText(this.config.get<unknown>("SQUAD_WEBHOOK_SECRET"))
-      || (mode === "sandbox" ? this.secretKey() : undefined);
-    if (!secret) {
-      throw new BadRequestException("missing SQUAD_WEBHOOK_SECRET");
-    }
-    const expected = createHmac("sha512", secret).update(rawBody).digest("hex").toUpperCase();
-    const received = supplied.trim().replace(/\s+/g, "").toUpperCase();
-    if (received.length !== expected.length) return false;
-    return timingSafeEqual(Buffer.from(received), Buffer.from(expected));
+    const received = supplied.trim().toUpperCase();
+    if (!/^[A-F0-9]{128}$/.test(received)) return false;
+    // Current Squad contract signs with the API secret. Preserve an explicitly
+    // configured historical signing secret without rotating/replacing it.
+    const secrets = [this.secretKey(), configText(this.config.get<unknown>("SQUAD_WEBHOOK_SECRET"))].filter((s): s is string => Boolean(s));
+    return secrets.some(secret => timingSafeEqual(Buffer.from(received), Buffer.from(createHmac("sha512", secret).update(rawBody).digest("hex").toUpperCase())));
+  }
+
+  async refund(input: ProviderRefundInput): Promise<ProviderRefundResult> {
+    if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0 || input.amountMinor > input.originalAmountMinor || !input.providerTransactionReference) throw new BadRequestException("Invalid refund evidence");
+    const response = await this.request("/transaction/refund", { method: "POST", body: JSON.stringify({
+      gateway_transaction_ref: input.providerTransactionReference,
+      transaction_ref: input.transactionReference,
+      refund_type: input.amountMinor === input.originalAmountMinor ? "Full" : "Partial",
+      reason_for_refund: input.reason,
+      ...(input.amountMinor === input.originalAmountMinor ? {} : { refund_amount: String(input.amountMinor) })
+    }) });
+    const data = this.record(response.data) ?? {};
+    // The documented response acknowledges a PENDING refund. HTTP 200 never
+    // certifies funds returned. Final status lookup needs merchant certification.
+    return { state: "PENDING", providerReference: this.string(data.refund_reference), providerStatus: this.string(data.gateway_refund_status) ?? "pending" };
   }
 
   private toMinorUnits(amount: string): number {

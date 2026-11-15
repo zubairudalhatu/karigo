@@ -23,6 +23,10 @@ export interface VerifyPaymentResult {
   successful: boolean;
   amountMinor?: number;
   currency?: string;
+  normalizedStatus?: "PENDING" | "SUCCEEDED" | "FAILED" | "CANCELLED";
+  providerTransactionReference?: string;
+  merchantAccountId?: string;
+  refundConfirmed?: boolean;
   providerResponse: Record<string, unknown>;
 }
 
@@ -33,6 +37,9 @@ export interface WebhookPaymentResult {
   verified: boolean;
   amountMinor?: number;
   currency?: string;
+  providerEventId?: string;
+  providerTransactionReference?: string;
+  merchantAccountId?: string;
   providerResponse: Record<string, unknown>;
 }
 
@@ -46,4 +53,21 @@ export interface PaymentProvider {
   initialize(input: InitializePaymentInput): Promise<InitializePaymentResult>;
   verify(transactionReference: string): Promise<VerifyPaymentResult>;
   parseWebhook(payload: Record<string, unknown>, context?: PaymentWebhookContext): Promise<WebhookPaymentResult>;
+  readonly capabilities?: { refunds: boolean; refundLookup: boolean; reconciliation: "REFERENCE" };
+  identity?(): { environment: "sandbox" | "live"; merchantAccountId: string };
+  refund?(input: ProviderRefundInput): Promise<ProviderRefundResult>;
+  lookupRefund?(reference: string): Promise<ProviderRefundResult>;
+}
+
+export interface ProviderRefundInput {
+  transactionReference: string;
+  providerTransactionReference: string;
+  amountMinor: number;
+  originalAmountMinor: number;
+  reason: string;
+}
+export interface ProviderRefundResult {
+  state: "ACCEPTED" | "PENDING" | "SUCCEEDED" | "FAILED" | "UNKNOWN";
+  providerReference?: string;
+  providerStatus?: string;
 }

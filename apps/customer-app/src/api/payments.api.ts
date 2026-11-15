@@ -2,6 +2,7 @@ import type { InitiatePaymentRequest, PublicPaymentConfig } from "@karigo/shared
 import { api } from "./client";
 
 export interface PaymentInitiation {
+  attempt?: { id: string; state: string; retry: string };
   payment: { id: string; transactionReference: string; paymentStatus: string; gateway?: string };
   authorization: {
     transactionReference: string;
@@ -19,8 +20,8 @@ export interface PaymentInitiation {
 
 export const paymentsApi = {
   publicConfig: () => api.get<PublicPaymentConfig>("payments/public-config", { authenticated: false }),
-  initiate: (body: InitiatePaymentRequest) => api.post<PaymentInitiation>("payments/initiate", body),
-  verify: (reference: string) => api.get<{ payment: { paymentStatus: string }; alreadyProcessed: boolean }>(`payments/verify/${reference}`),
+  initiate: (body: InitiatePaymentRequest) => api.post<PaymentInitiation>("payments/initiate", { ...body, idempotencyKey: body.idempotencyKey ?? `order-payment:${body.orderId}` }, { retryOnNetworkFailure: false, retryOnTemporaryFailure: false }),
+  verify: (reference: string) => api.get<{ payment: { paymentStatus: string }; attempt?: { id: string; state: string }; alreadyProcessed: boolean }>(`payments/verify/${reference}`),
   verifyWalletTopUp: (reference: string) =>
     api.get<{ payment: { paymentStatus: string }; alreadyProcessed: boolean }>(`payments/wallet-top-ups/verify/${reference}`)
 };

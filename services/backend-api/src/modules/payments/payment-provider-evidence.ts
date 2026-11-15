@@ -14,7 +14,9 @@ function text(value: unknown): string | undefined {
 export function paymentProviderEvidence(provider: string, input: PaymentEvidenceInput): Prisma.InputJsonValue {
   const response = record(input.providerResponse);
   const data = record(response?.data);
-  const providerTransactionReference = text(data?.flw_ref)
+  const providerTransactionReference = text(data?.gateway_transaction_ref)
+    ?? text(data?.gateway_ref)
+    ?? text(data?.flw_ref)
     ?? text(data?.id)
     ?? text(response?.flw_ref)
     ?? text(response?.id);

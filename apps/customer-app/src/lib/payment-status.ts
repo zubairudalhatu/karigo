@@ -138,6 +138,9 @@ export function isFlutterwaveLivePaymentConfig(config: PublicPaymentConfig = fal
 export function customerPaymentProviderOptions(
   config: PublicPaymentConfig = fallbackCustomerPaymentConfig
 ): CustomerPaymentProviderOption[] {
+  if (config.orderCheckout?.version === 2 && ["squad", "flutterwave"].includes(config.orderCheckout.provider)) {
+    return [{ value: config.orderCheckout.provider, title: "Pay online", description: "Opens secure checkout. Payment is confirmed by KariGO after server verification." }];
+  }
   if (isFlutterwaveLivePaymentConfig(config)) {
     return flutterwaveLivePaymentProviderOptions;
   }
@@ -165,6 +168,7 @@ export function paymentProviderLabel(provider?: string | null, config: PublicPay
 }
 
 export function paymentSafetyNoteForConfig(config: PublicPaymentConfig = fallbackCustomerPaymentConfig): string {
+  if (config.orderCheckout?.version === 2) return "Online order payment is confirmed only after server verification. If confirmation is delayed, check the original attempt before trying again.";
   if (isFlutterwaveLivePaymentConfig(config)) {
     const walletTopUpCopy = config.walletTopUpEnabled
       ? "Wallet top-up is available through Flutterwave and credits only after backend verification."
@@ -180,6 +184,7 @@ export function paymentSafetyNoteForConfig(config: PublicPaymentConfig = fallbac
 export const paymentSafetyNote = paymentSafetyNoteForConfig();
 
 export function paymentProviderSelectionTitleForConfig(config: PublicPaymentConfig = fallbackCustomerPaymentConfig): string {
+  if (config.orderCheckout?.version === 2) return "Online payment";
   if (isFlutterwaveLivePaymentConfig(config)) return "Payment provider";
   if (config.livePaymentsEnabled) return "Online payment unavailable";
   return "Internal payment provider";
@@ -188,6 +193,7 @@ export function paymentProviderSelectionTitleForConfig(config: PublicPaymentConf
 export const paymentProviderSelectionTitle = paymentProviderSelectionTitleForConfig();
 
 export function paymentProviderSelectionBodyForConfig(config: PublicPaymentConfig = fallbackCustomerPaymentConfig): string {
+  if (config.orderCheckout?.version === 2) return "Continue to secure checkout or choose Pay on Delivery where supported.";
   if (isFlutterwaveLivePaymentConfig(config)) {
     return "Pay securely with Flutterwave or choose Pay on Delivery where supported.";
   }

@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import type { CustomerTestPaymentProvider, PublicPaymentConfig } from "@karigo/shared-types";
 import { Order, ordersApi } from "../../src/api/orders.api";
@@ -88,20 +88,40 @@ export default function OrderTracking() {
     }
   }
 
+  const paymentFlight = useRef(false);
+  const retryAttemptKey = useRef<string | undefined>(undefined);
   async function pay() {
-    if (!order) return;
+    if (!order || paymentFlight.current) return;
     if (!paymentProviderAvailable) {
       setError("Payment provider is not ready yet. Please retry payment provider setup.");
       return;
     }
+    paymentFlight.current = true;
     setBusy(true); setError("");
     try {
       const started = await paymentsApi.initiate({
         orderId: order.id,
         amount: Number(order.totalAmount),
         paymentMethod: selectedPaymentProvider === "mock" ? "mock" : "card",
-        paymentProvider: selectedPaymentProvider
+        paymentProvider: selectedPaymentProvider,
+        idempotencyKey: retryAttemptKey.current
       });
+      if (started.payment.paymentStatus === "SUCCESSFUL") {
+        await verifyPayment(started.payment.transactionReference);
+        return;
+      }
+      if (started.attempt && ["FAILED", "CANCELLED"].includes(started.attempt.state)) {
+        retryAttemptKey.current = `order-payment:${order.id}:retry:${started.attempt.id}`;
+        setPendingPaymentReference(""); setPendingAuthorizationUrl("");
+        setMessage("The previous payment attempt failed or was cancelled. You may start a new payment when ready.");
+        return;
+      }
+      if (started.attempt && ["UNKNOWN", "REVIEW_REQUIRED", "CREATING"].includes(started.attempt.state)) {
+        setPendingPaymentReference(started.payment.transactionReference);
+        setPendingAuthorizationUrl("");
+        setMessage("The original payment needs confirmation. Check its status; do not pay twice.");
+        return;
+      }
       const authorizationUrl = paymentAuthorizationUrlFrom(started.authorization);
       const startedProvider = started.payment.gateway ?? selectedPaymentProvider;
       const startedProviderLabel = paymentProviderLabel(startedProvider, effectivePaymentConfig);
@@ -119,14 +139,20 @@ export default function OrderTracking() {
         return;
       }
       if (!authorizationUrl) {
-        throw new Error("Flutterwave checkout is temporarily unavailable. Please use Pay on Delivery.");
+        throw new Error("Checkout confirmation is unavailable. Check the original payment status before trying again.");
       }
       throw new Error("Payment provider returned an invalid checkout link.");
-    } catch (e) { setError(paymentInitializationFailureMessage(selectedProviderLabel, paymentRetryErrorMessage(e), effectivePaymentConfig)); } finally { setBusy(false); }
+    } catch (e) { setError(paymentInitializationFailureMessage(selectedProviderLabel, paymentRetryErrorMessage(e), effectivePaymentConfig)); } finally { paymentFlight.current = false; setBusy(false); }
   }
 
   async function verifyPayment(reference: string) {
-    await paymentsApi.verify(reference);
+    const result = await paymentsApi.verify(reference);
+    if (result.payment.paymentStatus !== "SUCCESSFUL") {
+      setPendingPaymentReference(reference);
+      setMessage("Payment is not confirmed yet. Check this original attempt again; do not pay twice.");
+      await load();
+      return;
+    }
     setPendingPaymentReference("");
     setPendingAuthorizationUrl("");
     setPendingPaymentProvider("");

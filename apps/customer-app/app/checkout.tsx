@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import type { CheckoutQuote, PublicPaymentConfig } from "@karigo/shared-types";
 import { Address, addressesApi } from "../src/api/addresses.api";
@@ -21,7 +21,7 @@ import {
 } from "../src/lib/payment-status";
 import { promoErrorMessage } from "../src/lib/promo-state";
 
-type CheckoutPaymentMethod = "flutterwave" | "cash_on_delivery";
+type CheckoutPaymentMethod = "online" | "cash_on_delivery";
 
 function paymentStartErrorMessage(error: unknown): string {
   const safeMessage = friendlyError(error);
@@ -77,7 +77,9 @@ export default function Checkout() {
   const items = useMemo(() => cart.items.map((i) => ({ productId: i.product.id, quantity: i.quantity })), [cart.items]);
   const effectivePaymentConfig = paymentConfig ?? fallbackCustomerPaymentConfig;
   const paymentProviderOptions = useMemo(() => customerPaymentProviderOptions(effectivePaymentConfig), [effectivePaymentConfig]);
-  const flutterwaveEnabled = paymentProviderOptions.some((option) => option.value === "flutterwave");
+  const onlineProvider = effectivePaymentConfig.orderCheckout?.provider ?? paymentProviderOptions.find((option) => option.value === "flutterwave")?.value;
+  const flutterwaveEnabled = Boolean(onlineProvider);
+  const checkoutFlight = useRef(false);
   const quoteKey = useMemo(() => JSON.stringify({
     vendorId: cart.vendor?.id,
     addressId,
@@ -111,7 +113,7 @@ export default function Checkout() {
 
   useEffect(() => { void loadPaymentConfig(); }, [loadPaymentConfig]);
   useEffect(() => {
-    if (!flutterwaveEnabled && selectedPaymentMethod === "flutterwave") {
+    if (!flutterwaveEnabled && selectedPaymentMethod === "online") {
       setSelectedPaymentMethod("cash_on_delivery");
     }
   }, [flutterwaveEnabled, selectedPaymentMethod]);
@@ -173,11 +175,11 @@ export default function Checkout() {
   }
 
   async function createOrder() {
-    if (!cart.vendor || !addressId) return;
+    if (!cart.vendor || !addressId || checkoutFlight.current) return;
     const isPayOnDelivery = selectedPaymentMethod === "cash_on_delivery";
-    const isFlutterwave = selectedPaymentMethod === "flutterwave";
+    const isFlutterwave = selectedPaymentMethod === "online";
     if (isFlutterwave && !flutterwaveEnabled) {
-      setError("Flutterwave checkout is temporarily unavailable. Please use Pay on Delivery where available.");
+      setError("Online checkout is temporarily unavailable. Please use Pay on Delivery where available.");
       return;
     }
     if (isPayOnDelivery && (!cashEnabled || knownUnsupportedCashCity)) {
@@ -188,6 +190,7 @@ export default function Checkout() {
       setError("Please refresh the delivery total before creating your order.");
       return;
     }
+    checkoutFlight.current = true;
     setBusy(true);
     setError("");
     try {
@@ -197,7 +200,7 @@ export default function Checkout() {
         serviceCategory: cart.serviceCategory,
         items,
         promoCode: validPromoCode || undefined,
-        paymentMethod: isFlutterwave ? "FLUTTERWAVE" : "CASH_ON_DELIVERY"
+        paymentMethod: isFlutterwave ? effectivePaymentConfig.orderCheckout?.orderPaymentMethod ?? "FLUTTERWAVE" : "CASH_ON_DELIVERY"
       });
       setQuote({
         quoteReference: created.orderNumber,
@@ -214,21 +217,21 @@ export default function Checkout() {
             orderId: created.id,
             amount: Number(created.totalAmount),
             paymentMethod: "card",
-            paymentProvider: "flutterwave"
+            paymentProvider: onlineProvider
           });
           const authorizationUrl = paymentAuthorizationUrlFrom(started.authorization);
           if (!authorizationUrl) {
-            throw new Error("Flutterwave checkout is temporarily unavailable. Please use Pay on Delivery.");
+            throw new Error("Checkout confirmation is unavailable. Open the order and check its original payment status before trying again.");
           }
           if (!isExternalPaymentAuthorizationUrl(authorizationUrl)) {
-            throw new Error("Flutterwave did not return a secure checkout link.");
+            throw new Error("The payment provider did not return a secure checkout link.");
           }
           const openResult = await openExternalPaymentUrl(authorizationUrl);
           if (!openResult.opened) throw new Error(openResult.message);
-          setMessage(paymentAuthorizationOpenedMessage("Flutterwave", effectivePaymentConfig));
+          setMessage(paymentAuthorizationOpenedMessage("Online payment", effectivePaymentConfig));
         } catch (paymentError) {
           setError(paymentStartErrorMessage(paymentError));
-          setMessage("Order created. Open the order details to retry Flutterwave payment.");
+          setMessage("Order created. Open the order details to check payment status.");
         }
       } else {
         setMessage("Pay on Delivery order created. Please pay only the amount shown in KariGO at delivery.");
@@ -240,6 +243,7 @@ export default function Checkout() {
       setQuote(null);
       setError(promoErrorMessage(e));
     } finally {
+      checkoutFlight.current = false;
       setBusy(false);
     }
   }
@@ -260,11 +264,11 @@ export default function Checkout() {
   ].map(canonicalLaunchCity).filter(Boolean);
   const hasSupportedCashCity = checkoutCityCandidates.some((city) => supportedCashCities.has(city));
   const knownUnsupportedCashCity = checkoutCityCandidates.length > 0 && !hasSupportedCashCity;
-  const checkoutMethodBlocked = selectedPaymentMethod === "flutterwave"
+  const checkoutMethodBlocked = selectedPaymentMethod === "online"
     ? !flutterwaveEnabled
     : !cashEnabled || knownUnsupportedCashCity;
-  const createButtonTitle = selectedPaymentMethod === "flutterwave"
-    ? busy ? "Opening Flutterwave..." : "Create order and pay with Flutterwave"
+  const createButtonTitle = selectedPaymentMethod === "online"
+    ? busy ? "Opening checkout..." : "Create order and pay online"
     : busy ? "Creating Pay on Delivery order..." : "Create Pay on Delivery order";
 
   return <Protected><Screen title="Checkout">
@@ -290,9 +294,9 @@ export default function Checkout() {
       <Text style={ui.muted}>{paymentProviderSelectionBodyForConfig(effectivePaymentConfig)}</Text>
       <Text style={ui.muted}>{paymentSafetyNoteForConfig(effectivePaymentConfig)}</Text>
       {flutterwaveEnabled ? <Button
-        title={`${selectedPaymentMethod === "flutterwave" ? "Selected - " : ""}Pay with Flutterwave`}
-        tone={selectedPaymentMethod === "flutterwave" ? "primary" : "muted"}
-        onPress={() => setSelectedPaymentMethod("flutterwave")}
+        title={`${selectedPaymentMethod === "online" ? "Selected - " : ""}Pay online`}
+        tone={selectedPaymentMethod === "online" ? "primary" : "muted"}
+        onPress={() => setSelectedPaymentMethod("online")}
         disabled={busy}
       /> : null}
       <Button

@@ -644,10 +644,10 @@ assert(checkout.includes("await loadQuote(\"\", { keepUiError: true })"), "Promo
 assert(checkout.includes("paymentsApi.publicConfig"), "Checkout must load public-safe backend payment configuration.");
 assert(checkout.includes("openExternalPaymentUrl"), "Flutterwave checkout must open provider URLs externally.");
 assert(checkout.includes("paymentsApi.initiate"), "Flutterwave checkout must initiate payment only through the backend.");
-assert(checkout.includes("Pay with Flutterwave"), "Checkout must show Flutterwave when runtime config enables it.");
+assert(checkout.includes("Pay online"), "Checkout must expose secure online payment from runtime configuration.");
 assert(!checkout.includes("Pay with Squad"), "Checkout must hide Squad customer checkout.");
 assert(!checkout.includes("Pay from Wallet"), "Checkout must hide wallet order payment.");
-assert(checkout.includes('paymentProvider: "flutterwave"'), "Flutterwave checkout must send the Flutterwave provider to the backend.");
+assert(checkout.includes("paymentProvider: onlineProvider"), "Checkout must use the server-selected order provider while preserving the Flutterwave fallback.");
 assert(paymentStatus.includes("Internal payment checks are not for public checkout"), "Payment copy must state internal payment checks are not public checkout.");
 assert(paymentStatus.includes("Flutterwave is KariGO's approved online payment provider"), "Payment copy must include Flutterwave launch wording.");
 assert(paymentStatus.includes("isFlutterwaveLivePaymentConfig"), "Customer checkout must recognize backend-confirmed Flutterwave live mode.");
@@ -673,7 +673,7 @@ assert(!checkout.includes("Verify payment status"), "Checkout must keep electron
 assert(!checkout.includes("paymentInitializationFailureMessage"), "Checkout must keep provider initialization copy on the order detail retry flow.");
 assert(checkout.includes("Pay on Delivery"), "Checkout must expose Cash/POD readiness copy.");
 assert(checkout.includes("cashPaymentEnabled"), "Checkout must reflect backend Cash/POD readiness flags.");
-assert(checkout.includes('paymentMethod: isFlutterwave ? "FLUTTERWAVE" : "CASH_ON_DELIVERY"'), "Checkout order creation must distinguish Flutterwave from Pay on Delivery.");
+assert(checkout.includes('paymentMethod: isFlutterwave ? effectivePaymentConfig.orderCheckout?.orderPaymentMethod ?? "FLUTTERWAVE" : "CASH_ON_DELIVERY"'), "Checkout order creation must distinguish Flutterwave from Pay on Delivery.");
 assert(checkout.includes("router.replace(`/orders/${created.id}`)"), "Order creation must go to order detail after Flutterwave/POD flow starts.");
 assert(checkout.includes("selectedAddress?.city"), "Pay on Delivery city eligibility must use the selected delivery address city first.");
 assert(checkout.includes("selectedAddress?.state"), "Pay on Delivery city eligibility must include the selected delivery address state.");
@@ -685,7 +685,7 @@ assert(checkout.includes("supportedCitySet(effectivePaymentConfig)"), "Pay on De
 assert(checkout.includes("knownUnsupportedCashCity"), "Pay on Delivery must only show city blocking copy when the known city is unsupported.");
 assert(checkout.includes("!cashEnabled || knownUnsupportedCashCity"), "Pay on Delivery must not be blocked just because GPS/current city is missing.");
 assert(checkout.includes("Pay on Delivery is available in supported KariGO cities."), "Customer checkout must show supported-city copy only for known unsupported Cash/POD cities.");
-assert(checkout.includes("Flutterwave checkout is temporarily unavailable. Please use Pay on Delivery."), "Customer checkout must surface a clear Flutterwave no-link fallback message.");
+assert(checkout.includes("Checkout confirmation is unavailable. Open the order and check its original payment status before trying again."), "Customer checkout must recover the original attempt when no checkout link is available.");
 assert(!checkout.includes("Cash/POD and wallet payment are available only in Kano and Abuja during launch readiness"), "Customer checkout must not expose launch-readiness Cash/POD copy.");
 assert(checkout.includes("Please pay only the amount shown in the app."), "Checkout Cash/POD copy must warn customers not to pay outside the app total.");
 assert(checkout.includes("Pay on Delivery is available for supported KariGO orders."), "Checkout must use simple live Pay on Delivery copy.");

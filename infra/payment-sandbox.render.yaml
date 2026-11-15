@@ -1,0 +1,96 @@
+# Dedicated PAY-02 resources. Never adopt Production or Partner staging.
+services:
+  - type: web
+    name: karigo-pay02-sandbox-api
+    runtime: node
+    region: frankfurt
+    plan: 0.5c-512mb
+    branch: codex/pay-02-squad-sandbox
+    autoDeployTrigger: off
+    buildCommand: npm ci --include=dev --no-audit --no-fund && npm run prisma:generate --workspace @karigo/backend-api && npm run build:payment-sandbox --workspace @karigo/backend-api
+    startCommand: cd services/backend-api && node scripts/payment-sandbox-launch.cjs
+    healthCheckPath: /ready
+    envVars:
+      - key: APP_ENV
+        value: "staging"
+      - key: NODE_ENV
+        value: "production"
+      - key: NODE_VERSION
+        value: "22.23.2"
+      - key: API_PREFIX
+        value: "/api/v1"
+      - key: PAYMENT_SANDBOX_ISOLATED
+        value: "true"
+      - key: PAYMENTS_LIVE_ENABLED
+        value: "false"
+      - key: PAYMENT_PROVIDER
+        value: "mock"
+      - key: PAYMENTS_PROVIDER
+        value: "mock"
+      - key: ORDER_PAYMENT_RUNTIME_V2_ENABLED
+        value: "true"
+      - key: ORDER_PAYMENT_V2_PROVIDER
+        value: "squad"
+      - key: ORDER_PAYMENT_CHECKOUT_HOSTS
+        value: "sandbox-pay.squadco.com"
+      - key: SQUAD_MODE
+        value: "sandbox"
+      - key: SQUAD_BASE_URL
+        value: "https://sandbox-api-d.squadco.com"
+      - key: SQUAD_MERCHANT_ID
+        value: "SBV83UFF3L"
+      - key: PRISMA_ACCELERATE_ENABLED
+        value: "false"
+      - key: OTP_PROVIDER
+        value: "mock"
+      - key: SMS_PROVIDER
+        value: "mock"
+      - key: EMAIL_PROVIDER
+        value: "mock"
+      - key: WHATSAPP_PROVIDER
+        value: "mock"
+      - key: PUSH_PROVIDER
+        value: "mock"
+      - key: NOTIFICATION_PROVIDER
+        value: "mock"
+      - key: APPLICATION_EMAIL_NOTIFICATION_PROVIDER
+        value: "mock"
+      - key: APPLICATION_SMS_NOTIFICATION_PROVIDER
+        value: "mock"
+      - key: WALLET_TOP_UP_ENABLED
+        value: "false"
+      - key: WALLET_PAYMENTS_ENABLED
+        value: "false"
+      - key: UTILITIES_ENABLED
+        value: "false"
+      - key: RIDES_SERVICE_ENABLED
+        value: "false"
+      - key: RIDES_PRODUCTION_ENABLED
+        value: "false"
+      - key: RIDES_AUTO_DISPATCH_ENABLED
+        value: "false"
+      - key: RIDE_IN_APP_CALL_ENABLED
+        value: "false"
+      - key: PARTNER_ONBOARDING_PAYMENT_ENABLED
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: karigo-pay02-sandbox-db
+          property: connectionString
+      - key: DIRECT_URL
+        fromDatabase:
+          name: karigo-pay02-sandbox-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PAYMENT_SANDBOX_OPERATOR_SECRET
+        generateValue: true
+databases:
+  - name: karigo-pay02-sandbox-db
+    databaseName: karigo_pay02_sandbox
+    user: payment_sandbox
+    region: frankfurt
+    plan: 0.1c-256mb
+    diskSizeGB: 1
+    postgresMajorVersion: "17"
+    ipAllowList: []

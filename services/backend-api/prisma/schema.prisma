@@ -2981,11 +2981,137 @@ model Payment {
   updatedAt            DateTime        @updatedAt
   order                Order?          @relation(fields: [orderId], references: [id])
   customer             CustomerProfile @relation(fields: [customerId], references: [id])
+  orderAttemptV2       OrderPaymentAttempt?
 
   @@index([orderId, paymentStatus])
   @@index([paymentPurpose, paymentStatus])
   @@index([walletLedgerEntryId])
   @@map("payments")
+}
+
+// PAY-02 additive order-payment runtime. Existing provider rows are never rewritten.
+enum OrderAttemptState {
+  CREATING
+  READY
+  PENDING
+  UNKNOWN
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REVIEW_REQUIRED
+  REFUND_PENDING
+  REFUNDED
+}
+
+enum OrderRefundState {
+  REQUESTED
+  ACCEPTED
+  PENDING
+  SUCCEEDED
+  FAILED
+  UNKNOWN
+  REVIEW_REQUIRED
+}
+
+model OrderPaymentAttempt {
+  id                           String @id @default(uuid()) @db.Uuid
+  paymentId                    String @unique @db.Uuid
+  orderId                      String @db.Uuid
+  customerId                   String @db.Uuid
+  provider                     String @db.VarChar(40)
+  environment                  String @db.VarChar(16)
+  merchantAccountId            String @db.VarChar(100)
+  transactionReference         String @unique @db.VarChar(200)
+  providerTransactionReference  String? @db.VarChar(200)
+  idempotencyKeyHash            String @db.VarChar(64)
+  requestHash                   String @db.VarChar(64)
+  amountMinor                  Int
+  currency                     String @db.VarChar(3)
+  state                        OrderAttemptState @default(CREATING)
+  version                      Int @default(0)
+  authorizationUrl             String? @db.VarChar(2048)
+  providerStatus               String? @db.VarChar(40)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+  payment                      Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  events                       OrderPaymentProviderEvent[]
+  refunds                      OrderPaymentRefund[]
+  discrepancies                OrderPaymentDiscrepancy[]
+  audit                        OrderPaymentAudit[]
+  @@unique([customerId, idempotencyKeyHash])
+  @@unique([provider, environment, merchantAccountId, providerTransactionReference], map: "order_attempt_provider_reference_key")
+  @@index([orderId, state])
+  @@map("order_payment_attempts")
+}
+
+model OrderPaymentClaim {
+  orderId              String @id @db.Uuid
+  activeAttemptId      String? @unique @db.Uuid
+  successfulAttemptId  String? @unique @db.Uuid
+  updatedAt            DateTime @updatedAt
+  @@map("order_payment_claims")
+}
+
+model OrderPaymentProviderEvent {
+  id                 String @id @default(uuid()) @db.Uuid
+  attemptId          String? @db.Uuid
+  provider           String @db.VarChar(40)
+  environment        String @db.VarChar(16)
+  merchantAccountId  String @db.VarChar(100)
+  eventKey           String @db.VarChar(64)
+  bodyDigest         String @db.VarChar(64)
+  reference          String? @db.VarChar(200)
+  eventType          String @db.VarChar(80)
+  state              String @default("RECEIVED") @db.VarChar(24)
+  reasonCode         String? @db.VarChar(64)
+  receivedAt         DateTime @default(now())
+  processedAt        DateTime?
+  attempt            OrderPaymentAttempt? @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  @@unique([provider, environment, merchantAccountId, eventKey], map: "order_provider_event_identity_key")
+  @@index([state, receivedAt])
+  @@map("order_payment_provider_events")
+}
+
+model OrderPaymentRefund {
+  id                  String @id @default(uuid()) @db.Uuid
+  attemptId           String @db.Uuid
+  idempotencyKeyHash   String @db.VarChar(64)
+  requestHash          String @db.VarChar(64)
+  amountMinor          Int
+  state                OrderRefundState @default(REQUESTED)
+  providerReference    String? @db.VarChar(200)
+  providerStatus       String? @db.VarChar(40)
+  acceptedAt           DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  attempt              OrderPaymentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  @@unique([attemptId, idempotencyKeyHash])
+  @@index([attemptId, state])
+  @@map("order_payment_refunds")
+}
+
+model OrderPaymentDiscrepancy {
+  id              String @id @default(uuid()) @db.Uuid
+  attemptId       String @db.Uuid
+  kind            String @db.VarChar(64)
+  evidenceDigest  String @db.VarChar(64)
+  state           String @default("OPEN") @db.VarChar(24)
+  createdAt       DateTime @default(now())
+  attempt         OrderPaymentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  @@unique([attemptId, kind, evidenceDigest])
+  @@map("order_payment_discrepancies")
+}
+
+model OrderPaymentAudit {
+  id          String @id @default(uuid()) @db.Uuid
+  attemptId   String @db.Uuid
+  stage       String @db.VarChar(64)
+  version     Int
+  reasonCode  String? @db.VarChar(64)
+  createdAt   DateTime @default(now())
+  attempt     OrderPaymentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  @@index([attemptId, createdAt])
+  @@map("order_payment_audit")
 }
 
 model PaymentWebhookLog {

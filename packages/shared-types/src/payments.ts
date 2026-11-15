@@ -2,6 +2,7 @@ export const customerTestPaymentProviders = ["mock", "paystack", "monnify", "squ
 export type CustomerTestPaymentProvider = (typeof customerTestPaymentProviders)[number];
 
 export interface InitiatePaymentRequest {
+  idempotencyKey?: string;
   orderId: string;
   amount: number;
   paymentMethod?: string;
@@ -9,6 +10,7 @@ export interface InitiatePaymentRequest {
 }
 
 export interface PublicPaymentConfig {
+  orderCheckout?: { version: 2; provider: CustomerTestPaymentProvider; orderPaymentMethod: "SQUAD" | "FLUTTERWAVE" };
   livePaymentsEnabled: boolean;
   activeProvider: string;
   customerSelectableProviders: CustomerTestPaymentProvider[];

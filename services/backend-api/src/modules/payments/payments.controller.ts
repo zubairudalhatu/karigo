@@ -86,7 +86,7 @@ export class PaymentsController {
       message: "Webhook received",
       data: await this.paymentsService.webhook(gateway, payload, {
         rawBody: request.rawBody,
-        signature: paystackSignature ?? flutterwaveSignature ?? flutterwaveVerifHash ?? monnifySignature ?? squadSignature
+        signature: gateway === "paystack" ? paystackSignature : gateway === "flutterwave" ? flutterwaveSignature ?? flutterwaveVerifHash : gateway === "monnify" ? monnifySignature : gateway === "squad" ? squadSignature : undefined
       })
     };
   }
