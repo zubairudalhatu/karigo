@@ -410,5 +410,104 @@ suite(
       ]);
       expect(finalized).toBe(1);
     });
+    it.each(["FAILED", "CANCELLED"] as const)(
+      "does not reopen terminal %s when a later lookup returns stale pending",
+      async (terminal) => {
+        const { result } = await start();
+        evidence.successful = false;
+        evidence.normalizedStatus = terminal;
+        expect(
+          (await runtime.verify(userId, result.payment.transactionReference))
+            .attempt.state,
+        ).toBe(terminal);
+        evidence.normalizedStatus = "PENDING";
+        expect(
+          (await runtime.verify(userId, result.payment.transactionReference))
+            .attempt.state,
+        ).toBe(terminal);
+        expect(
+          (
+            await db.payment.findUniqueOrThrow({
+              where: { id: result.payment.id },
+            })
+          ).paymentStatus,
+        ).toBe(terminal);
+        expect(finalized).toBe(0);
+      },
+    );
+
+    it("finalizes successful evidence racing with a newer pending lookup", async () => {
+      const { result } = await start();
+      const original = provider.verify;
+      provider.verify = async (ref) => {
+        await db.orderPaymentAttempt.update({
+          where: { id: result.attempt.id },
+          data: { state: "PENDING", version: { increment: 1 } },
+        });
+        return original(ref);
+      };
+      try {
+        expect(
+          (await runtime.verify(userId, result.payment.transactionReference))
+            .attempt.state,
+        ).toBe("SUCCEEDED");
+        expect(finalized).toBe(1);
+      } finally {
+        provider.verify = original;
+      }
+    });
+    it("does not credit provider evidence already refunded externally", async () => {
+      const { result } = await start();
+      evidence.refundConfirmed = true;
+      expect(
+        (await runtime.verify(userId, result.payment.transactionReference))
+          .attempt.state,
+      ).toBe("REVIEW_REQUIRED");
+      expect(finalized).toBe(0);
+    });
+    it("does not require a success webhook for an unpaid pending attempt", async () => {
+      const { result } = await start();
+      evidence.successful = false;
+      evidence.normalizedStatus = "PENDING";
+      expect(
+        (await runtime.reconcile(result.attempt.id)).discrepancies,
+      ).toEqual([]);
+    });
+    it("blocks legacy initialization of a tracked order after routing rollback", async () => {
+      const { o } = await start();
+      const stopped = new OrderPaymentRuntime(
+        db as PrismaService,
+        { get: () => provider } as unknown as PaymentProviderRegistry,
+        new ConfigService({
+          APP_ENV: "staging",
+          ORDER_PAYMENT_RUNTIME_V2_ENABLED: "false",
+        }),
+      );
+      const legacy = { ...provider, name: "flutterwave" };
+      const service = new PaymentsService(
+        db as PrismaService,
+        {
+          active: () => legacy,
+          customerTestProvider: () => legacy,
+          customerCheckoutProviders: () => ["flutterwave"],
+        } as unknown as PaymentProviderRegistry,
+        {} as never,
+        {} as never,
+        new ConfigService(),
+        {} as never,
+        undefined,
+        stopped,
+      );
+      const before = await db.payment.count({ where: { orderId: o.id } });
+      await expect(
+        service.initiate(userId, {
+          orderId: o.id,
+          amount: 100,
+          paymentMethod: "CARD",
+        } as never),
+      ).rejects.toThrow("tracked payment");
+      expect(await db.payment.count({ where: { orderId: o.id } })).toBe(before);
+      expect(initializes).toBe(1);
+    });
   },
 );

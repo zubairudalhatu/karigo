@@ -104,19 +104,35 @@ export class PaymentsService {
       throw new BadRequestException("Customer electronic checkout is temporarily unavailable");
     }
     const transactionReference = this.transactionReference(provider.name);
-    const payment = await this.prisma.payment.create({
-      data: {
-        orderId: order.id,
-        customerId: order.customerId,
-        gateway: provider.name,
-        transactionReference,
-        amount: order.totalAmount,
-        currency: "NGN",
-        paymentMethod: dto.paymentMethod,
-        paymentPurpose: PaymentPurpose.ORDER_PAYMENT,
-        paymentStatus: PaymentStatus.PENDING
-      }
-    });
+    const paymentData: Prisma.PaymentUncheckedCreateInput = {
+      orderId: order.id,
+      customerId: order.customerId,
+      gateway: provider.name,
+      transactionReference,
+      amount: order.totalAmount,
+      currency: "NGN",
+      paymentMethod: dto.paymentMethod,
+      paymentPurpose: PaymentPurpose.ORDER_PAYMENT,
+      paymentStatus: PaymentStatus.PENDING
+    };
+    const runtime = this.orderRuntime;
+    const payment = runtime
+      ? await this.prisma.$transaction(async tx => {
+          await runtime.guardLegacyOrderInitialization(tx, order.id);
+          const fresh = await tx.order.findUniqueOrThrow({ where: { id: order.id } });
+          if (
+            fresh.customerId !== order.customerId ||
+            fresh.orderStatus !== OrderStatus.AWAITING_PAYMENT ||
+            fresh.paymentStatus === PaymentStatus.SUCCESSFUL ||
+            fresh.paymentStatus === PaymentStatus.CASH_PENDING ||
+            fresh.paymentMethod === OrderPaymentMethod.CASH_ON_DELIVERY ||
+            !fresh.totalAmount.equals(new Prisma.Decimal(dto.amount))
+          ) {
+            throw new ConflictException("Order state changed before payment initialization");
+          }
+          return tx.payment.create({ data: paymentData });
+        })
+      : await this.prisma.payment.create({ data: paymentData });
     let authorization;
     try {
       authorization = await provider.initialize({

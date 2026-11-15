@@ -1,0 +1,73 @@
+{
+  "environment": "isolated Squad sandbox only",
+  "liveProviderTransaction": false,
+  "testedSource": "a931d879983046ff83d6179508bff8fc4d2698fb",
+  "attemptCount": 5,
+  "cases": [
+    {
+      "reference": "KGO-ORDER-cdd5e30b-3d01-48fa-9409-1a673b842052",
+      "state": "UNKNOWN",
+      "verificationHttpStatus": 500
+    },
+    {
+      "reference": "KGO-ORDER-bb480d65-6194-4416-ab2b-f7bc56f8738d",
+      "state": "UNKNOWN",
+      "initializationDiagnostic": "INIT_EMAIL_REJECTED_HTTP_400"
+    },
+    {
+      "reference": "KGO-ORDER-678929cb-29fc-447c-b849-73861b494d7d",
+      "stateBeforeRefund": "SUCCEEDED",
+      "paymentStatusBeforeRefund": "SUCCESSFUL",
+      "orderStatus": "PAID",
+      "realProviderWebhook": "charge_successful PROCESSED",
+      "finalizations": 1,
+      "notifications": 1,
+      "paidHistoryRecords": 1,
+      "reconciliationBeforeRefund": []
+    },
+    {
+      "reference": "KGO-ORDER-a7b102ae-bc7e-4d6f-8182-66a248b476b9",
+      "simulatorSelection": "Declined/Failed",
+      "actualVerifiedState": "SUCCEEDED",
+      "finalizations": 1,
+      "notifications": 1,
+      "failureCertification": false
+    },
+    {
+      "reference": "KGO-ORDER-ae0dbacf-efd7-4685-ac51-d6c0c94852a1",
+      "action": "closed checkout modal without paying",
+      "actualVerifiedState": "PENDING",
+      "orderStatus": "AWAITING_PAYMENT",
+      "finalizations": 0,
+      "notifications": 0
+    }
+  ],
+  "operatorGeneratedControls": {
+    "twoConcurrentSignedReplays": "duplicate ALREADY_PROCESSED",
+    "fourConcurrentVerificationRetries": "SUCCESSFUL alreadyProcessed",
+    "invalidSignatureHttp": 401,
+    "wrongProviderEndpointHttp": 401,
+    "unknownReference": "preserved without credit",
+    "amountCurrencyMismatch": "no credit; retry required",
+    "eightConcurrentRuntimeInitiations": {
+      "logicalAttempts": 1,
+      "providerInitializerCalls": 0,
+      "method": "real hosted DB, instrumented provider initializer"
+    }
+  },
+  "refund": {
+    "id": "94189d3d-486a-4d9c-a1cf-9ccae7a4173d",
+    "httpStatus": 200,
+    "state": "PENDING",
+    "stableKeyReplayHttpStatus": 200,
+    "sameRecordOnReplay": true,
+    "refundRowCount": 1,
+    "finalCompletionCertified": false
+  },
+  "certificationGaps": [
+    "Provider Declined/Failed simulation independently verified successful; genuine failure not certified",
+    "No authoritative merchant-supported final refund status/event established"
+  ],
+  "productionChanged": false,
+  "partnerStagingChanged": false
+}

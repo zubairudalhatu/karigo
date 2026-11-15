@@ -150,6 +150,14 @@ export class OrderPaymentRuntime {
     if (!a) throw new NotFoundException("Order payment attempt not found");
     return a;
   }
+  async guardLegacyOrderInitialization(tx: Tx, orderId: string) {
+    await this.lock(tx, orderId);
+    if (await tx.orderPaymentClaim.count({ where: { orderId } })) {
+      throw new ConflictException(
+        "This order has a tracked payment; verify or reconcile the original reference before changing providers",
+      );
+    }
+  }
   has(reference: string) {
     return this.db.orderPaymentAttempt
       .findUnique({
@@ -435,7 +443,8 @@ export class OrderPaymentRuntime {
         a.state === "REFUND_PENDING"
       )
         return a;
-      if (a.version !== snapshot.version) return a;
+      if (a.version !== snapshot.version && !evidence.successful) return a;
+      this.validate(a, evidence);
       await this.audit(
         tx,
         a,
@@ -443,6 +452,9 @@ export class OrderPaymentRuntime {
         evidence.successful ? "PROVIDER_PAID" : "PROVIDER_NOT_PAID",
       );
       if (!evidence.successful) {
+        // A lagging negative lookup cannot reopen a terminal or reviewed attempt.
+        if (["FAILED", "CANCELLED", "REVIEW_REQUIRED"].includes(a.state))
+          return a;
         const next =
           evidence.normalizedStatus === "FAILED"
             ? "FAILED"
@@ -470,6 +482,7 @@ export class OrderPaymentRuntime {
         where: { orderId: a.orderId },
       });
       const unsafe =
+        Boolean(evidence.refundConfirmed) ||
         order.customerId !== a.customerId ||
         !order.totalAmount.mul(100).equals(a.amountMinor) ||
         order.orderStatus !== "AWAITING_PAYMENT" ||
@@ -482,7 +495,9 @@ export class OrderPaymentRuntime {
         await this.discrepancy(
           tx,
           a,
-          "PROVIDER_PAID_ORDER_NOT_ELIGIBLE",
+          evidence.refundConfirmed
+            ? "PROVIDER_REFUND_BEFORE_FINALIZATION"
+            : "PROVIDER_PAID_ORDER_NOT_ELIGIBLE",
           evidence.transactionReference + ":" + order.orderStatus,
         );
         return tx.orderPaymentAttempt.update({
@@ -848,6 +863,8 @@ export class OrderPaymentRuntime {
     if (evidence.refundConfirmed && snapshot.state !== "REFUNDED")
       kinds.push("PROVIDER_REFUND_INTERNAL_MISMATCH");
     if (
+      (evidence.successful ||
+        ["SUCCEEDED", "REFUND_PENDING", "REFUNDED"].includes(snapshot.state)) &&
       !(await this.db.orderPaymentProviderEvent.count({
         where: { attemptId, state: "PROCESSED" },
       }))

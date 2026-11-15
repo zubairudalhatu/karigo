@@ -1,15 +1,14 @@
 {
-  "phase": "PAY02_LOCAL_PREPARATION",
-  "hostedCertification": "PENDING_REVIEWED_NEW_RESOURCE_PLAN",
+  "phase": "PAY02_FINAL_LOCAL_VALIDATION",
+  "hostedCertification": "PARTIAL_SEE_HOSTED_CERTIFICATION",
   "cleanInstall": "PASS",
   "migrationRehearsal": "PASS_ZERO_DRIFT",
   "backendFullSuite": {
-    "passedSuites": 138,
-    "passedTests": 1380,
+    "passedSuites": 139,
+    "passedTests": 1393,
     "skippedTests": 122
   },
-  "finalPaymentTargetTests": 88,
-  "realPostgresOrchestrationCases": 16,
+  "realPostgresOrchestrationCases": 22,
   "providerIsolationContractCases": 4,
   "sandboxGuardControls": 11,
   "backendTypecheck": "PASS",
@@ -22,7 +21,7 @@
     "ordinaryLoginRoute": 404,
     "unsignedSquadWebhook": 401
   },
-  "actualSquadTransactions": 0,
+  "actualSquadTransactions": "5 sandbox attempts; see hosted-certification.json",
   "actualLiveProviderTransactions": 0,
   "productionChanged": false,
   "partnerStagingChanged": false,
