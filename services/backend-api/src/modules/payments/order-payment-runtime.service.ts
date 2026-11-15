@@ -14,6 +14,7 @@ import {
 } from "@prisma/client";
 import { createHash, randomUUID } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
+import { safePaymentFailure } from "./providers/payment-failure-summary";
 import { PaymentProviderRegistry } from "./providers/payment-provider.registry";
 import {
   PaymentProvider,
@@ -383,7 +384,8 @@ export class OrderPaymentRuntime {
         await this.audit(tx, updated, "INITIALIZATION_READY");
         return updated;
       });
-    } catch {
+    } catch (error: unknown) {
+      const failure = safePaymentFailure(error);
       // An initialization timeout does NOT prove that the provider created no intent.
       await this.db.orderPaymentAttempt.updateMany({
         where: { id: a.id, state: "CREATING" },
@@ -396,7 +398,11 @@ export class OrderPaymentRuntime {
         this.db,
         a,
         "INITIALIZATION_UNKNOWN",
-        "VERIFY_ORIGINAL_REFERENCE",
+        "INIT_" +
+          failure.reason +
+          (failure.providerHttpStatus
+            ? "_HTTP_" + failure.providerHttpStatus
+            : ""),
       );
     }
     return this.response(a);

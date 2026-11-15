@@ -1,0 +1,20 @@
+{
+  "phase": "FIRST_ACTUAL_SQUAD_SANDBOX_INITIALIZATION",
+  "deployId": "dep-dbstmdu1egvs73erj1kg",
+  "sourceSha": "8457563820f79cddeb480bce5325b82a223aed5d",
+  "at": "2026-11-15T16:22:56.1448024Z",
+  "attemptId": "1be2f635-8b4d-4007-b70c-ab09acce581b",
+  "reference": "KGO-ORDER-cdd5e30b-3d01-48fa-9409-1a673b842052",
+  "amountMinor": 10000,
+  "currency": "NGN",
+  "state": "UNKNOWN",
+  "checkoutUrlReturned": false,
+  "completedPaymentProven": false,
+  "providerIntentExistence": "UNVERIFIED",
+  "originalReferenceVerificationHttpStatus": 409,
+  "fallbackPaymentCreated": false,
+  "recordedWebhookEvents": 0,
+  "secretValueReadByAgent": false,
+  "liveProviderTransaction": false,
+  "nextStep": "DEPLOY_CATEGORICAL_SANDBOX_DIAGNOSTICS_THEN_REVERIFY_ORIGINAL_REFERENCE"
+}

@@ -7,6 +7,7 @@ import { AppModule } from "../app.module";
 import { configureApp } from "../app.setup";
 import { PrismaService } from "../prisma/prisma.service";
 import { OrderPaymentRuntime } from "../modules/payments/order-payment-runtime.service";
+import { safePaymentFailure } from "../modules/payments/providers/payment-failure-summary";
 import { PaymentsService } from "../modules/payments/payments.service";
 
 export async function startPaymentSandbox() {
@@ -150,12 +151,11 @@ export async function startPaymentSandbox() {
           });
       }
       return res.sendStatus(404);
-    })().catch(() =>
-      res
-        .status(409)
-        .json({
-          code: "SANDBOX_OPERATION_NOT_COMPLETED_RECONCILE_ORIGINAL_REFERENCE",
-        }),
+    })().catch((error: unknown) =>
+      res.status(409).json({
+        code: "SANDBOX_OPERATION_NOT_COMPLETED_RECONCILE_ORIGINAL_REFERENCE",
+        diagnostic: safePaymentFailure(error),
+      }),
     );
   });
   configureApp(app, app.get(ConfigService));
