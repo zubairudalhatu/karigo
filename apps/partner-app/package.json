@@ -8,7 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "typecheck": "tsc --noEmit",
-    "test:regression": "node scripts/staging-regression-check.js && node scripts/h11-2-regression-check.js && node scripts/p1-security-regression.cjs && npm run test:orders",
+    "test:regression": "node scripts/staging-regression-check.js && node scripts/h11-2-regression-check.js && node scripts/p1-security-regression.cjs && npm run test:orders && node scripts/p4-operations-tests.cjs",
     "test:orders": "node scripts/p2-order-contract-tests.cjs"
   },
   "dependencies": {

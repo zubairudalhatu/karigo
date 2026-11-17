@@ -1,11 +1,14 @@
 import { VendorTeamRole } from "@prisma/client";
 import { Transform } from "class-transformer";
-import { IsEmail, IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsEmail, IsEnum, IsIn, MinLength, IsOptional, IsString, MaxLength } from "class-validator";
+
+export const assignableTeamRoles = ["MANAGER", "ORDER_MANAGER", "CATALOG_MANAGER", "FINANCE", "SUPPORT", "VIEWER"] as const;
 
 const trim = ({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value;
 
 export class InviteVendorTeamMemberDto {
   @IsString()
+  @MinLength(2)
   @MaxLength(120)
   @Transform(trim)
   fullName!: string;
@@ -23,11 +26,13 @@ export class InviteVendorTeamMemberDto {
   phoneNumber?: string;
 
   @IsEnum(VendorTeamRole)
+  @IsIn(assignableTeamRoles)
   role!: VendorTeamRole;
 }
 
 export class UpdateVendorTeamMemberDto {
   @IsOptional()
   @IsEnum(VendorTeamRole)
+  @IsIn(assignableTeamRoles)
   role?: VendorTeamRole;
 }

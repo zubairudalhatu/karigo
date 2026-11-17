@@ -1,0 +1,8 @@
+FEATURE,EXISTING WEB CAPABILITY,BACKEND CONTRACT,MOBILE SCOPE
+Branches,List/create/edit/primary/status/manual address and phone,GET/POST vendors/branches; PATCH vendors/branches/:id,Same model; owner/approval/session guards; concrete PATCH validation; serialized primary updates; no branch hours model
+Business hours,Vendor profile openingTime/closingTime/isOpen,GET/PATCH vendors/me,HH:mm scheduled times; separate manual availability and unchanged city readiness
+Team,Pending invitation records and revocation; roles; no delivery or acceptance,GET/POST vendors/team; PATCH role/revoke,"Owner-only invitation records, safe fields, pending role edits, revoke; no passwords/tokens/ownership transfer; full staff-access management NOT_SUPPORTED"
+Roles,Business owner identity; membership roles stored but not used for operational auth,Existing owner/approval resolver and revoked-session guard,Authoritative operation summary; manager/staff cannot obtain owner capability; delegated staff workspace remains unsupported
+Notifications,User notification model with list/read; Partner order/settlement push outbox,Scoped vendors/notifications read/target adapters over same Notification model,Generic minimized inbox; server-owned target checks; fresh order detail; unread count; signed-out/deactivated blocked
+Preferences,"Partner push opt-in, orders and paid settlements",Existing partner-mobile/push/preferences,Expose existing server-backed toggles only; no account/security suppression setting
+Advanced administration,Ads/audit explorer/finance execution on web,Unchanged,Web-only; no mobile advertising/audit/settlement execution

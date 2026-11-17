@@ -1,3 +1,4 @@
+import { VendorOrderAccessGuard } from "../vendor-dashboard-orders/vendor-order-access";
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { VendorsController } from "./vendors.controller";
@@ -7,7 +8,7 @@ import { VendorPrivateUploadStorageService } from "./vendor-private-upload-stora
 @Module({
   imports: [AuthModule],
   controllers: [VendorsController],
-  providers: [VendorsService, VendorPrivateUploadStorageService],
+  providers: [VendorOrderAccessGuard, VendorsService, VendorPrivateUploadStorageService],
   exports: [VendorPrivateUploadStorageService]
 })
 export class VendorsModule {}

@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { ConflictException, ForbiddenException, Inject, Injectable, OnModuleInit, OnModuleDestroy } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -60,12 +61,23 @@ export class PartnerPushService implements OnModuleInit, OnModuleDestroy {
     const order = await this.prisma.order.findUnique({ where: { id: orderId }, include: { vendor: { include: { user: true } } } });
     if (!order?.vendor) return;
     const kind = ["PAID", "VENDOR_CONFIRMING"].includes(order.orderStatus) ? "NEW_ORDER" : order.orderStatus === "CANCELLED" ? "CANCELLED" : "ORDER_STATUS";
-    return this.deliver(order.vendor.userId, order.id, kind, `order:${order.id}:${order.orderStatus}:${order.updatedAt.toISOString()}`);
+    const eventKey=`order:${order.id}:${order.orderStatus}:${order.updatedAt.toISOString()}`;
+    await this.recordInbox(order.vendor.userId,order.id,"Order",kind,eventKey);
+    return this.deliver(order.vendor.userId, order.id, kind, eventKey);
   }
   async settlementChanged(id: string) {
     const settlement = await this.prisma.vendorSettlement.findUnique({ where: { id }, include: { vendor: true } });
     if (!settlement || settlement.settlementStatus !== "PAID") return;
-    return this.deliver(settlement.vendor.userId, id, "SETTLEMENT", `settlement:${id}:PAID`);
+    const eventKey=`settlement:${id}:PAID`;
+    await this.recordInbox(settlement.vendor.userId,id,"VendorSettlement","SETTLEMENT",eventKey);
+    return this.deliver(settlement.vendor.userId, id, "SETTLEMENT", eventKey);
+  }
+
+  private async recordInbox(userId:string,entityId:string,entityType:string,kind:string,eventKey:string) {
+    try {await this.requireApproved(userId);} catch {return;}
+    const hex=createHash("sha256").update("partner-inbox:"+userId+":"+eventKey).digest("hex");
+    const id=`${hex.slice(0,8)}-${hex.slice(8,12)}-5${hex.slice(13,16)}-a${hex.slice(17,20)}-${hex.slice(20,32)}`;
+    await this.prisma.notification.upsert({where:{id},create:{id,userId,entityId,entityType,type:"SYSTEM_ALERT",title:kind==="SETTLEMENT"?"Settlement update":"Order update",message:"Open KariGO Partner to view this update."},update:{}});
   }
 
   private async deliver(userId: string, entityId: string, kind: string, eventKey: string) {

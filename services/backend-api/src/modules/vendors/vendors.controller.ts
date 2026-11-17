@@ -1,3 +1,4 @@
+import { VendorOrderAccessGuard } from "../vendor-dashboard-orders/vendor-order-access";
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
@@ -12,7 +13,7 @@ import { ApplicationDocumentDto } from "../../common/dto/application-document.dt
 import { UpdateVendorProfileDto } from "./dto/update-vendor-profile.dto";
 import { ListVendorsQueryDto } from "./dto/list-vendors-query.dto";
 import { InviteVendorTeamMemberDto, UpdateVendorTeamMemberDto } from "./dto/vendor-team.dto";
-import { UpsertVendorBranchDto } from "./dto/vendor-branch.dto";
+import { UpdateVendorBranchDto, UpsertVendorBranchDto } from "./dto/vendor-branch.dto";
 import { UpdateVendorServiceDto, VendorServiceInputDto } from "./dto/vendor-service.dto";
 import { VendorUploadDto } from "./dto/vendor-upload.dto";
 import { VendorsService, VendorUploadedFile } from "./vendors.service";
@@ -38,7 +39,7 @@ export class VendorsController {
   }
 
   @Patch("me")
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, VendorOrderAccessGuard)
   @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Update the authenticated vendor profile" })
@@ -56,7 +57,7 @@ export class VendorsController {
   }
 
   @Get("team")
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, VendorOrderAccessGuard)
   @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "List authenticated vendor team members and invitations" })
@@ -65,7 +66,7 @@ export class VendorsController {
   }
 
   @Post("team")
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, VendorOrderAccessGuard)
   @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Create a safe vendor team invitation without sending email or SMS" })
@@ -74,7 +75,7 @@ export class VendorsController {
   }
 
   @Patch("team/:memberId")
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, VendorOrderAccessGuard)
   @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Update a vendor team member role" })
@@ -83,7 +84,7 @@ export class VendorsController {
   }
 
   @Patch("team/:memberId/revoke")
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, VendorOrderAccessGuard)
   @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Revoke a pending vendor team invitation" })
@@ -92,7 +93,7 @@ export class VendorsController {
   }
 
   @Get("branches")
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, VendorOrderAccessGuard)
   @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "List authenticated vendor branches" })
@@ -101,7 +102,7 @@ export class VendorsController {
   }
 
   @Post("branches")
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, VendorOrderAccessGuard)
   @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Create a vendor branch/location" })
@@ -110,14 +111,38 @@ export class VendorsController {
   }
 
   @Patch("branches/:branchId")
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, VendorOrderAccessGuard)
   @Roles(...PARTNER_WORKSPACE_ROLES)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Update a vendor branch/location" })
-  async updateBranch(@CurrentUser() user: AuthenticatedUser, @Param("branchId", ParseUUIDPipe) branchId: string, @Body() dto: Partial<UpsertVendorBranchDto>) {
+  async updateBranch(@CurrentUser() user: AuthenticatedUser, @Param("branchId", ParseUUIDPipe) branchId: string, @Body() dto: UpdateVendorBranchDto) {
     return { message: "Vendor branch updated", data: await this.vendorsService.updateBranch(user.id, branchId, dto) };
   }
 
+  @Get("operations-summary")
+  @UseGuards(JwtAuthGuard, RolesGuard, VendorOrderAccessGuard)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
+  async operationsSummary(@CurrentUser() user: AuthenticatedUser) {
+    return {data:await this.vendorsService.operationsSummary(user.id)};
+  }
+  @Get("notifications")
+  @UseGuards(JwtAuthGuard, RolesGuard, VendorOrderAccessGuard)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
+  async partnerNotifications(@CurrentUser() user: AuthenticatedUser, @Query("page") page?: string) {
+    return {data:await this.vendorsService.partnerNotifications(user.id, Number(page||1))};
+  }
+  @Patch("notifications/:notificationId/read")
+  @UseGuards(JwtAuthGuard, RolesGuard, VendorOrderAccessGuard)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
+  async readPartnerNotification(@CurrentUser() user: AuthenticatedUser,@Param("notificationId",ParseUUIDPipe) id:string) {
+    return {data:await this.vendorsService.readPartnerNotification(user.id,id)};
+  }
+  @Get("notifications/:notificationId/target")
+  @UseGuards(JwtAuthGuard, RolesGuard, VendorOrderAccessGuard)
+  @Roles(...PARTNER_WORKSPACE_ROLES)
+  async partnerNotificationTarget(@CurrentUser() user: AuthenticatedUser,@Param("notificationId",ParseUUIDPipe) id:string) {
+    return {data:await this.vendorsService.partnerNotificationTarget(user.id,id)};
+  }
   @Get("audit-logs")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...PARTNER_WORKSPACE_ROLES)

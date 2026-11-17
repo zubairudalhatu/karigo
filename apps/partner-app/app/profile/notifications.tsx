@@ -27,7 +27,7 @@ function Preferences() {
     finally { setBusy(false); }
   }
   return <Screen><Hero title="Partner notifications" subtitle="Choose operational updates for this business." />
-    <Card><MutedText>Lock-screen messages contain only a general update. Open Partner to view order or settlement details.</MutedText>
+    <Card><MutedText>These settings control optional order and paid-settlement push updates. Account/security notices and in-app history are not disabled here.</MutedText><MutedText>Lock-screen messages contain only a general update. Open Partner to view order or settlement details.</MutedText>
       <Text>Orders and status updates</Text><Switch accessibilityLabel="Order notifications" disabled={busy || !loaded} value={value.orders} onValueChange={orders => setValue({ ...value, orders })} />
       <Text>Paid settlement updates</Text><Switch accessibilityLabel="Settlement notifications" disabled={busy || !loaded} value={value.settlements} onValueChange={settlements => setValue({ ...value, settlements })} />
       <PrimaryButton label="Enable / save notifications" disabled={busy || !loaded} onPress={() => void save(true)} />

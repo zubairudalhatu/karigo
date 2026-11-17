@@ -74,7 +74,7 @@ function ProfileContent() {
         <Card>
           <Text style={styles.sectionTitle}>Privacy, support and account controls</Text>
           <MutedText>Review KariGO policies, contact Support, or request closure of Partner business access.</MutedText>
-          <PrimaryButton label="Notifications" onPress={() => router.push("/profile/notifications")} variant="secondary" />
+          <PrimaryButton label="Notifications" onPress={() => router.push("/notifications")} variant="secondary" />
         <PrimaryButton label="Privacy Policy" onPress={() => router.push("/legal/privacy")} variant="secondary" />
           <PrimaryButton label="Terms of Service" onPress={() => router.push("/legal/terms")} variant="secondary" />
           <PrimaryButton label="Support" onPress={() => router.push("/support")} variant="secondary" />
@@ -123,6 +123,9 @@ function ProfileContent() {
         <MutedText>{profile?.city ?? "City pending"}, {profile?.state ?? "State pending"}</MutedText>
         <MutedText>{profile?.description ?? "Description can be maintained from Partner Workspace."}</MutedText>
         <Badge label={profile?.isOpen ? "Online" : "Offline"} tone={profile?.isOpen ? "success" : "warning"} />
+        <PrimaryButton label="Branches" onPress={()=>router.push("/business/branches")} variant="secondary" />
+        <PrimaryButton label="Team invitations" onPress={()=>router.push("/business/team")} variant="secondary" />
+        <PrimaryButton label="Business hours" onPress={()=>router.push("/business/hours")} variant="secondary" />
         {profile ? <PrimaryButton label="Edit partner profile" onPress={() => router.push("/profile/edit")} /> : null}
         <PrimaryButton label="Application and documents" onPress={() => router.push("/documents")} variant="secondary" />
         {profile?.sourceApplication?.reference ? <MutedText>Application: {profile.sourceApplication.reference}</MutedText> : null}
@@ -138,7 +141,7 @@ function ProfileContent() {
       <Card>
         <Text style={styles.sectionTitle}>Privacy, support and account controls</Text>
         <MutedText>Review KariGO policies, get support, or request safe closure of Partner business access.</MutedText>
-        <PrimaryButton label="Notifications" onPress={() => router.push("/profile/notifications")} variant="secondary" />
+        <PrimaryButton label="Notifications" onPress={() => router.push("/notifications")} variant="secondary" />
         <PrimaryButton label="Privacy Policy" onPress={() => router.push("/legal/privacy")} variant="secondary" />
         <PrimaryButton label="Terms of Service" onPress={() => router.push("/legal/terms")} variant="secondary" />
         <PrimaryButton label="Support" onPress={() => router.push("/support")} variant="secondary" />

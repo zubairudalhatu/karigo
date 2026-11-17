@@ -5,7 +5,7 @@ import { PushService } from "./push/push.service";
 describe("Partner push app isolation and privacy", () => {
   let db: any, push: any, service: PartnerPushService;
   beforeEach(() => {
-    db = { vendor: { findFirst: jest.fn(async () => ({ id: "vendor", userId: "owner" })) }, partnerPushPreference: {
+    db = { notification:{upsert:jest.fn(async()=>({id:"notice"}))}, vendor: { findFirst: jest.fn(async () => ({ id: "vendor", userId: "owner" })) }, partnerPushPreference: {
       upsert: jest.fn(async () => ({ enabled: true, orders: true, settlements: true })), findUnique: jest.fn(async () => ({ enabled: true, orders: true, settlements: true })) },
       deviceToken: { findUnique: jest.fn(), upsert: jest.fn(async () => ({ id: "device" })), findMany: jest.fn(async () => [{ token: "ExpoPushToken[synthetic]" }]), deleteMany: jest.fn() },
       order: { findUnique: jest.fn(async () => ({ id: "order", orderStatus: "CANCELLED", updatedAt: new Date(0), vendor: { userId: "owner" } })), findFirst: jest.fn(async () => ({ id: "order" })) },

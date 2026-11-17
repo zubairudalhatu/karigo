@@ -1,10 +1,11 @@
+import {p4Smoke} from "./p4-smoke";
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { ConfigService } from "@nestjs/config";
 import { json } from "express";
 import { dirname, join } from "path";
 import { timingSafeEqual } from "crypto";
-import { mkdirSync, existsSync, writeFileSync } from "fs";
+import { mkdirSync, existsSync, writeFileSync, readFileSync } from "fs";
 import { stagingSmoke } from "./smoke";
 import { AppModule } from "../app.module";
 import { configureApp } from "../app.setup";
@@ -25,10 +26,19 @@ export async function startStaging(identity: Record<string,string>) {
   };
   push.sendPushNotification=async message=>{const r=await push.sendBulkPushNotifications([message]);return {accepted:r.accepted===1,provider:"expo"};};
   app.use(json({limit:"1mb"}));
+  let p4Flight:Promise<unknown>|null=null;
   app.use((req:any,res:any,next:any)=>{
     res.setHeader("X-KariGO-Environment","partner-staging");
     if(req.path==="/health")return res.json({status:"ok",environment:"partner-staging"});
     if(req.path==="/ready")return void app.get(ReadinessService).ready().then(ok=>res.status(ok?200:503).json({status:ok?"ready":"not_ready",environment:"partner-staging",source:process.env.RENDER_GIT_COMMIT||"local",...identity}));
+    if(req.path==="/staging/p4-smoke" && req.method==="POST") {
+      const supplied=Buffer.from(req.headers.authorization?.replace(/^Bearer /,"")??""),expected=Buffer.from(process.env.STAGING_OPERATOR_SECRET!);
+      if(supplied.length!==expected.length||!timingSafeEqual(supplied,expected))return res.sendStatus(401);
+      const receipt=join(dirname(process.env.PARTNER_PRIVATE_STORAGE_LOCAL_ROOT!),"p4-smoke-"+(process.env.RENDER_GIT_COMMIT||"local")+".json");
+      if(existsSync(receipt))return res.json(JSON.parse(readFileSync(receipt,"utf8")));
+      if(!p4Flight)p4Flight=p4Smoke(app,`http://127.0.0.1:${process.env.PORT||4000}`).then(result=>{writeFileSync(receipt,JSON.stringify(result));return result;}).catch(error=>{const result={source:process.env.RENDER_GIT_COMMIT,failed:true,code:error instanceof Error&&/^P4_[A-Za-z0-9_]+$/.test(error.message)?error.message:"P4_CHECK_FAILED"};writeFileSync(receipt,JSON.stringify(result));return result;});
+      return void p4Flight.then(result=>res.json(result));
+    }
     if(req.path==="/staging/evidence") {
       const token=Buffer.from(req.headers.authorization?.replace(/^Bearer /,"")??""),expected=Buffer.from(process.env.STAGING_OPERATOR_SECRET!);
       return token.length===expected.length&&timingSafeEqual(token,expected)?res.json({events}):res.sendStatus(401);

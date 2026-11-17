@@ -1,3 +1,5 @@
+import {authSessionStore} from "../src/api/client";
+import {operationsApi,OperationsSummary} from "../src/api/operations.api";
 import { PermanentAccountDeletion } from "../src/components/permanent-account-deletion";
 import { brand } from "@karigo/config";
 import { KariGoApiError, LaunchAvailabilityResponse, PartnerCapabilities, ProductSummary, VendorServiceSummary } from "@karigo/shared-types";
@@ -53,6 +55,7 @@ function DashboardContent() {
   const [availabilityMessage, setAvailabilityMessage] = useState<string | null>(null);
   const [availabilitySaving, setAvailabilitySaving] = useState(false);
   const [launchAvailability, setLaunchAvailability] = useState<LaunchAvailabilityResponse | null>(null);
+  const [operations,setOperations]=useState<OperationsSummary|null>(null);
   const [commercial, setCommercial] = useState<PartnerCommercialState | null>(null);
   const [commercialMessage, setCommercialMessage] = useState<string | null>(null);
   const [paymentSaving, setPaymentSaving] = useState(false);
@@ -60,6 +63,8 @@ function DashboardContent() {
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
     else setLoading(true);
+    const generation=authSessionStore.currentGeneration();
+    setOperations(null);
     setError(null);
     setMissingProfile(false);
     setPartnerState(null);
@@ -74,6 +79,9 @@ function DashboardContent() {
       }
 
       const capabilities = await partnerApi.capabilities();
+      const nextOperations=await operationsApi.summary().catch(()=>null);
+      if (!authSessionStore.isCurrent(generation)) return;
+      setOperations(nextOperations);
       const [profile, orders, products, services, documents] = await Promise.all([
         partnerApi.profile(),
         partnerApi.orders().catch(() => []),
@@ -81,6 +89,7 @@ function DashboardContent() {
         capabilities.canManageServices ? partnerApi.services().catch(() => []) : Promise.resolve([]),
         partnerApi.documents().catch(() => [])
       ]);
+      if (!authSessionStore.isCurrent(generation)) return;
       setData({ profile, orders, products, services, documents, capabilities });
       setLaunchAvailability(await launchApi.myAvailability(profile.city).catch(() => null));
     } catch (err) {
@@ -93,7 +102,7 @@ function DashboardContent() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     void load();
@@ -234,6 +243,7 @@ function DashboardContent() {
 
       <Card>
         <Text style={styles.businessName}>{data.profile?.businessName ?? "Partner profile"}</Text>
+        {operations?<><PrimaryButton label={`Notifications · ${operations.unreadNotifications} unread`} variant="secondary" onPress={()=>router.push("/notifications")}/><MutedText>{operations.activeBranchCount}/{operations.branchCount} branches active · {operations.primary?.name||"No primary branch"} · {operations.teamCount} invitation records · {operations.pendingInvitations} pending</MutedText></>:null}
         <MutedText>
           {data.profile?.city ?? "City pending"}, {data.profile?.state ?? "State pending"} - {partnerTypeLabel(data.capabilities?.partnerType)}
         </MutedText>

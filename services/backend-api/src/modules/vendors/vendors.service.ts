@@ -10,7 +10,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { publicUserSelect } from "../users/users.service";
 import { ListVendorsQueryDto } from "./dto/list-vendors-query.dto";
 import { UpdateVendorProfileDto } from "./dto/update-vendor-profile.dto";
-import { InviteVendorTeamMemberDto, UpdateVendorTeamMemberDto } from "./dto/vendor-team.dto";
+import { assignableTeamRoles, InviteVendorTeamMemberDto, UpdateVendorTeamMemberDto } from "./dto/vendor-team.dto";
 import { UpsertVendorBranchDto } from "./dto/vendor-branch.dto";
 import { UpdateVendorServiceDto, VendorServiceInputDto } from "./dto/vendor-service.dto";
 import { VendorUploadPurpose } from "./dto/vendor-upload.dto";
@@ -44,8 +44,11 @@ export class VendorsService {
 
   private profileWithoutBankSecrets<T extends { accountNumber?: unknown; accountName?: unknown; bankName?: unknown }>(profile: T) {
     const { accountNumber: _number, accountName: _name, bankName: _bank, ...safe } = profile;
+    if ("teamMembers" in safe && Array.isArray(safe.teamMembers)) return {...safe,teamMembers:safe.teamMembers.map(member=>this.teamView(member))};
     return safe;
   }
+
+  private teamView<T extends {invitationTokenHash?:unknown}>(member:T) { const {invitationTokenHash: _hash,...safe}=member;return safe; }
 
   async me(userId: string) {
     const vendor = await this.prisma.vendor.findFirst({
@@ -72,6 +75,10 @@ export class VendorsService {
 
   async update(userId: string, dto: UpdateVendorProfileDto) {
     const vendor = await this.requireVendorForUser(userId);
+    if (dto.openingTime !== undefined || dto.closingTime !== undefined) {
+      if (!resolvePartnerCapabilities(vendor).canAccessWorkspace) throw new ForbiddenException("Approved Partner owner access required");
+      for (const time of [dto.openingTime,dto.closingTime]) if (time !== undefined && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new BadRequestException("Business hours must use HH:mm");
+    }
     const updated = await this.prisma.vendor.update({
       where: { id: vendor.id },
       data: dto,
@@ -141,18 +148,20 @@ export class VendorsService {
   }
 
   async team(userId: string) {
-    const vendor = await this.requireVendorForUser(userId);
-    return this.prisma.vendorTeamMember.findMany({
+    const vendor = await this.requireOperationsOwner(userId);
+    const members=await this.prisma.vendorTeamMember.findMany({
       where: { vendorId: vendor.id },
       orderBy: { createdAt: "desc" }
     });
+    return members.map(member=>this.teamView(member));
   }
 
   async inviteTeamMember(userId: string, dto: InviteVendorTeamMemberDto) {
     if (!dto.email && !dto.phoneNumber) {
       throw new BadRequestException("Provide either an email address or phone number for the team invitation.");
     }
-    const vendor = await this.requireVendorForUser(userId);
+    const vendor = await this.requireOperationsOwner(userId);
+    if (!assignableTeamRoles.includes(dto.role as typeof assignableTeamRoles[number])) throw new ForbiddenException("Ownership cannot be assigned by invitation");
     const invitationToken = randomBytes(32).toString("base64url");
     const member = await this.prisma.vendorTeamMember.create({
       data: {
@@ -171,35 +180,39 @@ export class VendorsService {
       hasEmail: Boolean(member.email),
       hasPhone: Boolean(member.phoneNumber)
     });
-    return { ...member, invitationIssued: true, invitationTokenReturned: false };
+    return { ...this.teamView(member), invitationIssued: true, invitationTokenReturned: false };
   }
 
   async updateTeamMember(userId: string, memberId: string, dto: UpdateVendorTeamMemberDto) {
-    const vendor = await this.requireVendorForUser(userId);
+    const vendor = await this.requireOperationsOwner(userId);
     const member = await this.prisma.vendorTeamMember.findFirst({ where: { id: memberId, vendorId: vendor.id } });
     if (!member) throw new NotFoundException("Vendor team member not found");
+    if (dto.role && !assignableTeamRoles.includes(dto.role as typeof assignableTeamRoles[number])) throw new ForbiddenException("Ownership cannot be assigned here");
+    if (member.invitationStatus !== "PENDING") throw new BadRequestException("Only pending invitation roles can be changed");
+    if (member.role === "OWNER" || member.userId === vendor.userId) throw new ForbiddenException("Business ownership cannot be removed or reassigned here");
     const updated = await this.prisma.vendorTeamMember.update({
       where: { id: member.id },
       data: dto
     });
     await this.logVendorAudit(vendor.id, userId, "vendor.team.updated", "VendorTeamMember", member.id, { role: updated.role });
-    return updated;
+    return this.teamView(updated);
   }
 
   async revokeTeamMember(userId: string, memberId: string) {
-    const vendor = await this.requireVendorForUser(userId);
+    const vendor = await this.requireOperationsOwner(userId);
     const member = await this.prisma.vendorTeamMember.findFirst({ where: { id: memberId, vendorId: vendor.id } });
     if (!member) throw new NotFoundException("Vendor team member not found");
+    if (member.role === "OWNER" || member.userId === vendor.userId) throw new ForbiddenException("Business ownership cannot be removed or reassigned here");
     const updated = await this.prisma.vendorTeamMember.update({
       where: { id: member.id },
       data: { invitationStatus: "REVOKED", revokedAt: new Date(), invitationTokenHash: null }
     });
     await this.logVendorAudit(vendor.id, userId, "vendor.team.revoked", "VendorTeamMember", member.id, { role: updated.role });
-    return updated;
+    return this.teamView(updated);
   }
 
   async branches(userId: string) {
-    const vendor = await this.requireVendorForUser(userId);
+    const vendor = await this.requireOperationsOwner(userId);
     return this.prisma.vendorBranch.findMany({
       where: { vendorId: vendor.id },
       orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }]
@@ -207,8 +220,10 @@ export class VendorsService {
   }
 
   async createBranch(userId: string, dto: UpsertVendorBranchDto) {
-    const vendor = await this.requireVendorForUser(userId);
+    const vendor = await this.requireOperationsOwner(userId);
     const branch = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${"vendor-branches:"+vendor.id}))::text`;
+      if (dto.isPrimary && dto.status && dto.status !== "ACTIVE") throw new BadRequestException("Primary branch must be active");
       if (dto.isPrimary) {
         await tx.vendorBranch.updateMany({ where: { vendorId: vendor.id, isPrimary: true }, data: { isPrimary: false } });
       }
@@ -222,19 +237,65 @@ export class VendorsService {
   }
 
   async updateBranch(userId: string, branchId: string, dto: Partial<UpsertVendorBranchDto>) {
-    const vendor = await this.requireVendorForUser(userId);
+    const vendor = await this.requireOperationsOwner(userId);
     const existing = await this.prisma.vendorBranch.findFirst({ where: { id: branchId, vendorId: vendor.id } });
     if (!existing) throw new NotFoundException("Vendor branch not found");
     const branch = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${"vendor-branches:"+vendor.id}))::text`;
+      const current=await tx.vendorBranch.findFirst({where:{id:branchId,vendorId:vendor.id}});
+      if (!current) throw new NotFoundException("Vendor branch not found");
+      if (dto.isPrimary && (dto.status ?? current.status) !== "ACTIVE") throw new BadRequestException("Primary branch must be active");
       if (dto.isPrimary) {
         await tx.vendorBranch.updateMany({ where: { vendorId: vendor.id, isPrimary: true, id: { not: branchId } }, data: { isPrimary: false } });
       }
-      return tx.vendorBranch.update({ where: { id: branchId }, data: dto });
+      return tx.vendorBranch.update({ where: { id: branchId }, data: {...dto,...(dto.status&&dto.status!=="ACTIVE"?{isPrimary:false}:{})} });
     });
     await this.logVendorAudit(vendor.id, userId, "vendor.branch.updated", "VendorBranch", branch.id, {
       fields: Object.keys(dto)
     });
     return branch;
+  }
+
+  private async requireOperationsOwner(userId:string) {
+    const vendor=await this.requireVendorForUser(userId);
+    if (!resolvePartnerCapabilities(vendor).canAccessWorkspace || vendor.userId!==userId) throw new ForbiddenException("Approved business owner access required");
+    return vendor;
+  }
+  async operationsSummary(userId:string) {
+    const vendor=await this.requireOperationsOwner(userId);
+    const [branchCount,activeBranchCount,primary,teamCount,pendingInvitations,unreadNotifications]=await Promise.all([
+      this.prisma.vendorBranch.count({where:{vendorId:vendor.id}}),this.prisma.vendorBranch.count({where:{vendorId:vendor.id,status:"ACTIVE"}}),
+      this.prisma.vendorBranch.findFirst({where:{vendorId:vendor.id,isPrimary:true,status:"ACTIVE"},select:{id:true,name:true}}),
+      this.prisma.vendorTeamMember.count({where:{vendorId:vendor.id,invitationStatus:{not:"REVOKED"}}}),this.prisma.vendorTeamMember.count({where:{vendorId:vendor.id,invitationStatus:"PENDING",expiresAt:{gt:new Date()}}}),
+      this.prisma.notification.count({where:{...this.partnerNotificationWhere(userId),isRead:false}})
+    ]);
+    return {workspaceRole:"OWNER",canManageBranches:true,canManageTeamInvitations:true,canManageHours:true,staffAccessSupported:false,assignableTeamRoles,branchCount,activeBranchCount,primary,teamCount,pendingInvitations,unreadNotifications};
+  }
+  private partnerNotificationWhere(userId:string) { return {userId,entityType:{in:["Order","VendorSettlement","VendorApplication","Vendor","SupportTicket"]}}; }
+  async partnerNotifications(userId:string,page=1) {
+    await this.requireOperationsOwner(userId);
+    if (!Number.isInteger(page)||page<1||page>10000) throw new BadRequestException("Invalid notification page");
+    const items=await this.prisma.notification.findMany({where:this.partnerNotificationWhere(userId),orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(page-1)*20,take:20,select:{id:true,entityType:true,isRead:true,createdAt:true}});
+    const titles:Record<string,string>={Order:"Order update",VendorSettlement:"Settlement update",VendorApplication:"Application update",Vendor:"Business account update",SupportTicket:"Support update"};
+    return items.map(item=>({...item,title:titles[item.entityType||""]||"Partner update",message:"Open Partner to view the current information."}));
+  }
+  async readPartnerNotification(userId:string,id:string) {
+    await this.requireOperationsOwner(userId);
+    const item=await this.prisma.notification.findFirst({where:{...this.partnerNotificationWhere(userId),id},select:{id:true,isRead:true}});
+    if (!item) throw new NotFoundException("Partner notification not found");
+    await this.prisma.notification.updateMany({where:{...this.partnerNotificationWhere(userId),id,isRead:false},data:{isRead:true,readAt:new Date()}});
+    return {id,isRead:true};
+  }
+  async partnerNotificationTarget(userId:string,id:string) {
+    const vendor=await this.requireOperationsOwner(userId);
+    const item=await this.prisma.notification.findFirst({where:{...this.partnerNotificationWhere(userId),id},select:{entityType:true,entityId:true}});
+    if (!item || !item.entityId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.entityId)) throw new NotFoundException("Partner notification target is unavailable");
+    if (item.entityType==="Order" && item.entityId && await this.prisma.order.findFirst({where:{id:item.entityId,vendorId:vendor.id},select:{id:true}})) return {route:"order",id:item.entityId};
+    if (item.entityType==="VendorSettlement" && item.entityId && await this.prisma.vendorSettlement.findFirst({where:{id:item.entityId,vendorId:vendor.id},select:{id:true}})) return {route:"earnings"};
+    if (item.entityType==="Vendor" && item.entityId===vendor.id) return {route:"profile"};
+    if (item.entityType==="VendorApplication" && item.entityId && await this.prisma.vendorApplication.findFirst({where:{id:item.entityId,applicantUserId:userId},select:{id:true}})) return {route:"documents"};
+    if (item.entityType==="SupportTicket" && item.entityId && await this.prisma.supportTicket.findFirst({where:{id:item.entityId,customer:{userId}},select:{id:true}})) return {route:"support"};
+    throw new NotFoundException("This update is no longer available to this business");
   }
 
   async auditLogs(userId: string) {
