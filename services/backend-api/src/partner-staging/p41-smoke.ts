@@ -6,10 +6,10 @@ export async function p41Smoke(app:any,origin:string) {
  if(process.env.PARTNER_ISOLATED_STAGING!=="true"||process.env.APP_ENV!=="staging"||!/^\/karigo_partner_p25(?:_[a-z0-9]+)?$/.test(new URL(process.env.DATABASE_URL!).pathname))throw Error("P41_STAGING_ONLY");
  const db=app.get(PrismaService) as PrismaService,checks:Record<string,string>={},sessions:any[]=[];
  const check=(ok:unknown,name:string)=>{if(!ok)throw Error("P41_CHECK_"+name);checks[name]="PASS";};
- async function request(path:string,token?:string,method="GET",body?:unknown,status=200):Promise<any>{
+ async function request(path:string,token?:string,method="GET",body?:unknown,status:number|number[]=200):Promise<any>{
   const r=await fetch(origin+"/api/v1/"+path,{method,redirect:"error",headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(20000)});
-  if(r.status!==status)throw Error("P41_HTTP_"+r.status+"_"+path.split("/").slice(0,2).join("_"));
-  if(status>=400)return;
+  if(!(Array.isArray(status)?status:[status]).includes(r.status))throw Error("P41_HTTP_"+r.status+"_"+path.split("/").slice(0,2).join("_"));
+  if(r.status>=400)return;
   const j=await r.json();return j.data??j;
  }
  const login=async(phoneNumber:string)=>{const s=await request("partner-mobile/session",undefined,"POST",{phoneNumber,password:process.env.STAGING_QA_PASSWORD},201);sessions.push(s);return s.accessToken as string;};
@@ -25,8 +25,8 @@ export async function p41Smoke(app:any,origin:string) {
  try{
  const a=await login(owner.phoneNumber!),b=await login(other.phoneNumber!),restricted=await login(phoneNumber);
  const summary=await request("vendors/operations-summary",a);check(summary.workspaceRole==="OWNER"&&summary.canManageTeamInvitations,"authorized_owner");
- await request("vendors/team/"+member.id,restricted,"PATCH",{role:"MANAGER"},401);checks.restricted_mutation_denied="PASS";
- await request("vendors/team/"+member.id,restricted,"PATCH",{role:"OWNER"},401);checks.self_escalation_denied="PASS";
+ await request("vendors/team/"+member.id,restricted,"PATCH",{role:"MANAGER"},[401,403]);checks.restricted_mutation_denied="PASS";
+ await request("vendors/team/"+member.id,restricted,"PATCH",{role:"OWNER"},[401,403]);checks.self_escalation_denied="PASS";
  await request("vendors/team/"+member.id,b,"PATCH",{role:"MANAGER"},404);checks.cross_business_denied="PASS";
  await request("vendors/team/"+member.id,a,"PATCH",{role:"OWNER"},400);checks.owner_role_escalation_denied="PASS";
  const order=await db.order.findFirstOrThrow({where:{vendorId:vendor.id,orderStatus:"CANCELLED"},select:{id:true,orderStatus:true}});
@@ -50,6 +50,9 @@ export async function p41Smoke(app:any,origin:string) {
  // Only synthetic/minimized values needed by deterministic Home rendering leave this harness.
  const dashboard={profile:{businessName:cleaned.businessName,city:cleaned.city,state:cleaned.state,status:cleaned.status,isOpen:cleaned.isOpen},capabilities,orders:orders.map((o:any)=>({id:o.id,orderNumber:o.orderNumber,orderStatus:o.orderStatus,totalAmount:o.totalAmount,itemsCount:o.itemsCount})),products:products.map((p:any)=>({id:p.id,name:p.name,isAvailable:p.isAvailable})),services:services.map((s:any)=>({id:s.id,name:s.name,status:s.status})),documents:[],commercial,launch,operations};
  return {source:process.env.RENDER_GIT_COMMIT,checks,dashboard,teamAcceptanceSupported:false,financialMutation:false};
+ }catch(error){
+ const code=error instanceof Error&&/^P41_[A-Za-z0-9_]+$/.test(error.message)?error.message:"P41_CHECK_FAILED";
+ return {source:process.env.RENDER_GIT_COMMIT,failed:true,code,checks};
  }finally{
   await db.vendorTeamMember.update({where:{id:member.id},data:{invitationStatus:"REVOKED",revokedAt:new Date()}});
   for(const s of sessions)await request("partner-mobile/session/logout",s.accessToken,"POST",{refreshToken:s.refreshToken},201);

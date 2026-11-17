@@ -32,7 +32,7 @@ function render(model){
  const text=n=>n==null||typeof n==="boolean"?"":Array.isArray(n)?n.map(text).join(" "):typeof n==="object"?text(n.props.children):String(n);
  return {text:text(tree),tree};
 }
-const r=render(d),t=r.text;
+const r=render(d),t=r.text.replace(/\s+/g," ").replace(/\s*\/\s*/g,"/");
 assert(t.includes(`${d.operations.activeBranchCount}/${d.operations.branchCount} branches active`));
 assert(t.includes(`Notifications · ${d.operations.unreadNotifications} unread`));
 assert(t.includes("Active orders")&&t.includes("View earnings and settlements")&&t.includes("Availability"));

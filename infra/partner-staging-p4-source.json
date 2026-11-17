@@ -480,7 +480,7 @@
     "services/backend-api/src/modules/wallet/wallet.controller.ts": "22755df6cf21949a55ddb378a131142157a263cfee8773560115787df5a9c1d6",
     "services/backend-api/src/modules/wallet/wallet.module.ts": "fd982ccb5627fd90fc127bc2072ecdf5969c69a5ccf087faa3fff14d8fb13114",
     "services/backend-api/src/modules/wallet/wallet.service.ts": "03959b9d1c3fdcb3b093a99e94e6334c541be538cf4dcd1bff26e580e0bf23e4",
-    "services/backend-api/src/partner-staging/main.ts": "b511f6610a18b13ec68b766391ceb94098a807e45cd960638abf30e1958312d2",
+    "services/backend-api/src/partner-staging/main.ts": "11f9e3f867aeafc80d63463512d6082c015f833491030a077910426b860780cc",
     "services/backend-api/src/partner-staging/p4-smoke.ts": "4f8c3da59613206b280a1f5295a439b845f8ac9dce0fb89cbcb0758899232efd",
     "services/backend-api/src/partner-staging/seed.ts": "690e10726ceee6831bbe6c74de60997731dfdfcad16eb05cebc2b35592194d68",
     "services/backend-api/src/partner-staging/smoke.ts": "e0ee353fdb1bde38368767ec18ab7e9854b9953b7c81cd963977954cc0d87a75",
@@ -490,6 +490,6 @@
     "services/backend-api/src/security/security.module.ts": "fb801138a98b6a2991c62a0916fb1e3081bacb1e06ba5c785428eff3a71648e3",
     "services/backend-api/src/seed/demo-seed-controls.ts": "f58f99cd2b6cf9fac6c3c21a7a0c0d22eb26eb0e0da05bc77789adf57e85e7d7",
     "services/backend-api/src/swagger.setup.ts": "1e46e7e91844e6ff10ac25001c816f32268cbdd2c363e443341b51e3f27f3b32",
-    "services/backend-api/src/partner-staging/p41-smoke.ts": "eeaf5bd7fde5a01a38c68d98b90f3b752353319f80857c16b574f92bf211f44e"
+    "services/backend-api/src/partner-staging/p41-smoke.ts": "271495c4b85ae3f8234024d626c71cd56f6d4e26f6771de855be1c7f5f8a89dc"
   }
 }

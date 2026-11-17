@@ -39,7 +39,7 @@ export async function startStaging(identity: Record<string,string>) {
       const receipt=join(dirname(process.env.PARTNER_PRIVATE_STORAGE_LOCAL_ROOT!),(closure?"p41-smoke-":"p4-smoke-")+(process.env.RENDER_GIT_COMMIT||"local")+".json");
       if(existsSync(receipt))return res.json(JSON.parse(readFileSync(receipt,"utf8")));
       const flightKey=closure?"closure":"full";
-      if(!p4Flights[flightKey])p4Flights[flightKey]=(closure?p41Smoke:p4Smoke)(app,`http://127.0.0.1:${process.env.PORT||4000}`).then(result=>{writeFileSync(receipt,JSON.stringify(result));return result;}).catch(error=>{const result={source:process.env.RENDER_GIT_COMMIT,failed:true,code:error instanceof Error&&/^P4_[A-Za-z0-9_]+$/.test(error.message)?error.message:"P4_CHECK_FAILED"};writeFileSync(receipt,JSON.stringify(result));return result;});
+      if(!p4Flights[flightKey])p4Flights[flightKey]=(closure?p41Smoke:p4Smoke)(app,`http://127.0.0.1:${process.env.PORT||4000}`).then(result=>{writeFileSync(receipt,JSON.stringify(result));return result;}).catch(error=>{const result={source:process.env.RENDER_GIT_COMMIT,failed:true,code:error instanceof Error&&/^P4(?:1)?_[A-Za-z0-9_]+$/.test(error.message)?error.message:"P4_CHECK_FAILED"};writeFileSync(receipt,JSON.stringify(result));return result;});
       return void p4Flights[flightKey].then(result=>res.json(result));
     }
     if(req.path==="/staging/evidence") {
