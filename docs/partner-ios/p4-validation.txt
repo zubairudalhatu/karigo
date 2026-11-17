@@ -1,0 +1,30 @@
+KariGO Partner P4 validation record
+Base: 274db9823fcbd3f75ac525b41b69958163a24b31
+P4 feature source: 88c6ddb1901644a2d97031106ed7eeebbc45fa2f
+Deployed runtime source: b4cbfcd4fdac3f60942092483d9f280fd38ca240
+Scope: Partner mobile daily merchant operations and shared backend contracts.
+
+Local validation:
+- Clean dependency installation: PASS; no dependency version changes.
+- Backend: 137 suites / 1379 tests passed; 9 gated suites / 122 tests skipped.
+- Targeted branch/team/notification/vendor checks: 3 suites / 35 tests passed.
+- Partner P1, staging, H11.2, P2 and P4 regression scripts: PASS.
+- Backend and Partner typecheck: PASS.
+- Partner staging compiled runtime build and emitted workspace verification: PASS.
+- Expo Doctor: 18/18 PASS; Expo dependency check: up to date.
+- Fresh staging Hermes iOS export: PASS; no native build or upload.
+- Staging public config: expected staging bundle; no location/microphone/contacts permission additions.
+- Runtime source manifest: 488 source hashes verified.
+- Changed/untracked source credential-pattern scan and diff check: PASS.
+
+Implementation matrix: p4-contract-matrix.csv.
+Team limitation: existing contracts support invitation records, pending-role edits and revocation only. They do not deliver or accept invitations or authorize staff operational workspaces. UI explicitly states this. Full team access management is NOT_SUPPORTED; no new staff authentication system was invented. All P4 operations require the authoritative approved owner, with revoked/suspended sessions denied.
+Hours are business-wide scheduled values; editing them does not change manual availability or city readiness. Branch addresses are manual and require no GPS permission.
+Notification history is independent of optional order/settlement push opt-in. Content is generic, targets are scoped server-side, and stale order navigation refreshes authoritative order detail.
+
+Hosted deployment: dep-dbu8ej4ipgvc73dri07g LIVE. /ready independently returned ready, partner-staging and b4cbfcd4fdac3f60942092483d9f280fd38ca240.
+Hosted P4 smoke: NOT RUN. Automatic approval review rejected launching the protected local operator window (blocked by policy; no further reason supplied). No credential was entered/read and no P4 synthetic fixture was created. No alternative route around the rejection was attempted. Hosted business/authorization proof remains outstanding; do not count this as full P4 closure or P5 readiness.
+
+Staging restart repair: boot classification identified STAGING_NON_SYNTHETIC_IDENTITY in seed. Completed deletion QA removes synthetic email markers. Seed now permits only an exact fully erased/frozen identity with a completed Partner/whole-account erasure receipt. Seven focused positive/negative tests passed, backend typecheck and compiled staging build passed again. The subsequent healthy deployment confirms recovery without resetting records or weakening active-identity checks.
+The original Production live deploy remains dep-dbd8gquq1p3s73cstagg / c907d04b11c1b08cf57c0c82cff604abee07918e. Partner auto-deploy remains OFF; linked branch unchanged.
+Apple registration, provisioning, APNs, TestFlight, physical iPhone/native picker/SecureStore/layout/accessibility/real push remain deferred at P3B. Apple submission hold remains YES. No Customer/Captain source changes, Production deployment, OTA or Apple action.
