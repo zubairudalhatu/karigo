@@ -482,7 +482,7 @@
     "services/backend-api/src/modules/wallet/wallet.service.ts": "03959b9d1c3fdcb3b093a99e94e6334c541be538cf4dcd1bff26e580e0bf23e4",
     "services/backend-api/src/partner-staging/main.ts": "91f71eeed18b6204712d63f3db1ebde18a066902419c90d7f4cc6c79d7eb7743",
     "services/backend-api/src/partner-staging/p4-smoke.ts": "4f8c3da59613206b280a1f5295a439b845f8ac9dce0fb89cbcb0758899232efd",
-    "services/backend-api/src/partner-staging/seed.ts": "4ce42dbbf9985af7b9a5f511118988432329091ee73942f9a7f2486a830a3e02",
+    "services/backend-api/src/partner-staging/seed.ts": "690e10726ceee6831bbe6c74de60997731dfdfcad16eb05cebc2b35592194d68",
     "services/backend-api/src/partner-staging/smoke.ts": "e0ee353fdb1bde38368767ec18ab7e9854b9953b7c81cd963977954cc0d87a75",
     "services/backend-api/src/prisma/prisma-accelerate.ts": "93d90f282045468f421b4199c55f091fd06b88c85f77a4f8c2bdbc803777208e",
     "services/backend-api/src/prisma/prisma.module.ts": "a2f8ade45c3aa0c5cedf59ac46ac220840454bbf6371b1a94c0411f619c57701",

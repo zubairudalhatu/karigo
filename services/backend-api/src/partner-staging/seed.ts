@@ -4,8 +4,16 @@ export const stageId = (n: number) => `f0250000-0000-4000-8000-${String(n).padSt
 export async function seedStaging() {
   const db = new PrismaClient();
   try {
-    const rows = await db.user.findMany({ select:{id:true,email:true,fullName:true} });
-    if (rows.some(u => !u.id.startsWith("f0250000-") && !u.email?.endsWith("@partner-stage.invalid"))) throw Error("STAGING_NON_SYNTHETIC_IDENTITY");
+    const rows = await db.user.findMany({ select:{id:true,email:true,fullName:true,phoneNumber:true,passwordHash:true,deletedAt:true,accountStatus:true} });
+    for (const u of rows) {
+      if (u.id.startsWith("f0250000-") || u.email?.endsWith("@partner-stage.invalid")) continue;
+      // Completed isolated deletion QA intentionally removes the synthetic email.
+      // Accept only the exact erased identity shape, backed by its completed receipt.
+      const erased = u.deletedAt && u.accountStatus === "DEACTIVATED" && u.email === null &&
+        u.fullName === "Deleted KariGO account" && u.phoneNumber === `deleted:${u.id}` && u.passwordHash === "";
+      const receipt = erased && await db.accountDeletionRequest.findFirst({where:{userId:u.id,accountType:{in:["PARTNER","COMPLETE_ACCOUNT"]},status:"COMPLETED",completedAt:{not:null},erasureVersion:{gte:1}},select:{id:true}});
+      if (!receipt) throw Error("STAGING_NON_SYNTHETIC_IDENTITY");
+    }
     const passwordHash = await hash(process.env.STAGING_QA_PASSWORD!,12);
     for (const [n,kind] of [[1,"approved"],[2,"wrong-business"],[3,"applicant"],[4,"delete-check"],[6,"delete-qa"]] as const) {
       await db.user.upsert({where:{id:stageId(n)},update:{},create:{id:stageId(n),fullName:`[STAGING] ${kind}`,phoneNumber:`+23480000000${String(n).padStart(2,"0")}`,email:`${kind}@partner-stage.invalid`,passwordHash,role:"VENDOR",accountStatus:n===3?"PENDING":"ACTIVE",phoneVerified:true,
