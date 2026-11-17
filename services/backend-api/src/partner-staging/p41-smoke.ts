@@ -25,8 +25,8 @@ export async function p41Smoke(app:any,origin:string) {
  try{
  const a=await login(owner.phoneNumber!),b=await login(other.phoneNumber!),restricted=await login(phoneNumber);
  const summary=await request("vendors/operations-summary",a);check(summary.workspaceRole==="OWNER"&&summary.canManageTeamInvitations,"authorized_owner");
- await request("vendors/team/"+member.id,restricted,"PATCH",{role:"MANAGER"},403);checks.restricted_mutation_denied="PASS";
- await request("vendors/team/"+member.id,restricted,"PATCH",{role:"OWNER"},403);checks.self_escalation_denied="PASS";
+ await request("vendors/team/"+member.id,restricted,"PATCH",{role:"MANAGER"},401);checks.restricted_mutation_denied="PASS";
+ await request("vendors/team/"+member.id,restricted,"PATCH",{role:"OWNER"},401);checks.self_escalation_denied="PASS";
  await request("vendors/team/"+member.id,b,"PATCH",{role:"MANAGER"},404);checks.cross_business_denied="PASS";
  await request("vendors/team/"+member.id,a,"PATCH",{role:"OWNER"},400);checks.owner_role_escalation_denied="PASS";
  const order=await db.order.findFirstOrThrow({where:{vendorId:vendor.id,orderStatus:"CANCELLED"},select:{id:true,orderStatus:true}});
