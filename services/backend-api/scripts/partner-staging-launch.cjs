@@ -1,6 +1,7 @@
 const { assertStaging, installHttpBoundary } = require('./partner-staging-guard.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
+let bootPhase = 'POLICY';
 async function main() {
   const identity = assertStaging(process.env);
   if (!fs.existsSync('/var/data')) throw Error('STAGING_PERSISTENT_DISK_REQUIRED');
@@ -14,9 +15,15 @@ async function main() {
   installHttpBoundary(process.env);
   // Never forward arbitrary framework/provider log payloads to hosted logs.
   for (const key of ['log','warn','error','info','debug']) console[key] = () => {};
+  bootPhase = 'SEED';
   const { seedStaging } = require('../dist/services/backend-api/src/partner-staging/seed.js');
   await seedStaging();
+  bootPhase = 'APP';
   const { startStaging } = require('../dist/services/backend-api/src/partner-staging/main.js');
   await startStaging(identity);
 }
-main().catch(() => { process.stderr.write('PARTNER_STAGING_BOOT_FAILED\n'); process.exitCode=1; });
+main().catch(error => {
+  const code = /^STAGING_[A-Z_]+$/.test(error?.message || '') ? error.message : /^P[0-9]{4}$/.test(error?.code || '') ? error.code : 'UNCLASSIFIED';
+  process.stderr.write(`PARTNER_STAGING_BOOT_FAILED phase=${bootPhase} code=${code}\n`);
+  process.exitCode=1;
+});
